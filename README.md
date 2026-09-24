@@ -43,12 +43,27 @@ export default defineConfig({
 ```
 
 ```text
-$ es run
- ✓ evals/hello.es.ts › greet module › creates a tested greet module   14s
-     judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
- ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn   24s
-     judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
-2 passed · run .es/runs/20260924T180304Z_009763c_elliot-hesp/summary.md
+$ CI=1 es run greet
+es 0.1.0 · 3 eval files · harness cursor/composer-2.5 · sandbox docker · grouped logs
+[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
+[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  17s
+[creates#1 cursor]  +0:00 sandbox ready 1s
+[creates#1 cursor]  +0:01 turn 1 done 12s · 1 tool call, 2 file edits
+[creates#1 cursor]  +0:13 $ node --test  exit 0 129ms
+[creates#1 cursor]  +0:13 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
+[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  23s
+…
+
+Summary
+ evals/hello.es.ts
+   greet module
+     ✓ creates a tested greet module                17s  judge 1.00  1 turn
+     ✓ adds a default name in a follow-up turn      23s  judge 1.00  2 turns
+
+   Evals  2 passed (2)
+Duration  40s
+ Results  .es/runs/20260924T213759Z_1ba71aa_ci-4vb0/summary.md
 ```
 
 ## Repository layout
@@ -59,6 +74,7 @@ $ es run
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
 | `packages/evalsuite/src/sandbox` | The Docker sandbox and its AI SDK harness sandbox provider |
 | `packages/evalsuite/src/harness` | The Cursor harness (`@ai-sdk/harness-cursor`) and a fake harness |
+| `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/docker` | The base image for sandboxes |
 | `examples/hello` | The example evals (including a with/without-skill pair and a Python sandbox), with a real config and a fake one |
 
@@ -116,6 +132,10 @@ es run [filter...]        Run evals matching config.include; filters are path, n
   --runs <n>              Attempts per cell, overriding the config, groups and evals
   --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
   --record                Also record the run into the history folder (see config.record)
+  --ui <mode>             live, plain or agent (see Output)
+  --log-order <order>     stream or grouped
+  --log-prefix <prefix>   task or none
+  --output-logs <level>   full, errors-only or none
 es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
                           --artifacts all|failures|none --allow-incomplete --skip-secret-scan
 es history [filter]       Pass/fail per recorded eval over recent runs
@@ -138,6 +158,67 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 | 2 | Config, credential or usage error, including no evals matched a filter or tag, an unknown option, `.only` in CI, Docker not running and a refused record |
 | 3 | An infrastructure error (sandbox or harness) and no failures |
 | 130 | Interrupted with Ctrl-C. Sandboxes are destroyed and the run is still recorded, as `interrupted` |
+
+## Output
+
+`es run` picks one of three output modes. The log flags follow
+[Turborepo's](https://turborepo.com/docs/reference/run#--log-order-option) names and defaults.
+
+| Mode | When (`--ui auto`) | What it prints |
+|---|---|---|
+| `agent` | Under a coding agent (Cursor, Claude Code, Codex…, detected by [std-env](https://github.com/unjs/std-env)) | No colour, no heartbeat. One `FAIL`/`INFRA`/`CANCELLED` block per failure with its record path, then the totals, and the summary path last |
+| `plain` | In CI (`CI`, `BUILD_NUMBER`, `GITHUB_ACTIONS`… as Turborepo detects it) or when stdout isn't a terminal | Append-only lines, never rewritten |
+| `live` | On a terminal | For now the same as `plain`; the redrawn live view comes later |
+
+Plain output prefixes every line about an eval with a short, stable tag: `[greet#1 cursor]` is
+the eval, its attempt number and the harness. The tag comes from the first distinctive words of
+the eval's name (words most evals in the file share don't count), so `grep '\[greet#1'` finds
+one eval's lines even when several run at once. Prefixes are coloured when colour is on.
+
+- **`--log-order grouped`** (the default in CI) prints the start line (`▶`) at once, then each
+  eval's detail as one contiguous block when it finishes: its result line, then sandbox start,
+  each turn (duration, tool calls, file edits), checks, judge verdicts and the eval's own
+  `console.log`/`console.error` output, each with its offset into the eval (`+1:05`). Blocks
+  from concurrent evals never interleave.
+- **`--log-order stream`** (the default elsewhere) prints every prefixed line as it happens.
+- **Heartbeat.** After 60s without output, plain mode prints what's still running, with each
+  eval's phase (`sandbox`, `turn 2`, `checks`, `judging`) and elapsed time, so CI doesn't kill a
+  silent job and a hung log shows where it stopped. `ES_HEARTBEAT=30s` changes it, `0` turns it off.
+- **`--output-logs`** picks whose detail prints: `full` (default), `errors-only` or `none`.
+  Failures always print their error, unless `none`.
+- **GitHub Actions** (`GITHUB_ACTIONS=true`): passing evals collapse into `::group::` blocks
+  titled with their result line; failing evals stay expanded and add an `::error` annotation on
+  the failing line. Lines inside blocks drop the prefix (`--log-prefix task` keeps it), colour is
+  on, and `summary.md` is appended to the job summary (`$GITHUB_STEP_SUMMARY`).
+
+Every mode ends with the same summary: the evals as a file › group tree with outcome, duration,
+lowest judge score and turns, then the failures grouped by kind (judge verdicts, assertions
+with Vitest's diff and code frame, timeouts, the tail of infra errors, cancelled) with each
+one's artifact directory, then totals and the results path. Cost appears when the harness
+reports it (Cursor doesn't).
+
+| Variable | Same as |
+|---|---|
+| `ES_UI` | `--ui` |
+| `ES_LOG_ORDER` | `--log-order` |
+| `ES_LOG_PREFIX` | `--log-prefix` |
+| `ES_OUTPUT_LOGS` | `--output-logs` |
+| `ES_HEARTBEAT` | Heartbeat interval, e.g. `30s`; `0` is off |
+| `NO_COLOR`, `FORCE_COLOR` | Turn colour off or on |
+
+If your agent isn't detected, set `ES_UI=agent` (or `AI_AGENT=<name>`).
+
+```text
+$ ES_UI=agent es run
+es run: 1 eval file
+FAIL evals/mix.es.ts › mix › judge says no (497ms, judge)
+  judge  fail 0.30 (≥ 0.8)  ok?
+  console:
+    warning from eval
+  record: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp/evals-mix-es-ts-mix-judge-says-no-0ca3d2/1
+1 passed, 1 failed
+summary: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp/summary.md
+```
 
 ## Authoring API
 
@@ -380,4 +461,5 @@ pnpm lint        # Biome; `pnpm format` applies fixes
 
 The engine and wrapper tests drive the real `es` CLI against generated projects with the fake
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
-and reproduce a dirty run with `es checkout`. The Docker tests skip unless Docker is running and the sandbox image has been built.
+and reproduce a dirty run with `es checkout`. The ui tests feed recorded event streams to each
+renderer on a fake non-TTY stream and compare the output line by line. The Docker tests skip unless Docker is running and the sandbox image has been built.
