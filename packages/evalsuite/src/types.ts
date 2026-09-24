@@ -1,3 +1,5 @@
+import type { ResultsStore } from './store/types.ts'
+
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
 export type TranscriptEvent =
@@ -103,12 +105,26 @@ export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
 
+/** Where run history goes beyond `.es/`. Main process only: never sent to eval workers. */
+export type ResultsConfig = {
+  /** The team store `es publish` and `es pull` use, e.g. `gitBranchStore()`. */
+  store?: ResultsStore
+}
+
 export type EsConfig = {
   include?: string[]
   harness?: HarnessDescriptor
   sandbox?: SandboxDescriptor
   judge?: ConfigJudgeOptions
   timeout?: Duration
+  results?: ResultsConfig
+}
+
+export type ConfigContext = {
+  /** True when the `CI` environment variable is set. */
+  ci: boolean
+  command: string
+  env: NodeJS.ProcessEnv
 }
 
 export type ResolvedConfig = {
@@ -134,6 +150,8 @@ export type EvalRecord = {
   diff: Diff | null
   checks: Array<{ command: string } & ExecResult>
   judgements: Verdict[]
+  /** What each judge call saw, in call order, including calls that errored. */
+  judgeInputs?: Array<{ question: string; model: string; state: { [key: string]: JSONValue } }>
 }
 
 /** Small summary carried through the engine's task metadata. */
@@ -145,24 +163,3 @@ export type EvalMeta = {
 }
 
 export type RunContext = { runId: string; resultsDir: string; config: ResolvedConfig }
-
-export type EsResult = {
-  schemaVersion: 2
-  runId: string
-  startedAt: string
-  durationMs: number
-  versions: { es: string; vitest: string; agentCli: string | null; image: string }
-  config: { harness: HarnessDescriptor; sandbox: SandboxDescriptor; judgeModel: string }
-  summary: { passed: number; failed: number; infraError: number; skipped: number }
-  evals: Array<
-    {
-      id: string
-      file: string
-      /** Enclosing group names, outermost first. */
-      group: string[]
-      name: string
-      outcome: Outcome
-      durationMs: number
-    } & Omit<EvalRecord, 'outcome'>
-  >
-}

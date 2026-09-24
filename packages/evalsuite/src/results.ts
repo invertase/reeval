@@ -1,70 +1,33 @@
-import { readFile, writeFile } from 'node:fs/promises'
+import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { EngineEval, EngineRun } from './engine/node.ts'
-import { recordFileName } from './ids.ts'
-import { judgeModelName } from './judge/index.ts'
-import { redactSecrets } from './redact.ts'
-import type { EsResult, EvalRecord, RunContext } from './types.ts'
+import { type AssembleInput, assembleRun } from './record/assemble.ts'
+import { deriveStore } from './record/index-file.ts'
+import type { RunRecord } from './record/types.ts'
+import { localStore } from './store/local.ts'
 
-const readRecord = async (path: string): Promise<EvalRecord | null> =>
-  JSON.parse(await readFile(path, 'utf8').catch(() => 'null'))
+const STALE_STAGING_MS = 24 * 60 * 60 * 1000
 
-function mergeEval(e: EngineEval, record: EvalRecord | null): EsResult['evals'][number] {
-  const base = { id: e.id, file: e.file, group: e.group, name: e.name, durationMs: e.durationMs }
-  const data = {
-    turns: record?.turns ?? [],
-    diff: record?.diff ?? null,
-    checks: record?.checks ?? [],
-    judgements: record?.judgements ?? [],
+/** Where workers write raw per-eval records before the run directory is assembled. */
+export const stagingDir = (root: string, runId: string) => join(root, '.es', 'staging', runId)
+
+/** Removes staging left behind by runs that were killed before they could clean up. */
+export async function sweepStaging(root: string): Promise<void> {
+  const dir = join(root, '.es', 'staging')
+  const entries = await readdir(dir).catch(() => [])
+  for (const name of entries) {
+    const age = await stat(join(dir, name)).then(
+      (s) => Date.now() - s.mtimeMs,
+      () => 0,
+    )
+    if (age > STALE_STAGING_MS) await rm(join(dir, name), { recursive: true, force: true })
   }
-  if (e.state === 'skipped' && record && record.outcome !== 'pass') {
-    return { ...base, ...data, outcome: record.outcome, error: record.error }
-  }
-  if (e.state === 'skipped') return { ...base, ...data, outcome: 'skipped', error: null }
-  if (e.state === 'passed') return { ...base, ...data, outcome: 'pass', error: null }
-  // The engine may have failed the eval (e.g. on timeout) before the worker finished its record.
-  const message = e.errors[0] ?? 'Eval failed'
-  const error =
-    record?.error ??
-    (/timed out/i.test(message)
-      ? { kind: 'timeout' as const, message }
-      : { kind: 'assertion' as const, message })
-  if (/timed out/i.test(message)) error.kind = 'timeout'
-  const outcome = record?.outcome === 'infra_error' ? 'infra_error' : 'fail'
-  return { ...base, ...data, outcome, error }
 }
 
-export async function writeResult(
-  ctx: RunContext,
-  run: EngineRun,
-  meta: { startedAt: Date; versions: EsResult['versions'] },
-): Promise<{ result: EsResult; path: string }> {
-  const evals = await Promise.all(
-    run.evals.map(async (e) =>
-      mergeEval(e, await readRecord(join(ctx.resultsDir, 'evals', recordFileName(e.id)))),
-    ),
-  )
-  const count = (o: string) => evals.filter((e) => e.outcome === o).length
-  const result: EsResult = {
-    schemaVersion: 2,
-    runId: ctx.runId,
-    startedAt: meta.startedAt.toISOString(),
-    durationMs: Date.now() - meta.startedAt.getTime(),
-    versions: meta.versions,
-    config: {
-      harness: ctx.config.harness,
-      sandbox: ctx.config.sandbox,
-      judgeModel: judgeModelName(ctx.config.judge.model),
-    },
-    summary: {
-      passed: count('pass'),
-      failed: count('fail'),
-      infraError: count('infra_error'),
-      skipped: count('skipped'),
-    },
-    evals,
-  }
-  const path = join(ctx.resultsDir, 'result.json')
-  await writeFile(path, `${redactSecrets(JSON.stringify(result, null, 2))}\n`)
-  return { result, path }
+/** Assembles the run directory into the local store and returns the record and its path. */
+export async function writeRun(input: AssembleInput): Promise<{ record: RunRecord; path: string }> {
+  const { record, dir, files } = await assembleRun(input)
+  const store = localStore({ root: input.ctx.config.root })
+  await store.commit({ files, derive: deriveStore, message: `es: run ${record.runId}` })
+  await rm(input.ctx.resultsDir, { recursive: true, force: true })
+  return { record, path: join(store.dir, ...dir.split('/')) }
 }

@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import { DEFAULT_IMAGE, HARNESS_CURSOR_VERSION, LABEL } from '../src/sandbox/image.ts'
-import { pkgRoot, project, readResult, runCli } from './helpers.ts'
+import { pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const dockerReady = (() => {
   try {
@@ -55,11 +55,12 @@ evaluate('docker', async (t) => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const result = readResult(p.dir)
-    assert.equal(result.versions.image, DEFAULT_IMAGE)
-    assert.match(result.versions.agentCli ?? '', /\d/)
-    assert.equal(result.evals[0]?.checks[0]?.stdout, 'Hello, Ada!\n')
-    assert.equal(liveContainers(result.runId), '')
+    const { run, evals } = readRun(p.dir)
+    assert.equal(run.versions.image, DEFAULT_IMAGE)
+    assert.match(run.versions.agentCli ?? '', /\d/)
+    const log = evals[0]?.read(evals[0].trial.checks[0]?.log.path ?? '') ?? ''
+    assert.match(log, /--- stdout\nHello, Ada!\n/)
+    assert.equal(liveContainers(run.runId), '')
   })
 
   test('a timeout removes the container', async () => {
@@ -71,8 +72,8 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    const result = readResult(p.dir)
-    assert.equal(result.evals[0]?.error?.kind, 'timeout')
-    assert.equal(liveContainers(result.runId), '')
+    const { run, evals } = readRun(p.dir)
+    assert.equal(evals[0]?.error?.kind, 'timeout')
+    assert.equal(liveContainers(run.runId), '')
   })
 })

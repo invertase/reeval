@@ -12,7 +12,7 @@ import {
 import { createHarness } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { evalId, recordFileName, relativeFile } from './ids.ts'
-import { type JudgeState, runJudge } from './judge/index.ts'
+import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
 import { patchForJudge } from './judge/patch.ts'
 import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
@@ -135,6 +135,7 @@ async function runEval(
     diff: null,
     checks: [],
     judgements: [],
+    judgeInputs: [],
   }
   const turns: Turn[] = []
   let sandbox: Sandbox | undefined
@@ -189,6 +190,7 @@ async function runEval(
       if (!subject) throw new Error('t.judge() has no turn to grade: call t.send() first')
       const state = judgeState(subject, on === undefined || isTurn(on) ? undefined : on)
       const options = { ...config.judge, ...spec.judge, ...call }
+      record.judgeInputs?.push({ question, model: judgeModelName(options.model), state })
       try {
         const verdict = await runJudge(question, state, options, signal)
         record.judgements.push(verdict)

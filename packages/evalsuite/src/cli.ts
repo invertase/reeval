@@ -8,7 +8,10 @@ import type { EngineEval } from './engine/node.ts'
 import { loadEnvFiles } from './env.ts'
 import { newRunId } from './ids.ts'
 import { preflight } from './preflight.ts'
-import type { EsResult } from './types.ts'
+import { gitInfo, runnerInfo } from './record/provenance.ts'
+import type { RunSummary } from './record/types.ts'
+
+const EXPECTED_ERRORS = ['SchemaError', 'ImmutableFileError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130 } as const
 
@@ -17,12 +20,12 @@ const version: string = createRequire(import.meta.url)('../package.json').versio
 const HELP = `es ${version} — eval runner for coding agents
 
 Usage:
-  es run [filter...]      Run evals matching config.include; filters are path or name substrings
-    --config <path>       Config file (default ./es.config.ts)
-  es image build          Build the Docker sandbox image (bakes in the Cursor CLI)
+  es run [filter...]        Run evals matching config.include; filters are path or name substrings
+  es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
   es --help
 
+Options: --config <path> (default ./es.config.ts)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
 `
 
@@ -62,14 +65,14 @@ function printEval(e: EngineEval) {
   }
 }
 
-function summaryLine(s: EsResult['summary'], resultPath: string) {
+function summaryLine(s: RunSummary, resultPath: string) {
   const parts = [
-    s.passed && green(`${s.passed} passed`),
-    s.failed && red(`${s.failed} failed`),
+    s.pass && green(`${s.pass} passed`),
+    s.fail && red(`${s.fail} failed`),
     s.infraError && yellow(`${s.infraError} infra error`),
     s.skipped && dim(`${s.skipped} skipped`),
   ].filter(Boolean)
-  return `${parts.join(' · ') || 'no evals ran'} · results ${resultPath}`
+  return `${parts.join(' · ') || 'no evals ran'} · run ${resultPath}`
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -100,7 +103,7 @@ async function run(argv: string[]): Promise<number> {
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
 
   loadEnvFiles(process.cwd())
-  const config = await loadConfig(values.config)
+  const { config } = await loadConfig(values.config)
   const missing = missingCredentials(config)
   if (missing.length) {
     throw new UsageError(
@@ -116,14 +119,16 @@ async function run(argv: string[]): Promise<number> {
     )
   }
 
-  const runId = newRunId()
-  const resultsDir = join(config.root, '.es', 'results', runId)
+  const startedAt = new Date()
+  const runId = newRunId(startedAt)
+  const { stagingDir, sweepStaging, writeRun } = await import('./results.ts')
+  await sweepStaging(config.root)
+  const resultsDir = stagingDir(config.root, runId)
   await mkdir(resultsDir, { recursive: true })
   const ctx = { runId, resultsDir, config }
-  const startedAt = new Date()
+  const git = await gitInfo(config.root)
 
   const { runEngine, vitestVersion } = await import('./engine/node.ts')
-  const { writeResult } = await import('./results.ts')
 
   let interrupted = false
   const engineRun = await runEngine({
@@ -150,21 +155,32 @@ async function run(argv: string[]): Promise<number> {
     )
   }
 
-  const { result, path } = await writeResult(ctx, engineRun, {
+  const { record, path } = await writeRun({
+    ctx,
+    engine: engineRun,
     startedAt,
-    versions: { es: version, vitest: vitestVersion, ...sandboxVersions },
+    endedAt: new Date(),
+    interrupted: interrupted || engineRun.cancelled,
+    versions: {
+      es: version,
+      vitest: vitestVersion,
+      node: process.versions.node,
+      ...sandboxVersions,
+    },
+    git,
+    runner: runnerInfo(),
   })
   if (interrupted) {
-    for (const e of result.evals.filter((e) => e.error?.kind === 'aborted')) {
+    for (const e of record.evals.filter((e) => e.trials[0]?.error?.kind === 'aborted')) {
       console.log(` ${red('✗')} ${e.id}   ${dim('cancelled')}`)
     }
   }
   for (const error of engineRun.unhandledErrors) console.error(red(`error: ${error}`))
-  console.log(summaryLine(result.summary, relative(process.cwd(), path)))
+  console.log(summaryLine(record.summary, relative(process.cwd(), join(path, 'summary.md'))))
 
   if (interrupted || engineRun.cancelled) return EXIT.interrupted
-  if (result.summary.failed > 0 || engineRun.unhandledErrors.length > 0) return EXIT.failed
-  if (result.summary.infraError > 0) return EXIT.infra
+  if (record.summary.fail > 0 || engineRun.unhandledErrors.length > 0) return EXIT.failed
+  if (record.summary.infraError > 0) return EXIT.infra
   return EXIT.ok
 }
 
@@ -173,10 +189,13 @@ run(process.argv.slice(2)).then(
     process.exitCode = code
   },
   (error: unknown) => {
-    const usage =
-      error instanceof UsageError || (error as { code?: string }).code?.startsWith('ERR_PARSE_ARGS')
+    const name = (error as Error).name
+    const expected =
+      error instanceof UsageError ||
+      (error as { code?: string }).code?.startsWith('ERR_PARSE_ARGS') ||
+      EXPECTED_ERRORS.includes(name)
     console.error(red(`es: ${(error as Error).message}`))
-    if (!usage && process.env.ES_DEBUG) console.error(error)
+    if (!expected && process.env.ES_DEBUG) console.error(error)
     process.exitCode = EXIT.usage
   },
 )

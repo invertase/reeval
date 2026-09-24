@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { fakeConfig, liveSandboxes, pkgRoot, project, readResult, runCli } from './helpers.ts'
+import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const math = (value: number) => `
 import { evaluate, expect } from 'evalsuite'
@@ -16,14 +16,17 @@ describe('engine', () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /✓ evals\/math\.es\.ts › math/)
-    assert.match(r.stdout, /1 passed · results \.es\/results\/.+\/result\.json/)
+    assert.match(r.stdout, /1 passed · run \.es\/runs\/\d{4}\/\d{2}\/.+\/summary\.md/)
     for (const leak of [/vitest/i, /RUN v/, /testTimeout/]) {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
-    const result = readResult(p.dir)
-    assert.equal(result.schemaVersion, 2)
-    assert.deepEqual(result.summary, { passed: 1, failed: 0, infraError: 0, skipped: 0 })
-    assert.equal(result.evals[0]?.id, 'evals/math.es.ts › math')
+    const { run } = readRun(p.dir)
+    assert.equal(run.schemaVersion, 3)
+    assert.equal(run.status, 'complete')
+    assert.deepEqual(run.summary, { evals: 1, pass: 1, fail: 0, infraError: 0, skipped: 0 })
+    assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')
+    assert.ok(!existsSync(join(p.dir, '.es/results')), 'no legacy result.json')
+    assert.ok(!existsSync(join(p.dir, '.es/staging', run.runId)), 'staging cleaned up')
   })
 
   test('a failing assertion exits 1', async () => {
@@ -32,7 +35,7 @@ describe('engine', () => {
     assert.equal(r.code, 1)
     assert.match(r.stdout, /✗ evals\/math\.es\.ts › math/)
     assert.doesNotMatch(r.stdout + r.stderr, /vitest/i)
-    const [e] = readResult(p.dir).evals
+    const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'fail')
     assert.equal(e?.error?.kind, 'assertion')
     assert.match(e?.error?.message ?? '', /expected 1 to be 2/)
@@ -74,7 +77,7 @@ evaluate('top level', async () => {})
     assert.equal(r.code, 1)
     assert.match(r.stdout, /✗ evals\/g\.es\.ts › outer › inner › slow/)
     assert.match(r.stdout, /✓ evals\/g\.es\.ts › outer › fast/)
-    const evals = readResult(p.dir).evals
+    const evals = readRun(p.dir).evals
     assert.deepEqual(
       evals.map((e) => [e.group, e.name, e.outcome]),
       [
@@ -88,7 +91,7 @@ evaluate('top level', async () => {})
     const filtered = await runCli(p.dir, ['run', 'outer fast'])
     assert.equal(filtered.code, 0, filtered.stdout)
     assert.deepEqual(
-      readResult(p.dir).evals.map((e) => e.name),
+      readRun(p.dir).evals.map((e) => e.name),
       ['fast'],
     )
   })
@@ -103,7 +106,13 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0)
-    assert.deepEqual(readResult(p.dir).summary, { passed: 1, failed: 0, infraError: 0, skipped: 1 })
+    assert.deepEqual(readRun(p.dir).run.summary, {
+      evals: 2,
+      pass: 1,
+      fail: 0,
+      infraError: 0,
+      skipped: 1,
+    })
   })
 
   test('usage errors exit 2', async () => {
@@ -156,7 +165,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
 })
 `
 
-  test('turns, diff, checks and verdicts land in result.json', async () => {
+  test('turns, diff, checks and verdicts land in the run directory', async () => {
     const big = 'x'.repeat(200_000)
     const p = await project('data-out', {
       'es.config.ts': fakeConfig({
@@ -175,26 +184,45 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /judge {2}pass 0\.90 \(≥ 0\.8\) {2}Did it write hello\.txt\?/)
 
-    const [e] = readResult(p.dir).evals
-    assert.equal(e?.outcome, 'pass')
-    assert.equal(e?.turns.length, 1)
-    assert.equal(e?.turns[0]?.text, 'Wrote hello.txt')
-    assert.equal(e?.turns[0]?.status, 'completed')
-    assert.ok(e?.turns[0]?.transcript.some((t) => t.type === 'tool-call'))
-    assert.match(e?.diff?.patch ?? '', /\+hi/)
-    assert.deepEqual(e?.diff?.files.map((f) => f.path).sort(), ['big.txt', 'hello.txt'])
-    assert.deepEqual(e?.checks, [
-      { command: 'cat hello.txt', exitCode: 0, stdout: 'hi\n', stderr: '' },
-    ])
-    assert.deepEqual(e?.judgements, [
+    const [e] = readRun(p.dir).evals
+    assert.ok(e)
+    assert.equal(e.outcome, 'pass')
+    assert.equal(e.trial.turns.length, 1)
+    assert.equal(e.trial.turns[0]?.text, 'Wrote hello.txt')
+    assert.equal(e.trial.turns[0]?.status, 'completed')
+    const transcript = e
+      .read(e.trial.files.transcript?.path ?? '')
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    assert.deepEqual(transcript[0], { turn: 0, type: 'prompt', text: 'write hello.txt' })
+    assert.ok(transcript.some((t) => t.type === 'tool-call'))
+    assert.match(e.read(e.trial.files.diff?.path ?? ''), /\+hi/)
+    assert.match(e.read(e.trial.files.final?.path ?? ''), /Wrote hello\.txt/)
+    assert.deepEqual(e.trial.changedFiles.map((f) => f.path).sort(), ['big.txt', 'hello.txt'])
+    assert.deepEqual(
+      e.trial.checks.map(({ command, exitCode }) => ({ command, exitCode })),
+      [{ command: 'cat hello.txt', exitCode: 0 }],
+    )
+    assert.match(
+      e.read(e.trial.checks[0]?.log.path ?? ''),
+      /^\$ cat hello\.txt\nexit 0\n--- stdout\nhi\n/,
+    )
+    assert.deepEqual(e.trial.judgements, [
       {
         verdict: 'pass',
         score: 0.9,
         threshold: 0.8,
         question: 'Did it write hello.txt?',
         model: 'fake',
+        reason: null,
+        evidence: [],
       },
     ])
+    const [input] = JSON.parse(e.read(e.trial.files.judgeInput?.path ?? ''))
+    assert.equal(input.question, 'Did it write hello.txt?')
+    assert.equal(input.state.task, 'write hello.txt')
+    assert.deepEqual(e.trials[0]?.result.path, `evals/${e.slug}/1/result.json`)
     assert.deepEqual(liveSandboxes(p), [], 'sandbox destroyed')
   })
 
@@ -212,9 +240,9 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    const [e] = readResult(p.dir).evals
+    const [e] = readRun(p.dir).evals
     assert.deepEqual(
-      e?.turns.map((x) => x.prompt),
+      e?.trial.turns.map((x) => x.prompt),
       ['write hello.txt', 'again'],
     )
     assert.deepEqual(liveSandboxes(p), [])
@@ -246,7 +274,7 @@ evaluate('on a value', async (t) => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.equal(readResult(p.dir).evals[1]?.judgements.length, 2)
+    assert.equal(readRun(p.dir).evals[1]?.trial.judgements.length, 2)
   })
 
   test('a failing judge fails the eval as a judge error', async () => {
@@ -258,8 +286,8 @@ evaluate('on a value', async (t) => {
     assert.equal(r.code, 1)
     assert.match(r.stdout, /judge {2}fail 0\.30/)
     assert.match(r.stdout, /judge score 0\.30 is below 0\.8 for "ok\?"/)
-    const [e] = readResult(p.dir).evals
-    assert.equal(e?.judgements[0]?.verdict, 'fail')
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
   })
 
@@ -271,7 +299,7 @@ evaluate('on a value', async (t) => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
     assert.match(r.stdout, /needs a provider prefix/)
-    assert.equal(readResult(p.dir).evals[0]?.error?.kind, 'judge')
+    assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
 
   test('t.judge before any turn is an assertion error', async () => {
@@ -305,7 +333,7 @@ evaluate('early', async (t) => { await t.judge('?') })
     const r = await runCli(p.dir)
     assert.equal(r.code, 3, r.stdout)
     assert.match(r.stdout, /! evals\/agent\.es\.ts › agent eval/)
-    const [e] = readResult(p.dir).evals
+    const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'infra_error')
     assert.deepEqual(e?.error, { kind: 'infra', message: 'agent CLI failed to start' })
     assert.deepEqual(liveSandboxes(p), [])
@@ -322,13 +350,13 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.ok(Date.now() - started < 20_000, 'did not wait for the agent')
     assert.match(r.stdout, /Eval timed out after 1s/)
     assert.doesNotMatch(r.stdout, /testTimeout/)
-    const [e] = readResult(p.dir).evals
+    const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'fail')
     assert.equal(e?.error?.kind, 'timeout')
     assert.deepEqual(liveSandboxes(p), [])
   })
 
-  test('Ctrl-C mid-turn exits 130, writes result.json and destroys the sandbox', async () => {
+  test('Ctrl-C mid-turn exits 130, records an interrupted run and destroys the sandbox', async () => {
     const p = await project('sigint', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
       'evals/agent.es.ts': agentEval(''),
@@ -340,9 +368,10 @@ evaluate('early', async (t) => { await t.judge('?') })
       },
     })
     assert.equal(r.code, 130, r.stdout + r.stderr)
-    const result = readResult(p.dir)
-    assert.equal(result.evals[0]?.outcome, 'fail')
-    assert.equal(result.evals[0]?.error?.kind, 'aborted')
+    const { run, evals } = readRun(p.dir)
+    assert.equal(run.status, 'interrupted')
+    assert.equal(evals[0]?.outcome, 'fail')
+    assert.equal(evals[0]?.error?.kind, 'aborted')
     assert.match(r.stdout, /✗ evals\/agent\.es\.ts › agent eval {3}cancelled/)
     assert.deepEqual(liveSandboxes(p), [])
   })
