@@ -223,66 +223,43 @@ async function sourceHash(root: string, file: string): Promise<string | null> {
   return bytes ? sha256(bytes) : null
 }
 
-export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
-  const { ctx, engine } = input
-  const { config, runId } = ctx
-  const out = new Artifacts()
-  const judgeModel = config.judge.model === undefined ? null : judgeModelName(config.judge.model)
-  const configHash = sha256(
-    JSON.stringify({
-      include: config.include,
-      harness: config.harness.map(withoutCaps),
-      sandbox: config.sandbox.map(withoutCaps),
-      environment: config.environment,
-      runs: config.runs,
-      env: config.env,
-      judge: withoutCaps(config.judge),
-      timeoutMs: config.timeoutMs,
-    }),
-  )
-  const sources = new Map<string, string | null>()
-  const byEval = new Map<string, EvalEntry>()
-  const contexts = new Map<string, ContextFile>()
-  const resolvedJudges = new Set<string>()
-  const images = new Map<string, Stack['images'][number]>()
-  const environments = new Map<string, EnvironmentRecord>()
-  const harnesses = new Map<string, Stack['harnesses'][number]>()
-  const known = new Map(input.sandbox.images.map((i) => [i.id, i.repoDigests]))
+/** What the run's attempts have in common, gathered while their records are read. */
+class Seen {
+  readonly sources = new Map<string, string | null>()
+  readonly byEval = new Map<string, EvalEntry>()
+  readonly contexts = new Map<string, ContextFile>()
+  readonly resolvedJudges = new Set<string>()
+  readonly images = new Map<string, Stack['images'][number]>()
+  readonly environments = new Map<string, EnvironmentRecord>()
+  readonly harnesses = new Map<string, Stack['harnesses'][number]>()
+  /** Registry digests found by the preflight, by image id. */
+  readonly digests: Map<string, string[]>
 
-  for (const e of engine.evals) {
-    const cell: Cell = e.attempt?.cell ?? {
-      key: 'unknown',
-      harness: 'unknown',
-      environment: 'unknown',
-      sandbox: 'unknown',
+  constructor(sandbox: SandboxVersions) {
+    this.digests = new Map(sandbox.images.map((i) => [i.id, i.repoDigests]))
+  }
+
+  add(record: EvalRecord | null, cell: Cell, e: EngineEval): void {
+    for (const c of record?.context ?? []) this.contexts.set(`${c.path}\0${c.sha256}`, c)
+    for (const j of record?.judgements ?? []) {
+      if (j.resolvedModel) this.resolvedJudges.add(j.resolvedModel)
     }
-    const n = e.attempt?.n ?? 1
-    const record = await readRecord(join(ctx.resultsDir, 'evals', recordFileName(e.key)))
-    const { outcome, error } = mergeOutcome(e, record)
-    if (!sources.has(e.file)) sources.set(e.file, await sourceHash(config.root, e.file))
-    const srcHash = sources.get(e.file) ?? null
-    const context = record?.context ?? []
-    for (const c of context) contexts.set(`${c.path}\0${c.sha256}`, c)
-    for (const j of record?.judgements ?? [])
-      if (j.resolvedModel) resolvedJudges.add(j.resolvedModel)
     if (record?.image) {
-      images.set(record.image.id, {
-        ...record.image,
-        repoDigests: known.get(record.image.id) ?? [],
-      })
+      const repoDigests = this.digests.get(record.image.id) ?? []
+      this.images.set(record.image.id, { ...record.image, repoDigests })
     }
     if (record?.environment) {
-      environments.set(
-        `${record.environment.name}\0${record.environment.digest}`,
-        record.environment,
-      )
+      const key = `${record.environment.name}\0${record.environment.digest}`
+      this.environments.set(key, record.environment)
     }
     if (e.attempt) {
       const h = e.attempt.harness
-      harnesses.set(cell.harness, { id: cell.harness, kind: h.kind, model: harnessModel(h) })
+      this.harnesses.set(cell.harness, { id: cell.harness, kind: h.kind, model: harnessModel(h) })
     }
+  }
 
-    let entry = byEval.get(e.id)
+  entry(e: EngineEval, sourceHash: string | null): EvalEntry {
+    let entry = this.byEval.get(e.id)
     if (!entry) {
       entry = {
         id: e.id,
@@ -292,104 +269,149 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
         name: e.name,
         tags: e.attempt?.tags ?? [],
         fingerprint: '',
-        sourceHash: srcHash,
+        sourceHash,
         fixtureHash: null,
         outcome: 'skipped',
         passRate: null,
         cells: [],
         attempts: [],
       }
-      byEval.set(e.id, entry)
+      this.byEval.set(e.id, entry)
     }
-    let cellRecord = entry.cells.find((c) => c.key === cell.key)
-    if (!cellRecord) {
-      cellRecord = {
-        ...cell,
-        fingerprint: '',
-        runs: 0,
-        pass: 0,
-        fail: 0,
-        infraError: 0,
-        skipped: 0,
-        passRate: null,
-        outcome: 'skipped',
-      }
-      entry.cells.push(cellRecord)
-    }
-    // Skipped attempts never ran, so they have no environment or image to fingerprint.
-    if (!cellRecord.fingerprint || record) {
-      cellRecord.fingerprint = sha256(
-        JSON.stringify({
-          sourceHash: srcHash,
-          harness: e.attempt?.harness ?? null,
-          environment: record?.environment?.digest ?? cell.environment,
-          image: record?.image?.id ?? null,
-          agentCli: record?.image?.agentCli ?? null,
-          judge: { model: judgeModel, threshold: config.judge.threshold },
-          context,
-        }),
-      )
-    }
+    return entry
+  }
+}
 
-    const dir = `${entry.slug}/${evalSlug(cell.key)}/${n}`
-    const files: AttemptFiles = {}
-    const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j) => ({
-      ...j,
-      reason: null,
-      evidence: [],
-    }))
-    if (record && record.turns.length > 0) {
-      files.transcript = out.add(`${dir}/transcript.jsonl`, transcriptLines(record))
-      const raw = rawLines(record)
-      if (raw) files.rawTranscript = out.add(`${dir}/transcript.raw.jsonl`, raw)
+const UNKNOWN_CELL: Cell = {
+  key: 'unknown',
+  harness: 'unknown',
+  environment: 'unknown',
+  sandbox: 'unknown',
+}
+
+function cellOf(entry: EvalEntry, cell: Cell): EvalEntry['cells'][number] {
+  let found = entry.cells.find((c) => c.key === cell.key)
+  if (!found) {
+    found = {
+      ...cell,
+      fingerprint: '',
+      runs: 0,
+      pass: 0,
+      fail: 0,
+      infraError: 0,
+      skipped: 0,
+      passRate: null,
+      outcome: 'skipped',
     }
-    const patch = record?.diff ? historyPatch(record.diff.patch) : null
-    if (patch !== null) files.diff = out.add(`${dir}/diff.patch`, patch)
-    if (record?.judgeInputs?.length) {
-      files.judgeInput = out.json(
-        `${dir}/judge-input.json`,
-        judgeInputs(record, patch, 'diff.patch'),
-      )
-    }
-    const checks = (record?.checks ?? []).map((c, i) => ({
+    entry.cells.push(found)
+  }
+  return found
+}
+
+type JudgeFingerprint = { model: string | null; threshold: number }
+
+/** Reads one attempt's worker record, files its artifacts and adds it to its eval and cell. */
+async function addAttempt(
+  e: EngineEval,
+  ctx: RunContext,
+  seen: Seen,
+  out: Artifacts,
+  judge: JudgeFingerprint,
+): Promise<void> {
+  const cell = e.attempt?.cell ?? UNKNOWN_CELL
+  const n = e.attempt?.n ?? 1
+  const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
+  const { outcome, error } = mergeOutcome(e, record)
+  if (!seen.sources.has(e.file)) {
+    seen.sources.set(e.file, await sourceHash(ctx.config.root, e.file))
+  }
+  const srcHash = seen.sources.get(e.file) ?? null
+  const context = record?.context ?? []
+  seen.add(record, cell, e)
+  const entry = seen.entry(e, srcHash)
+  const cellRecord = cellOf(entry, cell)
+  // Skipped attempts never ran, so they have no environment or image to fingerprint.
+  if (!cellRecord.fingerprint || record) {
+    cellRecord.fingerprint = sha256(
+      JSON.stringify({
+        sourceHash: srcHash,
+        harness: e.attempt?.harness ?? null,
+        environment: record?.environment?.digest ?? cell.environment,
+        image: record?.image?.id ?? null,
+        agentCli: record?.image?.agentCli ?? null,
+        judge,
+        context,
+      }),
+    )
+  }
+  entry.attempts.push({
+    id: attemptId(cell.key, n),
+    cell: cell.key,
+    n,
+    image: record?.image ?? null,
+    env: record?.env ?? { vars: [], secrets: [] },
+    context,
+    outcome,
+    error,
+    durationMs: e.durationMs,
+    ...attemptEvidence(record, `${entry.slug}/${evalSlug(cell.key)}/${n}`, out),
+  })
+}
+
+/** Turns, timings, activity, verdicts, checks and changed files, with their artifact files. */
+function attemptEvidence(
+  record: EvalRecord | null,
+  dir: string,
+  out: Artifacts,
+): Pick<
+  AttemptRecord,
+  'turns' | 'timings' | 'activity' | 'judgements' | 'checks' | 'changedFiles' | 'files'
+> {
+  const files: AttemptFiles = {}
+  if (record && record.turns.length > 0) {
+    files.transcript = out.add(`${dir}/transcript.jsonl`, transcriptLines(record))
+    const raw = rawLines(record)
+    if (raw) files.rawTranscript = out.add(`${dir}/transcript.raw.jsonl`, raw)
+  }
+  const patch = record?.diff ? historyPatch(record.diff.patch) : null
+  if (patch !== null) files.diff = out.add(`${dir}/diff.patch`, patch)
+  if (record?.judgeInputs?.length) {
+    files.judgeInput = out.json(`${dir}/judge-input.json`, judgeInputs(record, patch, 'diff.patch'))
+  }
+  const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j) => ({
+    ...j,
+    reason: null,
+    evidence: [],
+  }))
+  return {
+    turns: (record?.turns ?? []).map((t) => ({
+      prompt: t.prompt,
+      status: t.status,
+      startedAt: t.startedAt,
+      durationMs: t.durationMs,
+      text:
+        t.text.length > TURN_TEXT_LIMIT
+          ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
+          : t.text,
+    })),
+    timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
+    activity: record
+      ? activity(record)
+      : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
+    judgements,
+    checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,
       exitCode: c.exitCode,
       durationMs: c.durationMs,
       log: out.add(`${dir}/checks/${i + 1}.log`, checkLog(c)),
-    }))
-
-    entry.attempts.push({
-      id: attemptId(cell.key, n),
-      cell: cell.key,
-      n,
-      image: record?.image ?? null,
-      env: record?.env ?? { vars: [], secrets: [] },
-      context,
-      outcome,
-      error,
-      durationMs: e.durationMs,
-      turns: (record?.turns ?? []).map((t) => ({
-        prompt: t.prompt,
-        status: t.status,
-        startedAt: t.startedAt,
-        durationMs: t.durationMs,
-        text:
-          t.text.length > TURN_TEXT_LIMIT
-            ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
-            : t.text,
-      })),
-      timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
-      activity: record
-        ? activity(record)
-        : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
-      judgements,
-      checks,
-      changedFiles: changedFiles(record?.diff?.files ?? []),
-      files,
-    })
+    })),
+    changedFiles: changedFiles(record?.diff?.files ?? []),
+    files,
   }
+}
 
-  const evals = [...byEval.values()]
+/** Per-cell and per-eval counts, pass rates, outcomes and fingerprints, once every attempt is in. */
+function rollUp(evals: EvalEntry[]): void {
   for (const entry of evals) {
     for (const c of entry.cells) {
       const outcomes = entry.attempts.filter((a) => a.cell === c.key).map((a) => a.outcome)
@@ -408,40 +430,74 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       JSON.stringify(entry.cells.map((c) => [c.key, c.fingerprint]).sort()),
     )
   }
+}
 
-  let git = input.git
-  if (git?.dirty) {
-    const patch = input.worktreePatch
-    git = { ...git, diffHash: patch ? sha256(patch) : null }
-    if (!patch) git.worktreePatchNote = 'git could not produce a patch'
-    else if (patch.length > WORKTREE_PATCH_LIMIT) {
-      git.worktreePatchNote = `too large to keep (${patch.length} bytes)`
-    } else {
-      // Kept byte-exact so it applies; recording still refuses it if it looks like a secret.
-      out.files.set('worktree.patch', patch)
-      git.worktreePatch = { path: 'worktree.patch', sha256: sha256(patch), bytes: patch.length }
-    }
+/** The run's git state, with the uncommitted changes kept as `worktree.patch` when they fit. */
+function gitState(input: AssembleInput, out: Artifacts): GitInfo | null {
+  const git = input.git
+  if (!git?.dirty) return git
+  const patch = input.worktreePatch
+  const state = { ...git, diffHash: patch ? sha256(patch) : null }
+  if (!patch) state.worktreePatchNote = 'git could not produce a patch'
+  else if (patch.length > WORKTREE_PATCH_LIMIT) {
+    state.worktreePatchNote = `too large to keep (${patch.length} bytes)`
+  } else {
+    // Kept byte-exact so it applies; recording still refuses it if it looks like a secret.
+    out.files.set('worktree.patch', patch)
+    state.worktreePatch = { path: 'worktree.patch', sha256: sha256(patch), bytes: patch.length }
   }
+  return state
+}
+
+const byName =
+  <T>(key: (x: T) => string) =>
+  (a: T, b: T) =>
+    key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0
+
+function stackOf(input: AssembleInput, seen: Seen, judgeModel: string | null): Stack {
+  const { config } = input.ctx
   const packages = packageVersions(input.enginePackages)
-  const byPath = (a: { path: string }, b: { path: string }) =>
-    a.path < b.path ? -1 : a.path > b.path ? 1 : 0
-  const stack: Stack = {
+  return {
     es: input.es,
     node: process.versions.node,
     os: process.platform,
     arch: process.arch,
-    images: [...images.values()].sort((a, b) => (a.ref < b.ref ? -1 : 1)),
+    images: [...seen.images.values()].sort(byName((i) => i.ref)),
     packages,
-    harnesses: [...harnesses.values()].sort((a, b) => (a.id < b.id ? -1 : 1)),
+    harnesses: [...seen.harnesses.values()].sort(byName((h) => h.id)),
     judge: {
       model: judgeModel,
-      resolvedModels: [...resolvedJudges].sort(),
+      resolvedModels: [...seen.resolvedJudges].sort(),
       threshold: config.judge.threshold,
       version: judgeVersion(input.es, packages, judgeModel ?? ''),
     },
-    context: [...contexts.values()].sort(byPath),
+    context: [...seen.contexts.values()].sort(byName((c) => c.path)),
     fingerprintScope: FINGERPRINT_SCOPE,
   }
+}
+
+export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
+  const { ctx, engine } = input
+  const { config, runId } = ctx
+  const out = new Artifacts()
+  const judgeModel = config.judge.model === undefined ? null : judgeModelName(config.judge.model)
+  const configHash = sha256(
+    JSON.stringify({
+      include: config.include,
+      harness: config.harness.map(withoutCaps),
+      sandbox: config.sandbox.map(withoutCaps),
+      environment: config.environment,
+      runs: config.runs,
+      env: config.env,
+      judge: withoutCaps(config.judge),
+      timeoutMs: config.timeoutMs,
+    }),
+  )
+  const seen = new Seen(input.sandbox)
+  const judge = { model: judgeModel, threshold: config.judge.threshold }
+  for (const e of engine.evals) await addAttempt(e, ctx, seen, out, judge)
+  const evals = [...seen.byEval.values()]
+  rollUp(evals)
 
   const attempts = evals.flatMap((e) => e.attempts)
   const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length
@@ -454,11 +510,11 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     endedAt: input.endedAt.toISOString(),
     durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
     author: input.author,
-    git,
+    git: gitState(input, out),
     runner: input.runner,
     dependencies: { lockfiles: input.lockfiles },
-    stack,
-    environments: [...environments.values()].sort((a, b) => (a.name < b.name ? -1 : 1)),
+    stack: stackOf(input, seen, judgeModel),
+    environments: [...seen.environments.values()].sort(byName((e) => e.name)),
     config: {
       harnesses: config.harness.map(harnessId),
       sandboxes: config.sandbox.map(sandboxId),
