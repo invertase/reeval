@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { EvalEntry, RunRecord } from '../src/history/types.ts'
+import type { AttemptMeta } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EsEvent, EvalResult, Progress } from '../src/ui/events.ts'
@@ -17,14 +18,28 @@ const s = (seconds: number) => T0 + seconds * 1000
 const GREET = 'evals/hello.es.ts › greet module › creates a tested greet module'
 const DEFAULT = 'evals/hello.es.ts › greet module › adds a default name in a follow-up turn'
 
+const CELL = 'cursor:composer-2.5/baseline/docker'
+const keyOf = (id: string) => `${id} # ${CELL}#1`
+const attempt = (name: string, group: string[]): AttemptMeta => ({
+  name,
+  groups: group,
+  tags: [],
+  cell: { key: CELL, harness: 'cursor:composer-2.5', environment: 'baseline', sandbox: 'docker' },
+  n: 1,
+  label: '',
+  harness: { kind: 'cursor', model: 'composer-2.5' },
+})
+
 const progress = (id: string, at: number, p: Omit<Progress, 'at'>): EsEvent =>
-  ({ type: 'eval-progress', id, attempt: 1, progress: { at, ...p } }) as EsEvent
+  ({ type: 'eval-progress', key: keyOf(id), progress: { at, ...p } }) as EsEvent
 
 const greetResult: EvalResult = {
   id: GREET,
+  key: keyOf(GREET),
   file: 'evals/hello.es.ts',
   group: ['greet module'],
   name: 'creates a tested greet module',
+  attempt: attempt('creates a tested greet module', ['greet module']),
   state: 'passed',
   durationMs: 192_000,
   errors: [],
@@ -51,9 +66,11 @@ const assertion = [
 
 const defaultResult: EvalResult = {
   id: DEFAULT,
+  key: keyOf(DEFAULT),
   file: 'evals/hello.es.ts',
   group: ['greet module'],
   name: 'adds a default name in a follow-up turn',
+  attempt: attempt('adds a default name in a follow-up turn', ['greet module']),
   state: 'failed',
   durationMs: 363_000,
   errors: ['expected 1 to be 2 // Object.is equality'],
@@ -69,8 +86,11 @@ const entry = (r: EvalResult, turns: number, judge?: number): EvalEntry =>
     group: r.group,
     name: r.name,
     outcome: r.meta?.outcome ?? 'pass',
+    cells: [],
     attempts: [
       {
+        id: `${CELL}#1`,
+        cell: CELL,
         n: 1,
         outcome: r.meta?.outcome ?? 'pass',
         error: r.meta?.errorKind ? { kind: r.meta.errorKind, message: r.errors[0] ?? '' } : null,
@@ -87,7 +107,7 @@ const entry = (r: EvalResult, turns: number, judge?: number): EvalEntry =>
 const record = {
   durationMs: 365_000,
   cost: { usd: null },
-  summary: { evals: 2, pass: 1, fail: 1, infraError: 0, skipped: 0 },
+  summary: { evals: 2, attempts: 2, pass: 1, fail: 1, infraError: 0, skipped: 0 },
   evals: [entry(greetResult, 1, 0.92), entry(defaultResult, 2)],
 } as unknown as RunRecord
 
@@ -106,19 +126,37 @@ const interleaved: EsEvent[] = [
     at: T0,
     file: 'evals/hello.es.ts',
     evals: [
-      { id: GREET, group: ['greet module'], name: greetResult.name, skipped: false },
-      { id: DEFAULT, group: ['greet module'], name: defaultResult.name, skipped: false },
+      {
+        id: GREET,
+        key: keyOf(GREET),
+        group: ['greet module'],
+        name: greetResult.name,
+        skipped: false,
+      },
+      {
+        id: DEFAULT,
+        key: keyOf(DEFAULT),
+        group: ['greet module'],
+        name: defaultResult.name,
+        skipped: false,
+      },
     ],
   },
-  { type: 'eval-start', at: s(0), id: GREET, attempt: 1 },
-  { type: 'eval-start', at: s(1), id: DEFAULT, attempt: 1 },
+  { type: 'eval-start', at: s(0), id: GREET, key: keyOf(GREET), attempt: greetResult.attempt },
+  {
+    type: 'eval-start',
+    at: s(1),
+    id: DEFAULT,
+    key: keyOf(DEFAULT),
+    attempt: defaultResult.attempt,
+  },
   progress(GREET, s(1), { kind: 'sandbox' }),
   progress(DEFAULT, s(2), { kind: 'sandbox' }),
   progress(GREET, s(5), { kind: 'sandbox-ready', ms: 4100 }),
   progress(GREET, s(5), { kind: 'turn-start', turn: 1 }),
   progress(DEFAULT, s(6), { kind: 'sandbox-ready', ms: 4200 }),
   progress(DEFAULT, s(6), { kind: 'turn-start', turn: 1 }),
-  { type: 'log', at: s(70), id: DEFAULT, attempt: 1, stream: 'stdout', text: 'seeding greet.js\n' },
+  { type: 'log', at: s(70), key: keyOf(DEFAULT), stream: 'stdout', text: 'seeding greet.js\n' },
   progress(GREET, s(170), {
     kind: 'turn-end',
     turn: 1,
@@ -139,7 +177,7 @@ const interleaved: EsEvent[] = [
     ms: 3100,
   }),
   progress(GREET, s(176), { kind: 'cleanup' }),
-  { type: 'eval-end', at: s(192), attempt: 1, result: greetResult },
+  { type: 'eval-end', at: s(192), result: greetResult },
   progress(DEFAULT, s(200), {
     kind: 'turn-end',
     turn: 1,
@@ -164,7 +202,7 @@ const interleaved: EsEvent[] = [
     exitCode: 1,
     ms: 900,
   }),
-  { type: 'eval-end', at: s(364), attempt: 1, result: defaultResult },
+  { type: 'eval-end', at: s(364), result: defaultResult },
   {
     type: 'run-end',
     at: s(365),
@@ -197,7 +235,7 @@ function render(events: EsEvent[], output: OutputOptions, color = false): string
     colors: colors(color),
     output,
     harness: 'cursor',
-    attemptDir: (id) => `.es/runs/run-1/${id.split(' › ').at(-1)?.split(' ')[0]}/1`,
+    attemptDir: (id, _cell, n) => `.es/runs/run-1/${id.split(' › ').at(-1)?.split(' ')[0]}/${n}`,
     now: () => now,
     timers: false,
   })
