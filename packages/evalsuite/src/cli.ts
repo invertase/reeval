@@ -16,7 +16,7 @@ import { createRenderer, resolveOutput } from './ui/index.ts'
 
 const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1 }
 
-const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError']
+const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130 } as const
 
@@ -45,6 +45,13 @@ Usage:
                             --md --json --fail-on-regression
   es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                             (default dir: .es/checkouts/<run>)
+  es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
+    --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
+    --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
+    --no-token              Skip the session token (for scripts; anyone local can then read it)
+  es studio build           Write the studio as a static site for Pages, Netlify or any host
+    --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
+    --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
   es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
   es --help
@@ -79,6 +86,14 @@ async function run(argv: string[]): Promise<number> {
       'log-prefix': { type: 'string' },
       'output-logs': { type: 'string' },
       tag: { type: 'string', multiple: true },
+      port: { type: 'string' },
+      host: { type: 'string' },
+      open: { type: 'boolean' },
+      out: { type: 'string' },
+      scratch: { type: 'boolean' },
+      'no-scratch': { type: 'boolean' },
+      'no-token': { type: 'boolean' },
+      'no-artifacts': { type: 'boolean' },
     },
   })
   if (values.version) {
@@ -95,6 +110,11 @@ async function run(argv: string[]): Promise<number> {
     const { image } = await buildImage((line) => console.log(dim(line)))
     console.log(green(`Built ${image}`))
     return EXIT.ok
+  }
+  if (command === 'studio') {
+    const config = await loadConfig(values.config, 'studio')
+    const { studioCommand } = await import('./studio/command.ts')
+    return studioCommand({ config, flags: values, version, build: filters[0] === 'build' })
   }
   if (command in HISTORY_COMMANDS) {
     const config = await loadConfig(values.config, command)

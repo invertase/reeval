@@ -1,0 +1,214 @@
+import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { createReadStream } from 'node:fs'
+import { stat } from 'node:fs/promises'
+import { extname, join, resolve, sep } from 'node:path'
+import { Readable } from 'node:stream'
+import { type Context, Hono } from 'hono'
+import { getCookie, setCookie } from 'hono/cookie'
+import { streamSSE } from 'hono/streaming'
+import type { StudioInfo } from '../view/model.ts'
+import { indexFiles } from '../view/model.ts'
+import { artifactType, parseDataPath } from '../view/paths.ts'
+import { listHeaders, resolveFile, type StudioSource } from './source.ts'
+
+export const COOKIE = 'es_studio_token'
+
+export type StudioServerOptions = {
+  source: StudioSource
+  /** The prebuilt web app (index.html and assets/). */
+  appDir: string
+  es: string
+  project: string
+  /** null turns the token check off (`--no-token`). */
+  token: string | null
+  /** Host headers to accept, e.g. `127.0.0.1:4984`; empty accepts any (tests only). */
+  hosts: string[]
+  /** Subscribes to history changes; returns an unsubscribe function. */
+  subscribe?: (listener: () => void) => () => void
+  maxEventClients?: number
+}
+
+export const newToken = () => randomBytes(32).toString('base64url')
+
+/** Every name a browser may use to reach a server bound to `host:port`. */
+export function allowedHosts(host: string, port: number): string[] {
+  const names = new Set(['127.0.0.1', 'localhost', '[::1]'])
+  names.add(host.includes(':') && !host.startsWith('[') ? `[${host}]` : host)
+  return [...names].map((name) => `${name}:${port}`)
+}
+
+const APP_TYPES: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json; charset=utf-8',
+}
+
+const APP_CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "font-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+].join('; ')
+
+const sameToken = (a: string, b: string) => {
+  const x = Buffer.from(a)
+  const y = Buffer.from(b)
+  return x.length === y.length && timingSafeEqual(x, y)
+}
+
+/** The request path relative to the root, percent-decoded exactly once; null if malformed. */
+function requestPath(url: string): string | null {
+  let path: string
+  try {
+    path = decodeURIComponent(new URL(url).pathname)
+  } catch {
+    return null
+  }
+  if (path.includes('\0') || path.includes('\\')) return null
+  return path.replace(/^\/+/, '')
+}
+
+async function sendFile(
+  c: Context,
+  file: string,
+  headers: Record<string, string>,
+): Promise<Response> {
+  const info = await stat(file)
+  const etag = `W/"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`
+  const common = { ...headers, ETag: etag, 'Content-Length': String(info.size) }
+  if (c.req.header('if-none-match') === etag) return c.body(null, 304, { ETag: etag })
+  if (c.req.method === 'HEAD') return c.body(null, 200, common)
+  const body = Readable.toWeb(createReadStream(file)) as ReadableStream
+  return c.body(body, 200, common)
+}
+
+/** The studio's local HTTP app: read-only, GET only, behind a Host check and a session token. */
+export function createStudioApp(options: StudioServerOptions) {
+  const { source, token, hosts } = options
+  const maxClients = options.maxEventClients ?? 16
+  let clients = 0
+  const app = new Hono()
+
+  app.use('*', async (c, next) => {
+    c.header('Referrer-Policy', 'no-referrer')
+    c.header('X-Content-Type-Options', 'nosniff')
+    c.header('Cross-Origin-Resource-Policy', 'same-origin')
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
+      return c.text('Method not allowed', 405, { Allow: 'GET, HEAD' })
+    }
+    const host = c.req.header('host') ?? ''
+    if (hosts.length && !hosts.includes(host)) return c.text('Unknown host', 403)
+    const origin = c.req.header('origin')
+    if (origin && hosts.length && !hosts.some((h) => origin === `http://${h}`)) {
+      return c.text('Cross-origin requests are not allowed', 403)
+    }
+    if (token === null) return next()
+    const url = new URL(c.req.url)
+    const offered = url.searchParams.get('token')
+    if (offered !== null) {
+      if (!sameToken(offered, token)) return c.text('Wrong studio token', 401)
+      setCookie(c, COOKIE, token, { httpOnly: true, sameSite: 'Strict', path: '/' })
+      url.searchParams.delete('token')
+      return c.redirect(`${url.pathname}${url.search}${url.hash}`, 302)
+    }
+    const cookie = getCookie(c, COOKIE)
+    if (!cookie || !sameToken(cookie, token)) {
+      return c.text(
+        'This studio needs its session token. Open the full URL that es studio printed.',
+        401,
+      )
+    }
+    return next()
+  })
+
+  app.get('/api/events', (c) => {
+    if (!options.subscribe) return c.text('Live updates are off', 404)
+    if (clients >= maxClients) return c.text('Too many live clients', 503)
+    const subscribe = options.subscribe
+    clients++
+    return streamSSE(c, async (stream) => {
+      let id = 0
+      const unsubscribe = subscribe(() => {
+        void stream.writeSSE({ event: 'history.changed', data: '{}', id: String(++id) })
+      })
+      const closed = new Promise<void>((resolve) => stream.onAbort(resolve))
+      await stream.writeSSE({ event: 'ready', data: '{}', id: String(id) })
+      const ping = setInterval(() => void stream.writeSSE({ event: 'ping', data: '{}' }), 25_000)
+      await closed
+      clearInterval(ping)
+      unsubscribe()
+      clients--
+    })
+  })
+
+  app.get('*', async (c) => {
+    const path = requestPath(c.req.url)
+    if (path === null) return c.text('Bad path', 400)
+    const target = parseDataPath(path)
+    if (target) {
+      const noStore = { 'Cache-Control': 'no-cache' }
+      if (target.kind === 'studio') {
+        const info: StudioInfo = {
+          mode: 'live',
+          es: options.es,
+          project: options.project,
+          generatedAt: new Date().toISOString(),
+          features: { live: !!options.subscribe, scratch: source.scratch, artifacts: true },
+        }
+        return c.json(info, 200, noStore)
+      }
+      if (target.kind === 'manifest' || target.kind === 'shard') {
+        const files = indexFiles(await listHeaders(source))
+        const body = files.get(path)
+        if (body === undefined) return c.json([], 200, noStore)
+        return c.json(body, 200, noStore)
+      }
+      const file = await resolveFile(source, target)
+      if (!file) return c.text('Not found', 404)
+      if (target.kind === 'record') {
+        return sendFile(c, file, { ...noStore, 'Content-Type': APP_TYPES['.json'] as string })
+      }
+      return sendFile(c, file, {
+        ...noStore,
+        'Content-Type': artifactType(file),
+        'Content-Security-Policy': 'sandbox',
+      })
+    }
+    if (path.startsWith('data/') || path.startsWith('api/')) return c.text('Not found', 404)
+    return serveApp(c, options.appDir, path)
+  })
+
+  return app
+}
+
+const APP_FILE = /^(?:assets\/)?[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
+
+async function serveApp(c: Context, dir: string, path: string): Promise<Response> {
+  const appDir = resolve(dir)
+  const name = path === '' ? 'index.html' : path
+  if (!APP_FILE.test(name) || name.includes('..')) return c.text('Not found', 404)
+  const file = join(appDir, ...name.split('/'))
+  if (!file.startsWith(appDir + sep)) return c.text('Not found', 404)
+  try {
+    if (!(await stat(file)).isFile()) return c.text('Not found', 404)
+  } catch {
+    return c.text('Not found', 404)
+  }
+  const hashed = name.startsWith('assets/')
+  return sendFile(c, file, {
+    'Content-Type': APP_TYPES[extname(file)] ?? 'application/octet-stream',
+    'Cache-Control': hashed ? 'public, max-age=31536000, immutable' : 'no-cache',
+    ...(name === 'index.html' ? { 'Content-Security-Policy': APP_CSP } : {}),
+  })
+}

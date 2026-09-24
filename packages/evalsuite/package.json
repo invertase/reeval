@@ -24,13 +24,17 @@
       "types": "./dist/judge.d.ts",
       "default": "./dist/judge.js"
     },
+    "./view": {
+      "types": "./dist/view/index.d.ts",
+      "default": "./dist/view/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-studio-app.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
@@ -39,11 +43,16 @@
     "@ai-sdk/harness": "1.0.123",
     "@ai-sdk/harness-cursor": "1.0.36",
     "@ai-sdk/typesafe-ai": "3.0.6",
+    "@hono/node-server": "2.1.1",
     "ai": "7.0.113",
+    "hono": "4.13.9",
     "jiti": "2.7.0",
     "std-env": "4.2.0",
     "vitest": "5.0.1",
     "ws": "8.21.0",
     "zod": "4.6.5"
+  },
+  "devDependencies": {
+    "studio-web": "workspace:*"
   }
 }
