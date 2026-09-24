@@ -237,17 +237,37 @@ export type StackSummary = {
   fingerprintScope: string[]
 }
 
-/** One line of the derived, locally cached history listing. */
+/** Per-cell attempt counts in a `HistoryEntry`, enough for pass rates without the record. */
+export type CellCounts = Pick<
+  CellRecord,
+  'key' | 'runs' | 'pass' | 'fail' | 'infraError' | 'skipped'
+>
+
+/**
+ * One line of the derived history listing: cached locally by the CLI, and the run header in the
+ * studio's index shards.
+ */
 export type HistoryEntry = {
   runId: string
   recorded: boolean
   status: RunRecord['status']
   startedAt: string
+  durationMs: number
   author: string
   git: Pick<GitInfo, 'sha' | 'branch' | 'dirty'> | null
   runner: RunnerInfo['kind']
+  /** The CI provider and its run page, for CI runs. */
+  ci: { provider: string; runUrl: string | null } | null
   harnesses: string[]
   summary: RunSummary
+  costUsd: number | null
   stack: StackSummary
-  evals: Array<{ id: string; fingerprint: string; outcome: Outcome }>
+  evals: Array<{
+    id: string
+    slug: string
+    fingerprint: string
+    outcome: Outcome
+    passRate: number | null
+    cells: CellCounts[]
+  }>
 }

@@ -44,7 +44,7 @@ export function newRunId(start: Date, sha: string | null, author: string): strin
   return `${stamp}_${sha ? sha.slice(0, 7) : 'nogit'}_${author}`
 }
 
-export const RUN_ID = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+$/
+export { RUN_ID } from './view/paths.ts'
 
 /** Readable, unique directory name for an eval id. */
 export function evalSlug(id: string): string {

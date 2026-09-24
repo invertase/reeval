@@ -15,6 +15,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
+import { runHeader } from '../view/header.ts'
 import { renderSummary } from './summary.ts'
 import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
@@ -40,36 +41,6 @@ export function parseRecord(bytes: Uint8Array, where: string): RunRecord {
 
 export async function readRecord(path: string): Promise<RunRecord> {
   return parseRecord(await readFile(path), path)
-}
-
-function entryOf(record: RunRecord, recorded: boolean): HistoryEntry {
-  return {
-    runId: record.runId,
-    recorded,
-    status: record.status,
-    startedAt: record.startedAt,
-    author: record.author,
-    git: record.git
-      ? { sha: record.git.sha, branch: record.git.branch, dirty: record.git.dirty }
-      : null,
-    runner: record.runner.kind,
-    harnesses: record.config.harnesses,
-    summary: record.summary,
-    stack: {
-      imageIds: record.stack.images.map((i) => i.id),
-      agentClis: [...new Set(record.stack.images.flatMap((i) => (i.agentCli ? [i.agentCli] : [])))],
-      harnesses: record.stack.harnesses.map((h) => h.id),
-      environments: record.environments.map(
-        (e) => `${e.name}@${e.digest.replace(/^sha256:/, '').slice(0, 12)}`,
-      ),
-      judgeModel: record.stack.judge.model,
-      judgeServed: record.stack.judge.resolvedModels,
-      judgeVersion: record.stack.judge.version,
-      threshold: record.stack.judge.threshold,
-      fingerprintScope: record.stack.fingerprintScope,
-    },
-    evals: record.evals.map((e) => ({ id: e.id, fingerprint: e.fingerprint, outcome: e.outcome })),
-  }
 }
 
 type Cache = {
@@ -119,7 +90,7 @@ export async function listRuns(
       continue
     }
     try {
-      const entry = entryOf(await readRecord(path), recorded)
+      const entry = runHeader(await readRecord(path), recorded)
       cache.files[key] = { size: info.size, mtimeMs: info.mtimeMs, entry }
       entries.push(entry)
       changed = true
