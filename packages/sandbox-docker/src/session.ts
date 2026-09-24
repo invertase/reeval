@@ -3,9 +3,17 @@ import { posix } from 'node:path'
 import { Readable } from 'node:stream'
 import type { HarnessV1NetworkSandboxSession, HarnessV1SandboxProvider } from '@ai-sdk/harness'
 import { docker, dockerOk, removeContainerDetached } from './docker-cli.ts'
+import { type Gateway, type GatewayOptions, startGateway } from './egress/gateway.ts'
+import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
 
-type SessionOptions = {
+/** Starts the egress gateway: credential brokering, and an enforceable network policy. */
+export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
+  /** Defaults to `allow-all`. Anything else detaches the container from every Docker network. */
+  policy?: NetworkPolicy
+}
+
+export type SessionOptions = {
   image: string
   labels?: Record<string, string>
   /** Set in the container for every process; values travel via the docker CLI's env, not argv. */
@@ -13,19 +21,34 @@ type SessionOptions = {
   /** The container removes itself after this long, as a backstop for hard-killed runs. */
   lifetimeMs?: number
   abortSignal?: AbortSignal
+  egress?: EgressOptions | boolean
+}
+
+/** Whether the gateway runs. When it doesn't, the session has no request-transformation methods. */
+export type EgressStatus = { active: true } | { active: false; reason: string }
+
+export type DockerSession = HarnessV1NetworkSandboxSession & {
+  /** Unset when the session wasn't asked to start the gateway. */
+  readonly egress?: EgressStatus
 }
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 
+/** The Docker networks a container is attached to. */
+async function networksOf(id: string): Promise<string[]> {
+  const out = await dockerOk(['inspect', '--format', '{{json .NetworkSettings.Networks}}', id])
+  return Object.keys(JSON.parse(out) ?? {})
+}
+
 /**
  * A harness sandbox session backed by one local Docker container. Commands and file I/O go
- * through `docker exec`; the bridge port is published on 127.0.0.1.
+ * through `docker exec`. The bridge port is published on 127.0.0.1, or reached through the
+ * egress gateway's tunnel while the container has no network.
  */
-export async function createDockerSession(
-  options: SessionOptions,
-): Promise<HarnessV1NetworkSandboxSession> {
+export async function createDockerSession(options: SessionOptions): Promise<DockerSession> {
   const labels = { [LABEL.managed]: 'true', ...options.labels }
   const lifetime = Math.ceil((options.lifetimeMs ?? 24 * 3_600_000) / 1000)
+  const signal = options.abortSignal
   const id = await dockerOk(
     [
       'run',
@@ -43,17 +66,50 @@ export async function createDockerSession(
       options.image,
       String(lifetime),
     ],
-    { signal: options.abortSignal, env: options.env },
+    { signal, env: options.env },
   )
+  let gateway: Gateway | undefined
   let removed: Promise<void> | undefined
   const remove = () => {
+    gateway?.close()
     removed ??= removeContainerDetached(id)
     return removed
   }
-  if (options.abortSignal?.aborted) {
+  if (signal?.aborted) {
     await remove()
-    throw options.abortSignal.reason
+    throw signal.reason
   }
+
+  const egressOptions = options.egress === true ? {} : options.egress || undefined
+  let egress: EgressStatus | undefined
+  // Networks the container was detached from, to reattach if the policy opens up again.
+  let detached: string[] = []
+  const attach = async (policy: NetworkPolicy) => {
+    if (isRestricted(policy) && detached.length === 0) {
+      detached = await networksOf(id)
+      for (const n of detached) await dockerOk(['network', 'disconnect', '--force', n, id])
+    } else if (!isRestricted(policy) && detached.length > 0) {
+      for (const n of detached) await dockerOk(['network', 'connect', n, id])
+      detached = []
+    }
+  }
+  if (egressOptions) {
+    const { policy = { mode: 'allow-all' }, ...rest } = egressOptions
+    try {
+      // Before anything but `sleep` runs, so a restricted container never has a route out.
+      await attach(policy)
+      gateway = await startGateway(id, { ...rest, policy }, signal)
+      egress = { active: true }
+    } catch (error) {
+      if (signal?.aborted || isRestricted(policy)) {
+        await remove()
+        if (signal?.aborted) throw signal.reason
+        throw new Error(`Can't enforce the egress policy: ${(error as Error).message}`)
+      }
+      egress = { active: false, reason: (error as Error).message }
+    }
+  }
+  const envFor = (env?: Record<string, string>) => (gateway ? { ...gateway.env, ...env } : env)
 
   const execArgs = (command: string, cwd?: string, env?: Record<string, string>) => [
     'exec',
@@ -68,8 +124,9 @@ export async function createDockerSession(
   ]
 
   const run: HarnessV1NetworkSandboxSession['run'] = async (o) => {
-    const r = await docker(execArgs(o.command, o.workingDirectory, o.env), {
-      env: o.env,
+    const env = envFor(o.env)
+    const r = await docker(execArgs(o.command, o.workingDirectory, env), {
+      env,
       signal: o.abortSignal,
     })
     return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
@@ -101,17 +158,35 @@ export async function createDockerSession(
     )
   }
 
-  const session: HarnessV1NetworkSandboxSession = {
+  const brokering: Partial<HarnessV1NetworkSandboxSession> = gateway
+    ? {
+        async setNetworkPolicy(policy) {
+          gateway?.setPolicy(policy)
+          await attach(policy)
+        },
+        async addRequestTransformations(rules) {
+          gateway?.addTransformations(rules)
+        },
+        async setRequestTransformations(rules) {
+          gateway?.setTransformations(rules)
+        },
+      }
+    : {}
+
+  const session: DockerSession = {
     id,
     description: `Docker container ${id.slice(0, 12)} (${options.image})`,
     defaultWorkingDirectory: SANDBOX_ROOT,
     ports: [BRIDGE_PORT],
+    ...(egress ? { egress } : {}),
+    ...brokering,
     run,
     async spawn(o) {
-      const child = spawn('docker', execArgs(o.command, o.workingDirectory, o.env), {
+      const env = envFor(o.env)
+      const child = spawn('docker', execArgs(o.command, o.workingDirectory, env), {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: true,
-        env: o.env ? { ...process.env, ...o.env } : process.env,
+        env: env ? { ...process.env, ...env } : process.env,
       })
       const exited = new Promise<{ exitCode: number }>((resolve) =>
         child.on('close', (code) => resolve({ exitCode: code ?? 1 })),
@@ -152,9 +227,11 @@ export async function createDockerSession(
       await writeBinaryFile({ ...o, content: Buffer.concat(chunks) })
     },
     async getPortEndpoint({ port, protocol = 'ws' }) {
+      const scheme = protocol === 'ws' ? 'ws' : 'http'
+      if (gateway && detached.length > 0) return { url: await gateway.portUrl(port, scheme) }
       const mapped = await dockerOk(['port', id, `${port}/tcp`])
       const hostPort = mapped.split('\n')[0]?.split(':').at(-1)
-      return { url: `${protocol === 'ws' ? 'ws' : 'http'}://127.0.0.1:${hostPort}` }
+      return { url: `${scheme}://127.0.0.1:${hostPort}` }
     },
     async getPortUrl(o) {
       return (await session.getPortEndpoint(o)).url
