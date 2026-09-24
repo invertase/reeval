@@ -161,9 +161,10 @@ async function run(argv: string[]): Promise<number> {
   const who = await author(config.root)
   const { stagingDir, sweepStaging, writeScratchRun } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
+  // Run ids sort in run order, so a second run in the same second takes the next second's id.
   let runId = newRunId(startedAt, git?.sha ?? null, who)
-  for (let n = 2; existsSync(join(scratchDir(config.root), `${runId}.json`)); n++) {
-    runId = newRunId(startedAt, git?.sha ?? null, `${who}-${n}`)
+  for (let n = 1; existsSync(join(scratchDir(config.root), `${runId}.json`)); n++) {
+    runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
   }
   await sweepStaging(config.root)
   const resultsDir = stagingDir(config.root, runId)
