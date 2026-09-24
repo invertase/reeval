@@ -1,4 +1,6 @@
+import type { JudgeRetry } from '../history/types.ts'
 import type { FakeJudgeModel, JSONValue, JudgeModel, JudgeOptions, Verdict } from '../types.ts'
+import { JUDGE_RETRY, type RetryPolicy, withRetries } from './retry.ts'
 
 /** The judge the docs recommend, pinned so a model update never silently moves scores. */
 export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.13.0'
@@ -56,15 +58,21 @@ export function judgeRoute(model: string, env: NodeJS.ProcessEnv = process.env):
   throw new Error(`No credentials for judge model "${model}". ${options}`)
 }
 
+/** A verdict plus the transient failures retried on the way to it. */
+export type JudgeResult = { verdict: Verdict; retries: JudgeRetry[] }
+
+/** Transient provider errors (429, 5xx, "high demand") are retried with backoff and recorded. */
 export async function runJudge(
   question: string,
   state: JudgeState,
   options: Required<Pick<JudgeOptions, 'model' | 'threshold'>> & JudgeOptions,
   signal: AbortSignal,
-): Promise<Verdict> {
+  retry: RetryPolicy = JUDGE_RETRY,
+): Promise<JudgeResult> {
   const { model, threshold } = options
   let score: number
   let resolvedModel: string | undefined
+  let retries: JudgeRetry[] = []
   if (isFakeJudge(model)) {
     score = model.score
   } else {
@@ -73,15 +81,15 @@ export async function runJudge(
       if (problem) throw new Error(problem)
     }
     const { scoreWithModel } = await import('./model.ts')
-    ;({ score, resolvedModel } = await scoreWithModel(
-      model,
-      question,
-      state,
-      options.providerOptions,
+    const scored = await withRetries(
+      () => scoreWithModel(model, question, state, options.providerOptions, signal),
+      retry,
       signal,
-    ))
+    )
+    ;({ score, resolvedModel } = scored.value)
+    retries = scored.retries
   }
-  return {
+  const verdict: Verdict = {
     verdict: score >= threshold ? 'pass' : 'fail',
     score,
     threshold,
@@ -89,4 +97,5 @@ export async function runJudge(
     model: judgeModelName(model),
     ...(resolvedModel ? { resolvedModel } : {}),
   }
+  return { verdict, retries }
 }

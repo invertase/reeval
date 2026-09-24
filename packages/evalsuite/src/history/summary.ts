@@ -189,8 +189,11 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatMs(act.reasoningMs)} reasoning`,
   )
   for (const j of a.judgements) {
+    const retried = j.retries?.length
+      ? `, after ${j.retries.length} ${j.retries.length === 1 ? 'retry' : 'retries'}`
+      : ''
     lines.push(
-      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}): ${j.question}${j.reason ? ` — ${j.reason}` : ''}`,
+      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}${j.reason ? ` — ${j.reason}` : ''}`,
     )
   }
   for (const c of a.checks) {

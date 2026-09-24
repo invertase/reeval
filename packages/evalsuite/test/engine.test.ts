@@ -440,6 +440,39 @@ evaluate('passes', async () => {})
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
 
+  test('a judge call retries a transient provider error and records it', async () => {
+    const p = await project('judge-retry', {
+      'es.config.ts': fakeConfig(),
+      'evals/agent.es.ts': `import { evaluate, expect } from 'evalsuite'
+let calls = 0
+const flaky = {
+  specificationVersion: 'v4',
+  provider: 'mock',
+  modelId: 'flaky',
+  supportedQuestionTypes: ['boolean'],
+  async doEvaluate() {
+    if (calls++ === 0) {
+      throw Object.assign(new Error('The model is overloaded due to high demand'), { statusCode: 503 })
+    }
+    return { answers: { answer: { type: 'boolean', probability: 0.9 } }, warnings: [] }
+  },
+}
+evaluate('agent eval', async (t) => {
+  await t.send('x')
+  expect(await t.judge('ok?', { model: flaky })).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [j] = readRun(p.dir).evals[0]?.trial.judgements ?? []
+    assert.equal(j?.verdict, 'pass')
+    assert.equal(j?.model, 'mock/flaky')
+    assert.equal(j?.retries?.length, 1)
+    assert.equal(j?.retries?.[0]?.error, 'The model is overloaded due to high demand')
+    assert.match(readRun(p.dir).read('summary.md'), /mock\/flaky, after 1 retry\): ok\?/)
+  })
+
   test('t.judge before any turn is an assertion error', async () => {
     const p = await project('judge-early', {
       'es.config.ts': fakeConfig(),

@@ -16,6 +16,7 @@ import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
 import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from './judge/patch.ts'
+import type { RetriedError } from './judge/retry.ts'
 import {
   cascade,
   checkOptions,
@@ -41,6 +42,7 @@ import type {
   EvalRecord,
   GroupOptions,
   JSONValue,
+  JudgeInput,
   JudgeOptions,
   ResolvedConfig,
   Turn,
@@ -481,14 +483,15 @@ async function runAttempt(
         throw new Error(NO_JUDGE_MODEL)
       }
       const state = judgeState(subject, on === undefined || isTurn(on) ? undefined : on)
-      record.judgeInputs?.push({ question, model: judgeModelName(model), state })
+      const input: JudgeInput = { question, model: judgeModelName(model), state }
+      record.judgeInputs?.push(input)
       const start = performance.now()
       const ms = () => Math.round(performance.now() - start)
       report({ kind: 'judge-start', question })
       const { maxConcurrent, ...judgeOptions } = options
       const provider = judgeModelName(model).split('/')[0]
       try {
-        const verdict = await timed('judgeMs', () =>
+        const { verdict, retries } = await timed('judgeMs', () =>
           withLease(
             maxConcurrent ? { [`judge:${provider}`]: maxConcurrent } : {},
             () =>
@@ -501,7 +504,7 @@ async function runAttempt(
             signal,
           ),
         )
-        record.judgements.push(verdict)
+        record.judgements.push(retries.length ? { ...verdict, retries } : verdict)
         const { score, threshold } = verdict
         report({
           kind: 'judge-end',
@@ -514,6 +517,9 @@ async function runAttempt(
         return verdict
       } catch (error) {
         judgeErrored = true
+        const { retries } = error as Partial<RetriedError>
+        input.error = error instanceof Error ? error.message : String(error)
+        if (retries?.length) input.retries = retries
         report({
           kind: 'judge-end',
           question,

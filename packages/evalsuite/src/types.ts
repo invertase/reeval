@@ -1,4 +1,4 @@
-import type { ArtifactLevel, RecordMode } from './history/types.ts'
+import type { ArtifactLevel, JudgeRetry, RecordMode } from './history/types.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -313,6 +313,15 @@ export type EnvironmentRecord = {
 
 export type AttemptImage = { ref: string; id: string; agentCli: string | null }
 
+/** What one judge call saw, and for a call that failed, why and what was retried first. */
+export type JudgeInput = {
+  question: string
+  model: string
+  state: { [key: string]: JSONValue }
+  error?: string
+  retries?: JudgeRetry[]
+}
+
 /** Full per-attempt payload, written to disk by the worker. */
 export type EvalRecord = {
   outcome: Exclude<Outcome, 'skipped'>
@@ -321,12 +330,13 @@ export type EvalRecord = {
   /** Workspace changes over the whole eval. */
   diff: Diff | null
   checks: Array<{ command: string; durationMs: number } & ExecResult>
-  judgements: Verdict[]
+  /** With `retries` when transient provider errors were retried on the way to the verdict. */
+  judgements: Array<Verdict & { retries?: JudgeRetry[] }>
   timings: PhaseTimings
   /** Skills, rules and MCP config visible to the agent, by content hash. */
   context?: Array<{ path: string; sha256: string }>
   /** What each judge call saw, in call order, including calls that errored. */
-  judgeInputs?: Array<{ question: string; model: string; state: { [key: string]: JSONValue } }>
+  judgeInputs?: JudgeInput[]
   environment?: EnvironmentRecord
   image?: AttemptImage | null
   /** Names of the variables and secrets set in the sandbox. */

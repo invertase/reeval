@@ -43,6 +43,9 @@ export type RunnerInfo =
   | { kind: 'ci'; provider: string; runUrl: string | null; attempt: number | null }
   | { kind: 'local'; hostHash: string }
 
+/** One failed judge try that was retried, and the backoff before the next. */
+export type JudgeRetry = { error: string; delayMs: number }
+
 export type JudgementRecord = {
   question: string
   verdict: 'pass' | 'fail'
@@ -54,6 +57,8 @@ export type JudgementRecord = {
   /** Evaluation models return a probability only, so this is null until a judge explains itself. */
   reason: string | null
   evidence: string[]
+  /** Transient provider errors retried before this verdict, with the backoff before each retry. */
+  retries?: JudgeRetry[]
 }
 
 export type AttemptFiles = {

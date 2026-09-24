@@ -14,8 +14,9 @@ import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, stackChanges } from '../src/history/views.ts'
-import { checkModelString, judgeCredentials, judgeRoute } from '../src/judge/index.ts'
+import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
+import { backoffMs, isTransient } from '../src/judge/retry.ts'
 import { pullableDigests } from '../src/preflight.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { LABEL } from '../src/sandbox/image.ts'
@@ -351,4 +352,72 @@ test("a locally built ES image's containerd digest isn't a registry digest", () 
   assert.deepEqual(pullableDigests({ repoDigests: ['node@sha256:abc'], labels: {} }), [
     'node@sha256:abc',
   ])
+})
+
+/** An AI SDK evaluation model that fails with `errors` first, then answers `probability`. */
+function scriptedModel(errors: Array<Record<string, unknown>>, probability = 0.9) {
+  let calls = 0
+  return {
+    specificationVersion: 'v4',
+    provider: 'mock',
+    modelId: 'scripted',
+    supportedQuestionTypes: ['boolean'],
+    get calls() {
+      return calls
+    },
+    async doEvaluate() {
+      const error = errors[calls++]
+      if (error) throw Object.assign(new Error(String(error.message)), error)
+      return { answers: { answer: { type: 'boolean', probability } }, warnings: [] }
+    },
+  } as const
+}
+
+const quick = { attempts: 4, baseMs: 1, maxMs: 5 }
+const judge = (model: object) =>
+  runJudge('ok?', { output: 'x' }, { model, threshold: 0.8 }, new AbortController().signal, quick)
+
+test('judge calls retry transient provider errors with backoff and record them', async () => {
+  const model = scriptedModel([
+    { message: 'The model is overloaded due to high demand', statusCode: 503 },
+    { message: 'Too many requests', statusCode: 429, responseHeaders: { 'retry-after': '0' } },
+  ])
+  const { verdict, retries } = await judge(model)
+  assert.equal(verdict.verdict, 'pass')
+  assert.equal(model.calls, 3)
+  assert.deepEqual(
+    retries.map((r) => r.error),
+    ['The model is overloaded due to high demand', 'Too many requests'],
+  )
+  for (const r of retries) assert.ok(r.delayMs >= 0 && r.delayMs <= quick.maxMs)
+})
+
+test('judge calls fail at once on permanent errors, and after the last try on transient ones', async () => {
+  const bad = scriptedModel([{ message: 'API key not valid', statusCode: 401 }])
+  await assert.rejects(judge(bad), (e: Error & { retries: unknown[] }) => {
+    assert.equal(e.retries.length, 0)
+    return /API key/.test(e.message)
+  })
+  assert.equal(bad.calls, 1)
+  const down = scriptedModel(Array(10).fill({ message: 'Service Unavailable', statusCode: 503 }))
+  await assert.rejects(judge(down), (e: Error & { retries: unknown[] }) => e.retries.length === 3)
+  assert.equal(down.calls, quick.attempts)
+})
+
+test('transient judge errors and bounded backoff', () => {
+  assert.equal(isTransient({ name: 'AI_APICallError', statusCode: 500, message: 'x' }), true)
+  assert.equal(isTransient({ statusCode: 400, message: 'bad request' }), false)
+  assert.equal(isTransient(new Error('fetch failed')), true)
+  assert.equal(isTransient(new Error('No credentials for judge model')), false)
+  assert.equal(
+    isTransient({ name: 'AI_RetryError', message: 'x', lastError: { statusCode: 503 } }),
+    true,
+  )
+  const policy = { attempts: 6, baseMs: 2_000, maxMs: 30_000 }
+  for (let retry = 0; retry < 8; retry++) {
+    const ms = backoffMs(policy, retry, new Error('x'))
+    assert.ok(ms <= 30_000 && ms >= Math.min(30_000, 2_000 * 2 ** retry) / 2, `${retry}: ${ms}`)
+  }
+  const later = { statusCode: 429, responseHeaders: { 'retry-after': '12' } }
+  assert.ok(backoffMs(policy, 0, later) >= 12_000)
 })

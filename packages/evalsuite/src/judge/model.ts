@@ -31,6 +31,8 @@ export async function scoreWithModel(
     questions: { answer: { type: 'boolean', instructions: question } },
     providerOptions,
     abortSignal: signal,
+    // ES retries itself, with longer backoff, and records each retry with the verdict.
+    maxRetries: 0,
   })
   return { score: result.answers.answer.probability, resolvedModel: result.response?.modelId }
 }
