@@ -360,7 +360,6 @@ export type EvalMeta = {
   outcome: EvalRecord['outcome']
   errorKind: ErrorKind | null
   judgements: Array<Pick<Verdict, 'verdict' | 'score' | 'threshold'> & { question: string }>
-  recordPath: string
 }
 
 export type RunContext = {

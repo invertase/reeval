@@ -34,7 +34,7 @@ describe('engine', () => {
       skipped: 0,
     })
     assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')
-    assert.ok(!existsSync(join(p.dir, '.es/results')), 'no legacy result.json')
+    assert.ok(!existsSync(join(p.dir, '.es/attachments')), 'no copies of the records')
     assert.ok(!existsSync(join(p.dir, '.es/staging', run.runId)), 'staging cleaned up')
   })
 
@@ -192,20 +192,15 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
   })
 
   test('only the engine module imports vitest', () => {
-    const offenders: string[] = []
-    const walk = (dir: string) => {
-      for (const entry of readdirSync(dir, { withFileTypes: true })) {
-        const path = join(dir, entry.name)
-        if (entry.isDirectory()) walk(path)
-        else if (
+    const src = join(pkgRoot, 'src')
+    const offenders = readdirSync(src, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => join(entry.parentPath, entry.name))
+      .filter(
+        (path) =>
           !path.includes('/src/engine/') &&
-          /['"]vitest(\/[^'"]*)?['"]/.test(readFileSync(path, 'utf8'))
-        ) {
-          offenders.push(path)
-        }
-      }
-    }
-    walk(join(pkgRoot, 'src'))
+          /['"]vitest(\/[^'"]*)?['"]/.test(readFileSync(path, 'utf8')),
+      )
     assert.deepEqual(offenders, [])
   })
 })

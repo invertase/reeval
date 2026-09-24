@@ -27,7 +27,6 @@ declare module 'vitest' {
     toPass(): void
   }
   interface TestArtifactRegistry {
-    'es:record': { type: 'es:record'; attachments: { path: string; contentType: string }[] }
     'es:progress': { type: 'es:progress'; progress: Progress }
     'es:start': { type: 'es:start'; at: number }
   }
@@ -54,7 +53,6 @@ export type TestHandle = {
   file: string
   signal: AbortSignal
   setMeta(meta: EvalMeta): void
-  attachRecord(path: string): Promise<void>
   /** Streams a progress event to the main process as it happens. Never throws. */
   progress(progress: Progress): void
 }
@@ -108,12 +106,6 @@ export function registerTest(
         signal: AbortSignal.any([ctx.signal, timeout.signal]),
         setMeta: (meta) => {
           ctx.task.meta.es = meta
-        },
-        attachRecord: async (path) => {
-          await recordArtifact(ctx.task, {
-            type: 'es:record',
-            attachments: [{ path, contentType: 'application/json' }],
-          })
         },
         progress: (progress) => {
           recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})

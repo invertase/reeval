@@ -11,6 +11,7 @@ import {
 } from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import { type ResolvedEnvironment, resolveEnvironment } from './environment/resolve.ts'
+import { isTimeout } from './errors.ts'
 import { createHarness } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
@@ -253,7 +254,7 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   const message = error instanceof Error ? error.message : String(error)
   if (signal.aborted) {
     const reason = signal.reason instanceof Error ? signal.reason.message : String(signal.reason)
-    return /timed out/i.test(reason)
+    return isTimeout(reason)
       ? { kind: 'timeout', message: 'The eval timed out' }
       : { kind: 'aborted', message: 'The run was cancelled' }
   }
@@ -330,7 +331,7 @@ const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')
 async function runAttempt(
   spec: AttemptSpec,
   fn: EvalFn,
-  { file, signal: testSignal, setMeta, attachRecord, progress }: TestHandle,
+  { file, signal: testSignal, setMeta, progress }: TestHandle,
 ): Promise<void> {
   const report = (update: ProgressUpdate) => progress({ at: Date.now(), ...update })
   const setupStart = performance.now()
@@ -574,9 +575,7 @@ async function runAttempt(
         threshold: j.threshold,
         question: clip(j.question, 200),
       })),
-      recordPath,
     }
     setMeta(meta)
-    await attachRecord(recordPath).catch(() => {})
   }
 }

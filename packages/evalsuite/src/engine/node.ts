@@ -261,7 +261,6 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         retry: 0,
         allowOnly: !inCI(),
         passWithNoTests: true,
-        attachmentsDir: '.es/attachments',
         onStackTrace: (_error, frame) =>
           !frame.file.includes('/node_modules/vitest/') &&
           !esDirs.some((dir) => frame.file.startsWith(dir)),
