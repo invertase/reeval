@@ -5,7 +5,8 @@
   "scripts": {
     "es": "es",
     "eval": "es run",
-    "eval:fake": "es run --config es.fake.config.ts"
+    "eval:fake": "es run --config es.fake.config.ts",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "evalsuite": "workspace:*"

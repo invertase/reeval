@@ -9,40 +9,44 @@ timeouts, abort signals and reporting. You never import it, configure it or see 
 
 ```ts
 // evals/hello.es.ts
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect, group } from 'evalsuite'
 
-evaluate('creates a tested greet module', async ({ agent, judge }) => {
-  const run = await agent.run(
-    'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
-      'and greet.test.js that tests it with node:test. No dependencies.',
-  )
+group('greet module', () => {
+  evaluate('creates a tested greet module', async (t) => {
+    const turn = await t.send(
+      'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
+        'and greet.test.js that tests it with node:test. No dependencies.',
+    )
 
-  await expect(run).toHaveFile('greet.js')
-  await expect(run.exec('node --test')).toSucceed()
-
-  const verdict = await judge(run, "Does the agent's final message accurately describe what it changed?")
-  expect(verdict).toPass()
+    await expect(turn).toHaveFile('greet.js')
+    await expect(t.exec('node --test')).toSucceed()
+    expect(await t.judge("Does the agent's final message accurately describe what it changed?")).toPass()
+  })
 })
 ```
 
 ```ts
 // es.config.ts
-import { cursor, defineConfig, docker } from 'evalsuite'
+import { defineConfig } from 'evalsuite'
+import { cursor } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],
   harness: cursor({ model: 'composer-2.5' }),
   sandbox: docker(),
-  judge: { model: 'gemini-3.8-flash' },
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   timeout: '15m',
 })
 ```
 
 ```text
 $ es run
- ✓ evals/hello.es.ts › creates a tested greet module   22s
-     judge  pass: "The final message accurately reflects the changes, ..."
-1 passed · results .es/results/<runId>/result.json
+ ✓ evals/hello.es.ts › greet module › creates a tested greet module   14s
+     judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+ ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn   24s
+     judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+2 passed · results .es/results/<runId>/result.json
 ```
 
 ## Repository layout
@@ -68,7 +72,7 @@ pnpm build
 ### Run without credentials or Docker
 
 `es.fake.config.ts` swaps in a fake agent that writes canned files into a temp directory, and a
-canned judge verdict:
+fake judge with a fixed score:
 
 ```bash
 cd examples/hello
@@ -89,7 +93,7 @@ pnpm es run --config es.fake.config.ts
 
    ```bash
    CURSOR_API_KEY=...
-   GOOGLE_GENERATIVE_AI_API_KEY=...   # for judge()
+   GOOGLE_GENERATIVE_AI_API_KEY=...   # for the default judge; AI_GATEWAY_API_KEY for typesafe-ai/jev
    ```
 
 3. Run the evals:
@@ -120,21 +124,59 @@ es --version | es --help
 
 ## Authoring API
 
-- `evaluate(name, fn)` and `evaluate(name, { timeout }, fn)`, plus `evaluate.skip` and
-  `evaluate.only`. `fn` receives `{ agent, judge, signal }`.
-- `agent.run(prompt)` starts a sandbox and runs one agent turn. It returns a `Run` with
-  `text`, `status`, `transcript`, `diff`, `exec(command)` and `readFile(path)`.
-- `judge(run, question)` asks the judge model. A `pass` or `fail` that cites no evidence
-  becomes `inconclusive`.
-- Matchers: `await expect(run).toHaveFile(path, pattern?)`,
-  `await expect(run.exec(cmd)).toSucceed()` and `expect(verdict).toPass()`. All the usual
+| Import | Exports |
+|---|---|
+| `evalsuite` | `group`, `evaluate`, `expect`, `defineConfig` and the types |
+| `evalsuite/harness` | `cursor()`, `fakeHarness()` |
+| `evalsuite/sandbox` | `docker()`, `fakeSandbox()` |
+| `evalsuite/judge` | `fakeJudge()` and the judge types |
+
+- `evaluate(name, [options,] fn)`, plus `evaluate.skip` and `evaluate.only`. The options are
+  `timeout` and `judge`. `fn` receives the eval context `t`.
+- `group(name, [options,] fn)`, plus `group.skip` and `group.only`, groups evals and can nest.
+  Its options cascade to the evals inside it. Groups appear in eval ids
+  (`file › group › eval`) and as `group` in `result.json`.
+- `await t.send(prompt)` runs the next turn of this eval's agent session. The first call starts
+  the sandbox. It returns an immutable `Turn` with `prompt`, `text`, `status`, `transcript`,
+  `diff` (the changes since the eval started) and `exec`/`readFile`. Call it again for
+  multi-turn evals.
+- `t.exec(command)`, `t.readFile(path)`, `t.turns` and `t.signal` (aborted on timeout or
+  Ctrl-C).
+- `await t.judge(question, options?)` asks the judge a yes/no question about the latest turn.
+  It sees the task, the agent's final message, the changed files and the diff. It returns
+  `{ verdict, score, threshold, question, model }`. Pass `{ on: turn }` to grade an earlier
+  turn, or `{ on: value }` to grade any value.
+- Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
+  `await expect(t.exec(cmd)).toSucceed()` and `expect(verdict).toPass()`. All the usual
   `expect` matchers work too.
+
+## Judges
+
+The judge uses [AI SDK evaluation models](https://ai-sdk.dev/docs/ai-sdk-core/evaluation). A
+verdict passes when the model's probability of "yes" is at or above the threshold.
+
+| `model` | Resolves to | Credentials |
+|---|---|---|
+| `'google/gemini-3.8-flash'` (default) | `google.evaluationModel('gemini-3.8-flash')` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `'typesafe-ai/jev'` or any other `provider/model` | The AI Gateway's evaluation API, e.g. the Jev evaluation model | `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+| An evaluation model object, e.g. `openai.evaluationModel('…')` | Used as is. Per group, eval or call only, not in `es.config.ts` | The provider's |
+| `fakeJudge({ score })` | A fixed score, with no model call | None |
+
+Settings resolve per call, then per eval, then per group (innermost first), then from the
+config, merged field by field:
+
+```ts
+evaluate('strict', { judge: { model: 'typesafe-ai/jev', threshold: 0.9 } }, async (t) => {
+  await t.send('…')
+  expect(await t.judge('Is the change minimal?', { threshold: 0.7 })).toPass()
+})
+```
 
 ## Results
 
-Each run writes `.es/results/<runId>/result.json`. It holds the ES, Vitest, Cursor CLI and image
-versions, a summary, and per eval the outcome, error kind, agent transcript, diff, checks and
-judge verdicts with evidence. Per-eval records are also kept in `.es/results/<runId>/evals/`.
+Each run writes `.es/results/<runId>/result.json` (`schemaVersion: 2`). It holds the ES, Vitest,
+Cursor CLI and image versions and a summary. For each eval it has the group path, the outcome,
+the error kind, every turn with its transcript, the diff, the checks and the judge verdicts. Per-eval records are also kept in `.es/results/<runId>/evals/`.
 
 ## Development
 
