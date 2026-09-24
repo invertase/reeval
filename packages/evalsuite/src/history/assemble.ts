@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
+import { isTimeout } from '../errors.ts'
 import { attemptId, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
@@ -82,12 +83,9 @@ function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   if (e.state === 'skipped') return { outcome: 'skipped', error: null }
   if (e.state === 'passed') return { outcome: 'pass', error: null }
   const message = e.errors[0] ?? 'Eval failed'
-  const error =
-    record?.error ??
-    (/timed out/i.test(message)
-      ? { kind: 'timeout' as const, message }
-      : { kind: 'assertion' as const, message })
-  if (/timed out/i.test(message)) error.kind = 'timeout'
+  const error = isTimeout(message)
+    ? { kind: 'timeout' as const, message: record?.error?.message ?? message }
+    : (record?.error ?? { kind: 'assertion' as const, message })
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
 }
 
