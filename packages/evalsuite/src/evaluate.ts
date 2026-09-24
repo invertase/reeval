@@ -13,6 +13,7 @@ import { createHarness } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { evalId, recordFileName, relativeFile } from './ids.ts'
 import { type JudgeState, runJudge } from './judge/index.ts'
+import { patchForJudge } from './judge/patch.ts'
 import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
 import type {
@@ -107,19 +108,15 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   return { kind: 'assertion', message }
 }
 
-const MAX_JUDGE_PATCH = 60_000
-
 const isTurn = (value: unknown): value is Turn =>
   typeof value === 'object' && value !== null && 'transcript' in value && 'diff' in value
 
 function judgeState(turn: Turn, output: JSONValue = turn.text): JudgeState {
-  const patch = turn.diff.patch
   return {
     task: turn.prompt,
     output,
     files: turn.diff.files.map((f) => `${f.status} ${f.path}`),
-    diff:
-      patch.length > MAX_JUDGE_PATCH ? `${patch.slice(0, MAX_JUDGE_PATCH)}\n[truncated]` : patch,
+    diff: patchForJudge(turn.diff.patch),
   }
 }
 

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
 import { checkModelString, judgeCredentials } from '../src/judge/index.ts'
+import { patchForJudge } from '../src/judge/patch.ts'
 import { redactSecrets } from '../src/redact.ts'
 
 test('parseDuration', () => {
@@ -26,6 +27,36 @@ test('redactSecrets masks secret-looking env values', () => {
   assert.doesNotMatch(out, /sk-live/)
   assert.match(out, /\[REDACTED\]/)
   assert.match(out, /someone-long/)
+})
+
+test('judge prompt keeps source diffs and drops dependency noise', () => {
+  const patch = [
+    'diff --git a/node_modules/genkit/index.js b/node_modules/genkit/index.js',
+    'new file mode 100644',
+    '--- /dev/null',
+    '+++ b/node_modules/genkit/index.js',
+    '+module.exports = {}',
+    'diff --git a/package-lock.json b/package-lock.json',
+    '--- /dev/null',
+    '+++ b/package-lock.json',
+    '+{ "lock": true }',
+    'diff --git a/src/index.js b/src/index.js',
+    'new file mode 100644',
+    '--- /dev/null',
+    '+++ b/src/index.js',
+    '+export const flow = () => ({ title: "Soup" })',
+    '',
+  ].join('\n')
+  const shown = patchForJudge(patch)
+  assert.match(shown, /src\/index\.js/)
+  assert.match(shown, /title: "Soup"/)
+  assert.doesNotMatch(shown, /module\.exports/)
+  assert.doesNotMatch(shown, /"lock"/)
+  assert.match(shown, /omitted 2 dependency or binary files/)
+  assert.equal(
+    patchForJudge('diff --git a/greet.js b/greet.js\n+hi\n'),
+    'diff --git a/greet.js b/greet.js\n+hi\n',
+  )
 })
 
 test('judge model strings need a provider, and credentials follow the provider', () => {
