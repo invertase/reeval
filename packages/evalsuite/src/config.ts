@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createJiti } from 'jiti'
+import { inCI } from './env.ts'
 import { baseline, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { cursor } from './harness.ts'
@@ -48,7 +49,7 @@ export async function loadConfig(configPath: string, command = 'run'): Promise<R
     let exported = (await jiti.import(path, { default: true })) as ConfigInput
     if (typeof exported === 'function') {
       const env = process.env
-      exported = await exported({ ci: !!env.CI && env.CI !== 'false', command, env })
+      exported = await exported({ ci: inCI(env), command, env })
     }
     if (!exported || typeof exported !== 'object') {
       throw new UsageError(`${configPath} must default-export defineConfig({...})`)

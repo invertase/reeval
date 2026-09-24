@@ -1,5 +1,6 @@
 import { hostname, userInfo } from 'node:os'
 import { relative, sep } from 'node:path'
+import { inCI } from '../env.ts'
 import { git } from '../git.ts'
 import { randomSuffix, sha256, slugify } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
@@ -55,7 +56,7 @@ export async function gitInfo(
 }
 
 export function runnerInfo(env = process.env): RunnerInfo {
-  if (!env.CI || env.CI === 'false') {
+  if (!inCI(env)) {
     return { kind: 'local', hostHash: sha256(`evalsuite:${hostname()}`).slice(0, 12) }
   }
   if (env.GITHUB_ACTIONS) {
@@ -77,7 +78,7 @@ export function runnerInfo(env = process.env): RunnerInfo {
  * the same commit and second can never produce the same file name.
  */
 export async function author(root: string, env = process.env): Promise<string> {
-  if (env.CI && env.CI !== 'false') return `ci-${randomSuffix(4)}`
+  if (inCI(env)) return `ci-${randomSuffix(4)}`
   const name = await text(root, ['config', 'user.name'])
   const email = await text(root, ['config', 'user.email'])
   let user = ''
