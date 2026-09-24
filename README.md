@@ -27,15 +27,17 @@ group('greet module', () => {
 
 ```ts
 // es.config.ts
-import { defineConfig } from 'evalsuite'
+import { defineConfig, secret } from 'evalsuite'
 import { cursor } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],
-  harness: cursor({ model: 'composer-2.5' }),
+  harness: [cursor({ model: 'composer-2.5' })], // one harness or a list: each is a matrix cell
   sandbox: docker(),
-  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
+  runs: 1,                                      // attempts per cell
+  env: { GOOGLE_GENAI_API_KEY: secret('GOOGLE_GENERATIVE_AI_API_KEY') }, // into the sandbox, redacted
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },           // optional
   timeout: '15m',
 })
 ```
@@ -58,7 +60,7 @@ $ es run
 | `packages/evalsuite/src/sandbox` | The Docker sandbox and its AI SDK harness sandbox provider |
 | `packages/evalsuite/src/harness` | The Cursor harness (`@ai-sdk/harness-cursor`) and a fake harness |
 | `packages/evalsuite/docker` | The base image for sandboxes |
-| `examples/hello` | The example eval, with a real config and a fake one |
+| `examples/hello` | The example evals (including a with/without-skill pair and a Python sandbox), with a real config and a fake one |
 
 ## Getting started
 
@@ -93,13 +95,14 @@ pnpm es run --config es.fake.config.ts
 
    ```bash
    CURSOR_API_KEY=...
-   GOOGLE_GENERATIVE_AI_API_KEY=...   # for the default judge; AI_GATEWAY_API_KEY for typesafe-ai/jev
+   GOOGLE_GENERATIVE_AI_API_KEY=...   # for the configured judge; AI_GATEWAY_API_KEY for typesafe-ai/jev
    ```
 
 3. Run the evals:
 
    ```bash
-   pnpm es run            # or: pnpm es run greet   (filter by path or eval name)
+   pnpm es run            # or: pnpm es run greet   (filter by path, eval name or cell)
+   pnpm es run skill --runs 2   # the with/without-skill comparison, twice per cell
    ```
 
 The Cursor key is passed into the sandbox container, where the agent can read it. ES masks
@@ -108,7 +111,9 @@ secret-looking environment values in everything it writes to `.es/`.
 ## CLI
 
 ```text
-es run [filter...]        Run evals matching config.include; filters are path or name substrings
+es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+  --runs <n>              Attempts per cell, overriding the config, groups and evals
+  --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
   --record                Also record the run into the history folder (see config.record)
 es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
                           --artifacts all|failures|none --allow-incomplete --skip-secret-scan
@@ -127,9 +132,9 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 
 | Exit code | Meaning |
 |---|---|
-| 0 | All evals passed |
-| 1 | At least one eval failed |
-| 2 | Config, credential or usage error, including no evals matched, Docker not running and a refused record |
+| 0 | All attempts passed |
+| 1 | At least one attempt failed |
+| 2 | Config, credential or usage error, including no evals matched a filter or tag, an unknown option, `.only` in CI, Docker not running and a refused record |
 | 3 | An infrastructure error (sandbox or harness) and no failures |
 | 130 | Interrupted with Ctrl-C. Sandboxes are destroyed and the run is still recorded, as `interrupted` |
 
@@ -137,22 +142,23 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 
 | Import | Exports |
 |---|---|
-| `evalsuite` | `group`, `evaluate`, `expect`, `defineConfig` and the types |
+| `evalsuite` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment`, `baseline`, `secret` and the types |
 | `evalsuite/harness` | `cursor()`, `fakeHarness()` |
 | `evalsuite/sandbox` | `docker()`, `fakeSandbox()` |
 | `evalsuite/judge` | `fakeJudge()` and the judge types |
 
-- `evaluate(name, [options,] fn)`, plus `evaluate.skip` and `evaluate.only`. The options are
-  `timeout` and `judge`. `fn` receives the eval context `t`.
-- `group(name, [options,] fn)`, plus `group.skip` and `group.only`, groups evals and can nest.
-  Its options cascade to the evals inside it. Groups appear in eval ids
-  (`file › group › eval`) and as `group` in `run.json`.
+- `evaluate(name, [options,] fn)`, plus `evaluate.skip`, `evaluate.only`, `evaluate.todo(name)`
+  and `evaluate.for(cases)(name, [options,] (t, item) => …)` (the name can use `$key`, `%s` and
+  `%#`). `fn` receives the eval context `t`.
+- `group(name, [options,] fn)`, plus `group.skip`, `group.only` and `group.todo`, groups evals
+  and can nest. Groups appear in eval ids (`file › group › eval`) and as `group` in the record.
+  Options may also go last: `group(name, fn, options)`. `.only` is an error when `CI` is set.
 - `await t.send(prompt)` runs the next turn of this eval's agent session. The first call starts
   the sandbox. It returns an immutable `Turn` with `prompt`, `text`, `status`, `transcript`,
   `diff` (the changes since the eval started) and `exec`/`readFile`. Call it again for
   multi-turn evals.
-- `t.exec(command)`, `t.readFile(path)`, `t.turns` and `t.signal` (aborted on timeout or
-  Ctrl-C).
+- `t.exec(command)`, `t.readFile(path)`, `t.turns`, `t.signal` (aborted on timeout or
+  Ctrl-C) and `t.attempt` (`{ id, cell, n }`: which cell and run this is).
 - `await t.judge(question, options?)` asks the judge a yes/no question about the latest turn.
   It sees the task, the agent's final message, the changed files and the diff. It returns
   `{ verdict, score, threshold, question, model }`. Pass `{ on: turn }` to grade an earlier
@@ -161,6 +167,93 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
   `await expect(t.exec(cmd)).toSucceed()` and `expect(verdict).toPass()`. All the usual
   `expect` matchers work too.
 
+### Options, matrices and repeats
+
+`defineConfig`, `group` and `evaluate` take the same options, which cascade config → outer
+group → inner group → eval:
+
+| Option | Cascade | Meaning |
+|---|---|---|
+| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2' })]` |
+| `sandbox` | replace | Where it runs: `docker()`, `docker({ from: 'python:3.12-slim' })`, … |
+| `environment` | replace | What's in the sandbox: `baseline` (default) or `defineEnvironment(…)`, or a list |
+| `runs` | replace | Attempts per cell (default 1); `es run --runs n` overrides every level |
+| `env` | merge by name | Variables for the sandbox; `secret(from?)` passes a host variable, redacted |
+| `judge` | merge by field | `{ model, threshold, providerOptions }`; no default model |
+| `timeout` | replace | Per attempt, e.g. `'10m'`; image builds don't count |
+| `tags` | union | Filter with `es run --tag slow` or `--tag '!slow'` |
+
+`harness`, `sandbox` and `environment` are matrix axes. A list replaces the inherited one, and
+a function edits it: `{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }`.
+Each eval runs once per **cell** (harness × environment × sandbox) and `runs` times per cell;
+each run is an **attempt** with its own fresh sandbox, id `<harness>/<environment>/<sandbox>#<n>`
+(e.g. `cursor:composer-2.5/with-house-greeting/docker#2`). Give two values of one axis distinct
+ids with `id`: `cursor({ model: 'composer-2', id: 'fast' })`. The terminal prints one line per
+attempt, labelled with the axes that vary, then per-cell pass rates, and the lift over `baseline`
+when the environment axis includes it:
+
+```text
+ ✗ evals/skill.es.ts › house greeting › greets in the house style  baseline #1   41s
+ ✓ evals/skill.es.ts › house greeting › greets in the house style  with-house-greeting #1   38s
+
+Cells
+  evals/skill.es.ts › house greeting › greets in the house style
+    cursor:composer-2.5/baseline/docker              0/2    0%
+    cursor:composer-2.5/with-house-greeting/docker   2/2  100%   lift +100 pts
+```
+
+A cell fails if any of its attempts fails, and so does the run's exit code.
+
+### Environments
+
+The sandbox is *where* the agent runs; an environment is *what's in it* — the treatment you
+compare with and without:
+
+```ts
+import { baseline, defineEnvironment, evaluate } from 'evalsuite'
+
+export const withHouseGreeting = defineEnvironment('with-house-greeting', (env) => {
+  env.skill('./skills/house-greeting')              // a SKILL.md dir, a dir of them, or a git URL:
+  // env.skill('https://github.com/org/skills', { ref: 'v1', path: 'skills', skills: ['x'] })
+  env.mcp('docs', 'npx -y @acme/docs-mcp')          // or { command, args, env } / { url, headers }
+  env.rules('./rules/house.md')                     // AGENTS.md in the workspace (markdown or a .md path)
+  env.file('docs/api.md', { from: './docs/api.md' }) // workspace file, or ~/… for the home directory
+  env.exec('npm i -g firebase-tools')               // baked into a cached image layer (no secrets)
+  env.secret('FIREBASE_TOKEN')                      // this treatment only
+  env.exec('firebase use demo --token "$FIREBASE_TOKEN"', { cache: false }) // every attempt, with secrets
+  env.var('NODE_ENV', 'test')
+  env.use(otherEnvironment)                         // compose
+})
+
+evaluate('greets in the house style', { environment: [baseline, withHouseGreeting] }, async (t) => { … })
+```
+
+- Skills go to the harness adapter, which writes them where its agent reads them (for Cursor,
+  the agent's `.agents/skills`). MCP servers are passed to the agent session the same way.
+- Files, rules and per-attempt steps are applied before the workspace snapshot, so they never
+  show in the agent's diff. Paths are relative to the project root.
+- Cached `exec` steps become an `evalsuite-env:<hash>` image layer built on first use. A cached
+  step that references a declared secret is refused.
+- The record fingerprints every environment (skill hashes and git commits, MCP server names,
+  files, variable and secret *names*), and each cell's fingerprint includes it.
+
+### Sandboxes
+
+`docker()` uses the image `es image build` makes (Node 22 plus the Cursor CLI).
+`docker({ image })` uses another image that already has the harness baked in.
+`docker({ from: 'python:3.12-slim' })` bakes Node, git and the Cursor CLI onto a Debian or
+Ubuntu based toolchain image on first use and caches it, so evals can use Python, Go, Dart and
+so on (`examples/hello/evals/python.es.ts`).
+
+### Secrets
+
+`env: { NAME: secret() }` passes the host's `NAME` into the sandbox (`secret('OTHER')` reads
+`OTHER`), for the agent, its commands, MCP servers and `t.exec`. Values travel through the
+docker CLI's environment, never its arguments, are masked in everything ES writes, and only
+their names are recorded. A literal string under a secret-looking name (`*_KEY`, `*_TOKEN`, …)
+is refused, and a missing config-level secret stops the run before it starts. Anything you pass
+in is readable by the agent; the harness's own `CURSOR_API_KEY` is passed in too, for now.
+
 ## Judges
 
 The judge uses [AI SDK evaluation models](https://ai-sdk.dev/docs/ai-sdk-core/evaluation). A
@@ -168,13 +261,14 @@ verdict passes when the model's probability of "yes" is at or above the threshol
 
 | `model` | Resolves to | Credentials |
 |---|---|---|
-| `'google/gemini-3.8-flash'` (default) | `google.evaluationModel('gemini-3.8-flash')` | `GOOGLE_GENERATIVE_AI_API_KEY` |
+| `'google/gemini-3.8-flash'` | `google.evaluationModel('gemini-3.8-flash')` | `GOOGLE_GENERATIVE_AI_API_KEY` |
 | `'typesafe-ai/jev'` or any other `provider/model` | The AI Gateway's evaluation API, e.g. the Jev evaluation model | `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 | An evaluation model object, e.g. `openai.evaluationModel('…')` | Used as is. Per group, eval or call only, not in `es.config.ts` | The provider's |
 | `fakeJudge({ score })` | A fixed score, with no model call | None |
 
-Settings resolve per call, then per eval, then per group (innermost first), then from the
-config, merged field by field:
+There's no default model: set one in the config, a group, an eval or the call, or `t.judge()`
+fails and says where to set it. Settings resolve per call, then per eval, then per group
+(innermost first), then from the config, merged field by field:
 
 ```ts
 evaluate('strict', { judge: { model: 'typesafe-ai/jev', threshold: 0.9 } }, async (t) => {
@@ -196,7 +290,7 @@ evals/.history/
   20260924T180304Z_009763c_elliot-hesp/        its artifacts (optional)
     summary.md                                 the run as Markdown, every eval in detail
     worktree.patch                             uncommitted changes, when the run was dirty
-    <eval-slug>/1/
+    <eval-slug>/<cell-slug>/<n>/               one directory per attempt
       transcript.jsonl                         timed agent events, one per line (below)
       diff.patch                               the agent's changes (dependency noise dropped)
       judge-input.json                         what each judge call saw
@@ -253,8 +347,12 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   `es checkout <run>` recreates that state in a git worktree.
 - **Dependencies:** lockfile hashes (`pnpm-lock.yaml`, `package-lock.json`, `pubspec.lock`,
   `Cargo.lock`, …), and per eval the eval file's hash and a fingerprint.
-- **Environment:** the sandbox image's tag, content-addressed id and registry digests; the
-  agent CLI version; the harness and AI SDK package versions; the agent model; the judge
+- **Cells:** per eval, each cell's key, fingerprint and pass rate, and each attempt's cell,
+  run number, image, and variable and secret names.
+- **Environments:** each environment's digest, baked and per-attempt steps, skills (hash and
+  git commit), MCP server names, files, and variable and secret names.
+- **Stack:** every sandbox image's tag, content-addressed id and registry digests, with its
+  agent CLI version; the harness and AI SDK package versions; the harnesses; the judge
   model, the model ids the provider reported, and a judge version; the skills, rules and MCP
   config the agent could see in its sandbox, by content hash; ES and Node versions.
 - **What it can't pin down,** listed per record: sampled agent output, provider-side model
