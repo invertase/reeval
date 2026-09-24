@@ -2,7 +2,7 @@
 // the digest that goes into fingerprints. Nothing here touches the sandbox.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
-import { basename, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { isSecret, referencedSecret } from '../environment.ts'
 import { sha256 } from '../ids.ts'
 import { registerSecret } from '../redact.ts'
@@ -75,22 +75,12 @@ function parseSkill(dir: string, source: string): HarnessSkill {
       `Skill "${name}" in ${source} has no description in its SKILL.md frontmatter`,
     )
   }
-  const files: HarnessSkill['files'] = []
-  const walk = (at: string) => {
-    for (const entry of readdirSync(at, { withFileTypes: true })) {
-      const path = join(at, entry.name)
-      if (entry.name === '.git') continue
-      if (entry.isDirectory()) walk(path)
-      else if (path !== join(dir, 'SKILL.md')) {
-        files.push({
-          path: relative(dir, path).split('\\').join('/'),
-          content: readFileSync(path, 'utf8'),
-        })
-      }
-    }
-  }
-  walk(dir)
-  files.sort((a, b) => (a.path < b.path ? -1 : 1))
+  const files: HarnessSkill['files'] = readdirSync(dir, { recursive: true, withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/'))
+    .filter((path) => path !== 'SKILL.md' && !path.split('/').includes('.git'))
+    .sort()
+    .map((path) => ({ path, content: readFileSync(join(dir, path), 'utf8') }))
   return { name, description: front.description, content: match ? (match[2] ?? '') : text, files }
 }
 
