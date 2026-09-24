@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { DEFAULT_IMAGE, HARNESS_CURSOR_VERSION, LABEL } from '../src/sandbox/image.ts'
 import { pkgRoot, project, readRun, runCli } from './helpers.ts'
@@ -104,6 +105,56 @@ evaluate('layered', { environment: tools, env: { DB_URL: secret('ES_TEST_DB_URL'
     const b = readRun(p.dir)
     assert.equal(built(a), built(b), 'the second run reused the cached layer')
     assert.equal(liveContainers(b.run.runId), '')
+  })
+
+  test('concurrent attempts in two workers share one build of a new layer', async () => {
+    const nonce = `${Date.now()}-${process.pid}`
+    const env = `import { defineEnvironment } from 'evalsuite'
+export const fresh = defineEnvironment('fresh', (env) => {
+  env.exec('echo ${nonce} > /opt/es-nonce && date +%s%N > /opt/es-built')
+})
+`
+    const file = (name: string) => `import { evaluate } from 'evalsuite'
+import { fresh } from './env.ts'
+evaluate('${name}', { environment: fresh, runs: 2 }, async (t) => {
+  await t.send('x')
+  await t.exec('cat /opt/es-built')
+})
+`
+    const p = await project('docker-dedupe', {
+      'es.config.ts': config('{}'),
+      'evals/env.ts': env,
+      'evals/a.es.ts': file('a'),
+      'evals/b.es.ts': file('b'),
+    })
+    // BuildKit merges identical builds that overlap, so count ES's `docker build` calls instead.
+    const shim = join(p.dir, 'bin')
+    const builds = join(p.dir, 'builds.log')
+    mkdirSync(shim)
+    const real = execFileSync('sh', ['-c', 'command -v docker'], { encoding: 'utf8' }).trim()
+    writeFileSync(
+      join(shim, 'docker'),
+      `#!/bin/sh\n[ "$1" = build ] && echo build >> '${builds}'\nexec '${real}' "$@"\n`,
+      { mode: 0o755 },
+    )
+    const r = await runCli(p.dir, ['run', '--concurrency', '4'], {
+      env: { PATH: `${shim}:${process.env.PATH}` },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run, read } = readRun(p.dir)
+    const attempts = run.evals.flatMap((e) => e.attempts)
+    assert.equal(attempts.length, 4)
+    const ids = new Set(attempts.map((a) => a.image?.id))
+    const built = new Set(attempts.map((a) => read(a.checks[0]?.log.path ?? '')))
+    try {
+      assert.equal(readFileSync(builds, 'utf8'), 'build\n', 'one docker build for four attempts')
+      assert.equal(ids.size, 1, `one image for every attempt, got ${[...ids].join(', ')}`)
+      assert.equal(built.size, 1, 'every attempt saw the same build')
+      assert.equal(liveContainers(run.runId), '')
+    } finally {
+      const refs = new Set(attempts.map((a) => a.image?.ref).filter(Boolean) as string[])
+      for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
+    }
   })
 
   test('a timeout removes the container', async () => {

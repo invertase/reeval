@@ -1,20 +1,41 @@
+import { withLease } from '../scheduler/client.ts'
 import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
-import { buildEnvironmentLayer, buildImage, harnessImageFor } from './build-image.ts'
-import { imageInfo } from './docker-cli.ts'
+import {
+  buildEnvironmentLayer,
+  buildImage,
+  environmentLayerTag,
+  harnessImageFor,
+} from './build-image.ts'
+import { type ImageInfo, imageInfo } from './docker-cli.ts'
 import { DEFAULT_IMAGE, LABEL } from './image.ts'
 import { InfraError } from './types.ts'
 
-/** One build per image per worker, however many attempts ask for it at once. */
-const building = new Map<string, Promise<unknown>>()
+/**
+ * One image build at a time across the run's workers. Whoever gets the lease looks for the
+ * image again first, so attempts that asked for the same image while it was building reuse it.
+ */
+const BUILD_LIMIT = { 'image-build': 1 }
 
-function once<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  let p = building.get(key) as Promise<T> | undefined
-  if (!p) {
-    p = fn()
-    building.set(key, p)
-    p.catch(() => building.delete(key))
+async function buildOnce(
+  ref: string,
+  build: () => Promise<unknown>,
+  signal: AbortSignal,
+): Promise<ImageInfo | null> {
+  try {
+    return await withLease(
+      BUILD_LIMIT,
+      async () => {
+        const built = await imageInfo(ref)
+        if (built) return built
+        await build()
+        return imageInfo(ref)
+      },
+      signal,
+    )
+  } catch (error) {
+    if (signal.aborted) throw error
+    throw new InfraError((error as Error).message)
   }
-  return p
 }
 
 /**
@@ -33,28 +54,17 @@ export async function prepareImage(
   let info = await imageInfo(ref)
   if (!info && sandbox.from) {
     const from = sandbox.from
-    try {
-      await once(ref, () =>
-        buildImage((line) => process.env.ES_DEBUG && console.error(line), { from }),
-      )
-    } catch (error) {
-      throw new InfraError((error as Error).message)
-    }
-    info = await imageInfo(ref)
+    const log = (line: string) => process.env.ES_DEBUG && console.error(line)
+    info = await buildOnce(ref, () => buildImage(log, { from, signal }), signal)
   }
   if (!info) throw new InfraError(`Docker image ${ref} not found. Build it with: es image build`)
   const agentCli = info.labels[LABEL.agentVersion] ?? null
   if (baked.length > 0) {
     const parent = { ref, id: info.id }
-    try {
-      ref = await once(`${info.id}\0${JSON.stringify(baked)}`, () =>
-        buildEnvironmentLayer(parent, baked, signal),
-      )
-    } catch (error) {
-      if (signal.aborted) throw error
-      throw new InfraError((error as Error).message)
-    }
-    info = await imageInfo(ref)
+    ref = environmentLayerTag(parent, baked)
+    info =
+      (await imageInfo(ref)) ??
+      (await buildOnce(ref, () => buildEnvironmentLayer(parent, baked, signal), signal))
     if (!info) throw new InfraError(`The environment layer ${ref} disappeared after building`)
   }
   return { ref, id: info.id, agentCli }

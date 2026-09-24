@@ -47,21 +47,27 @@ const tail = (text: string) => text.trim().split('\n').slice(-15).join('\n')
  */
 export async function buildImage(
   log: (line: string) => void,
-  options: { from?: string } = {},
+  options: { from?: string; signal?: AbortSignal } = {},
 ): Promise<{ image: string; agentVersion: string }> {
-  const { from } = options
+  const { from, signal } = options
   const base = from ? `${harnessImageFor(from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(from) : DEFAULT_IMAGE
   log(`Building ${base}${from ? ` from ${from}` : ''}`)
   const build = from
-    ? await docker(['build', '--quiet', '--tag', base, '-'], { input: toolchainDockerfile(from) })
-    : await docker([
-        'build',
-        '--quiet',
-        '--tag',
-        base,
-        fileURLToPath(new URL('../../docker', import.meta.url)),
-      ])
+    ? await docker(['build', '--quiet', '--tag', base, '-'], {
+        input: toolchainDockerfile(from),
+        signal,
+      })
+    : await docker(
+        [
+          'build',
+          '--quiet',
+          '--tag',
+          base,
+          fileURLToPath(new URL('../../docker', import.meta.url)),
+        ],
+        { signal },
+      )
   if (build.exitCode !== 0) {
     throw new Error(
       `Building the sandbox image${from ? ` FROM ${from}` : ''} failed:\n${tail(build.stderr)}`,
@@ -69,7 +75,11 @@ export async function buildImage(
   }
 
   log('Installing the Cursor harness bootstrap')
-  const session = await createDockerSession({ image: base, lifetimeMs: 30 * 60_000 })
+  const session = await createDockerSession({
+    image: base,
+    lifetimeMs: 30 * 60_000,
+    ...(signal ? { abortSignal: signal } : {}),
+  })
   try {
     await prepareSandboxForHarness({
       session,
@@ -108,12 +118,15 @@ export async function buildImage(
  * An image with an environment's cached `exec` steps on top of `parent`, tagged by content so
  * it's built once. Secrets never exist here.
  */
+export const environmentLayerTag = (parent: { id: string }, steps: string[]) =>
+  `evalsuite-env:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
+
 export async function buildEnvironmentLayer(
   parent: { ref: string; id: string },
   steps: string[],
   signal?: AbortSignal,
 ): Promise<string> {
-  const tag = `evalsuite-env:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
+  const tag = environmentLayerTag(parent, steps)
   const exists = await docker(['image', 'inspect', '--format', '{{.Id}}', tag], { signal })
   if (exists.exitCode === 0) return tag
   const dockerfile = [
