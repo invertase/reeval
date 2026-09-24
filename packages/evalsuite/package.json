@@ -43,6 +43,7 @@
     "@ai-sdk/harness": "1.0.123",
     "@ai-sdk/harness-cursor": "1.0.36",
     "@ai-sdk/typesafe-ai": "3.0.6",
+    "@evalsuite/sandbox-docker": "workspace:*",
     "@hono/node-server": "2.1.1",
     "ai": "7.0.113",
     "hono": "4.13.9",

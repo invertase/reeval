@@ -1,9 +1,8 @@
+import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { prepareSandboxForHarness } from '@ai-sdk/harness/agent'
 import { createCursor } from '@ai-sdk/harness-cursor'
-import { sha256, slugify } from '../ids.ts'
 import { docker, dockerOk } from './docker-cli.ts'
-import { createDockerSession } from './docker-provider.ts'
 import {
   BASE_IMAGE,
   DEFAULT_IMAGE,
@@ -13,7 +12,22 @@ import {
   WORKSPACE_DIR,
 } from './image.ts'
 
+import { createDockerSession } from './session.ts'
+
 const PNPM_VERSION = '10.33.3'
+
+const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
+
+const slugify = (text: string, max: number) =>
+  text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, max)
+    .replace(/-+$/, '')
+
+/** The build context of ES's base image, shipped in the package. */
+export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
 /** The image `docker({ from })` evals run in: `from` plus Node, git and the baked harness. */
 export const harnessImageFor = (from: string) =>
@@ -58,16 +72,7 @@ export async function buildImage(
         input: toolchainDockerfile(from),
         signal,
       })
-    : await docker(
-        [
-          'build',
-          '--quiet',
-          '--tag',
-          base,
-          fileURLToPath(new URL('../../docker', import.meta.url)),
-        ],
-        { signal },
-      )
+    : await docker(['build', '--quiet', '--tag', base, DOCKER_CONTEXT], { signal })
   if (build.exitCode !== 0) {
     throw new Error(
       `Building the sandbox image${from ? ` FROM ${from}` : ''} failed:\n${tail(build.stderr)}`,

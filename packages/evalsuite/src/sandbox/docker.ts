@@ -1,9 +1,14 @@
 import { posix } from 'node:path'
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
+import {
+  createDockerSession,
+  DEFAULT_IMAGE,
+  imageInfo,
+  LABEL,
+  SANDBOX_ROOT,
+  WORKSPACE_DIR,
+} from '@evalsuite/sandbox-docker'
 import type { DockerSandboxDescriptor } from '../types.ts'
-import { imageInfo } from './docker-cli.ts'
-import { createDockerSession } from './docker-provider.ts'
-import { DEFAULT_IMAGE, LABEL, SANDBOX_ROOT, WORKSPACE_DIR } from './image.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
 

@@ -3,10 +3,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { run } from '@evalsuite/sandbox-docker/process'
 import { isSecret, referencedSecret } from '../environment.ts'
 import { sha256 } from '../ids.ts'
 import { registerSecret } from '../redact.ts'
-import { spawnCollect } from '../sandbox/exec.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { Environment, EnvironmentRecord, EnvVars, McpServer, SkillOptions } from '../types.ts'
 
@@ -109,7 +109,7 @@ function loadSkills(dir: string, source: string, only?: string[]): HarnessSkill[
 }
 
 async function git(args: string[], cwd: string, what: string) {
-  const r = await spawnCollect('git', args, { cwd })
+  const r = await run('git', args, { cwd })
   if (r.exitCode !== 0) throw new InfraError(`${what} failed: ${r.stderr.trim()}`)
   return r.stdout.trim()
 }

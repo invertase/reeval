@@ -1,0 +1,33 @@
+{
+  "name": "@evalsuite/sandbox-docker",
+  "version": "0.1.0",
+  "description": "A local Docker sandbox for AI SDK harnesses, with credential brokering and egress control",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./process": {
+      "types": "./dist/process.d.ts",
+      "default": "./dist/process.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "docker"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/harness": "1.0.123",
+    "@ai-sdk/harness-cursor": "1.0.36",
+    "ws": "8.21.0",
+    "zod": "4.6.5"
+  }
+}

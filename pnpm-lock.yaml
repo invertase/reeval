@@ -38,6 +38,9 @@ importers:
       '@ai-sdk/typesafe-ai':
         specifier: 3.0.6
         version: 3.0.6(zod@4.6.5)
+      '@evalsuite/sandbox-docker':
+        specifier: workspace:*
+        version: link:../sandbox-docker
       '@hono/node-server':
         specifier: 2.1.1
         version: 2.1.1(hono@4.13.9)
@@ -66,6 +69,21 @@ importers:
       studio-web:
         specifier: workspace:*
         version: link:../studio-web
+
+  packages/sandbox-docker:
+    dependencies:
+      '@ai-sdk/harness':
+        specifier: 1.0.123
+        version: 1.0.123(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/harness-cursor':
+        specifier: 1.0.36
+        version: 1.0.36(ws@8.21.0)(zod@4.6.5)
+      ws:
+        specifier: 8.21.0
+        version: 8.21.0
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
 
   packages/studio-web:
     devDependencies:

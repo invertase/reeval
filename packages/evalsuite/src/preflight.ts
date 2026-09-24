@@ -1,6 +1,5 @@
+import { DEFAULT_IMAGE, dockerAvailable, imageInfo, LABEL } from '@evalsuite/sandbox-docker'
 import { UsageError } from './errors.ts'
-import { dockerAvailable, imageInfo } from './sandbox/docker-cli.ts'
-import { DEFAULT_IMAGE, LABEL } from './sandbox/image.ts'
 import type { ResolvedConfig } from './types.ts'
 
 export type SandboxImage = {

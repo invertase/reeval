@@ -125,7 +125,7 @@ async function run(argv: string[]): Promise<number> {
     return values.help ? EXIT.ok : EXIT.usage
   }
   if (command === 'image' && filters[0] === 'build') {
-    const { buildImage } = await import('./sandbox/build-image.ts')
+    const { buildImage } = await import('@evalsuite/sandbox-docker')
     const { image } = await buildImage((line) => console.log(dim(line)))
     console.log(green(`Built ${image}`))
     return EXIT.ok
@@ -260,7 +260,7 @@ async function prepareRun(flags: Flags) {
   }
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
     if (!config.sandbox.some((s) => s.kind === 'docker')) return hostCapacity()
-    const { dockerCapacity } = await import('./sandbox/docker-cli.ts')
+    const { dockerCapacity } = await import('@evalsuite/sandbox-docker')
     return (await dockerCapacity()) ?? hostCapacity()
   })
   if (

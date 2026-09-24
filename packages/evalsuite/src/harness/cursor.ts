@@ -1,7 +1,7 @@
 import { HarnessAgent } from '@ai-sdk/harness/agent'
 import { createCursor } from '@ai-sdk/harness-cursor'
+import { WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
 import { isDockerSandbox } from '../sandbox/docker.ts'
-import { WORKSPACE_DIR } from '../sandbox/image.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { CursorHarnessDescriptor, McpServer, TranscriptEvent, TurnStatus } from '../types.ts'
 import { normaliseStream, type StampedPart } from './transcript.ts'

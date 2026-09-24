@@ -1,13 +1,15 @@
-import { withLease } from '../scheduler/client.ts'
-import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
 import {
   buildEnvironmentLayer,
   buildImage,
+  DEFAULT_IMAGE,
   environmentLayerTag,
   harnessImageFor,
-} from './build-image.ts'
-import { type ImageInfo, imageInfo } from './docker-cli.ts'
-import { DEFAULT_IMAGE, LABEL } from './image.ts'
+  type ImageInfo,
+  imageInfo,
+  LABEL,
+} from '@evalsuite/sandbox-docker'
+import { withLease } from '../scheduler/client.ts'
+import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
 
 /**

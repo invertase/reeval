@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { DEFAULT_IMAGE, HARNESS_CURSOR_VERSION, LABEL } from '../src/sandbox/image.ts'
+import { DEFAULT_IMAGE, HARNESS_CURSOR_VERSION, LABEL } from '@evalsuite/sandbox-docker'
 import { pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const dockerReady = (() => {

@@ -180,6 +180,7 @@ export async function createDockerSession(
   return session
 }
 
+/** The session as an AI SDK harness sandbox provider. */
 export const dockerSandboxProvider = (options: SessionOptions): HarnessV1SandboxProvider => ({
   specificationVersion: 'harness-sandbox-v1',
   providerId: 'evalsuite-docker',

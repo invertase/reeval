@@ -1,8 +1,8 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { run } from '@evalsuite/sandbox-docker/process'
 import type { FakeSandboxDescriptor } from '../types.ts'
-import { spawnCollect } from './exec.ts'
 import type { Sandbox } from './types.ts'
 
 /**
@@ -23,7 +23,7 @@ export async function createFakeSandbox(
   return {
     workdir,
     exec: (command, opts) =>
-      spawnCollect('sh', ['-c', command], { cwd: workdir, env: { HOME: base, ...env }, ...opts }),
+      run('sh', ['-c', command], { cwd: workdir, env: { HOME: base, ...env }, ...opts }),
     home: base,
     readFile: (path) => readFile(join(workdir, path), 'utf8').catch(() => null),
     async writeFile(path, content) {
