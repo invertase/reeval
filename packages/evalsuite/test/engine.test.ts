@@ -360,7 +360,7 @@ evaluate('passes', async () => {})
     assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
     assert.match(
       out[3] ?? '',
-      /^ {2}record: \.es\/runs\/[^/]+\/evals-agent-es-ts-agent-eval-[0-9a-f]{6}\/1$/,
+      /^ {2}record: \.es\/runs\/[^/]+\/evals-agent-es-ts-agent-eval-[0-9a-f]{6}\/fake-baseline-fake-[0-9a-f]{6}\/1$/,
     )
     assert.equal(out[4], '1 passed, 1 failed')
     assert.match(out[5] ?? '', /^summary: \.es\/runs\/[^/]+\/summary\.md$/)
