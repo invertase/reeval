@@ -16,10 +16,8 @@ describe('engine', () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /✓ evals\/math\.es\.ts › math/)
-    assert.match(
-      r.stdout,
-      /1 passed · run \.es\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+\/summary\.md/,
-    )
+    assert.match(r.stdout, /Evals {2}1 passed \(1\)/)
+    assert.match(r.stdout, /Results {2}\.es\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+\/summary\.md/)
     for (const leak of [/vitest/i, /RUN v/, /testTimeout/]) {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
@@ -324,7 +322,7 @@ evaluate('on a value', async (t) => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
     assert.match(r.stdout, /judge {2}fail 0\.30/)
-    assert.match(r.stdout, /judge score 0\.30 is below 0\.8 for "ok\?"/)
+    assert.match(r.stdout, /Judge failures \(1\)\n ✗ evals\/agent\.es\.ts › agent eval/)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
@@ -411,7 +409,8 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.equal(run.status, 'interrupted')
     assert.equal(evals[0]?.outcome, 'fail')
     assert.equal(evals[0]?.error?.kind, 'aborted')
-    assert.match(r.stdout, /✗ evals\/agent\.es\.ts › agent eval {3}cancelled/)
+    assert.match(r.stdout, /Cancelled \(1\)\n ✗ evals\/agent\.es\.ts › agent eval/)
+    assert.match(r.stdout, /Evals {2}1 cancelled/)
     assert.deepEqual(liveSandboxes(p), [])
   })
 })

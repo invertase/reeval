@@ -47,7 +47,14 @@ export function runCli(
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {
       cwd,
-      env: { ...process.env, NO_COLOR: '1', CI: '', ...opts.env },
+      env: {
+        ...process.env,
+        NO_COLOR: '1',
+        CI: '',
+        GITHUB_ACTIONS: '',
+        ES_UI: 'plain',
+        ...opts.env,
+      },
       detached: true,
     })
     let stdout = ''

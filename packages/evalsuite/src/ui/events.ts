@@ -1,14 +1,18 @@
 // The terminal output's view of a run. Nothing in ui/ may import Vitest: the engine translates
 // its reporter hooks into these events.
 import type { RunRecord } from '../history/types.ts'
-import type { EvalMeta, TurnStatus } from '../types.ts'
+import type { AttemptMeta, EvalMeta, TurnStatus } from '../types.ts'
 
+/** One attempt's result. `id` is the eval's; `key` is unique per attempt. */
 export type EvalResult = {
   id: string
+  key: string
   file: string
   /** Enclosing group names, outermost first. */
   group: string[]
   name: string
+  /** Absent only for tests ES didn't register (there are none today). */
+  attempt: AttemptMeta | undefined
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number
   errors: string[]
@@ -46,7 +50,17 @@ export type ProgressUpdate =
 /** A progress update stamped with the worker's clock (epoch ms). */
 export type Progress = { at: number } & ProgressUpdate
 
-export type CollectedEval = { id: string; group: string[]; name: string; skipped: boolean }
+/** One collected attempt. */
+export type CollectedEval = {
+  id: string
+  key: string
+  group: string[]
+  name: string
+  skipped: boolean
+}
+
+/** What a line about an attempt needs to name it. */
+export type AttemptRef = { id: string; key: string; attempt: AttemptMeta | undefined }
 
 export type EsEvent =
   | {
@@ -57,20 +71,13 @@ export type EsEvent =
       harness: string
       sandbox: string
     }
-  /** Every eval in a file, once the file is collected (skipped ones included, for stable tags). */
+  /** Every attempt in a file, once it's collected (skipped ones too, so tags are stable). */
   | { type: 'collected'; at: number; file: string; evals: CollectedEval[] }
-  | { type: 'eval-start'; at: number; id: string; attempt: number }
-  | { type: 'eval-progress'; id: string; attempt: number; progress: Progress }
-  /** User `console.log`/`console.error` output; `id` is unset for output outside an eval. */
-  | {
-      type: 'log'
-      at: number
-      id?: string
-      attempt?: number
-      stream: 'stdout' | 'stderr'
-      text: string
-    }
-  | { type: 'eval-end'; at: number; attempt: number; result: EvalResult }
+  | ({ type: 'eval-start'; at: number } & AttemptRef)
+  | { type: 'eval-progress'; key: string; progress: Progress }
+  /** User `console.log`/`console.error` output; `key` is unset for output outside an eval. */
+  | { type: 'log'; at: number; key?: string; stream: 'stdout' | 'stderr'; text: string }
+  | { type: 'eval-end'; at: number; result: EvalResult }
   /** A run-level message, e.g. the Ctrl-C notice. */
   | { type: 'notice'; at: number; level: 'info' | 'warn' | 'error'; text: string }
   | {

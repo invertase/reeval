@@ -1,8 +1,9 @@
 // Append-only output for CI, pipes and `| tee`. Lines are never rewritten. Modelled on
 // Turborepo's stream and grouped log orders.
 import { type Colors, colors, stripAnsi } from './colors.ts'
-import type { EsEvent, EvalResult, OutputStream, Progress, Renderer } from './events.ts'
+import type { AttemptRef, EsEvent, EvalResult, OutputStream, Progress, Renderer } from './events.ts'
 import {
+  attemptAxes,
   failureLines,
   formatDuration,
   mark,
@@ -12,17 +13,17 @@ import {
   progressLine,
 } from './format.ts'
 import type { OutputOptions } from './mode.ts'
-import { renderSummary } from './summary.ts'
+import { type AttemptDir, renderSummary } from './summary.ts'
 import { Tagger } from './tags.ts'
 
 export type RendererOptions = {
   out: OutputStream
   colors: Colors
   output: OutputOptions
-  /** The harness name in each prefix, e.g. `cursor`. */
+  /** The harness name in prefixes when an attempt doesn't say, e.g. `cursor`. */
   harness: string
   /** Where an attempt's artifacts will be, relative to the working directory. */
-  attemptDir(id: string, attempt: number): string
+  attemptDir: AttemptDir
   now?: () => number
   /** Off in tests, which call `tick()` themselves. */
   timers?: boolean
@@ -41,6 +42,7 @@ const STARTS: Partial<Record<Progress['kind'], Progress['kind']>> = {
 type Attempt = {
   key: string
   id: string
+  /** `[greet#1 cursor]` without colour. */
   label: string
   startedAt: number
   lines: Line[]
@@ -90,8 +92,14 @@ export class PlainRenderer implements Renderer {
     this.#lastWrite = this.#now()
   }
 
+  #attempt(ref: AttemptRef, startedAt: number): Attempt {
+    const n = ref.attempt?.n ?? 1
+    const label = `[${this.#tags.label(ref.id, n)} ${attemptAxes(ref.attempt, this.#o.harness)}]`
+    return { key: ref.key, id: ref.id, label, startedAt, lines: [], last: undefined }
+  }
+
   #prefix(a: Pick<Attempt, 'label'>) {
-    return this.#c.tag(a.label)(`[${a.label} ${this.#o.harness}]`)
+    return this.#c.tag(a.label)(a.label)
   }
 
   #detail(a: Attempt, line: Line, prefixed: boolean) {
@@ -121,19 +129,18 @@ export class PlainRenderer implements Renderer {
       }
       case 'collected':
         this.#tags.addFile(e.evals)
-        for (const x of e.evals) if (!x.skipped) this.#queued.add(x.id)
+        for (const x of e.evals) if (!x.skipped) this.#queued.add(x.key)
         return
       case 'eval-start': {
-        const label = this.#tags.label(e.id, e.attempt)
-        const key = `${e.id}#${e.attempt}`
-        const a: Attempt = { key, id: e.id, label, startedAt: e.at, lines: [], last: e }
-        this.#queued.delete(e.id)
-        this.#running.set(key, a)
+        const a = this.#attempt(e, e.at)
+        a.last = e
+        this.#queued.delete(e.key)
+        this.#running.set(e.key, a)
         this.#write(`${this.#prefix(a)} ${c.dim('▶')} ${e.id}`)
         return
       }
       case 'eval-progress': {
-        const a = this.#running.get(`${e.id}#${e.attempt}`)
+        const a = this.#running.get(e.key)
         if (!a) return
         a.last = e
         const { progress } = e
@@ -148,7 +155,7 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'log': {
-        const a = e.id ? this.#running.get(`${e.id}#${e.attempt ?? 1}`) : undefined
+        const a = e.key ? this.#running.get(e.key) : undefined
         const label = e.stream === 'stderr' ? c.yellow('stderr |') : c.dim('stdout |')
         for (const text of e.text.replace(/\n$/, '').split('\n')) {
           if (a) this.#add(a, { at: e.at, text: `${label} ${text}` })
@@ -157,7 +164,7 @@ export class PlainRenderer implements Renderer {
         return
       }
       case 'eval-end':
-        this.#end(e.result, e.attempt, e.at)
+        this.#end(e.result, e.at)
         return
       case 'notice': {
         const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
@@ -171,19 +178,11 @@ export class PlainRenderer implements Renderer {
     }
   }
 
-  #end(result: EvalResult, attempt: number, at: number) {
+  #end(result: EvalResult, at: number) {
     const c = this.#c
-    const key = `${result.id}#${attempt}`
-    const a: Attempt = this.#running.get(key) ?? {
-      key,
-      id: result.id,
-      label: this.#tags.label(result.id, attempt),
-      startedAt: at - result.durationMs,
-      lines: [],
-      last: undefined,
-    }
-    this.#running.delete(key)
-    this.#queued.delete(result.id)
+    const a = this.#running.get(result.key) ?? this.#attempt(result, at - result.durationMs)
+    this.#running.delete(result.key)
+    this.#queued.delete(result.key)
     const outcome = outcomeOf(result)
     const failed = outcome !== 'pass' && outcome !== 'skipped'
     const time = outcome === 'skipped' ? '' : `  ${c.dim(formatDuration(result.durationMs))}`
@@ -211,7 +210,8 @@ export class PlainRenderer implements Renderer {
     for (const line of errors) this.#write(prefixed ? `${this.#prefix(a)}  ${line}` : ` ${line}`)
     if (group) this.#write('::endgroup::')
     if (githubActions && failed) {
-      const title = ghEscape(result.id, true)
+      const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
+      const title = ghEscape(`${result.id}${which}`, true)
       const message = ghEscape(failureLines(colors(false), result, { max: ERROR_LINES }).join('\n'))
       const at = locate(result)
       const where = at ? `,line=${at.line},col=${at.col}` : ''

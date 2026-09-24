@@ -1,4 +1,5 @@
-import type { EvalEntry, RunSummary } from '../history/types.ts'
+import type { AttemptRecord } from '../history/types.ts'
+import type { AttemptMeta } from '../types.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
 import type { EvalResult, Progress } from './events.ts'
@@ -23,9 +24,13 @@ export function outcomeOf(e: EvalResult): Outcome {
   return e.meta?.outcome ?? (e.state === 'passed' ? 'pass' : 'fail')
 }
 
-export function entryOutcome(e: EvalEntry): Outcome {
-  const error = e.attempts[0]?.error
-  return error?.kind === 'aborted' ? 'cancelled' : e.outcome
+export function attemptOutcome(a: AttemptRecord): Outcome {
+  return a.error?.kind === 'aborted' ? 'cancelled' : a.outcome
+}
+
+/** What tells an eval's attempts apart: the axes that vary (`cursor:composer-2.5 · with-skill`), else the harness. */
+export function attemptAxes(a: AttemptMeta | undefined, fallback: string): string {
+  return a?.label.replace(/\s*#\d+$/, '') || a?.harness.kind || fallback
 }
 
 export function mark(c: Colors, outcome: Outcome): string {
@@ -156,16 +161,4 @@ export function failureLines(
   return capLines(text.replace(/^\n+/, ''), options.max).map((l) =>
     c.enabled && body === message ? c.red(l) : l,
   )
-}
-
-export function totals(c: Colors, s: RunSummary, cancelled = 0): string {
-  const fail = s.fail - cancelled
-  const parts = [
-    s.pass && c.green(`${s.pass} passed`),
-    fail > 0 && c.red(`${fail} failed`),
-    s.infraError && c.yellow(`${s.infraError} infra error`),
-    cancelled && c.yellow(`${cancelled} cancelled`),
-    s.skipped && c.dim(`${s.skipped} skipped`),
-  ].filter(Boolean)
-  return parts.length ? `${parts.join(c.dim(' · '))} ${c.dim(`(${s.evals})`)}` : 'no evals ran'
 }

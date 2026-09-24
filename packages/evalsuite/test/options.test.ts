@@ -45,11 +45,11 @@ group('g', { runs: 2 }, () => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /✓ evals\/m\.es\.ts › g › writes ok\.txt {2}good #1/)
-    assert.match(r.stdout, /✗ evals\/m\.es\.ts › g › writes ok\.txt {2}bad #2/)
+    assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.es\.ts › g › writes ok\.txt/m)
+    assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.es\.ts › g › writes ok\.txt/m)
     assert.match(
       r.stdout,
-      /Cells\n {2}evals\/m\.es\.ts › g › writes ok\.txt\n {4}good\/baseline\/fake +2\/2 +100%/,
+      /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/baseline\/fake +2\/2 +100%/,
     )
     assert.match(r.stdout, /bad\/baseline\/fake +0\/2 +0%/)
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
@@ -271,7 +271,7 @@ evaluate('greets', { environment: [baseline, withSkill] }, async (t) => {
     })
     const r = await runCli(p.dir, ['run'], { env: { ES_TEST_HOST_TOKEN: 's3cret-value-123' } })
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /✓ evals\/e\.es\.ts › greets {2}with-skill/)
+    assert.match(r.stdout, /^\[greets#1 with-skill\] ✓ evals\/e\.es\.ts › greets/m)
     assert.match(r.stdout, /with-skill\/fake +1\/1 +100% +lift \+100 pts/)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))

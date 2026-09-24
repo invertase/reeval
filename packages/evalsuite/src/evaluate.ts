@@ -42,6 +42,7 @@ import type {
   ResolvedConfig,
   Turn,
 } from './types.ts'
+import type { ProgressUpdate } from './ui/events.ts'
 
 export type { EvalOptions, GroupOptions }
 
@@ -286,8 +287,10 @@ const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')
 async function runAttempt(
   spec: AttemptSpec,
   fn: EvalFn,
-  { file, signal: testSignal, setMeta, attachRecord }: TestHandle,
+  { file, signal: testSignal, setMeta, attachRecord, progress }: TestHandle,
 ): Promise<void> {
+  const report = (update: ProgressUpdate) => progress({ at: Date.now(), ...update })
+  const setupStart = performance.now()
   const { runId, resultsDir, config } = getRunContext()
   const id = evalId(relativeFile(config.root, file), [...spec.groups, spec.name])
   const record: EvalRecord = {
@@ -344,9 +347,13 @@ async function runAttempt(
     return sandbox
   }
   const exec = async (command: string) => {
+    const box = requireSandbox()
     const start = performance.now()
-    const r = await timed('checksMs', () => requireSandbox().exec(command, { signal }))
-    record.checks.push({ command, ...r, durationMs: Math.round(performance.now() - start) })
+    report({ kind: 'check-start', command })
+    const r = await timed('checksMs', () => box.exec(command, { signal }))
+    const durationMs = Math.round(performance.now() - start)
+    record.checks.push({ command, ...r, durationMs })
+    report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
     return r
   }
   const readFile = (path: string) => requireSandbox().readFile(path)
@@ -379,6 +386,7 @@ async function runAttempt(
     if (spec.sandbox.kind === 'docker') record.context = await agentContext(box, signal)
     const harness = await createHarness(spec.harness)
     session = await harness.start(box, signal, { skills: env.skills, mcp: env.mcp })
+    report({ kind: 'sandbox-ready', ms: Math.round(performance.now() - setupStart) })
     return [box, session]
   }
 
@@ -402,8 +410,20 @@ async function runAttempt(
         durationMs: 0,
       }
       record.turns.push(entry)
+      const turnNumber = record.turns.length
+      report({ kind: 'turn-start', turn: turnNumber })
       const { raw, ...result } = await timed('agentMs', () => agent.send(prompt, signal))
       Object.assign(entry, result, raw ? { raw } : {})
+      const count = (...types: string[]) =>
+        result.transcript.filter((e) => types.includes(e.type)).length
+      report({
+        kind: 'turn-end',
+        turn: turnNumber,
+        status: result.status,
+        ms: result.durationMs,
+        tools: count('tool', 'web-search', 'web-fetch'),
+        fileEdits: count('file-edit'),
+      })
       signal.throwIfAborted()
       const diff: Diff = await timed('diffMs', () => diffSinceSnapshot(box, signal))
       record.diff = diff
@@ -422,6 +442,9 @@ async function runAttempt(
       }
       const state = judgeState(subject, on === undefined || isTurn(on) ? undefined : on)
       record.judgeInputs?.push({ question, model: judgeModelName(model), state })
+      const start = performance.now()
+      const ms = () => Math.round(performance.now() - start)
+      report({ kind: 'judge-start', question })
       try {
         const verdict = await timed('judgeMs', () =>
           runJudge(
@@ -432,9 +455,26 @@ async function runAttempt(
           ),
         )
         record.judgements.push(verdict)
+        const { score, threshold } = verdict
+        report({
+          kind: 'judge-end',
+          question,
+          verdict: verdict.verdict,
+          score,
+          threshold,
+          ms: ms(),
+        })
         return verdict
       } catch (error) {
         judgeErrored = true
+        report({
+          kind: 'judge-end',
+          question,
+          verdict: 'error',
+          score: null,
+          threshold: null,
+          ms: ms(),
+        })
         throw error
       }
     },
@@ -442,6 +482,7 @@ async function runAttempt(
 
   const timedOut = () => !!timer?.aborted && !testSignal.aborted
   try {
+    report({ kind: 'sandbox' })
     await timed('setupMs', setup)
     timer = AbortSignal.timeout(spec.timeoutMs)
     signal = AbortSignal.any([testSignal, timer])
@@ -459,6 +500,7 @@ async function runAttempt(
     if (timedOut()) throw new Error(`Eval timed out after ${spec.timeoutMs / 1000}s`)
     throw error
   } finally {
+    if (sandbox) report({ kind: 'cleanup' })
     testSignal.removeEventListener('abort', destroy)
     await session?.close().catch(() => {})
     await sandbox?.destroy()

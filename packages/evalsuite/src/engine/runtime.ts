@@ -2,6 +2,7 @@
 // code allowed to import `vitest`.
 import { afterAll, describe, expect, inject, recordArtifact, test } from 'vitest'
 import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
+import type { Progress } from '../ui/events.ts'
 
 declare module 'vitest' {
   interface ProvidedContext {
@@ -18,6 +19,7 @@ declare module 'vitest' {
   }
   interface TestArtifactRegistry {
     'es:record': { type: 'es:record'; attachments: { path: string; contentType: string }[] }
+    'es:progress': { type: 'es:progress'; progress: Progress }
   }
 }
 
@@ -28,6 +30,8 @@ export type TestHandle = {
   signal: AbortSignal
   setMeta(meta: EvalMeta): void
   attachRecord(path: string): Promise<void>
+  /** Streams a progress event to the main process as it happens. Never throws. */
+  progress(progress: Progress): void
 }
 
 export type TestMode = 'run' | 'skip' | 'only' | 'todo'
@@ -58,6 +62,9 @@ export function registerTest(
           type: 'es:record',
           attachments: [{ path, contentType: 'application/json' }],
         })
+      },
+      progress: (progress) => {
+        recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})
       },
     })
     inFlight.add(running)

@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { mkdir } from 'node:fs/promises'
+import { appendFile, mkdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
+import { detectAgent } from 'std-env'
 import { loadConfig, missingCredentials, UsageError } from './config.ts'
-import type { EngineEval } from './engine/node.ts'
 import { loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
-import type { EvalEntry, RunSummary } from './history/types.ts'
-import { newRunId } from './ids.ts'
+import { evalSlug, newRunId } from './ids.ts'
+import { harnessId, sandboxId } from './options.ts'
 import { preflight } from './preflight.ts'
+import { colors } from './ui/colors.ts'
+import { createRenderer, resolveOutput } from './ui/index.ts'
 
 const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1 }
 
@@ -27,6 +29,13 @@ Usage:
     --runs <n>              Attempts per cell, overriding the config, groups and evals
     --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --record                Also record the run into the history folder (see config.record)
+    --ui <mode>             live, plain or agent (default: agent under a coding agent, plain
+                            in CI or when piped, else live; live prints plain for now)
+    --log-order <order>     stream (every line as it happens) or grouped (each attempt as one
+                            block when it ends); default grouped in CI, else stream
+    --log-prefix <prefix>   task or none: the [eval#n harness] prefix on detail lines
+                            (default task, none inside GitHub Actions groups)
+    --output-logs <level>   full, errors-only or none: whose detail lines print (default full)
   es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
                             --artifacts all|failures|none --allow-incomplete --skip-secret-scan
   es history [filter]       Pass/fail per recorded eval over recent runs
@@ -45,80 +54,7 @@ Options: --config <path> (default ./es.config.ts)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
 `
 
-const color = (code: number) => (s: string) =>
-  process.stdout.isTTY && !process.env.NO_COLOR ? `\x1b[${code}m${s}\x1b[0m` : s
-const green = color(32)
-const red = color(31)
-const yellow = color(33)
-const dim = color(2)
-
-export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  const s = Math.round(ms / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
-}
-
-function printEval(e: EngineEval) {
-  const label = e.attempt?.label ? `  ${dim(e.attempt.label)}` : ''
-  const outcome =
-    e.state === 'skipped'
-      ? 'skipped'
-      : (e.meta?.outcome ?? (e.state === 'passed' ? 'pass' : 'fail'))
-  const mark = { pass: green('✓'), fail: red('✗'), infra_error: yellow('!'), skipped: dim('↓') }[
-    outcome
-  ]
-  const time = e.state === 'skipped' ? '' : `   ${dim(formatDuration(e.durationMs))}`
-  console.log(` ${mark} ${e.id}${label}${time}`)
-  for (const j of e.meta?.judgements ?? []) {
-    const mark = j.verdict === 'pass' ? green(j.verdict) : red(j.verdict)
-    console.log(
-      `     ${dim('judge')}  ${mark} ${j.score.toFixed(2)} ${dim(`(≥ ${j.threshold})`)}  ${j.question}`,
-    )
-  }
-  if (outcome === 'infra_error') console.log(`     ${yellow('infra error')}  ${e.errors[0] ?? ''}`)
-  else if (e.state === 'failed') {
-    for (const line of (e.errors[0] ?? '').split('\n').slice(0, 12))
-      console.log(`     ${red(line)}`)
-  }
-}
-
-function summaryLine(s: RunSummary, resultPath: string) {
-  const parts = [
-    s.pass && green(`${s.pass} passed`),
-    s.fail && red(`${s.fail} failed`),
-    s.infraError && yellow(`${s.infraError} infra error`),
-    s.skipped && dim(`${s.skipped} skipped`),
-  ].filter(Boolean)
-  const scope = s.attempts === s.evals ? '' : ` (${s.attempts} attempts, ${s.evals} evals)`
-  return `${parts.join(' · ') || 'no evals ran'}${parts.length ? scope : ''} · run ${resultPath}`
-}
-
-const pct = (rate: number | null) =>
-  rate === null ? '  – ' : `${Math.round(rate * 100)}%`.padStart(4)
-
-/** Pass rates per cell for evals with more than one attempt, and lift against `baseline`. */
-function printCells(evals: EvalEntry[]) {
-  const multi = evals.filter((e) => e.attempts.length > 1)
-  if (multi.length === 0) return
-  console.log(`\n${dim('Cells')}`)
-  for (const e of multi) {
-    console.log(`  ${e.id}`)
-    const width = Math.max(...e.cells.map((c) => c.key.length))
-    for (const c of e.cells) {
-      const base = e.cells.find(
-        (b) => b.environment === 'baseline' && b.harness === c.harness && b.sandbox === c.sandbox,
-      )
-      const lift =
-        base && base !== c && base.passRate !== null && c.passRate !== null
-          ? `   lift ${c.passRate >= base.passRate ? '+' : ''}${Math.round((c.passRate - base.passRate) * 100)} pts`
-          : ''
-      const infra = c.infraError ? yellow(`   ${c.infraError} infra`) : ''
-      console.log(
-        `    ${c.key.padEnd(width)}  ${`${c.pass}/${c.pass + c.fail}`.padStart(5)}  ${pct(c.passRate)}${lift}${infra}`,
-      )
-    }
-  }
-}
+const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COLOR)
 
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
@@ -138,6 +74,10 @@ async function run(argv: string[]): Promise<number> {
       limit: { type: 'string' },
       'fail-on-regression': { type: 'boolean' },
       runs: { type: 'string' },
+      ui: { type: 'string' },
+      'log-order': { type: 'string' },
+      'log-prefix': { type: 'string' },
+      'output-logs': { type: 'string' },
       tag: { type: 'string', multiple: true },
     },
   })
@@ -175,6 +115,17 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
 
+  const output = resolveOutput({
+    flags: {
+      ui: values.ui,
+      logOrder: values['log-order'],
+      logPrefix: values['log-prefix'],
+      outputLogs: values['output-logs'],
+    },
+    env: process.env,
+    isTTY: !!process.stdout.isTTY,
+    agent: detectAgent().name,
+  })
   loadEnvFiles(process.cwd())
   const config = await loadConfig(values.config)
   const missing = missingCredentials(config)
@@ -197,7 +148,7 @@ async function run(argv: string[]): Promise<number> {
     config.sandbox.some((s) => s.kind === 'docker')
   ) {
     console.error(
-      yellow(
+      colors(output.color).yellow(
         'warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it',
       ),
     )
@@ -221,30 +172,63 @@ async function run(argv: string[]): Promise<number> {
 
   const { engineVersions, runEngine } = await import('./engine/node.ts')
 
-  let interrupted = false
-  const engineRun = await runEngine({
-    run: ctx,
-    filters,
-    // Evals cut short by Ctrl-C are printed once their records are merged, below.
-    onEvalResult: (e) => {
-      if (!interrupted || e.state !== 'skipped') printEval(e)
-    },
-    onCancellable: (cancel) => {
-      process.on('SIGINT', () => {
-        if (interrupted) process.exit(EXIT.interrupted)
-        interrupted = true
-        console.log(
-          yellow('\nCancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)'),
-        )
-        cancel()
-      })
-    },
+  const renderer = createRenderer({
+    out: process.stdout,
+    output,
+    harness: config.harness[0]?.kind ?? 'agent',
+    attemptDir: (id, cell, n) =>
+      relative(
+        process.cwd(),
+        join(scratchDir(config.root), runId, evalSlug(id), evalSlug(cell), String(n)),
+      ),
   })
+  let interrupted = false
+  let engineRun: Awaited<ReturnType<typeof runEngine>>
+  try {
+    engineRun = await runEngine({
+      run: ctx,
+      filters,
+      onRunStart: (files) =>
+        renderer.onEvent({
+          type: 'run-start',
+          at: Date.now(),
+          version,
+          files,
+          harness: config.harness.map(harnessId).join(', '),
+          sandbox: config.sandbox.map(sandboxId).join(', '),
+        }),
+      onEvent: (e) => {
+        // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
+        if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
+        renderer.onEvent(e)
+      },
+      onCancellable: (cancel) => {
+        process.on('SIGINT', () => {
+          if (interrupted) {
+            renderer.close()
+            process.exit(EXIT.interrupted)
+          }
+          interrupted = true
+          renderer.onEvent({
+            type: 'notice',
+            at: Date.now(),
+            level: 'warn',
+            text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+          })
+          cancel()
+        })
+      },
+    })
+  } catch (error) {
+    renderer.close()
+    throw error
+  }
   const narrowed = [
     filters.length ? `filter "${filters.join(' ')}"` : '',
     tags.length ? `tags ${tags.join(', ')}` : '',
   ].filter(Boolean)
   if (engineRun.noFiles || (engineRun.evals.length === 0 && narrowed.length && !interrupted)) {
+    renderer.close()
     throw new UsageError(
       `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
     )
@@ -266,18 +250,20 @@ async function run(argv: string[]): Promise<number> {
     runner: runnerInfo(),
   })
   const { record } = run
-  if (interrupted) {
-    for (const e of record.evals) {
-      for (const a of e.attempts.filter((a) => a.error?.kind === 'aborted')) {
-        const label = e.attempts.length > 1 ? `  ${dim(a.id)}` : ''
-        console.log(` ${red('✗')} ${e.id}${label}   ${dim('cancelled')}`)
-      }
-    }
-  }
-  printCells(record.evals)
-  for (const error of engineRun.unhandledErrors) console.error(red(`error: ${error}`))
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
-  console.log(summaryLine(record.summary, relative(process.cwd(), summary)))
+  renderer.onEvent({
+    type: 'run-end',
+    at: Date.now(),
+    record,
+    summaryPath: relative(process.cwd(), summary),
+    results: engineRun.evals,
+    unhandledErrors: engineRun.unhandledErrors,
+  })
+  renderer.close()
+  const stepSummary = process.env.GITHUB_STEP_SUMMARY
+  if (stepSummary && run.artifactDir) {
+    await appendFile(stepSummary, await readFile(summary)).catch(() => {})
+  }
 
   const ci = !!process.env.CI && process.env.CI !== 'false'
   const autoRecord = values.record || config.record === 'always' || (config.record === 'ci' && ci)
@@ -291,6 +277,11 @@ async function run(argv: string[]): Promise<number> {
   if (record.summary.infraError > 0) return EXIT.infra
   return EXIT.ok
 }
+
+// `es run | head` closes stdout early; that isn't an error.
+process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code !== 'EPIPE') throw error
+})
 
 run(process.argv.slice(2)).then(
   (code) => {

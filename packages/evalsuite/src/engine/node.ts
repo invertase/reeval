@@ -8,24 +8,12 @@ import { configDefaults } from 'vitest/config'
 import { createVitest, type Reporter, type TestCase, type Vitest } from 'vitest/node'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
-import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
+import type { RunContext } from '../types.ts'
+import type { EsEvent, EvalResult } from '../ui/events.ts'
 import type {} from './runtime.ts'
 
-/** One attempt: a Vitest test. `id` is the eval's; `key` is unique per attempt. */
-export type EngineEval = {
-  id: string
-  key: string
-  file: string
-  /** Enclosing group names, outermost first. */
-  group: string[]
-  name: string
-  /** Absent only for tests ES didn't register (there are none today). */
-  attempt: AttemptMeta | undefined
-  state: 'passed' | 'failed' | 'skipped'
-  durationMs: number
-  errors: string[]
-  meta: EvalMeta | undefined
-}
+/** One attempt: a Vitest test. */
+export type EngineEval = EvalResult
 
 export type EngineRun = {
   evals: EngineEval[]
@@ -37,8 +25,10 @@ export type EngineRun = {
 export type EngineOptions = {
   run: RunContext
   filters: string[]
-  onEvalStart?: (e: Pick<EngineEval, 'id' | 'key' | 'file' | 'name' | 'attempt'>) => void
-  onEvalResult?: (e: EngineEval) => void
+  /** Called once the eval files are known, with how many there are. */
+  onRunStart?: (files: number) => void
+  /** Collection, start, progress, console output and result of each attempt, as they happen. */
+  onEvent?: (e: EsEvent) => void
   /** Called once the engine can be cancelled, with a function that cancels the run. */
   onCancellable?: (cancel: () => void) => void
 }
@@ -46,6 +36,9 @@ export type EngineOptions = {
 const require = createRequire(import.meta.url)
 export const vitestVersion: string = require('vitest/package.json').version
 export const engineVersions = { vitest: vitestVersion }
+
+// ES's own frames (src/ via source maps, or dist/) are noise in an eval's stack trace.
+const esDirs = ['../../src/', '../../dist/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
 
 const silentLogger = {
   hasWarned: false,
@@ -91,11 +84,14 @@ function identify(root: string, test: TestCase) {
   return { file, attempt, group, name, id, key }
 }
 
-function toEngineEval(root: string, test: TestCase): EngineEval {
+function toEngineEval(root: string, test: TestCase, vitest?: Vitest): EngineEval {
   const { file, attempt, group, name, id, key } = identify(root, test)
   const result = test.result()
   const state =
     result.state === 'failed' ? 'failed' : result.state === 'passed' ? 'passed' : 'skipped'
+  const errors = result.errors ?? []
+  const format = (e: (typeof errors)[number]) =>
+    vitest?.logger.formatError(e, { project: test.project, showCodeFrame: true }).output ?? ''
   return {
     id,
     key,
@@ -105,7 +101,8 @@ function toEngineEval(root: string, test: TestCase): EngineEval {
     attempt,
     state,
     durationMs: Math.round(test.diagnostic()?.duration ?? 0),
-    errors: (result.errors ?? []).map((e) => cleanMessage(e.message ?? String(e))),
+    errors: errors.map((e) => cleanMessage(e.message ?? String(e))),
+    formattedErrors: vitest ? errors.map(format) : [],
     meta: test.meta().es,
   }
 }
@@ -133,20 +130,61 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   let cancelled = false
   let usage: string | undefined
 
+  const emit = options.onEvent ?? (() => {})
+  const keysByTask = new Map<string, string>()
+  const skipped = (test: TestCase) => test.options.mode === 'skip' || test.options.mode === 'todo'
   const reporter: Reporter = {
+    onTestRunStart(specifications) {
+      options.onRunStart?.(specifications.length)
+    },
+    onTestModuleCollected(module) {
+      const tests = [...module.children.allTests()].map((test) => ({
+        test,
+        ...identify(config.root, test),
+      }))
+      for (const t of tests) keysByTask.set(t.test.id, t.key)
+      emit({
+        type: 'collected',
+        at: Date.now(),
+        file: relativeFile(config.root, module.moduleId),
+        evals: tests.map((t) => ({
+          id: t.id,
+          key: t.key,
+          group: t.group,
+          name: t.name,
+          skipped: skipped(t.test),
+        })),
+      })
+    },
     onTestCaseReady(test) {
-      const { file, attempt, name, id, key } = identify(config.root, test)
-      options.onEvalStart?.({ id, key, file, name, attempt })
+      if (skipped(test)) return
+      const { id, key, attempt } = identify(config.root, test)
+      emit({ type: 'eval-start', at: Date.now(), id, key, attempt })
+    },
+    onTestCaseArtifactRecord(test, artifact) {
+      if (artifact.type !== 'es:progress') return
+      const { key } = identify(config.root, test)
+      emit({ type: 'eval-progress', key, progress: artifact.progress })
+    },
+    onUserConsoleLog(log) {
+      const key = log.taskId ? keysByTask.get(log.taskId) : undefined
+      emit({
+        type: 'log',
+        at: log.time,
+        ...(key ? { key } : {}),
+        stream: log.type,
+        text: log.content,
+      })
     },
     onTestCaseResult(test) {
-      const e = toEngineEval(config.root, test)
+      const e = toEngineEval(config.root, test, vitest)
       evals.set(e.key, e)
-      if (matchesName(e)) options.onEvalResult?.(e)
+      if (matchesName(e)) emit({ type: 'eval-end', at: Date.now(), result: e })
     },
     onTestRunEnd(modules, errors, reason) {
       for (const module of modules) {
         for (const test of module.children.allTests()) {
-          const e = toEngineEval(config.root, test)
+          const e = toEngineEval(config.root, test, vitest)
           if (!evals.has(e.key)) evals.set(e.key, e)
           if (e.errors.some((m) => ONLY_IN_CI.test(m))) usage = onlyInCi(e.file)
         }
@@ -199,7 +237,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         allowOnly: !process.env.CI,
         passWithNoTests: true,
         attachmentsDir: '.es/attachments',
-        onStackTrace: (_error, frame) => !frame.file.includes('/node_modules/vitest/'),
+        onStackTrace: (_error, frame) =>
+          !frame.file.includes('/node_modules/vitest/') &&
+          !esDirs.some((dir) => frame.file.startsWith(dir)),
       },
       { customLogger: silentLogger, logLevel: 'silent', cacheDir: 'node_modules/.cache/es' },
       { stdout, stderr },

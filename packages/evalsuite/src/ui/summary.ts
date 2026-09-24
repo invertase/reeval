@@ -1,49 +1,71 @@
-import type { EvalEntry } from '../history/types.ts'
+import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
+import { attemptKey } from '../ids.ts'
 import type { Colors } from './colors.ts'
 import type { EsEvent, EvalResult } from './events.ts'
-import { entryOutcome, failureLines, formatDuration, mark, type Outcome, totals } from './format.ts'
+import { attemptOutcome, failureLines, formatDuration, mark, type Outcome } from './format.ts'
 
 type RunEnd = Extract<EsEvent, { type: 'run-end' }>
+export type AttemptDir = (id: string, cell: string, n: number) => string
 
 const FAILURE_LINES = 30
 
-const KINDS: Array<{ title: string; test: (e: EvalEntry, o: Outcome) => boolean }> = [
-  { title: 'Judge failures', test: (e) => e.attempts[0]?.error?.kind === 'judge' },
-  { title: 'Assertion failures', test: (e) => e.attempts[0]?.error?.kind === 'assertion' },
-  { title: 'Timeouts', test: (e) => e.attempts[0]?.error?.kind === 'timeout' },
+const KINDS: Array<{ title: string; test: (a: AttemptRecord, o: Outcome) => boolean }> = [
+  { title: 'Judge failures', test: (a) => a.error?.kind === 'judge' },
+  { title: 'Assertion failures', test: (a) => a.error?.kind === 'assertion' },
+  { title: 'Timeouts', test: (a) => a.error?.kind === 'timeout' },
   { title: 'Infra errors', test: (_, o) => o === 'infra_error' },
   { title: 'Cancelled', test: (_, o) => o === 'cancelled' },
 ]
 
-/** The engine's result for an entry, or one rebuilt from the record (e.g. cancelled evals). */
-export function resultFor(entry: EvalEntry, results: EvalResult[]): EvalResult {
-  const found = results.find((r) => r.id === entry.id)
-  const attempt = entry.attempts[0]
-  const errorKind = attempt?.error?.kind ?? null
+/** The engine's result for an attempt, or one rebuilt from the record (e.g. cancelled ones). */
+export function resultFor(entry: EvalEntry, attempt: AttemptRecord, results: EvalResult[]) {
+  const key = attemptKey(entry.id, attempt.cell, attempt.n)
+  const found = results.find((r) => r.key === key)
+  const errorKind = attempt.error?.kind ?? null
   const meta = {
-    outcome: entry.outcome === 'skipped' ? ('pass' as const) : entry.outcome,
+    outcome: attempt.outcome === 'skipped' ? ('pass' as const) : attempt.outcome,
     errorKind,
-    judgements: (attempt?.judgements ?? []).map((j) => ({ ...j })),
+    judgements: attempt.judgements.map((j) => ({ ...j })),
     recordPath: '',
   }
   if (found) return { ...found, meta: found.meta ? { ...found.meta, errorKind } : meta }
-  return {
+  const result: EvalResult = {
     id: entry.id,
+    key,
     file: entry.file,
     group: entry.group,
     name: entry.name,
-    state: entry.outcome === 'pass' ? 'passed' : entry.outcome === 'skipped' ? 'skipped' : 'failed',
-    durationMs: attempt?.durationMs ?? 0,
-    errors: attempt?.error ? [attempt.error.message] : [],
+    attempt: undefined,
+    state:
+      attempt.outcome === 'pass' ? 'passed' : attempt.outcome === 'skipped' ? 'skipped' : 'failed',
+    durationMs: attempt.durationMs,
+    errors: attempt.error ? [attempt.error.message] : [],
     formattedErrors: [],
     meta,
   }
+  return result
 }
 
+function entryOutcome(e: EvalEntry): Outcome {
+  const outcomes = e.attempts.map(attemptOutcome)
+  if (outcomes.length && outcomes.every((o) => o === 'cancelled')) return 'cancelled'
+  return e.outcome
+}
+
+const pct = (rate: number | null) =>
+  rate === null ? '  – ' : `${Math.round(rate * 100)}%`.padStart(4)
+
 function evalColumns(c: Colors, e: EvalEntry): string {
-  const attempt = e.attempts[0]
+  const [attempt, ...more] = e.attempts
   if (!attempt || e.outcome === 'skipped') return c.dim('skipped')
-  if (entryOutcome(e) === 'cancelled') return c.yellow('cancelled')
+  if (more.length) {
+    const pass = e.attempts.filter((a) => a.outcome === 'pass').length
+    const counted = e.attempts.filter((a) => a.outcome === 'pass' || a.outcome === 'fail').length
+    return c.dim(
+      `${`${pass}/${counted}`.padStart(7)}  ${pct(e.passRate)}  ${e.attempts.length} attempts`,
+    )
+  }
+  if (attemptOutcome(attempt) === 'cancelled') return c.yellow('cancelled')
   const cols = [formatDuration(attempt.durationMs).padStart(7)]
   const scores = attempt.judgements.map((j) => j.score)
   if (scores.length) cols.push(`judge ${Math.min(...scores).toFixed(2)}`)
@@ -52,7 +74,26 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   return c.dim(cols.join('  '))
 }
 
-/** The run's evals as a file › group tree, one row per eval. */
+/** Pass rate per cell for evals with several attempts, and lift against the `baseline` environment. */
+function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
+  if (e.attempts.length < 2) return []
+  const width = Math.max(...e.cells.map((cell) => cell.key.length))
+  return e.cells.map((cell) => {
+    const base = e.cells.find(
+      (b) =>
+        b.environment === 'baseline' && b.harness === cell.harness && b.sandbox === cell.sandbox,
+    )
+    const lift =
+      base && base !== cell && base.passRate !== null && cell.passRate !== null
+        ? `   lift ${cell.passRate >= base.passRate ? '+' : ''}${Math.round((cell.passRate - base.passRate) * 100)} pts`
+        : ''
+    const infra = cell.infraError ? c.yellow(`   ${cell.infraError} infra`) : ''
+    const counts = `${cell.pass}/${cell.pass + cell.fail}`.padStart(5)
+    return `${indent}${c.dim(cell.key.padEnd(width))}  ${counts}  ${pct(cell.passRate)}${lift}${infra}`
+  })
+}
+
+/** The run's evals as a file › group tree, one row per eval and per cell of a matrix. */
 function tree(c: Colors, evals: EvalEntry[]): string[] {
   const rows: Array<{ indent: number; text: string; entry?: EvalEntry }> = []
   let path: string[] = []
@@ -69,44 +110,59 @@ function tree(c: Colors, evals: EvalEntry[]): string[] {
   const width = Math.max(
     ...rows.filter((r) => r.entry).map((r) => r.indent * 2 + 2 + r.text.length),
   )
-  return rows.map(({ indent, text, entry }) => {
+  return rows.flatMap(({ indent, text, entry }) => {
     const pad = '  '.repeat(indent)
-    if (!entry) return ` ${pad}${text}`
+    if (!entry) return [` ${pad}${text}`]
     const name = `${mark(c, entryOutcome(entry))} ${text}`
     const fill = ' '.repeat(Math.max(0, width - indent * 2 - 2 - text.length))
-    return ` ${pad}${name}${fill}  ${evalColumns(c, entry)}`
+    return [` ${pad}${name}${fill}  ${evalColumns(c, entry)}`, ...cellRows(c, entry, ` ${pad}    `)]
   })
 }
 
-export function renderSummary(
-  c: Colors,
-  e: RunEnd,
-  attemptDir: (id: string, attempt: number) => string,
-): string[] {
+export function totals(c: Colors, s: RunSummary, cancelled = 0): string {
+  const fail = s.fail - cancelled
+  const parts = [
+    s.pass && c.green(`${s.pass} passed`),
+    fail > 0 && c.red(`${fail} failed`),
+    s.infraError && c.yellow(`${s.infraError} infra error`),
+    cancelled && c.yellow(`${cancelled} cancelled`),
+    s.skipped && c.dim(`${s.skipped} skipped`),
+  ].filter(Boolean)
+  const scope = s.attempts === s.evals ? `${s.evals}` : `${s.attempts} attempts, ${s.evals} evals`
+  return parts.length ? `${parts.join(c.dim(' · '))} ${c.dim(`(${scope})`)}` : 'no evals ran'
+}
+
+/** Failing attempts, in run order. */
+export function failingAttempts(evals: EvalEntry[]) {
+  return evals.flatMap((entry) =>
+    entry.attempts
+      .map((attempt) => ({ entry, attempt, outcome: attemptOutcome(attempt) }))
+      .filter(({ outcome }) => outcome !== 'pass' && outcome !== 'skipped'),
+  )
+}
+
+export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): string[] {
   const { record } = e
   const lines: string[] = []
   if (record.evals.length) lines.push(c.bold('Summary'), ...tree(c, record.evals))
 
-  const failing = record.evals
-    .map((entry) => ({ entry, outcome: entryOutcome(entry) }))
-    .filter(({ outcome }) => outcome !== 'pass' && outcome !== 'skipped')
+  const failing = failingAttempts(record.evals)
   if (failing.length) {
     lines.push('', c.bold(c.red(`Failures (${failing.length})`)))
     for (const kind of KINDS) {
-      const members = failing.filter(({ entry, outcome }) => kind.test(entry, outcome))
+      const members = failing.filter(({ attempt, outcome }) => kind.test(attempt, outcome))
       if (!members.length) continue
       lines.push('', c.bold(`${kind.title} (${members.length})`))
-      for (const { entry, outcome } of members) {
-        const result = resultFor(entry, e.results)
-        const reasons = (entry.attempts[0]?.judgements ?? [])
-          .filter((j) => j.verdict !== 'pass')
-          .map((j) => j.reason)
-        lines.push(` ${mark(c, outcome)} ${entry.id}`)
+      for (const { entry, attempt, outcome } of members) {
+        const result = resultFor(entry, attempt, e.results)
+        const reasons = attempt.judgements.filter((j) => j.verdict !== 'pass').map((j) => j.reason)
+        const which = entry.attempts.length > 1 ? `  ${c.dim(attempt.id)}` : ''
+        lines.push(` ${mark(c, outcome)} ${entry.id}${which}`)
         if (outcome !== 'cancelled') {
           for (const line of failureLines(c, result, { max: FAILURE_LINES, reasons }))
             lines.push(`   ${line}`)
         }
-        lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, entry.attempts[0]?.n ?? 1)}`)
+        lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, attempt.cell, attempt.n)}`)
       }
     }
   }
@@ -114,9 +170,10 @@ export function renderSummary(
   for (const error of e.unhandledErrors) lines.push('', c.red(`error: ${error}`))
 
   const cancelled = failing.filter((f) => f.outcome === 'cancelled').length
+  const label = record.summary.attempts === record.summary.evals ? '   Evals' : 'Attempts'
   lines.push(
     '',
-    `   ${c.dim('Evals')}  ${totals(c, record.summary, cancelled)}`,
+    `${c.dim(label)}  ${totals(c, record.summary, cancelled)}`,
     `${c.dim('Duration')}  ${formatDuration(record.durationMs)}`,
   )
   if (record.cost.usd !== null) lines.push(`    ${c.dim('Cost')}  $${record.cost.usd.toFixed(2)}`)
