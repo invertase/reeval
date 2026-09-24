@@ -46,7 +46,7 @@ $ es run
      judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
  ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn   24s
      judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
-2 passed · run .es/runs/2026/09/20260924T152700Z-3f9k2m7q/summary.md
+2 passed · run .es/runs/20260924T180304Z_009763c_elliot-hesp/summary.md
 ```
 
 ## Repository layout
@@ -109,15 +109,15 @@ secret-looking environment values in everything it writes to `.es/`.
 
 ```text
 es run [filter...]        Run evals matching config.include; filters are path or name substrings
-es history [filter]       Pass/fail per eval over recent runs    --limit <n> --json
-es show [run]             One run: table, --md (summary.md) or --json (run.json)
-es compare [base] [head]  Diff two runs; base defaults to head's baseline
+  --record                Also record the run into the history folder (see config.record)
+es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
+                          --artifacts all|failures|none --allow-incomplete --skip-secret-scan
+es history [filter]       Pass/fail per recorded eval over recent runs
+                          --limit <n> --all (include unrecorded runs) --json
+es show [run]             One run and the state it ran in: table, --md or --json (the record)
+es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                           --md --json --fail-on-regression
-es publish [run...]       Publish local runs (default: latest) to results.store
-                          --remote <url|path|name> --branch <name> --allow-dirty
-                          --allow-incomplete --skip-secret-scan
-es pull                   Copy published runs into .es/   --run <id> --full --remote --branch
-es index [--rebuild]      Regenerate .es/index.json
+es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
 es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
 es --version | es --help
 ```
@@ -129,8 +129,8 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 |---|---|
 | 0 | All evals passed |
 | 1 | At least one eval failed |
-| 2 | Config, credential or usage error, including no evals matched, Docker not running and a refused publish |
-| 3 | An infrastructure error (sandbox, harness, or git while publishing) and no failures |
+| 2 | Config, credential or usage error, including no evals matched, Docker not running and a refused record |
+| 3 | An infrastructure error (sandbox or harness) and no failures |
 | 130 | Interrupted with Ctrl-C. Sandboxes are destroyed and the run is still recorded, as `interrupted` |
 
 ## Authoring API
@@ -141,7 +141,6 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 | `evalsuite/harness` | `cursor()`, `fakeHarness()` |
 | `evalsuite/sandbox` | `docker()`, `fakeSandbox()` |
 | `evalsuite/judge` | `fakeJudge()` and the judge types |
-| `evalsuite/store` | `gitBranchStore()`, `localStore()` and the `ResultsStore` and record types |
 
 - `evaluate(name, [options,] fn)`, plus `evaluate.skip` and `evaluate.only`. The options are
   `timeout` and `judge`. `fn` receives the eval context `t`.
@@ -186,56 +185,63 @@ evaluate('strict', { judge: { model: 'typesafe-ai/jev', threshold: 0.9 } }, asyn
 
 ## Results
 
-Every `es run` writes one immutable run directory into `.es/` (gitignore it):
+Every `es run` writes a scratch run to `.es/runs/` (gitignore `.es/`). Recording a run copies
+it into the **history folder**, `.history/` next to your evals (`evals/.history/` for the
+default `include`), as ordinary files you commit like any other change. ES never commits or
+pushes.
 
 ```text
-.es/
-  index.json                         one entry per run, sorted by run id (derived, regenerable)
-  README.md                          what this directory is, for people and agents
-  runs/<yyyy>/<mm>/<runId>/
-    run.json                         git SHA, branch, dirty flag, runner, versions, config,
-                                     and each eval's outcome and fingerprint (schemaVersion 3)
-    summary.md                       the run as Markdown, with a Failures section and links
-    evals/<slug>/1/
-      result.json                    outcome, error, judge scores, checks, file hashes
-      transcript.jsonl               prompts, text, tool calls and results, one per line
-      final.md                       the agent's final message for each turn
-      diff.patch                     workspace changes
-      judge-input.json               exactly what each judge call saw
-      checks/<n>.log                 each t.exec: command, exit code, stdout, stderr
+evals/.history/
+  20260924T180304Z_009763c_elliot-hesp.json    the record: never edited once written
+  20260924T180304Z_009763c_elliot-hesp/        its artifacts (optional)
+    summary.md                                 the run as Markdown, every eval in detail
+    worktree.patch                             uncommitted changes, when the run was dirty
+    <eval-slug>/1/
+      transcript.jsonl                         prompts, text, tool calls and results
+      final.md                                 the agent's final message per turn
+      diff.patch                               the agent's changes (dependency noise dropped)
+      judge-input.json                         what each judge call saw
+      checks/<n>.log                           each t.exec: command, exit code, stdout, stderr
 ```
 
-Everything is plain text, redacted before it's written, so `rg` and a file read are enough to
-debug a failure. Run ids (`20260924T152700Z-3f9k2m7q`) sort by UTC start time. Two results
-compare only when the eval's fingerprint matches: its source, the harness, the agent CLI, the
-image and the judge.
-
-### Sharing results through git
-
-`gitBranchStore()` keeps published runs on an orphan `es-results` branch of your repo. It works
-from a separate cache under `.es/cache/`, so your checkout, HEAD and working tree are never
-touched. Concurrent publishers never conflict: runs are new directories, and the index is
-regenerated and the push retried when someone else pushed first.
-
-```ts
-import { defineConfig } from 'evalsuite'
-import { gitBranchStore } from 'evalsuite/store'
-
-export default defineConfig({
-  // ...
-  results: { store: gitBranchStore() }, // branch 'es-results' on remote 'origin'
-})
-```
+File names are `<UTC start>_<short sha>_<author>` (CI runs use `ci-<random>`), so history is
+the folder listing sorted by name, and two branches that record runs merge without conflicts.
+There is no committed index: listings are derived when read and cached in `.es/`.
 
 ```bash
-es publish                 # the latest run; refuses dirty or interrupted runs, and secrets
-es pull                    # everyone's records; add --full for transcripts and diffs
-es history
-es compare                 # latest run against its baseline on the commit's ancestry
+es run && es record            # or: es run --record
+git add evals/.history && git commit -m "Record eval run"
+es history                     # pass/fail per eval across recorded runs
+es compare                     # the latest run against its nearest recorded ancestor
+es show latest --md
 ```
 
-Pass `--remote <url|path>` to publish or pull without config, e.g. to a bare repo on disk.
-`es pull` fetches with a blob size filter, so large transcripts download only with `--full`.
+`config.record` picks when runs are recorded automatically: `'ci'` (default, when `CI` is
+set), `'always'`, or `'manual'`. `config.history.artifacts` picks what's kept next to each
+record: `'all'` (default, passes included, so you can see why something passed),
+`'failures'`, or `'none'`. Single tool outputs, check streams and per-file diffs over 128 KB
+keep their head and tail, with a truncation marker and the full text's sha256.
+
+### What a record captures
+
+Enough to understand or reproduce the run later, shown by `es show` and in `summary.md`:
+
+- **Git:** the SHA the run *executed at* (HEAD when `es run` started; the commit that adds the
+  history file is a later one), the branch and the dirty flag. When dirty, the uncommitted
+  changes, tracked and untracked, are saved as `worktree.patch` with their hash.
+  `es checkout <run>` recreates that state in a git worktree.
+- **Dependencies:** lockfile hashes (`pnpm-lock.yaml`, `package-lock.json`, `pubspec.lock`,
+  `Cargo.lock`, …), and per eval the eval file's hash and a fingerprint.
+- **Environment:** the sandbox image's tag, content-addressed id and registry digests; the
+  agent CLI version; the harness and AI SDK package versions; the agent model; the judge
+  model, the model ids the provider reported, and a judge version; the skills, rules and MCP
+  config the agent could see in its sandbox, by content hash; ES and Node versions.
+- **What it can't pin down,** listed per record: sampled agent output, provider-side model
+  updates, network-dependent results such as web search and package registries, and locally
+  built images.
+
+Records are redacted before they're written, and `es record` refuses any file that still looks
+like a secret, including `worktree.patch`.
 
 ## Development
 
@@ -247,5 +253,5 @@ pnpm lint        # Biome; `pnpm format` applies fixes
 ```
 
 The engine and wrapper tests drive the real `es` CLI against generated projects with the fake
-harness. The store tests publish to bare git repos on disk, including four publishers racing on
-one remote. The Docker tests skip unless Docker is running and the sandbox image has been built.
+harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
+and reproduce a dirty run with `es checkout`. The Docker tests skip unless Docker is running and the sandbox image has been built.
