@@ -1,37 +1,15 @@
 import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createJiti } from 'jiti'
-import type {
-  CursorHarnessDescriptor,
-  DockerSandboxDescriptor,
-  Duration,
-  EsConfig,
-  FakeHarnessDescriptor,
-  FakeSandboxDescriptor,
-  ResolvedConfig,
-} from './types.ts'
+import { cursor } from './harness.ts'
+import { docker } from './sandbox.ts'
+import type { Duration, EsConfig, ResolvedConfig } from './types.ts'
 
 export class UsageError extends Error {
   override name = 'UsageError'
 }
 
 export const defineConfig = (config: EsConfig): EsConfig => config
-
-export const cursor = (options: { model?: string } = {}): CursorHarnessDescriptor => ({
-  kind: 'cursor',
-  ...options,
-})
-
-export const docker = (options: { image?: string } = {}): DockerSandboxDescriptor => ({
-  kind: 'docker',
-  ...options,
-})
-
-export const fakeHarness = (options: Omit<FakeHarnessDescriptor, 'kind'> = {}) =>
-  ({ kind: 'fake', ...options }) satisfies FakeHarnessDescriptor
-
-export const fakeSandbox = (options: Omit<FakeSandboxDescriptor, 'kind'> = {}) =>
-  ({ kind: 'fake', ...options }) satisfies FakeSandboxDescriptor
 
 const UNITS = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const
 

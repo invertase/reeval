@@ -1,6 +1,6 @@
 // Worker-side half of the engine adapter. Together with ./node.ts, this is the only
 // code allowed to import `vitest`.
-import { afterAll, expect, inject, recordArtifact, test } from 'vitest'
+import { afterAll, describe, expect, inject, recordArtifact, test } from 'vitest'
 import type { EvalMeta, RunContext } from '../types.ts'
 
 declare module 'vitest' {
@@ -69,6 +69,11 @@ export function holdFileUntilEvalsSettle(): void {
   afterAll(async () => {
     await Promise.allSettled(inFlight)
   })
+}
+
+export function registerGroup(name: string, mode: TestMode, body: () => void): void {
+  const register = mode === 'run' ? describe : describe[mode]
+  register(name, body)
 }
 
 export const getRunContext = (): RunContext => inject('es:run')

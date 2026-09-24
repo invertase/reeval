@@ -25,7 +25,9 @@ export async function project(name: string, files: Record<string, string>): Prom
 }
 
 export const fakeConfig = (options: { harness?: string; judge?: string; extra?: string } = {}) => `
-import { defineConfig, fakeHarness, fakeSandbox } from 'evalsuite'
+import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { fakeSandbox } from 'evalsuite/sandbox'
 export default defineConfig({
   harness: fakeHarness(${options.harness ?? '{}'}),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),

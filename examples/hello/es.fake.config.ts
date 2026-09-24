@@ -1,6 +1,8 @@
 // Runs the same evals with no credentials, Docker or network: a fake agent writes canned
 // files into a temp dir, and the judge returns a canned verdict.
-import { defineConfig, fakeHarness, fakeSandbox } from 'evalsuite'
+import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { fakeSandbox } from 'evalsuite/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],

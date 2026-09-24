@@ -12,6 +12,8 @@ import type {} from './runtime.ts'
 export type EngineEval = {
   id: string
   file: string
+  /** Enclosing group names, outermost first. */
+  group: string[]
   name: string
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number
@@ -66,14 +68,22 @@ const cleanMessage = (message: string) =>
     )
     .replace(/\n?If this is a long-running test[\s\S]*/, '')
 
+function groupPath(test: TestCase): string[] {
+  const path: string[] = []
+  for (let p = test.parent; p.type === 'suite'; p = p.parent) path.unshift(p.name)
+  return path
+}
+
 function toEngineEval(root: string, test: TestCase): EngineEval {
   const file = relativeFile(root, test.module.moduleId)
+  const group = groupPath(test)
   const result = test.result()
   const state =
     result.state === 'failed' ? 'failed' : result.state === 'passed' ? 'passed' : 'skipped'
   return {
-    id: evalId(file, test.name),
+    id: evalId(file, [...group, test.name]),
     file,
+    group,
     name: test.name,
     state,
     durationMs: Math.round(test.diagnostic()?.duration ?? 0),
@@ -103,12 +113,13 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const reporter: Reporter = {
     onTestCaseReady(test) {
       const file = relativeFile(config.root, test.module.moduleId)
-      options.onEvalStart?.({ id: evalId(file, test.name), file, name: test.name })
+      const id = evalId(file, [...groupPath(test), test.name])
+      options.onEvalStart?.({ id, file, name: test.name })
     },
     onTestCaseResult(test) {
       const e = toEngineEval(config.root, test)
       evals.set(e.id, e)
-      if (!namePattern || namePattern.test(e.name)) options.onEvalResult?.(e)
+      if (matchesName(e)) options.onEvalResult?.(e)
     },
     onTestRunEnd(modules, errors, reason) {
       for (const module of modules) {
@@ -130,6 +141,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const stderr = new Capture()
   let vitest: Vitest | undefined
   let namePattern: RegExp | undefined
+  const matchesName = (e: EngineEval) =>
+    !namePattern || namePattern.test([...e.group, e.name].join(' '))
   const sigintListeners = new Set(process.listeners('SIGINT'))
   try {
     vitest = await createVitest(
@@ -181,6 +194,6 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   } finally {
     await vitest?.close()
   }
-  const matching = [...evals.values()].filter((e) => !namePattern || namePattern.test(e.name))
+  const matching = [...evals.values()].filter(matchesName)
   return { evals: matching, unhandledErrors, cancelled, noFiles: false }
 }

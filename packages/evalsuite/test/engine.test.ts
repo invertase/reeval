@@ -55,6 +55,44 @@ describe('engine', () => {
     assert.doesNotMatch(byName.stdout, /› math/)
   })
 
+  test('groups nest, cascade options and appear in ids and result.json', async () => {
+    const p = await project('groups', {
+      'es.config.ts': fakeConfig(),
+      'evals/g.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+group('outer', { timeout: '1s' }, () => {
+  group('inner', () => {
+    evaluate('slow', async ({ signal }) => {
+      await new Promise((resolve) => signal.addEventListener('abort', resolve))
+    })
+  })
+  evaluate('fast', async () => expect(1).toBe(1))
+})
+evaluate('top level', async () => {})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1)
+    assert.match(r.stdout, /✗ evals\/g\.es\.ts › outer › inner › slow/)
+    assert.match(r.stdout, /✓ evals\/g\.es\.ts › outer › fast/)
+    const evals = readResult(p.dir).evals
+    assert.deepEqual(
+      evals.map((e) => [e.group, e.name, e.outcome]),
+      [
+        [['outer', 'inner'], 'slow', 'fail'],
+        [['outer'], 'fast', 'pass'],
+        [[], 'top level', 'pass'],
+      ],
+    )
+    assert.equal(evals[0]?.error?.kind, 'timeout')
+
+    const filtered = await runCli(p.dir, ['run', 'outer fast'])
+    assert.equal(filtered.code, 0, filtered.stdout)
+    assert.deepEqual(
+      readResult(p.dir).evals.map((e) => e.name),
+      ['fast'],
+    )
+  })
+
   test('skip is reported as skipped', async () => {
     const p = await project('skip', {
       'es.config.ts': fakeConfig(),

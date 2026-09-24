@@ -12,7 +12,14 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./setup": "./dist/setup.js",
+    "./harness": {
+      "types": "./dist/harness.d.ts",
+      "default": "./dist/harness.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "default": "./dist/sandbox.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

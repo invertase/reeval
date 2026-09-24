@@ -1,4 +1,6 @@
-import { cursor, defineConfig, docker } from 'evalsuite'
+import { defineConfig } from 'evalsuite'
+import { cursor } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],

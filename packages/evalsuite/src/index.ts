@@ -1,6 +1,8 @@
-export { cursor, defineConfig, docker, fakeHarness, fakeSandbox } from './config.ts'
+// `evalsuite`: the core authoring API. Harnesses, sandboxes and judges live in subpaths.
+export { defineConfig } from './config.ts'
 export { expect } from './engine/runtime.ts'
-export { evaluate } from './evaluate.ts'
+export type { EvalOptions, GroupOptions } from './evaluate.ts'
+export { evaluate, group } from './evaluate.ts'
 export type {
   Agent,
   Duration,
@@ -9,10 +11,8 @@ export type {
   EvalContext,
   EvalFn,
   ExecResult,
-  HarnessDescriptor,
   Judge,
   Run,
-  SandboxDescriptor,
   TranscriptEvent,
   Verdict,
 } from './types.ts'

@@ -2,7 +2,13 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseDuration } from './config.ts'
 import { diffSinceSnapshot, snapshot } from './diff.ts'
-import { getRunContext, registerTest, type TestHandle, type TestMode } from './engine/runtime.ts'
+import {
+  getRunContext,
+  registerGroup,
+  registerTest,
+  type TestHandle,
+  type TestMode,
+} from './engine/runtime.ts'
 import { createHarness } from './harness/index.ts'
 import { evalId, recordFileName, relativeFile } from './ids.ts'
 import { runJudge } from './judge/index.ts'
@@ -19,7 +25,43 @@ import type {
   Run,
 } from './types.ts'
 
-type EvalOptions = { timeout?: Duration }
+export type EvalOptions = { timeout?: Duration }
+export type GroupOptions = EvalOptions
+
+// The groups enclosing the code being collected. Vitest may run a nested group's callback
+// after its parent's callback has returned, so each group captures its parents when declared.
+let groupStack: { name: string; options: GroupOptions }[] = []
+
+const cascade = (own: EvalOptions): EvalOptions =>
+  Object.assign({}, ...groupStack.map((g) => g.options), own)
+
+type GroupFn = {
+  (name: string, fn: () => void): void
+  (name: string, options: GroupOptions, fn: () => void): void
+}
+
+const defineGroup =
+  (mode: TestMode): GroupFn =>
+  (name: string, optionsOrFn: GroupOptions | (() => void), maybeFn?: () => void) => {
+    const [options, fn] =
+      typeof optionsOrFn === 'function' ? [{}, optionsOrFn] : [optionsOrFn, maybeFn]
+    if (typeof fn !== 'function') throw new TypeError(`group("${name}") needs a function`)
+    const stack = [...groupStack, { name, options }]
+    registerGroup(name, mode, () => {
+      const outer = groupStack
+      groupStack = stack
+      try {
+        fn()
+      } finally {
+        groupStack = outer
+      }
+    })
+  }
+
+export const group: GroupFn & { skip: GroupFn; only: GroupFn } = Object.assign(defineGroup('run'), {
+  skip: defineGroup('skip'),
+  only: defineGroup('only'),
+})
 
 type EvaluateFn = {
   (name: string, fn: EvalFn): void
@@ -29,11 +71,12 @@ type EvaluateFn = {
 const define =
   (mode: TestMode): EvaluateFn =>
   (name: string, optionsOrFn: EvalOptions | EvalFn, maybeFn?: EvalFn) => {
-    const [options, fn] =
-      typeof optionsOrFn === 'function' ? [{}, optionsOrFn] : [optionsOrFn, maybeFn]
+    const [own, fn] = typeof optionsOrFn === 'function' ? [{}, optionsOrFn] : [optionsOrFn, maybeFn]
     if (typeof fn !== 'function') throw new TypeError(`evaluate("${name}") needs a function`)
+    const options = cascade(own)
     const timeout = options.timeout === undefined ? undefined : parseDuration(options.timeout)
-    registerTest(name, { timeout, mode }, (handle) => runEval(name, timeout, fn, handle))
+    const groups = groupStack.map((g) => g.name)
+    registerTest(name, { timeout, mode }, (handle) => runEval(name, groups, timeout, fn, handle))
   }
 
 export const evaluate: EvaluateFn & { skip: EvaluateFn; only: EvaluateFn } = Object.assign(
@@ -55,6 +98,7 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
 
 async function runEval(
   name: string,
+  groups: string[],
   timeoutOverride: number | undefined,
   fn: EvalFn,
   { file, signal, setMeta, attachRecord }: TestHandle,
@@ -111,6 +155,8 @@ async function runEval(
 
   try {
     await fn({ agent, judge, signal })
+    // A body that ignores the signal can still return normally after a timeout or cancel.
+    signal.throwIfAborted()
   } catch (error) {
     record.error = classify(error, signal)
     const judgeFailed = record.judgements.some((j) => j.verdict !== 'pass')
@@ -120,7 +166,7 @@ async function runEval(
   } finally {
     signal.removeEventListener('abort', destroy)
     await sandbox?.destroy()
-    const id = evalId(relativeFile(config.root, file), name)
+    const id = evalId(relativeFile(config.root, file), [...groups, name])
     const recordPath = join(resultsDir, 'evals', recordFileName(id))
     await mkdir(join(resultsDir, 'evals'), { recursive: true })
     await writeFile(recordPath, redactSecrets(JSON.stringify(record, null, 2)))

@@ -123,6 +123,8 @@ export type EsResult = {
     {
       id: string
       file: string
+      /** Enclosing group names, outermost first. */
+      group: string[]
       name: string
       outcome: Outcome
       durationMs: number

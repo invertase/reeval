@@ -4,7 +4,8 @@ import { relative, sep } from 'node:path'
 export const relativeFile = (root: string, file: string) =>
   relative(root, file).split(sep).join('/')
 
-export const evalId = (file: string, name: string) => `${file} › ${name}`
+/** Stable id: the file, the enclosing group names and the eval name. */
+export const evalId = (file: string, path: string[]) => [file, ...path].join(' › ')
 
 export const recordFileName = (id: string) =>
   `${createHash('sha256').update(id).digest('hex').slice(0, 16)}.json`

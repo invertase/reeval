@@ -9,7 +9,7 @@ const readRecord = async (path: string): Promise<EvalRecord | null> =>
   JSON.parse(await readFile(path, 'utf8').catch(() => 'null'))
 
 function mergeEval(e: EngineEval, record: EvalRecord | null): EsResult['evals'][number] {
-  const base = { id: e.id, file: e.file, name: e.name, durationMs: e.durationMs }
+  const base = { id: e.id, file: e.file, group: e.group, name: e.name, durationMs: e.durationMs }
   const data = {
     agent: record?.agent ?? null,
     diff: record?.diff ?? null,
