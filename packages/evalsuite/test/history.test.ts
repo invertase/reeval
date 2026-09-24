@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { appendFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
-import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
+import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
 
 const GIT_ENV = {
-  ...process.env,
+  ...baseEnv,
   GIT_AUTHOR_NAME: 'Test Author',
   GIT_AUTHOR_EMAIL: 'test@example.com',
   GIT_COMMITTER_NAME: 'Test Author',
@@ -300,8 +300,7 @@ describe('recording runs into evals/.history', () => {
     assert.doesNotMatch(shown.stdout, /!|not reproducible/, 'no warning when everything is saved')
     assert.match(read('summary.md'), /## State[\s\S]*\| Uncommitted \| worktree\.patch/)
 
-    const target = join(p.dir, '..', 'record-state-checkout')
-    await rm(target, { recursive: true, force: true })
+    const target = join(tempDir('record-state-checkout'), 'tree')
     const co = await runCli(p.dir, ['checkout', 'latest', target])
     assert.equal(co.code, 0, co.stderr)
     assert.match(co.stdout, /applied worktree\.patch/)

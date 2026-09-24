@@ -36,7 +36,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/copy-studio-app.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+    "test": "node --test --test-timeout=120000 --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "4.0.79",

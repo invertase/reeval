@@ -23,7 +23,7 @@ import {
   splitPatch,
   transcriptItems,
 } from '../src/view/index.ts'
-import { fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
+import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 
 const RUN = '20260924T220414Z_f7e1b53_elliot-hesp'
 
@@ -457,7 +457,7 @@ describe('es studio build', () => {
     const child = spawn(
       process.execPath,
       [join(pkgRoot, 'dist/cli.js'), 'studio', '--port', '47311'],
-      { cwd: dir, env: { ...process.env, NO_COLOR: '1' } },
+      { cwd: dir, env: baseEnv },
     )
     try {
       const url = await new Promise<string>((resolve, reject) => {

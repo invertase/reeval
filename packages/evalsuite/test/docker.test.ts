@@ -37,8 +37,13 @@ test('the pinned harness version matches the installed adapter', () => {
   assert.equal(pkg.dependencies['@ai-sdk/harness-cursor'], HARNESS_CURSOR_VERSION)
 })
 
-describe('docker sandbox', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}` }, () => {
-  test('runs checks in the container, diffs, and removes it', async () => {
+// Per test, not on the describe: a skipped describe hides its tests from the summary's count.
+/** A first run may build an environment layer. */
+const slow = { timeoutMs: 240_000 }
+const docker = { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}`, timeout: 300_000 }
+
+describe('docker sandbox', () => {
+  test('runs checks in the container, diffs, and removes it', docker, async () => {
     const p = await project('docker-pass', {
       'es.config.ts': config(
         `{ files: { 'greet.js': 'export const greet = (n) => \`Hello, \${n}!\`\\n', 'package.json': '{"type":"module"}' } }`,
@@ -54,7 +59,7 @@ evaluate('docker', async (t) => {
 })
 `,
     })
-    const r = await runCli(p.dir)
+    const r = await runCli(p.dir, ['run'], slow)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.stack.images[0]?.ref, DEFAULT_IMAGE)
@@ -74,8 +79,11 @@ evaluate('docker', async (t) => {
     assert.equal(liveContainers(run.runId), '')
   })
 
-  test('environment exec steps bake into a cached layer; secrets reach the container', async () => {
-    const eval_ = `import { defineEnvironment, evaluate, expect, secret } from 'evalsuite'
+  test(
+    'environment exec steps bake into a cached layer; secrets reach the container',
+    docker,
+    async () => {
+      const eval_ = `import { defineEnvironment, evaluate, expect, secret } from 'evalsuite'
 const tools = defineEnvironment('tools', (env) => {
   env.exec('echo layer > /opt/es-layer && date +%s%N > /opt/es-built')
   env.file('~/.config/es/hint.txt', 'from home')
@@ -88,26 +96,30 @@ evaluate('layered', { environment: tools, env: { DB_URL: secret('ES_TEST_DB_URL'
   await t.exec('cat /opt/es-built')
 })
 `
-    const p = await project('docker-env', { 'es.config.ts': config('{}'), 'evals/d.es.ts': eval_ })
-    const env = { ES_TEST_DB_URL: 'postgres://u:pw-long-enough@db' }
-    const first = await runCli(p.dir, ['run'], { env })
-    assert.equal(first.code, 0, first.stdout + first.stderr)
-    const built = (run: ReturnType<typeof readRun>) =>
-      run.evals[0]?.read(run.evals[0].trial.checks[3]?.log.path ?? '') ?? ''
-    const a = readRun(p.dir)
-    assert.match(a.evals[0]?.trial.image?.ref ?? '', /^evalsuite-env:[0-9a-f]{16}$/)
-    assert.deepEqual(a.run.environments[0]?.baked, [
-      'echo layer > /opt/es-layer && date +%s%N > /opt/es-built',
-    ])
-    assert.doesNotMatch(JSON.stringify(a.run), /pw-long-enough/, 'declared secrets are redacted')
-    const second = await runCli(p.dir, ['run'], { env })
-    assert.equal(second.code, 0, second.stdout + second.stderr)
-    const b = readRun(p.dir)
-    assert.equal(built(a), built(b), 'the second run reused the cached layer')
-    assert.equal(liveContainers(b.run.runId), '')
-  })
+      const p = await project('docker-env', {
+        'es.config.ts': config('{}'),
+        'evals/d.es.ts': eval_,
+      })
+      const env = { ES_TEST_DB_URL: 'postgres://u:pw-long-enough@db' }
+      const first = await runCli(p.dir, ['run'], { env, ...slow })
+      assert.equal(first.code, 0, first.stdout + first.stderr)
+      const built = (run: ReturnType<typeof readRun>) =>
+        run.evals[0]?.read(run.evals[0].trial.checks[3]?.log.path ?? '') ?? ''
+      const a = readRun(p.dir)
+      assert.match(a.evals[0]?.trial.image?.ref ?? '', /^evalsuite-env:[0-9a-f]{16}$/)
+      assert.deepEqual(a.run.environments[0]?.baked, [
+        'echo layer > /opt/es-layer && date +%s%N > /opt/es-built',
+      ])
+      assert.doesNotMatch(JSON.stringify(a.run), /pw-long-enough/, 'declared secrets are redacted')
+      const second = await runCli(p.dir, ['run'], { env, ...slow })
+      assert.equal(second.code, 0, second.stdout + second.stderr)
+      const b = readRun(p.dir)
+      assert.equal(built(a), built(b), 'the second run reused the cached layer')
+      assert.equal(liveContainers(b.run.runId), '')
+    },
+  )
 
-  test('concurrent attempts in two workers share one build of a new layer', async () => {
+  test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`
     const env = `import { defineEnvironment } from 'evalsuite'
 export const fresh = defineEnvironment('fresh', (env) => {
@@ -139,6 +151,7 @@ evaluate('${name}', { environment: fresh, runs: 2 }, async (t) => {
     )
     const r = await runCli(p.dir, ['run', '--concurrency', '4'], {
       env: { PATH: `${shim}:${process.env.PATH}` },
+      ...slow,
     })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, read } = readRun(p.dir)
@@ -157,14 +170,14 @@ evaluate('${name}', { environment: fresh, runs: 2 }, async (t) => {
     }
   })
 
-  test('a timeout removes the container', async () => {
+  test('a timeout removes the container', docker, async () => {
     const p = await project('docker-timeout', {
       'es.config.ts': config('{ delayMs: 60_000 }'),
       'evals/d.es.ts': `import { evaluate } from 'evalsuite'
 evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
 `,
     })
-    const r = await runCli(p.dir)
+    const r = await runCli(p.dir, ['run'], slow)
     assert.equal(r.code, 1)
     const { run, evals } = readRun(p.dir)
     assert.equal(evals[0]?.error?.kind, 'timeout')

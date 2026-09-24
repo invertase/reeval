@@ -1,20 +1,68 @@
 import { spawn } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { mkdir, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
 
 export const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = join(pkgRoot, 'dist/cli.js')
-const tmpRoot = join(pkgRoot, 'test/.tmp')
+
+/** Every test's CLI runs and projects go under one fresh directory, removed when tests end. */
+const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), 'es-test-')))
+writeFileSync(join(tmpRoot, '.gitconfig-empty'), '')
+process.on('exit', () => {
+  if (!process.env.ES_TEST_KEEP) rmSync(tmpRoot, { recursive: true, force: true })
+})
+
+/** A fresh directory for one test, e.g. a checkout target next to a project. */
+export const tempDir = (name: string) => mkdtempSync(join(tmpRoot, `${name}-`))
+
+// What a spawned CLI (and the git it runs) may see of the parent's environment. CI variables,
+// GITHUB_* refs, provider keys and the user's git config would otherwise change what it does.
+const PASSTHROUGH = [
+  'PATH',
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'TMPDIR',
+  'TMP',
+  'TEMP',
+  'LANG',
+  'LC_ALL',
+  'SystemRoot',
+  'DOCKER_HOST',
+  'DOCKER_CONTEXT',
+  'DOCKER_CONFIG',
+  'DOCKER_CERT_PATH',
+  'DOCKER_TLS_VERIFY',
+  'ES_DEBUG',
+]
+
+/** The environment every spawned process in the tests starts from. */
+export const baseEnv: NodeJS.ProcessEnv = {
+  ...Object.fromEntries(PASSTHROUGH.flatMap((k) => (process.env[k] ? [[k, process.env[k]]] : []))),
+  GIT_CONFIG_NOSYSTEM: '1',
+  GIT_CONFIG_GLOBAL: join(tmpRoot, '.gitconfig-empty'),
+  NO_COLOR: '1',
+  ES_UI: 'plain',
+}
 
 export type Project = { dir: string; sandboxes: string }
 
 /** Creates a throwaway ES project that resolves `evalsuite` to this package. */
 export async function project(name: string, files: Record<string, string>): Promise<Project> {
-  const dir = join(tmpRoot, name)
-  await rm(dir, { recursive: true, force: true })
+  const dir = tempDir(name)
   await mkdir(join(dir, 'node_modules'), { recursive: true })
   await symlink(pkgRoot, join(dir, 'node_modules/evalsuite'), 'dir')
   for (const [path, content] of Object.entries(files)) {
@@ -39,35 +87,47 @@ export default defineConfig({
 
 export type CliRun = { code: number | null; stdout: string; stderr: string }
 
+export type CliOptions = {
+  /** Merged over `baseEnv`. */
+  env?: NodeJS.ProcessEnv
+  /** Called with all stdout so far on every chunk, until it returns true. */
+  onOutput?: (stdout: string, pid: number) => boolean
+  /** Kills the CLI's process group and fails after this long (default 60s). */
+  timeoutMs?: number
+}
+
 export function runCli(
   cwd: string,
   args: string[] = ['run'],
-  opts: { onSpawn?: (pid: number) => void; env?: NodeJS.ProcessEnv } = {},
+  opts: CliOptions = {},
 ): Promise<CliRun> {
+  const timeoutMs = opts.timeoutMs ?? 60_000
   return new Promise((resolve, reject) => {
+    // Detached, so the tests can signal its whole process group as a terminal would.
     const child = spawn(process.execPath, [cli, ...args], {
       cwd,
-      env: {
-        ...process.env,
-        NO_COLOR: '1',
-        CI: '',
-        GITHUB_ACTIONS: '',
-        ES_UI: 'plain',
-        ...opts.env,
-      },
+      env: { ...baseEnv, ...opts.env },
       detached: true,
     })
     let stdout = ''
     let stderr = ''
+    let watching = !!opts.onOutput
+    const timer = setTimeout(() => {
+      if (child.pid) process.kill(-child.pid, 'SIGKILL')
+      reject(new Error(`es ${args.join(' ')} took over ${timeoutMs}ms\n${stdout}\n${stderr}`))
+    }, timeoutMs)
     child.stdout.on('data', (d) => {
       stdout += d
+      if (watching && child.pid) watching = !opts.onOutput?.(stdout, child.pid)
     })
     child.stderr.on('data', (d) => {
       stderr += d
     })
     child.on('error', reject)
-    child.on('close', (code) => resolve({ code, stdout, stderr }))
-    if (child.pid) opts.onSpawn?.(child.pid)
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      resolve({ code, stdout, stderr })
+    })
   })
 }
 

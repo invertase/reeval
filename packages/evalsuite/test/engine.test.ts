@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { setTimeout as sleep } from 'node:timers/promises'
 import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const math = (value: number) => `
@@ -157,10 +156,8 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
       'evals/math.es.ts': math(1),
     })
     const creds = await runCli(real.dir)
-    if (!process.env.CURSOR_API_KEY) {
-      assert.equal(creds.code, 2)
-      assert.match(creds.stderr, /Missing credentials: CURSOR_API_KEY/)
-    }
+    assert.equal(creds.code, 2)
+    assert.match(creds.stderr, /Missing credentials: CURSOR_API_KEY/)
   })
 
   test('only the engine module imports vitest', () => {
@@ -466,24 +463,50 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.deepEqual(liveSandboxes(p), [])
   })
 
-  test('Ctrl-C mid-turn exits 130, records an interrupted run and destroys the sandbox', async () => {
-    const p = await project('sigint', {
+  for (const [target, signal] of [
+    ['the CLI only', (pid: number) => process.kill(pid, 'SIGINT')],
+    ['the process group, like a terminal', (pid: number) => process.kill(-pid, 'SIGINT')],
+  ] as const) {
+    test(`Ctrl-C mid-turn to ${target} exits 130, records the run and destroys the sandbox`, async () => {
+      const p = await project('sigint', {
+        'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+        'evals/agent.es.ts': agentEval(''),
+      })
+      const r = await runCli(p.dir, ['run'], {
+        onOutput: (stdout, pid) => {
+          if (/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) {
+            signal(pid)
+            return true
+          }
+          return false
+        },
+      })
+      assert.equal(r.code, 130, r.stdout + r.stderr)
+      const { run, evals } = readRun(p.dir)
+      assert.equal(run.status, 'interrupted')
+      assert.equal(evals[0]?.outcome, 'fail')
+      assert.equal(evals[0]?.error?.kind, 'aborted')
+      assert.match(r.stdout, /Cancelled \(1\)\n ✗ evals\/agent\.es\.ts › agent eval/)
+      assert.match(r.stdout, /Evals {2}1 cancelled/)
+      assert.deepEqual(liveSandboxes(p), [])
+    })
+  }
+
+  test('Ctrl-C while the worker boots still cancels the attempt before it starts', async () => {
+    const p = await project('sigint-early', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
       'evals/agent.es.ts': agentEval(''),
     })
     const r = await runCli(p.dir, ['run'], {
-      onSpawn: async (pid) => {
-        while (liveSandboxes(p).length === 0) await sleep(50)
-        process.kill(-pid, 'SIGINT') // the whole process group, like a terminal
+      timeoutMs: 20_000,
+      onOutput: (stdout, pid) => {
+        if (!stdout.startsWith('es ')) return false
+        process.kill(pid, 'SIGINT')
+        return true
       },
     })
     assert.equal(r.code, 130, r.stdout + r.stderr)
-    const { run, evals } = readRun(p.dir)
-    assert.equal(run.status, 'interrupted')
-    assert.equal(evals[0]?.outcome, 'fail')
-    assert.equal(evals[0]?.error?.kind, 'aborted')
-    assert.match(r.stdout, /Cancelled \(1\)\n ✗ evals\/agent\.es\.ts › agent eval/)
-    assert.match(r.stdout, /Evals {2}1 cancelled/)
+    assert.equal(readRun(p.dir).run.status, 'interrupted')
     assert.deepEqual(liveSandboxes(p), [])
   })
 })
