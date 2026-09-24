@@ -107,6 +107,7 @@ export async function createDockerSession(
     async spawn(o) {
       const child = spawn('docker', execArgs(o.command, o.workingDirectory, o.env), {
         stdio: ['ignore', 'pipe', 'pipe'],
+        detached: true,
         env: o.env ? { ...process.env, ...o.env } : process.env,
       })
       const exited = new Promise<{ exitCode: number }>((resolve) =>

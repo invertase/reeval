@@ -9,8 +9,10 @@ export function docker(
 ): Promise<DockerResult> {
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) return reject(opts.signal.reason)
+    // Own process group: Ctrl-C goes to ES, which then aborts and kills this child itself.
     const child = spawn('docker', args, {
       stdio: 'pipe',
+      detached: true,
       env: opts.env ? { ...process.env, ...opts.env } : process.env,
     })
     const out: Buffer[] = []
@@ -27,6 +29,8 @@ export function docker(
       if (opts.signal?.aborted) return reject(opts.signal.reason)
       resolve({ exitCode: code ?? 1, stdout: Buffer.concat(out), stderr })
     })
+    // The child may exit before reading its stdin.
+    child.stdin.on('error', () => {})
     child.stdin.end(opts.input ?? '')
   })
 }

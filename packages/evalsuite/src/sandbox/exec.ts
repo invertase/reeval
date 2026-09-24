@@ -9,7 +9,8 @@ export function spawnCollect(
 ): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) return reject(opts.signal.reason)
-    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: 'pipe' })
+    // Own process group: Ctrl-C goes to ES, which then aborts and kills this child itself.
+    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: 'pipe', detached: true })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (d) => {
@@ -26,6 +27,8 @@ export function spawnCollect(
       if (opts.signal?.aborted) return reject(opts.signal.reason)
       resolve({ exitCode: code ?? 1, stdout, stderr })
     })
+    // The child may exit before reading its stdin.
+    child.stdin.on('error', () => {})
     child.stdin.end(opts.input ?? '')
   })
 }
