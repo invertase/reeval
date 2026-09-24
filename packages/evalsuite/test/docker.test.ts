@@ -56,17 +56,17 @@ evaluate('docker', async (t) => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, evals } = readRun(p.dir)
-    assert.equal(run.environment.image?.ref, DEFAULT_IMAGE)
-    assert.match(run.environment.image?.id ?? '', /^sha256:[0-9a-f]{64}$/)
-    assert.match(run.environment.agentCli ?? '', /\d/)
+    assert.equal(run.stack.images[0]?.ref, DEFAULT_IMAGE)
+    assert.match(run.stack.images[0]?.id ?? '', /^sha256:[0-9a-f]{64}$/)
+    assert.match(run.stack.images[0]?.agentCli ?? '', /\d/)
     const shown = await runCli(p.dir, ['show', 'latest'])
     assert.match(
       shown.stdout,
       /! Image .+ isn't pushed, so an exact rerun needs this machine's image/,
     )
     assert.ok(
-      run.environment.context.some((c) => c.path === '~/.cursor/cli-config.json'),
-      JSON.stringify(run.environment.context),
+      run.stack.context.some((c) => c.path === '~/.cursor/cli-config.json'),
+      JSON.stringify(run.stack.context),
     )
     const log = evals[0]?.read(evals[0].trial.checks[0]?.log.path ?? '') ?? ''
     assert.match(log, /--- stdout\nHello, Ada!\n/)

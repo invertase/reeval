@@ -21,8 +21,14 @@ test('parseDuration', () => {
 test('resolveConfig defaults', () => {
   const c = resolveConfig({}, '/p')
   assert.deepEqual(c.include, ['evals/**/*.es.ts'])
-  assert.equal(c.harness.kind, 'cursor')
-  assert.equal(c.sandbox.kind, 'docker')
+  assert.deepEqual(c.harness, [{ kind: 'cursor' }])
+  assert.deepEqual(c.sandbox, [{ kind: 'docker' }])
+  assert.deepEqual(
+    c.environment.map((e) => e.name),
+    ['baseline'],
+  )
+  assert.equal(c.runs, 1)
+  assert.equal(c.judge.model, undefined, 'no default judge model')
   assert.equal(c.timeoutMs, 900_000)
 })
 
@@ -76,10 +82,7 @@ test('judge model strings need a provider, and credentials follow the provider',
     () => resolveConfig({ judge: { model: 'gemini-3.8-flash' } }, '/p'),
     /provider prefix/,
   )
-  assert.deepEqual(resolveConfig({}, '/p').judge, {
-    model: 'google/gemini-3.8-flash',
-    threshold: 0.8,
-  })
+  assert.deepEqual(resolveConfig({}, '/p').judge, { threshold: 0.8 })
 })
 
 test('missingCredentials names the judge key for the configured provider', () => {
@@ -139,13 +142,13 @@ const entry = (
   author: 'me',
   git: null,
   runner: 'local',
-  harness: 'cursor',
-  model: null,
-  summary: { evals: 1, pass: 0, fail: 0, infraError: 0, skipped: 0 },
+  harnesses: ['cursor:composer-2.5'],
+  summary: { evals: 1, attempts: 1, pass: 0, fail: 0, infraError: 0, skipped: 0 },
   stack: {
-    imageId: 'sha256:aaa',
-    agentCli: '1.0',
-    agentModel: 'composer-2.5',
+    imageIds: ['sha256:aaa'],
+    agentClis: ['1.0'],
+    harnesses: ['cursor:composer-2.5'],
+    environments: ['baseline@abc'],
     judgeModel: 'google/gemini-3.8-flash',
     judgeServed: ['gemini-3.8-flash-001'],
     judgeVersion: 'v1',
@@ -165,10 +168,14 @@ test('compare calls a flip drift when the judge changed outside the fingerprint'
     [['judge model served', 'gemini-3.8-flash-001', 'gemini-3.8-flash-002', true]],
   )
   assert.equal(compare(entry('pass'), served)[0]?.status, 'drift')
-  const cli = entry('fail', { agentCli: '2.0', imageId: 'sha256:bbb' })
+  const cli = entry('fail', {
+    agentClis: ['2.0'],
+    imageIds: ['sha256:bbb'],
+    environments: ['with-skill@def'],
+  })
   assert.deepEqual(
     stackChanges(entry('pass'), cli).map((c) => c.label),
-    ['image id', 'agent CLI'],
+    ['image ids', 'agent CLI', 'environments'],
   )
   assert.equal(compare(entry('pass'), cli)[0]?.status, 'regressed', 'the fingerprint decides these')
   const unreported = entry('fail', { judgeServed: [] })
@@ -182,14 +189,14 @@ test('compare calls a flip drift when the judge changed outside the fingerprint'
 test('warnings only name states someone can act on', () => {
   const run = {
     git: { dirty: false, worktreePatch: null, worktreePatchNote: null },
-    environment: { image: { ref: 'img:1', id: 'sha256:0123456789abcdef', repoDigests: [] } },
+    stack: { images: [{ ref: 'img:1', id: 'sha256:0123456789abcdef', repoDigests: [] }] },
   } as unknown as RunRecord
   assert.deepEqual(warnings(run), [
     "Image img:1 isn't pushed, so an exact rerun needs this machine's image (id 0123456789ab).",
   ])
   const pushed = {
     ...run,
-    environment: { image: { ...run.environment.image, repoDigests: ['r@sha256:1'] } },
+    stack: { images: [{ ...run.stack.images[0], repoDigests: ['r@sha256:1'] }] },
   } as RunRecord
   assert.deepEqual(warnings(pushed), [])
   const dirty = {

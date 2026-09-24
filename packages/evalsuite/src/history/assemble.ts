@@ -1,18 +1,26 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
-import { evalSlug, recordFileName, sha256 } from '../ids.ts'
+import { attemptId, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
+import { harnessId, sandboxId } from '../options.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
-import type { EvalRecord, FileChange, Outcome, ResolvedConfig, RunContext } from '../types.ts'
+import type {
+  Cell,
+  EnvironmentRecord,
+  EvalRecord,
+  FileChange,
+  HarnessDescriptor,
+  Outcome,
+  RunContext,
+} from '../types.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
   type AttemptRecord,
   type ContextFile,
-  type Environment,
   type EvalEntry,
   type FileRef,
   type GitInfo,
@@ -20,6 +28,7 @@ import {
   type RunnerInfo,
   type RunRecord,
   SCHEMA_VERSION,
+  type Stack,
 } from './types.ts'
 
 /** Final messages are kept whole in the record unless they're this big. */
@@ -82,8 +91,21 @@ function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
 }
 
-const harnessModel = (config: ResolvedConfig) =>
-  config.harness.kind === 'cursor' ? (config.harness.model ?? null) : null
+/** Any failure fails; then infra errors; then all-skipped; else pass. */
+export function worstOutcome(outcomes: Outcome[]): Outcome {
+  if (outcomes.includes('fail')) return 'fail'
+  if (outcomes.includes('infra_error')) return 'infra_error'
+  if (outcomes.length > 0 && outcomes.every((o) => o === 'skipped')) return 'skipped'
+  return outcomes.length ? 'pass' : 'skipped'
+}
+
+const passRateOf = (outcomes: Outcome[]) => {
+  const pass = outcomes.filter((o) => o === 'pass').length
+  const counted = pass + outcomes.filter((o) => o === 'fail').length
+  return counted ? pass / counted : null
+}
+
+const harnessModel = (h: HarnessDescriptor) => (h.kind === 'cursor' ? (h.model ?? null) : null)
 
 /** Collects artifact files, redacting before anything is hashed. */
 class Artifacts {
@@ -204,23 +226,37 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const { ctx, engine } = input
   const { config, runId } = ctx
   const out = new Artifacts()
-  const judgeModel = judgeModelName(config.judge.model)
+  const judgeModel = config.judge.model === undefined ? null : judgeModelName(config.judge.model)
   const configHash = sha256(
     JSON.stringify({
       include: config.include,
       harness: config.harness,
       sandbox: config.sandbox,
+      environment: config.environment,
+      runs: config.runs,
+      env: config.env,
       judge: config.judge,
       timeoutMs: config.timeoutMs,
     }),
   )
   const sources = new Map<string, string | null>()
-  const evals: EvalEntry[] = []
+  const byEval = new Map<string, EvalEntry>()
   const contexts = new Map<string, ContextFile>()
   const resolvedJudges = new Set<string>()
+  const images = new Map<string, Stack['images'][number]>()
+  const environments = new Map<string, EnvironmentRecord>()
+  const harnesses = new Map<string, Stack['harnesses'][number]>()
+  const known = new Map(input.sandbox.images.map((i) => [i.id, i.repoDigests]))
 
   for (const e of engine.evals) {
-    const record = await readRecord(join(ctx.resultsDir, 'evals', recordFileName(e.id)))
+    const cell: Cell = e.attempt?.cell ?? {
+      key: 'unknown',
+      harness: 'unknown',
+      environment: 'unknown',
+      sandbox: 'unknown',
+    }
+    const n = e.attempt?.n ?? 1
+    const record = await readRecord(join(ctx.resultsDir, 'evals', recordFileName(e.key)))
     const { outcome, error } = mergeOutcome(e, record)
     if (!sources.has(e.file)) sources.set(e.file, await sourceHash(config.root, e.file))
     const srcHash = sources.get(e.file) ?? null
@@ -228,18 +264,73 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     for (const c of context) contexts.set(`${c.path}\0${c.sha256}`, c)
     for (const j of record?.judgements ?? [])
       if (j.resolvedModel) resolvedJudges.add(j.resolvedModel)
-    const fingerprint = sha256(
-      JSON.stringify({
+    if (record?.image) {
+      images.set(record.image.id, {
+        ...record.image,
+        repoDigests: known.get(record.image.id) ?? [],
+      })
+    }
+    if (record?.environment) {
+      environments.set(
+        `${record.environment.name}\0${record.environment.digest}`,
+        record.environment,
+      )
+    }
+    if (e.attempt) {
+      const h = e.attempt.harness
+      harnesses.set(cell.harness, { id: cell.harness, kind: h.kind, model: harnessModel(h) })
+    }
+
+    let entry = byEval.get(e.id)
+    if (!entry) {
+      entry = {
+        id: e.id,
+        slug: evalSlug(e.id),
+        file: e.file,
+        group: e.group,
+        name: e.name,
+        tags: e.attempt?.tags ?? [],
+        fingerprint: '',
         sourceHash: srcHash,
-        harness: config.harness,
-        agentCli: input.sandbox.agentCli,
-        image: input.sandbox.image?.id ?? null,
-        judge: { model: judgeModel, threshold: config.judge.threshold },
-        context,
-      }),
-    )
-    const slug = evalSlug(e.id)
-    const dir = `${slug}/1`
+        fixtureHash: null,
+        outcome: 'skipped',
+        passRate: null,
+        cells: [],
+        attempts: [],
+      }
+      byEval.set(e.id, entry)
+    }
+    let cellRecord = entry.cells.find((c) => c.key === cell.key)
+    if (!cellRecord) {
+      cellRecord = {
+        ...cell,
+        fingerprint: '',
+        runs: 0,
+        pass: 0,
+        fail: 0,
+        infraError: 0,
+        skipped: 0,
+        passRate: null,
+        outcome: 'skipped',
+      }
+      entry.cells.push(cellRecord)
+    }
+    // Skipped attempts never ran, so they have no environment or image to fingerprint.
+    if (!cellRecord.fingerprint || record) {
+      cellRecord.fingerprint = sha256(
+        JSON.stringify({
+          sourceHash: srcHash,
+          harness: e.attempt?.harness ?? null,
+          environment: record?.environment?.digest ?? cell.environment,
+          image: record?.image?.id ?? null,
+          agentCli: record?.image?.agentCli ?? null,
+          judge: { model: judgeModel, threshold: config.judge.threshold },
+          context,
+        }),
+      )
+    }
+
+    const dir = `${entry.slug}/${evalSlug(cell.key)}/${n}`
     const files: AttemptFiles = {}
     const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j) => ({
       ...j,
@@ -266,8 +357,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       log: out.add(`${dir}/checks/${i + 1}.log`, checkLog(c)),
     }))
 
-    const attempt: AttemptRecord = {
-      n: 1,
+    entry.attempts.push({
+      id: attemptId(cell.key, n),
+      cell: cell.key,
+      n,
+      image: record?.image ?? null,
+      env: record?.env ?? { vars: [], secrets: [] },
       context,
       outcome,
       error,
@@ -290,21 +385,27 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       checks,
       changedFiles: changedFiles(record?.diff?.files ?? []),
       files,
-    }
-    const counted = outcome === 'pass' || outcome === 'fail'
-    evals.push({
-      id: e.id,
-      slug,
-      file: e.file,
-      group: e.group,
-      name: e.name,
-      fingerprint,
-      sourceHash: srcHash,
-      fixtureHash: null,
-      outcome,
-      passRate: counted ? (outcome === 'pass' ? 1 : 0) : null,
-      attempts: [attempt],
     })
+  }
+
+  const evals = [...byEval.values()]
+  for (const entry of evals) {
+    for (const c of entry.cells) {
+      const outcomes = entry.attempts.filter((a) => a.cell === c.key).map((a) => a.outcome)
+      c.runs = outcomes.length
+      c.pass = outcomes.filter((o) => o === 'pass').length
+      c.fail = outcomes.filter((o) => o === 'fail').length
+      c.infraError = outcomes.filter((o) => o === 'infra_error').length
+      c.skipped = outcomes.filter((o) => o === 'skipped').length
+      c.passRate = passRateOf(outcomes)
+      c.outcome = worstOutcome(outcomes)
+    }
+    const outcomes = entry.attempts.map((a) => a.outcome)
+    entry.outcome = worstOutcome(outcomes)
+    entry.passRate = passRateOf(outcomes)
+    entry.fingerprint = sha256(
+      JSON.stringify(entry.cells.map((c) => [c.key, c.fingerprint]).sort()),
+    )
   }
 
   let git = input.git
@@ -321,28 +422,28 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     }
   }
   const packages = packageVersions(input.enginePackages)
-  const environment: Environment = {
+  const byPath = (a: { path: string }, b: { path: string }) =>
+    a.path < b.path ? -1 : a.path > b.path ? 1 : 0
+  const stack: Stack = {
     es: input.es,
     node: process.versions.node,
     os: process.platform,
     arch: process.arch,
-    image: input.sandbox.image,
-    agentCli: input.sandbox.agentCli,
+    images: [...images.values()].sort((a, b) => (a.ref < b.ref ? -1 : 1)),
     packages,
-    harness: { kind: config.harness.kind, model: harnessModel(config), resolvedModel: null },
+    harnesses: [...harnesses.values()].sort((a, b) => (a.id < b.id ? -1 : 1)),
     judge: {
       model: judgeModel,
       resolvedModels: [...resolvedJudges].sort(),
       threshold: config.judge.threshold,
-      version: judgeVersion(input.es, packages, judgeModel),
+      version: judgeVersion(input.es, packages, judgeModel ?? ''),
     },
-    context: [...contexts.values()].sort((a, b) =>
-      a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
-    ),
+    context: [...contexts.values()].sort(byPath),
     fingerprintScope: FINGERPRINT_SCOPE,
   }
 
-  const count = (o: Outcome) => evals.filter((e) => e.outcome === o).length
+  const attempts = evals.flatMap((e) => e.attempts)
+  const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length
   const record: RunRecord = {
     kind: 'es-run',
     schemaVersion: SCHEMA_VERSION,
@@ -355,11 +456,13 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     git,
     runner: input.runner,
     dependencies: { lockfiles: input.lockfiles },
-    environment,
+    stack,
+    environments: [...environments.values()].sort((a, b) => (a.name < b.name ? -1 : 1)),
     config: {
-      harness: config.harness.kind,
-      model: harnessModel(config),
-      sandbox: config.sandbox.kind,
+      harnesses: config.harness.map(harnessId),
+      sandboxes: config.sandbox.map(sandboxId),
+      environments: config.environment.map((e) => e.name),
+      runs: config.runs,
       judgeModel,
       threshold: config.judge.threshold,
       timeoutMs: config.timeoutMs,
@@ -370,6 +473,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     redaction: { version: 1 },
     summary: {
       evals: evals.length,
+      attempts: attempts.length,
       pass: count('pass'),
       fail: count('fail'),
       infraError: count('infra_error'),

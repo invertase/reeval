@@ -1,6 +1,6 @@
 import type { Outcome } from '../types.ts'
 import { warnings } from './state.ts'
-import type { EvalEntry, RunRecord } from './types.ts'
+import type { AttemptRecord, EvalEntry, RunRecord } from './types.ts'
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
@@ -27,7 +27,14 @@ export function summaryCounts(s: RunRecord['summary']): string {
     s.infraError && `${s.infraError} infra error`,
     s.skipped && `${s.skipped} skipped`,
   ].filter(Boolean)
-  return parts.join(' · ') || 'no evals ran'
+  if (parts.length === 0) return 'no evals ran'
+  const scope = s.attempts === s.evals ? '' : ` (${s.attempts} attempts, ${s.evals} evals)`
+  return `${parts.join(' · ')}${scope}`
+}
+
+/** `baseline 0/2 · with-skill 2/2`: passes over counted attempts per cell. */
+export function cellCounts(e: EvalEntry): string {
+  return e.cells.map((c) => `${c.key} ${c.pass}/${c.pass + c.fail}`).join(' · ')
 }
 
 function judgeCell(e: EvalEntry): string {
@@ -44,7 +51,7 @@ const short = (hash: string) => hash.replace(/^sha256:/, '').slice(0, 12)
  * commit is where the run executed; the commit that adds its history file comes later.
  */
 export function stateRows(run: RunRecord): Array<[string, string]> {
-  const { git, environment: env } = run
+  const { git, stack: env } = run
   const rows: Array<[string, string]> = []
   rows.push([
     'Executed at',
@@ -66,18 +73,32 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
       'none found',
   ])
   rows.push([
-    'Image',
-    env.image
-      ? `${env.image.ref} · id ${short(env.image.id)} · ${env.image.repoDigests[0] ?? 'no registry digest (built locally)'}`
+    'Images',
+    env.images.length
+      ? env.images
+          .map(
+            (i) =>
+              `${i.ref} · id ${short(i.id)} · ${i.repoDigests[0] ?? 'no registry digest (built locally)'} · CLI ${i.agentCli ?? 'n/a'}`,
+          )
+          .join('; ')
       : 'none (fake sandbox)',
   ])
   rows.push([
-    'Agent',
-    `${env.harness.kind}${env.harness.model ? ` · model ${env.harness.model}` : ''}${env.harness.resolvedModel ? ` (served ${env.harness.resolvedModel})` : ''} · CLI ${env.agentCli ?? 'n/a'}`,
+    'Harnesses',
+    env.harnesses.map((h) => `${h.id}${h.model ? ` (model ${h.model})` : ''}`).join(', ') || 'none',
+  ])
+  rows.push([
+    'Environments',
+    run.environments
+      .map(
+        (e) =>
+          `${e.name} ${short(e.digest)}${e.skills.length ? ` · skills ${e.skills.map((s) => `${s.name}${s.commit ? `@${s.commit.slice(0, 7)}` : ''}`).join(', ')}` : ''}${e.mcp.length ? ` · mcp ${e.mcp.join(', ')}` : ''}${e.secrets.length ? ` · secrets ${e.secrets.join(', ')}` : ''}`,
+      )
+      .join('; ') || 'none',
   ])
   rows.push([
     'Judge',
-    `${env.judge.model}${env.judge.resolvedModels.length ? ` (served ${env.judge.resolvedModels.join(', ')})` : ''} · threshold ${env.judge.threshold} · version ${env.judge.version}`,
+    `${env.judge.model ?? 'none by default'}${env.judge.resolvedModels.length ? ` (served ${env.judge.resolvedModels.join(', ')})` : ''} · threshold ${env.judge.threshold} · version ${env.judge.version}`,
   ])
   rows.push([
     'Context',
@@ -118,81 +139,88 @@ export function renderSummary(run: RunRecord): string {
     '',
     '## Evals',
     '',
-    '| | Eval | Time | Judge |',
+    '| | Eval | Time or cells | Judge |',
     '|---|---|---|---|',
   ]
   for (const e of run.evals) {
     const a = e.attempts[0]
-    lines.push(
-      `| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${a ? formatMs(a.durationMs) : ''} | ${judgeCell(e)} |`,
-    )
+    const time = e.attempts.length > 1 ? cellCounts(e) : a ? formatMs(a.durationMs) : ''
+    lines.push(`| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`)
   }
   // Failures first, but passes get the same detail: why something passed matters too.
   const rank = (o: Outcome) => (o === 'fail' || o === 'infra_error' ? 0 : o === 'pass' ? 1 : 2)
   for (const e of [...run.evals].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
-    const a = e.attempts[0]
-    if (!a || e.outcome === 'skipped') continue
+    if (e.outcome === 'skipped') continue
     lines.push('', `### ${OUTCOME_MARK[e.outcome]} ${e.id}`, '')
-    if (a.error) {
-      lines.push(
-        `**${a.error.kind}**`,
-        '',
-        '```',
-        a.error.message.split('\n').slice(0, 20).join('\n'),
-        '```',
-        '',
-      )
+    const multi = e.attempts.length > 1
+    if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
+    for (const a of [...e.attempts].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
+      if (a.outcome === 'skipped') continue
+      if (multi) lines.push(`#### ${OUTCOME_MARK[a.outcome]} ${a.id}`, '')
+      attemptDetail(lines, a)
     }
-    for (const turn of a.turns) {
-      lines.push(
-        `- Prompt (${turn.status}, ${formatMs(turn.durationMs)}): ${cell(turn.prompt).slice(0, 200)}`,
-      )
-    }
-    const t = a.timings
-    lines.push(
-      `- Time: setup ${formatMs(t.setupMs)} · agent ${formatMs(t.agentMs)} · checks ${formatMs(t.checksMs)} · judge ${formatMs(t.judgeMs)}`,
-    )
-    const act = a.activity
-    lines.push(
-      `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatMs(act.reasoningMs)} reasoning`,
-    )
-    for (const j of a.judgements) {
-      lines.push(
-        `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}): ${j.question}${j.reason ? ` — ${j.reason}` : ''}`,
-      )
-    }
-    for (const c of a.checks) {
-      lines.push(
-        `- Check exit ${c.exitCode}: \`${cell(c.command)}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
-      )
-    }
-    if (a.changedFiles.length) {
-      lines.push(
-        `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,
-      )
-    }
-    const last = a.turns.at(-1)?.text
-    if (last) {
-      const shown =
-        last.length > LAST_MESSAGE_LIMIT ? `${last.slice(0, LAST_MESSAGE_LIMIT)}…` : last
-      lines.push(
-        '',
-        'Last message:',
-        '',
-        ...shown
-          .trimEnd()
-          .split('\n')
-          .map((l) => `> ${l}`),
-        '',
-      )
-    }
-    const links = [
-      a.files.transcript && `[transcript](${a.files.transcript.path})`,
-      a.files.diff && `[diff](${a.files.diff.path})`,
-      a.files.judgeInput && `[judge input](${a.files.judgeInput.path})`,
-    ].filter(Boolean)
-    if (links.length) lines.push(`- Files: ${links.join(' · ')}`)
   }
   lines.push('')
   return lines.join('\n')
+}
+
+function attemptDetail(lines: string[], a: AttemptRecord): void {
+  if (a.error) {
+    lines.push(
+      `**${a.error.kind}**`,
+      '',
+      '```',
+      a.error.message.split('\n').slice(0, 20).join('\n'),
+      '```',
+      '',
+    )
+  }
+  for (const turn of a.turns) {
+    lines.push(
+      `- Prompt (${turn.status}, ${formatMs(turn.durationMs)}): ${cell(turn.prompt).slice(0, 200)}`,
+    )
+  }
+  const t = a.timings
+  lines.push(
+    `- Time: setup ${formatMs(t.setupMs)} · agent ${formatMs(t.agentMs)} · checks ${formatMs(t.checksMs)} · judge ${formatMs(t.judgeMs)}`,
+  )
+  const act = a.activity
+  lines.push(
+    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatMs(act.reasoningMs)} reasoning`,
+  )
+  for (const j of a.judgements) {
+    lines.push(
+      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}): ${j.question}${j.reason ? ` — ${j.reason}` : ''}`,
+    )
+  }
+  for (const c of a.checks) {
+    lines.push(
+      `- Check exit ${c.exitCode}: \`${cell(c.command)}\`${c.log ? ` ([log](${c.log.path}))` : ''}`,
+    )
+  }
+  if (a.changedFiles.length) {
+    lines.push(
+      `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,
+    )
+  }
+  const last = a.turns.at(-1)?.text
+  if (last) {
+    const shown = last.length > LAST_MESSAGE_LIMIT ? `${last.slice(0, LAST_MESSAGE_LIMIT)}…` : last
+    lines.push(
+      '',
+      'Last message:',
+      '',
+      ...shown
+        .trimEnd()
+        .split('\n')
+        .map((l) => `> ${l}`),
+      '',
+    )
+  }
+  const links = [
+    a.files.transcript && `[transcript](${a.files.transcript.path})`,
+    a.files.diff && `[diff](${a.files.diff.path})`,
+    a.files.judgeInput && `[judge input](${a.files.judgeInput.path})`,
+  ].filter(Boolean)
+  if (links.length) lines.push(`- Files: ${links.join(' · ')}`)
 }

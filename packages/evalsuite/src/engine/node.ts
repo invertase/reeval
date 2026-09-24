@@ -6,16 +6,21 @@ import { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { configDefaults } from 'vitest/config'
 import { createVitest, type Reporter, type TestCase, type Vitest } from 'vitest/node'
-import { evalId, relativeFile } from '../ids.ts'
-import type { EvalMeta, RunContext } from '../types.ts'
+import { UsageError } from '../errors.ts'
+import { attemptKey, evalId, relativeFile } from '../ids.ts'
+import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type {} from './runtime.ts'
 
+/** One attempt: a Vitest test. `id` is the eval's; `key` is unique per attempt. */
 export type EngineEval = {
   id: string
+  key: string
   file: string
   /** Enclosing group names, outermost first. */
   group: string[]
   name: string
+  /** Absent only for tests ES didn't register (there are none today). */
+  attempt: AttemptMeta | undefined
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number
   errors: string[]
@@ -32,7 +37,7 @@ export type EngineRun = {
 export type EngineOptions = {
   run: RunContext
   filters: string[]
-  onEvalStart?: (e: Pick<EngineEval, 'id' | 'file' | 'name'>) => void
+  onEvalStart?: (e: Pick<EngineEval, 'id' | 'key' | 'file' | 'name' | 'attempt'>) => void
   onEvalResult?: (e: EngineEval) => void
   /** Called once the engine can be cancelled, with a function that cancels the run. */
   onCancellable?: (cancel: () => void) => void
@@ -76,17 +81,28 @@ function groupPath(test: TestCase): string[] {
   return path
 }
 
-function toEngineEval(root: string, test: TestCase): EngineEval {
+function identify(root: string, test: TestCase) {
   const file = relativeFile(root, test.module.moduleId)
-  const group = groupPath(test)
+  const attempt = test.meta().esAttempt
+  const group = attempt?.groups ?? groupPath(test)
+  const name = attempt?.name ?? test.name
+  const id = evalId(file, [...group, name])
+  const key = attempt ? attemptKey(id, attempt.cell.key, attempt.n) : id
+  return { file, attempt, group, name, id, key }
+}
+
+function toEngineEval(root: string, test: TestCase): EngineEval {
+  const { file, attempt, group, name, id, key } = identify(root, test)
   const result = test.result()
   const state =
     result.state === 'failed' ? 'failed' : result.state === 'passed' ? 'passed' : 'skipped'
   return {
-    id: evalId(file, [...group, test.name]),
+    id,
+    key,
     file,
     group,
-    name: test.name,
+    name,
+    attempt,
     state,
     durationMs: Math.round(test.diagnostic()?.duration ?? 0),
     errors: (result.errors ?? []).map((e) => cleanMessage(e.message ?? String(e))),
@@ -111,25 +127,32 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const evals = new Map<string, EngineEval>()
   let unhandledErrors: string[] = []
   let cancelled = false
+  let usage: string | undefined
 
   const reporter: Reporter = {
     onTestCaseReady(test) {
-      const file = relativeFile(config.root, test.module.moduleId)
-      const id = evalId(file, [...groupPath(test), test.name])
-      options.onEvalStart?.({ id, file, name: test.name })
+      const { file, attempt, name, id, key } = identify(config.root, test)
+      options.onEvalStart?.({ id, key, file, name, attempt })
     },
     onTestCaseResult(test) {
       const e = toEngineEval(config.root, test)
-      evals.set(e.id, e)
+      evals.set(e.key, e)
       if (matchesName(e)) options.onEvalResult?.(e)
     },
     onTestRunEnd(modules, errors, reason) {
       for (const module of modules) {
         for (const test of module.children.allTests()) {
           const e = toEngineEval(config.root, test)
-          if (!evals.has(e.id)) evals.set(e.id, e)
+          if (!evals.has(e.key)) evals.set(e.key, e)
         }
-        for (const error of module.errors()) unhandledErrors.push(error.message)
+        for (const error of module.errors()) {
+          const file = relativeFile(config.root, module.moduleId)
+          if (/Unexpected \.only modifier/.test(error.message)) {
+            usage = `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
+          } else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
+            usage = `${file}: ${error.message}`
+          } else unhandledErrors.push(error.message)
+        }
       }
       unhandledErrors = [...unhandledErrors, ...errors.map((e) => e.message ?? String(e))]
       if (reason === 'interrupted') cancelled = true
@@ -144,7 +167,10 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   let vitest: Vitest | undefined
   let namePattern: RegExp | undefined
   const matchesName = (e: EngineEval) =>
-    !namePattern || namePattern.test([...e.group, e.name].join(' '))
+    !namePattern ||
+    namePattern.test(
+      [...e.group, e.name, e.attempt ? `[${e.attempt.cell.key}#${e.attempt.n}]` : ''].join(' '),
+    )
   const sigintListeners = new Set(process.listeners('SIGINT'))
   try {
     vitest = await createVitest(
@@ -202,6 +228,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   } finally {
     await vitest?.close()
   }
+  if (usage) throw new UsageError(usage)
   const matching = [...evals.values()].filter(matchesName)
   return { evals: matching, unhandledErrors, cancelled, noFiles: false }
 }

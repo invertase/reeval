@@ -3,20 +3,34 @@ import { createCursor } from '@ai-sdk/harness-cursor'
 import { isDockerSandbox } from '../sandbox/docker.ts'
 import { WORKSPACE_DIR } from '../sandbox/image.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { CursorHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
+import type { CursorHarnessDescriptor, McpServer, TranscriptEvent, TurnStatus } from '../types.ts'
 import { normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
-export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harness {
-  const agent = new HarnessAgent({
-    harness: createCursor(),
-    model: descriptor.model,
-    permissionMode: 'allow-all',
-    sandboxConfig: { workDir: WORKSPACE_DIR },
-  })
+const pairs = (values: Record<string, unknown> = {}) =>
+  Object.entries(values).map(([name, value]) => ({ name, value: String(value) }))
 
+/** ES's MCP servers in the ACP `session/new` shape the Cursor adapter forwards as is. */
+export function acpMcpServers(servers: Record<string, McpServer>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) =>
+      'url' in s
+        ? [name, { type: 'http', url: s.url, headers: pairs(s.headers) }]
+        : [name, { command: s.command, args: s.args ?? [], env: pairs(s.env) }],
+    ),
+  )
+}
+
+export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harness {
   return {
-    async start(sandbox, signal) {
+    async start(sandbox, signal, { skills, mcp }) {
+      const agent = new HarnessAgent({
+        harness: createCursor(Object.keys(mcp).length ? { mcpServers: acpMcpServers(mcp) } : {}),
+        model: descriptor.model,
+        permissionMode: 'allow-all',
+        sandboxConfig: { workDir: WORKSPACE_DIR },
+        ...(skills.length ? { skills } : {}),
+      })
       if (!isDockerSandbox(sandbox)) {
         throw new InfraError('The Cursor harness needs the Docker sandbox')
       }

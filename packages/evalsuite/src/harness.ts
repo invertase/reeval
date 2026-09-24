@@ -1,7 +1,10 @@
 // `evalsuite/harness`: agent harness descriptors. The implementations load lazily in workers.
 import type { CursorHarnessDescriptor, FakeHarnessDescriptor } from './types.ts'
 
-export const cursor = (options: { model?: string } = {}): CursorHarnessDescriptor => ({
+/** The Cursor agent CLI. `id` names the cell; it defaults to `cursor:<model>`. */
+export const cursor = (
+  options: Omit<CursorHarnessDescriptor, 'kind'> = {},
+): CursorHarnessDescriptor => ({
   kind: 'cursor',
   ...options,
 })

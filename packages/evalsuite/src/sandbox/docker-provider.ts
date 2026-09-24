@@ -8,6 +8,8 @@ import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
 type SessionOptions = {
   image: string
   labels?: Record<string, string>
+  /** Set in the container for every process; values travel via the docker CLI's env, not argv. */
+  env?: Record<string, string>
   /** The container removes itself after this long, as a backstop for hard-killed runs. */
   lifetimeMs?: number
   abortSignal?: AbortSignal
@@ -31,6 +33,7 @@ export async function createDockerSession(
       '--rm',
       '--init',
       ...Object.entries(labels).flatMap(([k, v]) => ['--label', `${k}=${v}`]),
+      ...Object.keys(options.env ?? {}).flatMap((k) => ['--env', k]),
       '--publish',
       `127.0.0.1::${BRIDGE_PORT}`,
       '--workdir',
@@ -40,7 +43,7 @@ export async function createDockerSession(
       options.image,
       String(lifetime),
     ],
-    { signal: options.abortSignal },
+    { signal: options.abortSignal, env: options.env },
   )
   let removed: Promise<void> | undefined
   const remove = () => {

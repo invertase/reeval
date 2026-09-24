@@ -16,22 +16,26 @@ export async function createDockerSandbox(
   descriptor: DockerSandboxDescriptor,
   options: SandboxOptions,
 ): Promise<DockerSandbox> {
-  const image = descriptor.image ?? DEFAULT_IMAGE
+  const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
   if (!(await imageInfo(image))) {
     throw new InfraError(`Docker image ${image} not found. Build it with: es image build`)
   }
   const network = await createDockerSession({
     image,
+    env: options.env,
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
   })
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
-  const resolve = (path: string) => posix.resolve(workdir, path)
   await network.run({ command: `mkdir -p ${workdir}` })
+  const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || '/root'
+  const resolve = (path: string) =>
+    path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
 
   return {
     workdir,
+    home,
     network,
     exec: async (command, opts) =>
       network.run({ command, workingDirectory: workdir, abortSignal: opts?.signal }),

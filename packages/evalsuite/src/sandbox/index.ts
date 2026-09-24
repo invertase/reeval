@@ -2,7 +2,15 @@ import type { SandboxDescriptor } from '../types.ts'
 import { createFakeSandbox } from './fake.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
-export type SandboxOptions = { runId: string; timeoutMs: number; signal: AbortSignal }
+export type SandboxOptions = {
+  runId: string
+  timeoutMs: number
+  signal: AbortSignal
+  /** Variables for every process in the sandbox. */
+  env: Record<string, string>
+  /** The prepared image for Docker (see `prepareImage`). */
+  image?: string
+}
 
 export async function createSandbox(
   descriptor: SandboxDescriptor,
@@ -11,7 +19,7 @@ export async function createSandbox(
   try {
     switch (descriptor.kind) {
       case 'fake':
-        return await createFakeSandbox(descriptor)
+        return await createFakeSandbox(descriptor, options.env)
       case 'docker': {
         const { createDockerSandbox } = await import('./docker.ts')
         return await createDockerSandbox(descriptor, options)

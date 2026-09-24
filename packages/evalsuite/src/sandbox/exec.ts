@@ -5,12 +5,17 @@ import type { ExecResult } from '../types.ts'
 export function spawnCollect(
   cmd: string,
   args: string[],
-  opts: { cwd?: string; signal?: AbortSignal; input?: string } = {},
+  opts: { cwd?: string; signal?: AbortSignal; input?: string; env?: Record<string, string> } = {},
 ): Promise<ExecResult> {
   return new Promise((resolve, reject) => {
     if (opts.signal?.aborted) return reject(opts.signal.reason)
     // Own process group: Ctrl-C goes to ES, which then aborts and kills this child itself.
-    const child = spawn(cmd, args, { cwd: opts.cwd, stdio: 'pipe', detached: true })
+    const child = spawn(cmd, args, {
+      cwd: opts.cwd,
+      stdio: 'pipe',
+      detached: true,
+      env: opts.env ? { ...process.env, ...opts.env } : process.env,
+    })
     let stdout = ''
     let stderr = ''
     child.stdout.on('data', (d) => {

@@ -8,8 +8,12 @@ const lineCount = (text: string) =>
 
 /** Writes canned files into the sandbox and returns a canned message on every turn. */
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => ({
-  async start(sandbox) {
+  async start(sandbox, _signal, { skills, mcp }) {
     if (descriptor.failWith) throw new InfraError(descriptor.failWith)
+    const loaded = [
+      skills.length ? `skills: ${skills.map((s) => s.name).join(', ')}` : '',
+      Object.keys(mcp).length ? `mcp: ${Object.keys(mcp).join(', ')}` : '',
+    ].filter(Boolean)
     let calls = 0
     return {
       async send(prompt, signal) {
@@ -20,6 +24,16 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
         }
         const transcript: TranscriptEvent[] = [
           { ...at(), type: 'text', text: `Working on: ${prompt}`, durationMs: 0 },
+          ...(loaded.length
+            ? [
+                {
+                  ...at(),
+                  type: 'text' as const,
+                  text: `Loaded ${loaded.join('; ')}`,
+                  durationMs: 0,
+                },
+              ]
+            : []),
         ]
         const done = (text: string, status: 'completed' | 'aborted') => ({
           text,

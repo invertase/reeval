@@ -1,5 +1,6 @@
+import type { HarnessSkill } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type { TranscriptEvent, TurnStatus } from '../types.ts'
+import type { McpServer, TranscriptEvent, TurnStatus } from '../types.ts'
 
 export type HarnessResult = {
   /** The agent's final message for the turn. */
@@ -18,6 +19,13 @@ export interface HarnessSession {
   close(): Promise<void>
 }
 
+/** What an environment gives the agent itself; each adapter puts it where its agent looks. */
+export type Treatments = {
+  skills: HarnessSkill[]
+  /** Secret values are already resolved. */
+  mcp: Record<string, McpServer>
+}
+
 export interface Harness {
-  start(sandbox: Sandbox, signal: AbortSignal): Promise<HarnessSession>
+  start(sandbox: Sandbox, signal: AbortSignal, treatments: Treatments): Promise<HarnessSession>
 }

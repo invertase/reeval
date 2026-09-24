@@ -3,6 +3,8 @@ import type { ExecResult } from '../types.ts'
 export interface Sandbox {
   /** Absolute path of the agent's working directory inside the sandbox. */
   readonly workdir: string
+  /** Absolute path of the home directory; `~/` paths in `writeFile` resolve here. */
+  readonly home: string
   exec(command: string, opts?: { signal?: AbortSignal }): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
   writeFile(path: string, content: string): Promise<void>

@@ -9,7 +9,10 @@ import type { Sandbox } from './types.ts'
  * A temp directory on the host. Commands run unisolated on the host shell, so this is
  * only meant for tests and for the fake harness.
  */
-export async function createFakeSandbox(descriptor: FakeSandboxDescriptor): Promise<Sandbox> {
+export async function createFakeSandbox(
+  descriptor: FakeSandboxDescriptor,
+  env: Record<string, string> = {},
+): Promise<Sandbox> {
   const parent = descriptor.dir ?? tmpdir()
   await mkdir(parent, { recursive: true })
   const base = await mkdtemp(join(parent, 'es-sandbox-'))
@@ -19,10 +22,12 @@ export async function createFakeSandbox(descriptor: FakeSandboxDescriptor): Prom
 
   return {
     workdir,
-    exec: (command, opts) => spawnCollect('sh', ['-c', command], { cwd: workdir, ...opts }),
+    exec: (command, opts) =>
+      spawnCollect('sh', ['-c', command], { cwd: workdir, env: { HOME: base, ...env }, ...opts }),
+    home: base,
     readFile: (path) => readFile(join(workdir, path), 'utf8').catch(() => null),
     async writeFile(path, content) {
-      const target = join(workdir, path)
+      const target = path.startsWith('~/') ? join(base, path.slice(2)) : join(workdir, path)
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, content)
     },

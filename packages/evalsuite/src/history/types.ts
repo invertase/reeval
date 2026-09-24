@@ -1,4 +1,13 @@
-import type { ErrorKind, FileChange, Outcome, PhaseTimings, TurnStatus } from '../types.ts'
+import type {
+  AttemptImage,
+  Cell,
+  EnvironmentRecord,
+  ErrorKind,
+  FileChange,
+  Outcome,
+  PhaseTimings,
+  TurnStatus,
+} from '../types.ts'
 
 /** Stays 1 while ES is pre-release: the record changes in place. */
 export const SCHEMA_VERSION = 1
@@ -58,7 +67,16 @@ export type AttemptFiles = {
 export type ContextFile = { path: string; sha256: string }
 
 export type AttemptRecord = {
+  /** `<cell key>#<n>`. */
+  id: string
+  /** The cell's key; see `EvalEntry.cells`. */
+  cell: string
+  /** Run number within the cell, from 1. */
   n: number
+  /** The image the container started from; null for the fake sandbox. */
+  image: AttemptImage | null
+  /** Names of the variables and secrets set in the sandbox; values are never recorded. */
+  env: { vars: string[]; secrets: string[] }
   /** Skills, rules and MCP config visible to the agent in its sandbox, by content hash. */
   context: ContextFile[]
   outcome: Outcome
@@ -101,14 +119,32 @@ export type EvalEntry = {
   sourceHash: string | null
   /** Evals have no fixtures until workspace seeding lands; always null for now. */
   fixtureHash: string | null
+  tags: string[]
+  /** `fail` if any cell failed, else `infra_error` if any errored, else `skipped` if all were, else `pass`. */
   outcome: Outcome
-  /** pass / (pass + fail); infra errors and skips excluded. */
+  /** pass / (pass + fail) over every attempt; infra errors and skips excluded. */
   passRate: number | null
+  cells: CellRecord[]
   attempts: AttemptRecord[]
 }
 
+/** One harness × environment × sandbox combination of an eval, and how its attempts went. */
+export type CellRecord = Cell & {
+  /** Covers the eval source, harness, environment digest, image and judge settings. */
+  fingerprint: string
+  runs: number
+  pass: number
+  fail: number
+  infraError: number
+  skipped: number
+  passRate: number | null
+  outcome: Outcome
+}
+
+/** Counts attempts, except `evals`. */
 export type RunSummary = {
   evals: number
+  attempts: number
   pass: number
   fail: number
   infraError: number
@@ -139,12 +175,15 @@ export type RunRecord = {
     /** Lockfiles in the project root (and the repo root, if different), by content hash. */
     lockfiles: Array<{ path: string; sha256: string }>
   }
-  environment: Environment
+  stack: Stack
+  /** Each environment the run applied, fingerprinted; secret values are never included. */
+  environments: EnvironmentRecord[]
   config: {
-    harness: string
-    model: string | null
-    sandbox: string
-    judgeModel: string
+    harnesses: string[]
+    sandboxes: string[]
+    environments: string[]
+    runs: number
+    judgeModel: string | null
     threshold: number
     timeoutMs: number
     configHash: string
@@ -157,19 +196,20 @@ export type RunRecord = {
   evals: EvalEntry[]
 }
 
-export type Environment = {
+/** What ran and graded the agents: the machine, images, harnesses and judge. */
+export type Stack = {
   es: string
   node: string
   os: string
   arch: string
-  /** null for the fake sandbox. `id` is content-addressed; `repoDigests` only exist once pushed. */
-  image: { ref: string; id: string; repoDigests: string[] } | null
-  agentCli: string | null
+  /** Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed. */
+  images: Array<AttemptImage & { repoDigests: string[] }>
   /** Exact versions of the packages that run and grade the agent. */
   packages: Record<string, string>
-  harness: { kind: string; model: string | null; resolvedModel: string | null }
+  harnesses: Array<{ id: string; kind: string; model: string | null }>
   judge: {
-    model: string
+    /** The config's default model; groups, evals and calls may use others (see each verdict). */
+    model: string | null
     /** Model ids the provider reported serving, across every judge call in the run. */
     resolvedModels: string[]
     threshold: number
@@ -184,10 +224,12 @@ export type Environment = {
 
 /** The parts of a run's stack that `es compare` checks for drift. */
 export type StackSummary = {
-  imageId: string | null
-  agentCli: string | null
-  agentModel: string | null
-  judgeModel: string
+  imageIds: string[]
+  agentClis: string[]
+  harnesses: string[]
+  /** `name@digest` per environment. */
+  environments: string[]
+  judgeModel: string | null
   /** What the judge provider reported serving; differs from `judgeModel` on silent updates. */
   judgeServed: string[]
   judgeVersion: string
@@ -204,8 +246,7 @@ export type HistoryEntry = {
   author: string
   git: Pick<GitInfo, 'sha' | 'branch' | 'dirty'> | null
   runner: RunnerInfo['kind']
-  harness: string
-  model: string | null
+  harnesses: string[]
   summary: RunSummary
   stack: StackSummary
   evals: Array<{ id: string; fingerprint: string; outcome: Outcome }>

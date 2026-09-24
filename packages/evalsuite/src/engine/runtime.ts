@@ -1,7 +1,7 @@
 // Worker-side half of the engine adapter. Together with ./node.ts, this is the only
 // code allowed to import `vitest`.
 import { afterAll, describe, expect, inject, recordArtifact, test } from 'vitest'
-import type { EvalMeta, RunContext } from '../types.ts'
+import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 
 declare module 'vitest' {
   interface ProvidedContext {
@@ -9,6 +9,7 @@ declare module 'vitest' {
   }
   interface TaskMeta {
     es?: EvalMeta
+    esAttempt?: AttemptMeta
   }
   interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
     toHaveFile(path: string, pattern?: RegExp | string): Promise<void>
@@ -29,15 +30,23 @@ export type TestHandle = {
   attachRecord(path: string): Promise<void>
 }
 
-export type TestMode = 'run' | 'skip' | 'only'
+export type TestMode = 'run' | 'skip' | 'only' | 'todo'
 
 export function registerTest(
   name: string,
-  options: { timeout?: number; mode: TestMode },
+  options: { timeout?: number; mode: TestMode; attempt?: AttemptMeta },
   body: (handle: TestHandle) => Promise<void>,
 ): void {
+  if (options.mode === 'todo') {
+    test(name, {
+      todo: true,
+      meta: options.attempt ? { esAttempt: options.attempt } : {},
+    }, () => {})
+    return
+  }
   const register = options.mode === 'run' ? test : test[options.mode]
-  register(name, { timeout: options.timeout, retry: 0 }, async (ctx) => {
+  const meta = options.attempt ? { esAttempt: options.attempt } : {}
+  register(name, { timeout: options.timeout, retry: 0, meta }, async (ctx) => {
     const running = body({
       file: ctx.task.file.filepath,
       signal: ctx.signal,
@@ -72,8 +81,8 @@ export function holdFileUntilEvalsSettle(): void {
 }
 
 export function registerGroup(name: string, mode: TestMode, body: () => void): void {
-  const register = mode === 'run' ? describe : describe[mode]
-  register(name, body)
+  if (mode === 'todo') describe.todo(name)
+  else (mode === 'run' ? describe : describe[mode])(name, body)
 }
 
 export const getRunContext = (): RunContext => inject('es:run')

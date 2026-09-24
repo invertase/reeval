@@ -26,7 +26,14 @@ describe('engine', () => {
     const { run } = readRun(p.dir)
     assert.equal(run.schemaVersion, 1)
     assert.equal(run.status, 'complete')
-    assert.deepEqual(run.summary, { evals: 1, pass: 1, fail: 0, infraError: 0, skipped: 0 })
+    assert.deepEqual(run.summary, {
+      evals: 1,
+      attempts: 1,
+      pass: 1,
+      fail: 0,
+      infraError: 0,
+      skipped: 0,
+    })
     assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')
     assert.ok(!existsSync(join(p.dir, '.es/results')), 'no legacy result.json')
     assert.ok(!existsSync(join(p.dir, '.es/staging', run.runId)), 'staging cleaned up')
@@ -111,6 +118,7 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     assert.equal(r.code, 0)
     assert.deepEqual(readRun(p.dir).run.summary, {
       evals: 2,
+      attempts: 2,
       pass: 1,
       fail: 0,
       infraError: 0,
@@ -245,8 +253,15 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     const [input] = JSON.parse(e.read(e.trial.files.judgeInput?.path ?? ''))
     assert.equal(input.question, 'Did it write hello.txt?')
     assert.equal(input.state.task, 'write hello.txt')
-    assert.equal(e.trial.files.diff?.path, `${e.slug}/1/diff.patch`)
-    assert.equal(e.trial.files.transcript?.path, `${e.slug}/1/transcript.jsonl`)
+    assert.equal(e.trial.id, 'fake/baseline/fake#1')
+    assert.match(
+      e.trial.files.diff?.path ?? '',
+      new RegExp(`^${e.slug}/fake-baseline-fake-[0-9a-f]{6}/1/diff\\.patch$`),
+    )
+    assert.equal(
+      e.trial.files.transcript?.path,
+      e.trial.files.diff?.path.replace('diff.patch', 'transcript.jsonl'),
+    )
     assert.deepEqual(liveSandboxes(p), [], 'sandbox destroyed')
   })
 

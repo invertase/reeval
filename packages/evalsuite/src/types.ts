@@ -118,11 +118,15 @@ export type EvalContext = {
   readonly turns: readonly Turn[]
   /** Aborted on timeout or Ctrl-C. */
   readonly signal: AbortSignal
+  /** Which cell of the matrix this attempt is, and its run number (from 1). */
+  readonly attempt: { id: string; cell: Cell; n: number }
 }
 export type EvalFn = (t: EvalContext) => Promise<void>
 
 export type FakeHarnessDescriptor = {
   kind: 'fake'
+  /** Cell id; defaults to `fake`. */
+  id?: string
   /** Files the fake agent writes into the sandbox on every turn. */
   files?: Record<string, string>
   text?: string
@@ -131,16 +135,79 @@ export type FakeHarnessDescriptor = {
   /** Throw before the first turn starts, to simulate an infra failure. */
   failWith?: string
 }
-export type CursorHarnessDescriptor = { kind: 'cursor'; model?: string }
+export type CursorHarnessDescriptor = {
+  kind: 'cursor'
+  model?: string
+  /** Cell id; defaults to `cursor:<model>`. */
+  id?: string
+}
 export type HarnessDescriptor = FakeHarnessDescriptor | CursorHarnessDescriptor
 
 export type FakeSandboxDescriptor = {
   kind: 'fake'
+  id?: string
   /** Parent directory for the per-eval workspace (defaults to the OS temp dir). */
   dir?: string
 }
-export type DockerSandboxDescriptor = { kind: 'docker'; image?: string }
+export type DockerSandboxDescriptor = {
+  kind: 'docker'
+  /** Cell id; defaults to `docker`, or `docker:<image>` for other images. */
+  id?: string
+  /** An image that already has the harness baked in, used as is. */
+  image?: string
+  /** A Debian or Ubuntu based toolchain image; ES bakes Node and the harness on top, cached. */
+  from?: string
+}
 export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
+
+/** A host environment variable passed into the sandbox and redacted; see `secret()`. */
+export type Secret = { kind: 'secret'; from?: string }
+export type EnvValue = string | Secret
+export type EnvVars = Record<string, EnvValue>
+
+export type McpServer =
+  | { command: string; args?: string[]; env?: EnvVars }
+  | { url: string; headers?: EnvVars }
+
+export type SkillOptions = {
+  /** Branch, tag or commit for git sources. */
+  ref?: string
+  /** Directory inside a git source that holds the skills. */
+  path?: string
+  /** Only these skills, by name, from a directory of skills. */
+  skills?: string[]
+}
+
+export type EnvironmentStep =
+  | { kind: 'exec'; command: string; cache: boolean }
+  | { kind: 'skill'; source: string; options: SkillOptions }
+  | { kind: 'mcp'; name: string; server: McpServer }
+  | { kind: 'rules'; content: string }
+  | { kind: 'file'; path: string; content: string }
+  | { kind: 'file'; path: string; from: string }
+  | { kind: 'var'; name: string; value: string }
+  | { kind: 'secret'; name: string; from: string }
+
+/** What an eval's sandbox gets before the agent starts. Plain data; see `defineEnvironment`. */
+export type Environment = { kind: 'environment'; name: string; steps: readonly EnvironmentStep[] }
+
+/** One value, a list (each is a matrix axis value), or an edit of the inherited list. */
+export type Axis<T> = T | T[] | ((inherited: T[]) => T | T[])
+
+export type EvalOptions = {
+  harness?: Axis<HarnessDescriptor>
+  sandbox?: Axis<SandboxDescriptor>
+  environment?: Axis<Environment>
+  /** Attempts per cell. */
+  runs?: number
+  /** Variables and secrets for the sandbox, merged by name down the cascade. */
+  env?: EnvVars
+  judge?: JudgeOptions
+  /** Per attempt. */
+  timeout?: Duration
+  tags?: string[]
+}
+export type GroupOptions = EvalOptions
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
@@ -154,8 +221,11 @@ export type HistoryConfig = {
 
 export type EsConfig = {
   include?: string[]
-  harness?: HarnessDescriptor
-  sandbox?: SandboxDescriptor
+  harness?: HarnessDescriptor | HarnessDescriptor[]
+  sandbox?: SandboxDescriptor | SandboxDescriptor[]
+  environment?: Environment | Environment[]
+  runs?: number
+  env?: EnvVars
   judge?: ConfigJudgeOptions
   timeout?: Duration
   /** When runs are copied into the history folder: `es record` only, in CI, or on every run. */
@@ -173,9 +243,12 @@ export type ConfigContext = {
 export type ResolvedConfig = {
   root: string
   include: string[]
-  harness: HarnessDescriptor
-  sandbox: SandboxDescriptor
-  judge: ConfigJudgeOptions & { model: string | FakeJudgeModel; threshold: number }
+  harness: HarnessDescriptor[]
+  sandbox: SandboxDescriptor[]
+  environment: Environment[]
+  runs: number
+  env: EnvVars
+  judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
   record: RecordMode
   history: { dir: string; artifacts: ArtifactLevel }
@@ -198,7 +271,26 @@ export type PhaseTimings = {
   judgeMs: number
 }
 
-/** Full per-eval payload, written to disk by the worker. */
+/** One cell of an eval's matrix: harness × environment × sandbox, by id. */
+export type Cell = { key: string; harness: string; environment: string; sandbox: string }
+
+/** An environment as it was applied, without secret values. */
+export type EnvironmentRecord = {
+  name: string
+  /** Covers every step except the image id; secret names are included, values never are. */
+  digest: string
+  baked: string[]
+  perAttempt: string[]
+  skills: Array<{ name: string; source: string; commit: string | null; sha256: string }>
+  mcp: string[]
+  files: Array<{ path: string; sha256: string }>
+  vars: string[]
+  secrets: string[]
+}
+
+export type AttemptImage = { ref: string; id: string; agentCli: string | null }
+
+/** Full per-attempt payload, written to disk by the worker. */
 export type EvalRecord = {
   outcome: Exclude<Outcome, 'skipped'>
   error: { kind: ErrorKind; message: string } | null
@@ -212,6 +304,22 @@ export type EvalRecord = {
   context?: Array<{ path: string; sha256: string }>
   /** What each judge call saw, in call order, including calls that errored. */
   judgeInputs?: Array<{ question: string; model: string; state: { [key: string]: JSONValue } }>
+  environment?: EnvironmentRecord
+  image?: AttemptImage | null
+  /** Names of the variables and secrets set in the sandbox. */
+  env?: { vars: string[]; secrets: string[] }
+}
+
+/** Set when an attempt is registered, so the reporter has it even for skipped attempts. */
+export type AttemptMeta = {
+  name: string
+  groups: string[]
+  tags: string[]
+  cell: Cell
+  n: number
+  /** Only the axes that vary within the eval, plus `#n` when it has several runs. */
+  label: string
+  harness: HarnessDescriptor
 }
 
 /** Small summary carried through the engine's task metadata. */
@@ -222,4 +330,12 @@ export type EvalMeta = {
   recordPath: string
 }
 
-export type RunContext = { runId: string; resultsDir: string; config: ResolvedConfig }
+export type RunContext = {
+  runId: string
+  resultsDir: string
+  config: ResolvedConfig
+  /** `es run --runs n`: overrides every level. */
+  runs?: number
+  /** `es run --tag`: each is a tag, or `!tag` to exclude; all must hold. */
+  tags: string[]
+}

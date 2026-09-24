@@ -1,6 +1,6 @@
 import type { Outcome } from '../types.ts'
 import { warnings } from './state.ts'
-import { formatMs, OUTCOME_MARK, stateRows, summaryCounts } from './summary.ts'
+import { cellCounts, formatMs, OUTCOME_MARK, stateRows, summaryCounts } from './summary.ts'
 import type { HistoryEntry, RunRecord, StackSummary } from './types.ts'
 
 export class RefError extends Error {
@@ -157,9 +157,10 @@ export type StackChange = {
 }
 
 const STACK_FIELDS: Array<{ field: keyof StackSummary; label: string; outside: boolean }> = [
-  { field: 'imageId', label: 'image id', outside: false },
-  { field: 'agentCli', label: 'agent CLI', outside: false },
-  { field: 'agentModel', label: 'agent model', outside: false },
+  { field: 'imageIds', label: 'image ids', outside: false },
+  { field: 'agentClis', label: 'agent CLI', outside: false },
+  { field: 'harnesses', label: 'harnesses', outside: false },
+  { field: 'environments', label: 'environments', outside: false },
   { field: 'judgeModel', label: 'judge model', outside: false },
   { field: 'threshold', label: 'judge threshold', outside: false },
   { field: 'judgeServed', label: 'judge model served', outside: true },
@@ -275,12 +276,23 @@ export function formatShow(run: RunRecord): string {
     '',
   ]
   for (const e of run.evals) {
-    const t = e.attempts[0]
-    lines.push(`  ${OUTCOME_MARK[e.outcome]} ${e.id}${t ? `  ${formatMs(t.durationMs)}` : ''}`)
-    for (const j of t?.judgements ?? []) {
-      lines.push(`      judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${j.question}`)
+    const single = e.attempts.length === 1
+    const first = e.attempts[0]
+    lines.push(
+      `  ${OUTCOME_MARK[e.outcome]} ${e.id}${single && first ? `  ${formatMs(first.durationMs)}` : `  ${cellCounts(e)}`}`,
+    )
+    for (const t of e.attempts) {
+      const indent = single ? '      ' : '        '
+      if (!single) {
+        lines.push(`      ${OUTCOME_MARK[t.outcome]} ${t.id}  ${formatMs(t.durationMs)}`)
+      }
+      for (const j of t.judgements) {
+        lines.push(
+          `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${j.question}`,
+        )
+      }
+      if (t.error) lines.push(`${indent}${t.error.kind}: ${t.error.message.split('\n')[0]}`)
     }
-    if (t?.error) lines.push(`      ${t.error.kind}: ${t.error.message.split('\n')[0]}`)
   }
   return lines.join('\n')
 }

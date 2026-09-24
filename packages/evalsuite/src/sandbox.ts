@@ -1,8 +1,14 @@
 // `evalsuite/sandbox`: sandbox descriptors. The implementations load lazily in workers.
 import type { DockerSandboxDescriptor, FakeSandboxDescriptor } from './types.ts'
 
-/** One local Docker container per eval, from the image built by `es image build`. */
-export const docker = (options: { image?: string } = {}): DockerSandboxDescriptor => ({
+/**
+ * One local Docker container per attempt. By default it's the image `es image build` makes;
+ * `image` uses another image that already has the harness baked in, and `from` bakes Node and the
+ * harness onto a Debian or Ubuntu based toolchain image on first use (e.g. `python:3.12-slim`).
+ */
+export const docker = (
+  options: Omit<DockerSandboxDescriptor, 'kind'> = {},
+): DockerSandboxDescriptor => ({
   kind: 'docker',
   ...options,
 })

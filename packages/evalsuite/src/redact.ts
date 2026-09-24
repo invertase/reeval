@@ -1,4 +1,4 @@
-const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
+export const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
 
 /** Well-known credential shapes, masked even when they aren't in this process's environment. */
 const TOKEN_PATTERNS: RegExp[] = [
@@ -12,11 +12,18 @@ const TOKEN_PATTERNS: RegExp[] = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
 ]
 
+/** Values declared with `secret()`, masked whatever their variable is called. */
+const declared = new Set<string>()
+
+export function registerSecret(value: string | undefined): void {
+  if (value && value.length >= 4) declared.add(value)
+}
+
 function envSecrets(env: NodeJS.ProcessEnv): string[] {
-  return Object.entries(env)
+  const named = Object.entries(env)
     .filter(([name, value]) => SECRET_NAME.test(name) && value && value.length >= 8)
     .map(([, value]) => value as string)
-    .sort((a, b) => b.length - a.length)
+  return [...new Set([...named, ...declared])].sort((a, b) => b.length - a.length)
 }
 
 /**

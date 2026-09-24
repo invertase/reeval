@@ -78,8 +78,9 @@ describe('recording runs into evals/.history', () => {
     const [e] = recorded.evals
     assert.ok(e)
     assert.equal(recorded.run.artifacts, 'all')
-    for (const file of ['summary.md', `${e.slug}/1/transcript.jsonl`, `${e.slug}/1/diff.patch`]) {
-      assert.ok(existsSync(join(recorded.dir, file)), file)
+    const trial = e.attempts[0]
+    for (const file of ['summary.md', trial?.files.transcript?.path, trial?.files.diff?.path]) {
+      assert.ok(file && existsSync(join(recorded.dir, file)), file)
     }
     assert.match(
       recorded.read('summary.md'),
@@ -281,11 +282,11 @@ describe('recording runs into evals/.history', () => {
       run.dependencies.lockfiles.map((l) => l.path),
       ['package-lock.json'],
     )
-    assert.equal(run.environment.image, null)
-    assert.ok(run.environment.packages.ai && run.environment.packages.vitest)
-    assert.match(run.environment.judge.version, /^[0-9a-f]{12}$/)
+    assert.deepEqual(run.stack.images, [])
+    assert.ok(run.stack.packages.ai && run.stack.packages.vitest)
+    assert.match(run.stack.judge.version, /^[0-9a-f]{12}$/)
     assert.equal('reproducibility' in run, false)
-    assert.deepEqual(run.environment.fingerprintScope.length > 0, true)
+    assert.deepEqual(run.stack.fingerprintScope.length > 0, true)
     assert.equal(run.evals[0]?.fixtureHash, null)
     assert.equal(sh(p.dir, 'diff', '--cached', '--name-only'), '', "the user's index is untouched")
 

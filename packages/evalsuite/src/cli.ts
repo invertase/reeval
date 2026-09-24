@@ -8,7 +8,7 @@ import { loadConfig, missingCredentials, UsageError } from './config.ts'
 import type { EngineEval } from './engine/node.ts'
 import { loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
-import type { RunSummary } from './history/types.ts'
+import type { EvalEntry, RunSummary } from './history/types.ts'
 import { newRunId } from './ids.ts'
 import { preflight } from './preflight.ts'
 
@@ -23,7 +23,9 @@ const version: string = createRequire(import.meta.url)('../package.json').versio
 const HELP = `es ${version} — eval runner for coding agents
 
 Usage:
-  es run [filter...]        Run evals matching config.include; filters are path or name substrings
+  es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+    --runs <n>              Attempts per cell, overriding the config, groups and evals
+    --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --record                Also record the run into the history folder (see config.record)
   es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
                             --artifacts all|failures|none --allow-incomplete --skip-secret-scan
@@ -57,6 +59,7 @@ export function formatDuration(ms: number): string {
 }
 
 function printEval(e: EngineEval) {
+  const label = e.attempt?.label ? `  ${dim(e.attempt.label)}` : ''
   const outcome =
     e.state === 'skipped'
       ? 'skipped'
@@ -65,7 +68,7 @@ function printEval(e: EngineEval) {
     outcome
   ]
   const time = e.state === 'skipped' ? '' : `   ${dim(formatDuration(e.durationMs))}`
-  console.log(` ${mark} ${e.id}${time}`)
+  console.log(` ${mark} ${e.id}${label}${time}`)
   for (const j of e.meta?.judgements ?? []) {
     const mark = j.verdict === 'pass' ? green(j.verdict) : red(j.verdict)
     console.log(
@@ -86,7 +89,35 @@ function summaryLine(s: RunSummary, resultPath: string) {
     s.infraError && yellow(`${s.infraError} infra error`),
     s.skipped && dim(`${s.skipped} skipped`),
   ].filter(Boolean)
-  return `${parts.join(' · ') || 'no evals ran'} · run ${resultPath}`
+  const scope = s.attempts === s.evals ? '' : ` (${s.attempts} attempts, ${s.evals} evals)`
+  return `${parts.join(' · ') || 'no evals ran'}${parts.length ? scope : ''} · run ${resultPath}`
+}
+
+const pct = (rate: number | null) =>
+  rate === null ? '  – ' : `${Math.round(rate * 100)}%`.padStart(4)
+
+/** Pass rates per cell for evals with more than one attempt, and lift against `baseline`. */
+function printCells(evals: EvalEntry[]) {
+  const multi = evals.filter((e) => e.attempts.length > 1)
+  if (multi.length === 0) return
+  console.log(`\n${dim('Cells')}`)
+  for (const e of multi) {
+    console.log(`  ${e.id}`)
+    const width = Math.max(...e.cells.map((c) => c.key.length))
+    for (const c of e.cells) {
+      const base = e.cells.find(
+        (b) => b.environment === 'baseline' && b.harness === c.harness && b.sandbox === c.sandbox,
+      )
+      const lift =
+        base && base !== c && base.passRate !== null && c.passRate !== null
+          ? `   lift ${c.passRate >= base.passRate ? '+' : ''}${Math.round((c.passRate - base.passRate) * 100)} pts`
+          : ''
+      const infra = c.infraError ? yellow(`   ${c.infraError} infra`) : ''
+      console.log(
+        `    ${c.key.padEnd(width)}  ${`${c.pass}/${c.pass + c.fail}`.padStart(5)}  ${pct(c.passRate)}${lift}${infra}`,
+      )
+    }
+  }
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -106,6 +137,8 @@ async function run(argv: string[]): Promise<number> {
       'skip-secret-scan': { type: 'boolean' },
       limit: { type: 'string' },
       'fail-on-regression': { type: 'boolean' },
+      runs: { type: 'string' },
+      tag: { type: 'string', multiple: true },
     },
   })
   if (values.version) {
@@ -151,7 +184,18 @@ async function run(argv: string[]): Promise<number> {
     )
   }
   const sandboxVersions = await preflight(config)
-  if (config.harness.kind === 'cursor' && config.sandbox.kind === 'docker') {
+  let runs: number | undefined
+  if (values.runs !== undefined) {
+    runs = Number(values.runs)
+    if (!(Number.isInteger(runs) && runs >= 1)) {
+      throw new UsageError(`--runs must be a whole number of at least 1 (got ${values.runs})`)
+    }
+  }
+  const tags = values.tag ?? []
+  if (
+    config.harness.some((h) => h.kind === 'cursor') &&
+    config.sandbox.some((s) => s.kind === 'docker')
+  ) {
     console.error(
       yellow(
         'warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it',
@@ -173,7 +217,7 @@ async function run(argv: string[]): Promise<number> {
   await sweepStaging(config.root)
   const resultsDir = stagingDir(config.root, runId)
   await mkdir(resultsDir, { recursive: true })
-  const ctx = { runId, resultsDir, config }
+  const ctx = { runId, resultsDir, config, runs, tags }
 
   const { engineVersions, runEngine } = await import('./engine/node.ts')
 
@@ -196,9 +240,13 @@ async function run(argv: string[]): Promise<number> {
       })
     },
   })
-  if (engineRun.noFiles) {
+  const narrowed = [
+    filters.length ? `filter "${filters.join(' ')}"` : '',
+    tags.length ? `tags ${tags.join(', ')}` : '',
+  ].filter(Boolean)
+  if (engineRun.noFiles || (engineRun.evals.length === 0 && narrowed.length && !interrupted)) {
     throw new UsageError(
-      `No evals matched ${config.include.join(', ')}${filters.length ? ` with filter "${filters.join(' ')}"` : ''}`,
+      `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
     )
   }
 
@@ -219,10 +267,14 @@ async function run(argv: string[]): Promise<number> {
   })
   const { record } = run
   if (interrupted) {
-    for (const e of record.evals.filter((e) => e.attempts[0]?.error?.kind === 'aborted')) {
-      console.log(` ${red('✗')} ${e.id}   ${dim('cancelled')}`)
+    for (const e of record.evals) {
+      for (const a of e.attempts.filter((a) => a.error?.kind === 'aborted')) {
+        const label = e.attempts.length > 1 ? `  ${dim(a.id)}` : ''
+        console.log(` ${red('✗')} ${e.id}${label}   ${dim('cancelled')}`)
+      }
     }
   }
+  printCells(record.evals)
   for (const error of engineRun.unhandledErrors) console.error(red(`error: ${error}`))
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
   console.log(summaryLine(record.summary, relative(process.cwd(), summary)))

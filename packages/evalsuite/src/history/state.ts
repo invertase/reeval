@@ -97,6 +97,7 @@ export function judgeVersion(es: string, packages: Record<string, string>, model
 export const FINGERPRINT_SCOPE = [
   'eval-source',
   'harness',
+  'environment',
   'agent-cli',
   'image-id',
   'judge',
@@ -109,8 +110,7 @@ export const FINGERPRINT_SCOPE = [
  */
 export function warnings(run: RunRecord): string[] {
   const out: string[] = []
-  const image = run.environment.image
-  if (image && image.repoDigests.length === 0) {
+  for (const image of run.stack.images.filter((i) => i.repoDigests.length === 0)) {
     out.push(
       `Image ${image.ref} isn't pushed, so an exact rerun needs this machine's image (id ${image.id.replace(/^sha256:/, '').slice(0, 12)}).`,
     )
