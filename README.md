@@ -75,6 +75,9 @@ Duration  40s
 | `packages/evalsuite/src/sandbox` | The Docker sandbox and its AI SDK harness sandbox provider |
 | `packages/evalsuite/src/harness` | The Cursor harness (`@ai-sdk/harness-cursor`) and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
+| `packages/evalsuite/src/view` | `evalsuite/view`: browser-safe run headers, the studio's file layout and view-models |
+| `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
+| `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `evalsuite` |
 | `packages/evalsuite/docker` | The base image for sandboxes |
 | `examples/hello` | The example evals (including a with/without-skill pair and a Python sandbox), with a real config and a fake one |
 
@@ -144,6 +147,10 @@ es show [run]             One run and the state it ran in: table, --md or --json
 es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                           --md --json --fail-on-regression
 es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
+es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
+                          --port <n> (4984) --host <addr> --open --no-scratch --no-token
+es studio build           Write the studio as a static site: --out <dir> (studio-dist)
+                          --scratch --no-artifacts
 es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
 es --version | es --help
 ```
@@ -437,6 +444,21 @@ content. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stre
 `transcript.raw.jsonl`. The record adds per-turn durations, per-phase timings (setup, agent,
 diff, checks, judge) and activity counts, and `summary.md` quotes each eval's last message.
 
+### Studio
+
+`es studio` opens the history in a browser: runs (commit, branch, author or CI, pass counts, cost,
+duration, drift), a run's eval tree with per-cell pass rates and lift, one eval across runs, a
+compare of two runs, and each attempt's transcript, diff, checks, judge input and state. It
+listens on `127.0.0.1:4984` (or the next free port) and prints a URL with a session token; new
+runs appear as they're recorded, and unrecorded runs from `.es/runs/` are labelled scratch.
+
+`es studio build --out site` writes the same thing as a static folder (hash routing, relative
+paths) for GitHub Pages, Netlify, Cloudflare Pages or any static host. It includes transcripts
+and other artifacts unless you pass `--no-artifacts`, so host it where the repo's readers are.
+
+Both modes read one file layout: `studio.json`, `data/index/<YYYY-MM>.json` run headers,
+`data/runs/<runId>.json` records and `data/runs/<runId>/…` artifacts.
+
 ### What a record captures
 
 Enough to understand or reproduce the run later, shown by `es show` and in `summary.md`:
@@ -465,8 +487,8 @@ like a secret, including `worktree.patch`.
 ## Development
 
 ```bash
-pnpm build       # compile packages/evalsuite
-pnpm test        # build, then run the engine, wrapper and Docker tests
+pnpm build       # build the studio app, then compile packages/evalsuite (and copy the app in)
+pnpm test        # build, then run the engine, wrapper, studio, Docker and browser tests
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 ```
@@ -475,3 +497,8 @@ The engine and wrapper tests drive the real `es` CLI against generated projects 
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
 and reproduce a dirty run with `es checkout`. The ui tests feed recorded event streams to each
 renderer on a fake non-TTY stream and compare the output line by line. The Docker tests skip unless Docker is running and the sandbox image has been built.
+
+For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/es-demo` builds a demo project
+with recorded runs, and `ES_STUDIO_PROJECT=/tmp/es-demo pnpm --filter studio-web dev` serves the
+app with hot reload on port 4985 against it. The browser test needs Chrome or Chromium and skips
+without one.

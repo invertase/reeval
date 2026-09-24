@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --port 4985 --strictPort",
+    "dev": "vite --host 127.0.0.1 --port 4985 --strictPort",
     "build": "vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
