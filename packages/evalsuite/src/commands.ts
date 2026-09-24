@@ -1,4 +1,4 @@
-// The run-history commands: index, history, show, compare.
+// The run-history commands: publish, pull, index, history, show, compare.
 import { git } from './git.ts'
 import { runDir } from './ids.ts'
 import { buildIndex, deriveStore, INDEX_PATH, parseIndex, parseRun } from './record/index-file.ts'
@@ -12,12 +12,22 @@ import {
   pickBaseline,
   resolveRun,
 } from './record/views.ts'
+import { gitBranchStore } from './store/git.ts'
 import { type LocalStore, localStore } from './store/local.ts'
+import { publishRuns, pullRuns } from './store/sync.ts'
+import type { ResultsStore } from './store/types.ts'
 import type { ResultsConfig } from './types.ts'
 
 export type HistoryFlags = {
   json?: boolean
   md?: boolean
+  remote?: string
+  branch?: string
+  'allow-dirty'?: boolean
+  'allow-incomplete'?: boolean
+  'skip-secret-scan'?: boolean
+  run?: string[]
+  full?: boolean
   limit?: string
   rebuild?: boolean
   'fail-on-regression'?: boolean
@@ -38,6 +48,59 @@ async function localEntries(local: LocalStore): Promise<IndexEntry[]> {
     await local.commit({ files: new Map(), derive: deriveStore, message: 'es: index' })
   }
   return rebuilt.runs
+}
+
+function teamStore({ root, results, flags }: Ctx): ResultsStore {
+  if (flags.remote) return gitBranchStore({ remote: flags.remote, branch: flags.branch, root })
+  if (flags.branch) return gitBranchStore({ branch: flags.branch, root })
+  if (results.store) return results.store
+  throw new CommandError(
+    'No results store configured. Set results.store in es.config.ts (e.g. gitBranchStore()), or pass --remote <url|path|name>.',
+  )
+}
+
+const describe = (store: ResultsStore) =>
+  Object.entries(store.describe())
+    .map(([k, v]) => (k === 'kind' ? v : `${k} ${v}`))
+    .join(' · ')
+
+export async function publishCommand(ctx: Ctx, refs: string[]): Promise<number> {
+  const local = localStore({ root: ctx.root })
+  const entries = await localEntries(local)
+  const runIds = [
+    ...new Set((refs.length ? refs : ['latest']).map((r) => resolveRun(entries, r).runId)),
+  ]
+  const target = teamStore(ctx)
+  const result = await publishRuns(local, target, runIds, {
+    allowDirty: ctx.flags['allow-dirty'],
+    allowIncomplete: ctx.flags['allow-incomplete'],
+    skipSecretScan: ctx.flags['skip-secret-scan'],
+  })
+  if (ctx.flags.json) {
+    ctx.out(JSON.stringify({ store: target.describe(), ...result }, null, 2))
+    return 0
+  }
+  const what = runIds.length === 1 ? `run ${runIds[0]}` : `${runIds.length} runs`
+  if (!result.changed) ctx.out(`${what} already published to ${describe(target)}`)
+  else {
+    const retries = result.attempts > 1 ? ` after ${result.attempts} attempts` : ''
+    ctx.out(`published ${what} (${result.created.length} files) to ${describe(target)}${retries}`)
+  }
+  return 0
+}
+
+export async function pullCommand(ctx: Ctx): Promise<number> {
+  const local = localStore({ root: ctx.root })
+  const source = teamStore(ctx)
+  const result = await pullRuns(source, local, { runs: ctx.flags.run, full: ctx.flags.full })
+  if (ctx.flags.json) ctx.out(JSON.stringify(result, null, 2))
+  else if (result.runs.length === 0) ctx.out(`up to date with ${describe(source)}`)
+  else {
+    ctx.out(
+      `pulled ${result.runs.length} run${result.runs.length === 1 ? '' : 's'} (${result.files} files${ctx.flags.full ? '' : ', records only; --full for transcripts'}) from ${describe(source)}`,
+    )
+  }
+  return 0
 }
 
 export async function indexCommand(ctx: Ctx): Promise<number> {

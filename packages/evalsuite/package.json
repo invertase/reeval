@@ -24,6 +24,10 @@
       "types": "./dist/judge.d.ts",
       "default": "./dist/judge.js"
     },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "default": "./dist/store.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

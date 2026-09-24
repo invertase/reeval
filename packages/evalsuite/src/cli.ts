@@ -11,12 +11,14 @@ import { preflight } from './preflight.ts'
 import { gitInfo, runnerInfo } from './record/provenance.ts'
 import type { RunSummary } from './record/types.ts'
 
-const HISTORY_COMMANDS = { index: 1, history: 1, show: 1, compare: 1 }
+const HISTORY_COMMANDS = { publish: 1, pull: 1, index: 1, history: 1, show: 1, compare: 1 }
 
 const EXPECTED_ERRORS = [
   'CommandError',
   'RefError',
+  'PublishError',
   'SchemaError',
+  'GitError',
   'ImmutableFileError',
 ]
 
@@ -32,6 +34,10 @@ Usage:
   es show [run]             One run: table, --md (summary.md) or --json (run.json)
   es compare [base] [head]  Diff two runs; base defaults to head's baseline
                             --md --json --fail-on-regression
+  es publish [run...]       Publish local runs (default: latest) to results.store
+                            --remote <url|path|name> --branch <name> --allow-dirty
+                            --allow-incomplete --skip-secret-scan
+  es pull                   Copy published runs into .es/   --run <id> --full --remote --branch
   es index [--rebuild]      Regenerate .es/index.json
   es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
@@ -98,6 +104,13 @@ async function run(argv: string[]): Promise<number> {
       version: { type: 'boolean', short: 'v' },
       json: { type: 'boolean' },
       md: { type: 'boolean' },
+      remote: { type: 'string' },
+      branch: { type: 'string' },
+      'allow-dirty': { type: 'boolean' },
+      'allow-incomplete': { type: 'boolean' },
+      'skip-secret-scan': { type: 'boolean' },
+      run: { type: 'string', multiple: true },
+      full: { type: 'boolean' },
       limit: { type: 'string' },
       rebuild: { type: 'boolean' },
       'fail-on-regression': { type: 'boolean' },
@@ -123,6 +136,10 @@ async function run(argv: string[]): Promise<number> {
     const commands = await import('./commands.ts')
     const ctx = { root: config.root, results, flags: values, out: (s: string) => console.log(s) }
     switch (command as keyof typeof HISTORY_COMMANDS) {
+      case 'publish':
+        return commands.publishCommand(ctx, filters)
+      case 'pull':
+        return commands.pullCommand(ctx)
       case 'index':
         return commands.indexCommand(ctx)
       case 'history':
@@ -229,6 +246,6 @@ run(process.argv.slice(2)).then(
       EXPECTED_ERRORS.includes(name)
     console.error(red(`es: ${(error as Error).message}`))
     if (!expected && process.env.ES_DEBUG) console.error(error)
-    process.exitCode = EXIT.usage
+    process.exitCode = name === 'GitError' ? EXIT.infra : EXIT.usage
   },
 )
