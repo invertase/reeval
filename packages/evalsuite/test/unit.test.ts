@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
+import { evalRoot, missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
+import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { checkModelString, judgeCredentials } from '../src/judge/index.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { redactSecrets } from '../src/redact.ts'
@@ -81,4 +82,24 @@ test('missingCredentials names the judge key for the configured provider', () =>
     'AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
   ])
   assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }), [])
+})
+
+test('huge single outputs keep their head and tail, with a marker and hash', () => {
+  const big = `${'a'.repeat(100_000)}${'m'.repeat(100_000)}${'z'.repeat(20_000)}`
+  const capped = capText(big)
+  assert.ok(capped.length < OUTPUT_CAP + 200)
+  assert.ok(capped.startsWith('a'.repeat(1000)))
+  assert.ok(capped.endsWith('z'.repeat(1000)))
+  assert.match(capped, /\[es: truncated \d+ of 220000 characters, sha256 [0-9a-f]{64}\]/)
+  assert.equal(capText('small'), 'small')
+})
+
+test('the history folder sits in the directory the evals live in', () => {
+  assert.equal(evalRoot(['evals/**/*.es.ts']), 'evals')
+  assert.equal(evalRoot(['test/evals/a/*.es.ts', 'test/evals/b/**/*.es.ts']), 'test/evals')
+  assert.equal(evalRoot(['**/*.es.ts']), '')
+  assert.equal(resolveConfig({}, '/p').history.dir, '/p/evals/.history')
+  assert.equal(resolveConfig({ history: { dir: 'runs' } }, '/p').history.dir, '/p/runs')
+  assert.equal(resolveConfig({}, '/p').record, 'ci')
+  assert.throws(() => resolveConfig({ history: { artifacts: 'some' as 'all' } }, '/p'), /artifacts/)
 })

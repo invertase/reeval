@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
@@ -6,21 +7,14 @@ import { parseArgs } from 'node:util'
 import { loadConfig, missingCredentials, UsageError } from './config.ts'
 import type { EngineEval } from './engine/node.ts'
 import { loadEnvFiles } from './env.ts'
+import { author, gitInfo, runnerInfo } from './history/provenance.ts'
+import type { RunSummary } from './history/types.ts'
 import { newRunId } from './ids.ts'
 import { preflight } from './preflight.ts'
-import { gitInfo, runnerInfo } from './record/provenance.ts'
-import type { RunSummary } from './record/types.ts'
 
-const HISTORY_COMMANDS = { publish: 1, pull: 1, index: 1, history: 1, show: 1, compare: 1 }
+const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1 }
 
-const EXPECTED_ERRORS = [
-  'CommandError',
-  'RefError',
-  'PublishError',
-  'SchemaError',
-  'GitError',
-  'ImmutableFileError',
-]
+const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError']
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130 } as const
 
@@ -30,15 +24,14 @@ const HELP = `es ${version} — eval runner for coding agents
 
 Usage:
   es run [filter...]        Run evals matching config.include; filters are path or name substrings
-  es history [filter]       Pass/fail per eval over recent runs    --limit <n> --json
-  es show [run]             One run: table, --md (summary.md) or --json (run.json)
-  es compare [base] [head]  Diff two runs; base defaults to head's baseline
+    --record                Also record the run into the history folder (see config.record)
+  es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
+                            --artifacts all|failures|none --allow-incomplete --skip-secret-scan
+  es history [filter]       Pass/fail per recorded eval over recent runs
+                            --limit <n> --all (include unrecorded runs) --json
+  es show [run]             One run: table, --md (summary.md) or --json (the record)
+  es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                             --md --json --fail-on-regression
-  es publish [run...]       Publish local runs (default: latest) to results.store
-                            --remote <url|path|name> --branch <name> --allow-dirty
-                            --allow-incomplete --skip-secret-scan
-  es pull                   Copy published runs into .es/   --run <id> --full --remote --branch
-  es index [--rebuild]      Regenerate .es/index.json
   es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
   es --help
@@ -104,15 +97,12 @@ async function run(argv: string[]): Promise<number> {
       version: { type: 'boolean', short: 'v' },
       json: { type: 'boolean' },
       md: { type: 'boolean' },
-      remote: { type: 'string' },
-      branch: { type: 'string' },
-      'allow-dirty': { type: 'boolean' },
+      all: { type: 'boolean' },
+      record: { type: 'boolean' },
+      artifacts: { type: 'string' },
       'allow-incomplete': { type: 'boolean' },
       'skip-secret-scan': { type: 'boolean' },
-      run: { type: 'string', multiple: true },
-      full: { type: 'boolean' },
       limit: { type: 'string' },
-      rebuild: { type: 'boolean' },
       'fail-on-regression': { type: 'boolean' },
     },
   })
@@ -132,16 +122,12 @@ async function run(argv: string[]): Promise<number> {
     return EXIT.ok
   }
   if (command in HISTORY_COMMANDS) {
-    const { config, results } = await loadConfig(values.config, command)
+    const config = await loadConfig(values.config, command)
     const commands = await import('./commands.ts')
-    const ctx = { root: config.root, results, flags: values, out: (s: string) => console.log(s) }
+    const ctx = { config, flags: values, out: (s: string) => console.log(s) }
     switch (command as keyof typeof HISTORY_COMMANDS) {
-      case 'publish':
-        return commands.publishCommand(ctx, filters)
-      case 'pull':
-        return commands.pullCommand(ctx)
-      case 'index':
-        return commands.indexCommand(ctx)
+      case 'record':
+        return commands.recordCommand(ctx, filters)
       case 'history':
         return commands.historyCommand(ctx, filters)
       case 'show':
@@ -153,7 +139,7 @@ async function run(argv: string[]): Promise<number> {
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
 
   loadEnvFiles(process.cwd())
-  const { config } = await loadConfig(values.config)
+  const config = await loadConfig(values.config)
   const missing = missingCredentials(config)
   if (missing.length) {
     throw new UsageError(
@@ -170,13 +156,18 @@ async function run(argv: string[]): Promise<number> {
   }
 
   const startedAt = new Date()
-  const runId = newRunId(startedAt)
-  const { stagingDir, sweepStaging, writeRun } = await import('./results.ts')
+  const git = await gitInfo(config.root, [config.history.dir])
+  const who = await author(config.root)
+  const { stagingDir, sweepStaging, writeScratchRun } = await import('./results.ts')
+  const { scratchDir } = await import('./history/files.ts')
+  let runId = newRunId(startedAt, git?.sha ?? null, who)
+  for (let n = 2; existsSync(join(scratchDir(config.root), `${runId}.json`)); n++) {
+    runId = newRunId(startedAt, git?.sha ?? null, `${who}-${n}`)
+  }
   await sweepStaging(config.root)
   const resultsDir = stagingDir(config.root, runId)
   await mkdir(resultsDir, { recursive: true })
   const ctx = { runId, resultsDir, config }
-  const git = await gitInfo(config.root)
 
   const { runEngine, vitestVersion } = await import('./engine/node.ts')
 
@@ -205,8 +196,9 @@ async function run(argv: string[]): Promise<number> {
     )
   }
 
-  const { record, path } = await writeRun({
+  const run = await writeScratchRun({
     ctx,
+    author: who,
     engine: engineRun,
     startedAt,
     endedAt: new Date(),
@@ -220,13 +212,22 @@ async function run(argv: string[]): Promise<number> {
     git,
     runner: runnerInfo(),
   })
+  const { record } = run
   if (interrupted) {
-    for (const e of record.evals.filter((e) => e.trials[0]?.error?.kind === 'aborted')) {
+    for (const e of record.evals.filter((e) => e.attempts[0]?.error?.kind === 'aborted')) {
       console.log(` ${red('✗')} ${e.id}   ${dim('cancelled')}`)
     }
   }
   for (const error of engineRun.unhandledErrors) console.error(red(`error: ${error}`))
-  console.log(summaryLine(record.summary, relative(process.cwd(), join(path, 'summary.md'))))
+  const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
+  console.log(summaryLine(record.summary, relative(process.cwd(), summary)))
+
+  const ci = !!process.env.CI && process.env.CI !== 'false'
+  const autoRecord = values.record || config.record === 'always' || (config.record === 'ci' && ci)
+  if (autoRecord && record.status === 'complete') {
+    const { record: recordCmd } = await import('./commands.ts')
+    console.log(await recordCmd(config, record.runId, values))
+  }
 
   if (interrupted || engineRun.cancelled) return EXIT.interrupted
   if (record.summary.fail > 0 || engineRun.unhandledErrors.length > 0) return EXIT.failed
@@ -246,6 +247,6 @@ run(process.argv.slice(2)).then(
       EXPECTED_ERRORS.includes(name)
     console.error(red(`es: ${(error as Error).message}`))
     if (!expected && process.env.ES_DEBUG) console.error(error)
-    process.exitCode = name === 'GitError' ? EXIT.infra : EXIT.usage
+    process.exitCode = EXIT.usage
   },
 )

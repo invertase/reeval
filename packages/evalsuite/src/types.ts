@@ -1,4 +1,4 @@
-import type { ResultsStore } from './store/types.ts'
+import type { ArtifactLevel, RecordMode } from './history/types.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
@@ -105,10 +105,11 @@ export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
 
-/** Where run history goes beyond `.es/`. Main process only: never sent to eval workers. */
-export type ResultsConfig = {
-  /** The team store `es publish` and `es pull` use, e.g. `gitBranchStore()`. */
-  store?: ResultsStore
+export type HistoryConfig = {
+  /** Committed history folder (default: `.history` in the directory the evals live in). */
+  dir?: string
+  /** Artifacts recorded next to each run: every eval's, failing evals' only, or none. */
+  artifacts?: ArtifactLevel
 }
 
 export type EsConfig = {
@@ -117,7 +118,9 @@ export type EsConfig = {
   sandbox?: SandboxDescriptor
   judge?: ConfigJudgeOptions
   timeout?: Duration
-  results?: ResultsConfig
+  /** When runs are copied into the history folder: `es record` only, in CI, or on every run. */
+  record?: RecordMode
+  history?: HistoryConfig
 }
 
 export type ConfigContext = {
@@ -134,6 +137,8 @@ export type ResolvedConfig = {
   sandbox: SandboxDescriptor
   judge: ConfigJudgeOptions & { model: string | FakeJudgeModel; threshold: number }
   timeoutMs: number
+  record: RecordMode
+  history: { dir: string; artifacts: ArtifactLevel }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'

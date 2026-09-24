@@ -1,13 +1,14 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
-import { evalSlug, recordFileName, runDir, sha256 } from '../ids.ts'
+import { evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
+import { patchForJudge } from '../judge/patch.ts'
 import { redactSecrets } from '../redact.ts'
 import type { EvalRecord, Outcome, ResolvedConfig, RunContext } from '../types.ts'
-import { renderSummary } from './summary.ts'
 import {
-  type CheckRecord,
+  type AttemptFiles,
+  type AttemptRecord,
   type EvalEntry,
   type FileRef,
   type GitInfo,
@@ -15,13 +16,13 @@ import {
   type RunnerInfo,
   type RunRecord,
   SCHEMA_VERSION,
-  type TrialFiles,
-  type TrialRecord,
 } from './types.ts'
 
 const TURN_TEXT_LIMIT = 4096
-const SIDECAR_THRESHOLD = 256 * 1024
-const SIDECAR_LIMIT = 10 * 1024 * 1024
+/** A single tool output, check stream or file diff bigger than this keeps its head and tail. */
+export const OUTPUT_CAP = 128 * 1024
+const HEAD = 96 * 1024
+const TAIL = 16 * 1024
 
 export type AssembleInput = {
   ctx: RunContext
@@ -29,6 +30,7 @@ export type AssembleInput = {
   startedAt: Date
   endedAt: Date
   interrupted: boolean
+  author: string
   versions: RunRecord['versions']
   git: GitInfo | null
   runner: RunnerInfo
@@ -36,10 +38,15 @@ export type AssembleInput = {
 
 export type AssembledRun = {
   record: RunRecord
-  /** Run directory relative to the store root, e.g. `runs/2026/09/<runId>`. */
-  dir: string
-  /** Every file of the run, keyed by path from the store root. */
-  files: Map<string, Uint8Array>
+  /** Artifact files keyed by path inside the run's artifact directory. */
+  artifacts: Map<string, Uint8Array>
+}
+
+/** Keeps evidence readable without letting one `cat` of a lockfile dominate the record. */
+export function capText(text: string, cap = OUTPUT_CAP): string {
+  if (text.length <= cap) return text
+  const omitted = text.length - HEAD - TAIL
+  return `${text.slice(0, HEAD)}\n[es: truncated ${omitted} of ${text.length} characters, sha256 ${sha256(text)}]\n${text.slice(-TAIL)}`
 }
 
 const readRecord = async (path: string): Promise<EvalRecord | null> =>
@@ -64,52 +71,34 @@ function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
 }
 
-const describeHarness = (config: ResolvedConfig) => config.harness.kind
 const harnessModel = (config: ResolvedConfig) =>
   config.harness.kind === 'cursor' ? (config.harness.model ?? null) : null
 
-/** Collects files for one run, redacting before anything is hashed. */
-class FileSet {
+/** Collects artifact files, redacting before anything is hashed. */
+class Artifacts {
   readonly files = new Map<string, Uint8Array>()
-  readonly dir: string
-  constructor(dir: string) {
-    this.dir = dir
-  }
 
-  add(relPath: string, content: string): FileRef {
+  add(path: string, content: string): FileRef {
     const bytes = Buffer.from(redactSecrets(content))
-    this.files.set(`${this.dir}/${relPath}`, bytes)
-    return { path: relPath, sha256: sha256(bytes), bytes: bytes.length }
+    this.files.set(path, bytes)
+    return { path, sha256: sha256(bytes), bytes: bytes.length }
   }
 
-  json(relPath: string, value: unknown): FileRef {
-    return this.add(relPath, `${JSON.stringify(value, null, 2)}\n`)
+  json(path: string, value: unknown): FileRef {
+    return this.add(path, `${JSON.stringify(value, null, 2)}\n`)
   }
 }
 
-function transcriptLines(record: EvalRecord, files: FileSet, trialDir: string): string {
+function transcriptLines(record: EvalRecord): string {
   const lines: string[] = []
-  let seq = 0
   record.turns.forEach((turn, index) => {
     lines.push(JSON.stringify({ turn: index, type: 'prompt', text: turn.prompt }))
     for (const event of turn.transcript) {
-      seq++
       if (event.type === 'tool-result') {
         const raw =
           typeof event.output === 'string' ? event.output : JSON.stringify(event.output, null, 2)
-        if (raw !== undefined && raw.length > SIDECAR_THRESHOLD) {
-          const body =
-            raw.length > SIDECAR_LIMIT
-              ? `${raw.slice(0, SIDECAR_LIMIT)}\n[truncated: ${raw.length} characters in total]\n`
-              : raw
-          const ref = files.add(`${trialDir}/tool-output/${seq}.txt`, body)
-          lines.push(
-            JSON.stringify({
-              turn: index,
-              ...event,
-              output: { sidecar: ref.path, bytes: raw.length },
-            }),
-          )
+        if (raw !== undefined && raw.length > OUTPUT_CAP) {
+          lines.push(JSON.stringify({ turn: index, ...event, output: capText(raw) }))
           continue
         }
       }
@@ -120,8 +109,21 @@ function transcriptLines(record: EvalRecord, files: FileSet, trialDir: string): 
   return `${lines.join('\n')}\n`
 }
 
+const block = (label: string, text: string) => {
+  const body = capText(text)
+  return `--- ${label}\n${body}${body.endsWith('\n') || !body ? '' : '\n'}`
+}
+
 const checkLog = (c: EvalRecord['checks'][number]) =>
-  `$ ${c.command}\nexit ${c.exitCode}\n--- stdout\n${c.stdout}${c.stdout.endsWith('\n') || !c.stdout ? '' : '\n'}--- stderr\n${c.stderr}${c.stderr.endsWith('\n') || !c.stderr ? '' : '\n'}`
+  `$ ${c.command}\nexit ${c.exitCode}\n${block('stdout', c.stdout)}${block('stderr', c.stderr)}`
+
+/** Dependency and binary noise dropped, and each remaining file's diff capped. */
+function historyPatch(patch: string): string {
+  return patchForJudge(patch)
+    .split(/(?=^diff --git )/m)
+    .map((part) => capText(part))
+    .join('')
+}
 
 function finalText(record: EvalRecord): string {
   return record.turns
@@ -132,6 +134,14 @@ function finalText(record: EvalRecord): string {
     .join('\n')
 }
 
+/** Judge inputs whose diff is the recorded diff point at `diff.patch` instead of repeating it. */
+function judgeInputs(record: EvalRecord, diff: string | null, diffPath: string) {
+  return (record.judgeInputs ?? []).map((input) => {
+    if (diff === null || input.state.diff !== diff) return input
+    return { ...input, state: { ...input.state, diff: { $ref: diffPath, sha256: sha256(diff) } } }
+  })
+}
+
 async function sourceHash(root: string, file: string): Promise<string | null> {
   const bytes = await readFile(join(root, file)).catch(() => null)
   return bytes ? sha256(bytes) : null
@@ -140,8 +150,7 @@ async function sourceHash(root: string, file: string): Promise<string | null> {
 export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const { ctx, engine } = input
   const { config, runId } = ctx
-  const dir = runDir(runId)
-  const set = new FileSet(dir)
+  const out = new Artifacts()
   const judgeModel = judgeModelName(config.judge.model)
   const configHash = sha256(
     JSON.stringify({
@@ -170,35 +179,32 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       }),
     )
     const slug = evalSlug(e.id)
-    const trialDir = `evals/${slug}/1`
-    const files: TrialFiles = {}
-    const checks: CheckRecord[] = []
+    const dir = `${slug}/1`
+    const files: AttemptFiles = {}
     const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j) => ({
       ...j,
       reason: null,
       evidence: [],
     }))
     if (record && record.turns.length > 0) {
-      files.transcript = set.add(
-        `${trialDir}/transcript.jsonl`,
-        transcriptLines(record, set, trialDir),
-      )
-      files.final = set.add(`${trialDir}/final.md`, finalText(record))
+      files.transcript = out.add(`${dir}/transcript.jsonl`, transcriptLines(record))
+      files.final = out.add(`${dir}/final.md`, finalText(record))
     }
-    if (record?.diff) files.diff = set.add(`${trialDir}/diff.patch`, record.diff.patch)
+    const patch = record?.diff ? historyPatch(record.diff.patch) : null
+    if (patch !== null) files.diff = out.add(`${dir}/diff.patch`, patch)
     if (record?.judgeInputs?.length) {
-      files.judgeInput = set.json(`${trialDir}/judge-input.json`, record.judgeInputs)
+      files.judgeInput = out.json(
+        `${dir}/judge-input.json`,
+        judgeInputs(record, patch, 'diff.patch'),
+      )
     }
-    record?.checks.forEach((c, i) => {
-      const log = set.add(`${trialDir}/checks/${i + 1}.log`, checkLog(c))
-      checks.push({ command: c.command, exitCode: c.exitCode, log })
-    })
+    const checks = (record?.checks ?? []).map((c, i) => ({
+      command: c.command,
+      exitCode: c.exitCode,
+      log: out.add(`${dir}/checks/${i + 1}.log`, checkLog(c)),
+    }))
 
-    const trial: TrialRecord = {
-      kind: 'es-trial',
-      schemaVersion: SCHEMA_VERSION,
-      runId,
-      evalId: e.id,
+    const attempt: AttemptRecord = {
       n: 1,
       outcome,
       error,
@@ -216,8 +222,6 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       changedFiles: record?.diff?.files ?? [],
       files,
     }
-    const result = set.json(`${trialDir}/result.json`, trial)
-
     const counted = outcome === 'pass' || outcome === 'fail'
     evals.push({
       id: e.id,
@@ -229,19 +233,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       sourceHash: srcHash,
       outcome,
       passRate: counted ? (outcome === 'pass' ? 1 : 0) : null,
-      trials: [
-        {
-          n: 1,
-          outcome,
-          error,
-          durationMs: e.durationMs,
-          judgements,
-          checks,
-          changedFiles: trial.changedFiles,
-          files,
-          result,
-        },
-      ],
+      attempts: [attempt],
     })
   }
 
@@ -254,11 +246,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     startedAt: input.startedAt.toISOString(),
     endedAt: input.endedAt.toISOString(),
     durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
+    author: input.author,
     git: input.git,
     runner: input.runner,
     versions: input.versions,
     config: {
-      harness: describeHarness(config),
+      harness: config.harness.kind,
       model: harnessModel(config),
       sandbox: config.sandbox.kind,
       judgeModel,
@@ -266,6 +259,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       timeoutMs: config.timeoutMs,
       configHash,
     },
+    cost: { usd: null, inputTokens: null, outputTokens: null, source: 'unreported' },
+    artifacts: 'all',
     redaction: { version: 1 },
     summary: {
       evals: evals.length,
@@ -276,8 +271,5 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
   }
-  // The record and summary land last in the file set, marking the run complete.
-  set.add('summary.md', renderSummary(record))
-  set.json('run.json', record)
-  return { record, dir, files: set.files }
+  return { record, artifacts: out.files }
 }

@@ -1,8 +1,9 @@
-// The run-history commands: publish, pull, index, history, show, compare.
+// The run-history commands: record, history, show, compare.
+import { join, relative } from 'node:path'
 import { git } from './git.ts'
-import { runDir } from './ids.ts'
-import { buildIndex, deriveStore, INDEX_PATH, parseIndex, parseRun } from './record/index-file.ts'
-import type { IndexEntry } from './record/types.ts'
+import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
+import { renderSummary } from './history/summary.ts'
+import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
   compare,
   formatCompare,
@@ -10,26 +11,19 @@ import {
   formatShow,
   history,
   pickBaseline,
+  type Reachability,
   resolveRun,
-} from './record/views.ts'
-import { gitBranchStore } from './store/git.ts'
-import { type LocalStore, localStore } from './store/local.ts'
-import { publishRuns, pullRuns } from './store/sync.ts'
-import type { ResultsStore } from './store/types.ts'
-import type { ResultsConfig } from './types.ts'
+} from './history/views.ts'
+import type { ResolvedConfig } from './types.ts'
 
 export type HistoryFlags = {
   json?: boolean
   md?: boolean
-  remote?: string
-  branch?: string
-  'allow-dirty'?: boolean
+  all?: boolean
+  artifacts?: string
   'allow-incomplete'?: boolean
   'skip-secret-scan'?: boolean
-  run?: string[]
-  full?: boolean
   limit?: string
-  rebuild?: boolean
   'fail-on-regression'?: boolean
 }
 
@@ -37,136 +31,118 @@ export class CommandError extends Error {
   override name = 'CommandError'
 }
 
-type Ctx = { root: string; results: ResultsConfig; flags: HistoryFlags; out: (s: string) => void }
+type Ctx = { config: ResolvedConfig; flags: HistoryFlags; out: (s: string) => void }
 
-/** The local index, rebuilt if it's missing or stale (e.g. written by an older ES). */
-async function localEntries(local: LocalStore): Promise<IndexEntry[]> {
-  const index = parseIndex(await local.get(INDEX_PATH))
-  if (index) return index.runs
-  const rebuilt = await buildIndex(local, null)
-  if (rebuilt.runs.length > 0) {
-    await local.commit({ files: new Map(), derive: deriveStore, message: 'es: index' })
-  }
-  return rebuilt.runs
-}
+const recorded = (config: ResolvedConfig) => listRuns(config.root, config.history.dir, true)
+const scratch = (config: ResolvedConfig) => listRuns(config.root, scratchDir(config.root), false)
 
-function teamStore({ root, results, flags }: Ctx): ResultsStore {
-  if (flags.remote) return gitBranchStore({ remote: flags.remote, branch: flags.branch, root })
-  if (flags.branch) return gitBranchStore({ branch: flags.branch, root })
-  if (results.store) return results.store
-  throw new CommandError(
-    'No results store configured. Set results.store in es.config.ts (e.g. gitBranchStore()), or pass --remote <url|path|name>.',
+/** Recorded runs plus scratch runs that weren't recorded, sorted by run id. */
+async function allRuns(config: ResolvedConfig): Promise<HistoryEntry[]> {
+  const kept = await recorded(config)
+  const ids = new Set(kept.map((e) => e.runId))
+  return [...kept, ...(await scratch(config)).filter((e) => !ids.has(e.runId))].sort((a, b) =>
+    a.runId < b.runId ? -1 : 1,
   )
 }
 
-const describe = (store: ResultsStore) =>
-  Object.entries(store.describe())
-    .map(([k, v]) => (k === 'kind' ? v : `${k} ${v}`))
-    .join(' · ')
-
-export async function publishCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const local = localStore({ root: ctx.root })
-  const entries = await localEntries(local)
-  const runIds = [
-    ...new Set((refs.length ? refs : ['latest']).map((r) => resolveRun(entries, r).runId)),
-  ]
-  const target = teamStore(ctx)
-  const result = await publishRuns(local, target, runIds, {
-    allowDirty: ctx.flags['allow-dirty'],
-    allowIncomplete: ctx.flags['allow-incomplete'],
-    skipSecretScan: ctx.flags['skip-secret-scan'],
-  })
-  if (ctx.flags.json) {
-    ctx.out(JSON.stringify({ store: target.describe(), ...result }, null, 2))
-    return 0
-  }
-  const what = runIds.length === 1 ? `run ${runIds[0]}` : `${runIds.length} runs`
-  if (!result.changed) ctx.out(`${what} already published to ${describe(target)}`)
-  else {
-    const retries = result.attempts > 1 ? ` after ${result.attempts} attempts` : ''
-    ctx.out(`published ${what} (${result.created.length} files) to ${describe(target)}${retries}`)
-  }
-  return 0
+async function lines(root: string, args: string[]): Promise<string[] | null> {
+  const r = await git(root, args)
+  if (r.code !== 0) return null
+  return r.stdout.toString('utf8').split('\n').filter(Boolean)
 }
 
-export async function pullCommand(ctx: Ctx): Promise<number> {
-  const local = localStore({ root: ctx.root })
-  const source = teamStore(ctx)
-  const result = await pullRuns(source, local, { runs: ctx.flags.run, full: ctx.flags.full })
-  if (ctx.flags.json) ctx.out(JSON.stringify(result, null, 2))
-  else if (result.runs.length === 0) ctx.out(`up to date with ${describe(source)}`)
-  else {
-    ctx.out(
-      `pulled ${result.runs.length} run${result.runs.length === 1 ? '' : 's'} (${result.files} files${ctx.flags.full ? '' : ', records only; --full for transcripts'}) from ${describe(source)}`,
-    )
-  }
-  return 0
+/** Commits reachable from HEAD; null when git can't tell (no repo, or a shallow clone). */
+async function reachability(root: string): Promise<Reachability> {
+  const shallow = await lines(root, ['rev-parse', '--is-shallow-repository'])
+  if (!shallow || shallow[0] === 'true') return null
+  const shas = await lines(root, ['rev-list', '--max-count=20000', 'HEAD'])
+  return shas ? new Set(shas) : null
 }
 
-export async function indexCommand(ctx: Ctx): Promise<number> {
-  const local = localStore({ root: ctx.root })
-  const index = await buildIndex(
-    local,
-    ctx.flags.rebuild ? null : parseIndex(await local.get(INDEX_PATH)),
-  )
-  await local.commit({
-    files: new Map(),
-    derive: async (view) => {
-      const derived = await deriveStore(view)
-      if (ctx.flags.rebuild)
-        derived.set(INDEX_PATH, Buffer.from(`${JSON.stringify(index, null, 2)}\n`))
-      return derived
-    },
-    message: 'es: index',
+const rel = (path: string) => relative(process.cwd(), path) || path
+
+export function parseLevel(value: string | undefined, fallback: ArtifactLevel): ArtifactLevel {
+  if (value === undefined) return fallback
+  if (value === 'all' || value === 'failures' || value === 'none') return value
+  throw new CommandError('--artifacts must be all, failures or none')
+}
+
+export async function record(
+  config: ResolvedConfig,
+  runId: string,
+  flags: HistoryFlags,
+): Promise<string> {
+  const result = await recordRun({
+    root: config.root,
+    historyDir: config.history.dir,
+    runId,
+    artifacts: parseLevel(flags.artifacts, config.history.artifacts),
+    allowIncomplete: flags['allow-incomplete'],
+    skipSecretScan: flags['skip-secret-scan'],
   })
-  ctx.out(`indexed ${index.runs.length} run${index.runs.length === 1 ? '' : 's'} in ${local.dir}`)
+  const where = rel(result.recordPath)
+  if (!result.created) return `${where} is already recorded`
+  const kb = (result.bytes / 1024).toFixed(1)
+  const extra = result.artifactDir
+    ? ` + ${result.files} artifact files in ${rel(result.artifactDir)}/`
+    : ''
+  return `recorded ${where}${extra} (${kb} KB). Commit it with git.`
+}
+
+export async function recordCommand(ctx: Ctx, refs: string[]): Promise<number> {
+  const runs = await scratch(ctx.config)
+  for (const ref of refs.length ? refs : ['latest']) {
+    ctx.out(await record(ctx.config, resolveRun(runs, ref).runId, ctx.flags))
+  }
   return 0
 }
 
 export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number> {
-  const entries = await localEntries(localStore({ root: ctx.root }))
+  const entries = ctx.flags.all ? await allRuns(ctx.config) : await recorded(ctx.config)
   const limit = ctx.flags.limit ? Number(ctx.flags.limit) : 20
   if (!(limit > 0)) throw new CommandError('--limit must be a positive number')
-  const view = history(entries, { filter: filter.join(' ') || undefined, limit })
+  const reach = await reachability(ctx.config.root)
+  const view = history(entries, { filter: filter.join(' ') || undefined, limit, reach })
   ctx.out(ctx.flags.json ? JSON.stringify(view, null, 2) : formatHistory(view))
   return 0
 }
 
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const local = localStore({ root: ctx.root })
-  const entry = resolveRun(await localEntries(local), refs[0])
-  const file = ctx.flags.md ? 'summary.md' : 'run.json'
-  const bytes = await local.get(`${runDir(entry.runId)}/${file}`)
-  if (!bytes)
-    throw new CommandError(`${entry.runId} has no ${file} locally; es pull --run ${entry.runId}`)
-  const text = Buffer.from(bytes).toString('utf8')
-  if (ctx.flags.md || ctx.flags.json) ctx.out(text.trimEnd())
-  else ctx.out(formatShow(parseRun(bytes, entry.path)))
+  const entry = resolveRun(await allRuns(ctx.config), refs[0])
+  const dir = entry.recorded ? ctx.config.history.dir : scratchDir(ctx.config.root)
+  const run = await readRecord(join(dir, `${entry.runId}.json`))
+  if (ctx.flags.json) ctx.out(JSON.stringify(run, null, 2))
+  else if (ctx.flags.md) ctx.out(renderSummary(run).trimEnd())
+  else ctx.out(formatShow(run))
   return 0
 }
 
-/** First-parent commits from `sha` back, or null when git can't say (not a repo, shallow). */
-async function ancestry(root: string, sha: string): Promise<string[] | null> {
-  const r = await git(root, ['rev-list', '--first-parent', '--max-count=500', sha])
-  if (r.code !== 0) return null
-  return r.stdout.toString('utf8').split('\n').filter(Boolean)
-}
-
 export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const entries = await localEntries(localStore({ root: ctx.root }))
-  let base: IndexEntry | null
-  let head: IndexEntry
+  const { root } = ctx.config
+  const entries = await allRuns(ctx.config)
+  const reach = await reachability(root)
+  let base: HistoryEntry | null
+  let head: HistoryEntry
   if (refs.length >= 2) {
     base = resolveRun(entries, refs[0])
     head = resolveRun(entries, refs[1])
   } else {
     head = resolveRun(entries, refs[0] ?? 'latest')
-    base = pickBaseline(entries, head, head.git ? await ancestry(ctx.root, head.git.sha) : null)
-    if (!base) throw new CommandError(`No earlier complete run to compare ${head.runId} with`)
+    // Ancestry of head's commit, or of HEAD when that commit was rebased away.
+    const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
+    const ancestry = await lines(root, ['rev-list', '--max-count=5000', from])
+    const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
+    base = pickBaseline(candidates, head, ancestry)
+    if (!base) throw new CommandError(`No earlier recorded run to compare ${head.runId} with`)
   }
   const rows = compare(base, head)
   if (ctx.flags.json) {
-    ctx.out(JSON.stringify({ base: base.runId, head: head.runId, rows }, null, 2))
-  } else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md))
+    const flag = (e: HistoryEntry) => ({
+      runId: e.runId,
+      recorded: e.recorded,
+      inHistory: !reach || !e.git ? null : reach.has(e.git.sha),
+    })
+    ctx.out(JSON.stringify({ base: flag(base), head: flag(head), rows }, null, 2))
+  } else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
   return ctx.flags['fail-on-regression'] && rows.some((r) => r.status === 'regressed') ? 1 : 0
 }

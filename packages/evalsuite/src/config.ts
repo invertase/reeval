@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createJiti } from 'jiti'
 import { cursor } from './harness.ts'
 import {
@@ -9,7 +9,7 @@ import {
   judgeCredentials,
 } from './judge/index.ts'
 import { docker } from './sandbox.ts'
-import type { ConfigContext, Duration, EsConfig, ResolvedConfig, ResultsConfig } from './types.ts'
+import type { ConfigContext, Duration, EsConfig, ResolvedConfig } from './types.ts'
 
 export class UsageError extends Error {
   override name = 'UsageError'
@@ -18,13 +18,6 @@ export class UsageError extends Error {
 export type ConfigInput = EsConfig | ((ctx: ConfigContext) => EsConfig | Promise<EsConfig>)
 
 export const defineConfig = <T extends ConfigInput>(config: T): T => config
-
-export type LoadedConfig = {
-  /** Plain data, safe to send to eval workers. */
-  config: ResolvedConfig
-  /** Store objects; these stay in the main process. */
-  results: ResultsConfig
-}
 
 const UNITS = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const
 
@@ -35,7 +28,7 @@ export function parseDuration(value: Duration): number {
   return Number(match[1]) * UNITS[match[2] as keyof typeof UNITS]
 }
 
-export async function loadConfig(configPath: string, command = 'run'): Promise<LoadedConfig> {
+export async function loadConfig(configPath: string, command = 'run'): Promise<ResolvedConfig> {
   const path = resolve(configPath)
   const root = dirname(path)
   let user: EsConfig = {}
@@ -53,22 +46,27 @@ export async function loadConfig(configPath: string, command = 'run'): Promise<L
   } else if (configPath !== 'es.config.ts') {
     throw new UsageError(`Config file not found: ${configPath}`)
   }
-  return { config: resolveConfig(user, root), results: resolveResults(user.results) }
+  return resolveConfig(user, root)
 }
 
-function resolveResults(results: EsConfig['results'] = {}): ResultsConfig {
-  if (typeof results !== 'object' || results === null) {
-    throw new UsageError('config.results must be an object, e.g. { store: gitBranchStore() }')
+const GLOB = /[*?[\]{}!]/
+
+/** The directory every include pattern starts in: `evals/**\/*.es.ts` → `evals`. */
+export function evalRoot(include: string[]): string {
+  const dirs = include.map((pattern) => {
+    const parts = pattern.split('/')
+    const stop = parts.findIndex((part) => GLOB.test(part))
+    return (stop < 0 ? parts.slice(0, -1) : parts.slice(0, stop)).filter((p) => p && p !== '.')
+  })
+  const common: string[] = []
+  for (let i = 0; dirs.every((d) => d[i] !== undefined && d[i] === dirs[0]?.[i]); i++) {
+    common.push(dirs[0]?.[i] as string)
   }
-  const { store } = results
-  if (
-    store !== undefined &&
-    (typeof store?.commit !== 'function' || typeof store?.get !== 'function')
-  ) {
-    throw new UsageError('config.results.store must be a results store, e.g. gitBranchStore()')
-  }
-  return { store }
+  return common.join('/')
 }
+
+const ARTIFACTS = ['all', 'failures', 'none'] as const
+const RECORD = ['manual', 'ci', 'always'] as const
 
 export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   const include = user.include ?? ['evals/**/*.es.ts']
@@ -83,6 +81,15 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   if (!['fake', 'docker'].includes(sandbox.kind)) {
     throw new UsageError(`Unknown sandbox "${(sandbox as { kind: string }).kind}"`)
   }
+  const record = user.record ?? 'ci'
+  if (!RECORD.includes(record)) {
+    throw new UsageError(`config.record must be one of ${RECORD.join(', ')}`)
+  }
+  const artifacts = user.history?.artifacts ?? 'all'
+  if (!ARTIFACTS.includes(artifacts)) {
+    throw new UsageError(`config.history.artifacts must be one of ${ARTIFACTS.join(', ')}`)
+  }
+  const historyDir = resolve(root, user.history?.dir ?? join(evalRoot(include), '.history'))
   return {
     root,
     include,
@@ -90,6 +97,8 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     sandbox,
     judge: resolveJudge(user.judge),
     timeoutMs: parseDuration(user.timeout ?? '15m'),
+    record,
+    history: { dir: historyDir, artifacts },
   }
 }
 

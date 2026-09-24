@@ -1,13 +1,13 @@
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type AssembleInput, assembleRun } from './record/assemble.ts'
-import { deriveStore } from './record/index-file.ts'
-import type { RunRecord } from './record/types.ts'
-import { localStore } from './store/local.ts'
+import { type AssembleInput, assembleRun } from './history/assemble.ts'
+import { scratchDir, type WrittenRun, writeRun } from './history/files.ts'
+import { renderSummary } from './history/summary.ts'
+import type { RunRecord } from './history/types.ts'
 
 const STALE_STAGING_MS = 24 * 60 * 60 * 1000
 
-/** Where workers write raw per-eval records before the run directory is assembled. */
+/** Where workers write raw per-eval records before the run is assembled. */
 export const stagingDir = (root: string, runId: string) => join(root, '.es', 'staging', runId)
 
 /** Removes staging left behind by runs that were killed before they could clean up. */
@@ -23,11 +23,13 @@ export async function sweepStaging(root: string): Promise<void> {
   }
 }
 
-/** Assembles the run directory into the local store and returns the record and its path. */
-export async function writeRun(input: AssembleInput): Promise<{ record: RunRecord; path: string }> {
-  const { record, dir, files } = await assembleRun(input)
-  const store = localStore({ root: input.ctx.config.root })
-  await store.commit({ files, derive: deriveStore, message: `es: run ${record.runId}` })
+/** Assembles the run into `.es/runs/`, with every artifact and a summary.md. */
+export async function writeScratchRun(
+  input: AssembleInput,
+): Promise<WrittenRun & { record: RunRecord }> {
+  const { record, artifacts } = await assembleRun(input)
+  artifacts.set('summary.md', Buffer.from(renderSummary(record)))
+  const written = await writeRun(scratchDir(input.ctx.config.root), record, artifacts)
   await rm(input.ctx.resultsDir, { recursive: true, force: true })
-  return { record, path: join(store.dir, ...dir.split('/')) }
+  return { ...written, record }
 }

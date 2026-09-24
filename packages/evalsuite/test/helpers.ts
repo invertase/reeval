@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { EvalEntry, RunIndex, RunRecord, TrialRecord } from '../src/record/types.ts'
+import type { AttemptRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
 
 export const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = join(pkgRoot, 'dist/cli.js')
@@ -42,12 +42,12 @@ export type CliRun = { code: number | null; stdout: string; stderr: string }
 export function runCli(
   cwd: string,
   args: string[] = ['run'],
-  opts: { onSpawn?: (pid: number) => void } = {},
+  opts: { onSpawn?: (pid: number) => void; env?: NodeJS.ProcessEnv } = {},
 ): Promise<CliRun> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [cli, ...args], {
       cwd,
-      env: { ...process.env, NO_COLOR: '1', CI: '' },
+      env: { ...process.env, NO_COLOR: '1', CI: '', ...opts.env },
       detached: true,
     })
     let stdout = ''
@@ -65,27 +65,41 @@ export function runCli(
 }
 
 export type EvalView = EvalEntry & {
-  error: TrialRecord['error']
-  trial: TrialRecord
-  /** A file of this eval's first trial, by path relative to the run directory. */
+  error: AttemptRecord['error']
+  trial: AttemptRecord
+  /** A file of the run's artifact directory, by path inside it. */
   read(path: string): string
 }
 export type RunView = { run: RunRecord; dir: string; evals: EvalView[]; read(path: string): string }
 
-/** The newest run, found through `.es/index.json` like every other reader. */
-export function readRun(project: string, back = 0): RunView {
-  const index: RunIndex = JSON.parse(readFileSync(join(project, '.es/index.json'), 'utf8'))
-  const entry = index.runs[index.runs.length - 1 - back]
-  if (!entry) throw new Error('no run in .es/index.json')
-  const dir = join(project, '.es', dirname(entry.path))
+const runsIn = (dir: string) =>
+  existsSync(dir)
+    ? readdirSync(dir)
+        .filter((f) => f.endsWith('.json'))
+        .sort()
+    : []
+
+/** The newest run in `.es/runs/` (scratch) or, with `history`, in that history folder. */
+export function readRun(
+  project: string,
+  options: { back?: number; history?: string } = {},
+): RunView {
+  const folder = join(project, options.history ?? '.es/runs')
+  const names = runsIn(folder)
+  const name = names[names.length - 1 - (options.back ?? 0)]
+  if (!name) throw new Error(`no run in ${folder}`)
+  const run: RunRecord = JSON.parse(readFileSync(join(folder, name), 'utf8'))
+  const dir = join(folder, run.runId)
   const read = (path: string) => readFileSync(join(dir, path), 'utf8')
-  const run: RunRecord = JSON.parse(read('run.json'))
   const evals = run.evals.map((e) => {
-    const trial: TrialRecord = JSON.parse(read(e.trials[0]?.result.path ?? ''))
+    const trial = e.attempts[0] as AttemptRecord
     return { ...e, error: trial.error, trial, read }
   })
   return { run, dir, evals, read }
 }
+
+export const recordedRuns = (project: string, history = 'evals/.history') =>
+  runsIn(join(project, history)).map((f) => f.slice(0, -5))
 
 export const liveSandboxes = (p: Project) =>
   existsSync(p.sandboxes) ? readdirSync(p.sandboxes).filter((f) => f.startsWith('es-sandbox-')) : []

@@ -16,12 +16,15 @@ describe('engine', () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /✓ evals\/math\.es\.ts › math/)
-    assert.match(r.stdout, /1 passed · run \.es\/runs\/\d{4}\/\d{2}\/.+\/summary\.md/)
+    assert.match(
+      r.stdout,
+      /1 passed · run \.es\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+\/summary\.md/,
+    )
     for (const leak of [/vitest/i, /RUN v/, /testTimeout/]) {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
     const { run } = readRun(p.dir)
-    assert.equal(run.schemaVersion, 3)
+    assert.equal(run.schemaVersion, 1)
     assert.equal(run.status, 'complete')
     assert.deepEqual(run.summary, { evals: 1, pass: 1, fail: 0, infraError: 0, skipped: 0 })
     assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')
@@ -222,7 +225,8 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     const [input] = JSON.parse(e.read(e.trial.files.judgeInput?.path ?? ''))
     assert.equal(input.question, 'Did it write hello.txt?')
     assert.equal(input.state.task, 'write hello.txt')
-    assert.deepEqual(e.trials[0]?.result.path, `evals/${e.slug}/1/result.json`)
+    assert.equal(e.trial.files.diff?.path, `${e.slug}/1/diff.patch`)
+    assert.equal(e.trial.files.transcript?.path, `${e.slug}/1/transcript.jsonl`)
     assert.deepEqual(liveSandboxes(p), [], 'sandbox destroyed')
   })
 

@@ -4,6 +4,7 @@ import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
+import { configDefaults } from 'vitest/config'
 import { createVitest, type Reporter, type TestCase, type Vitest } from 'vitest/node'
 import { evalId, relativeFile } from '../ids.ts'
 import type { EvalMeta, RunContext } from '../types.ts'
@@ -150,6 +151,12 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         config: false,
         root: config.root,
         include: config.include,
+        // Recorded runs live next to the evals; never walk them looking for eval files.
+        exclude: [
+          ...configDefaults.exclude,
+          '**/.es/**',
+          `${relativeFile(config.root, config.history.dir)}/**`,
+        ],
         watch: false,
         reporters: [reporter],
         setupFiles: [fileURLToPath(new URL('../setup.js', import.meta.url))],
