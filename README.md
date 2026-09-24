@@ -133,6 +133,7 @@ secret-looking environment values in everything it writes to `.es/`.
 ```text
 es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
   --runs <n>              Attempts per cell, overriding the config, groups and evals
+  --concurrency <n>       Attempts running at once, across evals and cells (see Concurrency)
   --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
   --record                Also record the run into the history folder (see config.record)
   --ui <mode>             live, plain or agent (see Output)
@@ -214,6 +215,7 @@ Cost appears when the harness reports it (Cursor doesn't).
 | `ES_LOG_PREFIX` | `--log-prefix` |
 | `ES_OUTPUT_LOGS` | `--output-logs` |
 | `ES_HEARTBEAT` | Heartbeat interval, e.g. `30s`; `0` is off |
+| `ES_CONCURRENCY` | `--concurrency` |
 | `NO_COLOR`, `FORCE_COLOR` | Turn colour off or on |
 
 If your agent isn't detected, set `ES_UI=agent` (or `AI_AGENT=<name>`).
@@ -229,6 +231,40 @@ FAIL evals/mix.es.ts › mix › judge says no (497ms, judge)
 1 passed, 1 failed
 summary: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp/summary.md
 ```
+
+## Concurrency
+
+Attempts run in parallel: every eval × cell × run is one attempt with its own sandbox, and up to
+`concurrency` of them run at once across the whole run. Set it with `--concurrency <n>`,
+`ES_CONCURRENCY`, or `concurrency` in `es.config.ts` (in that order of precedence). The default
+is 8, but no more than one per CPU or per GB of memory where the sandboxes run (the Docker VM
+under Docker Desktop), so a 4 GB Docker VM gets 4. The run header shows it:
+`es 0.1.0 · 3 eval files · … · concurrency 8 · grouped logs`.
+
+Tighter caps sit on top of it, for resources several attempts share:
+
+```ts
+export default defineConfig({
+  concurrency: 8,
+  sandbox: docker({ maxConcurrent: 4 }), // Docker containers at once, whatever their image
+  harness: cursor({ model: 'composer-2.5', maxConcurrent: 3 }), // e.g. the account's rate limit
+  judge: { model: 'google/gemini-3.8-flash', maxConcurrent: 2 }, // judge calls per provider
+})
+```
+
+- **Order.** The other cells of a run that has started go first, so a baseline and its
+  with-skill cell run side by side. Then the eval with the fewest runs started, so every eval
+  gets a first result early.
+- **Timeouts** start when an attempt starts, not while it waits for a slot, and durations
+  leave out the wait.
+- **Image builds** (`docker({ from })` and cached environment layers) happen once, one at a
+  time: attempts that need an image another attempt is building wait for it and reuse it.
+- **Ctrl-C** cancels running attempts, skips queued ones, and destroys every sandbox.
+- **Guidance.** Memory is what runs out first: an idle agent container takes about 300 MB, and
+  installs and test runs inside it take more. Raise `concurrency` for suites of short evals on
+  a roomy Docker VM, and lower it (or cap `docker`) for heavy repos or small CI runners. With
+  more attempts than slots, wall time is roughly total agent time ÷ concurrency. Once every
+  attempt has a slot, the slowest attempt sets it.
 
 ## Authoring API
 
