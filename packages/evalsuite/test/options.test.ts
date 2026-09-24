@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
@@ -203,9 +203,26 @@ evaluate('other', async () => {})
         ['other', 'skipped'],
       ],
     )
+    const { runId } = readRun(p.dir).run
     const ci = await runCli(p.dir, ['run'], { env: { CI: 'true' } })
     assert.equal(ci.code, 2, ci.stdout + ci.stderr)
     assert.match(ci.stderr, /evaluate\.only\/group\.only in evals\/o\.es\.ts isn't allowed in CI/)
+    assert.equal(readRun(p.dir).run.runId, runId, 'no run written for a usage error')
+    assert.deepEqual(readdirSync(join(p.dir, '.es/staging')), [], 'no staging left behind')
+
+    const groupOnly = await project('group-only', {
+      'es.config.ts': fakeConfig(),
+      'evals/o.es.ts': `import { evaluate, group } from 'evalsuite'
+group.only('focused', () => { evaluate('inside', async () => {}) })
+evaluate('other', async () => {})
+`,
+    })
+    const groupCi = await runCli(groupOnly.dir, ['run'], { env: { CI: '1' } })
+    assert.equal(groupCi.code, 2, groupCi.stdout + groupCi.stderr)
+    assert.match(groupCi.stderr, /isn't allowed in CI/)
+
+    const optOut = await runCli(p.dir, ['run'], { env: { CI: 'false' } })
+    assert.equal(optOut.code, 0, 'CI=false, as the message suggests, allows .only')
   })
 
   test('t.judge without a model names where to set one', async () => {

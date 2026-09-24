@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync } from 'node:fs'
-import { appendFile, mkdir, readFile } from 'node:fs/promises'
+import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
@@ -12,7 +12,7 @@ import {
   resolveConcurrency,
   UsageError,
 } from './config.ts'
-import { loadEnvFiles } from './env.ts'
+import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import { evalSlug, newRunId } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
@@ -201,8 +201,8 @@ async function run(argv: string[]): Promise<number> {
     runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
   }
   await sweepStaging(config.root)
+  // Workers create it with their first record; a run that never starts leaves nothing behind.
   const resultsDir = stagingDir(config.root, runId)
-  await mkdir(resultsDir, { recursive: true })
   const ctx = { runId, resultsDir, config, runs, tags, concurrency }
 
   const { engineVersions, runEngine } = await import('./engine/node.ts')
@@ -257,14 +257,16 @@ async function run(argv: string[]): Promise<number> {
     })
   } catch (error) {
     renderer.close()
+    await rm(resultsDir, { recursive: true, force: true })
     throw error
   }
   const narrowed = [
     filters.length ? `filter "${filters.join(' ')}"` : '',
     tags.length ? `tags ${tags.join(', ')}` : '',
   ].filter(Boolean)
-  if (engineRun.noFiles || (engineRun.evals.length === 0 && narrowed.length && !interrupted)) {
+  if (engineRun.noFiles || (engineRun.evals.length === 0 && !interrupted)) {
     renderer.close()
+    await rm(resultsDir, { recursive: true, force: true })
     throw new UsageError(
       `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
     )
@@ -301,8 +303,8 @@ async function run(argv: string[]): Promise<number> {
     await appendFile(stepSummary, await readFile(summary)).catch(() => {})
   }
 
-  const ci = !!process.env.CI && process.env.CI !== 'false'
-  const autoRecord = values.record || config.record === 'always' || (config.record === 'ci' && ci)
+  const autoRecord =
+    values.record || config.record === 'always' || (config.record === 'ci' && inCI())
   if (autoRecord && record.status === 'complete') {
     const { record: recordCmd } = await import('./commands.ts')
     console.log(await recordCmd(config, record.runId, values))

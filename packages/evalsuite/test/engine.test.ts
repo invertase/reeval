@@ -64,6 +64,24 @@ describe('engine', () => {
     assert.equal(byName.code, 0)
     assert.match(byName.stdout, /b\.es\.ts › named thing/)
     assert.doesNotMatch(byName.stdout, /› math/)
+
+    const { runId } = readRun(p.dir).run
+    const none = await runCli(p.dir, ['run', 'nope'])
+    assert.equal(none.code, 2, none.stdout + none.stderr)
+    assert.match(none.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts with filter "nope"/)
+    assert.equal(readRun(p.dir).run.runId, runId, 'no empty run written')
+    assert.deepEqual(readdirSync(join(p.dir, '.es/staging')), [], 'no staging left behind')
+  })
+
+  test('eval files that declare no evals exit 2 instead of writing an empty run', async () => {
+    const p = await project('no-evals', {
+      'es.config.ts': fakeConfig(),
+      'evals/empty.es.ts': `import { evaluate } from 'evalsuite'\nvoid evaluate\n`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts/)
+    assert.ok(!existsSync(join(p.dir, '.es/runs')), 'no run written')
   })
 
   test('groups nest, cascade options and appear in ids and result.json', async () => {

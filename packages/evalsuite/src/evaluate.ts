@@ -9,6 +9,7 @@ import {
   type TestHandle,
   type TestMode,
 } from './engine/runtime.ts'
+import { inCI } from './env.ts'
 import { type ResolvedEnvironment, resolveEnvironment } from './environment/resolve.ts'
 import { createHarness } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
@@ -74,9 +75,18 @@ type GroupFn = {
   (name: string, options: GroupOptions, fn: () => void): void
 }
 
+/** Vitest rejects `test.only` in CI but skips everything around a `describe.only`; ES rejects both. */
+function checkOnly(mode: TestMode, what: string): void {
+  if (mode !== 'only' || !inCI()) return
+  const error = new Error(`${what}.only isn't allowed in CI`)
+  error.name = 'OnlyInCiError'
+  throw error
+}
+
 const defineGroup =
   (mode: TestMode): GroupFn =>
   (name: string, a?: GroupOptions | (() => void), b?: GroupOptions | (() => void)) => {
+    checkOnly(mode, 'group')
     const [options, fn] = splitArgs<() => void>('group', name, a, b)
     checkOptions(options, `group("${name}")`)
     const stack = [...groupStack, { name, options }]
@@ -188,6 +198,7 @@ function attemptLimits(planned: PlannedAttempt, concurrency: number): Limits {
 const defineEval =
   (mode: TestMode): EvaluateFn =>
   (name: string, a?: EvalOptions | EvalFn, b?: EvalOptions | EvalFn) => {
+    checkOnly(mode, 'evaluate')
     const [own, fn] = splitArgs<EvalFn>('evaluate', name, a, b)
     register(mode, name, own, fn)
   }

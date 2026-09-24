@@ -7,6 +7,7 @@ import { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { configDefaults } from 'vitest/config'
 import { createVitest, type Reporter, type TestCase, type Vitest } from 'vitest/node'
+import { inCI } from '../env.ts'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
 import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
@@ -197,8 +198,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         }
         for (const error of module.errors()) {
           const file = relativeFile(config.root, module.moduleId)
-          if (ONLY_IN_CI.test(error.message)) usage = onlyInCi(file)
-          else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
+          if (error.name === 'OnlyInCiError' || ONLY_IN_CI.test(error.message)) {
+            usage = onlyInCi(file)
+          } else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
             usage = `${file}: ${error.message}`
           } else unhandledErrors.push(error.message)
         }
@@ -249,7 +251,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         // Every attempt in a file asks the scheduler for a lease at once; it decides who runs.
         maxConcurrency: 10_000,
         retry: 0,
-        allowOnly: !process.env.CI,
+        allowOnly: !inCI(),
         passWithNoTests: true,
         attachmentsDir: '.es/attachments',
         onStackTrace: (_error, frame) =>
