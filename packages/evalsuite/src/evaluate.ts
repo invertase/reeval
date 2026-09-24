@@ -197,7 +197,11 @@ export const evaluate: EvaluateFn & {
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
-  todo: (name: string) => registerTest(name, { mode: 'todo' }, async () => {}),
+  todo: (name: string) => {
+    const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
+    if (matchesTags(tags, getRunContext().tags))
+      registerTest(name, { mode: 'todo' }, async () => {})
+  },
   for: evalFor,
 })
 

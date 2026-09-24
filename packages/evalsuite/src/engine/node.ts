@@ -110,6 +110,10 @@ function toEngineEval(root: string, test: TestCase): EngineEval {
   }
 }
 
+const ONLY_IN_CI = /Unexpected \.only modifier/
+const onlyInCi = (file: string) =>
+  `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
+
 /** Fails fast if two copies of Vitest would be loaded, which breaks test registration. */
 function assertSingleVitest(root: string): string | undefined {
   try {
@@ -144,12 +148,12 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         for (const test of module.children.allTests()) {
           const e = toEngineEval(config.root, test)
           if (!evals.has(e.key)) evals.set(e.key, e)
+          if (e.errors.some((m) => ONLY_IN_CI.test(m))) usage = onlyInCi(e.file)
         }
         for (const error of module.errors()) {
           const file = relativeFile(config.root, module.moduleId)
-          if (/Unexpected \.only modifier/.test(error.message)) {
-            usage = `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
-          } else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
+          if (ONLY_IN_CI.test(error.message)) usage = onlyInCi(file)
+          else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
             usage = `${file}: ${error.message}`
           } else unhandledErrors.push(error.message)
         }
