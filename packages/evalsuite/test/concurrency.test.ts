@@ -301,9 +301,10 @@ for (const name of ['a', 'b']) {
       'evals/b.es.ts': tracedEval('b', '{ runs: 3 }'),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '3'], {
-      onSpawn: async (pid) => {
-        while (readTrace(p.dir).length < 3) await sleep(50)
+      onOutput: (stdout, pid) => {
+        if ((stdout.match(/ turn 1 started$/gm) ?? []).length < 3) return false
         process.kill(-pid, 'SIGINT')
+        return true
       },
     })
     assert.equal(r.code, 130, r.stdout + r.stderr)
