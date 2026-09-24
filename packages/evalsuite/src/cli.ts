@@ -71,6 +71,9 @@ Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interru
 
 const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COLOR)
 
+/** Set by the first Ctrl-C of `es run`. */
+let interrupted = false
+
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseArgs({
     args: argv,
@@ -217,7 +220,6 @@ async function run(argv: string[]): Promise<number> {
         join(scratchDir(config.root), runId, evalSlug(id), evalSlug(cell), String(n)),
       ),
   })
-  let interrupted = false
   let engineRun: Awaited<ReturnType<typeof runEngine>>
   try {
     engineRun = await runEngine({
@@ -321,8 +323,18 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code !== 'EPIPE') throw error
 })
 
+let settled = false
+// A Ctrl-C to the whole process group can kill a Vitest worker while Node is still booting it,
+// before it can ignore SIGINT. Vitest then never settles and the event loop simply drains.
+process.on('beforeExit', () => {
+  if (settled) return
+  console.error(red('es: interrupted before the evals could start; nothing was recorded'))
+  process.exit(interrupted ? EXIT.interrupted : EXIT.infra)
+})
+
 run(process.argv.slice(2)).then(
   (code) => {
+    settled = true
     process.exitCode = code
   },
   (error: unknown) => {
@@ -331,6 +343,7 @@ run(process.argv.slice(2)).then(
       error instanceof UsageError ||
       (error as { code?: string }).code?.startsWith('ERR_PARSE_ARGS') ||
       EXPECTED_ERRORS.includes(name)
+    settled = true
     console.error(red(`es: ${(error as Error).message}`))
     if (!expected && process.env.ES_DEBUG) console.error(error)
     process.exitCode = EXIT.usage

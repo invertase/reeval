@@ -1,6 +1,6 @@
 // Main-process half of the engine adapter: embeds Vitest and translates its reporter events
 // into ES types. Nothing here leaks Vitest types to callers.
-import { realpathSync } from 'node:fs'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
 import { Writable } from 'node:stream'
@@ -13,6 +13,7 @@ import { attemptKey, evalId, relativeFile } from '../ids.ts'
 import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
 import type { RunContext } from '../types.ts'
 import type { EsEvent, EvalResult } from '../ui/events.ts'
+import { cancelMarker } from './cancel.ts'
 import type {} from './runtime.ts'
 
 /** One attempt: a Vitest test. */
@@ -243,6 +244,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         watch: false,
         reporters: [reporter],
         setupFiles: [fileURLToPath(new URL('../setup.js', import.meta.url))],
+        execArgv: ['--import', new URL('./worker-signals.js', import.meta.url).href],
         testTimeout: config.timeoutMs,
         hookTimeout: config.timeoutMs,
         pool: 'forks',
@@ -283,6 +285,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     const instance = vitest
     options.onCancellable?.(() => {
       cancelled = true
+      mkdirSync(options.run.resultsDir, { recursive: true })
+      writeFileSync(cancelMarker(options.run.resultsDir), '')
       void instance.cancelCurrentRun('keyboard-input')
     })
     await vitest.runTestSpecifications(specs, true)

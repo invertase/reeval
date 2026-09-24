@@ -1,12 +1,14 @@
 // Worker-side half of the engine adapter. Together with ./node.ts, this is the only
 // code allowed to import `vitest`.
 import { AsyncLocalStorage } from 'node:async_hooks'
+import { existsSync } from 'node:fs'
 import { afterAll, describe, inject, recordArtifact, test, expect as vitestExpect } from 'vitest'
 import { acquire, type Lease, useScheduler } from '../scheduler/client.ts'
 import type { Limits, Rank } from '../scheduler/core.ts'
 import type { SchedulerAddress } from '../scheduler/protocol.ts'
 import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
+import { cancelMarker } from './cancel.ts'
 
 declare module 'vitest' {
   interface ProvidedContext {
@@ -84,6 +86,9 @@ export function registerTest(
   const register = options.mode === 'run' ? test : test[options.mode]
   // Vitest's timer would count time spent queued, so the attempt's own timer starts at its lease.
   register(name, { timeout: 0, retry: 0, meta }, async (ctx) => {
+    if (existsSync(cancelMarker(inject('es:run').resultsDir))) {
+      ctx.skip('The run was cancelled before this attempt started')
+    }
     let lease: Lease | undefined
     if (options.gate) {
       const { limits, rank } = options.gate(ctx.task.file.filepath)
