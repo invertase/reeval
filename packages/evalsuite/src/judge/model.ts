@@ -1,18 +1,21 @@
 import { google } from '@ai-sdk/google'
 import { experimental_evaluate as evaluate } from 'ai'
 import type { JudgeModel, JudgeOptions } from '../types.ts'
-import type { JudgeState } from './index.ts'
+import { type JudgeState, judgeRoute } from './index.ts'
 
 type EvaluationModel = Parameters<typeof evaluate>[0]['model']
 
-/**
- * `google/<id>` uses the Google provider's evaluation adapter directly. Any other string
- * (e.g. `typesafe-ai/jev`) resolves through the AI SDK default provider, the AI Gateway.
- */
-function resolveModel(model: Exclude<JudgeModel, { kind: 'fake-judge' }>): EvaluationModel {
+/** See `judgeRoute`: a known provider's own package when its key is set, else the AI Gateway. */
+async function resolveModel(
+  model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
+): Promise<EvaluationModel> {
   if (typeof model !== 'string') return model as EvaluationModel
-  if (model.startsWith('google/')) return google.evaluationModel(model.slice('google/'.length))
-  return model
+  const route = judgeRoute(model)
+  if (route.kind === 'gateway') return model
+  const id = model.slice(route.provider.length + 1)
+  if (route.provider === 'google') return google.evaluationModel(id)
+  const { typeSafeAi } = await import('@ai-sdk/typesafe-ai')
+  return typeSafeAi.evaluationModel(id)
 }
 
 export async function scoreWithModel(
@@ -23,7 +26,7 @@ export async function scoreWithModel(
   signal: AbortSignal,
 ): Promise<{ score: number; resolvedModel: string | undefined }> {
   const result = await evaluate({
-    model: resolveModel(model),
+    model: await resolveModel(model),
     state,
     questions: { answer: { type: 'boolean', instructions: question } },
     providerOptions,

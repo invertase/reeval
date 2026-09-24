@@ -37,7 +37,7 @@ export default defineConfig({
   sandbox: docker(),
   runs: 1,                                      // attempts per cell
   env: { GOOGLE_GENAI_API_KEY: secret('GOOGLE_GENERATIVE_AI_API_KEY') }, // into the sandbox, redacted
-  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },           // optional
+  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 },            // optional; pin the version
   timeout: '15m',
 })
 ```
@@ -95,7 +95,8 @@ pnpm es run --config es.fake.config.ts
 
    ```bash
    CURSOR_API_KEY=...
-   GOOGLE_GENERATIVE_AI_API_KEY=...   # for the configured judge; AI_GATEWAY_API_KEY for typesafe-ai/jev
+   GOOGLE_GENERATIVE_AI_API_KEY=...   # the example's judge (google/*) and the Genkit evals' sandbox
+   # TYPESAFE_AI_API_KEY=...          # for typesafe-ai/* judges such as Jev (or AI_GATEWAY_API_KEY)
    ```
 
 3. Run the evals:
@@ -259,19 +260,25 @@ in is readable by the agent; the harness's own `CURSOR_API_KEY` is passed in too
 The judge uses [AI SDK evaluation models](https://ai-sdk.dev/docs/ai-sdk-core/evaluation). A
 verdict passes when the model's probability of "yes" is at or above the threshold.
 
-| `model` | Resolves to | Credentials |
-|---|---|---|
-| `'google/gemini-3.8-flash'` | `google.evaluationModel('gemini-3.8-flash')` | `GOOGLE_GENERATIVE_AI_API_KEY` |
-| `'typesafe-ai/jev'` or any other `provider/model` | The AI Gateway's evaluation API, e.g. the Jev evaluation model | `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
-| An evaluation model object, e.g. `openai.evaluationModel('…')` | Used as is. Per group, eval or call only, not in `es.config.ts` | The provider's |
-| `fakeJudge({ score })` | A fixed score, with no model call | None |
+A `provider/model` string resolves to the provider's own AI SDK package when its key is set,
+otherwise to the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway) when a Gateway credential
+is set. With neither, the judge call fails and names both options. The Gateway isn't needed for Jev.
 
+| `model` | With its key set | Otherwise |
+|---|---|---|
+| `'typesafe-ai/jev-1.13.0'` (recommended, pinned) | `typeSafeAi.evaluationModel('jev-1.13.0')` with `TYPESAFE_AI_API_KEY` | The AI Gateway |
+| `'google/gemini-3.8-flash'` | `google.evaluationModel('gemini-3.8-flash')` with `GOOGLE_GENERATIVE_AI_API_KEY` | The AI Gateway |
+| Any other `provider/model` | — | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+| An evaluation model object, e.g. `openai.evaluationModel('…')` | Used as is. Per group, eval or call only, not in `es.config.ts` | — |
+| `fakeJudge({ score })` | A fixed score, with no model call | — |
+
+Pin model versions (`jev-1.13.0`, not `jev-latest`): a moving alias changes scores between runs.
 There's no default model: set one in the config, a group, an eval or the call, or `t.judge()`
 fails and says where to set it. Settings resolve per call, then per eval, then per group
 (innermost first), then from the config, merged field by field:
 
 ```ts
-evaluate('strict', { judge: { model: 'typesafe-ai/jev', threshold: 0.9 } }, async (t) => {
+evaluate('strict', { judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.9 } }, async (t) => {
   await t.send('…')
   expect(await t.judge('Is the change minimal?', { threshold: 0.7 })).toPass()
 })

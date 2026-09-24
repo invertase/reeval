@@ -8,7 +8,7 @@ export const fakeJudge = ({ score = 1 }: { score?: number } = {}): FakeJudgeMode
   score,
 })
 
-export { DEFAULT_JUDGE_MODEL, DEFAULT_THRESHOLD } from './judge/index.ts'
+export { DEFAULT_THRESHOLD, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
 export type {
   ConfigJudgeOptions,
   FakeJudgeModel,

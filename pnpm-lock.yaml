@@ -35,6 +35,9 @@ importers:
       '@ai-sdk/harness-cursor':
         specifier: 1.0.36
         version: 1.0.36(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/typesafe-ai':
+        specifier: 3.0.6
+        version: 3.0.6(zod@4.6.5)
       ai:
         specifier: 7.0.113
         version: 7.0.113(zod@4.6.5)
@@ -96,6 +99,12 @@ packages:
   '@ai-sdk/provider@4.0.18':
     resolution: {integrity: sha512-+GZJIgz1jk86pwEbb3f1BD2bdoSKyWE4Jg4YUc7NMnMozbWemSKYZcw2F4nMaO5qwsL5A8RmioAKW81YktRpIQ==}
     engines: {node: '>=22'}
+
+  '@ai-sdk/typesafe-ai@3.0.6':
+    resolution: {integrity: sha512-hcLt6Q75go3QZu4HJnLfqQbk9QCe6tR2bWfPIM/zpFmCUmLkbVY7LHK7bLk5O1DUk7/5ULfhma0cvwvDWbqQCg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@biomejs/biome@2.5.14':
     resolution: {integrity: sha512-0FabLIjd4M/dm8VFI86RMaLLdgepzbdfiAL2R8cr7V81OYYrP1w7Z73KfAwPK5h9SrEBXTzNG2y+mBwPo9xRnw==}
@@ -775,6 +784,12 @@ snapshots:
   '@ai-sdk/provider@4.0.18':
     dependencies:
       json-schema: 0.4.0
+
+  '@ai-sdk/typesafe-ai@3.0.6(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
+      zod: 4.6.5
 
   '@biomejs/biome@2.5.14':
     optionalDependencies:

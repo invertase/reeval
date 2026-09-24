@@ -278,7 +278,7 @@ type AttemptSpec = PlannedAttempt & {
 }
 
 const NO_JUDGE_MODEL =
-  "t.judge() has no model. Set judge: { model: 'google/gemini-3.8-flash' } in es.config.ts, " +
+  "t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in es.config.ts, " +
   'on the group or eval, or pass { model } to this call.'
 
 const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')

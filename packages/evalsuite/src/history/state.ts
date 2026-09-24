@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { git } from '../git.ts'
 import { sha256 } from '../ids.ts'
+import { DIRECT_PROVIDERS } from '../judge/index.ts'
 import type { RunRecord } from './types.ts'
 
 const LOCKFILES = [
@@ -75,7 +76,13 @@ export async function worktreePatch(root: string, ignore: string[]): Promise<Buf
 
 const require = createRequire(import.meta.url)
 // The engine's version comes from `engine/`, the only module that may name it.
-const PACKAGES = ['ai', '@ai-sdk/harness', '@ai-sdk/harness-cursor', '@ai-sdk/google']
+const PACKAGES = [
+  'ai',
+  '@ai-sdk/harness',
+  '@ai-sdk/harness-cursor',
+  '@ai-sdk/google',
+  '@ai-sdk/typesafe-ai',
+]
 
 export function packageVersions(engine: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = { ...engine }
@@ -89,7 +96,8 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
 
 /** Moves whenever the code that builds and scores the judge prompt could have changed. */
 export function judgeVersion(es: string, packages: Record<string, string>, model: string): string {
-  const adapter = model.startsWith('google/') ? packages['@ai-sdk/google'] : packages.ai
+  const direct = DIRECT_PROVIDERS[model.slice(0, model.indexOf('/'))]
+  const adapter = (direct && packages[direct.pkg]) ?? packages.ai
   return sha256(JSON.stringify({ es, ai: packages.ai, adapter, model })).slice(0, 12)
 }
 

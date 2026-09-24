@@ -1,7 +1,18 @@
 import type { FakeJudgeModel, JSONValue, JudgeModel, JudgeOptions, Verdict } from '../types.ts'
 
-export const DEFAULT_JUDGE_MODEL = 'google/gemini-3.8-flash'
+/** The judge the docs recommend, pinned so a model update never silently moves scores. */
+export const RECOMMENDED_JUDGE_MODEL = 'typesafe-ai/jev-1.13.0'
 export const DEFAULT_THRESHOLD = 0.8
+
+const GATEWAY_KEYS = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']
+
+/** Providers ES calls directly, through their own AI SDK package, when their key is set. */
+export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string }> = {
+  google: { key: 'GOOGLE_GENERATIVE_AI_API_KEY', pkg: '@ai-sdk/google' },
+  'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai' },
+}
+
+export type JudgeRoute = { kind: 'direct'; provider: string; pkg: string } | { kind: 'gateway' }
 
 export type JudgeState = { [key: string]: JSONValue }
 
@@ -18,14 +29,31 @@ export function judgeModelName(model: JudgeModel): string {
 /** Checks a model string's shape; returns an error message, or undefined when it's valid. */
 export function checkModelString(model: string): string | undefined {
   if (model.includes('/')) return undefined
-  return `Judge model "${model}" needs a provider prefix, e.g. "google/${model}" or "typesafe-ai/jev"`
+  return `Judge model "${model}" needs a provider prefix, e.g. "${RECOMMENDED_JUDGE_MODEL}" or "google/${model}"`
 }
+
+const providerOf = (model: string) => model.slice(0, model.indexOf('/'))
 
 /** Environment variables the judge model needs, as alternatives: any one of them is enough. */
 export function judgeCredentials(model: string | FakeJudgeModel): string[] {
   if (isFakeJudge(model)) return []
-  if (model.startsWith('google/')) return ['GOOGLE_GENERATIVE_AI_API_KEY']
-  return ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']
+  const direct = DIRECT_PROVIDERS[providerOf(model)]
+  return direct ? [direct.key, ...GATEWAY_KEYS] : GATEWAY_KEYS
+}
+
+/**
+ * A known provider's own package when its key is set, else the Vercel AI Gateway when a
+ * Gateway credential is set. Throws, naming both, when neither is.
+ */
+export function judgeRoute(model: string, env: NodeJS.ProcessEnv = process.env): JudgeRoute {
+  const provider = providerOf(model)
+  const direct = DIRECT_PROVIDERS[provider]
+  if (direct && env[direct.key]) return { kind: 'direct', provider, pkg: direct.pkg }
+  if (GATEWAY_KEYS.some((k) => env[k])) return { kind: 'gateway' }
+  const options = direct
+    ? `Set ${direct.key} to call ${direct.pkg} directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.`
+    : 'Set AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.'
+  throw new Error(`No credentials for judge model "${model}". ${options}`)
 }
 
 export async function runJudge(

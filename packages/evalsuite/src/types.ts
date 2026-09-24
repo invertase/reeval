@@ -79,11 +79,12 @@ export type JSONValue =
 export type FakeJudgeModel = { kind: 'fake-judge'; score: number }
 
 /**
- * `'provider/model'` (e.g. `'google/gemini-3.8-flash'`, `'typesafe-ai/jev'`), an AI SDK
+ * `'provider/model'` (e.g. `'typesafe-ai/jev-1.13.0'`, `'google/gemini-3.8-flash'`), an AI SDK
  * evaluation model object (per group, eval or call only), or a fake judge.
  */
 export type JudgeModel = string | FakeJudgeModel | { readonly specificationVersion: string }
 
+/** Merged field by field down the cascade, so per-model settings can join as new fields. */
 export type JudgeOptions = {
   model?: JudgeModel
   /** Minimum score (0–1) for a `pass` verdict. */

@@ -222,7 +222,7 @@ evaluate('judged', async (t) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /t\.judge\(\) has no model\. Set judge: \{ model: 'google\/gemini-3\.8-flash' \} in es\.config\.ts/,
+      /t\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in es\.config\.ts/,
     )
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })

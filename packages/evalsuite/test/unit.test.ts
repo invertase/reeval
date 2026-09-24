@@ -7,7 +7,7 @@ import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, stackChanges } from '../src/history/views.ts'
-import { checkModelString, judgeCredentials } from '../src/judge/index.ts'
+import { checkModelString, judgeCredentials, judgeRoute } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { redactSecrets } from '../src/redact.ts'
 
@@ -75,8 +75,13 @@ test('judge prompt keeps source diffs and drops dependency noise', () => {
 test('judge model strings need a provider, and credentials follow the provider', () => {
   assert.match(checkModelString('gemini-3.8-flash') ?? '', /google\/gemini-3\.8-flash/)
   assert.equal(checkModelString('typesafe-ai/jev'), undefined)
-  assert.deepEqual(judgeCredentials('google/gemini-3.8-flash'), ['GOOGLE_GENERATIVE_AI_API_KEY'])
-  assert.deepEqual(judgeCredentials('typesafe-ai/jev'), ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN'])
+  const gateway = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']
+  assert.deepEqual(judgeCredentials('google/gemini-3.8-flash'), [
+    'GOOGLE_GENERATIVE_AI_API_KEY',
+    ...gateway,
+  ])
+  assert.deepEqual(judgeCredentials('typesafe-ai/jev-1.13.0'), ['TYPESAFE_AI_API_KEY', ...gateway])
+  assert.deepEqual(judgeCredentials('openai/gpt-x'), gateway)
   assert.deepEqual(judgeCredentials({ kind: 'fake-judge', score: 1 }), [])
   assert.throws(
     () => resolveConfig({ judge: { model: 'gemini-3.8-flash' } }, '/p'),
@@ -86,11 +91,43 @@ test('judge model strings need a provider, and credentials follow the provider',
 })
 
 test('missingCredentials names the judge key for the configured provider', () => {
-  const config = resolveConfig({ judge: { model: 'typesafe-ai/jev' } }, '/p')
+  const config = resolveConfig({ judge: { model: 'typesafe-ai/jev-1.13.0' } }, '/p')
   assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k' }), [
-    'AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
+    'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
   ])
   assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }), [])
+  assert.deepEqual(
+    missingCredentials(config, { CURSOR_API_KEY: 'k', TYPESAFE_AI_API_KEY: 't' }),
+    [],
+  )
+  assert.deepEqual(
+    missingCredentials(resolveConfig({}, '/p'), { CURSOR_API_KEY: 'k' }),
+    [],
+    'no judge, no key',
+  )
+})
+
+test('judge strings use the provider package when its key is set, else the AI Gateway', () => {
+  const jev = 'typesafe-ai/jev-1.13.0'
+  assert.deepEqual(judgeRoute(jev, { TYPESAFE_AI_API_KEY: 't', AI_GATEWAY_API_KEY: 'g' }), {
+    kind: 'direct',
+    provider: 'typesafe-ai',
+    pkg: '@ai-sdk/typesafe-ai',
+  })
+  assert.deepEqual(judgeRoute(jev, { AI_GATEWAY_API_KEY: 'g' }), { kind: 'gateway' })
+  assert.equal(
+    judgeRoute('google/gemini-3.8-flash', { GOOGLE_GENERATIVE_AI_API_KEY: 'k' }).kind,
+    'direct',
+  )
+  assert.deepEqual(judgeRoute('openai/gpt-x', { VERCEL_OIDC_TOKEN: 'o' }), { kind: 'gateway' })
+  assert.throws(
+    () => judgeRoute(jev, {}),
+    /No credentials for judge model "typesafe-ai\/jev-1\.13\.0"\. Set TYPESAFE_AI_API_KEY to call @ai-sdk\/typesafe-ai directly, or AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\) to go through the Vercel AI Gateway\./,
+  )
+  assert.throws(
+    () => judgeRoute('openai/gpt-x', {}),
+    /Set AI_GATEWAY_API_KEY \(or VERCEL_OIDC_TOKEN\)/,
+  )
 })
 
 test('huge single outputs keep their head and tail, with a marker and hash', () => {
