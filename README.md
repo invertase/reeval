@@ -170,32 +170,35 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 | `plain` | In CI (`CI`, `BUILD_NUMBER`, `GITHUB_ACTIONS`… as Turborepo detects it) or when stdout isn't a terminal | Append-only lines, never rewritten |
 | `live` | On a terminal | For now the same as `plain`; the redrawn live view comes later |
 
-Plain output prefixes every line about an eval with a short, stable tag: `[greet#1 cursor]` is
-the eval, its attempt number and the harness. The tag comes from the first distinctive words of
-the eval's name (words most evals in the file share don't count), so `grep '\[greet#1'` finds
-one eval's lines even when several run at once. Prefixes are coloured when colour is on.
+Plain output prefixes every line about an attempt with a short, stable tag. `[greet#1 cursor]`
+is the eval's tag, its run number within the cell, and the cell's axes that vary (`with-skill`,
+`cursor:composer-2`), or the harness when nothing varies. The tag is the first distinctive words
+of the eval's name (words most evals in the file share don't count), so `grep '\[greet#1'` finds
+one attempt's lines even when several run at once. Prefixes are coloured when colour is on.
 
 - **`--log-order grouped`** (the default in CI) prints the start line (`▶`) at once, then each
-  eval's detail as one contiguous block when it finishes: its result line, then sandbox start,
-  each turn (duration, tool calls, file edits), checks, judge verdicts and the eval's own
-  `console.log`/`console.error` output, each with its offset into the eval (`+1:05`). Blocks
-  from concurrent evals never interleave.
+  attempt's detail as one contiguous block when it finishes: its result line, then sandbox
+  start, each turn (duration, tool calls, file edits), checks, judge verdicts and the eval's own
+  `console.log`/`console.error` output, each with its offset into the attempt (`+1:05`). Blocks
+  from concurrent attempts never interleave.
 - **`--log-order stream`** (the default elsewhere) prints every prefixed line as it happens.
 - **Heartbeat.** After 60s without output, plain mode prints what's still running, with each
-  eval's phase (`sandbox`, `turn 2`, `checks`, `judging`) and elapsed time, so CI doesn't kill a
-  silent job and a hung log shows where it stopped. `ES_HEARTBEAT=30s` changes it, `0` turns it off.
+  attempt's phase (`sandbox`, `turn 2`, `checks`, `judging`) and elapsed time, so CI doesn't
+  kill a silent job and a hung log shows where it stopped. `ES_HEARTBEAT=30s` changes it, `0`
+  turns it off.
 - **`--output-logs`** picks whose detail prints: `full` (default), `errors-only` or `none`.
   Failures always print their error, unless `none`.
-- **GitHub Actions** (`GITHUB_ACTIONS=true`): passing evals collapse into `::group::` blocks
-  titled with their result line; failing evals stay expanded and add an `::error` annotation on
+- **GitHub Actions** (`GITHUB_ACTIONS=true`): passing attempts collapse into `::group::` blocks
+  titled with their result line; failing ones stay expanded and add an `::error` annotation on
   the failing line. Lines inside blocks drop the prefix (`--log-prefix task` keeps it), colour is
   on, and `summary.md` is appended to the job summary (`$GITHUB_STEP_SUMMARY`).
 
-Every mode ends with the same summary: the evals as a file › group tree with outcome, duration,
-lowest judge score and turns, then the failures grouped by kind (judge verdicts, assertions
-with Vitest's diff and code frame, timeouts, the tail of infra errors, cancelled) with each
-one's artifact directory, then totals and the results path. Cost appears when the harness
-reports it (Cursor doesn't).
+Plain output ends with a summary: the evals as a file › group tree with outcome, duration,
+lowest judge score and turns (or, for evals with several attempts, the pass count and rate and
+a row per cell with its pass rate and lift over `baseline`); then the failing attempts grouped
+by kind (judge verdicts, assertions with Vitest's diff and code frame, timeouts, the tail of
+infra errors, cancelled), each with its artifact directory; then totals and the results path.
+Cost appears when the harness reports it (Cursor doesn't).
 
 | Variable | Same as |
 |---|---|
@@ -270,18 +273,27 @@ a function edits it: `{ harness: (inherited) => [...inherited, cursor({ model: '
 Each eval runs once per **cell** (harness × environment × sandbox) and `runs` times per cell;
 each run is an **attempt** with its own fresh sandbox, id `<harness>/<environment>/<sandbox>#<n>`
 (e.g. `cursor:composer-2.5/with-house-greeting/docker#2`). Give two values of one axis distinct
-ids with `id`: `cursor({ model: 'composer-2', id: 'fast' })`. The terminal prints one line per
-attempt, labelled with the axes that vary, then per-cell pass rates, and the lift over `baseline`
-when the environment axis includes it:
+ids with `id`: `cursor({ model: 'composer-2', id: 'fast' })`. Each attempt's lines are prefixed
+with the eval's tag, its run number and the axes that vary (`[greets#1 with-house-greeting]`),
+and the summary lists each cell's pass rate, with the lift over `baseline` when the environment
+axis includes it (a real `CI=1 es run skill`, trimmed):
 
 ```text
- ✗ evals/skill.es.ts › house greeting › greets in the house style  baseline #1   41s
- ✓ evals/skill.es.ts › house greeting › greets in the house style  with-house-greeting #1   38s
+[greets#1 baseline] ✗ evals/skill.es.ts › house greeting › greets in the house style  49s
+[greets#1 baseline]  +0:01 turn 1 done 47s · 29 tool calls, 2 file edits
+[greets#1 baseline]  +0:48 $ node -e "import('./greet.js').then((m) => {…  exit 1 79ms
+…
+[greets#1 with-house-greeting] ✓ evals/skill.es.ts › house greeting › greets in the house style  17s
+…
 
-Cells
-  evals/skill.es.ts › house greeting › greets in the house style
-    cursor:composer-2.5/baseline/docker              0/2    0%
-    cursor:composer-2.5/with-house-greeting/docker   2/2  100%   lift +100 pts
+Summary
+ evals/skill.es.ts
+   house greeting
+     ✗ greets in the house style      1/2   50%  2 attempts
+         cursor:composer-2.5/baseline/docker               0/1    0%
+         cursor:composer-2.5/with-house-greeting/docker    1/1  100%   lift +100 pts
+…
+Attempts  1 passed · 1 failed (2 attempts, 1 evals)
 ```
 
 A cell fails if any of its attempts fails, and so does the run's exit code.
