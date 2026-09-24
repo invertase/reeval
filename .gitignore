@@ -5,4 +5,4 @@ dist/
 .env
 .env.local
 *.tsbuildinfo
-test/.tmp/
+**/test/.tmp/

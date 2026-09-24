@@ -147,6 +147,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         retry: 0,
         allowOnly: !process.env.CI,
         passWithNoTests: true,
+        attachmentsDir: '.es/attachments',
         onStackTrace: (_error, frame) => !frame.file.includes('/node_modules/vitest/'),
       },
       { customLogger: silentLogger, logLevel: 'silent', cacheDir: 'node_modules/.cache/es' },
