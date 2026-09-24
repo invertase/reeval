@@ -123,8 +123,6 @@ export type RunRecord = {
     lockfiles: Array<{ path: string; sha256: string }>
   }
   environment: Environment
-  /** What a rerun can't pin down, so differences aren't mistaken for regressions. */
-  reproducibility: { notes: string[] }
   config: {
     harness: string
     model: string | null
@@ -163,6 +161,21 @@ export type Environment = {
   }
   /** Union of every attempt's context files. */
   context: ContextFile[]
+  /** What eval fingerprints hash; fingerprints from different scopes aren't comparable. */
+  fingerprintScope: string[]
+}
+
+/** The parts of a run's stack that `es compare` checks for drift. */
+export type StackSummary = {
+  imageId: string | null
+  agentCli: string | null
+  agentModel: string | null
+  judgeModel: string
+  /** What the judge provider reported serving; differs from `judgeModel` on silent updates. */
+  judgeServed: string[]
+  judgeVersion: string
+  threshold: number
+  fingerprintScope: string[]
 }
 
 /** One line of the derived, locally cached history listing. */
@@ -177,5 +190,6 @@ export type HistoryEntry = {
   harness: string
   model: string | null
   summary: RunSummary
+  stack: StackSummary
   evals: Array<{ id: string; fingerprint: string; outcome: Outcome }>
 }

@@ -7,12 +7,7 @@ import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
 import type { EvalRecord, FileChange, Outcome, ResolvedConfig, RunContext } from '../types.ts'
-import {
-  judgeVersion,
-  packageVersions,
-  reproducibilityNotes,
-  WORKTREE_PATCH_LIMIT,
-} from './state.ts'
+import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
   type AttemptRecord,
@@ -298,10 +293,11 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     context: [...contexts.values()].sort((a, b) =>
       a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
     ),
+    fingerprintScope: FINGERPRINT_SCOPE,
   }
 
   const count = (o: Outcome) => evals.filter((e) => e.outcome === o).length
-  const draft: Omit<RunRecord, 'reproducibility'> = {
+  const record: RunRecord = {
     kind: 'es-run',
     schemaVersion: SCHEMA_VERSION,
     runId,
@@ -335,6 +331,5 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
   }
-  const record: RunRecord = { ...draft, reproducibility: { notes: reproducibilityNotes(draft) } }
   return { record, artifacts: out.files }
 }

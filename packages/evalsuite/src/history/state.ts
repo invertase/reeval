@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { git } from '../git.ts'
 import { sha256 } from '../ids.ts'
-import type { Environment, RunRecord } from './types.ts'
+import type { RunRecord } from './types.ts'
 
 const LOCKFILES = [
   'pnpm-lock.yaml',
@@ -93,41 +93,33 @@ export function judgeVersion(es: string, packages: Record<string, string>, model
   return sha256(JSON.stringify({ es, ai: packages.ai, adapter, model })).slice(0, 12)
 }
 
-/** What a rerun from the same commit, patch and image still can't pin down. */
-export function reproducibilityNotes(record: Omit<RunRecord, 'reproducibility'>): string[] {
-  const env: Environment = record.environment
-  const notes = [
-    'Agents sample their output, so a rerun of the same state can take a different path.',
-  ]
-  if (env.harness.kind !== 'fake') {
-    notes.push(
-      `The agent model (${env.harness.model ?? 'the harness default'}) is served by the provider and can change without notice${env.harness.resolvedModel ? '' : '; the harness does not report which version answered'}.`,
+/** Inputs every eval fingerprint hashes. Change it when the fingerprint's inputs change. */
+export const FINGERPRINT_SCOPE = [
+  'eval-source',
+  'harness',
+  'agent-cli',
+  'image-id',
+  'judge',
+  'context',
+]
+
+/**
+ * One-line warnings for states that stop an exact rerun and that someone can act on. Derived
+ * when shown, never stored.
+ */
+export function warnings(run: RunRecord): string[] {
+  const out: string[] = []
+  const image = run.environment.image
+  if (image && image.repoDigests.length === 0) {
+    out.push(
+      `Image ${image.ref} isn't pushed, so an exact rerun needs this machine's image (id ${image.id.replace(/^sha256:/, '').slice(0, 12)}).`,
     )
   }
-  if (!env.judge.model.startsWith('fake')) {
-    notes.push(
-      `The judge model (${env.judge.model}) can also change provider-side${env.judge.resolvedModels.length ? `; it reported ${env.judge.resolvedModels.join(', ')}` : ''}.`,
+  if (!run.git) out.push("Not a git repository, so the code under test isn't pinned.")
+  else if (run.git.dirty && !run.git.worktreePatch) {
+    out.push(
+      `Uncommitted changes weren't saved (${run.git.worktreePatchNote ?? 'no patch'}), so this exact state can't be recreated.`,
     )
   }
-  if (record.config.sandbox === 'docker') {
-    notes.push(
-      'The sandbox has network access: web search, package registries and APIs can return different results on a rerun.',
-    )
-    if (env.image && env.image.repoDigests.length === 0) {
-      notes.push(
-        `The image ${env.image.ref} was built locally (id ${env.image.id.slice(0, 19)}…) and not pushed; rebuilding it reinstalls the agent CLI, so keep or push the image to reproduce exactly.`,
-      )
-    }
-  }
-  if (!record.git)
-    notes.push('The project is not a git repository, so the code under test is not pinned.')
-  else if (record.git.dirty && !record.git.worktreePatch) {
-    notes.push(
-      `The working tree was dirty and its changes weren't saved (${record.git.worktreePatchNote ?? 'no patch'}); only their hash is recorded.`,
-    )
-  }
-  if (record.evals.some((e) => e.sourceHash)) {
-    notes.push('Eval fingerprints hash each eval file, not the modules it imports.')
-  }
-  return notes
+  return out
 }

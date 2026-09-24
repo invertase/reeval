@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { evalRoot, missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
+import { warnings } from '../src/history/state.ts'
+import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
+import { compare, stackChanges } from '../src/history/views.ts'
 import { checkModelString, judgeCredentials } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { redactSecrets } from '../src/redact.ts'
@@ -119,4 +122,75 @@ test('an npm install in the sandbox collapses to one line for the judge', () => 
     { path: 'src/app.js', status: 'added' },
   ])
   assert.deepEqual(files, ['added src/app.js', 'changed node_modules/ (10000 files)'])
+})
+
+const entry = (
+  outcome: 'pass' | 'fail',
+  stack: Partial<HistoryEntry['stack']> = {},
+): HistoryEntry => ({
+  runId: `20260924T10000${outcome === 'pass' ? 0 : 1}Z_abc1234_me`,
+  recorded: true,
+  status: 'complete',
+  startedAt: '',
+  author: 'me',
+  git: null,
+  runner: 'local',
+  harness: 'cursor',
+  model: null,
+  summary: { evals: 1, pass: 0, fail: 0, infraError: 0, skipped: 0 },
+  stack: {
+    imageId: 'sha256:aaa',
+    agentCli: '1.0',
+    agentModel: 'composer-2.5',
+    judgeModel: 'google/gemini-3.8-flash',
+    judgeServed: ['gemini-3.8-flash-001'],
+    judgeVersion: 'v1',
+    threshold: 0.8,
+    fingerprintScope: ['eval-source'],
+    ...stack,
+  },
+  evals: [{ id: 'e', fingerprint: 'fp', outcome }],
+})
+
+test('compare calls a flip drift when the judge changed outside the fingerprint', () => {
+  assert.deepEqual(stackChanges(entry('pass'), entry('fail')), [])
+  assert.equal(compare(entry('pass'), entry('fail'))[0]?.status, 'regressed')
+  const served = entry('fail', { judgeServed: ['gemini-3.8-flash-002'] })
+  assert.deepEqual(
+    stackChanges(entry('pass'), served).map((c) => [c.label, c.base, c.head, c.outsideFingerprint]),
+    [['judge model served', 'gemini-3.8-flash-001', 'gemini-3.8-flash-002', true]],
+  )
+  assert.equal(compare(entry('pass'), served)[0]?.status, 'drift')
+  const cli = entry('fail', { agentCli: '2.0', imageId: 'sha256:bbb' })
+  assert.deepEqual(
+    stackChanges(entry('pass'), cli).map((c) => c.label),
+    ['image id', 'agent CLI'],
+  )
+  assert.equal(compare(entry('pass'), cli)[0]?.status, 'regressed', 'the fingerprint decides these')
+  const unreported = entry('fail', { judgeServed: [] })
+  assert.deepEqual(
+    stackChanges(entry('pass'), unreported),
+    [],
+    'an unreported model is not a change',
+  )
+})
+
+test('warnings only name states someone can act on', () => {
+  const run = {
+    git: { dirty: false, worktreePatch: null, worktreePatchNote: null },
+    environment: { image: { ref: 'img:1', id: 'sha256:0123456789abcdef', repoDigests: [] } },
+  } as unknown as RunRecord
+  assert.deepEqual(warnings(run), [
+    "Image img:1 isn't pushed, so an exact rerun needs this machine's image (id 0123456789ab).",
+  ])
+  const pushed = {
+    ...run,
+    environment: { image: { ...run.environment.image, repoDigests: ['r@sha256:1'] } },
+  } as RunRecord
+  assert.deepEqual(warnings(pushed), [])
+  const dirty = {
+    ...pushed,
+    git: { dirty: true, worktreePatch: null, worktreePatchNote: 'too large to keep (9 bytes)' },
+  } as unknown as RunRecord
+  assert.match(warnings(dirty)[0] ?? '', /weren't saved \(too large to keep/)
 })

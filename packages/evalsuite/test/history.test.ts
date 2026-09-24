@@ -134,15 +134,17 @@ describe('recording runs into evals/.history', () => {
 
     const q = await gitProject('record-ci', { 'evals/agent.es.ts': agent() })
     assert.equal((await runCli(q.dir)).code, 0)
+    const local = readRun(q.dir).run.runId
     assert.deepEqual(recordedRuns(q.dir), [], "record: 'ci' is the default, and this isn't CI")
     assert.equal((await runCli(q.dir, ['run'], { env: { CI: '1' } })).code, 0)
     const [ci] = recordedRuns(q.dir)
     assert.match(ci ?? '', /_ci-[0-9a-z]{4}$/)
-    const bare = await runCli(q.dir, ['record', 'latest~1', '--artifacts', 'none'])
+    // By id: two runs in the same second sort by author, not start order.
+    const bare = await runCli(q.dir, ['record', local, '--artifacts', 'none'])
     assert.equal(bare.code, 0, bare.stderr)
     const runs = recordedRuns(q.dir)
     assert.equal(runs.length, 2)
-    assert.ok(!existsSync(join(q.dir, HISTORY, runs[0] ?? '')), 'no artifact dir with none')
+    assert.ok(!existsSync(join(q.dir, HISTORY, local)), 'no artifact dir with none')
   })
 
   test('two branches record, merge with zero conflicts, and old checkouts show old history', async () => {
@@ -281,7 +283,8 @@ describe('recording runs into evals/.history', () => {
     assert.equal(run.environment.image, null)
     assert.ok(run.environment.packages.ai && run.environment.packages.vitest)
     assert.match(run.environment.judge.version, /^[0-9a-f]{12}$/)
-    assert.ok(run.reproducibility.notes.some((n) => /sample/.test(n)))
+    assert.equal('reproducibility' in run, false)
+    assert.deepEqual(run.environment.fingerprintScope.length > 0, true)
     assert.equal(run.evals[0]?.fixtureHash, null)
     assert.equal(sh(p.dir, 'diff', '--cached', '--name-only'), '', "the user's index is untouched")
 
@@ -292,7 +295,7 @@ describe('recording runs into evals/.history', () => {
     )
     assert.match(shown.stdout, /Uncommitted +worktree\.patch, \d+ bytes/)
     assert.match(shown.stdout, /Lockfiles +package-lock\.json [0-9a-f]{12}/)
-    assert.match(shown.stdout, /not reproducible from this record alone/)
+    assert.doesNotMatch(shown.stdout, /!|not reproducible/, 'no warning when everything is saved')
     assert.match(read('summary.md'), /## State[\s\S]*\| Uncommitted \| worktree\.patch/)
 
     const target = join(p.dir, '..', 'record-state-checkout')

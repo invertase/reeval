@@ -15,6 +15,7 @@ import {
   pickBaseline,
   type Reachability,
   resolveRun,
+  stackChanges,
 } from './history/views.ts'
 import { sha256 } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
@@ -145,7 +146,13 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
       recorded: e.recorded,
       inHistory: !reach || !e.git ? null : reach.has(e.git.sha),
     })
-    ctx.out(JSON.stringify({ base: flag(base), head: flag(head), rows }, null, 2))
+    ctx.out(
+      JSON.stringify(
+        { base: flag(base), head: flag(head), changes: stackChanges(base, head), rows },
+        null,
+        2,
+      ),
+    )
   } else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
   return ctx.flags['fail-on-regression'] && rows.some((r) => r.status === 'regressed') ? 1 : 0
 }

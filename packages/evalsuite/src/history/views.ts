@@ -1,6 +1,7 @@
 import type { Outcome } from '../types.ts'
+import { warnings } from './state.ts'
 import { formatMs, OUTCOME_MARK, stateRows, summaryCounts } from './summary.ts'
-import type { HistoryEntry, RunRecord } from './types.ts'
+import type { HistoryEntry, RunRecord, StackSummary } from './types.ts'
 
 export class RefError extends Error {
   override name = 'RefError'
@@ -146,7 +147,50 @@ export type CompareRow = {
   head: Outcome | null
 }
 
+export type StackChange = {
+  field: keyof StackSummary
+  label: string
+  base: string
+  head: string
+  /** Not covered by eval fingerprints, so outcome flips across it are drift, not regressions. */
+  outsideFingerprint: boolean
+}
+
+const STACK_FIELDS: Array<{ field: keyof StackSummary; label: string; outside: boolean }> = [
+  { field: 'imageId', label: 'image id', outside: false },
+  { field: 'agentCli', label: 'agent CLI', outside: false },
+  { field: 'agentModel', label: 'agent model', outside: false },
+  { field: 'judgeModel', label: 'judge model', outside: false },
+  { field: 'threshold', label: 'judge threshold', outside: false },
+  { field: 'judgeServed', label: 'judge model served', outside: true },
+  { field: 'judgeVersion', label: 'judge version', outside: true },
+  { field: 'fingerprintScope', label: 'fingerprint scope', outside: true },
+]
+
+const show = (value: StackSummary[keyof StackSummary]) =>
+  Array.isArray(value)
+    ? value.join(', ') || 'none'
+    : value === null
+      ? 'none'
+      : String(value)
+          .replace(/^sha256:/, '')
+          .slice(0, 24)
+
+/** What changed in the stack between two runs. Reported served-judge lists only compare when both have one. */
+export function stackChanges(base: HistoryEntry, head: HistoryEntry): StackChange[] {
+  const changes: StackChange[] = []
+  for (const { field, label, outside } of STACK_FIELDS) {
+    const b = base.stack[field]
+    const h = head.stack[field]
+    if (field === 'judgeServed' && (!(b as string[]).length || !(h as string[]).length)) continue
+    if (JSON.stringify(b) === JSON.stringify(h)) continue
+    changes.push({ field, label, base: show(b), head: show(h), outsideFingerprint: outside })
+  }
+  return changes
+}
+
 export function compare(base: HistoryEntry, head: HistoryEntry): CompareRow[] {
+  const graderChanged = stackChanges(base, head).some((c) => c.outsideFingerprint)
   const ids = [...new Set([...head.evals.map((e) => e.id), ...base.evals.map((e) => e.id)])]
   return ids.map((id) => {
     const b = base.evals.find((e) => e.id === id)
@@ -157,6 +201,7 @@ export function compare(base: HistoryEntry, head: HistoryEntry): CompareRow[] {
     if (b.outcome === 'infra_error' || h.outcome === 'infra_error')
       return { ...row, status: 'infra' }
     if (b.fingerprint !== h.fingerprint) return { ...row, status: 'drift' }
+    if (graderChanged && b.outcome !== h.outcome) return { ...row, status: 'drift' }
     if (b.outcome === 'pass' && h.outcome === 'fail') return { ...row, status: 'regressed' }
     if (b.outcome === 'fail' && h.outcome === 'pass') return { ...row, status: 'fixed' }
     return { ...row, status: 'same' }
@@ -189,12 +234,15 @@ export function formatCompare(
   const mark = (o: Outcome | null) => (o ? OUTCOME_MARK[o] : '·')
   const count = (s: CompareStatus) => rows.filter((r) => r.status === s).length
   const tally = `${count('regressed')} regressed · ${count('fixed')} fixed · ${count('drift')} not comparable · ${count('same')} same`
+  const changes = stackChanges(base, head)
+  const changeText = changes.map((c) => `${c.label} ${c.base} → ${c.head}`).join('; ')
   if (md) {
     return [
       `### ES: ${head.runId} vs ${base.runId}`,
       '',
       `Base ${describeRun(base, reach)} → head ${describeRun(head, reach)}. ${tally}.`,
       '',
+      ...(changes.length ? [`**Stack changed:** ${changeText}.`, ''] : []),
       '| Eval | Base | Head | Change |',
       '|---|---|---|---|',
       ...sorted.map(
@@ -207,6 +255,7 @@ export function formatCompare(
   return [
     `base ${describeRun(base, reach)} → head ${describeRun(head, reach)}`,
     tally,
+    ...(changes.length ? [`stack changed: ${changeText}`] : []),
     '',
     ...sorted.map(
       (r) => `  ${mark(r.base)} → ${mark(r.head)}  ${STATUS_LABEL[r.status].padEnd(24)}  ${r.id}`,
@@ -222,9 +271,7 @@ export function formatShow(run: RunRecord): string {
     `  started ${run.startedAt}  (${formatMs(run.durationMs)}) · artifacts ${run.artifacts}`,
     '',
     ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
-    '',
-    '  not reproducible from this record alone:',
-    ...run.reproducibility.notes.map((n) => `    - ${n}`),
+    ...warnings(run).map((w) => `  ! ${w}`),
     '',
   ]
   for (const e of run.evals) {

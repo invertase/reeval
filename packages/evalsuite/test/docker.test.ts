@@ -59,6 +59,11 @@ evaluate('docker', async (t) => {
     assert.equal(run.environment.image?.ref, DEFAULT_IMAGE)
     assert.match(run.environment.image?.id ?? '', /^sha256:[0-9a-f]{64}$/)
     assert.match(run.environment.agentCli ?? '', /\d/)
+    const shown = await runCli(p.dir, ['show', 'latest'])
+    assert.match(
+      shown.stdout,
+      /! Image .+ isn't pushed, so an exact rerun needs this machine's image/,
+    )
     assert.ok(
       run.environment.context.some((c) => c.path === '~/.cursor/cli-config.json'),
       JSON.stringify(run.environment.context),

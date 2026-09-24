@@ -1,4 +1,5 @@
 import type { Outcome } from '../types.ts'
+import { warnings } from './state.ts'
 import type { EvalEntry, RunRecord } from './types.ts'
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
@@ -109,10 +110,7 @@ export function renderSummary(run: RunRecord): string {
     '|---|---|',
     ...stateRows(run).map(([k, v]) => `| ${k} | ${cell(v)} |`),
     '',
-    'Not reproducible from this record alone:',
-    '',
-    ...run.reproducibility.notes.map((n) => `- ${n}`),
-    '',
+    ...warnings(run).map((w) => `> **Warning:** ${w}\n`),
     `Record: [${run.runId}.json](../${run.runId}.json) · artifacts: ${run.artifacts}`,
     '',
     '## Evals',

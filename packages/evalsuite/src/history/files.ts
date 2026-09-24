@@ -13,7 +13,6 @@ import {
 import { dirname, join, relative } from 'node:path'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
-import { reproducibilityNotes } from './state.ts'
 import { renderSummary } from './summary.ts'
 import {
   type ArtifactLevel,
@@ -67,21 +66,31 @@ function entryOf(record: RunRecord, recorded: boolean): HistoryEntry {
     harness: record.config.harness,
     model: record.config.model,
     summary: record.summary,
+    stack: {
+      imageId: record.environment.image?.id ?? null,
+      agentCli: record.environment.agentCli,
+      agentModel: record.environment.harness.model,
+      judgeModel: record.environment.judge.model,
+      judgeServed: record.environment.judge.resolvedModels,
+      judgeVersion: record.environment.judge.version,
+      threshold: record.environment.judge.threshold,
+      fingerprintScope: record.environment.fingerprintScope,
+    },
     evals: record.evals.map((e) => ({ id: e.id, fingerprint: e.fingerprint, outcome: e.outcome })),
   }
 }
 
 type Cache = {
-  version: 1
+  version: 2
   files: Record<string, { size: number; mtimeMs: number; entry: HistoryEntry }>
 }
 
 async function readCache(root: string): Promise<Cache> {
   try {
     const parsed = JSON.parse(await readFile(cacheFile(root), 'utf8')) as Cache
-    if (parsed.version === 1 && parsed.files) return parsed
+    if (parsed.version === 2 && parsed.files) return parsed
   } catch {}
-  return { version: 1, files: {} }
+  return { version: 2, files: {} }
 }
 
 /**
@@ -256,7 +265,6 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
   }
-  record.reproducibility.notes = reproducibilityNotes(record)
   if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record)))
 
   if (!options.skipSecretScan) {
