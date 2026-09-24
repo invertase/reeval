@@ -116,7 +116,7 @@ export type EsResult = {
   runId: string
   startedAt: string
   durationMs: number
-  versions: { es: string; vitest: string }
+  versions: { es: string; vitest: string; agentCli: string | null; image: string }
   config: { harness: HarnessDescriptor; sandbox: SandboxDescriptor; judgeModel: string }
   summary: { passed: number; failed: number; infraError: number; skipped: number }
   evals: Array<

@@ -7,6 +7,7 @@ import { loadConfig, missingCredentials, UsageError } from './config.ts'
 import type { EngineEval } from './engine/node.ts'
 import { loadEnvFiles } from './env.ts'
 import { newRunId } from './ids.ts'
+import { preflight } from './preflight.ts'
 import type { EsResult } from './types.ts'
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130 } as const
@@ -18,6 +19,7 @@ const HELP = `es ${version} — eval runner for coding agents
 Usage:
   es run [filter...]      Run evals matching config.include; filters are path or name substrings
     --config <path>       Config file (default ./es.config.ts)
+  es image build          Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
   es --help
 
@@ -85,6 +87,12 @@ async function run(argv: string[]): Promise<number> {
     console.log(HELP)
     return values.help ? EXIT.ok : EXIT.usage
   }
+  if (command === 'image' && filters[0] === 'build') {
+    const { buildImage } = await import('./sandbox/build-image.ts')
+    const { image } = await buildImage((line) => console.log(dim(line)))
+    console.log(green(`Built ${image}`))
+    return EXIT.ok
+  }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
 
   loadEnvFiles(process.cwd())
@@ -93,6 +101,14 @@ async function run(argv: string[]): Promise<number> {
   if (missing.length) {
     throw new UsageError(
       `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
+    )
+  }
+  const sandboxVersions = await preflight(config)
+  if (config.harness.kind === 'cursor' && config.sandbox.kind === 'docker') {
+    console.error(
+      yellow(
+        'warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it',
+      ),
     )
   }
 
@@ -132,7 +148,7 @@ async function run(argv: string[]): Promise<number> {
 
   const { result, path } = await writeResult(ctx, engineRun, {
     startedAt,
-    versions: { es: version, vitest: vitestVersion },
+    versions: { es: version, vitest: vitestVersion, ...sandboxVersions },
   })
   if (interrupted) {
     for (const e of result.evals.filter((e) => e.error?.kind === 'aborted')) {

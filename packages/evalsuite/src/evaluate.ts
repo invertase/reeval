@@ -6,6 +6,7 @@ import { getRunContext, registerTest, type TestHandle, type TestMode } from './e
 import { createHarness } from './harness/index.ts'
 import { evalId, recordFileName, relativeFile } from './ids.ts'
 import { runJudge } from './judge/index.ts'
+import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
 import type {
   Agent,
@@ -122,7 +123,7 @@ async function runEval(
     const id = evalId(relativeFile(config.root, file), name)
     const recordPath = join(resultsDir, 'evals', recordFileName(id))
     await mkdir(join(resultsDir, 'evals'), { recursive: true })
-    await writeFile(recordPath, JSON.stringify(record, null, 2))
+    await writeFile(recordPath, redactSecrets(JSON.stringify(record, null, 2)))
     const last = record.judgements.at(-1)
     const meta: EvalMeta = {
       outcome: record.outcome,

@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from './engine/node.ts'
 import { recordFileName } from './ids.ts'
+import { redactSecrets } from './redact.ts'
 import type { EsResult, EvalRecord, RunContext } from './types.ts'
 
 const readRecord = async (path: string): Promise<EvalRecord | null> =>
@@ -63,6 +64,6 @@ export async function writeResult(
     evals,
   }
   const path = join(ctx.resultsDir, 'result.json')
-  await writeFile(path, `${JSON.stringify(result, null, 2)}\n`)
+  await writeFile(path, `${redactSecrets(JSON.stringify(result, null, 2))}\n`)
   return { result, path }
 }

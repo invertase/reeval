@@ -24,7 +24,13 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
+    "@ai-sdk/google": "4.0.79",
+    "@ai-sdk/harness": "1.0.123",
+    "@ai-sdk/harness-cursor": "1.0.36",
+    "ai": "7.0.113",
     "jiti": "2.7.0",
-    "vitest": "5.0.1"
+    "vitest": "5.0.1",
+    "ws": "8.21.0",
+    "zod": "4.6.5"
   }
 }
