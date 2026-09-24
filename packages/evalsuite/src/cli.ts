@@ -11,7 +11,14 @@ import { preflight } from './preflight.ts'
 import { gitInfo, runnerInfo } from './record/provenance.ts'
 import type { RunSummary } from './record/types.ts'
 
-const EXPECTED_ERRORS = ['SchemaError', 'ImmutableFileError']
+const HISTORY_COMMANDS = { index: 1, history: 1, show: 1, compare: 1 }
+
+const EXPECTED_ERRORS = [
+  'CommandError',
+  'RefError',
+  'SchemaError',
+  'ImmutableFileError',
+]
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130 } as const
 
@@ -21,10 +28,16 @@ const HELP = `es ${version} — eval runner for coding agents
 
 Usage:
   es run [filter...]        Run evals matching config.include; filters are path or name substrings
+  es history [filter]       Pass/fail per eval over recent runs    --limit <n> --json
+  es show [run]             One run: table, --md (summary.md) or --json (run.json)
+  es compare [base] [head]  Diff two runs; base defaults to head's baseline
+                            --md --json --fail-on-regression
+  es index [--rebuild]      Regenerate .es/index.json
   es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
   es --help
 
+Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
 Options: --config <path> (default ./es.config.ts)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
 `
@@ -83,6 +96,11 @@ async function run(argv: string[]): Promise<number> {
       config: { type: 'string', default: 'es.config.ts' },
       help: { type: 'boolean', short: 'h' },
       version: { type: 'boolean', short: 'v' },
+      json: { type: 'boolean' },
+      md: { type: 'boolean' },
+      limit: { type: 'string' },
+      rebuild: { type: 'boolean' },
+      'fail-on-regression': { type: 'boolean' },
     },
   })
   if (values.version) {
@@ -99,6 +117,21 @@ async function run(argv: string[]): Promise<number> {
     const { image } = await buildImage((line) => console.log(dim(line)))
     console.log(green(`Built ${image}`))
     return EXIT.ok
+  }
+  if (command in HISTORY_COMMANDS) {
+    const { config, results } = await loadConfig(values.config, command)
+    const commands = await import('./commands.ts')
+    const ctx = { root: config.root, results, flags: values, out: (s: string) => console.log(s) }
+    switch (command as keyof typeof HISTORY_COMMANDS) {
+      case 'index':
+        return commands.indexCommand(ctx)
+      case 'history':
+        return commands.historyCommand(ctx, filters)
+      case 'show':
+        return commands.showCommand(ctx, filters)
+      case 'compare':
+        return commands.compareCommand(ctx, filters)
+    }
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
 
