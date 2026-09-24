@@ -1,0 +1,34 @@
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+import type { FakeSandboxDescriptor } from '../types.ts'
+import { spawnCollect } from './exec.ts'
+import type { Sandbox } from './types.ts'
+
+/**
+ * A temp directory on the host. Commands run unisolated on the host shell, so this is
+ * only meant for tests and for the fake harness.
+ */
+export async function createFakeSandbox(descriptor: FakeSandboxDescriptor): Promise<Sandbox> {
+  const parent = descriptor.dir ?? tmpdir()
+  await mkdir(parent, { recursive: true })
+  const base = await mkdtemp(join(parent, 'es-sandbox-'))
+  const workdir = join(base, 'work')
+  await mkdir(workdir)
+  let destroyed: Promise<void> | undefined
+
+  return {
+    workdir,
+    exec: (command, opts) => spawnCollect('sh', ['-c', command], { cwd: workdir, ...opts }),
+    readFile: (path) => readFile(join(workdir, path), 'utf8').catch(() => null),
+    async writeFile(path, content) {
+      const target = join(workdir, path)
+      await mkdir(dirname(target), { recursive: true })
+      await writeFile(target, content)
+    },
+    destroy: () => {
+      destroyed ??= rm(base, { recursive: true, force: true }).catch(() => {})
+      return destroyed
+    },
+  }
+}

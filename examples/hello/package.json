@@ -1,0 +1,13 @@
+{
+  "name": "hello-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "es": "es",
+    "eval": "es run",
+    "eval:fake": "es run --config es.fake.config.ts"
+  },
+  "dependencies": {
+    "evalsuite": "workspace:*"
+  }
+}

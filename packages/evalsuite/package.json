@@ -1,0 +1,30 @@
+{
+  "name": "evalsuite",
+  "version": "0.1.0",
+  "description": "ES (Eval Suite): an eval runner for coding agents",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "es": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./setup": "./dist/setup.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "dependencies": {
+    "jiti": "2.7.0",
+    "vitest": "5.0.1"
+  }
+}

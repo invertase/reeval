@@ -1,0 +1,22 @@
+{
+  "name": "es-monorepo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.3",
+  "engines": {
+    "node": ">=22.6"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter ./packages/* build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm build && pnpm -r --filter ./packages/* test",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "example": "pnpm --filter hello-example es run"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "@types/node": "22.20.4",
+    "typescript": "7.0.2"
+  }
+}
