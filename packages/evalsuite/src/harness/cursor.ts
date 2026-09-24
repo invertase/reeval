@@ -3,36 +3,9 @@ import { createCursor } from '@ai-sdk/harness-cursor'
 import { isDockerSandbox } from '../sandbox/docker.ts'
 import { WORKSPACE_DIR } from '../sandbox/image.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { CursorHarnessDescriptor, TranscriptEvent } from '../types.ts'
+import type { CursorHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
+import { normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
-
-type Part = { type: string }
-
-export function toTranscript(
-  steps: ReadonlyArray<{ content: ReadonlyArray<Part> }>,
-): TranscriptEvent[] {
-  const events: TranscriptEvent[] = []
-  for (const part of steps.flatMap((s) => s.content)) {
-    const p = part as Record<string, unknown>
-    const toolCallId = String(p.toolCallId ?? '')
-    const toolName = String(p.toolName ?? '')
-    switch (part.type) {
-      case 'text':
-        if (typeof p.text === 'string' && p.text) events.push({ type: 'text', text: p.text })
-        break
-      case 'tool-call':
-        events.push({ type: 'tool-call', toolCallId, toolName, input: p.input })
-        break
-      case 'tool-result':
-        events.push({ type: 'tool-result', toolCallId, toolName, output: p.output })
-        break
-      case 'tool-error':
-        events.push({ type: 'error', message: `${toolName}: ${String(p.error)}` })
-        break
-    }
-  }
-  return events
-}
 
 export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harness {
   const agent = new HarnessAgent({
@@ -59,20 +32,29 @@ export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harnes
       }
       return {
         async send(prompt, turnSignal) {
+          const startedAt = Date.now()
+          const parts: StampedPart[] = []
+          const finish = (text: string, status: TurnStatus, extra: TranscriptEvent[] = []) => ({
+            text,
+            status,
+            startedAt: new Date(startedAt).toISOString(),
+            durationMs: Date.now() - startedAt,
+            transcript: [...normaliseStream(parts, startedAt), ...extra],
+            ...(process.env.ES_RAW_TRANSCRIPT ? { raw: parts } : {}),
+          })
           try {
-            const result = await agent.generate({ session, prompt, abortSignal: turnSignal })
-            return {
-              text: result.text,
-              status: 'completed',
-              transcript: toTranscript(result.steps),
+            // stream(), not generate(): only the stream says when each event happened.
+            const result = await agent.stream({ session, prompt, abortSignal: turnSignal })
+            for await (const part of result.fullStream) {
+              parts.push({ ms: Date.now() - startedAt, part: part as StampedPart['part'] })
             }
+            return finish(await result.text, 'completed')
           } catch (error) {
             const message = (error as Error).message
-            return {
-              text: '',
-              status: turnSignal.aborted ? 'aborted' : 'error',
-              transcript: [{ type: 'error', message }],
-            }
+            const at = Date.now() - startedAt
+            return finish('', turnSignal.aborted ? 'aborted' : 'error', [
+              { type: 'error', message, ts: new Date(startedAt + at).toISOString(), atMs: at },
+            ])
           }
         },
         close: () => session.destroy().catch(() => {}),

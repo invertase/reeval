@@ -1,6 +1,6 @@
-import type { ErrorKind, FileChange, Outcome, TurnStatus } from '../types.ts'
+import type { ErrorKind, FileChange, Outcome, PhaseTimings, TurnStatus } from '../types.ts'
 
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export type ArtifactLevel = 'all' | 'failures' | 'none'
 export type RecordMode = 'manual' | 'ci' | 'always'
@@ -48,7 +48,8 @@ export type JudgementRecord = {
 
 export type AttemptFiles = {
   transcript?: FileRef
-  final?: FileRef
+  /** Unnormalised harness stream parts, only with `ES_RAW_TRANSCRIPT=1`. */
+  rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
 }
@@ -62,10 +63,25 @@ export type AttemptRecord = {
   outcome: Outcome
   error: { kind: ErrorKind; message: string } | null
   durationMs: number
-  /** `text` is capped at 4 KB; `final.md` has it whole. */
-  turns: Array<{ prompt: string; status: TurnStatus; text: string }>
+  /** `text` is the agent's final message, whole unless it's over 64 KB. */
+  turns: Array<{
+    prompt: string
+    status: TurnStatus
+    startedAt: string
+    durationMs: number
+    text: string
+  }>
+  timings: PhaseTimings
+  /** Counts from the transcript, so a run's shape is visible without reading it. */
+  activity: {
+    tools: number
+    fileEdits: number
+    webSearches: number
+    webFetches: number
+    reasoningMs: number
+  }
   judgements: JudgementRecord[]
-  checks: Array<{ command: string; exitCode: number; log?: FileRef }>
+  checks: Array<{ command: string; exitCode: number; durationMs: number; log?: FileRef }>
   /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>
   files: AttemptFiles

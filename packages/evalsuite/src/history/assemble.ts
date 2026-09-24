@@ -22,7 +22,8 @@ import {
   SCHEMA_VERSION,
 } from './types.ts'
 
-const TURN_TEXT_LIMIT = 4096
+/** Final messages are kept whole in the record unless they're this big. */
+const TURN_TEXT_LIMIT = 64 * 1024
 /** A single tool output, check stream or file diff bigger than this keeps its head and tail. */
 export const OUTPUT_CAP = 128 * 1024
 const HEAD = 96 * 1024
@@ -99,12 +100,24 @@ class Artifacts {
   }
 }
 
+const endOf = (startedAt: string, durationMs: number) =>
+  new Date(Date.parse(startedAt) + durationMs).toISOString()
+
+/** One JSON object per line: each turn's prompt, its events, then a `turn-end`. */
 function transcriptLines(record: EvalRecord): string {
   const lines: string[] = []
   record.turns.forEach((turn, index) => {
-    lines.push(JSON.stringify({ turn: index, type: 'prompt', text: turn.prompt }))
+    lines.push(
+      JSON.stringify({
+        ts: turn.startedAt,
+        atMs: 0,
+        turn: index,
+        type: 'prompt',
+        text: turn.prompt,
+      }),
+    )
     for (const event of turn.transcript) {
-      if (event.type === 'tool-result') {
+      if (event.type === 'tool') {
         const raw =
           typeof event.output === 'string' ? event.output : JSON.stringify(event.output, null, 2)
         if (raw !== undefined && raw.length > OUTPUT_CAP) {
@@ -114,9 +127,43 @@ function transcriptLines(record: EvalRecord): string {
       }
       lines.push(JSON.stringify({ turn: index, ...event }))
     }
-    lines.push(JSON.stringify({ turn: index, type: 'turn-end', status: turn.status }))
+    lines.push(
+      JSON.stringify({
+        ts: endOf(turn.startedAt, turn.durationMs),
+        atMs: turn.durationMs,
+        turn: index,
+        type: 'turn-end',
+        status: turn.status,
+        durationMs: turn.durationMs,
+      }),
+    )
   })
   return `${lines.join('\n')}\n`
+}
+
+/** Every stream part the harness sent, for debugging the normaliser (`ES_RAW_TRANSCRIPT=1`). */
+function rawLines(record: EvalRecord): string | null {
+  if (!record.turns.some((t) => t.raw)) return null
+  const lines = record.turns.flatMap((turn, index) =>
+    (turn.raw ?? []).map((part) => JSON.stringify({ turn: index, ...(part as object) })),
+  )
+  return `${lines.join('\n')}\n`
+}
+
+function activity(record: EvalRecord): AttemptRecord['activity'] {
+  const events = record.turns.flatMap((t) => t.transcript)
+  const count = (type: string) => events.filter((e) => e.type === type).length
+  const reasoningMs = events.reduce(
+    (n, e) => n + (e.type === 'reasoning' ? (e.durationMs ?? 0) : 0),
+    0,
+  )
+  return {
+    tools: count('tool'),
+    fileEdits: count('file-edit'),
+    webSearches: count('web-search'),
+    webFetches: count('web-fetch'),
+    reasoningMs,
+  }
 }
 
 const block = (label: string, text: string) => {
@@ -138,15 +185,6 @@ function historyPatch(patch: string): string {
 function changedFiles(files: FileChange[]): AttemptRecord['changedFiles'] {
   const { kept, dirs } = collapseDependencies(files, (f) => f.path)
   return [...kept, ...dirs.map((d) => ({ path: d.dir, status: 'added' as const, count: d.count }))]
-}
-
-function finalText(record: EvalRecord): string {
-  return record.turns
-    .map(
-      (t, i) =>
-        `## Turn ${i + 1}\n\n> ${t.prompt.split('\n').join('\n> ')}\n\n${t.text || '_(no final message)_'}\n`,
-    )
-    .join('\n')
 }
 
 /** Judge inputs whose diff is the recorded diff point at `diff.patch` instead of repeating it. */
@@ -210,7 +248,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     }))
     if (record && record.turns.length > 0) {
       files.transcript = out.add(`${dir}/transcript.jsonl`, transcriptLines(record))
-      files.final = out.add(`${dir}/final.md`, finalText(record))
+      const raw = rawLines(record)
+      if (raw) files.rawTranscript = out.add(`${dir}/transcript.raw.jsonl`, raw)
     }
     const patch = record?.diff ? historyPatch(record.diff.patch) : null
     if (patch !== null) files.diff = out.add(`${dir}/diff.patch`, patch)
@@ -223,6 +262,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     const checks = (record?.checks ?? []).map((c, i) => ({
       command: c.command,
       exitCode: c.exitCode,
+      durationMs: c.durationMs,
       log: out.add(`${dir}/checks/${i + 1}.log`, checkLog(c)),
     }))
 
@@ -235,11 +275,17 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       turns: (record?.turns ?? []).map((t) => ({
         prompt: t.prompt,
         status: t.status,
+        startedAt: t.startedAt,
+        durationMs: t.durationMs,
         text:
           t.text.length > TURN_TEXT_LIMIT
-            ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [see final.md]`
+            ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
             : t.text,
       })),
+      timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
+      activity: record
+        ? activity(record)
+        : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
       judgements,
       checks,
       changedFiles: changedFiles(record?.diff?.files ?? []),

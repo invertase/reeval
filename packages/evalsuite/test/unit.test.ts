@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { evalRoot, missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
+import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
@@ -56,7 +58,8 @@ test('judge prompt keeps source diffs and drops dependency noise', () => {
   assert.match(shown, /title: "Soup"/)
   assert.doesNotMatch(shown, /module\.exports/)
   assert.doesNotMatch(shown, /"lock"/)
-  assert.match(shown, /omitted 2 dependency or binary files/)
+  assert.match(shown, /\[es: dropped node_modules\/ \(1 file\): installed dependencies\]/)
+  assert.match(shown, /\[es: dropped package-lock\.json: lockfile, 1 changed line\]/)
   assert.equal(
     patchForJudge('diff --git a/greet.js b/greet.js\n+hi\n'),
     'diff --git a/greet.js b/greet.js\n+hi\n',
@@ -115,7 +118,8 @@ test('an npm install in the sandbox collapses to one line for the judge', () => 
   ].join('')
   const shown = patchForJudge(patch)
   assert.ok(shown.length < 500, `judge diff is ${shown.length} characters`)
-  assert.match(shown, /- node_modules\/ \(10000 files\)/)
+  assert.match(shown, /\[es: dropped node_modules\/ \(10000 files\)/)
+  assert.equal(shown.match(/\[es: dropped/g)?.length, 1, 'one marker for the whole directory')
   assert.match(shown, /\+app/)
   const files = changedFilesForJudge([
     ...deps.map((path) => ({ path, status: 'added' })),
@@ -193,4 +197,69 @@ test('warnings only name states someone can act on', () => {
     git: { dirty: true, worktreePatch: null, worktreePatchNote: 'too large to keep (9 bytes)' },
   } as unknown as RunRecord
   assert.match(warnings(dirty)[0] ?? '', /weren't saved \(too large to keep/)
+})
+
+test('a real Cursor stream normalises to one event per action, timed', () => {
+  const parts: Array<{ ms: number; type: string }> = JSON.parse(
+    readFileSync(new URL('./fixtures/cursor-stream.json', import.meta.url), 'utf8'),
+  )
+  const events = normaliseStream(
+    parts.map(({ ms, ...part }) => ({ ms, part })),
+    Date.parse('2026-09-24T20:50:00.000Z'),
+  )
+  const shape = events.map((e) =>
+    e.type === 'file-edit' ? `${e.type}:${e.kind}:${e.path}` : e.type,
+  )
+  assert.deepEqual(shape, [
+    'reasoning',
+    'text',
+    'file-edit:create:notes.txt',
+    'reasoning',
+    'text',
+    'file-edit:modify:notes.txt',
+    'reasoning',
+    'text',
+    'file-edit:create:scratch.txt',
+    'web-fetch',
+    'web-search',
+    'reasoning',
+    'text',
+    'file-edit:delete:scratch.txt',
+    'reasoning',
+    'text',
+  ])
+  assert.ok(
+    !events.some((e) => 'tool' in e && e.tool === 'fileChange'),
+    'no duplicate fileChange events',
+  )
+  const modify = events.find((e) => e.type === 'file-edit' && e.kind === 'modify')
+  assert.deepEqual(modify && { added: modify.added, removed: modify.removed }, {
+    added: 1,
+    removed: 1,
+  })
+  const create = events.find((e) => e.type === 'file-edit' && e.path === 'notes.txt')
+  assert.deepEqual(create && { added: create.added, removed: create.removed }, {
+    added: 1,
+    removed: 0,
+  })
+  const fetch = events.find((e) => e.type === 'web-fetch')
+  assert.deepEqual(fetch && { url: fetch.url, ok: fetch.ok }, {
+    url: 'https://example.com',
+    ok: true,
+  })
+  const search = events.find((e) => e.type === 'web-search')
+  assert.deepEqual(search && { query: search.query, references: search.references }, {
+    query: 'Genkit flows documentation',
+    references: 1,
+  })
+  // Tool results are flushed at the end of a step; the ACP updates say when the fetch finished.
+  assert.ok(
+    fetch && fetch.durationMs !== null && fetch.durationMs < 3000,
+    `fetch took ${fetch?.durationMs}ms`,
+  )
+  assert.ok(search && search.durationMs !== null && search.durationMs > fetch.durationMs)
+  const reasoning = events.find((e) => e.type === 'reasoning')
+  assert.ok(
+    reasoning && reasoning.text.length > 0 && reasoning.ts.startsWith('2026-09-24T20:50:08'),
+  )
 })

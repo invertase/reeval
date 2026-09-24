@@ -78,7 +78,7 @@ describe('recording runs into evals/.history', () => {
     const [e] = recorded.evals
     assert.ok(e)
     assert.equal(recorded.run.artifacts, 'all')
-    for (const file of ['summary.md', `${e.slug}/1/transcript.jsonl`, `${e.slug}/1/final.md`]) {
+    for (const file of ['summary.md', `${e.slug}/1/transcript.jsonl`, `${e.slug}/1/diff.patch`]) {
       assert.ok(existsSync(join(recorded.dir, file)), file)
     }
     assert.match(
@@ -86,6 +86,7 @@ describe('recording runs into evals/.history', () => {
       /### ✓ evals\/agent\.es\.ts › agent/,
       'passes get detail',
     )
+    assert.match(recorded.read('summary.md'), /Last message:\n\n> Wrote it/)
     const [input] = JSON.parse(recorded.read(e.trial.files.judgeInput?.path ?? ''))
     assert.deepEqual(input.state.diff.$ref, 'diff.patch', 'the judge input points at diff.patch')
     assert.equal(sh(p.dir, 'status', '--porcelain'), '?? evals/.history/', 'plain files for git')
@@ -240,12 +241,12 @@ describe('recording runs into evals/.history', () => {
     const r = await runCli(p.dir, ['record'], { env: { DEPLOY_TOKEN: leaked } })
     assert.equal(r.code, 2)
     assert.match(r.stderr, /Refusing to record .*look like they contain a secret/s)
-    assert.match(r.stderr, /\/final\.md/)
+    assert.match(r.stderr, /\/transcript\.jsonl/)
     assert.doesNotMatch(r.stderr, new RegExp(leaked), 'names files, not the secret')
     assert.deepEqual(recordedRuns(p.dir), [])
 
     const { dir, evals } = readRun(p.dir)
-    await appendFile(join(dir, evals[0]?.trial.files.final?.path ?? ''), 'edited\n')
+    await appendFile(join(dir, evals[0]?.trial.files.transcript?.path ?? ''), 'edited\n')
     const tampered = await runCli(p.dir, ['record'])
     assert.equal(tampered.code, 2)
     assert.match(tampered.stderr, /changed since the run wrote it/)

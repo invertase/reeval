@@ -24,7 +24,7 @@ describe('engine', () => {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
     const { run } = readRun(p.dir)
-    assert.equal(run.schemaVersion, 1)
+    assert.equal(run.schemaVersion, 2)
     assert.equal(run.status, 'complete')
     assert.deepEqual(run.summary, { evals: 1, pass: 1, fail: 0, infraError: 0, skipped: 0 })
     assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')
@@ -198,10 +198,30 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
       .trim()
       .split('\n')
       .map((l) => JSON.parse(l))
-    assert.deepEqual(transcript[0], { turn: 0, type: 'prompt', text: 'write hello.txt' })
-    assert.ok(transcript.some((t) => t.type === 'tool-call'))
+    assert.deepEqual(
+      { ...transcript[0], ts: undefined },
+      { ts: undefined, atMs: 0, turn: 0, type: 'prompt', text: 'write hello.txt' },
+    )
+    for (const event of transcript)
+      assert.ok(!Number.isNaN(Date.parse(event.ts)), 'every line is timestamped')
+    assert.deepEqual(
+      transcript
+        .filter((t) => t.type === 'file-edit')
+        .map(({ path, kind, added, removed }) => ({ path, kind, added, removed })),
+      [
+        { path: 'hello.txt', kind: 'create', added: 1, removed: 0 },
+        { path: 'big.txt', kind: 'create', added: 1, removed: 0 },
+      ],
+    )
+    assert.equal(transcript.at(-1).type, 'turn-end')
+    assert.equal(transcript.at(-1).durationMs, e.trial.turns[0]?.durationMs)
     assert.match(e.read(e.trial.files.diff?.path ?? ''), /\+hi/)
-    assert.match(e.read(e.trial.files.final?.path ?? ''), /Wrote hello\.txt/)
+    assert.equal(e.trial.turns[0]?.text, 'Wrote hello.txt', 'the final message lives in the record')
+    assert.equal('final' in e.trial.files, false)
+    const t = e.trial.timings
+    assert.ok(t.setupMs >= 0 && t.agentMs >= 0 && t.checksMs >= 0 && t.judgeMs >= 0)
+    assert.equal(e.trial.activity.fileEdits, 2)
+    assert.equal(typeof e.trial.checks[0]?.durationMs, 'number')
     assert.deepEqual(e.trial.changedFiles.map((f) => f.path).sort(), ['big.txt', 'hello.txt'])
     assert.deepEqual(
       e.trial.checks.map(({ command, exitCode }) => ({ command, exitCode })),

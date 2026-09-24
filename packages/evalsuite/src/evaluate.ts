@@ -175,7 +175,16 @@ async function runEval(
     diff: null,
     checks: [],
     judgements: [],
+    timings: { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     judgeInputs: [],
+  }
+  const timed = async <T>(phase: keyof EvalRecord['timings'], fn: () => Promise<T>): Promise<T> => {
+    const start = performance.now()
+    try {
+      return await fn()
+    } finally {
+      record.timings[phase] += Math.round(performance.now() - start)
+    }
   }
   const turns: Turn[] = []
   let sandbox: Sandbox | undefined
@@ -189,8 +198,9 @@ async function runEval(
     return sandbox
   }
   const exec = async (command: string) => {
-    const r = await requireSandbox().exec(command, { signal })
-    record.checks.push({ command, ...r })
+    const start = performance.now()
+    const r = await timed('checksMs', () => requireSandbox().exec(command, { signal }))
+    record.checks.push({ command, ...r, durationMs: Math.round(performance.now() - start) })
     return r
   }
   const readFile = (path: string) => requireSandbox().readFile(path)
@@ -214,13 +224,21 @@ async function runEval(
     exec,
     readFile,
     async send(prompt) {
-      const [box, agent] = sandbox && session ? [sandbox, session] : await startSession()
-      const entry = { prompt, text: '', status: 'error' as const, transcript: [] }
+      const [box, agent] =
+        sandbox && session ? [sandbox, session] : await timed('setupMs', startSession)
+      const entry = {
+        prompt,
+        text: '',
+        status: 'error' as const,
+        transcript: [],
+        startedAt: new Date().toISOString(),
+        durationMs: 0,
+      }
       record.turns.push(entry)
-      const result = await agent.send(prompt, signal)
-      Object.assign(entry, result)
+      const { raw, ...result } = await timed('agentMs', () => agent.send(prompt, signal))
+      Object.assign(entry, result, raw ? { raw } : {})
       signal.throwIfAborted()
-      const diff: Diff = await diffSinceSnapshot(box, signal)
+      const diff: Diff = await timed('diffMs', () => diffSinceSnapshot(box, signal))
       record.diff = diff
       const turn: Turn = Object.freeze({ prompt, ...result, diff, exec, readFile })
       turns.push(turn)
@@ -233,7 +251,7 @@ async function runEval(
       const options = { ...config.judge, ...spec.judge, ...call }
       record.judgeInputs?.push({ question, model: judgeModelName(options.model), state })
       try {
-        const verdict = await runJudge(question, state, options, signal)
+        const verdict = await timed('judgeMs', () => runJudge(question, state, options, signal))
         record.judgements.push(verdict)
         return verdict
       } catch (error) {

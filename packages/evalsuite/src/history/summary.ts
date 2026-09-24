@@ -9,6 +9,9 @@ export const OUTCOME_MARK: Record<Outcome, string> = {
   skipped: '↓',
 }
 
+/** Enough to read the agent's conclusion; the record and transcript have it whole. */
+const LAST_MESSAGE_LIMIT = 4000
+
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
 
 export const formatMs = (ms: number) => {
@@ -140,8 +143,19 @@ export function renderSummary(run: RunRecord): string {
         '',
       )
     }
-    for (const turn of a.turns)
-      lines.push(`- Prompt (${turn.status}): ${cell(turn.prompt).slice(0, 200)}`)
+    for (const turn of a.turns) {
+      lines.push(
+        `- Prompt (${turn.status}, ${formatMs(turn.durationMs)}): ${cell(turn.prompt).slice(0, 200)}`,
+      )
+    }
+    const t = a.timings
+    lines.push(
+      `- Time: setup ${formatMs(t.setupMs)} · agent ${formatMs(t.agentMs)} · checks ${formatMs(t.checksMs)} · judge ${formatMs(t.judgeMs)}`,
+    )
+    const act = a.activity
+    lines.push(
+      `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatMs(act.reasoningMs)} reasoning`,
+    )
     for (const j of a.judgements) {
       lines.push(
         `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}): ${j.question}${j.reason ? ` — ${j.reason}` : ''}`,
@@ -157,8 +171,22 @@ export function renderSummary(run: RunRecord): string {
         `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,
       )
     }
+    const last = a.turns.at(-1)?.text
+    if (last) {
+      const shown =
+        last.length > LAST_MESSAGE_LIMIT ? `${last.slice(0, LAST_MESSAGE_LIMIT)}…` : last
+      lines.push(
+        '',
+        'Last message:',
+        '',
+        ...shown
+          .trimEnd()
+          .split('\n')
+          .map((l) => `> ${l}`),
+        '',
+      )
+    }
     const links = [
-      a.files.final && `[final messages](${a.files.final.path})`,
       a.files.transcript && `[transcript](${a.files.transcript.path})`,
       a.files.diff && `[diff](${a.files.diff.path})`,
       a.files.judgeInput && `[judge input](${a.files.judgeInput.path})`,

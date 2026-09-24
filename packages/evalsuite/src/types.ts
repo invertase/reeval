@@ -2,11 +2,47 @@ import type { ArtifactLevel, RecordMode } from './history/types.ts'
 
 export type Duration = number | `${number}${'ms' | 's' | 'm' | 'h'}`
 
-export type TranscriptEvent =
-  | { type: 'text'; text: string }
-  | { type: 'tool-call'; toolCallId: string; toolName: string; input: unknown }
-  | { type: 'tool-result'; toolCallId: string; toolName: string; output: unknown }
-  | { type: 'error'; message: string }
+/** When an event started: wall clock, and ms since its turn started. */
+export type EventTime = { ts: string; atMs: number }
+
+export type FileEditEvent = {
+  type: 'file-edit'
+  toolCallId: string
+  path: string
+  kind: 'create' | 'modify' | 'delete'
+  /** Line counts, or null when the harness didn't send the content (e.g. deletes). */
+  added: number | null
+  removed: number | null
+}
+
+/**
+ * Normalised agent events. Each tool call is one event, merged with its result; `durationMs`
+ * is null when the harness never reported the end.
+ */
+export type TranscriptEvent = EventTime &
+  (
+    | { type: 'text' | 'reasoning'; text: string; durationMs: number | null }
+    | (FileEditEvent & { durationMs: number | null })
+    | {
+        type: 'web-search'
+        toolCallId: string
+        query: string
+        /** How many sources the harness says it used; Cursor sends no URLs or titles. */
+        references: number | null
+        durationMs: number | null
+      }
+    | { type: 'web-fetch'; toolCallId: string; url: string; ok: boolean; durationMs: number | null }
+    | {
+        type: 'tool'
+        toolCallId: string
+        tool: string
+        input: unknown
+        output: unknown
+        ok: boolean
+        durationMs: number | null
+      }
+    | { type: 'error'; message: string }
+  )
 
 export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 
@@ -21,6 +57,8 @@ export type Turn = {
   /** The agent's final message for this turn. */
   text: string
   status: TurnStatus
+  startedAt: string
+  durationMs: number
   transcript: TranscriptEvent[]
   /** Workspace changes since the eval started, as of the end of this turn. */
   diff: Diff
@@ -146,7 +184,19 @@ export type ResolvedConfig = {
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
 export type ErrorKind = 'assertion' | 'timeout' | 'aborted' | 'infra' | 'judge'
 
-export type TurnRecord = Pick<Turn, 'prompt' | 'text' | 'status' | 'transcript'>
+export type TurnRecord = Pick<
+  Turn,
+  'prompt' | 'text' | 'status' | 'transcript' | 'startedAt' | 'durationMs'
+> & { raw?: unknown[] }
+
+/** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */
+export type PhaseTimings = {
+  setupMs: number
+  agentMs: number
+  diffMs: number
+  checksMs: number
+  judgeMs: number
+}
 
 /** Full per-eval payload, written to disk by the worker. */
 export type EvalRecord = {
@@ -155,11 +205,12 @@ export type EvalRecord = {
   turns: TurnRecord[]
   /** Workspace changes over the whole eval. */
   diff: Diff | null
-  checks: Array<{ command: string } & ExecResult>
+  checks: Array<{ command: string; durationMs: number } & ExecResult>
   judgements: Verdict[]
-  /** What each judge call saw, in call order, including calls that errored. */
+  timings: PhaseTimings
   /** Skills, rules and MCP config visible to the agent, by content hash. */
   context?: Array<{ path: string; sha256: string }>
+  /** What each judge call saw, in call order, including calls that errored. */
   judgeInputs?: Array<{ question: string; model: string; state: { [key: string]: JSONValue } }>
 }
 
