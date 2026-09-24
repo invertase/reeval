@@ -1,0 +1,11 @@
+{
+  "outcome": "fail",
+  "error": {
+    "kind": "assertion",
+    "message": "expected 1 to be 2 // Object.is equality"
+  },
+  "agent": null,
+  "diff": null,
+  "checks": [],
+  "judgements": []
+}

@@ -1,0 +1,16 @@
+{
+  "outcome": "infra_error",
+  "error": {
+    "kind": "infra",
+    "message": "agent CLI failed to start"
+  },
+  "agent": {
+    "prompt": "write hello.txt",
+    "text": "",
+    "status": "error",
+    "transcript": []
+  },
+  "diff": null,
+  "checks": [],
+  "judgements": []
+}

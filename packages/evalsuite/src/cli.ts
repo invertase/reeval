@@ -109,7 +109,10 @@ async function run(argv: string[]): Promise<number> {
   const engineRun = await runEngine({
     run: ctx,
     filters,
-    onEvalResult: printEval,
+    // Evals cut short by Ctrl-C are printed once their records are merged, below.
+    onEvalResult: (e) => {
+      if (!interrupted || e.state !== 'skipped') printEval(e)
+    },
     onCancellable: (cancel) => {
       process.on('SIGINT', () => {
         if (interrupted) process.exit(EXIT.interrupted)
@@ -131,6 +134,11 @@ async function run(argv: string[]): Promise<number> {
     startedAt,
     versions: { es: version, vitest: vitestVersion },
   })
+  if (interrupted) {
+    for (const e of result.evals.filter((e) => e.error?.kind === 'aborted')) {
+      console.log(` ${red('✗')} ${e.id}   ${dim('cancelled')}`)
+    }
+  }
   for (const error of engineRun.unhandledErrors) console.error(red(`error: ${error}`))
   console.log(summaryLine(result.summary, relative(process.cwd(), path)))
 

@@ -1,0 +1,35 @@
+{
+  "outcome": "fail",
+  "error": {
+    "kind": "assertion",
+    "message": "expected command to succeed, exit code 3\n--- stderr ---\nboom\n--- stdout ---\n"
+  },
+  "agent": {
+    "prompt": "write hello.txt",
+    "text": "Done.",
+    "status": "completed",
+    "transcript": [
+      {
+        "type": "text",
+        "text": "Working on: write hello.txt"
+      },
+      {
+        "type": "text",
+        "text": "Done."
+      }
+    ]
+  },
+  "diff": {
+    "patch": "",
+    "files": []
+  },
+  "checks": [
+    {
+      "command": "echo boom >&2; exit 3",
+      "exitCode": 3,
+      "stdout": "",
+      "stderr": "boom\n"
+    }
+  ],
+  "judgements": []
+}

@@ -1,0 +1,36 @@
+{
+  "outcome": "fail",
+  "error": {
+    "kind": "judge",
+    "message": "judge was inconclusive: No evidence cited. looks fine"
+  },
+  "agent": {
+    "prompt": "write hello.txt",
+    "text": "Done.",
+    "status": "completed",
+    "transcript": [
+      {
+        "type": "text",
+        "text": "Working on: write hello.txt"
+      },
+      {
+        "type": "text",
+        "text": "Done."
+      }
+    ]
+  },
+  "diff": {
+    "patch": "",
+    "files": []
+  },
+  "checks": [],
+  "judgements": [
+    {
+      "question": "ok?",
+      "model": "fake",
+      "verdict": "inconclusive",
+      "reason": "No evidence cited. looks fine",
+      "evidence": []
+    }
+  ]
+}

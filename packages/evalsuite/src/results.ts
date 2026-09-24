@@ -15,6 +15,9 @@ function mergeEval(e: EngineEval, record: EvalRecord | null): EsResult['evals'][
     checks: record?.checks ?? [],
     judgements: record?.judgements ?? [],
   }
+  if (e.state === 'skipped' && record && record.outcome !== 'pass') {
+    return { ...base, ...data, outcome: record.outcome, error: record.error }
+  }
   if (e.state === 'skipped') return { ...base, ...data, outcome: 'skipped', error: null }
   if (e.state === 'passed') return { ...base, ...data, outcome: 'pass', error: null }
   // The engine may have failed the eval (e.g. on timeout) before the worker finished its record.

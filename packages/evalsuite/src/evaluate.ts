@@ -131,6 +131,6 @@ async function runEval(
       recordPath,
     }
     setMeta(meta)
-    await attachRecord(recordPath)
+    await attachRecord(recordPath).catch(() => {})
   }
 }

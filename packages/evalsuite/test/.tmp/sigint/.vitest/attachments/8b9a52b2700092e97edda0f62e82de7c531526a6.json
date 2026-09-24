@@ -1,0 +1,21 @@
+{
+  "outcome": "fail",
+  "error": {
+    "kind": "aborted",
+    "message": "The run was cancelled"
+  },
+  "agent": {
+    "prompt": "write hello.txt",
+    "text": "",
+    "status": "aborted",
+    "transcript": [
+      {
+        "type": "text",
+        "text": "Working on: write hello.txt"
+      }
+    ]
+  },
+  "diff": null,
+  "checks": [],
+  "judgements": []
+}

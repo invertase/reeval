@@ -1,6 +1,6 @@
 // Worker-side half of the engine adapter. Together with ./node.ts, this is the only
 // code allowed to import `vitest`.
-import { expect, inject, recordArtifact, test } from 'vitest'
+import { afterAll, expect, inject, recordArtifact, test } from 'vitest'
 import type { EvalMeta, RunContext } from '../types.ts'
 
 declare module 'vitest' {
@@ -38,7 +38,7 @@ export function registerTest(
 ): void {
   const register = options.mode === 'run' ? test : test[options.mode]
   register(name, { timeout: options.timeout, retry: 0 }, async (ctx) => {
-    await body({
+    const running = body({
       file: ctx.task.file.filepath,
       signal: ctx.signal,
       setMeta: (meta) => {
@@ -51,6 +51,23 @@ export function registerTest(
         })
       },
     })
+    inFlight.add(running)
+    running.then(
+      () => inFlight.delete(running),
+      () => inFlight.delete(running),
+    )
+    await running
+  })
+}
+
+// On timeout or cancel, Vitest settles the test without waiting for its body, and may stop
+// the worker right after the file ends. Holding the file open lets every body finish its
+// cleanup (sandbox destroy, record write).
+const inFlight = new Set<Promise<void>>()
+
+export function holdFileUntilEvalsSettle(): void {
+  afterAll(async () => {
+    await Promise.allSettled(inFlight)
   })
 }
 

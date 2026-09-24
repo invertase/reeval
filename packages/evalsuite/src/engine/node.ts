@@ -108,7 +108,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     onTestCaseResult(test) {
       const e = toEngineEval(config.root, test)
       evals.set(e.id, e)
-      options.onEvalResult?.(e)
+      if (!namePattern || namePattern.test(e.name)) options.onEvalResult?.(e)
     },
     onTestRunEnd(modules, errors, reason) {
       for (const module of modules) {
@@ -129,6 +129,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const stdout = new Capture()
   const stderr = new Capture()
   let vitest: Vitest | undefined
+  let namePattern: RegExp | undefined
+  const sigintListeners = new Set(process.listeners('SIGINT'))
   try {
     vitest = await createVitest(
       {
@@ -150,12 +152,17 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       { customLogger: silentLogger, logLevel: 'silent', cacheDir: 'node_modules/.cache/es' },
       { stdout, stderr },
     )
+    // Vitest's logger exits the process on SIGINT; the CLI owns Ctrl-C instead.
+    for (const listener of process.listeners('SIGINT')) {
+      if (!sigintListeners.has(listener)) process.off('SIGINT', listener)
+    }
     vitest.provide('es:run', options.run)
 
     let specs = await vitest.globTestSpecifications(options.filters)
     if (specs.length === 0 && options.filters.length > 0) {
       const escaped = options.filters.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      vitest.setGlobalTestNamePattern(new RegExp(escaped.join('|')))
+      namePattern = new RegExp(escaped.join('|'))
+      vitest.setGlobalTestNamePattern(namePattern)
       specs = await vitest.globTestSpecifications()
     }
     if (specs.length === 0)
@@ -173,5 +180,6 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   } finally {
     await vitest?.close()
   }
-  return { evals: [...evals.values()], unhandledErrors, cancelled, noFiles: false }
+  const matching = [...evals.values()].filter((e) => !namePattern || namePattern.test(e.name))
+  return { evals: matching, unhandledErrors, cancelled, noFiles: false }
 }
