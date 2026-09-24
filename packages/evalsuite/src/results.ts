@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from './engine/node.ts'
 import { recordFileName } from './ids.ts'
+import { judgeModelName } from './judge/index.ts'
 import { redactSecrets } from './redact.ts'
 import type { EsResult, EvalRecord, RunContext } from './types.ts'
 
@@ -11,7 +12,7 @@ const readRecord = async (path: string): Promise<EvalRecord | null> =>
 function mergeEval(e: EngineEval, record: EvalRecord | null): EsResult['evals'][number] {
   const base = { id: e.id, file: e.file, group: e.group, name: e.name, durationMs: e.durationMs }
   const data = {
-    agent: record?.agent ?? null,
+    turns: record?.turns ?? [],
     diff: record?.diff ?? null,
     checks: record?.checks ?? [],
     judgements: record?.judgements ?? [],
@@ -45,7 +46,7 @@ export async function writeResult(
   )
   const count = (o: string) => evals.filter((e) => e.outcome === o).length
   const result: EsResult = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     runId: ctx.runId,
     startedAt: meta.startedAt.toISOString(),
     durationMs: Date.now() - meta.startedAt.getTime(),
@@ -53,7 +54,7 @@ export async function writeResult(
     config: {
       harness: ctx.config.harness,
       sandbox: ctx.config.sandbox,
-      judgeModel: ctx.config.judge.fake ? 'fake' : ctx.config.judge.model,
+      judgeModel: judgeModelName(ctx.config.judge.model),
     },
     summary: {
       passed: count('pass'),

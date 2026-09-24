@@ -21,7 +21,7 @@ describe('engine', () => {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
     const result = readResult(p.dir)
-    assert.equal(result.schemaVersion, 1)
+    assert.equal(result.schemaVersion, 2)
     assert.deepEqual(result.summary, { passed: 1, failed: 0, infraError: 0, skipped: 0 })
     assert.equal(result.evals[0]?.id, 'evals/math.es.ts › math')
   })
@@ -149,65 +149,136 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
 describe('evaluate wrapper with the fake harness', () => {
   const agentEval = (body: string, options = '') => `
 import { evaluate, expect } from 'evalsuite'
-evaluate('agent eval', ${options ? `${options}, ` : ''}async ({ agent, judge, signal }) => {
-  const run = await agent.run('write hello.txt')
+import { fakeJudge } from 'evalsuite/judge'
+evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
+  const turn = await t.send('write hello.txt')
   ${body}
 })
 `
 
-  test('transcript, diff, checks and verdict land in result.json', async () => {
+  test('turns, diff, checks and verdicts land in result.json', async () => {
     const big = 'x'.repeat(200_000)
     const p = await project('data-out', {
       'es.config.ts': fakeConfig({
         harness: `{ files: { 'hello.txt': 'hi\\n', 'big.txt': '${big}' }, text: 'Wrote hello.txt' }`,
-        judge: `{ fake: { verdict: 'pass', reason: 'hello.txt is in the diff', evidence: ['A hello.txt'] } }`,
       }),
       'evals/agent.es.ts': agentEval(`
-  await expect(run).toHaveFile('hello.txt', /hi/)
-  await expect(run.exec('cat hello.txt')).toSucceed()
-  expect(run.diff.files).toEqual(expect.arrayContaining([{ path: 'hello.txt', status: 'added' }]))
-  expect(run.text).toMatch(/hello/)
-  expect(await judge(run, 'Did it write hello.txt?')).toPass()
+  await expect(turn).toHaveFile('hello.txt', /hi/)
+  await expect(t).toHaveFile('big.txt')
+  await expect(t.exec('cat hello.txt')).toSucceed()
+  expect(turn.diff.files).toEqual(expect.arrayContaining([{ path: 'hello.txt', status: 'added' }]))
+  expect(turn.text).toMatch(/hello/)
+  expect(await t.judge('Did it write hello.txt?')).toPass()
 `),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /judge {2}pass: "hello\.txt is in the diff"/)
+    assert.match(r.stdout, /judge {2}pass 0\.90 \(≥ 0\.8\) {2}Did it write hello\.txt\?/)
 
     const [e] = readResult(p.dir).evals
     assert.equal(e?.outcome, 'pass')
-    assert.equal(e?.agent?.text, 'Wrote hello.txt')
-    assert.equal(e?.agent?.status, 'completed')
-    assert.ok(e?.agent?.transcript.some((t) => t.type === 'tool-call'))
+    assert.equal(e?.turns.length, 1)
+    assert.equal(e?.turns[0]?.text, 'Wrote hello.txt')
+    assert.equal(e?.turns[0]?.status, 'completed')
+    assert.ok(e?.turns[0]?.transcript.some((t) => t.type === 'tool-call'))
     assert.match(e?.diff?.patch ?? '', /\+hi/)
     assert.deepEqual(e?.diff?.files.map((f) => f.path).sort(), ['big.txt', 'hello.txt'])
     assert.deepEqual(e?.checks, [
       { command: 'cat hello.txt', exitCode: 0, stdout: 'hi\n', stderr: '' },
     ])
-    assert.equal(e?.judgements[0]?.verdict, 'pass')
-    assert.deepEqual(e?.judgements[0]?.evidence, ['A hello.txt'])
+    assert.deepEqual(e?.judgements, [
+      {
+        verdict: 'pass',
+        score: 0.9,
+        threshold: 0.8,
+        question: 'Did it write hello.txt?',
+        model: 'fake',
+      },
+    ])
     assert.deepEqual(liveSandboxes(p), [], 'sandbox destroyed')
   })
 
-  test('a judge verdict without evidence is inconclusive and fails', async () => {
-    const p = await project('inconclusive', {
-      'es.config.ts': fakeConfig({
-        judge: `{ fake: { verdict: 'pass', reason: 'looks fine', evidence: [] } }`,
-      }),
-      'evals/agent.es.ts': agentEval(`expect(await judge(run, 'ok?')).toPass()`),
+  test('a second t.send continues the same sandbox and session', async () => {
+    const p = await project('multi-turn', {
+      'es.config.ts': fakeConfig({ harness: `{ files: { 'n.txt': 'x' }, text: 'ok' }` }),
+      'evals/agent.es.ts': agentEval(`
+  await t.exec('echo 1 > counter')
+  const second = await t.send('again')
+  expect(second.prompt).toBe('again')
+  expect(t.turns).toEqual([turn, second])
+  expect(await t.readFile('counter')).toBe('1\\n')
+  expect(second.diff.files.map((f) => f.path).sort()).toEqual(['counter', 'n.txt'])
+`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [e] = readResult(p.dir).evals
+    assert.deepEqual(
+      e?.turns.map((x) => x.prompt),
+      ['write hello.txt', 'again'],
+    )
+    assert.deepEqual(liveSandboxes(p), [])
+  })
+
+  test('judge options cascade from config to group, eval and call', async () => {
+    const p = await project('judge-cascade', {
+      'es.config.ts': fakeConfig(),
+      'evals/j.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+import { fakeJudge } from 'evalsuite/judge'
+group('strict', { judge: { threshold: 0.95 } }, () => {
+  evaluate('group threshold', async (t) => {
+    await t.send('x')
+    expect(await t.judge('from group')).toMatchObject({ verdict: 'fail', score: 0.9, threshold: 0.95 })
+  })
+  evaluate('eval model', { judge: { model: fakeJudge({ score: 0.5 }) } }, async (t) => {
+    await t.send('x')
+    expect(await t.judge('from eval')).toMatchObject({ verdict: 'fail', score: 0.5, threshold: 0.95 })
+    expect(await t.judge('from call', { threshold: 0.4 })).toMatchObject({ verdict: 'pass', score: 0.5 })
+  })
+})
+evaluate('on a value', async (t) => {
+  const first = await t.send('first')
+  await t.send('second')
+  expect(await t.judge('custom', { on: 'some output' })).toMatchObject({ verdict: 'pass' })
+  expect(await t.judge('earlier turn', { on: first })).toMatchObject({ verdict: 'pass' })
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(readResult(p.dir).evals[1]?.judgements.length, 2)
+  })
+
+  test('a failing judge fails the eval as a judge error', async () => {
+    const p = await project('judge-fail', {
+      'es.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
+      'evals/agent.es.ts': agentEval(`expect(await t.judge('ok?')).toPass()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /judge was inconclusive/)
+    assert.match(r.stdout, /judge {2}fail 0\.30/)
+    assert.match(r.stdout, /judge score 0\.30 is below 0\.8 for "ok\?"/)
     const [e] = readResult(p.dir).evals
-    assert.equal(e?.judgements[0]?.verdict, 'inconclusive')
+    assert.equal(e?.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
+  })
+
+  test('t.judge before any turn is an assertion error', async () => {
+    const p = await project('judge-early', {
+      'es.config.ts': fakeConfig(),
+      'evals/j.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('early', async (t) => { await t.judge('?') })
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1)
+    assert.match(r.stdout, /t\.judge\(\) has no turn to grade/)
   })
 
   test('a failing check shows the tail of stderr', async () => {
     const p = await project('check-fail', {
       'es.config.ts': fakeConfig(),
-      'evals/agent.es.ts': agentEval(`await expect(run.exec('echo boom >&2; exit 3')).toSucceed()`),
+      'evals/agent.es.ts': agentEval(`await expect(t.exec('echo boom >&2; exit 3')).toSucceed()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)

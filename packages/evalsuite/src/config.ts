@@ -2,6 +2,12 @@ import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createJiti } from 'jiti'
 import { cursor } from './harness.ts'
+import {
+  checkModelString,
+  DEFAULT_JUDGE_MODEL,
+  DEFAULT_THRESHOLD,
+  judgeCredentials,
+} from './judge/index.ts'
 import { docker } from './sandbox.ts'
 import type { Duration, EsConfig, ResolvedConfig } from './types.ts'
 
@@ -19,8 +25,6 @@ export function parseDuration(value: Duration): number {
   if (!match) throw new UsageError(`Invalid duration "${value}". Use e.g. "90s" or "15m".`)
   return Number(match[1]) * UNITS[match[2] as keyof typeof UNITS]
 }
-
-export const DEFAULT_JUDGE_MODEL = 'gemini-3.8-flash'
 
 export async function loadConfig(configPath: string): Promise<ResolvedConfig> {
   const path = resolve(configPath)
@@ -56,18 +60,34 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     include,
     harness,
     sandbox,
-    judge: { model: user.judge?.model ?? DEFAULT_JUDGE_MODEL, fake: user.judge?.fake },
+    judge: resolveJudge(user.judge),
     timeoutMs: parseDuration(user.timeout ?? '15m'),
   }
 }
 
+function resolveJudge(judge: EsConfig['judge'] = {}): ResolvedConfig['judge'] {
+  const model = judge.model ?? DEFAULT_JUDGE_MODEL
+  if (typeof model === 'string') {
+    const problem = checkModelString(model)
+    if (problem) throw new UsageError(`config.judge: ${problem}`)
+  } else if (typeof model !== 'object' || model?.kind !== 'fake-judge') {
+    throw new UsageError(
+      'config.judge.model must be a "provider/model" string or fakeJudge(). ' +
+        'Pass model objects per group, eval or call instead.',
+    )
+  }
+  const threshold = judge.threshold ?? DEFAULT_THRESHOLD
+  if (!(threshold >= 0 && threshold <= 1)) {
+    throw new UsageError('config.judge.threshold must be between 0 and 1')
+  }
+  return { ...judge, model, threshold }
+}
+
 /** Names the environment variables the configured providers need but don't have. */
 export function missingCredentials(config: ResolvedConfig, env = process.env): string[] {
-  if (config.harness.kind === 'fake') return []
   const missing: string[] = []
-  if (!env.CURSOR_API_KEY) missing.push('CURSOR_API_KEY')
-  if (!config.judge.fake && !env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    missing.push('GOOGLE_GENERATIVE_AI_API_KEY')
-  }
+  if (config.harness.kind === 'cursor' && !env.CURSOR_API_KEY) missing.push('CURSOR_API_KEY')
+  const judgeKeys = judgeCredentials(config.judge.model)
+  if (judgeKeys.length && !judgeKeys.some((k) => env[k])) missing.push(judgeKeys.join(' or '))
   return missing
 }

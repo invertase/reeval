@@ -43,7 +43,7 @@ export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harnes
   })
 
   return {
-    async run(sandbox, prompt, signal) {
+    async start(sandbox, signal) {
       if (!isDockerSandbox(sandbox)) {
         throw new InfraError('The Cursor harness needs the Docker sandbox')
       }
@@ -57,18 +57,25 @@ export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harnes
         if (signal.aborted) throw error
         throw new InfraError(`Cursor harness failed to start: ${(error as Error).message}`)
       }
-      try {
-        const result = await agent.generate({ session, prompt, abortSignal: signal })
-        return { text: result.text, status: 'completed', transcript: toTranscript(result.steps) }
-      } catch (error) {
-        const message = (error as Error).message
-        return {
-          text: '',
-          status: signal.aborted ? 'aborted' : 'error',
-          transcript: [{ type: 'error', message }],
-        }
-      } finally {
-        await session.destroy().catch(() => {})
+      return {
+        async send(prompt, turnSignal) {
+          try {
+            const result = await agent.generate({ session, prompt, abortSignal: turnSignal })
+            return {
+              text: result.text,
+              status: 'completed',
+              transcript: toTranscript(result.steps),
+            }
+          } catch (error) {
+            const message = (error as Error).message
+            return {
+              text: '',
+              status: turnSignal.aborted ? 'aborted' : 'error',
+              transcript: [{ type: 'error', message }],
+            }
+          }
+        },
+        close: () => session.destroy().catch(() => {}),
       }
     },
   }

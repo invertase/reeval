@@ -10,30 +10,39 @@ import {
   type TestMode,
 } from './engine/runtime.ts'
 import { createHarness } from './harness/index.ts'
+import type { HarnessSession } from './harness/types.ts'
 import { evalId, recordFileName, relativeFile } from './ids.ts'
-import { runJudge } from './judge/index.ts'
+import { type JudgeState, runJudge } from './judge/index.ts'
 import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
 import type {
-  Agent,
+  Diff,
   Duration,
   ErrorKind,
+  EvalContext,
   EvalFn,
   EvalMeta,
   EvalRecord,
-  Judge,
-  Run,
+  JSONValue,
+  JudgeOptions,
+  Turn,
 } from './types.ts'
 
-export type EvalOptions = { timeout?: Duration }
+export type EvalOptions = { timeout?: Duration; judge?: JudgeOptions }
 export type GroupOptions = EvalOptions
 
 // The groups enclosing the code being collected. Vitest may run a nested group's callback
 // after its parent's callback has returned, so each group captures its parents when declared.
 let groupStack: { name: string; options: GroupOptions }[] = []
 
-const cascade = (own: EvalOptions): EvalOptions =>
-  Object.assign({}, ...groupStack.map((g) => g.options), own)
+/** Innermost wins; `judge` merges field by field so a threshold override keeps the model. */
+function cascade(own: EvalOptions): EvalOptions {
+  const levels = [...groupStack.map((g) => g.options), own]
+  return {
+    timeout: levels.findLast((l) => l.timeout !== undefined)?.timeout,
+    judge: Object.assign({}, ...levels.map((l) => l.judge)),
+  }
+}
 
 type GroupFn = {
   (name: string, fn: () => void): void
@@ -76,7 +85,9 @@ const define =
     const options = cascade(own)
     const timeout = options.timeout === undefined ? undefined : parseDuration(options.timeout)
     const groups = groupStack.map((g) => g.name)
-    registerTest(name, { timeout, mode }, (handle) => runEval(name, groups, timeout, fn, handle))
+    registerTest(name, { timeout, mode }, (handle) =>
+      runEval({ name, groups, timeout, judge: options.judge ?? {} }, fn, handle),
+    )
   }
 
 export const evaluate: EvaluateFn & { skip: EvaluateFn; only: EvaluateFn } = Object.assign(
@@ -86,20 +97,36 @@ export const evaluate: EvaluateFn & { skip: EvaluateFn; only: EvaluateFn } = Obj
 
 function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; message: string } {
   const message = error instanceof Error ? error.message : String(error)
-  if (error instanceof InfraError) return { kind: 'infra', message }
   if (signal.aborted) {
     const reason = signal.reason instanceof Error ? signal.reason.message : String(signal.reason)
     return /timed out/i.test(reason)
       ? { kind: 'timeout', message: 'The eval timed out' }
       : { kind: 'aborted', message: 'The run was cancelled' }
   }
+  if (error instanceof InfraError) return { kind: 'infra', message }
   return { kind: 'assertion', message }
 }
 
+const MAX_JUDGE_PATCH = 60_000
+
+const isTurn = (value: unknown): value is Turn =>
+  typeof value === 'object' && value !== null && 'transcript' in value && 'diff' in value
+
+function judgeState(turn: Turn, output: JSONValue = turn.text): JudgeState {
+  const patch = turn.diff.patch
+  return {
+    task: turn.prompt,
+    output,
+    files: turn.diff.files.map((f) => `${f.status} ${f.path}`),
+    diff:
+      patch.length > MAX_JUDGE_PATCH ? `${patch.slice(0, MAX_JUDGE_PATCH)}\n[truncated]` : patch,
+  }
+}
+
+type EvalSpec = { name: string; groups: string[]; timeout?: number; judge: JudgeOptions }
+
 async function runEval(
-  name: string,
-  groups: string[],
-  timeoutOverride: number | undefined,
+  spec: EvalSpec,
   fn: EvalFn,
   { file, signal, setMeta, attachRecord }: TestHandle,
 ): Promise<void> {
@@ -107,54 +134,71 @@ async function runEval(
   const record: EvalRecord = {
     outcome: 'pass',
     error: null,
-    agent: null,
+    turns: [],
     diff: null,
     checks: [],
     judgements: [],
   }
+  const turns: Turn[] = []
   let sandbox: Sandbox | undefined
+  let session: HarnessSession | undefined
   const destroy = () => void sandbox?.destroy()
   signal.addEventListener('abort', destroy, { once: true })
 
-  const agent: Agent = {
-    async run(prompt) {
-      if (record.agent) throw new Error('agent.run() can only be called once per eval')
-      record.agent = { prompt, text: '', status: 'error', transcript: [] }
-      const timeoutMs = (timeoutOverride ?? config.timeoutMs) + 60_000
-      const box = await createSandbox(config.sandbox, { runId, timeoutMs, signal })
-      sandbox = box
-      if (signal.aborted) destroy()
+  const requireSandbox = () => {
+    if (!sandbox) throw new Error('No sandbox yet: call t.send() before t.exec() or t.readFile()')
+    return sandbox
+  }
+  const exec = async (command: string) => {
+    const r = await requireSandbox().exec(command, { signal })
+    record.checks.push({ command, ...r })
+    return r
+  }
+  const readFile = (path: string) => requireSandbox().readFile(path)
+
+  async function startSession(): Promise<[Sandbox, HarnessSession]> {
+    const lifetimeMs = (spec.timeout ?? config.timeoutMs) + 60_000
+    const box = await createSandbox(config.sandbox, { runId, timeoutMs: lifetimeMs, signal })
+    sandbox = box
+    if (signal.aborted) destroy()
+    signal.throwIfAborted()
+    await snapshot(box, signal)
+    const harness = await createHarness(config.harness)
+    session = await harness.start(box, signal)
+    return [box, session]
+  }
+
+  const t: EvalContext = {
+    signal,
+    turns,
+    exec,
+    readFile,
+    async send(prompt) {
+      const [box, agent] = sandbox && session ? [sandbox, session] : await startSession()
+      const entry = { prompt, text: '', status: 'error' as const, transcript: [] }
+      record.turns.push(entry)
+      const result = await agent.send(prompt, signal)
+      Object.assign(entry, result)
       signal.throwIfAborted()
-      await snapshot(box, signal)
-      const harness = await createHarness(config.harness)
-      const result = await harness.run(box, prompt, signal)
-      record.agent = { prompt, ...result }
-      signal.throwIfAborted()
-      const diff = await diffSinceSnapshot(box, signal)
+      const diff: Diff = await diffSinceSnapshot(box, signal)
       record.diff = diff
-      const run: Run = {
-        prompt,
-        ...result,
-        diff,
-        async exec(command) {
-          const r = await box.exec(command, { signal })
-          record.checks.push({ command, ...r })
-          return r
-        },
-        readFile: (path) => box.readFile(path),
-      }
-      return run
+      const turn: Turn = Object.freeze({ prompt, ...result, diff, exec, readFile })
+      turns.push(turn)
+      return turn
+    },
+    async judge(question, { on, ...call } = {}) {
+      const subject = isTurn(on) ? on : turns.at(-1)
+      if (!subject) throw new Error('t.judge() has no turn to grade: call t.send() first')
+      const state = judgeState(subject, on === undefined || isTurn(on) ? undefined : on)
+      const options = { ...config.judge, ...spec.judge, ...call }
+      const verdict = await runJudge(question, state, options, signal)
+      record.judgements.push(verdict)
+      return verdict
     },
   }
 
-  const judge: Judge = async (run, question) => {
-    const j = await runJudge(config.judge, { ...run, question }, signal)
-    record.judgements.push(j)
-    return { verdict: j.verdict, reason: j.reason, evidence: j.evidence }
-  }
-
   try {
-    await fn({ agent, judge, signal })
+    await fn(t)
     // A body that ignores the signal can still return normally after a timeout or cancel.
     signal.throwIfAborted()
   } catch (error) {
@@ -165,16 +209,21 @@ async function runEval(
     throw error
   } finally {
     signal.removeEventListener('abort', destroy)
+    await session?.close().catch(() => {})
     await sandbox?.destroy()
-    const id = evalId(relativeFile(config.root, file), [...groups, name])
+    const id = evalId(relativeFile(config.root, file), [...spec.groups, spec.name])
     const recordPath = join(resultsDir, 'evals', recordFileName(id))
     await mkdir(join(resultsDir, 'evals'), { recursive: true })
     await writeFile(recordPath, redactSecrets(JSON.stringify(record, null, 2)))
-    const last = record.judgements.at(-1)
     const meta: EvalMeta = {
       outcome: record.outcome,
       errorKind: record.error?.kind ?? null,
-      verdict: last ? { verdict: last.verdict, reason: last.reason.slice(0, 300) } : null,
+      judgements: record.judgements.map((j) => ({
+        verdict: j.verdict,
+        score: j.score,
+        threshold: j.threshold,
+        question: j.question.slice(0, 200),
+      })),
       recordPath,
     }
     setMeta(meta)

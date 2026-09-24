@@ -23,10 +23,11 @@ const config = (harness: string) => `
 import { defineConfig } from 'evalsuite'
 import { fakeHarness } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
+import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig({
   harness: fakeHarness(${harness}),
   sandbox: docker(),
-  judge: { fake: { verdict: 'pass', reason: 'ok', evidence: ['e'] } },
+  judge: { model: fakeJudge() },
 })
 `
 
@@ -42,13 +43,13 @@ describe('docker sandbox', { skip: !dockerReady && `needs Docker and ${DEFAULT_I
         `{ files: { 'greet.js': 'export const greet = (n) => \`Hello, \${n}!\`\\n', 'package.json': '{"type":"module"}' } }`,
       ),
       'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
-evaluate('docker', async ({ agent }) => {
-  const run = await agent.run('write greet.js')
-  await expect(run).toHaveFile('greet.js', /Hello/)
-  await expect(run.exec('node -e "import(\\'./greet.js\\').then(m => console.log(m.greet(\\'Ada\\')))"')).toSucceed()
-  const r = await run.exec('pwd && git --version && ls -A')
+evaluate('docker', async (t) => {
+  const turn = await t.send('write greet.js')
+  await expect(turn).toHaveFile('greet.js', /Hello/)
+  await expect(t.exec('node -e "import(\\'./greet.js\\').then(m => console.log(m.greet(\\'Ada\\')))"')).toSucceed()
+  const r = await t.exec('pwd && git --version && ls -A')
   expect(r.stdout).toContain('/es/workspace')
-  expect(run.diff.files).toEqual(expect.arrayContaining([{ path: 'greet.js', status: 'added' }]))
+  expect(turn.diff.files).toEqual(expect.arrayContaining([{ path: 'greet.js', status: 'added' }]))
 })
 `,
     })
@@ -65,7 +66,7 @@ evaluate('docker', async ({ agent }) => {
     const p = await project('docker-timeout', {
       'es.config.ts': config('{ delayMs: 60_000 }'),
       'evals/d.es.ts': `import { evaluate } from 'evalsuite'
-evaluate('slow', { timeout: '3s' }, async ({ agent }) => { await agent.run('wait') })
+evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
 `,
     })
     const r = await runCli(p.dir)

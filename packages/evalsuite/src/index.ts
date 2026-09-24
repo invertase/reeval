@@ -4,15 +4,16 @@ export { expect } from './engine/runtime.ts'
 export type { EvalOptions, GroupOptions } from './evaluate.ts'
 export { evaluate, group } from './evaluate.ts'
 export type {
-  Agent,
+  Diff,
   Duration,
   EsConfig,
   EsResult,
   EvalContext,
   EvalFn,
   ExecResult,
-  Judge,
-  Run,
+  JudgeCallOptions,
+  JudgeOptions,
   TranscriptEvent,
+  Turn,
   Verdict,
 } from './types.ts'

@@ -1,15 +1,17 @@
-import type { ExecResult, Run, Verdict } from './types.ts'
+import type { ExecResult, Verdict } from './types.ts'
 
 type Result = { pass: boolean; message: () => string }
 
 const tail = (s: string, lines = 20) => s.trimEnd().split('\n').slice(-lines).join('\n')
 
-const isRun = (value: unknown): value is Run =>
-  typeof value === 'object' && value !== null && 'readFile' in value && 'diff' in value
+type HasFiles = { readFile(path: string): Promise<string | null> }
+
+const hasFiles = (value: unknown): value is HasFiles =>
+  typeof value === 'object' && value !== null && typeof (value as HasFiles).readFile === 'function'
 
 export const matchers = {
   async toHaveFile(actual: unknown, path: string, pattern?: RegExp | string): Promise<Result> {
-    if (!isRun(actual)) throw new TypeError('toHaveFile() expects the Run returned by agent.run()')
+    if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from t.send(), or t')
     const content = await actual.readFile(path)
     if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
     if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
@@ -36,13 +38,14 @@ export const matchers = {
 
   toPass(actual: unknown): Result {
     const v = actual as Verdict
-    if (typeof v?.verdict !== 'string') throw new TypeError('toPass() expects a judge() verdict')
+    if (typeof v?.score !== 'number') throw new TypeError('toPass() expects a t.judge() verdict')
+    const score = v.score.toFixed(2)
     return {
       pass: v.verdict === 'pass',
       message: () =>
-        v.verdict === 'inconclusive'
-          ? `judge was inconclusive: ${v.reason}`
-          : `judge verdict ${v.verdict}: ${v.reason}`,
+        v.verdict === 'pass'
+          ? `expected judge to fail: score ${score} ≥ ${v.threshold} for "${v.question}"`
+          : `judge score ${score} is below ${v.threshold} for "${v.question}" (${v.model})`,
     }
   },
 }

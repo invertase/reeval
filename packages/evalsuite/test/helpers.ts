@@ -28,10 +28,11 @@ export const fakeConfig = (options: { harness?: string; judge?: string; extra?: 
 import { defineConfig } from 'evalsuite'
 import { fakeHarness } from 'evalsuite/harness'
 import { fakeSandbox } from 'evalsuite/sandbox'
+import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig({
   harness: fakeHarness(${options.harness ?? '{}'}),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
-  judge: ${options.judge ?? "{ fake: { verdict: 'pass', reason: 'ok', evidence: ['e'] } }"},
+  judge: ${options.judge ?? '{ model: fakeJudge({ score: 0.9 }) }'},
   ${options.extra ?? ''}
 })
 `

@@ -49,8 +49,12 @@ function printEval(e: EngineEval) {
   ]
   const time = e.state === 'skipped' ? '' : `   ${dim(formatDuration(e.durationMs))}`
   console.log(` ${mark} ${e.id}${time}`)
-  if (e.meta?.verdict)
-    console.log(`     ${dim('judge')}  ${e.meta.verdict.verdict}: "${e.meta.verdict.reason}"`)
+  for (const j of e.meta?.judgements ?? []) {
+    const mark = j.verdict === 'pass' ? green(j.verdict) : red(j.verdict)
+    console.log(
+      `     ${dim('judge')}  ${mark} ${j.score.toFixed(2)} ${dim(`(≥ ${j.threshold})`)}  ${j.question}`,
+    )
+  }
   if (outcome === 'infra_error') console.log(`     ${yellow('infra error')}  ${e.errors[0] ?? ''}`)
   else if (e.state === 'failed') {
     for (const line of (e.errors[0] ?? '').split('\n').slice(0, 12))

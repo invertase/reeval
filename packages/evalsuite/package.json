@@ -20,6 +20,10 @@
       "types": "./dist/sandbox.d.ts",
       "default": "./dist/sandbox.js"
     },
+    "./judge": {
+      "types": "./dist/judge.d.ts",
+      "default": "./dist/judge.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

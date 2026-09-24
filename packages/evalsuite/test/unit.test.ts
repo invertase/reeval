@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { parseDuration, resolveConfig } from '../src/config.ts'
-import { normaliseVerdict } from '../src/judge/index.ts'
+import { missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
+import { checkModelString, judgeCredentials } from '../src/judge/index.ts'
 import { redactSecrets } from '../src/redact.ts'
 
 test('parseDuration', () => {
@@ -28,14 +28,26 @@ test('redactSecrets masks secret-looking env values', () => {
   assert.match(out, /someone-long/)
 })
 
-test('verdicts without evidence become inconclusive', () => {
-  assert.equal(
-    normaliseVerdict({ verdict: 'pass', reason: 'r', evidence: [' '] }).verdict,
-    'inconclusive',
+test('judge model strings need a provider, and credentials follow the provider', () => {
+  assert.match(checkModelString('gemini-3.8-flash') ?? '', /google\/gemini-3\.8-flash/)
+  assert.equal(checkModelString('typesafe-ai/jev'), undefined)
+  assert.deepEqual(judgeCredentials('google/gemini-3.8-flash'), ['GOOGLE_GENERATIVE_AI_API_KEY'])
+  assert.deepEqual(judgeCredentials('typesafe-ai/jev'), ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN'])
+  assert.deepEqual(judgeCredentials({ kind: 'fake-judge', score: 1 }), [])
+  assert.throws(
+    () => resolveConfig({ judge: { model: 'gemini-3.8-flash' } }, '/p'),
+    /provider prefix/,
   )
-  assert.equal(
-    normaliseVerdict({ verdict: 'fail', reason: 'r', evidence: [] }).verdict,
-    'inconclusive',
-  )
-  assert.equal(normaliseVerdict({ verdict: 'pass', reason: 'r', evidence: ['x'] }).verdict, 'pass')
+  assert.deepEqual(resolveConfig({}, '/p').judge, {
+    model: 'google/gemini-3.8-flash',
+    threshold: 0.8,
+  })
+})
+
+test('missingCredentials names the judge key for the configured provider', () => {
+  const config = resolveConfig({ judge: { model: 'typesafe-ai/jev' } }, '/p')
+  assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k' }), [
+    'AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN',
+  ])
+  assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'k', AI_GATEWAY_API_KEY: 'g' }), [])
 })
