@@ -1,3 +1,4 @@
+import { clip, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from './types.ts'
@@ -13,12 +14,6 @@ export const OUTCOME_MARK: Record<Outcome, string> = {
 const LAST_MESSAGE_LIMIT = 4000
 
 const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
-
-export const formatMs = (ms: number) => {
-  if (ms < 1000) return `${ms}ms`
-  const s = Math.round(ms / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`
-}
 
 export function summaryCounts(s: RunRecord['summary']): string {
   const parts = [
@@ -126,7 +121,7 @@ export function renderSummary(run: RunRecord): string {
   const lines = [
     `# ES run ${run.runId}`,
     '',
-    `${summaryCounts(run.summary)}${run.status === 'interrupted' ? ' · **interrupted**' : ''} · started ${run.startedAt} (${formatMs(run.durationMs)})`,
+    `${summaryCounts(run.summary)}${run.status === 'interrupted' ? ' · **interrupted**' : ''} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
     '',
     '## State',
     '',
@@ -144,7 +139,7 @@ export function renderSummary(run: RunRecord): string {
   ]
   for (const e of run.evals) {
     const a = e.attempts[0]
-    const time = e.attempts.length > 1 ? cellCounts(e) : a ? formatMs(a.durationMs) : ''
+    const time = e.attempts.length > 1 ? cellCounts(e) : a ? formatDuration(a.durationMs) : ''
     lines.push(`| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`)
   }
   // Failures first, but passes get the same detail: why something passed matters too.
@@ -164,8 +159,12 @@ export function renderSummary(run: RunRecord): string {
   return lines.join('\n')
 }
 
+/** A failed verdict already says why a judge error failed the attempt; its message repeats it. */
+export const repeatsVerdict = (a: Pick<AttemptRecord, 'error' | 'judgements'>) =>
+  a.error?.kind === 'judge' && a.judgements.some((j) => j.verdict === 'fail')
+
 function attemptDetail(lines: string[], a: AttemptRecord): void {
-  if (a.error) {
+  if (a.error && !repeatsVerdict(a)) {
     lines.push(
       `**${a.error.kind}**`,
       '',
@@ -177,16 +176,16 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
   }
   for (const turn of a.turns) {
     lines.push(
-      `- Prompt (${turn.status}, ${formatMs(turn.durationMs)}): ${cell(turn.prompt).slice(0, 200)}`,
+      `- Prompt (${turn.status}, ${formatDuration(turn.durationMs)}): ${clip(cell(turn.prompt), 200)}`,
     )
   }
   const t = a.timings
   lines.push(
-    `- Time: setup ${formatMs(t.setupMs)} · agent ${formatMs(t.agentMs)} · checks ${formatMs(t.checksMs)} · judge ${formatMs(t.judgeMs)}`,
+    `- Time: setup ${formatDuration(t.setupMs)} · agent ${formatDuration(t.agentMs)} · checks ${formatDuration(t.checksMs)} · judge ${formatDuration(t.judgeMs)}`,
   )
   const act = a.activity
   lines.push(
-    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatMs(act.reasoningMs)} reasoning`,
+    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatDuration(act.reasoningMs)} reasoning`,
   )
   for (const j of a.judgements) {
     const retried = j.retries?.length

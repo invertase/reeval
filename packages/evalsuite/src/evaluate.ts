@@ -30,6 +30,7 @@ import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
 import { withLease } from './scheduler/client.ts'
 import type { Limits } from './scheduler/core.ts'
+import { clip } from './text.ts'
 import type {
   AttemptMeta,
   Diff,
@@ -571,7 +572,7 @@ async function runAttempt(
         verdict: j.verdict,
         score: j.score,
         threshold: j.threshold,
-        question: j.question.slice(0, 200),
+        question: clip(j.question, 200),
       })),
       recordPath,
     }

@@ -1,14 +1,11 @@
 import type { AttemptRecord } from '../history/types.ts'
+import { clip, formatDuration } from '../text.ts'
 import type { AttemptMeta } from '../types.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
 import type { EvalResult, Progress } from './events.ts'
 
-export function formatDuration(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  const s = Math.round(ms / 1000)
-  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
-}
+export { formatDuration }
 
 /** Offset into an attempt, `+1:05`. */
 export function offset(ms: number): string {
@@ -45,11 +42,11 @@ export function mark(c: Colors, outcome: Outcome): string {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** A command on one line: the first line, cut to 80 characters. */
+/** A command on one line: the first line, cut to 80 characters at a word boundary. */
 export function oneLine(text: string, max = 80): string {
   const [first = ''] = text.trim().split('\n')
-  const more = first.length > max || text.trim().includes('\n')
-  return more ? `${first.slice(0, max).trimEnd()}…` : first
+  const cut = clip(first, max)
+  return cut === first && text.trim().includes('\n') ? `${first}…` : cut
 }
 
 /** One line per worker progress event, without prefix or offset. */

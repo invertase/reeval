@@ -1,7 +1,8 @@
+import { formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { type CompareRow, type CompareStatus, stackChanges } from '../view/compare.ts'
 import { warnings } from './state.ts'
-import { cellCounts, formatMs, OUTCOME_MARK, stateRows, summaryCounts } from './summary.ts'
+import { cellCounts, OUTCOME_MARK, repeatsVerdict, stateRows, summaryCounts } from './summary.ts'
 import type { HistoryEntry, RunRecord } from './types.ts'
 
 export {
@@ -207,7 +208,7 @@ export function formatShow(run: RunRecord): string {
   const width = Math.max(...rows.map(([k]) => k.length))
   const lines = [
     `run ${run.runId}  ${summaryCounts(run.summary)}${run.status === 'interrupted' ? '  (interrupted)' : ''}`,
-    `  started ${run.startedAt}  (${formatMs(run.durationMs)}) · artifacts ${run.artifacts}`,
+    `  started ${run.startedAt}  (${formatDuration(run.durationMs)}) · artifacts ${run.artifacts}`,
     '',
     ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
     ...warnings(run).map((w) => `  ! ${w}`),
@@ -217,19 +218,21 @@ export function formatShow(run: RunRecord): string {
     const single = e.attempts.length === 1
     const first = e.attempts[0]
     lines.push(
-      `  ${OUTCOME_MARK[e.outcome]} ${e.id}${single && first ? `  ${formatMs(first.durationMs)}` : `  ${cellCounts(e)}`}`,
+      `  ${OUTCOME_MARK[e.outcome]} ${e.id}${single && first ? `  ${formatDuration(first.durationMs)}` : `  ${cellCounts(e)}`}`,
     )
     for (const t of e.attempts) {
       const indent = single ? '      ' : '        '
       if (!single) {
-        lines.push(`      ${OUTCOME_MARK[t.outcome]} ${t.id}  ${formatMs(t.durationMs)}`)
+        lines.push(`      ${OUTCOME_MARK[t.outcome]} ${t.id}  ${formatDuration(t.durationMs)}`)
       }
       for (const j of t.judgements) {
         lines.push(
           `${indent}judge ${j.verdict} ${j.score.toFixed(2)} (≥ ${j.threshold})  ${j.question}`,
         )
       }
-      if (t.error) lines.push(`${indent}${t.error.kind}: ${t.error.message.split('\n')[0]}`)
+      if (t.error && !repeatsVerdict(t)) {
+        lines.push(`${indent}${t.error.kind}: ${t.error.message.split('\n')[0]}`)
+      }
     }
   }
   return lines.join('\n')

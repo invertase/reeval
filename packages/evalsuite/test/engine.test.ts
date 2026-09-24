@@ -427,6 +427,12 @@ evaluate('passes', async () => {})
     const [e] = readRun(p.dir).evals
     assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
+    const shown = await runCli(p.dir, ['show'])
+    assert.match(shown.stdout, /judge fail 0\.30 \(≥ 0\.8\) {2}ok\?/)
+    assert.doesNotMatch(shown.stdout, /judge score/, 'the verdict is printed once')
+    const summary = readRun(p.dir).read('summary.md')
+    assert.match(summary, /Judge \*\*fail\*\* 0\.30/)
+    assert.doesNotMatch(summary, /judge score/, 'the verdict is printed once')
   })
 
   test('a judge that errors fails the eval as a judge error', async () => {

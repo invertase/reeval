@@ -20,6 +20,7 @@ import { backoffMs, isTransient } from '../src/judge/retry.ts'
 import { pullableDigests } from '../src/preflight.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { LABEL } from '../src/sandbox/image.ts'
+import { clip } from '../src/text.ts'
 
 test('parseDuration', () => {
   assert.equal(parseDuration('90s'), 90_000)
@@ -420,4 +421,13 @@ test('transient judge errors and bounded backoff', () => {
   }
   const later = { statusCode: 429, responseHeaders: { 'retry-after': '12' } }
   assert.ok(backoffMs(policy, 0, later) >= 12_000)
+})
+
+test('clip cuts on a word boundary with an ellipsis', () => {
+  const question = `Does it follow ${'every numbered instruction, '.repeat(10)}exactly?`
+  const cut = clip(question, 200)
+  assert.ok(cut.length <= 200 && cut.endsWith('…'), cut)
+  assert.match(cut, /(instruction,|numbered|every)…$/)
+  assert.equal(clip('short', 200), 'short')
+  assert.equal(clip('x'.repeat(300), 10), `${'x'.repeat(9)}…`)
 })
