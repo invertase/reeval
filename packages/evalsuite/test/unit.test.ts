@@ -16,7 +16,9 @@ import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, stackChanges } from '../src/history/views.ts'
 import { checkModelString, judgeCredentials, judgeRoute } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
+import { pullableDigests } from '../src/preflight.ts'
 import { redactSecrets } from '../src/redact.ts'
+import { LABEL } from '../src/sandbox/image.ts'
 
 test('parseDuration', () => {
   assert.equal(parseDuration('90s'), 90_000)
@@ -334,4 +336,19 @@ test('a real Cursor stream normalises to one event per action, timed', () => {
   assert.ok(
     reasoning && reasoning.text.length > 0 && reasoning.ts.startsWith('2026-09-24T20:50:08'),
   )
+})
+
+test("a locally built ES image's containerd digest isn't a registry digest", () => {
+  const managed = { [LABEL.managed]: 'true' }
+  assert.deepEqual(
+    pullableDigests({ repoDigests: ['evalsuite-sandbox@sha256:abc'], labels: managed }),
+    [],
+  )
+  assert.deepEqual(
+    pullableDigests({ repoDigests: ['ghcr.io/acme/sandbox@sha256:abc'], labels: managed }),
+    ['ghcr.io/acme/sandbox@sha256:abc'],
+  )
+  assert.deepEqual(pullableDigests({ repoDigests: ['node@sha256:abc'], labels: {} }), [
+    'node@sha256:abc',
+  ])
 })
