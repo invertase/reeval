@@ -155,7 +155,9 @@ export function renderSummary(run: RunRecord): string {
       )
     }
     if (a.changedFiles.length) {
-      lines.push(`- Changed: ${a.changedFiles.map((f) => `${f.status} \`${f.path}\``).join(', ')}`)
+      lines.push(
+        `- Changed: ${a.changedFiles.map((f) => (f.count ? `\`${f.path}\` (${f.count} files)` : `${f.status} \`${f.path}\``)).join(', ')}`,
+      )
     }
     const links = [
       a.files.final && `[final messages](${a.files.final.path})`,

@@ -66,7 +66,8 @@ export type AttemptRecord = {
   turns: Array<{ prompt: string; status: TurnStatus; text: string }>
   judgements: JudgementRecord[]
   checks: Array<{ command: string; exitCode: number; log?: FileRef }>
-  changedFiles: FileChange[]
+  /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */
+  changedFiles: Array<FileChange & { count?: number }>
   files: AttemptFiles
 }
 

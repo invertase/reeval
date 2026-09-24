@@ -3,10 +3,10 @@ import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
-import { patchForJudge } from '../judge/patch.ts'
+import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
-import type { EvalRecord, Outcome, ResolvedConfig, RunContext } from '../types.ts'
+import type { EvalRecord, FileChange, Outcome, ResolvedConfig, RunContext } from '../types.ts'
 import {
   judgeVersion,
   packageVersions,
@@ -140,6 +140,11 @@ function historyPatch(patch: string): string {
     .join('')
 }
 
+function changedFiles(files: FileChange[]): AttemptRecord['changedFiles'] {
+  const { kept, dirs } = collapseDependencies(files, (f) => f.path)
+  return [...kept, ...dirs.map((d) => ({ path: d.dir, status: 'added' as const, count: d.count }))]
+}
+
 function finalText(record: EvalRecord): string {
   return record.turns
     .map(
@@ -242,7 +247,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       })),
       judgements,
       checks,
-      changedFiles: record?.diff?.files ?? [],
+      changedFiles: changedFiles(record?.diff?.files ?? []),
       files,
     }
     const counted = outcome === 'pass' || outcome === 'fail'

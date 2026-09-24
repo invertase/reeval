@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import { evalRoot, missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { checkModelString, judgeCredentials } from '../src/judge/index.ts'
-import { patchForJudge } from '../src/judge/patch.ts'
+import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { redactSecrets } from '../src/redact.ts'
 
 test('parseDuration', () => {
@@ -102,4 +102,21 @@ test('the history folder sits in the directory the evals live in', () => {
   assert.equal(resolveConfig({ history: { dir: 'runs' } }, '/p').history.dir, '/p/runs')
   assert.equal(resolveConfig({}, '/p').record, 'ci')
   assert.throws(() => resolveConfig({ history: { artifacts: 'some' as 'all' } }, '/p'), /artifacts/)
+})
+
+test('an npm install in the sandbox collapses to one line for the judge', () => {
+  const deps = Array.from({ length: 10_000 }, (_, i) => `node_modules/pkg${i}/index.js`)
+  const patch = [
+    ...deps.map((p) => `diff --git a/${p} b/${p}\nnew file mode 100644\n+x\n`),
+    'diff --git a/src/app.js b/src/app.js\n+app\n',
+  ].join('')
+  const shown = patchForJudge(patch)
+  assert.ok(shown.length < 500, `judge diff is ${shown.length} characters`)
+  assert.match(shown, /- node_modules\/ \(10000 files\)/)
+  assert.match(shown, /\+app/)
+  const files = changedFilesForJudge([
+    ...deps.map((path) => ({ path, status: 'added' })),
+    { path: 'src/app.js', status: 'added' },
+  ])
+  assert.deepEqual(files, ['added src/app.js', 'changed node_modules/ (10000 files)'])
 })

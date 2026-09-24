@@ -13,7 +13,7 @@ import { createHarness } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { evalId, recordFileName, relativeFile } from './ids.ts'
 import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
-import { patchForJudge } from './judge/patch.ts'
+import { changedFilesForJudge, patchForJudge } from './judge/patch.ts'
 import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
 import type {
@@ -155,7 +155,7 @@ function judgeState(turn: Turn, output: JSONValue = turn.text): JudgeState {
   return {
     task: turn.prompt,
     output,
-    files: turn.diff.files.map((f) => `${f.status} ${f.path}`),
+    files: changedFilesForJudge(turn.diff.files),
     diff: patchForJudge(turn.diff.patch),
   }
 }
