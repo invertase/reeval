@@ -263,6 +263,17 @@ evaluate('on a value', async (t) => {
     assert.equal(e?.error?.kind, 'judge')
   })
 
+  test('a judge that errors fails the eval as a judge error', async () => {
+    const p = await project('judge-error', {
+      'es.config.ts': fakeConfig(),
+      'evals/agent.es.ts': agentEval(`await t.judge('ok?', { model: 'no-provider' })`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1)
+    assert.match(r.stdout, /needs a provider prefix/)
+    assert.equal(readResult(p.dir).evals[0]?.error?.kind, 'judge')
+  })
+
   test('t.judge before any turn is an assertion error', async () => {
     const p = await project('judge-early', {
       'es.config.ts': fakeConfig(),

@@ -142,6 +142,7 @@ async function runEval(
   const turns: Turn[] = []
   let sandbox: Sandbox | undefined
   let session: HarnessSession | undefined
+  let judgeErrored = false
   const destroy = () => void sandbox?.destroy()
   signal.addEventListener('abort', destroy, { once: true })
 
@@ -191,9 +192,14 @@ async function runEval(
       if (!subject) throw new Error('t.judge() has no turn to grade: call t.send() first')
       const state = judgeState(subject, on === undefined || isTurn(on) ? undefined : on)
       const options = { ...config.judge, ...spec.judge, ...call }
-      const verdict = await runJudge(question, state, options, signal)
-      record.judgements.push(verdict)
-      return verdict
+      try {
+        const verdict = await runJudge(question, state, options, signal)
+        record.judgements.push(verdict)
+        return verdict
+      } catch (error) {
+        judgeErrored = true
+        throw error
+      }
     },
   }
 
@@ -203,7 +209,7 @@ async function runEval(
     signal.throwIfAborted()
   } catch (error) {
     record.error = classify(error, signal)
-    const judgeFailed = record.judgements.some((j) => j.verdict !== 'pass')
+    const judgeFailed = judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
     if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
     record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
     throw error
