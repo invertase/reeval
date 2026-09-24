@@ -31,7 +31,15 @@ export async function createDockerSandbox(
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
+    egress: options.brokerCredentials && {
+      log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
+    },
   })
+  if (network.egress?.active === false) {
+    console.warn(
+      `warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it (credential brokering could not start: ${network.egress.reason})`,
+    )
+  }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
   await network.run({ command: `mkdir -p ${workdir}` })
   const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || '/root'

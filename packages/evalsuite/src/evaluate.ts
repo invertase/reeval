@@ -410,6 +410,7 @@ async function runAttempt(
       signal,
       env: env.vars,
       image,
+      brokerCredentials: spec.harness.kind === 'cursor',
     })
     sandbox = box
     if (signal.aborted) destroy()

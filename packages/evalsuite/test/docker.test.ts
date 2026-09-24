@@ -183,4 +183,41 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
     assert.equal(evals[0]?.error?.kind, 'timeout')
     assert.equal(liveContainers(run.runId), '')
   })
+
+  test('Cursor attempts broker the key; the warning only appears when brokering cannot start', async () => {
+    const cursorConfig = (sandbox: string) => `
+import { defineConfig } from 'evalsuite'
+import { cursor } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({ harness: cursor(), sandbox: ${sandbox}, timeout: '60s' })
+`
+    const eval_ = `import { evaluate } from 'evalsuite'
+evaluate('hi', async (t) => { await t.send('hi') })
+`
+    const warning = /CURSOR_API_KEY is passed into the sandbox container/
+    // A made-up key: the sandbox and the gateway start, then the Cursor API refuses the key.
+    const env = { CURSOR_API_KEY: 'crsr_not_a_real_key_0000000000000000' }
+    const brokered = await project('docker-brokered', {
+      'es.config.ts': cursorConfig('docker()'),
+      'evals/d.es.ts': eval_,
+    })
+    const a = await runCli(brokered.dir, ['run'], { env })
+    assert.doesNotMatch(a.stdout + a.stderr, warning)
+    assert.equal(liveContainers(readRun(brokered.dir).run.runId), '')
+
+    try {
+      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+    } catch {
+      return
+    }
+    // No node in the image, so the gateway can't start; nor can the harness, but the warning
+    // comes first.
+    const fallback = await project('docker-no-broker', {
+      'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37' })"),
+      'evals/d.es.ts': eval_,
+    })
+    const b = await runCli(fallback.dir, ['run'], { env })
+    assert.match(b.stdout + b.stderr, warning)
+    assert.match(b.stdout + b.stderr, /credential brokering could not start: the forwarder exited/)
+  })
 })

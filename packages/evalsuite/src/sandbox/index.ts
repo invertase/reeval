@@ -10,6 +10,8 @@ export type SandboxOptions = {
   env: Record<string, string>
   /** The prepared image for Docker (see `prepareImage`). */
   image?: string
+  /** Keep the harness's credentials out of the sandbox, behind the Docker egress gateway. */
+  brokerCredentials?: boolean
 }
 
 export async function createSandbox(

@@ -263,16 +263,6 @@ async function prepareRun(flags: Flags) {
     const { dockerCapacity } = await import('@evalsuite/sandbox-docker')
     return (await dockerCapacity()) ?? hostCapacity()
   })
-  if (
-    config.harness.some((h) => h.kind === 'cursor') &&
-    config.sandbox.some((s) => s.kind === 'docker')
-  ) {
-    console.error(
-      colors(output.color).yellow(
-        'warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it',
-      ),
-    )
-  }
   return { output, config, runs, tags: flags.tag ?? [], concurrency, sandboxVersions }
 }
 
