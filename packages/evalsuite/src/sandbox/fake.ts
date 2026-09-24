@@ -31,8 +31,14 @@ export async function createFakeSandbox(
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, content)
     },
+    // An abort destroys the sandbox while the body may still be writing into it, so a later
+    // call removes again instead of reusing the settled promise.
     destroy: () => {
-      destroyed ??= rm(base, { recursive: true, force: true }).catch(() => {})
+      destroyed ??= rm(base, { recursive: true, force: true })
+        .catch(() => {})
+        .finally(() => {
+          destroyed = undefined
+        })
       return destroyed
     },
   }
