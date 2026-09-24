@@ -66,6 +66,14 @@
         "path": "~/.cursor/cli-config.json",
         "sha256": "6bebcca150b22dd97e384d296ce1061a1710659fe9ce9eeb4e9c559c4c412c0c"
       }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
     ]
   },
   "config": {
@@ -196,15 +204,5 @@
         }
       ]
     }
-  ],
-  "reproducibility": {
-    "notes": [
-      "Agents sample their output, so a rerun of the same state can take a different path.",
-      "The agent model (composer-2.5) is served by the provider and can change without notice; the harness does not report which version answered.",
-      "The judge model (google/gemini-3.8-flash) can also change provider-side; it reported gemini-3.8-flash.",
-      "The sandbox has network access: web search, package registries and APIs can return different results on a rerun.",
-      "The image evalsuite-sandbox:cursor-1.0.36 was built locally (id sha256:9d0f47ae4d7c…) and not pushed; rebuilding it reinstalls the agent CLI, so keep or push the image to reproduce exactly.",
-      "Eval fingerprints hash each eval file, not the modules it imports."
-    ]
-  }
+  ]
 }

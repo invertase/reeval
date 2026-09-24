@@ -16,14 +16,7 @@
 | ES | 0.1.0 · node 25.8.1 · darwin/arm64 |
 | Runner | local · elliot-hesp |
 
-Not reproducible from this record alone:
-
-- Agents sample their output, so a rerun of the same state can take a different path.
-- The agent model (composer-2.5) is served by the provider and can change without notice; the harness does not report which version answered.
-- The judge model (google/gemini-3.8-flash) can also change provider-side; it reported gemini-3.8-flash.
-- The sandbox has network access: web search, package registries and APIs can return different results on a rerun.
-- The image evalsuite-sandbox:cursor-1.0.36 was built locally (id sha256:9d0f47ae4d7c…) and not pushed; rebuilding it reinstalls the agent CLI, so keep or push the image to reproduce exactly.
-- Eval fingerprints hash each eval file, not the modules it imports.
+> **Warning:** Image evalsuite-sandbox:cursor-1.0.36 isn't pushed, so an exact rerun needs this machine's image (id 9d0f47ae4d7c).
 
 Record: [20260924T185518Z_f4849a4_elliot-hesp.json](../20260924T185518Z_f4849a4_elliot-hesp.json) · artifacts: all
 
