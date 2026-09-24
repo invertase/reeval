@@ -21,7 +21,7 @@ export async function scoreWithModel(
   state: JudgeState,
   providerOptions: JudgeOptions['providerOptions'],
   signal: AbortSignal,
-): Promise<number> {
+): Promise<{ score: number; resolvedModel: string | undefined }> {
   const result = await evaluate({
     model: resolveModel(model),
     state,
@@ -29,5 +29,5 @@ export async function scoreWithModel(
     providerOptions,
     abortSignal: signal,
   })
-  return result.answers.answer.probability
+  return { score: result.answers.answer.probability, resolvedModel: result.response?.modelId }
 }

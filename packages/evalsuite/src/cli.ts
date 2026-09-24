@@ -12,7 +12,7 @@ import type { RunSummary } from './history/types.ts'
 import { newRunId } from './ids.ts'
 import { preflight } from './preflight.ts'
 
-const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1 }
+const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1 }
 
 const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError']
 
@@ -32,6 +32,8 @@ Usage:
   es show [run]             One run: table, --md (summary.md) or --json (the record)
   es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                             --md --json --fail-on-regression
+  es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
+                            (default dir: .es/checkouts/<run>)
   es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
   es --version
   es --help
@@ -134,6 +136,8 @@ async function run(argv: string[]): Promise<number> {
         return commands.showCommand(ctx, filters)
       case 'compare':
         return commands.compareCommand(ctx, filters)
+      case 'checkout':
+        return commands.checkoutCommand(ctx, filters)
     }
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
@@ -157,6 +161,8 @@ async function run(argv: string[]): Promise<number> {
 
   const startedAt = new Date()
   const git = await gitInfo(config.root, [config.history.dir])
+  const { lockfiles, worktreePatch } = await import('./history/state.ts')
+  const patch = git?.dirty ? await worktreePatch(config.root, [config.history.dir]) : null
   const who = await author(config.root)
   const { stagingDir, sweepStaging, writeScratchRun } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
@@ -169,7 +175,7 @@ async function run(argv: string[]): Promise<number> {
   await mkdir(resultsDir, { recursive: true })
   const ctx = { runId, resultsDir, config }
 
-  const { runEngine, vitestVersion } = await import('./engine/node.ts')
+  const { runEngine } = await import('./engine/node.ts')
 
   let interrupted = false
   const engineRun = await runEngine({
@@ -203,12 +209,10 @@ async function run(argv: string[]): Promise<number> {
     startedAt,
     endedAt: new Date(),
     interrupted: interrupted || engineRun.cancelled,
-    versions: {
-      es: version,
-      vitest: vitestVersion,
-      node: process.versions.node,
-      ...sandboxVersions,
-    },
+    es: version,
+    sandbox: sandboxVersions,
+    worktreePatch: patch,
+    lockfiles: await lockfiles(config.root),
     git,
     runner: runnerInfo(),
   })

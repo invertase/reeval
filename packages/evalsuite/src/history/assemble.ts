@@ -4,11 +4,20 @@ import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { patchForJudge } from '../judge/patch.ts'
+import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
 import type { EvalRecord, Outcome, ResolvedConfig, RunContext } from '../types.ts'
 import {
+  judgeVersion,
+  packageVersions,
+  reproducibilityNotes,
+  WORKTREE_PATCH_LIMIT,
+} from './state.ts'
+import {
   type AttemptFiles,
   type AttemptRecord,
+  type ContextFile,
+  type Environment,
   type EvalEntry,
   type FileRef,
   type GitInfo,
@@ -31,8 +40,12 @@ export type AssembleInput = {
   endedAt: Date
   interrupted: boolean
   author: string
-  versions: RunRecord['versions']
+  es: string
+  sandbox: SandboxVersions
   git: GitInfo | null
+  /** Uncommitted changes when the run started, saved as `worktree.patch`. */
+  worktreePatch: Buffer | null
+  lockfiles: RunRecord['dependencies']['lockfiles']
   runner: RunnerInfo
 }
 
@@ -163,19 +176,26 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   )
   const sources = new Map<string, string | null>()
   const evals: EvalEntry[] = []
+  const contexts = new Map<string, ContextFile>()
+  const resolvedJudges = new Set<string>()
 
   for (const e of engine.evals) {
     const record = await readRecord(join(ctx.resultsDir, 'evals', recordFileName(e.id)))
     const { outcome, error } = mergeOutcome(e, record)
     if (!sources.has(e.file)) sources.set(e.file, await sourceHash(config.root, e.file))
     const srcHash = sources.get(e.file) ?? null
+    const context = record?.context ?? []
+    for (const c of context) contexts.set(`${c.path}\0${c.sha256}`, c)
+    for (const j of record?.judgements ?? [])
+      if (j.resolvedModel) resolvedJudges.add(j.resolvedModel)
     const fingerprint = sha256(
       JSON.stringify({
         sourceHash: srcHash,
         harness: config.harness,
-        agentCli: input.versions.agentCli,
-        image: input.versions.image,
+        agentCli: input.sandbox.agentCli,
+        image: input.sandbox.image?.id ?? null,
         judge: { model: judgeModel, threshold: config.judge.threshold },
+        context,
       }),
     )
     const slug = evalSlug(e.id)
@@ -206,6 +226,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
 
     const attempt: AttemptRecord = {
       n: 1,
+      context,
       outcome,
       error,
       durationMs: e.durationMs,
@@ -231,14 +252,49 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       name: e.name,
       fingerprint,
       sourceHash: srcHash,
+      fixtureHash: null,
       outcome,
       passRate: counted ? (outcome === 'pass' ? 1 : 0) : null,
       attempts: [attempt],
     })
   }
 
+  let git = input.git
+  if (git?.dirty) {
+    const patch = input.worktreePatch
+    git = { ...git, diffHash: patch ? sha256(patch) : null }
+    if (!patch) git.worktreePatchNote = 'git could not produce a patch'
+    else if (patch.length > WORKTREE_PATCH_LIMIT) {
+      git.worktreePatchNote = `too large to keep (${patch.length} bytes)`
+    } else {
+      // Kept byte-exact so it applies; recording still refuses it if it looks like a secret.
+      out.files.set('worktree.patch', patch)
+      git.worktreePatch = { path: 'worktree.patch', sha256: sha256(patch), bytes: patch.length }
+    }
+  }
+  const packages = packageVersions()
+  const environment: Environment = {
+    es: input.es,
+    node: process.versions.node,
+    os: process.platform,
+    arch: process.arch,
+    image: input.sandbox.image,
+    agentCli: input.sandbox.agentCli,
+    packages,
+    harness: { kind: config.harness.kind, model: harnessModel(config), resolvedModel: null },
+    judge: {
+      model: judgeModel,
+      resolvedModels: [...resolvedJudges].sort(),
+      threshold: config.judge.threshold,
+      version: judgeVersion(input.es, packages, judgeModel),
+    },
+    context: [...contexts.values()].sort((a, b) =>
+      a.path < b.path ? -1 : a.path > b.path ? 1 : 0,
+    ),
+  }
+
   const count = (o: Outcome) => evals.filter((e) => e.outcome === o).length
-  const record: RunRecord = {
+  const draft: Omit<RunRecord, 'reproducibility'> = {
     kind: 'es-run',
     schemaVersion: SCHEMA_VERSION,
     runId,
@@ -247,9 +303,10 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     endedAt: input.endedAt.toISOString(),
     durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
     author: input.author,
-    git: input.git,
+    git,
     runner: input.runner,
-    versions: input.versions,
+    dependencies: { lockfiles: input.lockfiles },
+    environment,
     config: {
       harness: config.harness.kind,
       model: harnessModel(config),
@@ -271,5 +328,6 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     evals,
   }
+  const record: RunRecord = { ...draft, reproducibility: { notes: reproducibilityNotes(draft) } }
   return { record, artifacts: out.files }
 }

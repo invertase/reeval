@@ -1,7 +1,7 @@
 import { posix } from 'node:path'
 import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import type { DockerSandboxDescriptor } from '../types.ts'
-import { imageLabels } from './docker-cli.ts'
+import { imageInfo } from './docker-cli.ts'
 import { createDockerSession } from './docker-provider.ts'
 import { DEFAULT_IMAGE, LABEL, SANDBOX_ROOT, WORKSPACE_DIR } from './image.ts'
 import type { SandboxOptions } from './index.ts'
@@ -17,7 +17,7 @@ export async function createDockerSandbox(
   options: SandboxOptions,
 ): Promise<DockerSandbox> {
   const image = descriptor.image ?? DEFAULT_IMAGE
-  if (!(await imageLabels(image))) {
+  if (!(await imageInfo(image))) {
     throw new InfraError(`Docker image ${image} not found. Build it with: es image build`)
   }
   const network = await createDockerSession({

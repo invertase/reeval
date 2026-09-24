@@ -36,6 +36,7 @@ export async function runJudge(
 ): Promise<Verdict> {
   const { model, threshold } = options
   let score: number
+  let resolvedModel: string | undefined
   if (isFakeJudge(model)) {
     score = model.score
   } else {
@@ -44,7 +45,13 @@ export async function runJudge(
       if (problem) throw new Error(problem)
     }
     const { scoreWithModel } = await import('./model.ts')
-    score = await scoreWithModel(model, question, state, options.providerOptions, signal)
+    ;({ score, resolvedModel } = await scoreWithModel(
+      model,
+      question,
+      state,
+      options.providerOptions,
+      signal,
+    ))
   }
   return {
     verdict: score >= threshold ? 'pass' : 'fail',
@@ -52,5 +59,6 @@ export async function runJudge(
     threshold,
     question,
     model: judgeModelName(model),
+    ...(resolvedModel ? { resolvedModel } : {}),
   }
 }

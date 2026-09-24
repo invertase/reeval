@@ -33,29 +33,85 @@ function judgeCell(e: EvalEntry): string {
 }
 
 /** Markdown for people and agents landing on a run cold. Links are relative to the artifact dir. */
-export function renderSummary(run: RunRecord): string {
-  const git = run.git
-  const commit = git
-    ? `\`${git.sha.slice(0, 12)}\`${git.branch ? ` on \`${git.branch}\`` : ''}${git.dirty ? ' (dirty)' : ''}`
-    : 'not a git repository'
-  const runner =
+const short = (hash: string) => hash.replace(/^sha256:/, '').slice(0, 12)
+
+/**
+ * The state a run executed in, as label/value pairs, shared by summary.md and `es show`. The
+ * commit is where the run executed; the commit that adds its history file comes later.
+ */
+export function stateRows(run: RunRecord): Array<[string, string]> {
+  const { git, environment: env } = run
+  const rows: Array<[string, string]> = []
+  rows.push([
+    'Executed at',
+    git
+      ? `${git.sha.slice(0, 12)}${git.branch ? ` on ${git.branch}` : ''}${git.dirty ? ', dirty' : ', clean'} (the commit that adds this record is later)`
+      : 'not a git repository',
+  ])
+  if (git?.dirty) {
+    rows.push([
+      'Uncommitted',
+      git.worktreePatch
+        ? `worktree.patch, ${git.worktreePatch.bytes} bytes, sha256 ${short(git.worktreePatch.sha256)}`
+        : `not saved: ${git.worktreePatchNote ?? 'unknown'}${git.diffHash ? `; sha256 ${short(git.diffHash)}` : ''}`,
+    ])
+  }
+  rows.push([
+    'Lockfiles',
+    run.dependencies.lockfiles.map((l) => `${l.path} ${short(l.sha256)}`).join(', ') ||
+      'none found',
+  ])
+  rows.push([
+    'Image',
+    env.image
+      ? `${env.image.ref} · id ${short(env.image.id)} · ${env.image.repoDigests[0] ?? 'no registry digest (built locally)'}`
+      : 'none (fake sandbox)',
+  ])
+  rows.push([
+    'Agent',
+    `${env.harness.kind}${env.harness.model ? ` · model ${env.harness.model}` : ''}${env.harness.resolvedModel ? ` (served ${env.harness.resolvedModel})` : ''} · CLI ${env.agentCli ?? 'n/a'}`,
+  ])
+  rows.push([
+    'Judge',
+    `${env.judge.model}${env.judge.resolvedModels.length ? ` (served ${env.judge.resolvedModels.join(', ')})` : ''} · threshold ${env.judge.threshold} · version ${env.judge.version}`,
+  ])
+  rows.push([
+    'Context',
+    env.context.length
+      ? `${env.context.length} file${env.context.length === 1 ? '' : 's'}: ${env.context.map((c) => `${c.path} ${short(c.sha256)}`).join(', ')}`
+      : 'no skills, rules or MCP config found in the sandbox',
+  ])
+  rows.push([
+    'Packages',
+    Object.entries(env.packages)
+      .map(([name, v]) => `${name} ${v}`)
+      .join(' · '),
+  ])
+  rows.push(['ES', `${env.es} · node ${env.node} · ${env.os}/${env.arch}`])
+  rows.push([
+    'Runner',
     run.runner.kind === 'ci'
-      ? `CI (${run.runner.provider})${run.runner.runUrl ? ` [log](${run.runner.runUrl})` : ''}`
-      : 'local'
+      ? `CI (${run.runner.provider})${run.runner.runUrl ? ` ${run.runner.runUrl}` : ''}`
+      : `local · ${run.author}`,
+  ])
+  return rows
+}
+
+export function renderSummary(run: RunRecord): string {
   const lines = [
     `# ES run ${run.runId}`,
     '',
-    `${summaryCounts(run.summary)}${run.status === 'interrupted' ? ' · **interrupted**' : ''}`,
+    `${summaryCounts(run.summary)}${run.status === 'interrupted' ? ' · **interrupted**' : ''} · started ${run.startedAt} (${formatMs(run.durationMs)})`,
+    '',
+    '## State',
     '',
     '| | |',
     '|---|---|',
-    `| Started | ${run.startedAt} (${formatMs(run.durationMs)}) |`,
-    `| Commit | ${commit} |`,
-    `| Runner | ${runner} |`,
-    `| Harness | ${run.config.harness}${run.config.model ? ` · ${run.config.model}` : ''} · agent CLI ${run.versions.agentCli ?? 'n/a'} |`,
-    `| Sandbox | ${run.config.sandbox} · ${run.versions.image} |`,
-    `| Judge | ${run.config.judgeModel} · threshold ${run.config.threshold} |`,
-    `| Versions | es ${run.versions.es} · vitest ${run.versions.vitest} · node ${run.versions.node} |`,
+    ...stateRows(run).map(([k, v]) => `| ${k} | ${cell(v)} |`),
+    '',
+    'Not reproducible from this record alone:',
+    '',
+    ...run.reproducibility.notes.map((n) => `- ${n}`),
     '',
     `Record: [${run.runId}.json](../${run.runId}.json) · artifacts: ${run.artifacts}`,
     '',

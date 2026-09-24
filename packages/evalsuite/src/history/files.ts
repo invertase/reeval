@@ -13,6 +13,7 @@ import {
 import { dirname, join, relative } from 'node:path'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
+import { reproducibilityNotes } from './state.ts'
 import { renderSummary } from './summary.ts'
 import {
   type ArtifactLevel,
@@ -244,6 +245,18 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       for (const c of a.checks) delete c.log
     }
   }
+  const patch = record.git?.worktreePatch
+  if (patch && level !== 'none') {
+    const bytes = await readFile(join(source, runId, patch.path))
+    if (sha256(bytes) !== patch.sha256) {
+      throw new HistoryError(`${runId}/${patch.path} changed since the run wrote it`)
+    }
+    files.set(patch.path, bytes)
+  } else if (patch && record.git) {
+    record.git.worktreePatch = null
+    record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
+  }
+  record.reproducibility.notes = reproducibilityNotes(record)
   if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record)))
 
   if (!options.skipSecretScan) {

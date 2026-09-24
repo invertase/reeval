@@ -1,5 +1,5 @@
 import type { Outcome } from '../types.ts'
-import { formatMs, OUTCOME_MARK, summaryCounts } from './summary.ts'
+import { formatMs, OUTCOME_MARK, stateRows, summaryCounts } from './summary.ts'
 import type { HistoryEntry, RunRecord } from './types.ts'
 
 export class RefError extends Error {
@@ -215,13 +215,16 @@ export function formatCompare(
 }
 
 export function formatShow(run: RunRecord): string {
-  const git = run.git
+  const rows = stateRows(run)
+  const width = Math.max(...rows.map(([k]) => k.length))
   const lines = [
     `run ${run.runId}  ${summaryCounts(run.summary)}${run.status === 'interrupted' ? '  (interrupted)' : ''}`,
-    `  started  ${run.startedAt}  (${formatMs(run.durationMs)}, ${run.runner.kind})`,
-    `  commit   ${git ? `${git.sha.slice(0, 12)}${git.branch ? ` ${git.branch}` : ''}${git.dirty ? ' dirty' : ''}` : 'not a git repository'}`,
-    `  author   ${run.author} · artifacts ${run.artifacts}`,
-    `  stack    ${run.config.harness}${run.config.model ? `/${run.config.model}` : ''} · ${run.config.sandbox} · judge ${run.config.judgeModel}`,
+    `  started ${run.startedAt}  (${formatMs(run.durationMs)}) · artifacts ${run.artifacts}`,
+    '',
+    ...rows.map(([k, v]) => `  ${k.padEnd(width)}  ${v}`),
+    '',
+    '  not reproducible from this record alone:',
+    ...run.reproducibility.notes.map((n) => `    - ${n}`),
     '',
   ]
   for (const e of run.evals) {

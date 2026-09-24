@@ -64,8 +64,23 @@ export async function dockerAvailable(): Promise<boolean> {
   }
 }
 
-export async function imageLabels(image: string): Promise<Record<string, string> | null> {
-  const r = await docker(['image', 'inspect', '--format', '{{json .Config.Labels}}', image])
+export type ImageInfo = {
+  labels: Record<string, string>
+  /** Content-addressed image id (`sha256:…`): identical bytes on any machine that has it. */
+  id: string
+  /** Registry digests (`repo@sha256:…`), empty for images that were only built locally. */
+  repoDigests: string[]
+}
+
+export async function imageInfo(image: string): Promise<ImageInfo | null> {
+  const r = await docker([
+    'image',
+    'inspect',
+    '--format',
+    '{"labels":{{json .Config.Labels}},"id":{{json .Id}},"repoDigests":{{json .RepoDigests}}}',
+    image,
+  ])
   if (r.exitCode !== 0) return null
-  return JSON.parse(r.stdout.toString('utf8')) ?? {}
+  const info = JSON.parse(r.stdout.toString('utf8'))
+  return { labels: info.labels ?? {}, id: info.id, repoDigests: info.repoDigests ?? [] }
 }

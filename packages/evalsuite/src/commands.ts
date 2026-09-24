@@ -1,6 +1,8 @@
 // The run-history commands: record, history, show, compare.
-import { join, relative } from 'node:path'
-import { git } from './git.ts'
+import { existsSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import { join, relative, resolve } from 'node:path'
+import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
@@ -14,6 +16,7 @@ import {
   type Reachability,
   resolveRun,
 } from './history/views.ts'
+import { sha256 } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
 
 export type HistoryFlags = {
@@ -145,4 +148,40 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
     ctx.out(JSON.stringify({ base: flag(base), head: flag(head), rows }, null, 2))
   } else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
   return ctx.flags['fail-on-regression'] && rows.some((r) => r.status === 'regressed') ? 1 : 0
+}
+
+/** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */
+export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number> {
+  const { root } = ctx.config
+  const entry = resolveRun(await allRuns(ctx.config), args[0] ?? 'latest')
+  const dir = entry.recorded ? ctx.config.history.dir : scratchDir(root)
+  const run = await readRecord(join(dir, `${entry.runId}.json`))
+  if (!run.git) throw new CommandError(`${run.runId} didn't run in a git repository`)
+  const { sha } = run.git
+  if ((await git(root, ['cat-file', '-e', `${sha}^{commit}`])).code !== 0) {
+    throw new CommandError(
+      `Commit ${sha.slice(0, 12)} isn't in this clone (rebased or not fetched). Fetch it, then try again.`,
+    )
+  }
+  const target = resolve(args[1] ?? join(root, '.es', 'checkouts', run.runId))
+  if (existsSync(target)) throw new CommandError(`${rel(target)} already exists`)
+  await gitText(root, ['worktree', 'add', '--detach', '-q', target, sha])
+  const patchRef = run.git.worktreePatch
+  let applied = ''
+  if (patchRef) {
+    const patchPath = join(dir, run.runId, patchRef.path)
+    const bytes = await readFile(patchPath)
+    if (sha256(bytes) !== patchRef.sha256) {
+      throw new CommandError(`${rel(patchPath)} doesn't match the hash in the record`)
+    }
+    const r = await git(target, ['apply', '--binary', '--whitespace=nowarn', patchPath])
+    if (r.code !== 0) throw new CommandError(`Applying worktree.patch failed: ${r.stderr.trim()}`)
+    applied = ' and applied worktree.patch'
+  } else if (run.git.dirty) {
+    applied = ` (the run was dirty, but its changes weren't saved: ${run.git.worktreePatchNote ?? 'unknown'})`
+  }
+  ctx.out(
+    `checked out ${sha.slice(0, 12)} into ${rel(target)}${applied}.\nRemove it with: git worktree remove ${rel(target)}`,
+  )
+  return 0
 }

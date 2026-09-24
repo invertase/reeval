@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { appendFile, writeFile } from 'node:fs/promises'
+import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
@@ -255,5 +255,63 @@ describe('recording runs into evals/.history', () => {
       scan.some((text) => text.includes(leaked)),
       'the scratch run still has it, locally',
     )
+  })
+
+  test('a dirty run saves worktree.patch, lockfile hashes and state; es checkout reproduces it', async () => {
+    const p = await gitProject('record-state', {
+      'evals/agent.es.ts': agent(),
+      'package-lock.json': '{"lockfileVersion":3}\n',
+      'src/app.js': 'export const v = 1\n',
+    })
+    await writeFile(join(p.dir, 'src/app.js'), 'export const v = 2\n')
+    await writeFile(join(p.dir, 'src/new.js'), 'export const added = true\n')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const { run, read } = readRun(p.dir, { history: HISTORY })
+    assert.equal(run.git?.dirty, true)
+    assert.equal(run.git?.sha, sh(p.dir, 'rev-parse', 'HEAD'), 'the commit the run executed at')
+    const patch = read('worktree.patch')
+    assert.match(patch, /\+export const v = 2/)
+    assert.match(patch, /src\/new\.js/, 'untracked files are included')
+    assert.doesNotMatch(patch, /evals\/\.history|\.es\//, "ES's own output is not")
+    assert.equal(run.git?.worktreePatch?.sha256, run.git?.diffHash)
+    assert.deepEqual(
+      run.dependencies.lockfiles.map((l) => l.path),
+      ['package-lock.json'],
+    )
+    assert.equal(run.environment.image, null)
+    assert.ok(run.environment.packages.ai && run.environment.packages.vitest)
+    assert.match(run.environment.judge.version, /^[0-9a-f]{12}$/)
+    assert.ok(run.reproducibility.notes.some((n) => /sample/.test(n)))
+    assert.equal(run.evals[0]?.fixtureHash, null)
+    assert.equal(sh(p.dir, 'diff', '--cached', '--name-only'), '', "the user's index is untouched")
+
+    const shown = await runCli(p.dir, ['show', 'latest'])
+    assert.match(
+      shown.stdout,
+      /Executed at +[0-9a-f]{12} on main, dirty \(the commit that adds this record is later\)/,
+    )
+    assert.match(shown.stdout, /Uncommitted +worktree\.patch, \d+ bytes/)
+    assert.match(shown.stdout, /Lockfiles +package-lock\.json [0-9a-f]{12}/)
+    assert.match(shown.stdout, /not reproducible from this record alone/)
+    assert.match(read('summary.md'), /## State[\s\S]*\| Uncommitted \| worktree\.patch/)
+
+    const target = join(p.dir, '..', 'record-state-checkout')
+    await rm(target, { recursive: true, force: true })
+    const co = await runCli(p.dir, ['checkout', 'latest', target])
+    assert.equal(co.code, 0, co.stderr)
+    assert.match(co.stdout, /applied worktree\.patch/)
+    assert.equal(readFileSync(join(target, 'src/app.js'), 'utf8'), 'export const v = 2\n')
+    assert.equal(readFileSync(join(target, 'src/new.js'), 'utf8'), 'export const added = true\n')
+    sh(p.dir, 'worktree', 'remove', '--force', target)
+  })
+
+  test('a secret in the uncommitted changes stops the record', async () => {
+    const p = await gitProject('record-patch-secret', { 'evals/agent.es.ts': agent() })
+    await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)
+    assert.equal((await runCli(p.dir)).code, 0)
+    const r = await runCli(p.dir, ['record'])
+    assert.equal(r.code, 2)
+    assert.match(r.stderr, /\/worktree\.patch/)
+    assert.deepEqual(recordedRuns(p.dir), [])
   })
 })

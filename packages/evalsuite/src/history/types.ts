@@ -9,12 +9,20 @@ export type RecordMode = 'manual' | 'ci' | 'always'
 export type FileRef = { path: string; sha256: string; bytes: number }
 
 export type GitInfo = {
+  /**
+   * The commit the run executed at: HEAD when `es run` started. The later commit that adds the
+   * history file is a different, descendant commit.
+   */
   sha: string
   branch: string | null
   /** Uncommitted changes, outside `.es/` and the history folder, when the run started. */
   dirty: boolean
-  /** sha256 of `git diff HEAD` plus the untracked file names, when dirty. */
+  /** sha256 of the uncommitted changes (tracked and untracked, as a binary patch), when dirty. */
   diffHash: string | null
+  /** Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce. */
+  worktreePatch: FileRef | null
+  /** Why a dirty run has no `worktree.patch`, e.g. too large or artifacts: 'none'. */
+  worktreePatchNote: string | null
   commitTime: string
   shallow: boolean
   /** The `origin` URL with any credentials removed. */
@@ -31,6 +39,8 @@ export type JudgementRecord = {
   score: number
   threshold: number
   model: string
+  /** The model id the provider says served the call, when it reports one. */
+  resolvedModel?: string
   /** Evaluation models return a probability only, so this is null until a judge explains itself. */
   reason: string | null
   evidence: string[]
@@ -43,8 +53,12 @@ export type AttemptFiles = {
   judgeInput?: FileRef
 }
 
+export type ContextFile = { path: string; sha256: string }
+
 export type AttemptRecord = {
   n: number
+  /** Skills, rules and MCP config visible to the agent in its sandbox, by content hash. */
+  context: ContextFile[]
   outcome: Outcome
   error: { kind: ErrorKind; message: string } | null
   durationMs: number
@@ -65,7 +79,10 @@ export type EvalEntry = {
   name: string
   /** Results are comparable only when fingerprints match. */
   fingerprint: string
+  /** sha256 of the eval file (its imports aren't traced yet). */
   sourceHash: string | null
+  /** Evals have no fixtures until workspace seeding lands; always null for now. */
+  fixtureHash: string | null
   outcome: Outcome
   /** pass / (pass + fail); infra errors and skips excluded. */
   passRate: number | null
@@ -100,7 +117,13 @@ export type RunRecord = {
   author: string
   git: GitInfo | null
   runner: RunnerInfo
-  versions: { es: string; vitest: string; node: string; agentCli: string | null; image: string }
+  dependencies: {
+    /** Lockfiles in the project root (and the repo root, if different), by content hash. */
+    lockfiles: Array<{ path: string; sha256: string }>
+  }
+  environment: Environment
+  /** What a rerun can't pin down, so differences aren't mistaken for regressions. */
+  reproducibility: { notes: string[] }
   config: {
     harness: string
     model: string | null
@@ -116,6 +139,29 @@ export type RunRecord = {
   redaction: { version: 1 }
   summary: RunSummary
   evals: EvalEntry[]
+}
+
+export type Environment = {
+  es: string
+  node: string
+  os: string
+  arch: string
+  /** null for the fake sandbox. `id` is content-addressed; `repoDigests` only exist once pushed. */
+  image: { ref: string; id: string; repoDigests: string[] } | null
+  agentCli: string | null
+  /** Exact versions of the packages that run and grade the agent. */
+  packages: Record<string, string>
+  harness: { kind: string; model: string | null; resolvedModel: string | null }
+  judge: {
+    model: string
+    /** Model ids the provider reported serving, across every judge call in the run. */
+    resolvedModels: string[]
+    threshold: number
+    /** Changes when ES, the AI SDK or the provider adapter (and so the judge prompt) change. */
+    version: string
+  }
+  /** Union of every attempt's context files. */
+  context: ContextFile[]
 }
 
 /** One line of the derived, locally cached history listing. */

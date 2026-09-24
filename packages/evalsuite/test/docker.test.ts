@@ -56,8 +56,13 @@ evaluate('docker', async (t) => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run, evals } = readRun(p.dir)
-    assert.equal(run.versions.image, DEFAULT_IMAGE)
-    assert.match(run.versions.agentCli ?? '', /\d/)
+    assert.equal(run.environment.image?.ref, DEFAULT_IMAGE)
+    assert.match(run.environment.image?.id ?? '', /^sha256:[0-9a-f]{64}$/)
+    assert.match(run.environment.agentCli ?? '', /\d/)
+    assert.ok(
+      run.environment.context.some((c) => c.path === '~/.cursor/cli-config.json'),
+      JSON.stringify(run.environment.context),
+    )
     const log = evals[0]?.read(evals[0].trial.checks[0]?.log.path ?? '') ?? ''
     assert.match(log, /--- stdout\nHello, Ada!\n/)
     assert.equal(liveContainers(run.runId), '')

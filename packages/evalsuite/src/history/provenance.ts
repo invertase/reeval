@@ -33,16 +33,6 @@ export async function gitInfo(
     .map((line) => ({ code: line.slice(0, 2), path: line.slice(3) }))
     .filter((e) => e.path && !isEsOutput(e.path))
   const dirty = entries.length > 0
-  let diffHash: string | null = null
-  if (dirty) {
-    const exclude = [':(top,exclude,glob)**/.es/**', ...ignored.map((d) => `:(top,exclude)${d}`)]
-    const diff = await git(root, ['diff', 'HEAD', '--binary', '--', ':(top)', ...exclude])
-    const untracked = entries
-      .filter((e) => e.code === '??')
-      .map((e) => e.path)
-      .sort()
-    diffHash = sha256(Buffer.concat([diff.stdout, Buffer.from(`\0${untracked.join('\0')}`)]))
-  }
   const branch =
     env.GITHUB_HEAD_REF ||
     env.GITHUB_REF_NAME ||
@@ -54,7 +44,10 @@ export async function gitInfo(
     sha,
     branch,
     dirty,
-    diffHash,
+    // Filled in with worktree.patch when the run is assembled.
+    diffHash: null,
+    worktreePatch: null,
+    worktreePatchNote: null,
     commitTime: (await text(root, ['show', '-s', '--format=%cI', 'HEAD'])) ?? '',
     shallow: (await text(root, ['rev-parse', '--is-shallow-repository'])) === 'true',
     remote: remote ? stripCredentials(remote) : null,

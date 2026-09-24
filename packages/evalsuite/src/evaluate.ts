@@ -108,6 +108,46 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   return { kind: 'assertion', message }
 }
 
+/**
+ * Skills, rules and MCP config the agent could load, with content hashes (never contents).
+ * Paths under the home directory are shown as `~/…`; others are relative to the workspace.
+ */
+const CONTEXT_PATHS = [
+  '$HOME/.cursor/mcp.json',
+  '$HOME/.cursor/cli-config.json',
+  '$HOME/.cursor/rules',
+  '$HOME/.cursor/skills',
+  '$HOME/.cursor/skills-cursor',
+  '$HOME/.agents/skills',
+  '$HOME/.claude/skills',
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.cursorrules',
+  '.cursor/rules',
+  '.cursor/skills',
+  '.cursor/mcp.json',
+  '.agents/skills',
+  '.mcp.json',
+]
+
+async function agentContext(box: Sandbox, signal: AbortSignal): Promise<EvalRecord['context']> {
+  const script = `for p in ${CONTEXT_PATHS.map((p) => `"${p}"`).join(' ')}; do [ -e "$p" ] && find "$p" -type f 2>/dev/null; done | sort | head -500 | while IFS= read -r f; do printf '%s\t%s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done`
+  const r = await box.exec(script, { signal }).catch(() => null)
+  if (r?.exitCode !== 0) return []
+  const home = (await box.exec('printf %s "$HOME"', { signal }).catch(() => null))?.stdout ?? ''
+  return r.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [sha, ...rest] = line.split('\t')
+      const path = rest.join('\t')
+      return {
+        path: home && path.startsWith(`${home}/`) ? `~${path.slice(home.length)}` : path,
+        sha256: sha ?? '',
+      }
+    })
+}
+
 const isTurn = (value: unknown): value is Turn =>
   typeof value === 'object' && value !== null && 'transcript' in value && 'diff' in value
 
@@ -162,6 +202,7 @@ async function runEval(
     if (signal.aborted) destroy()
     signal.throwIfAborted()
     await snapshot(box, signal)
+    if (config.sandbox.kind === 'docker') record.context = await agentContext(box, signal)
     const harness = await createHarness(config.harness)
     session = await harness.start(box, signal)
     return [box, session]

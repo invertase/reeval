@@ -65,6 +65,8 @@ export type Verdict = {
   threshold: number
   question: string
   model: string
+  /** The model id the provider says served the call, when it reports one. */
+  resolvedModel?: string
 }
 
 export type EvalContext = {
@@ -156,6 +158,8 @@ export type EvalRecord = {
   checks: Array<{ command: string } & ExecResult>
   judgements: Verdict[]
   /** What each judge call saw, in call order, including calls that errored. */
+  /** Skills, rules and MCP config visible to the agent, by content hash. */
+  context?: Array<{ path: string; sha256: string }>
   judgeInputs?: Array<{ question: string; model: string; state: { [key: string]: JSONValue } }>
 }
 
