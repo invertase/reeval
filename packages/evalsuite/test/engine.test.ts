@@ -314,6 +314,61 @@ evaluate('on a value', async (t) => {
     assert.equal(readRun(p.dir).evals[1]?.trial.judgements.length, 2)
   })
 
+  test('plain output streams worker progress and console.log from inside the eval', async () => {
+    const p = await project('plain-progress', {
+      'es.config.ts': fakeConfig({ harness: "{ files: { 'hello.txt': 'hi' } }" }),
+      'evals/agent.es.ts': agentEval(`console.log('hello from', 'the eval')
+  await expect(t.exec('cat hello.txt')).toSucceed()`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const tag = /^\[agent#1 fake\] {2}\+0:\d\d /
+    const detail = r.stdout
+      .split('\n')
+      .filter((l) => tag.test(l))
+      .map((l) => l.replace(tag, ''))
+    assert.deepEqual(
+      detail.map((l) => l.replace(/ \d+ms/g, '')),
+      [
+        'sandbox starting',
+        'sandbox ready',
+        'turn 1 started',
+        'turn 1 done · 0 tool calls, 1 file edit',
+        'stdout | hello from the eval',
+        '$ cat hello.txt',
+        '$ cat hello.txt  exit 0',
+        'cleaning up',
+      ],
+    )
+    assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.es\.ts › agent eval {2}\d+ms$/m)
+  })
+
+  test('agent mode prints failures only, with record and summary paths, and no colour', async () => {
+    const p = await project('agent-mode', {
+      'es.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
+      'evals/agent.es.ts': `${agentEval(`expect(await t.judge('ok?')).toPass()`)}
+evaluate('passes', async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: { ES_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
+    })
+    assert.equal(r.code, 1)
+    const out = r.stdout.trimEnd().split('\n')
+    assert.equal(out[0], 'es run: 1 eval file')
+    assert.match(out[1] ?? '', /^FAIL evals\/agent\.es\.ts › agent eval \(\d+ms, judge\)$/)
+    assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
+    assert.match(
+      out[3] ?? '',
+      /^ {2}record: \.es\/runs\/[^/]+\/evals-agent-es-ts-agent-eval-[0-9a-f]{6}\/1$/,
+    )
+    assert.equal(out[4], '1 passed, 1 failed')
+    assert.match(out[5] ?? '', /^summary: \.es\/runs\/[^/]+\/summary\.md$/)
+    assert.equal(out.length, 6)
+    assert.ok(existsSync(join(p.dir, (out[3] ?? '').replace('  record: ', ''))))
+    assert.ok(!r.stdout.includes('\x1b['))
+  })
+
   test('a failing judge fails the eval as a judge error', async () => {
     const p = await project('judge-fail', {
       'es.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
