@@ -24,7 +24,7 @@ describe('engine', () => {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
     const { run } = readRun(p.dir)
-    assert.equal(run.schemaVersion, 2)
+    assert.equal(run.schemaVersion, 1)
     assert.equal(run.status, 'complete')
     assert.deepEqual(run.summary, { evals: 1, pass: 1, fail: 0, infraError: 0, skipped: 0 })
     assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')

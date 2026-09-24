@@ -1,6 +1,7 @@
 import type { ErrorKind, FileChange, Outcome, PhaseTimings, TurnStatus } from '../types.ts'
 
-export const SCHEMA_VERSION = 2
+/** Stays 1 while ES is pre-release: the record changes in place. */
+export const SCHEMA_VERSION = 1
 
 export type ArtifactLevel = 'all' | 'failures' | 'none'
 export type RecordMode = 'manual' | 'ci' | 'always'

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto'
+import { statSync } from 'node:fs'
 import {
   link,
   mkdir,
@@ -11,17 +12,11 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import { renderSummary } from './summary.ts'
-import {
-  type ArtifactLevel,
-  type EvalEntry,
-  type FileRef,
-  type HistoryEntry,
-  type RunRecord,
-  SCHEMA_VERSION,
-} from './types.ts'
+import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
 export class HistoryError extends Error {
   override name = 'HistoryError'
@@ -40,11 +35,6 @@ export const encodeRecord = (record: RunRecord) =>
 export function parseRecord(bytes: Uint8Array, where: string): RunRecord {
   const value = JSON.parse(Buffer.from(bytes).toString('utf8')) as RunRecord
   if (value?.kind !== 'es-run') throw new HistoryError(`${where} is not an ES run record`)
-  if (value.schemaVersion !== SCHEMA_VERSION) {
-    throw new HistoryError(
-      `${where} has schema ${String(value.schemaVersion)}; this ES reads ${SCHEMA_VERSION}`,
-    )
-  }
   return value
 }
 
@@ -81,16 +71,19 @@ function entryOf(record: RunRecord, recorded: boolean): HistoryEntry {
 }
 
 type Cache = {
-  version: 2
+  /** The mtime of this module: any rebuild of ES drops entries derived by the old code. */
+  build: number
   files: Record<string, { size: number; mtimeMs: number; entry: HistoryEntry }>
 }
+
+const BUILD = statSync(fileURLToPath(import.meta.url)).mtimeMs
 
 async function readCache(root: string): Promise<Cache> {
   try {
     const parsed = JSON.parse(await readFile(cacheFile(root), 'utf8')) as Cache
-    if (parsed.version === 2 && parsed.files) return parsed
+    if (parsed.build === BUILD && parsed.files) return parsed
   } catch {}
-  return { version: 2, files: {} }
+  return { build: BUILD, files: {} }
 }
 
 /**
