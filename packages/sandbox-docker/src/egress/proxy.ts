@@ -177,7 +177,13 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     server.emit('connection', socket)
   }
 
-  function transformed(target: Target, method: string, path: string, headers: IncomingHttpHeaders) {
+  function transformed(
+    target: Target,
+    method: string,
+    path: string,
+    headers: IncomingHttpHeaders,
+    version: string,
+  ) {
     const { headers: out, replaced } = applyTransformations(rules, {
       host: target.host,
       method,
@@ -185,7 +191,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       headers: endToEnd(headers, ['upgrade', 'connection']) as IncomingHttpHeaders,
     })
     const set = replaced.length ? ` (set ${replaced.join(', ')})` : ''
-    log(`es:egress ${method} https://${target.host}${pathOnly(path)}${set}`)
+    log(`es:egress ${method} https://${target.host}${pathOnly(path)} HTTP/${version}${set}`)
     return out as OutgoingHttpHeaders
   }
 
@@ -196,7 +202,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   ) {
     const method = req.method ?? 'GET'
     const path = req.url ?? '/'
-    const headers = transformed(target, method, path, req.headers)
+    const headers = transformed(target, method, path, req.headers, req.httpVersion)
     delete headers.upgrade
     delete headers.connection
     const authority = target.port === 443 ? target.host : `${target.host}:${target.port}`
@@ -257,7 +263,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   function onUpgrade(target: Target, req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     const method = req.method ?? 'GET'
     const path = req.url ?? '/'
-    const headers = transformed(target, method, path, req.headers)
+    const headers = transformed(target, method, path, req.headers, req.httpVersion)
     const upstream = https.request({
       host: target.address,
       servername: net.isIP(target.host) ? undefined : target.host,

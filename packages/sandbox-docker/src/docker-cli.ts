@@ -46,11 +46,21 @@ export async function dockerCapacity(): Promise<{ cpus: number; memoryBytes: num
   return cpus && memoryBytes ? { cpus, memoryBytes } : null
 }
 
+/**
+ * Whether a RepoDigest shows the image is in a registry someone can pull from. The containerd
+ * image store (Docker 29+, recent Docker Desktop) also gives locally built images a digest, under
+ * their bare local name (`evalsuite-sandbox@sha256:…`). A bare name is Docker Hub's `library/`
+ * namespace, which only official images can push to, so only a digest whose name has a registry
+ * host or a namespace counts. Official images such as `busybox` count as local; no image with
+ * the harness baked in is one.
+ */
+export const isRegistryDigest = (digest: string) => (digest.split('@')[0] ?? '').includes('/')
+
 export type ImageInfo = {
   labels: Record<string, string>
   /** Content-addressed image id (`sha256:…`): identical bytes on any machine that has it. */
   id: string
-  /** Registry digests (`repo@sha256:…`), empty for images that were only built locally. */
+  /** Registry digests (`repo@sha256:…`), empty for images that were only built locally (see {@link isRegistryDigest}). */
   repoDigests: string[]
 }
 
@@ -65,5 +75,6 @@ export async function imageInfo(image: string): Promise<ImageInfo | null> {
   ])
   if (r.exitCode !== 0) return null
   const info = JSON.parse(r.stdout.toString('utf8'))
-  return { labels: info.config?.Labels ?? {}, id: info.id, repoDigests: info.repoDigests ?? [] }
+  const repoDigests = ((info.repoDigests ?? []) as string[]).filter(isRegistryDigest)
+  return { labels: info.config?.Labels ?? {}, id: info.id, repoDigests }
 }

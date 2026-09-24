@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { isRegistryDigest } from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, DEFAULT_ALLOWED_HOSTS, hostAllowed } from '../src/egress/policy.ts'
@@ -316,6 +317,17 @@ describe('stdio mux', () => {
     assert.doesNotThrow(() => new Function('require', 'process', script))
     assert.doesNotMatch(script, /\bimport\b|\bexport\b/)
   })
+})
+
+test('only registry-qualified or namespaced digests count as pushed', () => {
+  const d = `@sha256:${'a'.repeat(64)}`
+  // What the containerd image store reports for images built on this machine.
+  assert.equal(isRegistryDigest(`evalsuite-sandbox${d}`), false)
+  assert.equal(isRegistryDigest(`evalsuite-env${d}`), false)
+  assert.equal(isRegistryDigest(`busybox${d}`), false)
+  assert.equal(isRegistryDigest(`invertase/evalsuite-sandbox${d}`), true)
+  assert.equal(isRegistryDigest(`ghcr.io/invertase/es${d}`), true)
+  assert.equal(isRegistryDigest(`localhost:5000/es${d}`), true)
 })
 
 describe('package boundary', () => {

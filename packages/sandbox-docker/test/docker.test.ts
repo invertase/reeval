@@ -247,6 +247,8 @@ describe('image info', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE
     const { imageInfo } = await import('../src/docker-cli.ts')
     const ours = await imageInfo(DEFAULT_IMAGE)
     assert.match(ours?.labels['dev.evalsuite.agent-version'] ?? '', /\d/)
+    // Built here, so no registry digest, on the classic and the containerd image store alike.
+    assert.deepEqual(ours?.repoDigests, [])
     try {
       execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
     } catch {

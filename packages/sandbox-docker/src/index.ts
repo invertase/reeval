@@ -15,6 +15,7 @@ export {
   dockerOk,
   type ImageInfo,
   imageInfo,
+  isRegistryDigest,
   removeContainerDetached,
 } from './docker-cli.ts'
 export { CA_PATH, PROXY_PORT } from './egress/gateway.ts'
