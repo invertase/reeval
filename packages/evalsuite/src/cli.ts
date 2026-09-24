@@ -12,11 +12,14 @@ import {
   resolveConcurrency,
   UsageError,
 } from './config.ts'
+import type { EngineRun } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
+import type { GitInfo } from './history/types.ts'
 import { evalSlug, newRunId } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { preflight } from './preflight.ts'
+import type { RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 
@@ -74,8 +77,8 @@ const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COL
 /** Set by the first Ctrl-C of `es run`. */
 let interrupted = false
 
-async function run(argv: string[]): Promise<number> {
-  const { values, positionals } = parseArgs({
+function parse(argv: string[]) {
+  return parseArgs({
     args: argv,
     allowPositionals: true,
     options: {
@@ -108,6 +111,10 @@ async function run(argv: string[]): Promise<number> {
       'no-artifacts': { type: 'boolean' },
     },
   })
+}
+
+async function run(argv: string[]): Promise<number> {
+  const { values, positionals } = parse(argv)
   if (values.version) {
     console.log(version)
     return EXIT.ok
@@ -146,147 +153,50 @@ async function run(argv: string[]): Promise<number> {
     }
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
+  return runCommand(values, filters)
+}
 
-  const output = resolveOutput({
-    flags: {
-      ui: values.ui,
-      logOrder: values['log-order'],
-      logPrefix: values['log-prefix'],
-      outputLogs: values['output-logs'],
-    },
-    env: process.env,
-    isTTY: !!process.stdout.isTTY,
-    agent: detectAgent().name,
-  })
-  loadEnvFiles(process.cwd())
-  const config = await loadConfig(values.config)
-  const missing = missingCredentials(config)
-  if (missing.length) {
-    throw new UsageError(
-      `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
-    )
-  }
-  const sandboxVersions = await preflight(config)
-  let runs: number | undefined
-  if (values.runs !== undefined) {
-    runs = Number(values.runs)
-    if (!(Number.isInteger(runs) && runs >= 1)) {
-      throw new UsageError(`--runs must be a whole number of at least 1 (got ${values.runs})`)
-    }
-  }
-  const tags = values.tag ?? []
-  const concurrency = await resolveConcurrency(config, values.concurrency, async () => {
-    if (!config.sandbox.some((s) => s.kind === 'docker')) return hostCapacity()
-    const { dockerCapacity } = await import('./sandbox/docker-cli.ts')
-    return (await dockerCapacity()) ?? hostCapacity()
-  })
-  if (
-    config.harness.some((h) => h.kind === 'cursor') &&
-    config.sandbox.some((s) => s.kind === 'docker')
-  ) {
-    console.error(
-      colors(output.color).yellow(
-        'warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it',
-      ),
-    )
-  }
+type Flags = ReturnType<typeof parse>['values']
 
-  const startedAt = new Date()
-  const git = await gitInfo(config.root, [config.history.dir])
-  const { lockfiles, worktreePatch } = await import('./history/state.ts')
-  const patch = git?.dirty ? await worktreePatch(config.root, [config.history.dir]) : null
-  const who = await author(config.root)
-  const { stagingDir, sweepStaging, writeScratchRun } = await import('./results.ts')
-  const { scratchDir } = await import('./history/files.ts')
-  // Run ids sort in run order, so a second run in the same second takes the next second's id.
-  let runId = newRunId(startedAt, git?.sha ?? null, who)
-  for (let n = 1; existsSync(join(scratchDir(config.root), `${runId}.json`)); n++) {
-    runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
-  }
-  await sweepStaging(config.root)
-  // Workers create it with their first record; a run that never starts leaves nothing behind.
-  const resultsDir = stagingDir(config.root, runId)
-  const ctx = { runId, resultsDir, config, runs, tags, concurrency }
-
-  const { engineVersions, runEngine } = await import('./engine/node.ts')
-
+/** `es run`: check, start, run the engine, then write the run and pick the exit code. */
+async function runCommand(flags: Flags, filters: string[]): Promise<number> {
+  const setup = await prepareRun(flags)
+  const ctx = await startRun(setup)
+  const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
     out: process.stdout,
-    output,
-    harness: config.harness[0]?.kind ?? 'agent',
+    output: setup.output,
+    harness: setup.config.harness[0]?.kind ?? 'agent',
     attemptDir: (id, cell, n) =>
       relative(
         process.cwd(),
-        join(scratchDir(config.root), runId, evalSlug(id), evalSlug(cell), String(n)),
+        join(ctx.scratch, ctx.runId, evalSlug(id), evalSlug(cell), String(n)),
       ),
   })
-  let engineRun: Awaited<ReturnType<typeof runEngine>>
+  let engineRun: EngineRun
   try {
-    engineRun = await runEngine({
-      run: ctx,
-      filters,
-      onRunStart: (files) =>
-        renderer.onEvent({
-          type: 'run-start',
-          at: Date.now(),
-          version,
-          files,
-          harness: config.harness.map(harnessId).join(', '),
-          sandbox: config.sandbox.map(sandboxId).join(', '),
-          concurrency,
-        }),
-      onEvent: (e) => {
-        // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
-        if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
-        renderer.onEvent(e)
-      },
-      onCancellable: (cancel) => {
-        process.on('SIGINT', () => {
-          if (interrupted) {
-            renderer.close()
-            process.exit(EXIT.interrupted)
-          }
-          interrupted = true
-          renderer.onEvent({
-            type: 'notice',
-            at: Date.now(),
-            level: 'warn',
-            text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
-          })
-          cancel()
-        })
-      },
-    })
+    engineRun = await executeRun(ctx, filters, renderer)
   } catch (error) {
     renderer.close()
-    await rm(resultsDir, { recursive: true, force: true })
+    await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const narrowed = [
-    filters.length ? `filter "${filters.join(' ')}"` : '',
-    tags.length ? `tags ${tags.join(', ')}` : '',
-  ].filter(Boolean)
-  if (engineRun.noFiles || (engineRun.evals.length === 0 && !interrupted)) {
-    renderer.close()
-    await rm(resultsDir, { recursive: true, force: true })
-    throw new UsageError(
-      `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
-    )
-  }
 
+  const { lockfiles } = await import('./history/state.ts')
+  const { writeScratchRun } = await import('./results.ts')
   const run = await writeScratchRun({
     ctx,
-    author: who,
+    author: ctx.author,
     engine: engineRun,
-    startedAt,
+    startedAt: ctx.startedAt,
     endedAt: new Date(),
     interrupted: interrupted || engineRun.cancelled,
     es: version,
     enginePackages: engineVersions,
-    sandbox: sandboxVersions,
-    worktreePatch: patch,
-    lockfiles: await lockfiles(config.root),
-    git,
+    sandbox: setup.sandboxVersions,
+    worktreePatch: ctx.worktreePatch,
+    lockfiles: await lockfiles(ctx.config.root),
+    git: ctx.git,
     runner: runnerInfo(),
   })
   const { record } = run
@@ -305,17 +215,167 @@ async function run(argv: string[]): Promise<number> {
     await appendFile(stepSummary, await readFile(summary)).catch(() => {})
   }
 
+  const { config } = ctx
   const autoRecord =
-    values.record || config.record === 'always' || (config.record === 'ci' && inCI())
+    flags.record || config.record === 'always' || (config.record === 'ci' && inCI())
   if (autoRecord && record.status === 'complete') {
     const { record: recordCmd } = await import('./commands.ts')
-    console.log(await recordCmd(config, record.runId, values))
+    console.log(await recordCmd(config, record.runId, flags))
   }
 
   if (interrupted || engineRun.cancelled) return EXIT.interrupted
   if (record.summary.fail > 0 || engineRun.unhandledErrors.length > 0) return EXIT.failed
   if (record.summary.infraError > 0) return EXIT.infra
   return EXIT.ok
+}
+
+/** Everything that can fail before a run starts: output mode, config, keys, Docker, flags. */
+async function prepareRun(flags: Flags) {
+  const output = resolveOutput({
+    flags: {
+      ui: flags.ui,
+      logOrder: flags['log-order'],
+      logPrefix: flags['log-prefix'],
+      outputLogs: flags['output-logs'],
+    },
+    env: process.env,
+    isTTY: !!process.stdout.isTTY,
+    agent: detectAgent().name,
+  })
+  loadEnvFiles(process.cwd())
+  const config = await loadConfig(flags.config)
+  const missing = missingCredentials(config)
+  if (missing.length) {
+    throw new UsageError(
+      `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
+    )
+  }
+  const sandboxVersions = await preflight(config)
+  let runs: number | undefined
+  if (flags.runs !== undefined) {
+    runs = Number(flags.runs)
+    if (!(Number.isInteger(runs) && runs >= 1)) {
+      throw new UsageError(`--runs must be a whole number of at least 1 (got ${flags.runs})`)
+    }
+  }
+  const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
+    if (!config.sandbox.some((s) => s.kind === 'docker')) return hostCapacity()
+    const { dockerCapacity } = await import('./sandbox/docker-cli.ts')
+    return (await dockerCapacity()) ?? hostCapacity()
+  })
+  if (
+    config.harness.some((h) => h.kind === 'cursor') &&
+    config.sandbox.some((s) => s.kind === 'docker')
+  ) {
+    console.error(
+      colors(output.color).yellow(
+        'warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it',
+      ),
+    )
+  }
+  return { output, config, runs, tags: flags.tag ?? [], concurrency, sandboxVersions }
+}
+
+type StartedRun = RunContext & {
+  startedAt: Date
+  git: GitInfo | null
+  worktreePatch: Buffer | null
+  author: string
+  /** `.es/runs`, where the run is written. */
+  scratch: string
+}
+
+/** The run's id and the state it starts from: commit, uncommitted changes, author. */
+async function startRun({
+  config,
+  runs,
+  tags,
+  concurrency,
+}: Awaited<ReturnType<typeof prepareRun>>): Promise<StartedRun> {
+  const startedAt = new Date()
+  const git = await gitInfo(config.root, [config.history.dir])
+  const { worktreePatch } = await import('./history/state.ts')
+  const patch = git?.dirty ? await worktreePatch(config.root, [config.history.dir]) : null
+  const who = await author(config.root)
+  const { stagingDir, sweepStaging } = await import('./results.ts')
+  const { scratchDir } = await import('./history/files.ts')
+  const scratch = scratchDir(config.root)
+  // Run ids sort in run order, so a second run in the same second takes the next second's id.
+  let runId = newRunId(startedAt, git?.sha ?? null, who)
+  for (let n = 1; existsSync(join(scratch, `${runId}.json`)); n++) {
+    runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
+  }
+  await sweepStaging(config.root)
+  return {
+    runId,
+    // Workers create it with their first record; a run that never starts leaves nothing behind.
+    stagingDir: stagingDir(config.root, runId),
+    config,
+    runs,
+    tags,
+    concurrency,
+    startedAt,
+    git,
+    worktreePatch: patch,
+    author: who,
+    scratch,
+  }
+}
+
+/** Runs the engine with live output and Ctrl-C handling; a run that matches nothing exits 2. */
+async function executeRun(
+  ctx: StartedRun,
+  filters: string[],
+  renderer: ReturnType<typeof createRenderer>,
+): Promise<EngineRun> {
+  const { runId, stagingDir, config, runs, tags, concurrency } = ctx
+  const { runEngine } = await import('./engine/node.ts')
+  const engineRun = await runEngine({
+    // Provided to every worker, so only what evals need; not the worktree patch.
+    run: { runId, stagingDir, config, runs, tags, concurrency },
+    filters,
+    onRunStart: (files) =>
+      renderer.onEvent({
+        type: 'run-start',
+        at: Date.now(),
+        version,
+        files,
+        harness: config.harness.map(harnessId).join(', '),
+        sandbox: config.sandbox.map(sandboxId).join(', '),
+        concurrency,
+      }),
+    onEvent: (e) => {
+      // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
+      if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
+      renderer.onEvent(e)
+    },
+    onCancellable: (cancel) => {
+      process.on('SIGINT', () => {
+        if (interrupted) {
+          renderer.close()
+          process.exit(EXIT.interrupted)
+        }
+        interrupted = true
+        renderer.onEvent({
+          type: 'notice',
+          at: Date.now(),
+          level: 'warn',
+          text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+        })
+        cancel()
+      })
+    },
+  })
+  if (engineRun.noFiles || (engineRun.evals.length === 0 && !interrupted)) {
+    const narrowed = [
+      filters.length ? `filter "${filters.join(' ')}"` : '',
+      tags.length ? `tags ${tags.join(', ')}` : '',
+    ].filter(Boolean)
+    throw new UsageError(
+      `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
+    )
+  }
+  return engineRun
 }
 
 // `es run | head` closes stdout early; that isn't an error.

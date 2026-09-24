@@ -30,6 +30,6 @@ export async function writeScratchRun(
   const { record, artifacts } = await assembleRun(input)
   artifacts.set('summary.md', Buffer.from(renderSummary(record)))
   const written = await writeRun(scratchDir(input.ctx.config.root), record, artifacts)
-  await rm(input.ctx.resultsDir, { recursive: true, force: true })
+  await rm(input.ctx.stagingDir, { recursive: true, force: true })
   return { ...written, record }
 }

@@ -290,8 +290,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     const instance = vitest
     options.onCancellable?.(() => {
       cancelled = true
-      mkdirSync(options.run.resultsDir, { recursive: true })
-      writeFileSync(cancelMarker(options.run.resultsDir), '')
+      mkdirSync(options.run.stagingDir, { recursive: true })
+      writeFileSync(cancelMarker(options.run.stagingDir), '')
       void instance.cancelCurrentRun('keyboard-input')
     })
     await vitest.runTestSpecifications(specs, true)

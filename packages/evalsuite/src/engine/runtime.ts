@@ -84,7 +84,7 @@ export function registerTest(
   const register = options.mode === 'run' ? test : test[options.mode]
   // Vitest's timer would count time spent queued, so the attempt's own timer starts at its lease.
   register(name, { timeout: 0, retry: 0, meta }, async (ctx) => {
-    if (existsSync(cancelMarker(inject('es:run').resultsDir))) {
+    if (existsSync(cancelMarker(inject('es:run').stagingDir))) {
       ctx.skip('The run was cancelled before this attempt started')
     }
     let lease: Lease | undefined

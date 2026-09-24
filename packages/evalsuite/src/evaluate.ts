@@ -335,7 +335,7 @@ async function runAttempt(
 ): Promise<void> {
   const report = (update: ProgressUpdate) => progress({ at: Date.now(), ...update })
   const setupStart = performance.now()
-  const { runId, resultsDir, config } = getRunContext()
+  const { runId, stagingDir, config } = getRunContext()
   const id = evalId(relativeFile(config.root, file), [...spec.groups, spec.name])
   const record: EvalRecord = {
     outcome: 'pass',
@@ -560,11 +560,11 @@ async function runAttempt(
     await session?.close().catch(() => {})
     await sandbox?.destroy()
     const recordPath = join(
-      resultsDir,
+      stagingDir,
       'evals',
       recordFileName(attemptKey(id, spec.cell.key, spec.n)),
     )
-    await mkdir(join(resultsDir, 'evals'), { recursive: true })
+    await mkdir(join(stagingDir, 'evals'), { recursive: true })
     await writeFile(recordPath, redactSecrets(JSON.stringify(record, null, 2)))
     const meta: EvalMeta = {
       outcome: record.outcome,

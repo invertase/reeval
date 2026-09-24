@@ -364,7 +364,7 @@ export type EvalMeta = {
 
 export type RunContext = {
   runId: string
-  resultsDir: string
+  stagingDir: string
   config: ResolvedConfig
   /** `es run --runs n`: overrides every level. */
   runs?: number
