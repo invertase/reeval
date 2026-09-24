@@ -197,8 +197,7 @@ evals/.history/
     summary.md                                 the run as Markdown, every eval in detail
     worktree.patch                             uncommitted changes, when the run was dirty
     <eval-slug>/1/
-      transcript.jsonl                         prompts, text, tool calls and results
-      final.md                                 the agent's final message per turn
+      transcript.jsonl                         timed agent events, one per line (below)
       diff.patch                               the agent's changes (dependency noise dropped)
       judge-input.json                         what each judge call saw
       checks/<n>.log                           each t.exec: command, exit code, stdout, stderr
@@ -221,6 +220,28 @@ set), `'always'`, or `'manual'`. `config.history.artifacts` picks what's kept ne
 record: `'all'` (default, passes included, so you can see why something passed),
 `'failures'`, or `'none'`. Single tool outputs, check streams and per-file diffs over 128 KB
 keep their head and tail, with a truncation marker and the full text's sha256.
+
+### Transcripts
+
+`transcript.jsonl` has one JSON object per line. Every line has `ts` (UTC) and `atMs` (ms since
+the turn started), and events have `durationMs`:
+
+```jsonl
+{"turn":0,"type":"prompt","ts":"2026-09-24T20:59:37.007Z","atMs":0,"text":"Build a Genkit…"}
+{"turn":0,"type":"reasoning","ts":"…","atMs":8940,"durationMs":16,"text":"Planning a Genkit…"}
+{"turn":0,"type":"web-search","ts":"…","atMs":9969,"durationMs":6183,"query":"Genkit JavaScript flow…","references":1}
+{"turn":0,"type":"web-fetch","ts":"…","atMs":17756,"durationMs":763,"url":"https://genkit.dev/docs/js/flows/","ok":true}
+{"turn":0,"type":"file-edit","ts":"…","atMs":29250,"durationMs":177,"path":"package.json","kind":"create","added":14,"removed":0}
+{"turn":0,"type":"tool","ts":"…","atMs":9968,"durationMs":61,"tool":"glob","input":{…},"output":{…},"ok":true}
+{"turn":0,"type":"turn-end","ts":"…","atMs":80513,"status":"completed","durationMs":80513}
+```
+
+Types: `prompt`, `reasoning`, `text`, `tool` (a call merged with its result), `file-edit`
+(`create | modify | delete` with line counts), `web-search`, `web-fetch`, `error` and
+`turn-end`. Cursor reports only the query or URL for web tools, not result URLs, titles or
+content. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
+`transcript.raw.jsonl`. The record adds per-turn durations, per-phase timings (setup, agent,
+diff, checks, judge) and activity counts, and `summary.md` quotes each eval's last message.
 
 ### What a record captures
 
