@@ -72,13 +72,13 @@ Duration  40s
 |---|---|
 | `packages/evalsuite` | The `evalsuite` package and its `es` CLI |
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
-| `packages/evalsuite/src/sandbox` | The Docker sandbox and its AI SDK harness sandbox provider |
+| `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/harness` | The Cursor harness (`@ai-sdk/harness-cursor`) and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/view` | `evalsuite/view`: browser-safe run headers, the studio's file layout and view-models |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `evalsuite` |
-| `packages/evalsuite/docker` | The base image for sandboxes |
+| `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). A dependency of `evalsuite` that imports nothing from it |
 | `examples/hello` | The example evals (including a with/without-skill pair and a Python sandbox), with a real config and a fake one |
 
 ## Getting started
@@ -389,7 +389,16 @@ so on (`examples/hello/evals/python.es.ts`).
 docker CLI's environment, never its arguments, are masked in everything ES writes, and only
 their names are recorded. A literal string under a secret-looking name (`*_KEY`, `*_TOKEN`, …)
 is refused, and a missing config-level secret stops the run before it starts. Anything you pass
-in is readable by the agent; the harness's own `CURSOR_API_KEY` is passed in too, for now.
+in is readable by the agent.
+
+The harness's own `CURSOR_API_KEY` never enters the container. Each Cursor attempt starts an
+egress gateway: the container's HTTP(S) proxy is a small forwarder that sends every connection
+over `docker exec` to ES, which decrypts only `api2.cursor.sh` (with a CA made for that attempt,
+whose key stays in memory) and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key
+on the key-exchange request. Other hosts pass through untouched and end to end. The short-lived
+session token the Cursor CLI gets back does live in the container. If the gateway can't start
+(for example, an `image` without `node`), that attempt forwards the key as before and prints a
+warning saying why. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
 
 ## Judges
 
@@ -523,8 +532,8 @@ like a secret, including `worktree.patch`.
 ## Development
 
 ```bash
-pnpm build       # build the studio app, then compile packages/evalsuite (and copy the app in)
-pnpm test        # build, then run the engine, wrapper, studio, Docker and browser tests
+pnpm build       # build the studio app, then compile the packages (and copy the app in)
+pnpm test        # build, then run every package's tests: engine, wrapper, studio, sandbox, Docker and browser
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 ```
@@ -532,7 +541,13 @@ pnpm lint        # Biome; `pnpm format` applies fixes
 The engine and wrapper tests drive the real `es` CLI against generated projects with the fake
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
 and reproduce a dirty run with `es checkout`. The ui tests feed recorded event streams to each
-renderer on a fake non-TTY stream and compare the output line by line. The Docker tests skip unless Docker is running and the sandbox image has been built.
+renderer on a fake non-TTY stream and compare the output line by line. The pack test installs the
+packed tarballs into an empty project with npm and runs them. `packages/sandbox-docker` has its own
+tests: request-transformation and policy matching, certificates and the stdio multiplexer; the
+gateway against local HTTP/1.1, HTTP/2 and WebSocket servers; and real containers, where it checks
+the header swap, searches `env`, `/proc` and the filesystem for the key, and checks a restricted
+policy leaves no route out. The Docker tests skip unless Docker is running and the sandbox image
+has been built.
 
 For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/es-demo` builds a demo project
 with recorded runs, and `ES_STUDIO_PROJECT=/tmp/es-demo pnpm --filter studio-web dev` serves the
