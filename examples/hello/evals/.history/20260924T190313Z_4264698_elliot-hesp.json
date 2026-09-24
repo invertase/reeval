@@ -1,0 +1,210 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260924T190313Z_4264698_elliot-hesp",
+  "status": "complete",
+  "startedAt": "2026-09-24T19:03:13.993Z",
+  "endedAt": "2026-09-24T19:04:50.371Z",
+  "durationMs": 96378,
+  "author": "elliot-hesp",
+  "git": {
+    "sha": "42646987e6a35e9e934dcda51ff01a4505dab539",
+    "branch": "feat/history-in-repo",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-24T20:03:12+01:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "bbfa06fd4b38"
+  },
+  "dependencies": {
+    "lockfiles": [
+      {
+        "path": "../../pnpm-lock.yaml",
+        "sha256": "f65b1de2947e4608318226bd9ad71e5c4b88a7eca3bdd14c06b49abb56491ebf"
+      }
+    ]
+  },
+  "environment": {
+    "es": "0.1.0",
+    "node": "25.8.1",
+    "os": "darwin",
+    "arch": "arm64",
+    "image": {
+      "ref": "evalsuite-sandbox:cursor-1.0.36",
+      "id": "sha256:9d0f47ae4d7c1d00626bc5d756ec01c0b31bb5790063c247bed323f809a8d2ba",
+      "repoDigests": []
+    },
+    "agentCli": "2026.09.23-86fc751",
+    "packages": {
+      "vitest": "5.0.1",
+      "ai": "7.0.113",
+      "@ai-sdk/harness": "1.0.123",
+      "@ai-sdk/harness-cursor": "1.0.36",
+      "@ai-sdk/google": "4.0.79"
+    },
+    "harness": {
+      "kind": "cursor",
+      "model": "composer-2.5",
+      "resolvedModel": null
+    },
+    "judge": {
+      "model": "google/gemini-3.8-flash",
+      "resolvedModels": [
+        "gemini-3.8-flash"
+      ],
+      "threshold": 0.8,
+      "version": "6634fe7784e7"
+    },
+    "context": [
+      {
+        "path": "~/.cursor/cli-config.json",
+        "sha256": "6bebcca150b22dd97e384d296ce1061a1710659fe9ce9eeb4e9c559c4c412c0c"
+      }
+    ]
+  },
+  "config": {
+    "harness": "cursor",
+    "model": "composer-2.5",
+    "sandbox": "docker",
+    "judgeModel": "google/gemini-3.8-flash",
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "configHash": "6480ddd680694e269414dbba4e1bb66fe0d6b2833d1aba015067844c17ac3841"
+  },
+  "cost": {
+    "usd": null,
+    "inputTokens": null,
+    "outputTokens": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "pass": 0,
+    "fail": 1,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/custom.es.ts › builds a runnable Genkit recipe flow",
+      "slug": "evals-custom-es-ts-builds-a-runnable-genkit-recipe-flow-36d091",
+      "file": "evals/custom.es.ts",
+      "group": [],
+      "name": "builds a runnable Genkit recipe flow",
+      "fingerprint": "ff5015e6646dda1530fecdd7b20261a3a30266577f6c73daf7f565058c3d8a38",
+      "sourceHash": "f98d7dffb376ebbd946deb61195f79660b8705e6718ab21ba34aa3abb71cd951",
+      "fixtureHash": null,
+      "outcome": "fail",
+      "passRate": 0,
+      "attempts": [
+        {
+          "n": 1,
+          "context": [
+            {
+              "path": "~/.cursor/cli-config.json",
+              "sha256": "6bebcca150b22dd97e384d296ce1061a1710659fe9ce9eeb4e9c559c4c412c0c"
+            }
+          ],
+          "outcome": "fail",
+          "error": {
+            "kind": "judge",
+            "message": "judge score 0.05 is below 0.8 for \"Pass if a local invocation of the flow with a meal idea completes successfully and returns valid structured data containing a nonempty title, at least one ingredient, and at least one numbered instruction.\" (google/gemini-3.8-flash)"
+          },
+          "durationMs": 95469,
+          "turns": [
+            {
+              "prompt": "Build a Genkit JavaScript flow that accepts a meal idea and returns a structured recipe with a title, ingredient list, and numbered instructions. Configure it to use a supported model through environment-based credentials, and make the flow runnable locally with a sample request.",
+              "status": "completed",
+              "text": "A Genkit JavaScript recipe flow is set up in the workspace. Here is what was added and how to run it.\n\n## Project layout\n\n| File | Purpose |\n|------|---------|\n| `src/index.js` | Genkit flow with Zod schemas |\n| `src/run-sample.js` | Local runner with a sample meal idea |\n| `.env.example` | Documents `GOOGLE_GENAI_API_KEY` |\n| `package.json` | Dependencies and npm scripts |\n\n## Flow\n\n`recipeFlow` accepts `{ mealIdea: string }` and returns structured output:\n\n- **title** — recipe name  \n- **ingredients** — array of ingredient lines with quantities  \n- **instructions** — ordered steps (numbered when printed by the sample runner)\n\nThe Google AI plugin reads credentials from the environment (`GOOGLE_GENAI_API_KEY`, `GEMINI_API_KEY`, or `GOOGLE_API_KEY`).\n\n## Run locally\n\n1. **Get an API key** from [Google AI Studio](https://aistudio.google.com/apikey).\n\n2. **Set the environment variable:**\n   ```bash\n   export GOOGLE_GENAI_API_KEY=\"your-api-key-here\"\n   ```\n\n3. **Install and run the sample:**\n   ```bash\n   cd /es/workspace\n   npm install\n   npm start\n   ```\n\n   Or pass your own meal idea:\n   ```bash\n   node src/run-sample.js \"spicy Korean bibimbap bowl\"\n   ```\n\n4. **Optional — Genkit Developer UI:**\n   ```bash\n   npm run dev\n   ```\n   Then open the UI to inspect and test `recipeFlow` with traces.\n\nWithout an API key, `npm start` exits with a clear message pointing to `.env.example`."
+            }
+          ],
+          "judgements": [
+            {
+              "verdict": "fail",
+              "score": 0.05,
+              "threshold": 0.8,
+              "question": "Pass if a local invocation of the flow with a meal idea completes successfully and returns valid structured data containing a nonempty title, at least one ingredient, and at least one numbered instruction.",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "reason": null,
+              "evidence": []
+            }
+          ],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": ".env.example",
+              "status": "added"
+            },
+            {
+              "path": ".genkit/traces_idx/genkit.metadata",
+              "status": "added"
+            },
+            {
+              "path": ".gitignore",
+              "status": "added"
+            },
+            {
+              "path": "package-lock.json",
+              "status": "added"
+            },
+            {
+              "path": "package.json",
+              "status": "added"
+            },
+            {
+              "path": "src/index.js",
+              "status": "added"
+            },
+            {
+              "path": "src/run-sample.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-custom-es-ts-builds-a-runnable-genkit-recipe-flow-36d091/1/transcript.jsonl",
+              "sha256": "aa9302f374462db0a823ca4c975ab4964ffcb6f0dd443a5eb0caf8d09d5047d6",
+              "bytes": 25097
+            },
+            "final": {
+              "path": "evals-custom-es-ts-builds-a-runnable-genkit-recipe-flow-36d091/1/final.md",
+              "sha256": "671a23414d367576a44d9e764c665c6fb23d9406d4327591b6649beeb5097ae2",
+              "bytes": 1705
+            },
+            "diff": {
+              "path": "evals-custom-es-ts-builds-a-runnable-genkit-recipe-flow-36d091/1/diff.patch",
+              "sha256": "6cfba3f75ad6bc62dc4bd9349a30167e6bdbfef03725c2bfb16fa7a4ba03658a",
+              "bytes": 3754
+            },
+            "judgeInput": {
+              "path": "evals-custom-es-ts-builds-a-runnable-genkit-recipe-flow-36d091/1/judge-input.json",
+              "sha256": "5024726187f92339a0ad9eb90d846131eabab8200dddcfc891b124931580085f",
+              "bytes": 2481
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "reproducibility": {
+    "notes": [
+      "Agents sample their output, so a rerun of the same state can take a different path.",
+      "The agent model (composer-2.5) is served by the provider and can change without notice; the harness does not report which version answered.",
+      "The judge model (google/gemini-3.8-flash) can also change provider-side; it reported gemini-3.8-flash.",
+      "The sandbox has network access: web search, package registries and APIs can return different results on a rerun.",
+      "The image evalsuite-sandbox:cursor-1.0.36 was built locally (id sha256:9d0f47ae4d7c…) and not pushed; rebuilding it reinstalls the agent CLI, so keep or push the image to reproduce exactly.",
+      "Eval fingerprints hash each eval file, not the modules it imports."
+    ]
+  }
+}

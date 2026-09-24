@@ -1,0 +1,23 @@
+[
+  {
+    "question": "Pass if a local invocation of the flow with a meal idea completes successfully and returns valid structured data containing a nonempty title, at least one ingredient, and at least one numbered instruction.",
+    "model": "google/gemini-3.8-flash",
+    "state": {
+      "task": "Build a Genkit JavaScript flow that accepts a meal idea and returns a structured recipe with a title, ingredient list, and numbered instructions. Configure it to use a supported model through environment-based credentials, and make the flow runnable locally with a sample request.",
+      "output": "A Genkit JavaScript recipe flow is set up in the workspace. Here is what was added and how to run it.\n\n## Project layout\n\n| File | Purpose |\n|------|---------|\n| `src/index.js` | Genkit flow with Zod schemas |\n| `src/run-sample.js` | Local runner with a sample meal idea |\n| `.env.example` | Documents `GOOGLE_GENAI_API_KEY` |\n| `package.json` | Dependencies and npm scripts |\n\n## Flow\n\n`recipeFlow` accepts `{ mealIdea: string }` and returns structured output:\n\n- **title** — recipe name  \n- **ingredients** — array of ingredient lines with quantities  \n- **instructions** — ordered steps (numbered when printed by the sample runner)\n\nThe Google AI plugin reads credentials from the environment (`GOOGLE_GENAI_API_KEY`, `GEMINI_API_KEY`, or `GOOGLE_API_KEY`).\n\n## Run locally\n\n1. **Get an API key** from [Google AI Studio](https://aistudio.google.com/apikey).\n\n2. **Set the environment variable:**\n   ```bash\n   export GOOGLE_GENAI_API_KEY=\"your-api-key-here\"\n   ```\n\n3. **Install and run the sample:**\n   ```bash\n   cd /es/workspace\n   npm install\n   npm start\n   ```\n\n   Or pass your own meal idea:\n   ```bash\n   node src/run-sample.js \"spicy Korean bibimbap bowl\"\n   ```\n\n4. **Optional — Genkit Developer UI:**\n   ```bash\n   npm run dev\n   ```\n   Then open the UI to inspect and test `recipeFlow` with traces.\n\nWithout an API key, `npm start` exits with a clear message pointing to `.env.example`.",
+      "files": [
+        "added .env.example",
+        "added .genkit/traces_idx/genkit.metadata",
+        "added .gitignore",
+        "added package-lock.json",
+        "added package.json",
+        "added src/index.js",
+        "added src/run-sample.js"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "6cfba3f75ad6bc62dc4bd9349a30167e6bdbfef03725c2bfb16fa7a4ba03658a"
+      }
+    }
+  }
+]

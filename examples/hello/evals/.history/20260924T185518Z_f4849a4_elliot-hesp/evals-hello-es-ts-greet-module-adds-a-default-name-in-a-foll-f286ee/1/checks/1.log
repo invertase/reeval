@@ -1,0 +1,7 @@
+$ node -e "import('./greet.js').then((m) => {
+  const greet = m.greet ?? m.default?.greet ?? m.default
+  process.exit(greet() === 'Hello, world!' ? 0 : 1)
+})"
+exit 0
+--- stdout
+--- stderr

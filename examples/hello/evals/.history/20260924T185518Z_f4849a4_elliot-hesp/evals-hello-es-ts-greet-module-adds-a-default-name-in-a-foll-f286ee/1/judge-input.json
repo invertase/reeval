@@ -1,0 +1,17 @@
+[
+  {
+    "question": "Did the agent add the default without breaking greet(name)?",
+    "model": "google/gemini-3.8-flash",
+    "state": {
+      "task": "Make name default to \"world\" when greet() is called without arguments.",
+      "output": "`greet()` now defaults `name` to `\"world\"`:\n\n```javascript\nfunction greet(name = \"world\") {\n  return `Hello, ${name}!`;\n}\n```\n\n- `greet()` → `\"Hello, world!\"`\n- `greet('Alice')` → `\"Hello, Alice!\"`",
+      "files": [
+        "added greet.js"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "b9d2ba9f6321ce1ed99ddf7f39a1e636ef1fd42eddab0ecb5e86d69ee70b8d79"
+      }
+    }
+  }
+]

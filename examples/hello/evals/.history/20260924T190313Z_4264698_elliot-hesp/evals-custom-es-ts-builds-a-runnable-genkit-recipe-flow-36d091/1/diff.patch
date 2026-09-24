@@ -1,0 +1,141 @@
+diff --git a/.env.example b/.env.example
+new file mode 100644
+index 0000000..6ff4fdd
+--- /dev/null
++++ b/.env.example
+@@ -0,0 +1,2 @@
++# Get a key at https://aistudio.google.com/apikey
++GOOGLE_GENAI_API_KEY=your-api-key-here
+diff --git a/.genkit/traces_idx/genkit.metadata b/.genkit/traces_idx/genkit.metadata
+new file mode 100644
+index 0000000..0cc77b6
+--- /dev/null
++++ b/.genkit/traces_idx/genkit.metadata
+@@ -0,0 +1 @@
++{"version":"1.43.0"}
+\ No newline at end of file
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..2e8157a
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1,3 @@
++node_modules/
++.env
++*.log
+diff --git a/package.json b/package.json
+new file mode 100644
+index 0000000..6f4cc93
+--- /dev/null
++++ b/package.json
+@@ -0,0 +1,20 @@
++{
++  "name": "genkit-recipe-flow",
++  "version": "1.0.0",
++  "description": "Genkit flow that turns a meal idea into a structured recipe",
++  "type": "module",
++  "scripts": {
++    "start": "node src/run-sample.js",
++    "dev": "genkit start -- node src/index.js"
++  },
++  "engines": {
++    "node": ">=18"
++  },
++  "dependencies": {
++    "@genkit-ai/google-genai": "^1.42.0",
++    "genkit": "^1.42.0"
++  },
++  "devDependencies": {
++    "genkit-cli": "^1.43.0"
++  }
++}
+diff --git a/src/index.js b/src/index.js
+new file mode 100644
+index 0000000..d0ee7ef
+--- /dev/null
++++ b/src/index.js
+@@ -0,0 +1,46 @@
++import { genkit, z } from 'genkit';
++import { googleAI } from '@genkit-ai/google-genai';
++
++const ai = genkit({
++  plugins: [googleAI()],
++});
++
++export const RecipeSchema = z.object({
++  title: z.string().describe('A concise, descriptive recipe title'),
++  ingredients: z
++    .array(z.string())
++    .describe('Ingredient lines with quantities, e.g. "2 cups flour"'),
++  instructions: z
++    .array(z.string())
++    .describe('Ordered cooking steps; each item is one numbered instruction'),
++});
++
++export const recipeFlow = ai.defineFlow(
++  {
++    name: 'recipeFlow',
++    inputSchema: z.object({
++      mealIdea: z
++        .string()
++        .describe('A meal idea, dish name, or brief description to recipe-ize'),
++    }),
++    outputSchema: RecipeSchema,
++  },
++  async ({ mealIdea }) => {
++    const { output } = await ai.generate({
++      model: googleAI.model('gemini-2.5-flash'),
++      prompt: `Create a practical home-cook recipe for: ${mealIdea}
++
++Return:
++- title: a clear recipe name
++- ingredients: a complete shopping list with quantities
++- instructions: step-by-step directions as an ordered array (one step per item, no numbers in the strings)`,
++      output: { schema: RecipeSchema },
++    });
++
++    if (output == null) {
++      throw new Error('Model response did not match the recipe schema.');
++    }
++
++    return output;
++  },
++);
+diff --git a/src/run-sample.js b/src/run-sample.js
+new file mode 100644
+index 0000000..f3375ab
+--- /dev/null
++++ b/src/run-sample.js
+@@ -0,0 +1,30 @@
++import { recipeFlow } from './index.js';
++
++const apiKey =
++  process.env.GOOGLE_GENAI_API_KEY ??
++  process.env.GEMINI_API_KEY ??
++  process.env.GOOGLE_API_KEY;
++
++if (!apiKey) {
++  console.error(
++    'Missing API key. Set GOOGLE_GENAI_API_KEY (see .env.example) and retry.',
++  );
++  process.exit(1);
++}
++
++const mealIdea =
++  process.argv[2] ?? 'creamy garlic mushroom pasta with fresh herbs';
++
++console.log(`Generating recipe for: "${mealIdea}"\n`);
++
++const recipe = await recipeFlow({ mealIdea });
++
++console.log(`# ${recipe.title}\n`);
++console.log('## Ingredients');
++for (const ingredient of recipe.ingredients) {
++  console.log(`- ${ingredient}`);
++}
++console.log('\n## Instructions');
++recipe.instructions.forEach((step, index) => {
++  console.log(`${index + 1}. ${step}`);
++});
+[omitted 1 dependency or binary file from the judge prompt]
+- package-lock.json
