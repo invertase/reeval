@@ -135,6 +135,14 @@ export type FakeHarnessDescriptor = {
   delayMs?: number
   /** Throw before the first turn starts, to simulate an infra failure. */
   failWith?: string
+  /** A reasoning block at the start of every turn. */
+  reasoning?: string
+  /** Tool calls the fake agent reports on every turn, before writing files. */
+  tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean }>
+  /** Files and message used instead when the environment gives the agent a skill. */
+  withSkill?: { files?: Record<string, string>; text?: string }
+  /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
+  flakeRate?: number
 }
 export type CursorHarnessDescriptor = {
   kind: 'cursor'

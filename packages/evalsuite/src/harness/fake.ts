@@ -15,6 +15,10 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       Object.keys(mcp).length ? `mcp: ${Object.keys(mcp).join(', ')}` : '',
     ].filter(Boolean)
     let calls = 0
+    const skilled = skills.length > 0 && descriptor.withSkill
+    const files = (skilled ? descriptor.withSkill?.files : undefined) ?? descriptor.files ?? {}
+    const reply = (skilled ? descriptor.withSkill?.text : undefined) ?? descriptor.text ?? 'Done.'
+    const flaked = Math.random() < (descriptor.flakeRate ?? 0)
     return {
       async send(prompt, signal) {
         const startedAt = Date.now()
@@ -42,6 +46,26 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
           durationMs: Date.now() - startedAt,
           transcript,
         })
+        if (descriptor.reasoning) {
+          transcript.push({ ...at(), type: 'reasoning', text: descriptor.reasoning, durationMs: 0 })
+        }
+        for (const tool of descriptor.tools ?? []) {
+          transcript.push({
+            ...at(),
+            type: 'tool',
+            toolCallId: `call_${++calls}`,
+            tool: tool.tool,
+            input: tool.input,
+            output: tool.output,
+            ok: tool.ok ?? true,
+            durationMs: 0,
+          })
+        }
+        if (flaked) {
+          const text = 'I ran out of ideas and left the workspace unchanged.'
+          transcript.push({ ...at(), type: 'text', text, durationMs: 0 })
+          return done(text, 'completed')
+        }
         if (descriptor.delayMs) {
           try {
             await sleep(descriptor.delayMs, undefined, { signal })
@@ -49,7 +73,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             return done('', 'aborted')
           }
         }
-        for (const [path, content] of Object.entries(descriptor.files ?? {})) {
+        for (const [path, content] of Object.entries(files)) {
           const time = at()
           const before = await sandbox.readFile(path)
           await sandbox.writeFile(path, content)
@@ -64,9 +88,8 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             durationMs: Date.now() - startedAt - time.atMs,
           })
         }
-        const text = descriptor.text ?? 'Done.'
-        transcript.push({ ...at(), type: 'text', text, durationMs: 0 })
-        return done(text, 'completed')
+        transcript.push({ ...at(), type: 'text', text: reply, durationMs: 0 })
+        return done(reply, 'completed')
       },
       async close() {},
     }
