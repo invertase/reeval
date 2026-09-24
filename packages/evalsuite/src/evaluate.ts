@@ -26,6 +26,8 @@ import {
 } from './options.ts'
 import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
+import { withLease } from './scheduler/client.ts'
+import type { Limits } from './scheduler/core.ts'
 import type {
   AttemptMeta,
   Diff,
@@ -127,7 +129,10 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
   if (!matchesTags(resolved.tags, ctx.tags)) return
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
+  const order = registered++
+  const cells: string[] = []
   for (const planned of expand(resolved)) {
+    if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
     const baked = planned.environment.steps.filter((s) => s.kind === 'exec' && s.cache).length
     const setup =
       planned.sandbox.kind === 'docker' && (planned.sandbox.from || baked > 0) ? SETUP_BUDGET_MS : 0
@@ -148,12 +153,36 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       env: resolved.env,
       judge: resolved.judge,
     }
+    const cell = cells.indexOf(planned.cell.key)
     registerTest(
       `${name} [${attemptId(planned.cell.key, planned.n)}]`,
-      { timeout: timeoutMs + setup + GRACE_MS, mode, attempt },
+      {
+        timeout: timeoutMs + setup + GRACE_MS,
+        mode,
+        attempt,
+        gate: (file) => {
+          const path = relativeFile(ctx.config.root, file)
+          return {
+            limits: attemptLimits(planned, ctx.concurrency),
+            rank: { eval: evalId(path, [...groups, name]), file: path, order, n: planned.n, cell },
+          }
+        },
+      },
       (handle) => runAttempt(spec, fn, handle),
     )
   }
+}
+
+/** Evals registered so far in this worker, for the scheduler's tie-break. */
+let registered = 0
+
+/** The run-wide cap, plus the sandbox provider's and harness's own caps when they set one. */
+function attemptLimits(planned: PlannedAttempt, concurrency: number): Limits {
+  const limits: Limits = { attempts: concurrency }
+  const { sandbox, harness } = planned
+  if (sandbox.maxConcurrent) limits[`sandbox:${sandbox.kind}`] = sandbox.maxConcurrent
+  if (harness.maxConcurrent) limits[`harness:${harness.kind}`] = harness.maxConcurrent
+  return limits
 }
 
 const defineEval =
@@ -445,12 +474,19 @@ async function runAttempt(
       const start = performance.now()
       const ms = () => Math.round(performance.now() - start)
       report({ kind: 'judge-start', question })
+      const { maxConcurrent, ...judgeOptions } = options
+      const provider = judgeModelName(model).split('/')[0]
       try {
         const verdict = await timed('judgeMs', () =>
-          runJudge(
-            question,
-            state,
-            { ...options, model, threshold: options.threshold ?? 0.8 },
+          withLease(
+            maxConcurrent ? { [`judge:${provider}`]: maxConcurrent } : {},
+            () =>
+              runJudge(
+                question,
+                state,
+                { ...judgeOptions, model, threshold: options.threshold ?? 0.8 },
+                signal,
+              ),
             signal,
           ),
         )

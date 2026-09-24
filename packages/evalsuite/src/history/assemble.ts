@@ -105,6 +105,9 @@ const passRateOf = (outcomes: Outcome[]) => {
   return counted ? pass / counted : null
 }
 
+/** Concurrency caps change how fast a run goes, not what it measures. */
+const withoutCaps = <T extends { maxConcurrent?: number }>({ maxConcurrent: _, ...rest }: T) => rest
+
 const harnessModel = (h: HarnessDescriptor) => (h.kind === 'cursor' ? (h.model ?? null) : null)
 
 /** Collects artifact files, redacting before anything is hashed. */
@@ -230,12 +233,12 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const configHash = sha256(
     JSON.stringify({
       include: config.include,
-      harness: config.harness,
-      sandbox: config.sandbox,
+      harness: config.harness.map(withoutCaps),
+      sandbox: config.sandbox.map(withoutCaps),
       environment: config.environment,
       runs: config.runs,
       env: config.env,
-      judge: config.judge,
+      judge: withoutCaps(config.judge),
       timeoutMs: config.timeoutMs,
     }),
   )
@@ -466,6 +469,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       judgeModel,
       threshold: config.judge.threshold,
       timeoutMs: config.timeoutMs,
+      concurrency: input.ctx.concurrency,
       configHash,
     },
     cost: { usd: null, inputTokens: null, outputTokens: null, source: 'unreported' },

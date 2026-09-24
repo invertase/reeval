@@ -90,6 +90,8 @@ export type JudgeOptions = {
   /** Minimum score (0–1) for a `pass` verdict. */
   threshold?: number
   providerOptions?: Record<string, Record<string, JSONValue>>
+  /** The most judge calls to this model's provider at once, across the run. */
+  maxConcurrent?: number
 }
 
 export type JudgeCallOptions = JudgeOptions & {
@@ -143,12 +145,16 @@ export type FakeHarnessDescriptor = {
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
+  /** The most attempts on this harness kind at once, across the run. */
+  maxConcurrent?: number
 }
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
   model?: string
   /** Cell id; defaults to `cursor:<model>`. */
   id?: string
+  /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
+  maxConcurrent?: number
 }
 export type HarnessDescriptor = FakeHarnessDescriptor | CursorHarnessDescriptor
 
@@ -157,6 +163,8 @@ export type FakeSandboxDescriptor = {
   id?: string
   /** Parent directory for the per-eval workspace (defaults to the OS temp dir). */
   dir?: string
+  /** The most attempts on this sandbox kind at once, across the run. */
+  maxConcurrent?: number
 }
 export type DockerSandboxDescriptor = {
   kind: 'docker'
@@ -166,6 +174,8 @@ export type DockerSandboxDescriptor = {
   image?: string
   /** A Debian or Ubuntu based toolchain image; ES bakes Node and the harness on top, cached. */
   from?: string
+  /** The most Docker sandboxes at once, across the run, whatever their image. */
+  maxConcurrent?: number
 }
 export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
 
@@ -237,6 +247,8 @@ export type EsConfig = {
   env?: EnvVars
   judge?: ConfigJudgeOptions
   timeout?: Duration
+  /** How many attempts run at once. `--concurrency` and `ES_CONCURRENCY` override it. */
+  concurrency?: number
   /** When runs are copied into the history folder: `es record` only, in CI, or on every run. */
   record?: RecordMode
   history?: HistoryConfig
@@ -259,6 +271,8 @@ export type ResolvedConfig = {
   env: EnvVars
   judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
+  /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
+  concurrency: number | undefined
   record: RecordMode
   history: { dir: string; artifacts: ArtifactLevel }
 }
@@ -347,4 +361,6 @@ export type RunContext = {
   runs?: number
   /** `es run --tag`: each is a tag, or `!tag` to exclude; all must hold. */
   tags: string[]
+  /** How many attempts run at once, across the run. */
+  concurrency: number
 }

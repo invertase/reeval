@@ -120,6 +120,7 @@ const interleaved: EsEvent[] = [
     files: 1,
     harness: 'cursor/composer-2.5',
     sandbox: 'docker',
+    concurrency: 2,
   },
   {
     type: 'collected',
@@ -285,7 +286,7 @@ describe('plain renderer', () => {
     assert.equal(
       render(interleaved, options()),
       lines(
-        'es 0.1.0 · 1 eval file · harness cursor/composer-2.5 · sandbox docker · grouped logs',
+        'es 0.1.0 · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
         '[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module',
         '[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn',
         '… 2 running after 1m 01s: [creates#1 cursor] turn 1 1m 01s, [adds#1 cursor] turn 1 1m 00s',

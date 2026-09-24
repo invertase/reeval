@@ -70,6 +70,8 @@ export type EsEvent =
       files: number
       harness: string
       sandbox: string
+      /** How many attempts run at once. */
+      concurrency: number
     }
   /** Every attempt in a file, once it's collected (skipped ones too, so tags are stable). */
   | { type: 'collected'; at: number; file: string; evals: CollectedEval[] }

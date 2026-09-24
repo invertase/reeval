@@ -186,6 +186,8 @@ export type RunRecord = {
     judgeModel: string | null
     threshold: number
     timeoutMs: number
+    /** Attempts that ran at once; not part of `configHash`, since it doesn't change results. */
+    concurrency: number
     configHash: string
   }
   cost: Cost

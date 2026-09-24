@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
-import { loadConfig, missingCredentials, UsageError } from './config.ts'
+import { loadConfig, missingCredentials, resolveConcurrency, UsageError } from './config.ts'
 import { loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import { evalSlug, newRunId } from './ids.ts'
@@ -27,6 +27,8 @@ const HELP = `es ${version} — eval runner for coding agents
 Usage:
   es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
     --runs <n>              Attempts per cell, overriding the config, groups and evals
+    --concurrency <n>       Attempts running at once across evals and cells (default 4;
+                            also ES_CONCURRENCY or concurrency in the config)
     --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
     --record                Also record the run into the history folder (see config.record)
     --ui <mode>             live, plain or agent (default: agent under a coding agent, plain
@@ -81,6 +83,7 @@ async function run(argv: string[]): Promise<number> {
       limit: { type: 'string' },
       'fail-on-regression': { type: 'boolean' },
       runs: { type: 'string' },
+      concurrency: { type: 'string' },
       ui: { type: 'string' },
       'log-order': { type: 'string' },
       'log-prefix': { type: 'string' },
@@ -163,6 +166,7 @@ async function run(argv: string[]): Promise<number> {
     }
   }
   const tags = values.tag ?? []
+  const concurrency = resolveConcurrency(config, values.concurrency)
   if (
     config.harness.some((h) => h.kind === 'cursor') &&
     config.sandbox.some((s) => s.kind === 'docker')
@@ -189,7 +193,7 @@ async function run(argv: string[]): Promise<number> {
   await sweepStaging(config.root)
   const resultsDir = stagingDir(config.root, runId)
   await mkdir(resultsDir, { recursive: true })
-  const ctx = { runId, resultsDir, config, runs, tags }
+  const ctx = { runId, resultsDir, config, runs, tags, concurrency }
 
   const { engineVersions, runEngine } = await import('./engine/node.ts')
 
@@ -217,6 +221,7 @@ async function run(argv: string[]): Promise<number> {
           files,
           harness: config.harness.map(harnessId).join(', '),
           sandbox: config.sandbox.map(sandboxId).join(', '),
+          concurrency,
         }),
       onEvent: (e) => {
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.

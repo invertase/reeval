@@ -2,12 +2,14 @@
 // into ES types. Nothing here leaks Vitest types to callers.
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
+import { availableParallelism } from 'node:os'
 import { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { configDefaults } from 'vitest/config'
 import { createVitest, type Reporter, type TestCase, type Vitest } from 'vitest/node'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
+import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
 import type { RunContext } from '../types.ts'
 import type { EsEvent, EvalResult } from '../ui/events.ts'
 import type {} from './runtime.ts'
@@ -100,7 +102,7 @@ function toEngineEval(root: string, test: TestCase, vitest?: Vitest): EngineEval
     name,
     attempt,
     state,
-    durationMs: Math.round(test.diagnostic()?.duration ?? 0),
+    durationMs: Math.round(test.meta().esRunMs ?? test.diagnostic()?.duration ?? 0),
     errors: errors.map((e) => cleanMessage(e.message ?? String(e))),
     formattedErrors: vitest ? errors.map(format) : [],
     meta: test.meta().es,
@@ -143,6 +145,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         ...identify(config.root, test),
       }))
       for (const t of tests) keysByTask.set(t.test.id, t.key)
+      scheduler?.expect(tests.filter((t) => !skipped(t.test)).length)
       emit({
         type: 'collected',
         at: Date.now(),
@@ -156,15 +159,15 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         })),
       })
     },
-    onTestCaseReady(test) {
-      if (skipped(test)) return
-      const { id, key, attempt } = identify(config.root, test)
-      emit({ type: 'eval-start', at: Date.now(), id, key, attempt })
-    },
+    // An attempt starts when the scheduler lets it, not when Vitest calls its test.
     onTestCaseArtifactRecord(test, artifact) {
-      if (artifact.type !== 'es:progress') return
-      const { key } = identify(config.root, test)
-      emit({ type: 'eval-progress', key, progress: artifact.progress })
+      if (artifact.type === 'es:start') {
+        const { id, key, attempt } = identify(config.root, test)
+        emit({ type: 'eval-start', at: artifact.at, id, key, attempt })
+      } else if (artifact.type === 'es:progress') {
+        const { key } = identify(config.root, test)
+        emit({ type: 'eval-progress', key, progress: artifact.progress })
+      }
     },
     onUserConsoleLog(log) {
       const key = log.taskId ? keysByTask.get(log.taskId) : undefined
@@ -182,10 +185,14 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       if (matchesName(e)) emit({ type: 'eval-end', at: Date.now(), result: e })
     },
     onTestRunEnd(modules, errors, reason) {
-      for (const module of modules) {
+      // Attempts finish in any order; results are listed by file, then as declared.
+      const byFile = [...modules].sort((a, b) => (a.moduleId < b.moduleId ? -1 : 1))
+      const finished = new Map(evals)
+      evals.clear()
+      for (const module of byFile) {
         for (const test of module.children.allTests()) {
           const e = toEngineEval(config.root, test, vitest)
-          if (!evals.has(e.key)) evals.set(e.key, e)
+          evals.set(e.key, finished.get(e.key) ?? e)
           if (e.errors.some((m) => ONLY_IN_CI.test(m))) usage = onlyInCi(e.file)
         }
         for (const error of module.errors()) {
@@ -214,6 +221,11 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       [...e.group, e.name, e.attempt ? `[${e.attempt.cell.key}#${e.attempt.n}]` : ''].join(' '),
     )
   const sigintListeners = new Set(process.listeners('SIGINT'))
+  const { concurrency } = options.run
+  // Attempts wait on the network, not the CPU, so a few workers run many attempts each; one
+  // worker per file in flight lets the scheduler balance across files.
+  const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
+  let scheduler: SchedulerServer | undefined
   try {
     vitest = await createVitest(
       {
@@ -232,7 +244,10 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         testTimeout: config.timeoutMs,
         hookTimeout: config.timeoutMs,
         pool: 'forks',
-        maxWorkers: 1,
+        maxWorkers: workers,
+        sequence: { concurrent: true },
+        // Every attempt in a file asks the scheduler for a lease at once; it decides who runs.
+        maxConcurrency: 10_000,
         retry: 0,
         allowOnly: !process.env.CI,
         passWithNoTests: true,
@@ -260,6 +275,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     if (specs.length === 0)
       return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true }
 
+    scheduler = await startSchedulerServer({ gatherFiles: Math.min(specs.length, workers) })
+    vitest.provide('es:scheduler', scheduler.address)
+
     const instance = vitest
     options.onCancellable?.(() => {
       cancelled = true
@@ -271,6 +289,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     throw new Error(`${(error as Error).message}${detail ? `\n${detail}` : ''}`)
   } finally {
     await vitest?.close()
+    await scheduler?.close()
   }
   if (usage) throw new UsageError(usage)
   const matching = [...evals.values()].filter(matchesName)

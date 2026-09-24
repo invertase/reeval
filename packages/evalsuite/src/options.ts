@@ -66,6 +66,14 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     throw new UsageError(`tags must be a list of strings in ${where}`)
   }
   if (env !== undefined) checkEnv(env, where)
+  checkMaxConcurrent((options as EvalOptions).judge?.maxConcurrent, `judge in ${where}`)
+}
+
+function checkMaxConcurrent(value: unknown, where: string): void {
+  if (value === undefined || (Number.isInteger(value) && (value as number) >= 1)) return
+  throw new UsageError(
+    `maxConcurrent must be a whole number of at least 1 (got ${String(value)}) for ${where}`,
+  )
 }
 
 export function checkEnv(env: EnvVars, where: string): void {
@@ -98,7 +106,10 @@ function checkAxisValue(
       : kind === 'harness'
         ? v?.kind === 'cursor' || v?.kind === 'fake'
         : v?.kind === 'docker' || v?.kind === 'fake'
-  if (ok) return
+  if (ok) {
+    checkMaxConcurrent((value as { maxConcurrent?: unknown }).maxConcurrent, `${kind} in ${where}`)
+    return
+  }
   const example = { harness: 'cursor()', sandbox: 'docker()', environment: 'defineEnvironment(…)' }[
     kind
   ]

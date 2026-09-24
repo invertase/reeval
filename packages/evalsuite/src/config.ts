@@ -20,6 +20,7 @@ const CONFIG_KEYS = [
   'env',
   'judge',
   'timeout',
+  'concurrency',
   'record',
   'history',
 ]
@@ -117,9 +118,35 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     env,
     judge: resolveJudge(user.judge),
     timeoutMs: parseDuration(user.timeout ?? '15m'),
+    concurrency:
+      user.concurrency === undefined
+        ? undefined
+        : checkConcurrency(user.concurrency, 'config.concurrency'),
     record,
     history: { dir: historyDir, artifacts },
   }
+}
+
+/** The default: attempts are mostly waiting on a model, but each Docker sandbox costs memory. */
+export const DEFAULT_CONCURRENCY = 4
+
+function checkConcurrency(value: unknown, where: string): number {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1) {
+    throw new UsageError(`${where} must be a whole number of at least 1 (got ${String(value)})`)
+  }
+  return n
+}
+
+/** `--concurrency`, then `ES_CONCURRENCY`, then `concurrency` in the config, then the default. */
+export function resolveConcurrency(
+  config: ResolvedConfig,
+  flag: string | undefined,
+  env = process.env,
+): number {
+  if (flag !== undefined) return checkConcurrency(flag, '--concurrency')
+  if (env.ES_CONCURRENCY) return checkConcurrency(env.ES_CONCURRENCY, 'ES_CONCURRENCY')
+  return config.concurrency ?? DEFAULT_CONCURRENCY
 }
 
 function resolveJudge(judge: EsConfig['judge'] = {}): ResolvedConfig['judge'] {
