@@ -97,7 +97,7 @@ function Filters({ hasScratch }: { hasScratch: boolean }) {
           className="h-9 pl-8"
         />
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg bg-muted p-0.5">
           <Seg value={undefined} label="All" />
           <Seg value="failed" label="Failing" />

@@ -86,7 +86,9 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
             {record.runner.kind === 'ci' ? `CI · ${record.runner.provider}` : record.author}
           </Meta>
           <Meta icon={Clock}>{formatDuration(record.durationMs)}</Meta>
-          <Meta icon={Coins}>{formatCost(record.cost.usd)}</Meta>
+          {record.cost.usd !== null ? (
+            <Meta icon={Coins}>{formatCost(record.cost.usd)}</Meta>
+          ) : null}
         </div>
       </div>
       {children}
@@ -408,8 +410,8 @@ export function RunPage() {
           This run matched no evals, so there's nothing to show.
         </EmptyState>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
-          <aside className="lg:sticky lg:top-20 lg:self-start">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
             <div className="rounded-xl border bg-card">
               <div className="flex items-center justify-between border-b px-3 py-2">
                 <span className="text-sm font-medium">Evals</span>
