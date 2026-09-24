@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createJiti } from 'jiti'
 import { baseline, isSecret } from './environment.ts'
@@ -127,8 +128,21 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   }
 }
 
-/** The default: attempts are mostly waiting on a model, but each Docker sandbox costs memory. */
-export const DEFAULT_CONCURRENCY = 4
+export type Capacity = { cpus: number; memoryBytes: number }
+
+export const hostCapacity = (): Capacity => ({
+  cpus: availableParallelism(),
+  memoryBytes: totalmem(),
+})
+
+/**
+ * Attempts mostly wait on a model, so the default is 8, but no more than one per CPU or per GB
+ * of memory where the sandboxes run (the Docker VM, under Docker Desktop): an idle agent
+ * container takes about 300 MB, and the rest is headroom for what the agent runs.
+ */
+export function defaultConcurrency({ cpus, memoryBytes }: Capacity): number {
+  return Math.max(1, Math.min(8, cpus, Math.floor(memoryBytes / 1e9)))
+}
 
 function checkConcurrency(value: unknown, where: string): number {
   const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value
@@ -139,14 +153,15 @@ function checkConcurrency(value: unknown, where: string): number {
 }
 
 /** `--concurrency`, then `ES_CONCURRENCY`, then `concurrency` in the config, then the default. */
-export function resolveConcurrency(
+export async function resolveConcurrency(
   config: ResolvedConfig,
   flag: string | undefined,
+  capacity: () => Promise<Capacity>,
   env = process.env,
-): number {
+): Promise<number> {
   if (flag !== undefined) return checkConcurrency(flag, '--concurrency')
   if (env.ES_CONCURRENCY) return checkConcurrency(env.ES_CONCURRENCY, 'ES_CONCURRENCY')
-  return config.concurrency ?? DEFAULT_CONCURRENCY
+  return config.concurrency ?? defaultConcurrency(await capacity())
 }
 
 function resolveJudge(judge: EsConfig['judge'] = {}): ResolvedConfig['judge'] {

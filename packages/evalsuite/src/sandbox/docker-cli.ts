@@ -64,6 +64,14 @@ export async function dockerAvailable(): Promise<boolean> {
   }
 }
 
+/** CPUs and memory of the machine containers run on (the VM, under Docker Desktop). */
+export async function dockerCapacity(): Promise<{ cpus: number; memoryBytes: number } | null> {
+  const r = await docker(['info', '--format', '{{.NCPU}} {{.MemTotal}}']).catch(() => null)
+  if (r?.exitCode !== 0) return null
+  const [cpus, memoryBytes] = r.stdout.toString('utf8').trim().split(/\s+/).map(Number)
+  return cpus && memoryBytes ? { cpus, memoryBytes } : null
+}
+
 export type ImageInfo = {
   labels: Record<string, string>
   /** Content-addressed image id (`sha256:…`): identical bytes on any machine that has it. */

@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
-import { evalRoot, missingCredentials, parseDuration, resolveConfig } from '../src/config.ts'
+import {
+  defaultConcurrency,
+  evalRoot,
+  missingCredentials,
+  parseDuration,
+  resolveConcurrency,
+  resolveConfig,
+} from '../src/config.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -30,6 +37,27 @@ test('resolveConfig defaults', () => {
   assert.equal(c.runs, 1)
   assert.equal(c.judge.model, undefined, 'no default judge model')
   assert.equal(c.timeoutMs, 900_000)
+})
+
+test('concurrency: flag, then ES_CONCURRENCY, then config, then a default sized to Docker', async () => {
+  const GB = 1e9
+  assert.equal(defaultConcurrency({ cpus: 20, memoryBytes: 8.2 * GB }), 8)
+  assert.equal(defaultConcurrency({ cpus: 20, memoryBytes: 64 * GB }), 8)
+  assert.equal(defaultConcurrency({ cpus: 4, memoryBytes: 16 * GB }), 4)
+  assert.equal(defaultConcurrency({ cpus: 8, memoryBytes: 2 * GB }), 2)
+  assert.equal(defaultConcurrency({ cpus: 8, memoryBytes: 0.5 * GB }), 1)
+  const capacity = async () => ({ cpus: 3, memoryBytes: 64 * GB })
+  const config = resolveConfig({}, '/p')
+  assert.equal(await resolveConcurrency(config, undefined, capacity, {}), 3)
+  const withConfig = resolveConfig({ concurrency: 5 }, '/p')
+  assert.equal(await resolveConcurrency(withConfig, undefined, capacity, {}), 5)
+  assert.equal(
+    await resolveConcurrency(withConfig, undefined, capacity, { ES_CONCURRENCY: '6' }),
+    6,
+  )
+  assert.equal(await resolveConcurrency(withConfig, '7', capacity, { ES_CONCURRENCY: '6' }), 7)
+  await assert.rejects(resolveConcurrency(config, 'lots', capacity, {}), /--concurrency must be/)
+  assert.throws(() => resolveConfig({ concurrency: 0 }, '/p'), /config\.concurrency must be/)
 })
 
 test('redactSecrets masks secret-looking env values', () => {
