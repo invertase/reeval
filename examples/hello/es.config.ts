@@ -6,6 +6,6 @@ export default defineConfig({
   include: ['evals/**/*.es.ts'],
   harness: cursor({ model: 'composer-2.5' }),
   sandbox: docker(),
-  judge: { model: 'gemini-3.8-flash' },
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   timeout: '15m',
 })

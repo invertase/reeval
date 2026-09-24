@@ -2,6 +2,7 @@
 // files into a temp dir, and the judge returns a canned verdict.
 import { defineConfig } from 'evalsuite'
 import { fakeHarness } from 'evalsuite/harness'
+import { fakeJudge } from 'evalsuite/judge'
 import { fakeSandbox } from 'evalsuite/sandbox'
 
 export default defineConfig({
@@ -9,7 +10,7 @@ export default defineConfig({
   harness: fakeHarness({
     files: {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the fake agent's file content
-      'greet.js': 'export function greet(name) {\n  return `Hello, ${name}!`\n}\n',
+      'greet.js': "export function greet(name = 'world') {\n  return `Hello, ${name}!`\n}\n",
       'greet.test.js': [
         "import { test } from 'node:test'",
         "import assert from 'node:assert/strict'",
@@ -23,12 +24,6 @@ export default defineConfig({
     text: 'I created greet.js exporting greet(name), and greet.test.js which tests it with node:test.',
   }),
   sandbox: fakeSandbox(),
-  judge: {
-    fake: {
-      verdict: 'pass',
-      reason: 'The final message lists greet.js and greet.test.js; both are in the diff.',
-      evidence: ['diff adds greet.js', 'diff adds greet.test.js'],
-    },
-  },
+  judge: { model: fakeJudge({ score: 0.95 }) },
   timeout: '2m',
 })
