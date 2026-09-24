@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli } from './helpers.ts'
+import { vitestMismatch } from '../src/engine/node.ts'
+import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const math = (value: number) => `
 import { evaluate, expect } from 'evalsuite'
@@ -158,6 +160,35 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     const creds = await runCli(real.dir)
     assert.equal(creds.code, 2)
     assert.match(creds.stderr, /Missing credentials: CURSOR_API_KEY/)
+  })
+
+  test("a project's own vitest, for its own tests, coexists without a warning", async () => {
+    const p = await project('coexist', {
+      'es.config.ts': fakeConfig(),
+      'evals/math.es.ts': math(1),
+      'node_modules/vitest/package.json': '{ "name": "vitest", "version": "3.2.0" }',
+      'vitest.config.ts': 'export default {}\n',
+      'src/sum.test.ts': "throw new Error('ES must not run the project tests')\n",
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.doesNotMatch(r.stderr, /warning/)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => e.id),
+      ['evals/math.es.ts › math'],
+    )
+  })
+
+  test('an evalsuite on another copy of vitest is reported', async () => {
+    const dir = tempDir('other-evalsuite')
+    const manifest = (name: string) =>
+      JSON.stringify({ name, exports: { './package.json': './package.json' } })
+    const vitest = join(dir, 'node_modules/evalsuite/node_modules/vitest')
+    await mkdir(vitest, { recursive: true })
+    await writeFile(join(dir, 'node_modules/evalsuite/package.json'), manifest('evalsuite'))
+    await writeFile(join(vitest, 'package.json'), manifest('vitest'))
+    assert.match(vitestMismatch(dir) ?? '', /uses another copy of vitest/)
+    assert.equal(vitestMismatch((await project('same-evalsuite', {})).dir), undefined)
   })
 
   test('only the engine module imports vitest', () => {

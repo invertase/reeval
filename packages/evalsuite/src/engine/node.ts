@@ -115,16 +115,22 @@ const ONLY_IN_CI = /Unexpected \.only modifier/
 const onlyInCi = (file: string) =>
   `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
 
-/** Fails fast if two copies of Vitest would be loaded, which breaks test registration. */
-function assertSingleVitest(root: string): string | undefined {
+/**
+ * Evals register through the `evalsuite` the project resolves, so that copy must run on this
+ * engine's Vitest; two copies break registration. A project's own Vitest, for its own tests,
+ * is never loaded and doesn't matter.
+ */
+export function vitestMismatch(root: string): string | undefined {
+  let theirs: string
   try {
-    const theirs = createRequire(`${root}/`).resolve('vitest/package.json')
-    const ours = require.resolve('vitest/package.json')
-    if (realpathSync(theirs) !== realpathSync(ours)) {
-      return `Your project resolves its own copy of vitest (${theirs}). ES bundles vitest ${vitestVersion}; evals must import from 'evalsuite' only.`
-    }
-  } catch {}
-  return undefined
+    const evalsuite = createRequire(`${root}/`).resolve('evalsuite/package.json')
+    theirs = createRequire(evalsuite).resolve('vitest/package.json')
+  } catch {
+    return undefined
+  }
+  const ours = require.resolve('vitest/package.json')
+  if (realpathSync(theirs) === realpathSync(ours)) return undefined
+  return `The evalsuite this project resolves uses another copy of vitest (${theirs}) than this es (${ours}). Run the project's own es, e.g. npx es.`
 }
 
 export async function runEngine(options: EngineOptions): Promise<EngineRun> {
@@ -211,7 +217,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     },
   }
 
-  const warning = assertSingleVitest(config.root)
+  const warning = vitestMismatch(config.root)
   if (warning) process.stderr.write(`warning: ${warning}\n`)
 
   const stdout = new Capture()
