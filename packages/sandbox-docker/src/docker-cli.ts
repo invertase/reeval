@@ -59,10 +59,11 @@ export async function imageInfo(image: string): Promise<ImageInfo | null> {
     'image',
     'inspect',
     '--format',
-    '{"labels":{{json .Config.Labels}},"id":{{json .Id}},"repoDigests":{{json .RepoDigests}}}',
+    // `.Config.Labels` is a template error, not null, on images without labels.
+    '{"config":{{json .Config}},"id":{{json .Id}},"repoDigests":{{json .RepoDigests}}}',
     image,
   ])
   if (r.exitCode !== 0) return null
   const info = JSON.parse(r.stdout.toString('utf8'))
-  return { labels: info.labels ?? {}, id: info.id, repoDigests: info.repoDigests ?? [] }
+  return { labels: info.config?.Labels ?? {}, id: info.id, repoDigests: info.repoDigests ?? [] }
 }

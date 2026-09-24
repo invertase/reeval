@@ -241,3 +241,20 @@ async function retry<T>(fn: () => Promise<T>, tries = 30): Promise<T> {
     }
   }
 }
+
+describe('image info', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}` }, () => {
+  test('reads labelled images and images without labels', async () => {
+    const { imageInfo } = await import('../src/docker-cli.ts')
+    const ours = await imageInfo(DEFAULT_IMAGE)
+    assert.match(ours?.labels['dev.evalsuite.agent-version'] ?? '', /\d/)
+    try {
+      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+    } catch {
+      return
+    }
+    const plain = await imageInfo('busybox:1.37')
+    assert.deepEqual(plain?.labels, {})
+    assert.match(plain?.id ?? '', /^sha256:/)
+    assert.equal(await imageInfo('evalsuite-no-such-image:missing'), null)
+  })
+})
