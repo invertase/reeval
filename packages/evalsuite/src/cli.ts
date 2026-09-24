@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
@@ -16,7 +16,7 @@ import type { EngineRun } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
-import { evalSlug, newRunId } from './ids.ts'
+import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import { preflight } from './preflight.ts'
 import type { RunContext } from './types.ts'
@@ -300,9 +300,15 @@ async function startRun({
   const { stagingDir, sweepStaging } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)
-  // Run ids sort in run order, so a second run in the same second takes the next second's id.
+  // Run ids sort in run order, so a second run in the same second takes the next second's id,
+  // whatever its commit or author.
+  const stamps = new Set(
+    [scratch, config.history.dir].flatMap((dir) =>
+      existsSync(dir) ? readdirSync(dir).map((name) => name.slice(0, RUN_STAMP_LENGTH)) : [],
+    ),
+  )
   let runId = newRunId(startedAt, git?.sha ?? null, who)
-  for (let n = 1; existsSync(join(scratch, `${runId}.json`)); n++) {
+  for (let n = 1; stamps.has(runId.slice(0, RUN_STAMP_LENGTH)); n++) {
     runId = newRunId(new Date(startedAt.getTime() + n * 1000), git?.sha ?? null, who)
   }
   await sweepStaging(config.root)

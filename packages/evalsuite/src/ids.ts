@@ -36,6 +36,9 @@ export const slugify = (text: string, max: number) =>
  * `20260924T152700Z_009763c_elliot-hesp`. Sorting by name sorts by UTC start time; the SHA and
  * author keep runs from different people or branches apart.
  */
+/** `20260924T152700Z`, the part of a run id that orders runs. */
+export const RUN_STAMP_LENGTH = 16
+
 export function newRunId(start: Date, sha: string | null, author: string): string {
   const stamp = start
     .toISOString()
