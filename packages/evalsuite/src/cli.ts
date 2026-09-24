@@ -175,7 +175,7 @@ async function run(argv: string[]): Promise<number> {
   await mkdir(resultsDir, { recursive: true })
   const ctx = { runId, resultsDir, config }
 
-  const { runEngine } = await import('./engine/node.ts')
+  const { engineVersions, runEngine } = await import('./engine/node.ts')
 
   let interrupted = false
   const engineRun = await runEngine({
@@ -210,6 +210,7 @@ async function run(argv: string[]): Promise<number> {
     endedAt: new Date(),
     interrupted: interrupted || engineRun.cancelled,
     es: version,
+    enginePackages: engineVersions,
     sandbox: sandboxVersions,
     worktreePatch: patch,
     lockfiles: await lockfiles(config.root),

@@ -40,6 +40,7 @@ export type EngineOptions = {
 
 const require = createRequire(import.meta.url)
 export const vitestVersion: string = require('vitest/package.json').version
+export const engineVersions = { vitest: vitestVersion }
 
 const silentLogger = {
   hasWarned: false,

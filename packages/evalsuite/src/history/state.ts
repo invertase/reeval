@@ -74,10 +74,11 @@ export async function worktreePatch(root: string, ignore: string[]): Promise<Buf
 }
 
 const require = createRequire(import.meta.url)
-const PACKAGES = ['ai', '@ai-sdk/harness', '@ai-sdk/harness-cursor', '@ai-sdk/google', 'vitest']
+// The engine's version comes from `engine/`, the only module that may name it.
+const PACKAGES = ['ai', '@ai-sdk/harness', '@ai-sdk/harness-cursor', '@ai-sdk/google']
 
-export function packageVersions(): Record<string, string> {
-  const out: Record<string, string> = {}
+export function packageVersions(engine: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = { ...engine }
   for (const name of PACKAGES) {
     try {
       out[name] = require(`${name}/package.json`).version

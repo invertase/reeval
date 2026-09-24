@@ -41,6 +41,8 @@ export type AssembleInput = {
   interrupted: boolean
   author: string
   es: string
+  /** Name and version of the embedded test engine. */
+  enginePackages: Record<string, string>
   sandbox: SandboxVersions
   git: GitInfo | null
   /** Uncommitted changes when the run started, saved as `worktree.patch`. */
@@ -272,7 +274,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       git.worktreePatch = { path: 'worktree.patch', sha256: sha256(patch), bytes: patch.length }
     }
   }
-  const packages = packageVersions()
+  const packages = packageVersions(input.enginePackages)
   const environment: Environment = {
     es: input.es,
     node: process.versions.node,
