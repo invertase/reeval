@@ -151,9 +151,22 @@ export type FakeHarnessDescriptor = {
   withSkill?: { files?: Record<string, string>; text?: string }
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
+  /**
+   * Real sandbox actions, one list per `t.send` (the last list repeats), run in order before
+   * `files`. `exec` runs as the agent: with the sandbox's own variables, none of the checks'.
+   */
+  script?: FakeScriptStep[][]
   /** The most attempts on this harness kind at once, across the run. */
   maxConcurrent?: number
 }
+/**
+ * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
+ * the command's stdout, `write` as file edits, and `reply` is the turn's final message.
+ */
+export type FakeScriptStep =
+  | { exec: string }
+  | { write: Record<string, string> }
+  | { reply: string }
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
   model?: string

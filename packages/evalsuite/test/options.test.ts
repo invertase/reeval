@@ -454,6 +454,16 @@ describe('common mistakes', () => {
       /harness is an empty list in evaluate\("e"\)/,
     ],
     [
+      'a fake agent script that is not one list per turn',
+      `evaluate('e', { harness: fakeHarness({ script: [{ exec: 'ls' }] as never }) }, async () => {})`,
+      /fakeHarness\(\{ script \}\) takes one list of steps per turn, e\.g\. script: \[\[\{ exec: 'cat notes\.txt' \}, \{ reply: 'done' \}\]\]/,
+    ],
+    [
+      'a fake agent script step with two actions',
+      `evaluate('e', { harness: fakeHarness({ script: [[{ exec: 'ls', reply: 'x' } as never]] }) }, async () => {})`,
+      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \} or \{ reply: string \}/,
+    ],
+    [
       'two harnesses with one id',
       `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
       /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
