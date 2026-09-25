@@ -39,6 +39,52 @@ function Row({ k, children, mono = true }: { k: string; children: ReactNode; mon
 
 const none = <span className="font-sans text-muted-foreground">none</span>
 
+const bytes = (n: number) =>
+  n < 1024
+    ? `${n} B`
+    : n < 1024 ** 2
+      ? `${(n / 1024).toFixed(1)} KB`
+      : `${(n / 1024 ** 2).toFixed(1)} MB`
+
+function Egress({ egress }: { egress: NonNullable<AttemptRecord['egress']> }) {
+  const policy =
+    typeof egress.policy === 'string'
+      ? egress.policy
+      : `allow ${egress.policy.allow.join(', ') || 'none'}`
+  return (
+    <>
+      <div>
+        {policy}
+        {egress.allowed ? (
+          <span className="text-muted-foreground">
+            {' '}
+            · allows {egress.allowed.join(', ') || 'nothing'}
+          </span>
+        ) : null}
+      </div>
+      {!egress.recorded ? (
+        <div className="font-sans text-muted-foreground">not recorded by this sandbox</div>
+      ) : null}
+      {egress.contacted.map((h) => (
+        <div key={`${h.host}:${h.port}`}>
+          {h.host}:{h.port}{' '}
+          <span className="text-muted-foreground">
+            ×{h.connections} · ↑{bytes(h.sent)} ↓{bytes(h.received)}
+          </span>
+        </div>
+      ))}
+      {egress.blocked.map((h) => (
+        <div key={`blocked ${h.host}:${h.port}`} className="text-fail">
+          blocked {h.host}:{h.port}{' '}
+          <span className="text-muted-foreground">
+            ×{h.connections} · {h.reason}
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
 export function State({ record, attempt }: { record: RunRecord; attempt: AttemptRecord }) {
   const { git, stack } = record
   const image = stack.images.find((i) => i.id === attempt.imageId)
@@ -121,6 +167,7 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
         </Row>
         <Row k="Env vars">{attempt.env.vars.length ? attempt.env.vars.join(', ') : none}</Row>
         <Row k="Secrets">{attempt.env.secrets.length ? attempt.env.secrets.join(', ') : none}</Row>
+        <Row k="Egress">{attempt.egress ? <Egress egress={attempt.egress} /> : none}</Row>
         <Row k="Context">
           {attempt.context.length
             ? attempt.context.map((c) => (
