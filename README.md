@@ -107,8 +107,10 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 
 ### Run a real agent
 
-1. Build the sandbox image once. This bakes the Cursor CLI into `evalsuite-sandbox:cursor-<version>`,
-   so the image tag pins the CLI build. Rebuild it after bumping `@ai-sdk/harness-cursor`.
+1. Build the sandbox images once. This bakes the Cursor CLI into `evalsuite-sandbox:cursor-<version>`,
+   so the image tag pins the CLI build, then builds every other image the evals' sandboxes need
+   (`from`, `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping
+   `@ai-sdk/harness-cursor`.
 
    ```bash
    cd examples/hello
@@ -162,7 +164,10 @@ es studio                 Browse runs, evals and transcripts in the web studio (
                           --port <n> (4984) --host <addr> --open --no-scratch --no-token
 es studio build           Write the studio as a static site: --out <dir> (studio-dist)
                           --scratch --no-artifacts
-es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
+es image build [filter...]
+                          Build every image the evals' Docker sandboxes need: ES's image (bakes
+                          in the Cursor CLI), from and dockerfile images, install layers
+  --dry-run               List the images and how each is made, without building
 es --version | es --help
 ```
 
@@ -275,8 +280,8 @@ export default defineConfig({
   gets a first result early.
 - **Timeouts** start when an attempt starts, not while it waits for a slot, and durations
   leave out the wait.
-- **Image builds** (`docker({ from })` and cached environment layers) happen once, one at a
-  time: attempts that need an image another attempt is building wait for it and reuse it.
+- **Image builds** (`docker({ from })`, `docker({ dockerfile })` and `install` layers) happen
+  once, one at a time: attempts that need an image another attempt is building wait for it and reuse it.
 - **Ctrl-C** cancels running attempts, skips queued ones, and destroys every sandbox.
 - **Guidance.** Memory is what runs out first: an idle agent container takes about 300 MB, and
   installs and test runs inside it take more. Raise `concurrency` for suites of short evals on
@@ -323,7 +328,7 @@ defaults → outer group → inner group → eval:
 | `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2' })]`. The only list: each harness is its own cell |
 | `environment` | replace | What the eval runs in: one `defineEnvironment(…)`. None by default |
 | `compare` | replace | Variants to run next to the environment (groups and evals only); `false` opts out |
-| `sandbox` | replace | Where it runs: one `docker()`, `docker({ from: 'python:3.12-slim' })`, … |
+| `sandbox` | replace | Where it runs and what's baked into its image: one `docker()`, `docker({ install: […] })`, `docker({ dockerfile: './Dockerfile' })`, … |
 | `runs` | replace | Attempts per cell (default 1); `es run --runs n` overrides every level |
 | `env` | merge by name | Variables for the sandbox; strings, or `secret.fromEnv(…)` from a callback |
 | `judge` | merge by field | `{ model, threshold, providerOptions }`; no default model |
@@ -340,8 +345,9 @@ sandbox, id `<harness>/<environment or ->/<sandbox>#<n>` (e.g.
 
 ### Environments
 
-The sandbox is *where* the agent runs; an environment is *what it runs in*: skills, MCP
-servers, files, rules, variables, secrets and setup steps. It's declarative: pass a spec, or a
+The sandbox is *where* the agent runs and what's baked into its image; an environment is *what
+it runs in*, per attempt: skills, MCP servers, files, rules, variables, secrets and setup steps.
+It's declarative: pass a spec, or a
 callback that destructures the typed helpers it needs (`secret`, `skill`, `mcp`, `file`):
 
 ```ts
@@ -358,20 +364,18 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url)
   rules: file('../rules/house.md'),                       // AGENTS.md in the workspace
   files: { 'docs/api.md': file('../docs/api.md'), '~/.npmrc': 'fund=false\n' },
-  image: ['npm i -g firebase-tools@14'],                  // baked into a cached layer, no secrets
   setup: [{ run: 'npm ci', timeout: '5m' }],            // every attempt, before the agent starts
 }))
 ```
 
-- **Phases, always in this order:** `image` steps are baked into an `evalsuite-env:<hash>` layer
-  on first use (no secrets; the log is in `.es/cache/images/`). Each attempt then sets `env`,
-  writes `files` and `rules`, runs `setup` steps in order (with secrets, outside the eval
+- **Phases, always in this order:** the sandbox's image is ready first (see
+  [Sandboxes](#sandboxes)). Each attempt then sets `env`, writes `files` and `rules`, runs `setup` steps in order (with secrets, outside the eval
   timeout, output in the attempt's `setup.log`), snapshots the workspace, and starts the agent
   with its `skills` and `mcp`. Files, rules and setup never show in the agent's diff.
 - **`extend` is the only composition:** the child's spec layers on the parent's. Wherever it sets
   a key the parent has (an env var, a file path, a skill or MCP server name, `rules`), the child
-  wins, and the key is listed in the environment's `overrides` in the record. `image` and `setup`
-  steps concatenate, parent first.
+  wins, and the key is listed in the environment's `overrides` in the record. `setup` steps
+  concatenate, parent first.
 - **Skills** go to the harness adapter, which writes them where its agent reads them;
   `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
   for Cursor). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
@@ -471,12 +475,50 @@ evals/skill.es.ts › house greeting › greets in the house style    1         
 
 ### Sandboxes
 
-`docker()` uses the image `es image build` makes (Node 22 plus the Cursor CLI).
-`docker({ image })` uses another image that already has the harness baked in.
-`docker({ from: 'python:3.12-slim' })` bakes Node, git and the Cursor CLI onto a Debian or
-Ubuntu based toolchain image on first use and caches it, so evals can use Python, Go, Dart and
-so on (`examples/hello/evals/python.es.ts`). An eval has one sandbox: comparing toolchains needs
-different checks, so that's a separate eval.
+What's baked into the image belongs to the sandbox; what runs in it, per attempt, belongs to the
+environment. A sandbox has one base, and optionally `install` commands on top:
+
+```ts
+import { docker } from 'evalsuite/sandbox'
+
+docker()                                          // ES's image: Node 22 and the Cursor CLI
+docker({ image: 'ghcr.io/acme/agent:1' })         // already has the harness, used as is
+docker({ from: 'python:3.12-slim' })              // ES bakes Node, git and the harness on top
+docker({ dockerfile: './sandbox/Dockerfile' })    // yours, relative to this file
+docker({ install: ['npm i -g firebase-tools@14'] }) // on any base but dockerfile
+```
+
+- **`install`** runs its commands in order in one build container, as root from `/`, and stops
+  at the first that fails (the error names it; the log is in `.es/cache/images/`). They never see
+  secrets or the workspace. The result is cached as one `evalsuite-install:<hash>` image, keyed
+  on the base image's id and the exact list, so any edit (or a rebuilt base) builds anew.
+  `{ run, timeout }` kills a slow command. Anything that needs a secret or the workspace is a
+  `setup` step of the environment.
+- **`dockerfile`** is built with plain `docker build` from the Dockerfile's directory, so Docker's
+  layer cache applies, and tagged `evalsuite-dockerfile:<name>-<hash>`: a hash of the Dockerfile,
+  every file of the build context (less `.dockerignore`, or `<name>.dockerignore` next to it) and
+  ES's image tag. It builds on first use, and again when any of those change. ES passes
+  `--build-arg ES_BASE=evalsuite-sandbox:cursor-<version>`. **The harness bootstrap:** start the
+  Dockerfile `ARG ES_BASE` / `FROM ${ES_BASE}` to layer on ES's image, which already has Node,
+  git and the Cursor CLI, so the result is used as is (ES checks the image's
+  `dev.evalsuite.agent-version` label). From any other base, which must be Debian or Ubuntu
+  based, ES treats the built image like `from`: it adds Node, pnpm, git and bash, runs the
+  harness bootstrap and caches that as `evalsuite-sandbox:cursor-<version>-<your image>`. Either
+  way, keep `root` as the user and leave `/es` alone. `install` doesn't combine with
+  `dockerfile`: put the commands in it as `RUN` lines.
+- **Mistakes** are usage errors when the file loads: two bases (`image`, `from`, `dockerfile`),
+  `install` with `dockerfile`, an empty `install`, a Dockerfile that doesn't exist, and `image`,
+  `install` or `dockerfile` on an environment.
+- **`es image build`** collects the evals as `--dry-run` does (filters, `--tag` and `--profile`
+  apply) and builds every image their sandboxes need: ES's image when a sandbox or a
+  `FROM ${ES_BASE}` Dockerfile uses it, then each `from` and `dockerfile` image (rebuilt, so the
+  Cursor CLI stays current) and each `install` layer (only when its base or commands changed).
+  `es image build --dry-run` lists each sandbox's images and how they're made, without building.
+  Otherwise `es run` builds `from`, `dockerfile` and `install` images on first use.
+
+`examples/hello` has one of each: `python.es.ts` (`from`), `jq.es.ts` (`install`) and
+`sqlite.es.ts` (`dockerfile`). An eval has one sandbox: comparing toolchains needs different
+checks, so that's a separate eval.
 
 ### Secrets
 
@@ -617,8 +659,9 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   the profile with the reason it was chosen; `status` is `complete`, `interrupted` or `budget`.
 - **Cells:** per eval, each cell's key, role (`control` or `variant`), whether it's gated, its
   fingerprint, pass rate, overrides and, for variants, lift; and each attempt's cell, run
-  number, image, and variable and secret names.
-- **Environments:** each environment's digest, parent and overrides, image and setup steps,
+  number, image (tag, id, agent CLI, the base, `install` commands, and for `dockerfile` its path
+  and content hash), and variable and secret names.
+- **Environments:** each environment's digest, parent and overrides, setup steps,
   skills (source, hash, git commit, placement), MCP server names, files, and variable and
   secret names (and optional ones that were unset).
 - **Stack:** every sandbox image's tag, content-addressed id and registry digests, with its
@@ -649,8 +692,9 @@ packed tarballs into an empty project with npm and runs them. `packages/sandbox-
 tests: request-transformation and policy matching, certificates and the stdio multiplexer; the
 gateway against local HTTP/1.1, HTTP/2 and WebSocket servers; and real containers, where it checks
 the header swap, searches `env`, `/proc` and the filesystem for the key, and checks a restricted
-policy leaves no route out. The Docker tests skip unless Docker is running and the sandbox image
-has been built.
+policy leaves no route out. ES's Docker tests build real `install` layers and Dockerfiles (one
+`FROM ${ES_BASE}`, one on a Debian base that gets the harness baked on) and check the cache and
+the record. The Docker tests skip unless Docker is running and the sandbox image has been built.
 
 For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/es-demo` builds a demo project
 with recorded runs, and `ES_STUDIO_PROJECT=/tmp/es-demo pnpm --filter studio-web dev` serves the
