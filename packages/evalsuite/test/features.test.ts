@@ -108,6 +108,24 @@ const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
 /** `ES_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
 const only = process.env.ES_FIXTURE_TIERS?.split(',')
 
+/**
+ * Containers are removed by a detached `docker rm`, which may finish after the CLI exits, so this
+ * waits for them. Run ids are per second and author, so concurrent temp projects can share one:
+ * the label then also matches the other run's containers, which go too.
+ */
+async function containersGone(runId: string, deadlineMs = 20_000): Promise<void> {
+  const until = Date.now() + deadlineMs
+  let left = ''
+  do {
+    left = execFileSync('docker', ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
+      encoding: 'utf8',
+    }).trim()
+    if (!left) return
+    await new Promise((r) => setTimeout(r, 250))
+  } while (Date.now() < until)
+  assert.equal(left, '', `containers of run ${runId} still exist after ${deadlineMs / 1000}s`)
+}
+
 function skipTier(tier: Tier): string | false {
   if (only && !only.includes(tier)) return `ES_FIXTURE_TIERS=${only.join(',')}`
   if (tier === 'docker' && !dockerReady && !requireDocker)
@@ -141,14 +159,7 @@ describe('feature fixtures', { concurrency: 4 }, () => {
         })
         f.record?.(run, p.dir)
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
-        if (tier === 'docker') {
-          const left = execFileSync(
-            'docker',
-            ['ps', '-aq', '--filter', `label=${LABEL.run}=${run.runId}`],
-            { encoding: 'utf8' },
-          )
-          assert.equal(left.trim(), '', 'every container is removed')
-        }
+        if (tier === 'docker') await containersGone(run.runId)
       })
     }
   }
