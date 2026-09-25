@@ -1,0 +1,65 @@
+# Feature fixtures
+
+Each directory here is a small ES project that checks **one** behaviour of one feature, from
+inside the attempt, with ES's own API. `features.test.ts` runs it and checks the record from
+outside. Every user-facing feature or option lands with its fixtures in the same change.
+
+## Which tier
+
+| The feature changes… | Add |
+|---|---|
+| which evals, cells, attempts or notes a run plans (options, profiles, selection, compare, images) | a plan case in `plan.test.ts`: a new directory under `test/plan/`, or a case on an existing one |
+| what lands in or happens inside an attempt (environment fields, sandbox behaviour, harness inputs, the `t` API) | a fixture here: one check and one canary |
+| … and touches Docker, images, egress, ports or brokering | list it with `tiers: ['fake', 'docker']` (only `docker` if the fake can't model it) |
+| what a real harness receives (skills, MCP, rules, auth) | also tag it `real` for the nightly tier, once it exists |
+| runner behaviour (exit codes, output, history, cancel, budget, redaction) | a plain `node:test` case in the matching existing test file |
+| a new error message | a row in the `common mistakes` table in `options.test.ts` |
+
+## Shape of a fixture
+
+```text
+<area>/<what-it-checks>/        e.g. skills/exclude-custom, not skills-2
+  es.config.ts                  ES_FIXTURE_SANDBOX picks the fake sandbox or docker()
+  evals/env.ts                  the environment both evals use
+  evals/lands.es.ts             the check: one evaluate, one expectation
+  evals/canary.es.ts            the same check with a wrong expectation: it must fail
+  …                             whatever the feature needs (skills/, files)
+```
+
+- One `evaluate` per file and one behavioural expectation. A feature with two properties (the
+  file set and the content, say) gets two fixtures.
+- The canary makes the same check with one deliberate mistake, so it fails with an assertion.
+  That proves the check can fail. The oracle matches its message, so it also fails for the right
+  reason.
+- Then add a row to `features` in `features.test.ts`:
+  - `dir` and `tiers`;
+  - `env`: the environment's name, since attempt ids are `fake/<env>/<sandbox>#1`;
+  - `canary`: a regex for the canary's failure message;
+  - optionally `prepare` (for example, making a git repo) and `record`, a host-side cross-check
+    of the run record.
+- The table test fails if a directory here is missing from the table, or lacks either eval.
+
+## Running
+
+```bash
+pnpm build                              # the tests run dist/cli.js; rebuild after changing src/
+cd packages/evalsuite
+pnpm test:plan                          # plan snapshots
+pnpm test:features                      # fixtures on the fake sandbox, and Docker if it's there
+pnpm test:docker                        # Docker only, failing (not skipping) without it
+ES_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the diff
+pnpm test                               # everything, before finishing
+```
+
+To debug one fixture by hand, run with `ES_TEST_KEEP=1` to keep the temp project, then `cd` into
+it and run `es run --ui plain`. Add `ES_FIXTURE_SANDBOX=docker` for the Docker tier.
+
+## Done means
+
+1. The new fixtures pass in every tier they list, on the machine that built the feature. That
+   includes Docker when the feature touches it.
+2. Each canary fails, with the message its row expects.
+3. Plan snapshot diffs are reviewed and show only the intended change.
+4. `pnpm test`, `pnpm lint` and `pnpm typecheck` are green, with no Docker test skipped when the
+   feature touches Docker.
+5. The change lists the fixtures it adds.
