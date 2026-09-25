@@ -73,7 +73,11 @@ export function renderPlan(plan: PlanDocument): string {
             ? 'gated'
             : `gated passRate ${c.gate.passRate}`,
         `×${c.runs}`,
-        [c.minLift === undefined ? '' : `minLift ${c.minLift}`, ...(i === 0 ? e.notes : [])]
+        [
+          c.minLift === undefined ? '' : `minLift ${c.minLift}`,
+          ...(i === 0 ? e.notes : []),
+          c.brokered.length ? `brokered: ${c.brokered.join('; ')}` : '',
+        ]
           .filter(Boolean)
           .join(' · '),
       ])

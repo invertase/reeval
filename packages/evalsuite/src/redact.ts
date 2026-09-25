@@ -19,25 +19,71 @@ export function registerSecret(value: string | undefined): void {
   if (value && value.length >= 4) declared.add(value)
 }
 
+/** Encoded forms shorter than this aren't masked, so they can't eat ordinary text. */
+const MIN_ENCODED = 8
+
+/**
+ * The stretch of base64 that encodes `value` wherever it starts in a longer input: one per byte
+ * offset (0, 1 or 2), without the characters shared with the bytes around it. Plus the URL-safe
+ * alphabet of each.
+ */
+export function base64Forms(value: string): string[] {
+  const bytes = Buffer.from(value)
+  const out: string[] = []
+  for (const offset of [0, 1, 2]) {
+    const padded = Buffer.concat([Buffer.alloc(offset), bytes])
+    const encoded = padded.toString('base64').replace(/=+$/, '')
+    const skip = Math.ceil((offset * 8) / 6)
+    const tail = padded.length % 3
+    const keep = Math.floor(padded.length / 3) * 4 + tail
+    const form = encoded.slice(skip, keep)
+    out.push(form, form.replaceAll('+', '-').replaceAll('/', '_'))
+  }
+  return out
+}
+
+/** How a value may appear once a client or a log has encoded it: JSON, URL and base64. */
+export function encodedForms(value: string): string[] {
+  const forms = [
+    jsonEscaped(value),
+    encodeURIComponent(value),
+    new URLSearchParams({ v: value }).toString().slice(2),
+    ...base64Forms(value),
+  ]
+  return [...new Set(forms)].filter((f) => f !== value && f.length >= MIN_ENCODED)
+}
+
+const jsonEscaped = (s: string) => JSON.stringify(s).slice(1, -1)
+
+const formsCache = new Map<string, string[]>()
+/**
+ * The value and its encoded forms, each also as it reads inside a JSON string: redaction runs on
+ * serialised records, where a JSON-escaped form the agent printed is escaped a second time.
+ */
+const formsOf = (value: string) => {
+  let forms = formsCache.get(value)
+  if (!forms) {
+    forms = [...new Set([value, ...encodedForms(value)].flatMap((f) => [f, jsonEscaped(f)]))]
+    formsCache.set(value, forms)
+  }
+  return forms
+}
+
 function envSecrets(env: NodeJS.ProcessEnv): string[] {
   const named = Object.entries(env)
     .filter(([name, value]) => SECRET_NAME.test(name) && value && value.length >= 8)
     .map(([, value]) => value as string)
-  return [...new Set([...named, ...declared])].sort((a, b) => b.length - a.length)
+  const values = [...new Set([...named, ...declared])]
+  return [...new Set(values.flatMap(formsOf))].sort((a, b) => b.length - a.length)
 }
 
 /**
- * Masks the values of secret-looking environment variables, and well-known token shapes,
- * anywhere in `text`.
+ * Masks the values of secret-looking environment variables and declared secrets, raw or
+ * JSON-, URL- or base64-encoded, and well-known token shapes, anywhere in `text`.
  */
 export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
   let out = text
-  for (const secret of envSecrets(env)) {
-    out = out.replaceAll(secret, '[REDACTED]')
-    // Also catch the value as it appears inside JSON strings.
-    const escaped = JSON.stringify(secret).slice(1, -1)
-    if (escaped !== secret) out = out.replaceAll(escaped, '[REDACTED]')
-  }
+  for (const secret of envSecrets(env)) out = out.replaceAll(secret, '[REDACTED]')
   for (const pattern of TOKEN_PATTERNS) out = out.replace(pattern, '[REDACTED]')
   return out
 }

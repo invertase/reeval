@@ -1,3 +1,4 @@
+import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Brokering } from '../harness/agents.ts'
 import type { SandboxDescriptor } from '../types.ts'
 import { createFakeSandbox } from './fake.ts'
@@ -13,6 +14,8 @@ export type SandboxOptions = {
   image?: string
   /** The harness's credential, which the Docker egress gateway keeps out of the sandbox. */
   brokering?: Brokering
+  /** User secrets the Docker egress gateway brokers; none is swapped in until `setSubstitutions`. */
+  substitutions?: readonly BrokeredSecret[]
 }
 
 export async function createSandbox(

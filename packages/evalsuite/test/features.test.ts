@@ -4,8 +4,8 @@
 // the record from outside; see test/features/README.md for adding one.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
@@ -32,12 +32,33 @@ type Feature = {
   /** Runs on the copied project before `es run`. */
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
-  record?: (view: { run: RunRecord; project: string; runDir: string }) => void
+  record?: (view: {
+    run: RunRecord
+    project: string
+    runDir: string
+    tier: Tier
+  }) => void | Promise<void>
   /** ES's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
 }
 
 const TOKEN = 'es-fixture-token-7c1d9a0b52e4'
+/** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
+const LEAKY = 'es leak/7c+1d"9a&b?0=e4f2'
+
+/** Each way the redaction-coverage agent prints LEAKY, and each of those inside a JSON string. */
+const leakyForms = () => {
+  const printed = [
+    LEAKY,
+    Buffer.from(LEAKY).toString('base64'),
+    encodeURIComponent(LEAKY),
+    JSON.stringify(LEAKY).slice(1, -1),
+  ]
+  return [...new Set(printed.flatMap((f) => [f, JSON.stringify(f).slice(1, -1)]))]
+}
+
+/** The `lands` eval's first attempt. */
+const landed = (run: RunRecord) => run.evals.find((e) => e.name === 'lands')?.attempts[0]
 
 const skills = (run: RunRecord) => run.environments.flatMap((e) => e.skills)
 const envFiles = (run: RunRecord) => run.environments.flatMap((e) => e.files.map((f) => f.path))
@@ -133,6 +154,70 @@ const features: Feature[] = [
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
   },
   {
+    dir: 'secrets/brokered-agent-sees-placeholder',
+    tiers: ['fake', 'docker'],
+    env: 'keys',
+    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'es_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
+    record: ({ run, runDir }) => {
+      assert.deepEqual(landed(run)?.env.brokered, ['API_KEY'])
+      assert.equal(filesContaining(runDir, TOKEN), '')
+      assert.notEqual(filesContaining(runDir, 'API_KEY'), '', 'twin: the search finds the name')
+    },
+  },
+  {
+    dir: 'secrets/brokered-checks-see-placeholder',
+    tiers: ['fake', 'docker'],
+    env: 'keys',
+    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'es_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
+    record: ({ run, runDir }) => {
+      assert.deepEqual(landed(run)?.env, {
+        vars: [],
+        secrets: ['CHECK_TOKEN'],
+        brokered: ['CHECK_TOKEN'],
+      })
+      assert.equal(filesContaining(runDir, TOKEN), '')
+      assert.notEqual(filesContaining(runDir, 'CHECK_TOKEN'), '', 'twin: the search finds the name')
+    },
+  },
+  {
+    dir: 'secrets/redaction-coverage',
+    tiers: ['fake', 'docker'],
+    env: 'leaky',
+    hostEnv: { ES_FIXTURE_LEAKY: LEAKY },
+    canary: /not to contain '\[REDACTED\]'/,
+    async record({ project, runDir, tier }) {
+      const env = { ES_FIXTURE_LEAKY: LEAKY, ES_FIXTURE_SANDBOX: tier }
+      const recorded = await runCli(project, ['record'], { env })
+      assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
+      const site = join(project, 'site')
+      const built = await runCli(project, ['studio', 'build', '--out', site], { env })
+      assert.equal(built.code, 0, built.stdout + built.stderr)
+      const [judgeInput, ...more] = filesNamed(runDir, 'judge-input.json')
+      assert.ok(judgeInput && more.length === 0, 'one judge call')
+      const input = JSON.parse(readFileSync(judgeInput, 'utf8')) as Array<{
+        state: { diff?: { $ref?: string } }
+      }>
+      assert.equal(input[0]?.state.diff?.$ref, 'diff.patch', 'the judge saw the diff')
+      const judged = join(dirname(judgeInput), 'diff.patch')
+      for (const [where, paths] of [
+        ['the run', [runDir]],
+        ['the history folder', [join(project, 'evals', '.history')]],
+        ['the studio build', [site]],
+        ['the judge input', [judgeInput, judged]],
+      ] as const) {
+        for (const form of leakyForms()) {
+          const hits = paths.map((p) => filesContaining(p, form)).join('')
+          assert.equal(hits, '', `${where} has ${JSON.stringify(form)}`)
+        }
+        // Twin: the same search finds what was left in place of the forms.
+        const masked = paths.map((p) => filesContaining(p, '[REDACTED]')).join('')
+        assert.notEqual(masked, '', `${where} has no [REDACTED]`)
+      }
+    },
+  },
+  {
     dir: 'env/files-home',
     tiers: ['fake', 'docker'],
     env: 'home-files',
@@ -216,6 +301,13 @@ function filesContaining(dir: string, needle: string): string {
   }
 }
 
+/** Paths under `dir` named `name`. */
+function filesNamed(dir: string, name: string): string[] {
+  return execFileSync('find', [dir, '-name', name], { encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean)
+}
+
 const imageBuilt = (ref: string) => {
   try {
     execFileSync('docker', ['image', 'inspect', ref], { stdio: 'ignore' })
@@ -276,7 +368,7 @@ describe('feature fixtures', { concurrency: 4 }, () => {
             },
           },
         })
-        f.record?.({ run, project: p.dir, runDir })
+        await f.record?.({ run, project: p.dir, runDir, tier })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
         if (tier === 'docker') await containersGone(run.runId)
       })

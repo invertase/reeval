@@ -165,7 +165,13 @@ export function planTable(plan: RunPlan): string[] {
         : `${p.variants.run} of ${p.variants.of}`,
     String(p.runs),
     String(p.attempts),
-    [p.skip ? `skipped: ${p.skip}` : '', ...p.notes].filter(Boolean).join(' · '),
+    [
+      p.skip ? `skipped: ${p.skip}` : '',
+      ...p.notes,
+      p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
   ])
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
   const line = (cols: string[]) =>
@@ -176,7 +182,13 @@ export function planTable(plan: RunPlan): string[] {
   return [line(header), ...rows.map(line)]
 }
 
-export type PlanCell = Cell & { gate: CellGate; minLift?: number; runs: number }
+export type PlanCell = Cell & {
+  gate: CellGate
+  minLift?: number
+  runs: number
+  /** Secrets its attempts broker, as `NAME → host, host`. */
+  brokered: string[]
+}
 
 export type PlanEval = {
   id: string
@@ -244,6 +256,7 @@ export function planDocument(
         gate: attempt.gate,
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
         runs: 1,
+        brokered: attempt.brokered,
       })
     }
   }

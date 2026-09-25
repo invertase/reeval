@@ -97,8 +97,8 @@ export type AttemptRecord = {
   startedAt: string | null
   /** The image the container started from, in `stack.images`; null for the fake sandbox. */
   imageId: string | null
-  /** Names of the variables and secrets set in the sandbox; values are never recorded. */
-  env: { vars: string[]; secrets: string[] }
+  /** Names of the variables and secrets set in the sandbox, and the brokered ones; never values. */
+  env: { vars: string[]; secrets: string[]; brokered: string[] }
   /** Skills, rules and MCP config visible to the agent in its sandbox, by content hash. */
   context: ContextFile[]
   outcome: Outcome

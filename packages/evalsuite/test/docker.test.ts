@@ -476,6 +476,39 @@ evaluate('hi', async (t) => { await t.send('hi') })
   )
 
   test(
+    'a brokered user secret on an image without the gateway fails closed, naming it',
+    docker,
+    async () => {
+      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      const value = 'es-docker-user-secret-5e4d3c2b1a'
+      const p = await project('docker-secret-no-broker', {
+        'es.config.ts': config('{}').replace('docker()', "docker({ image: 'busybox:1.37' })"),
+        'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+const keys = defineEnvironment('keys', ({ secret }) => ({
+  env: { GEMINI_API_KEY: secret.fromEnv('ES_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
+}))
+evaluate('hi', { environment: keys }, async (t) => { await t.sandbox() })
+`,
+      })
+      const r = await runCli(p.dir, ['run'], { env: { ES_DOCKER_SECRET: value } })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      const { run, evals, dir } = readRun(p.dir)
+      assert.equal(evals[0]?.error?.kind, 'infra')
+      assert.match(
+        evals[0]?.error?.message ?? '',
+        /^Can't keep GEMINI_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited/,
+      )
+      assert.equal(liveContainers(run.runId), '')
+      const grep = (needle: string) =>
+        execFileSync('grep', ['-rlsF', needle, dir, `${dir}.json`], {
+          encoding: 'utf8',
+        }).trim()
+      assert.throws(() => grep(value), 'the value is nowhere in the run')
+      assert.notEqual(grep('GEMINI_API_KEY'), '', 'twin: the search finds the name')
+    },
+  )
+
+  test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',
     claudeImage,
     async () => {

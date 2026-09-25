@@ -19,6 +19,7 @@ const cases: PlanCase[] = [
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
   { dir: 'images', name: 'install-from-dockerfile', args: [] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
+  { dir: 'secrets', name: 'brokered', args: [] },
 ]
 
 describe('plan snapshots', { concurrency: true }, () => {

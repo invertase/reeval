@@ -235,6 +235,21 @@ export type Secret = {
   optional?: boolean
   /** `agent` (default): the container's environment. `checks`: only `t.exec` and `setup` steps. */
   to?: 'agent' | 'checks'
+  /**
+   * Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway
+   * swaps in the real value only on HTTPS requests to these hosts (`*.example.com` for subdomains).
+   */
+  hosts?: string[]
+  /** Where in a request to those hosts the gateway substitutes; defaults to `['header']`. */
+  in?: SubstituteIn[]
+}
+/** `header` values, the `query` string, or the request `body`. */
+export type SubstituteIn = 'header' | 'query' | 'body'
+export type SecretOptions = {
+  optional?: boolean
+  to?: 'agent' | 'checks'
+  hosts?: readonly string[]
+  in?: readonly SubstituteIn[]
 }
 /** `secret.template('Bearer ${TOKEN}')`: host variables substituted into a string, for MCP headers. */
 export type SecretTemplate = { kind: 'secret-template'; template: string }
@@ -320,9 +335,16 @@ export type EnvironmentHelpers = {
 
 export type SecretHelper = {
   /** The host variable of the same name as the key it's set under. */
-  (): Secret
-  fromEnv(host: string, options?: { optional?: boolean; to?: 'agent' | 'checks' }): Secret
+  (options?: SecretOptions): Secret
+  fromEnv(host: string, options?: SecretOptions): Secret
   template(template: string): SecretTemplate
+  /** The hosts well-known APIs take their keys on, for `hosts`. */
+  hosts: {
+    readonly gemini: readonly string[]
+    readonly openai: readonly string[]
+    readonly anthropic: readonly string[]
+    readonly github: readonly string[]
+  }
 }
 
 type SkillCommon = { placement?: SkillPlacement }
@@ -487,6 +509,8 @@ export type EsConfig = {
   profiles?: Record<string, Profile>
   /** The profile when neither `--profile` nor `ES_PROFILE` names one: `ci` when `CI` is set. */
   defaultProfile?: { ci?: string; local?: string }
+  /** `unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`). */
+  secrets?: { unbrokered?: 'warn' | 'error' }
 }
 
 /** What a `defineConfig` callback gets: the environment helpers plus the run's context. */
@@ -533,6 +557,7 @@ export type ResolvedConfig = {
   budget: Budget
   profiles: Record<string, Profile>
   defaultProfile: { ci?: string; local?: string }
+  secrets: { unbrokered: 'warn' | 'error' }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
@@ -591,6 +616,8 @@ export type EnvironmentRecord = {
   files: Array<{ path: string; sha256: string }>
   vars: string[]
   secrets: string[]
+  /** Secrets the sandbox only had placeholders for, swapped in by the egress gateway. */
+  brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
 }
@@ -637,8 +664,8 @@ export type EvalRecord = {
   judgeInputs?: JudgeInput[]
   environment?: EnvironmentRecord
   image?: AttemptImage | null
-  /** Names of the variables and secrets set in the sandbox. */
-  env?: { vars: string[]; secrets: string[] }
+  /** Names of the variables and secrets set in the sandbox, and of the brokered secrets among them. */
+  env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
 }
@@ -657,6 +684,8 @@ export type EvalPlan = {
   skip?: string
   /** Warnings about the eval's setup, e.g. a moving git ref. */
   warnings: string[]
+  /** Secrets any of its attempts brokers, as `NAME → host, host`. */
+  brokered: string[]
 }
 
 /** Set when an attempt is registered, so the reporter has it even for skipped attempts. */
@@ -674,6 +703,8 @@ export type AttemptMeta = {
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
   minLift?: number
+  /** The secrets this attempt brokers, as `NAME → host, host`. */
+  brokered: string[]
   plan: EvalPlan
 }
 

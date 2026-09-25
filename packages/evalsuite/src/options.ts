@@ -7,6 +7,9 @@ import {
   isEnvironment,
   isMovingRef,
   layered,
+  plannedSecrets,
+  type UnbrokeredSecret,
+  unbrokeredSecrets,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { isAgentKind } from './harness/agents.ts'
@@ -511,6 +514,33 @@ export function environmentWarnings(attempts: PlannedAttempt[]): string[] {
   return [...out]
 }
 
+/** Secrets a Docker attempt would get as real values, because they have no `hosts`. */
+export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): UnbrokeredSecret[] {
+  const out = new Map<string, UnbrokeredSecret>()
+  for (const a of attempts) {
+    if (a.sandbox.kind !== 'docker') continue
+    for (const s of unbrokeredSecrets(env, a.environment.layers)) out.set(s.label, s)
+  }
+  return [...out.values()]
+}
+
+/** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret an attempt brokers. */
+export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
+  plannedSecrets(env, attempt.environment.layers).flatMap((s) =>
+    s.hosts ? [`${s.label} → ${s.hosts.join(', ')}`] : [],
+  )
+
+const brokerHint = (s: UnbrokeredSecret) =>
+  /^mcp\.[^.]+\.headers\./.test(s.label)
+    ? 'give the MCP server an https:// URL (ES brokers its header secrets to its own host, over HTTPS only)'
+    : `add the hosts it's sent to, e.g. secret.fromEnv('${s.from}', { hosts: ['api.example.com'] })`
+
+export const unbrokeredWarning = (s: UnbrokeredSecret) =>
+  `${s.label} is in the sandbox as its real value. To give the agent only a placeholder, ${brokerHint(s)}.`
+
+export const unbrokeredError = (s: UnbrokeredSecret, where: string) =>
+  `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in es.config.ts. To broker it, ${brokerHint(s)}.`
+
 /** The plan row for an eval. */
 export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan {
   const { resolved, notes, skip } = r
@@ -524,7 +554,11 @@ export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan 
     attempts: skip ? 0 : attempts.length,
     notes,
     ...(skip ? { skip } : {}),
-    warnings: environmentWarnings(attempts),
+    warnings: [
+      ...environmentWarnings(attempts),
+      ...unbrokered(r.resolved.env, attempts).map(unbrokeredWarning),
+    ],
+    brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
   }
 }
 

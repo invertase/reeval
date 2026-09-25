@@ -7,14 +7,17 @@ import type {
   EnvironmentInput,
   EnvironmentLayer,
   EnvironmentSpec,
+  EnvVars,
   HostFile,
   McpHelper,
   McpServer,
   Secret,
   SecretHelper,
+  SecretOptions,
   SecretTemplate,
   SkillHelper,
   SkillSource,
+  SubstituteIn,
 } from './types.ts'
 
 export class DefinitionError extends Error {
@@ -81,26 +84,140 @@ const toPath = (value: string | URL, base: string) => {
   return isAbsolute(path) ? path : resolve(base, path)
 }
 
+/** A host name, or `*.` and a domain for its subdomains. */
+const HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/i
+const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
+
+export const SECRET_HOSTS: SecretHelper['hosts'] = Object.freeze({
+  gemini: Object.freeze(['generativelanguage.googleapis.com']),
+  openai: Object.freeze(['api.openai.com']),
+  anthropic: Object.freeze(['api.anthropic.com']),
+  github: Object.freeze(['api.github.com', 'uploads.github.com']),
+})
+
+function secretOptions(options: SecretOptions, what: string): Omit<Secret, 'kind' | 'from'> {
+  const to = options.to ?? 'agent'
+  if (to !== 'agent' && to !== 'checks') {
+    throw new DefinitionError(`${what}: to must be 'agent' or 'checks'`)
+  }
+  const { hosts } = options
+  if (hosts !== undefined) {
+    if (!Array.isArray(hosts) || hosts.length === 0) {
+      throw new DefinitionError(
+        `${what}: hosts must list the hosts the secret is sent to, e.g. hosts: ['api.example.com'] or secret.hosts.gemini (got ${JSON.stringify(hosts)})`,
+      )
+    }
+    for (const host of hosts) {
+      if (typeof host === 'string' && HOST.test(host)) continue
+      const url = typeof host === 'string' && /^[a-z]+:\/\//i.test(host)
+      throw new DefinitionError(
+        url
+          ? `${what}: hosts are host names, not URLs: use '${new URL(host).hostname}' (got '${host}')`
+          : `${what}: ${JSON.stringify(host)} isn't a host. Use a name like 'api.example.com', or '*.example.com' for its subdomains.`,
+      )
+    }
+  }
+  if (options.in !== undefined) {
+    if (hosts === undefined) {
+      throw new DefinitionError(
+        `${what}: in only applies to a brokered secret; add hosts, e.g. { hosts: ['api.example.com'], in: ${JSON.stringify(options.in)} }`,
+      )
+    }
+    const bad = Array.isArray(options.in)
+      ? options.in.filter((i) => !SUBSTITUTE_IN.includes(i))
+      : [options.in]
+    if (bad.length || options.in.length === 0) {
+      throw new DefinitionError(
+        `${what}: in lists where the gateway substitutes: 'header', 'query' and/or 'body' (got ${JSON.stringify(options.in)})`,
+      )
+    }
+  }
+  return {
+    ...(options.optional ? { optional: true } : {}),
+    ...(to === 'checks' ? { to } : {}),
+    ...(hosts ? { hosts: [...hosts] } : {}),
+    ...(options.in ? { in: [...new Set(options.in)] } : {}),
+  }
+}
+
+/** Where an MCP server's header secrets are brokered to by default: its own host, over HTTPS. */
+export function mcpHosts(url: string): string[] | undefined {
+  try {
+    const u = new URL(url)
+    return u.protocol === 'https:' ? [u.hostname] : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * A secret an attempt puts in the sandbox: where it's set (`KEY`, `mcp.docs.headers.auth`), the
+ * host variable it reads, and the hosts it's brokered to, or none when the sandbox gets its value.
+ */
+export type PlannedSecret = { label: string; from: string; hosts?: readonly string[] }
+export type UnbrokeredSecret = Omit<PlannedSecret, 'hosts'>
+
+/**
+ * Every secret among `env` and the layers' env and MCP servers, layered as the attempt resolves
+ * them: a later layer's variable or MCP server replaces an earlier one of the same name.
+ */
+export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]): PlannedSecret[] {
+  const vars: EnvVars = { ...env }
+  const servers = new Map<string, McpServer>()
+  for (const { spec } of layers) {
+    Object.assign(vars, spec.env)
+    for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
+  }
+  const out = new Map<string, PlannedSecret>()
+  const add = (label: string, from: string, hosts: readonly string[] | undefined) =>
+    out.set(label, { label, from, ...(hosts ? { hosts } : {}) })
+  const fromVars = (values: EnvVars, prefix: string) => {
+    for (const [name, value] of Object.entries(values)) {
+      if (isSecret(value)) add(`${prefix}${name}`, value.from ?? name, value.hosts)
+    }
+  }
+  fromVars(vars, '')
+  for (const [server, s] of servers) {
+    if (s.transport === 'stdio') {
+      fromVars(s.env, `mcp.${server}.env.`)
+      continue
+    }
+    const own = mcpHosts(s.url)
+    for (const [header, value] of Object.entries(s.headers)) {
+      const label = `mcp.${server}.headers.${header}`
+      if (isSecret(value)) add(label, value.from ?? header, value.hosts ?? own)
+      if (isSecretTemplate(value)) {
+        for (const [, name] of value.template.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)) {
+          add(label, name as string, own)
+        }
+      }
+    }
+  }
+  return [...out.values()]
+}
+
+/** The secrets the sandbox gets as real values: no `hosts`, and none implied by an MCP URL. */
+export const unbrokeredSecrets = (
+  env: EnvVars,
+  layers: readonly EnvironmentLayer[],
+): UnbrokeredSecret[] =>
+  plannedSecrets(env, layers).flatMap(({ hosts, ...s }) => (hosts ? [] : [s]))
+
 function secretHelper(): SecretHelper {
-  const secret = (() => ({ kind: 'secret' })) as SecretHelper
+  const secret = ((options: SecretOptions = {}) => ({
+    kind: 'secret',
+    ...secretOptions(options, 'secret()'),
+  })) as SecretHelper
   secret.fromEnv = (host, options = {}) => {
     if (typeof host !== 'string' || !VAR.test(host)) {
       throw new DefinitionError(
         `secret.fromEnv(${JSON.stringify(host)}) needs a host variable name`,
       )
     }
-    const to = options.to ?? 'agent'
-    if (to !== 'agent' && to !== 'checks') {
-      throw new DefinitionError(`secret.fromEnv("${host}"): to must be 'agent' or 'checks'`)
-    }
-    return {
-      kind: 'secret',
-      from: host,
-      ...(options.optional ? { optional: true } : {}),
-      ...(to === 'checks' ? { to } : {}),
-    }
+    return { kind: 'secret', from: host, ...secretOptions(options, `secret.fromEnv("${host}")`) }
   }
   secret.template = (template) => ({ kind: 'secret-template', template })
+  secret.hosts = SECRET_HOSTS
   return secret
 }
 

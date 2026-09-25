@@ -404,7 +404,7 @@ async function addAttempt(
     seq: null,
     startedAt: record?.startedAt ?? null,
     imageId: record?.image?.id ?? null,
-    env: record?.env ?? { vars: [], secrets: [] },
+    env: record?.env ?? { vars: [], secrets: [], brokered: [] },
     context,
     outcome,
     error,

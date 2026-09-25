@@ -6,6 +6,7 @@ import {
   imageInfo,
   LABEL,
   SANDBOX_ROOT,
+  type Substitution,
   WORKSPACE_DIR,
 } from '@evalsuite/sandbox-docker'
 import type { DockerSandboxDescriptor } from '../types.ts'
@@ -25,27 +26,36 @@ export async function createDockerSandbox(
   if (!(await imageInfo(image))) {
     throw new InfraError(`Docker image ${image} not found. Build it with: es image build`)
   }
-  const { brokering } = options
+  const { brokering, substitutions = [] } = options
+  const brokered = [
+    ...new Set([...(brokering ? [brokering.credential] : []), ...substitutions.map((s) => s.name)]),
+  ]
   const network = await createDockerSession({
     image,
     env: options.env,
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    egress: brokering && {
+    egress: brokered.length > 0 && {
       log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
-      endpoints: brokering.endpoints,
-      onRefused: ({ method, url }) =>
+      onUnsubstituted: ({ name, where, in: places, method, url }) =>
         console.warn(
-          `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints ES brokers it for`,
+          `warning: the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
         ),
+      ...(brokering && {
+        endpoints: brokering.endpoints,
+        onRefused: ({ method, url }) =>
+          console.warn(
+            `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints ES brokers it for`,
+          ),
+      }),
     },
   })
-  // The key never enters the container: with no gateway to broker it, the attempt can't start.
+  // Brokered values never enter the container: with no gateway to swap them in, the attempt can't start.
   if (network.egress?.active === false) {
     await Promise.resolve(network.destroy()).catch(() => {})
     throw new InfraError(
-      `Can't keep ${brokering?.credential} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
+      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
     )
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
@@ -66,6 +76,10 @@ export async function createDockerSandbox(
         abortSignal: opts?.signal,
       }),
     readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
+    ...(network.setSubstitutions && {
+      setSubstitutions: (subs: readonly Substitution[]) =>
+        network.setSubstitutions?.(subs) ?? Promise.resolve(),
+    }),
     writeFile: async (path, content) => network.writeTextFile({ path: resolve(path), content }),
     destroy: async () => {
       await Promise.resolve(network.destroy()).catch(() => {})

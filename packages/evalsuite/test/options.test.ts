@@ -555,6 +555,31 @@ describe('common mistakes', () => {
       /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \} or \{ reply: string \}/,
     ],
     [
+      'an empty hosts list',
+      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { hosts: [] }) } }))`,
+      /secret\.fromEnv\("K"\): hosts must list the hosts the secret is sent to, e\.g\. hosts: \['api\.example\.com'\] or secret\.hosts\.gemini \(got \[\]\)/,
+    ],
+    [
+      'a URL as a host',
+      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { hosts: ['https://api.example.com/v1'] }) } }))`,
+      /secret\.fromEnv\("K"\): hosts are host names, not URLs: use 'api\.example\.com' \(got 'https:\/\/api\.example\.com\/v1'\)/,
+    ],
+    [
+      'a host that is not a string',
+      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { hosts: [42 as never] }) } }))`,
+      /secret\.fromEnv\("K"\): 42 isn't a host\. Use a name like 'api\.example\.com', or '\*\.example\.com' for its subdomains\./,
+    ],
+    [
+      'substituting somewhere the gateway does not',
+      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret({ hosts: ['api.example.com'], in: ['cookie' as never] }) } }))`,
+      /secret\(\): in lists where the gateway substitutes: 'header', 'query' and\/or 'body' \(got \["cookie"\]\)/,
+    ],
+    [
+      'in without hosts',
+      `defineEnvironment('k', ({ secret }) => ({ env: { K: secret.fromEnv('K', { in: ['query'] }) } }))`,
+      /secret\.fromEnv\("K"\): in only applies to a brokered secret; add hosts, e\.g\. \{ hosts: \['api\.example\.com'\], in: \["query"\] \}/,
+    ],
+    [
       'two harnesses with one id',
       `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
       /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
@@ -600,6 +625,11 @@ ${body}
       /budget\.usd isn't supported: no harness ES runs reports cost or tokens yet \(Cursor reports no usage\)\. Cap the run with attempts or duration\./,
     ],
     [
+      'an unbrokered policy ES does not know',
+      `secrets: { unbrokered: 'deny' as never },`,
+      /config\.secrets\.unbrokered is 'warn' or 'error' \(got "deny"\)/,
+    ],
+    [
       'control reuse',
       `profiles: { pr: { reuse: 'control' } },`,
       /Unknown option "reuse" in profiles\.pr\. Reusing control results from \.history isn’t built yet/,
@@ -619,6 +649,44 @@ ${body}
       assert.match(r.stderr, message)
     })
   }
+
+  const unbrokeredEval = `import { defineEnvironment, evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+const keys = defineEnvironment('keys', ({ secret }) => ({
+  env: {
+    GEMINI_API_KEY: secret.fromEnv('HOST_GEMINI', { hosts: secret.hosts.gemini }),
+    AWS_SECRET_ACCESS_KEY: secret(),
+  },
+}))
+evaluate('one', { sandbox: docker(), environment: keys }, async () => {})
+evaluate('two', { sandbox: docker(), environment: keys }, async () => {})
+`
+
+  test('a Docker secret without hosts warns once in the plan', async () => {
+    const p = await project('unbrokered', {
+      'es.config.ts': fakeConfig(),
+      'evals/o.es.ts': unbrokeredEval,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const warning =
+      /^warning: AWS_SECRET_ACCESS_KEY is in the sandbox as its real value\. To give the agent only a placeholder, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\.$/gm
+    assert.equal(r.stdout.match(warning)?.length, 1, r.stdout)
+    assert.doesNotMatch(r.stdout, /GEMINI_API_KEY is in the sandbox/)
+  })
+
+  test("secrets: { unbrokered: 'error' } refuses a Docker secret without hosts", async () => {
+    const p = await project('unbrokered-strict', {
+      'es.config.ts': fakeConfig({ extra: "secrets: { unbrokered: 'error' }," }),
+      'evals/o.es.ts': unbrokeredEval,
+    })
+    const r = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /AWS_SECRET_ACCESS_KEY in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error' in es\.config\.ts\. To broker it, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\./,
+    )
+  })
 
   test('a moving git ref warns in the plan', async () => {
     const p = await project('moving-ref', {
@@ -719,6 +787,7 @@ evaluate('greets', { compare: [withSkill] }, async (t) => {
     assert.deepEqual(variant?.env, {
       vars: ['FLAVOUR', 'MODE'],
       secrets: ['APP_TOKEN', 'CHECK_TOKEN', 'EXTRA_TOKEN'],
+      brokered: [],
     })
     assert.ok(variant?.files.setupLog, 'setup steps write setup.log')
     assert.match(readRun(p.dir).read(variant?.files.setupLog?.path ?? ''), /exit 0 after \d+ms/)

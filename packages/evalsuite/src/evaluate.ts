@@ -25,6 +25,7 @@ import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from './judge/patch.ts'
 import type { RetriedError } from './judge/retry.ts'
 import {
+  brokeredIn,
   cascade,
   checkOptions,
   evalPlan,
@@ -33,9 +34,12 @@ import {
   matchesTags,
   type PlannedAttempt,
   type Resolved,
+  unbrokered,
+  unbrokeredError,
 } from './options.ts'
 import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
+import { type BrokerPhases, brokerPhases } from './sandbox/phases.ts'
 import { withLease } from './scheduler/client.ts'
 import type { Limits } from './scheduler/core.ts'
 import { clip, formatDuration } from './text.ts'
@@ -178,6 +182,10 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
   const order = registered++
   const plannedAttempts = resolvedEval.skip ? [] : expand(resolved)
+  if (ctx.config.secrets.unbrokered === 'error') {
+    const [first] = unbrokered(resolved.env, plannedAttempts)
+    if (first) throw new UsageError(unbrokeredError(first, where))
+  }
   const plan = evalPlan(resolvedEval, plannedAttempts)
   if (resolvedEval.skip) {
     const [first] = expand(resolved)
@@ -192,6 +200,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       harness: first.harness,
       sandbox: first.sandbox,
       gate: 'none',
+      brokered: [],
       plan,
     }
     registerTest(
@@ -215,6 +224,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       sandbox: planned.sandbox,
       gate: planned.gate,
       ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
+      brokered: brokeredIn(resolved.env, planned),
       plan,
     }
     const spec: AttemptSpec = {
@@ -465,12 +475,13 @@ async function runAttempt(
       layoutOf(spec.harness).rulesFile,
     )
     record.environment = resolved.record
-    const secrets = resolved.record.secrets
+    const { secrets, brokered } = resolved.record
     record.env = {
       vars: Object.keys(resolved.vars)
         .filter((n) => !secrets.includes(n))
         .sort(),
       secrets,
+      brokered,
     }
     record.image = null
     if (spec.sandbox.kind === 'docker') {
@@ -481,6 +492,8 @@ async function runAttempt(
     }
   }
   const checkEnv = () => (resolved?.checkVars ?? {}) as Record<string, string>
+  let phases: BrokerPhases | undefined
+  const asCheck = <T>(fn: () => Promise<T>) => (phases ? phases.checks(fn) : fn())
 
   const requireSandbox = () => {
     if (!sandbox) {
@@ -494,7 +507,9 @@ async function runAttempt(
     const box = requireSandbox()
     const start = performance.now()
     report({ kind: 'check-start', command })
-    const r = await timed('checksMs', () => box.exec(command, { signal, env: checkEnv() }))
+    const r = await timed('checksMs', () =>
+      asCheck(() => box.exec(command, { signal, env: checkEnv() })),
+    )
     const durationMs = Math.round(performance.now() - start)
     record.checks.push({ command, ...r, durationMs })
     report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
@@ -509,16 +524,16 @@ async function runAttempt(
     for (const [i, step] of steps.entries()) {
       const start = performance.now()
       const stepSignal = AbortSignal.any([signal, AbortSignal.timeout(step.timeoutMs)])
-      const r = await box
-        .exec(step.run, {
+      const r = await asCheck(() =>
+        box.exec(step.run, {
           signal: stepSignal,
           env: env.checkVars,
           ...(step.cwd ? { cwd: step.cwd } : {}),
-        })
-        .catch((error) => {
-          if (signal.aborted) throw error
-          return null
-        })
+        }),
+      ).catch((error) => {
+        if (signal.aborted) throw error
+        return null
+      })
       const durationMs = Math.round(performance.now() - start)
       const output = r ? [r.stdout, r.stderr].filter(Boolean).join('\n') : ''
       record.setup.push({ run: step.run, exitCode: r?.exitCode ?? null, durationMs, output })
@@ -541,10 +556,13 @@ async function runAttempt(
       env: env.vars,
       image,
       brokering: brokeringFor(spec.harness),
+      substitutions: env.substitutions,
     })
     sandbox = box
     if (signal.aborted) destroy()
     signal.throwIfAborted()
+    phases = brokerPhases(box, env.substitutions)
+    await phases.start()
     for (const f of env.files) await box.writeFile(f.path, f.content)
     const skillDir = workspaceSkillDir(spec.harness)
     for (const skill of env.workspaceSkills) {

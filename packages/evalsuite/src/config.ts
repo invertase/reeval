@@ -40,6 +40,7 @@ const CONFIG_KEYS = [
   'budget',
   'profiles',
   'defaultProfile',
+  'secrets',
 ]
 const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
 const DEFAULTS_KEYS = [
@@ -305,7 +306,23 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
         : checkConcurrency(user.concurrency, 'config.concurrency'),
     record,
     history: { dir: historyDir, artifacts },
+    secrets: checkSecrets(user.secrets),
   }
+}
+
+function checkSecrets(secrets: EsConfig['secrets']): ResolvedConfig['secrets'] {
+  if (secrets === undefined) return { unbrokered: 'warn' }
+  if (typeof secrets !== 'object' || secrets === null) {
+    throw new UsageError("config.secrets must be an object like { unbrokered: 'error' }")
+  }
+  unknownKey(secrets, ['unbrokered'], 'config.secrets')
+  const unbrokered = secrets.unbrokered ?? 'warn'
+  if (unbrokered !== 'warn' && unbrokered !== 'error') {
+    throw new UsageError(
+      `config.secrets.unbrokered is 'warn' or 'error' (got ${JSON.stringify(unbrokered)})`,
+    )
+  }
+  return { unbrokered }
 }
 
 export type Capacity = { cpus: number; memoryBytes: number }

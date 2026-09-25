@@ -1,9 +1,11 @@
 // Worker side of environments: layers an attempt's environments, reads skills and files on the
 // host, resolves secrets, and computes the digest that goes into fingerprints. Nothing here
 // touches the sandbox.
+import { randomInt } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, join, relative, sep } from 'node:path'
+import type { Substitution } from '@evalsuite/sandbox-docker'
 import { run } from '@evalsuite/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
 import { parseDuration } from '../config.ts'
@@ -13,6 +15,7 @@ import {
   isHostFile,
   isSecret,
   isSecretTemplate,
+  mcpHosts,
   parseGitRepo,
   stepCommand,
 } from '../environment.ts'
@@ -60,14 +63,51 @@ export type ResolvedEnvironment = {
   vars: Record<string, string>
   /** `to: 'checks'` secrets: only for `t.exec` and setup steps. */
   checkVars: Record<string, string>
+  /**
+   * Brokered secrets: the sandbox has the placeholders, and these real values stay in the worker
+   * for the Docker egress gateway. Never write this anywhere.
+   */
+  substitutions: BrokeredSecret[]
+}
+
+/** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
+export type BrokeredSecret = Substitution & { phase: 'agent' | 'checks' }
+
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
+/** A fresh `es_secret_<32 base62>`: URL-safe, so it survives any encoding a client applies. */
+export function placeholder(): string {
+  let out = 'es_secret_'
+  for (let i = 0; i < 32; i++) out += BASE62[randomInt(BASE62.length)]
+  return out
 }
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DEFAULT_SETUP_TIMEOUT = '5m'
 
-type Secrets = { names: string[]; checks: string[]; unset: string[] }
+type Secrets = { names: string[]; checks: string[]; unset: string[]; brokered: BrokeredSecret[] }
 
-function hostValue(name: string, secret: Secret, where: string, secrets: Secrets) {
+function broker(
+  secrets: Secrets,
+  name: string,
+  value: string,
+  hosts: readonly string[],
+  where: readonly Substitution['in'][number][] = ['header'],
+  phase: BrokeredSecret['phase'] = 'agent',
+): string {
+  const sub = { name, placeholder: placeholder(), value, hosts: [...hosts], in: [...where], phase }
+  secrets.brokered.push(sub)
+  return sub.placeholder
+}
+
+/** The host value, or its placeholder when it's brokered to `secret.hosts` (else `hosts`). */
+function hostValue(
+  name: string,
+  secret: Secret,
+  where: string,
+  secrets: Secrets,
+  hosts: readonly string[] | undefined = secret.hosts,
+) {
   const from = secret.from ?? name
   const value = process.env[from]
   if (!value) {
@@ -83,15 +123,26 @@ function hostValue(name: string, secret: Secret, where: string, secrets: Secrets
   registerSecret(value)
   if (secret.to === 'checks') secrets.checks.push(name)
   else secrets.names.push(name)
-  return value
+  if (!hosts) return value
+  return broker(secrets, name, value, hosts, secret.in, secret.to === 'checks' ? 'checks' : 'agent')
 }
 
-function template(value: SecretTemplate, where: string): string {
+/** Each host variable in the template, or with `hosts` one placeholder per variable. */
+function template(
+  value: SecretTemplate,
+  where: string,
+  secrets: Secrets,
+  hosts?: readonly string[],
+): string {
+  const placeholders = new Map<string, string>()
   return value.template.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
     const v = process.env[name]
     if (!v) throw new InfraError(`secret.template needs ${name} for ${where}, and it isn't set`)
     registerSecret(v)
-    return v
+    if (!hosts) return v
+    const p = placeholders.get(name) ?? broker(secrets, name, v, hosts)
+    placeholders.set(name, p)
+    return p
   })
 }
 
@@ -402,7 +453,7 @@ export async function resolveEnvironment(
     }
   }
 
-  const secrets: Secrets = { names: [], checks: [], unset: [] }
+  const secrets: Secrets = { names: [], checks: [], unset: [], brokered: [] }
   const vars: Record<string, string> = {}
   const checkVars: Record<string, string> = {}
   for (const [name, value] of Object.entries(env)) {
@@ -415,10 +466,14 @@ export async function resolveEnvironment(
     if (value.to === 'checks') checkVars[name] = resolved
     else vars[name] = resolved
   }
-  const secretOf = (value: string | Secret | SecretTemplate, key: string): string | undefined => {
+  const secretOf = (
+    value: string | Secret | SecretTemplate,
+    key: string,
+    hosts?: readonly string[],
+  ): string | undefined => {
     if (typeof value === 'string') return value
-    if (isSecretTemplate(value)) return template(value, envWhere)
-    return hostValue(key, value, envWhere, secrets)
+    if (isSecretTemplate(value)) return template(value, envWhere, secrets, hosts)
+    return hostValue(key, value, envWhere, secrets, value.hosts ?? hosts)
   }
   const resolvedMcp: Record<string, ResolvedMcpServer> = {}
   for (const [name, s] of mcp) {
@@ -431,8 +486,9 @@ export async function resolveEnvironment(
       resolvedMcp[name] = { transport: 'stdio', command: s.command, args: s.args, env: e }
     } else {
       const h: Record<string, string> = {}
+      const hosts = mcpHosts(s.url)
       for (const [k, v] of Object.entries(s.headers)) {
-        const r = secretOf(v, k)
+        const r = secretOf(v, k, hosts)
         if (r !== undefined) h[k] = r
       }
       resolvedMcp[name] = { transport: s.transport, url: s.url, headers: h }
@@ -460,6 +516,10 @@ export async function resolveEnvironment(
     rulesContent === undefined ? undefined : { path: rulesFile, sha256: sha256(rulesContent) }
   if (rulesContent !== undefined) fileList.push({ path: rulesFile, content: rulesContent })
   const secretNames = [...new Set([...secrets.names, ...secrets.checks])].sort()
+  const brokered = secrets.brokered
+    .map((b) => JSON.stringify([b.name, b.hosts, b.in, b.phase]))
+    .sort()
+  const brokeredNames = [...new Set(secrets.brokered.map((b) => b.name))].sort()
   const varNames = Object.keys(vars)
     .filter((n) => !secrets.names.includes(n))
     .sort()
@@ -482,6 +542,7 @@ export async function resolveEnvironment(
       secrets: secretNames,
       checks: [...secrets.checks].sort(),
       unset: [...secrets.unset].sort(),
+      brokered,
     }),
   )}`
   return {
@@ -496,6 +557,7 @@ export async function resolveEnvironment(
       files: rulesRecord ? [...fileRecords, rulesRecord] : fileRecords,
       vars: varNames,
       secrets: secretNames,
+      brokered: brokeredNames,
       unset: [...secrets.unset].sort(),
     },
     setup,
@@ -505,6 +567,7 @@ export async function resolveEnvironment(
     files: fileList,
     vars,
     checkVars,
+    substitutions: secrets.brokered,
   }
 }
 
