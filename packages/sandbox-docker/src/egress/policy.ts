@@ -23,9 +23,17 @@ export const DEFAULT_ALLOWED_HOSTS = [
 
 /**
  * Never reachable through the gateway, whatever the policy: the worker's own loopback (the
- * container's `localhost` is its own) and link-local addresses such as cloud metadata.
+ * container's `localhost` is its own) and link-local addresses such as cloud metadata. A
+ * connection to an unspecified address (`0.0.0.0`, `::`) reaches the local host too.
  */
-const ALWAYS_DENIED = ['127.0.0.0/8', '169.254.0.0/16', '0.0.0.0/8', '::1/128', 'fe80::/10']
+const ALWAYS_DENIED = [
+  '127.0.0.0/8',
+  '169.254.0.0/16',
+  '0.0.0.0/8',
+  '::/128',
+  '::1/128',
+  'fe80::/10',
+]
 
 export const isRestricted = (policy: NetworkPolicy) => policy.mode !== 'allow-all'
 

@@ -136,6 +136,16 @@ describe('network policy', () => {
     assert.equal((await check('metadata.cloud')).allowed, false)
     assert.equal((await check('127.0.0.1')).allowed, false)
     assert.equal((await check('[::1]')).allowed, false)
+    // Connecting to the unspecified address reaches the local host, like 0.0.0.0.
+    for (const host of [
+      '[::]',
+      '::',
+      '0:0:0:0:0:0:0:0',
+      '::ffff:127.0.0.1',
+      '::ffff:169.254.169.254',
+    ]) {
+      assert.equal((await check(host)).allowed, false, host)
+    }
     const loose = createPolicyCheck({ mode: 'allow-all' }, { lookup, allowLoopback: true })
     assert.equal((await loose('sneaky.example')).allowed, true)
   })

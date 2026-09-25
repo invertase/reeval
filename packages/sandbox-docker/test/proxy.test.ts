@@ -468,7 +468,7 @@ describe('egress policy through the proxy', () => {
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
     try {
       const gw = { port: (server.address() as net.AddressInfo).port } as Gw
-      for (const host of ['127.0.0.1', 'localhost', '[::1]', '169.254.169.254']) {
+      for (const host of ['127.0.0.1', 'localhost', '[::1]', '[::]', '169.254.169.254']) {
         const r = await connect(gw, host, h1.port)
         assert.equal(!r.ok && r.status, 403, host)
       }
