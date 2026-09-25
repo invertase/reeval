@@ -1,0 +1,34 @@
+name: Sandbox images
+description: >
+  Loads ES's sandbox image for every baked harness (Cursor's, Claude Code's) from the Actions
+  cache, or builds them and caches them as one zstd tarball. Needs pnpm build first.
+runs:
+  using: composite
+  steps:
+    - id: images
+      shell: bash
+      run: |
+        images=$(node --input-type=module -e "
+          import { BAKED_HARNESSES, imageFor } from './packages/sandbox-docker/dist/index.js'
+          console.log(BAKED_HARNESSES.map(imageFor).join(' '))")
+        echo "list=$images" >> "$GITHUB_OUTPUT"
+        echo "Sandbox images: $images"
+    # The tag pins each adapter, whose bootstrap pins the CLI, so the key is the adapters and
+    # the build context. `actions/cache` saves the tarball when the job ends.
+    - id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/es-sandbox-images.tar.zst
+        key: es-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
+    - if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      run: zstd -dc "$RUNNER_TEMP/es-sandbox-images.tar.zst" | docker load
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        IMAGES: ${{ steps.images.outputs.list }}
+      run: |
+        node --input-type=module -e "
+          import { BAKED_HARNESSES, buildImage } from './packages/sandbox-docker/dist/index.js'
+          for (const harness of BAKED_HARNESSES) await buildImage(console.log, { harness })"
+        docker save $IMAGES | zstd -T0 -3 -q -f -o "$RUNNER_TEMP/es-sandbox-images.tar.zst"

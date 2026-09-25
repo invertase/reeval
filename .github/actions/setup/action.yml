@@ -1,0 +1,18 @@
+name: Set up the workspace
+description: pnpm from packageManager, Node from engines (or node-version), a cached store and a frozen install
+inputs:
+  node-version:
+    description: A Node version to use instead of the root package.json's engines.node
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      with:
+        node-version: ${{ inputs.node-version }}
+        node-version-file: ${{ inputs.node-version == '' && 'package.json' || '' }}
+        cache: pnpm
+    - run: pnpm install --frozen-lockfile
+      shell: bash
