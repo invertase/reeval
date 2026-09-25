@@ -45,6 +45,7 @@ test("a harness's auth is only its own credential, and a missing one fails close
   assert.deepEqual(brokeringFor({ kind: 'cursor' }), {
     credential: 'CURSOR_API_KEY',
     endpoints: AGENTS.cursor.endpoints,
+    tokens: { name: 'CURSOR_API_KEY', ...AGENTS.cursor.tokens },
   })
   assert.equal(brokeringFor({ kind: 'fake' }), undefined)
 })
