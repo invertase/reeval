@@ -213,7 +213,7 @@ defaults → outer group → inner group → eval:
 | `pin` | union | `['harness' \| 'runs' \| 'compare']`: keys a profile's `limit` may not narrow |
 
 The config also takes `include` (eval file globs), `profiles`, `defaultProfile`, `concurrency`,
-`record` and `history` (see [Profiles](#profiles-the-plan-and-budgets),
+`record`, `history` and `secrets` (`{ unbrokered: 'error' }`; see [Secrets](#secrets)) (see [Profiles](#profiles-the-plan-and-budgets),
 [Concurrency](#concurrency) and [Results](#results)).
 
 A harness list replaces the inherited one, and a function edits it:
@@ -427,7 +427,54 @@ only to `t.exec` and setup steps, never the agent's container. `secret.template(
 builds MCP headers. Values travel through the docker CLI's environment, never its arguments, are
 masked in everything ES writes, and only their names are recorded. A literal string under a
 secret-looking name (`*_KEY`, `*_TOKEN`, …) is refused, and a missing config-level secret stops
-the run before it starts. Anything you pass to the agent is readable by the agent.
+the run before it starts. Anything you pass to the agent is readable by the agent, unless it's
+brokered.
+
+**Brokered secrets.** Give a secret the `hosts` it's sent to and it never enters the sandbox:
+
+```ts
+env: {
+ GEMINI_API_KEY: secret.fromEnv('GEMINI_API_KEY', { hosts: secret.hosts.gemini }), // headers only
+ LEGACY_KEY: secret({ hosts: ['api.example.com', '*.example.org'], in: ['header', 'query'] }),
+ SERVICE_TOKEN: secret({ hosts: ['api.example.com'], in: ['header', 'body'], to: 'checks' }),
+ AWS_SECRET_ACCESS_KEY: secret(), // no hosts: the real value, with a warning
+}
+```
+
+- The agent and the checks get a per-attempt placeholder (`es_secret_` and 32 base62
+ characters), and the attempt's egress gateway swaps in the real value only on **HTTPS** requests
+ to that secret's own `hosts` (`*.example.com` matches subdomains), and only where the `Host` (or
+ `:authority`) is the host it connected to. By default it substitutes inside header values
+ (`Bearer <placeholder>` works); `in: ['query']` and `in: ['body']` opt in to the query string and
+ uncompressed request bodies. Plain HTTP is never substituted. Responses from those hosts have
+ the value put back as the placeholder, headers and bodies, so an echo can't reveal it.
+- A request to a brokered host carrying the placeholder where its secret isn't substituted (the
+ query, say, without `in: ['query']`) goes up as the placeholder and prints
+ `warning: the egress gateway sent GET https://… with LEGACY_KEY's placeholder in the query,
+ where it isn't substituted: add 'query' to its in …`.
+- `to: 'checks'` secrets are substituted only while a `t.exec` or setup step runs; the agent's
+ own requests during a turn go up with the placeholder.
+- MCP `http`/`sse` header secrets (and `secret.template` parts) are brokered to the server's own
+ host automatically when its URL is `https://`; MCP `stdio` env secrets need explicit `hosts`.
+- `secret.hosts` has presets: `gemini`, `openai`, `anthropic` and `github`.
+- The plan lists each eval's brokered secrets (`brokered: GEMINI_API_KEY →
+ generativelanguage.googleapis.com`) and warns once per run for every Docker secret that isn't
+ (`warning: API_KEY is in the sandbox as its real value. To give the agent only a
+ placeholder, add the hosts it's sent to, …`). `secrets: { unbrokered: 'error' }` in
+ `es.config.ts` makes that a usage error (exit 2).
+- The record lists `env.brokered` (names only), and the environment digest covers `hosts` and
+ `in`. On Docker, a brokered secret whose gateway can't start (an image without `node`) makes
+ the attempt an infra error that names it. The fake sandbox hands out placeholders too, and
+ nothing substitutes them.
+- Clients must use the proxy variables and the system trust store, which the gateway sets for
+ every process: `HTTPS_PROXY`, `NODE_EXTRA_CA_CERTS`, `NODE_USE_ENV_PROXY=1` (Node's `fetch`
+ needs it, from 22.21), and `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE` and
+ `GIT_SSL_CAINFO` pointing at the system bundle with the gateway's CA in it. A client that
+ ignores them sends the placeholder direct, and authentication fails. SDKs that check a key's
+ shape (`AIza…`, `sk-…`) may reject the placeholder; signed requests (SigV4) can't be brokered.
+- Redaction masks every declared and secret-looking value in its raw, JSON-escaped,
+ URL-encoded and base64 (standard and URL-safe, at any byte offset) forms. Other encodings,
+ hex for one, aren't masked.
 
 The harness's own key (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`) never enters the container. Each
 real-agent attempt starts an egress gateway: the container's HTTP(S) proxy is a small forwarder
