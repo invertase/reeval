@@ -205,6 +205,12 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'secrets/cursor-session-tokens',
+    tiers: ['real'],
+    env: 'plain',
+    canary: /expected '' to match \/\^es_secret_\//,
+  },
+  {
     dir: 'secrets/redaction-coverage',
     tiers: ['fake', 'docker'],
     env: 'leaky',

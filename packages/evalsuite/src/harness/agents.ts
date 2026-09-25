@@ -1,5 +1,5 @@
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
-import type { BakedHarness, EndpointMatch } from '@evalsuite/sandbox-docker'
+import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, HarnessDescriptor } from '../types.ts'
@@ -30,6 +30,11 @@ export type Agent = Layout & {
    * asks for. Anything else carrying the placeholder gets a 403 from the gateway.
    */
   endpoints: readonly EndpointMatch[]
+  /**
+   * Session tokens the agent's CLI gets for its credential, which the gateway keeps out of the
+   * sandbox too: the exchange's response carries placeholders, swapped back on these hosts.
+   */
+  tokens?: Omit<DerivedTokens, 'name'>
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -93,6 +98,17 @@ export const AGENTS: Record<AgentKind, Agent> = {
     endpoints: [
       { host: 'api2.cursor.sh', path: { exact: '/auth/exchange_user_api_key' }, method: ['POST'] },
     ],
+    // The CLI stores these in auth.json and sends the access token to api2 and the agent hosts
+    // (agentn.*.cursor.sh, over long-lived HTTP/2 streams). It doesn't check their signatures.
+    tokens: {
+      endpoint: {
+        host: 'api2.cursor.sh',
+        path: { exact: '/auth/exchange_user_api_key' },
+        method: ['POST'],
+      },
+      fields: ['accessToken', 'refreshToken'],
+      hosts: ['cursor.sh', '*.cursor.sh'],
+    },
     mcpServers: acpMcpServers,
     adapter: async (options) => (await import('@ai-sdk/harness-cursor')).createCursor(options),
   },
@@ -159,10 +175,19 @@ export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
   return { [agent.credential]: value }
 }
 
-/** What the Docker egress gateway brokers for a harness: its credential, on its endpoints only. */
-export type Brokering = { credential: string; endpoints: readonly EndpointMatch[] }
+/**
+ * What the Docker egress gateway brokers for a harness: its credential, on its endpoints only,
+ * and the session tokens the agent derives from it.
+ */
+export type Brokering = {
+  credential: string
+  endpoints: readonly EndpointMatch[]
+  tokens?: DerivedTokens
+}
 
 export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
   const agent = agentOf(h)
-  return agent && { credential: agent.credential, endpoints: agent.endpoints }
+  if (!agent) return undefined
+  const { credential, endpoints, tokens } = agent
+  return { credential, endpoints, ...(tokens ? { tokens: { name: credential, ...tokens } } : {}) }
 }

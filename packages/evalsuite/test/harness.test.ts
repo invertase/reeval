@@ -4,7 +4,7 @@ import type {
   HarnessV1NetworkSandboxSession,
   HarnessV1RequestTransformation,
 } from '@ai-sdk/harness'
-import { applyTransformations } from '@evalsuite/sandbox-docker'
+import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered } from '../src/environment.ts'
@@ -281,6 +281,28 @@ describe('credential brokering per agent', () => {
       endpoints,
     )
     assert.equal(exchange.headers.authorization, 'Bearer crsr_real')
+  })
+
+  test("Cursor's session tokens are tokenised at its exchange and swapped back on its hosts only", () => {
+    const tokens = brokeringFor(cursor())?.tokens
+    assert.equal(tokens?.name, 'CURSOR_API_KEY')
+    assert.deepEqual(tokens?.fields, ['accessToken', 'refreshToken'])
+    assert.ok(
+      onEndpoint([tokens?.endpoint ?? { host: 'none' }], {
+        host: 'api2.cursor.sh',
+        method: 'POST',
+        path: '/auth/exchange_user_api_key',
+        headers: {},
+      }),
+    )
+    const hosts = tokens?.hosts ?? []
+    for (const host of ['api2.cursor.sh', 'agentn.global.api5.cursor.sh', 'cursor.sh']) {
+      assert.ok(hostAllowed(hosts, host), host)
+    }
+    for (const host of ['cursor.sh.evil.test', 'api.anthropic.com']) {
+      assert.ok(!hostAllowed(hosts, host), host)
+    }
+    assert.equal(brokeringFor(claudeCode({ model: 'opus' }))?.tokens, undefined)
   })
 
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
