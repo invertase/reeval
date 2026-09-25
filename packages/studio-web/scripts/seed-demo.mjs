@@ -1,6 +1,6 @@
 // Builds a throwaway ES project with real run history for studio development, screenshots and
 // tests: a copy of examples/hello with a few commits and recorded fake runs (passing, failing, CI,
-// multi-cell with a skill environment), plus one unrecorded scratch run.
+// multi-cell with a compared skill environment), plus one unrecorded scratch run.
 //
 //   node packages/studio-web/scripts/seed-demo.mjs [dir]    (default: $TMPDIR/es-studio-demo)
 import { spawnSync } from 'node:child_process'
@@ -138,7 +138,8 @@ es(['run', '--config', 'es.demo.config.ts', '--record'], {
   GITHUB_RUN_ATTEMPT: '1',
 })
 
-// A matrix: two agents × with/without the house-greeting skill, three runs per cell.
+// A matrix: two agents, each with skill.es.ts's control and its house-greeting variant, three
+// runs per cell.
 // biome-ignore lint/suspicious/noTemplateCurlyInString: the fake agent's file content
 const AHOY = "export function greet(name = 'world') {\n  return `Ahoy, ${name}!`\n}\n"
 await writeFile(
