@@ -5,6 +5,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, join, relative, sep } from 'node:path'
 import { run } from '@evalsuite/sandbox-docker/process'
+import { parse as parseYaml } from 'yaml'
 import { parseDuration } from '../config.ts'
 import {
   type AppliedEnvironment,
@@ -96,14 +97,39 @@ function template(value: SecretTemplate, where: string): string {
   })
 }
 
+/** A `SKILL.md` split into its YAML frontmatter's `name` and `description` and its body. */
+export function parseSkillMd(
+  text: string,
+  where: string,
+): { name?: string; description?: string; body: string } {
+  const match = /^---\r?\n(?:([\s\S]*?)\r?\n)?---[ \t]*(?:\r?\n|$)([\s\S]*)$/.exec(text)
+  if (!match) return { body: text }
+  let front: unknown
+  try {
+    front = parseYaml(match[1] ?? '')
+  } catch (error) {
+    const reason = (error as Error).message.split('\n')[0]
+    throw new InfraError(
+      `${where}: the SKILL.md frontmatter isn't valid YAML (${reason}). Quote values that contain ": ".`,
+    )
+  }
+  if (front != null && (typeof front !== 'object' || Array.isArray(front))) {
+    throw new InfraError(`${where}: the SKILL.md frontmatter must be a YAML mapping`)
+  }
+  const field = (key: 'name' | 'description') => {
+    const value = (front as Record<string, unknown> | null)?.[key]
+    if (value == null) return undefined
+    if (typeof value !== 'string') {
+      throw new InfraError(`${where}: the SKILL.md ${key} must be a string (got ${typeof value})`)
+    }
+    return value.trim() || undefined
+  }
+  return { name: field('name'), description: field('description'), body: match[2] ?? '' }
+}
+
 function parseSkill(dir: string, source: string): HarnessSkill {
   const text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(text)
-  const front: Record<string, string> = {}
-  for (const line of (match?.[1] ?? '').split(/\r?\n/)) {
-    const kv = /^([A-Za-z_-]+):\s*(.*)$/.exec(line)
-    if (kv?.[1]) front[kv[1]] = (kv[2] ?? '').replace(/^(['"])(.*)\1$/, '$2').trim()
-  }
+  const front = parseSkillMd(text, `Skill ${basename(dir)} in ${source}`)
   const name = front.name || basename(dir)
   checkSkill(name, front.description, source)
   const files: HarnessSkill['files'] = readdirSync(dir, { recursive: true, withFileTypes: true })
@@ -115,7 +141,7 @@ function parseSkill(dir: string, source: string): HarnessSkill {
   return {
     name,
     description: front.description ?? '',
-    content: match ? (match[2] ?? '') : text,
+    content: front.body,
     files,
   }
 }

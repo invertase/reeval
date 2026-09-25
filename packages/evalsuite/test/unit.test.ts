@@ -10,7 +10,7 @@ import {
   resolveConfig,
   selectProfile,
 } from '../src/config.ts'
-import { resolveEnvironment } from '../src/environment/resolve.ts'
+import { parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, isMovingRef, layered, parseGitRepo } from '../src/environment.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
@@ -511,6 +511,50 @@ test('layered environments and overrides', async () => {
   assert.deepEqual(crossed.record.overrides, ['files.a.txt'])
   assert.equal(crossed.record.parent, 'main')
   assert.ok(crossed.files.some((f) => f.path === 'AGENTS.md' && f.content === 'Be terse.'))
+})
+
+test('SKILL.md frontmatter is parsed as YAML', () => {
+  const md = (front: string, body = 'Body.\n') => `---\n${front}\n---\n${body}`
+  assert.deepEqual(parseSkillMd(md('name: greet\ndescription: Says hi'), 's'), {
+    name: 'greet',
+    description: 'Says hi',
+    body: 'Body.\n',
+  })
+  assert.equal(
+    parseSkillMd(md('description: |\n  Line one.\n  Line two.\nname: greet'), 's').description,
+    'Line one.\nLine two.',
+    'literal block keeps newlines',
+  )
+  assert.equal(
+    parseSkillMd(md('description: >\n  Folded one\n  and two.\n'), 's').description,
+    'Folded one and two.',
+    'folded block joins lines',
+  )
+  assert.equal(parseSkillMd(md('description: |-\n  Kept.'), 's').description, 'Kept.')
+  assert.equal(
+    parseSkillMd(md(`description: "Use when: it's \\"quoted\\""`), 's').description,
+    `Use when: it's "quoted"`,
+  )
+  assert.equal(parseSkillMd(md("description: 'It''s single'"), 's').description, "It's single")
+  assert.equal(
+    parseSkillMd(md('description: A plain scalar\n  that wraps.'), 's').description,
+    'A plain scalar that wraps.',
+  )
+  assert.equal(
+    parseSkillMd('---\r\nname: crlf\r\ndescription: |\r\n  Windows.\r\n---\r\nBody', 's')
+      .description,
+    'Windows.',
+  )
+  assert.deepEqual(parseSkillMd('No frontmatter.', 's'), { body: 'No frontmatter.' })
+  assert.deepEqual(parseSkillMd('---\n---\nBody', 's'), {
+    name: undefined,
+    description: undefined,
+    body: 'Body',
+  })
+  assert.equal(parseSkillMd(md('description: a---b'), 's').description, 'a---b')
+  assert.throws(() => parseSkillMd(md('description: Use when: x'), 's'), /isn't valid YAML/)
+  assert.throws(() => parseSkillMd(md('description: 42'), 's'), /must be a string/)
+  assert.throws(() => parseSkillMd(md('- a list'), 's'), /must be a YAML mapping/)
 })
 
 test('git refs and repo shorthands', () => {
