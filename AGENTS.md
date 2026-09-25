@@ -98,6 +98,31 @@ with recorded runs, and `ES_STUDIO_PROJECT=/tmp/es-demo pnpm --filter studio-web
 app with hot reload on port 4985 against it. The browser test needs Chrome or Chromium and skips
 without one.
 
+### CI and releases
+
+GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with Node from
+`engines`:
+
+| Workflow | Jobs |
+|---|---|
+| `ci.yml` | `lint` (`biome ci`), `typecheck`, `build` (uploads the packed tarball), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test) and `packed install` (the pack test and `npm publish --dry-run`) |
+| `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
+| `real.yml` | The real-agent tier (`pnpm smoke:real`), nightly and on demand, only when the `CURSOR_API_KEY` secret exists; never on PRs |
+| `release.yml` | release-please on `main`, then publishing to npm |
+
+- Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
+  every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
+  versions and the build context.
+- **Merge with squash**, so the PR title (checked by `commits.yml`) is the commit release-please reads.
+  `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking change
+  bumps the minor.
+- **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open, with the version
+  (`packages/evalsuite/package.json`, the root `package.json` and `.release-please-manifest.json`)
+  and `CHANGELOG.md`. Merging it tags `vX.Y.Z`, creates the GitHub release and runs the publish job
+  in the `npm` environment. That job builds, which vendors `sandbox-docker` in, runs the packed-install test, then publishes the
+  `pnpm pack` tarball with npm trusted publishing (OIDC, no token). Provenance is automatic once
+  the repository is public. Don't publish by hand, and don't edit versions or `CHANGELOG.md` yourself.
+
 ### Adding a feature
 
 Follow [the feature contract](./packages/evalsuite/test/features/README.md). It says which tier
