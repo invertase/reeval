@@ -63,7 +63,7 @@ describe('recording runs into evals/.history', () => {
     assert.equal((await runCli(p.dir)).code, 0)
     assert.deepEqual(recordedRuns(p.dir), [], 'nothing recorded without --record')
     const { run } = readRun(p.dir)
-    assert.match(run.runId, /^\d{8}T\d{6}Z_[0-9a-f]{7}_test-author$/)
+    assert.match(run.runId, /^\d{8}T\d{6}Z_[0-9a-f]{7}_test-author_[0-9a-z]{4}$/)
     assert.equal(run.git?.sha.slice(0, 7), run.runId.split('_')[1])
 
     const r = await runCli(p.dir, ['record'])
@@ -140,7 +140,7 @@ describe('recording runs into evals/.history', () => {
     assert.deepEqual(recordedRuns(q.dir), [], "record: 'ci' is the default, and this isn't CI")
     assert.equal((await runCli(q.dir, ['run'], { env: { CI: '1' } })).code, 0)
     const [ci] = recordedRuns(q.dir)
-    assert.match(ci ?? '', /_ci-[0-9a-z]{4}$/)
+    assert.match(ci ?? '', /_ci_[0-9a-z]{4}$/)
     // By id: two runs in the same second sort by author, not start order.
     const bare = await runCli(q.dir, ['record', local, '--artifacts', 'none'])
     assert.equal(bare.code, 0, bare.stderr)

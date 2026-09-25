@@ -25,7 +25,7 @@ import {
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 
-const RUN = '20260924T220414Z_f7e1b53_elliot-hesp'
+const RUN = '20260924T220414Z_f7e1b53_elliot-hesp_k3f9'
 
 describe('studio data paths', () => {
   test('map the file layout and nothing else', () => {
@@ -340,16 +340,16 @@ describe('studio server', () => {
     await symlink(join(dir, 'es.config.ts'), join(source.historyDir, runId, 'escape.txt'))
     await symlink(
       join(dir, 'es.config.ts'),
-      join(source.historyDir, '20990101T000000Z_abc1234_x.json'),
+      join(source.historyDir, '20990101T000000Z_abc1234_x_a1b2.json'),
     )
     for (const path of [
       `/data/runs/${runId}/escape.txt`,
-      '/data/runs/20990101T000000Z_abc1234_x.json',
+      '/data/runs/20990101T000000Z_abc1234_x_a1b2.json',
       `/data/runs/${runId}/..%2F..%2F..%2Fes.config.ts`,
       `/data/runs/${runId}/%2e%2e/%2e%2e/es.config.ts`,
       `/data/runs/${runId}/summary.md%00.txt`,
       `/data/runs/${runId}/..%5C..%5Ces.config.ts`,
-      '/data/runs/20260101T000000Z_0000000_nobody.json',
+      '/data/runs/20260101T000000Z_0000000_nobody_a1b2.json',
       '/assets/../../es.config.ts',
       '/es.config.ts',
       '/data/unknown',

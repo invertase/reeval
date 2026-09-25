@@ -9,7 +9,7 @@
  *   data/runs/<runId>/<artifact path>   artifacts, raw
  */
 
-export const RUN_ID = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+$/
+export const RUN_ID = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}$/
 const SHARD = /^\d{4}-\d{2}$/
 const SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/
 const MAX_DEPTH = 8

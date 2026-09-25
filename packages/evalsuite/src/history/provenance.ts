@@ -2,7 +2,7 @@ import { hostname, userInfo } from 'node:os'
 import { relative, sep } from 'node:path'
 import { inCI } from '../env.ts'
 import { git } from '../git.ts'
-import { randomSuffix, sha256, slugify } from '../ids.ts'
+import { sha256, slugify } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
 import type { GitInfo, RunnerInfo } from './types.ts'
 
@@ -73,12 +73,9 @@ export function runnerInfo(env = process.env): RunnerInfo {
   return { kind: 'ci', provider: 'unknown', runUrl: null, attempt: null }
 }
 
-/**
- * Who a run belongs to, as a file-name segment. CI runs get a random suffix so parallel jobs on
- * the same commit and second can never produce the same file name.
- */
+/** Who a run belongs to, as a file-name segment: `ci` in CI, else the git user. */
 export async function author(root: string, env = process.env): Promise<string> {
-  if (inCI(env)) return `ci-${randomSuffix(4)}`
+  if (inCI(env)) return 'ci'
   const name = await text(root, ['config', 'user.name'])
   const email = await text(root, ['config', 'user.email'])
   let user = ''

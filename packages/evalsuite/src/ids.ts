@@ -32,19 +32,25 @@ export const slugify = (text: string, max: number) =>
     .slice(0, max)
     .replace(/-+$/, '')
 
-/**
- * `20260924T152700Z_009763c_elliot-hesp`. Sorting by name sorts by UTC start time; the SHA and
- * author keep runs from different people or branches apart.
- */
 /** `20260924T152700Z`, the part of a run id that orders runs. */
 export const RUN_STAMP_LENGTH = 16
 
-export function newRunId(start: Date, sha: string | null, author: string): string {
+/**
+ * `20260924T152700Z_009763c_elliot-hesp_k3f9`. Sorting by name sorts by UTC start time; the SHA
+ * and author keep runs from different people or branches apart, and the random suffix keeps
+ * runs that start in the same second anywhere (other projects, CI shards) apart.
+ */
+export function newRunId(
+  start: Date,
+  sha: string | null,
+  author: string,
+  suffix = randomSuffix(4),
+): string {
   const stamp = start
     .toISOString()
     .replace(/[-:]/g, '')
     .replace(/\.\d+Z$/, 'Z')
-  return `${stamp}_${sha ? sha.slice(0, 7) : 'nogit'}_${author}`
+  return `${stamp}_${sha ? sha.slice(0, 7) : 'nogit'}_${author}_${suffix}`
 }
 
 export { RUN_ID } from './view/paths.ts'

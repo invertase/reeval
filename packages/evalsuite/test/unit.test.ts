@@ -25,6 +25,7 @@ import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, stackChanges } from '../src/history/views.ts'
+import { newRunId, RUN_ID } from '../src/ids.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
@@ -32,6 +33,18 @@ import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
+
+test('run ids sort by start time and differ for runs in the same second', () => {
+  const start = new Date('2026-09-24T15:27:00.123Z')
+  const a = newRunId(start, '009763c1234', 'elliot-hesp')
+  const b = newRunId(start, '009763c1234', 'elliot-hesp')
+  assert.match(a, /^20260924T152700Z_009763c_elliot-hesp_[0-9a-z]{4}$/)
+  assert.match(a, RUN_ID)
+  assert.notEqual(a, b, 'same second, commit and author: still two runs')
+  assert.equal(newRunId(start, null, 'x', 'abcd'), '20260924T152700Z_nogit_x_abcd')
+  const later = newRunId(new Date('2026-09-24T15:27:01Z'), null, 'a', '0000')
+  assert.ok(later > newRunId(start, null, 'z', 'zzzz'), 'the stamp orders runs first')
+})
 
 test('the fake sandbox reads and writes ~/ paths in its home', async () => {
   const box = await createFakeSandbox({ kind: 'fake' })

@@ -25,5 +25,5 @@ export const formatDate = (iso: string) => dateTime.format(new Date(iso))
 
 export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** `20260924T220414Z_f7e1b53_elliot-hesp` → `220414Z_f7e1b53` style short label. */
+/** `20260924T220414Z_f7e1b53_elliot-hesp_k3f9` → `220414Z_f7e1b53` style short label. */
 export const shortRunId = (runId: string) => runId.split('_').slice(0, 2).join('_')

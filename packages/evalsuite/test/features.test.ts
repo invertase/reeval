@@ -185,11 +185,7 @@ const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
 /** `ES_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
 const only = process.env.ES_FIXTURE_TIERS?.split(',')
 
-/**
- * Containers are removed by a detached `docker rm`, which may finish after the CLI exits, so this
- * waits for them. Run ids are per second and author, so concurrent temp projects can share one:
- * the label then also matches the other run's containers, which go too.
- */
+/** Containers are removed by a detached `docker rm`, which may finish after the CLI exits. */
 async function containersGone(runId: string, deadlineMs = 20_000): Promise<void> {
   const until = Date.now() + deadlineMs
   let left = ''

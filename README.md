@@ -67,7 +67,7 @@ Summary
 
    Evals  2 passed (2)
 Duration  40s
- Results  .es/runs/20260924T213759Z_1ba71aa_ci-4vb0/summary.md
+ Results  .es/runs/20260924T213759Z_1ba71aa_ci_4vb0/summary.md
 ```
 
 ## Repository layout
@@ -250,9 +250,9 @@ FAIL evals/mix.es.ts › mix › judge says no (497ms, judge)
   judge  fail 0.30 (≥ 0.8)  ok?
   console:
     warning from eval
-  record: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp/evals-mix-es-ts-mix-judge-says-no-0ca3d2/1
+  record: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp_k3f9/evals-mix-es-ts-mix-judge-says-no-0ca3d2/1
 1 passed, 1 failed
-summary: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp/summary.md
+summary: .es/runs/20260924T214114Z_1ba71aa_elliot-hesp_k3f9/summary.md
 ```
 
 ## Concurrency
@@ -582,8 +582,8 @@ pushes.
 
 ```text
 evals/.history/
-  20260924T180304Z_009763c_elliot-hesp.json    the record: never edited once written
-  20260924T180304Z_009763c_elliot-hesp/        its artifacts (optional)
+  20260924T180304Z_009763c_elliot-hesp_m2qx.json    the record: never edited once written
+  20260924T180304Z_009763c_elliot-hesp_m2qx/        its artifacts (optional)
     summary.md                                 the run as Markdown, every eval in detail
     worktree.patch                             uncommitted changes, when the run was dirty
     <eval-slug>/<cell-slug>/<n>/               one directory per attempt
@@ -594,7 +594,7 @@ evals/.history/
       checks/<n>.log                           each t.exec: command, exit code, stdout, stderr
 ```
 
-File names are `<UTC start>_<short sha>_<author>` (CI runs use `ci-<random>`), so history is
+File names are `<UTC start>_<short sha>_<author>_<random>` (the author is `ci` in CI), so history is
 the folder listing sorted by name, and two branches that record runs merge without conflicts.
 There is no committed index: listings are derived when read and cached in `.es/`.
 
