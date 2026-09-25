@@ -1,5 +1,5 @@
 /** Must match the exact `@ai-sdk/harness-cursor` dependency; a test enforces it. */
-export const HARNESS_CURSOR_VERSION = '1.0.36'
+export const HARNESS_CURSOR_VERSION = '1.0.37'
 
 export const BASE_IMAGE = 'evalsuite-sandbox-base:latest'
 export const DEFAULT_IMAGE = `evalsuite-sandbox:cursor-${HARNESS_CURSOR_VERSION}`
