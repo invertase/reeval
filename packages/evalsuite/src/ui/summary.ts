@@ -168,7 +168,9 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
         const reasons = attempt.judgements.filter((j) => j.verdict !== 'pass').map((j) => j.reason)
         const which = entry.attempts.length > 1 ? `  ${c.dim(attempt.id)}` : ''
         const gated = entry.cells.find((x) => x.key === attempt.cell)?.gated !== false
-        lines.push(` ${mark(c, outcome)} ${entry.id}${which}${gated ? '' : `  ${c.dim('(not gated)')}`}`)
+        lines.push(
+          ` ${mark(c, outcome)} ${entry.id}${which}${gated ? '' : `  ${c.dim('(not gated)')}`}`,
+        )
         if (outcome !== 'cancelled') {
           for (const line of failureLines(c, result, { max: FAILURE_LINES, reasons }))
             lines.push(`   ${line}`)
@@ -185,7 +187,9 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
   const lifted = record.evals.flatMap((entry) =>
     entry.cells.flatMap((cell) =>
       cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift
-        ? [`${entry.id}  ${cell.key} lift ${points(cell.lift.points)}, below minLift ${Math.round(cell.lift.minLift * 100)}`]
+        ? [
+            `${entry.id}  ${cell.key} lift ${points(cell.lift.points)}, below minLift ${Math.round(cell.lift.minLift * 100)}`,
+          ]
         : [],
     ),
   )

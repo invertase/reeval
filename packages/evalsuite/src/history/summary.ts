@@ -35,7 +35,9 @@ export function cellCounts(e: EvalEntry): string {
       const notes = [
         c.role === 'control' && e.cells.some((x) => x.role === 'variant') ? 'control' : '',
         c.gated ? '' : 'not gated',
-        c.lift ? `lift ${c.lift.points >= 0 ? '+' : '−'}${Math.round(Math.abs(c.lift.points) * 100)} pts` : '',
+        c.lift
+          ? `lift ${c.lift.points >= 0 ? '+' : '−'}${Math.round(Math.abs(c.lift.points) * 100)} pts`
+          : '',
         c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
       ].filter(Boolean)
       return `${c.key} ${c.pass}/${c.pass + c.fail}${notes.length ? ` (${notes.join(', ')})` : ''}`

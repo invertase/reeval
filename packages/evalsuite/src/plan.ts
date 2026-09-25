@@ -8,8 +8,9 @@ import type { RunRecord } from './history/types.ts'
 import { clip, formatDuration } from './text.ts'
 import type { Budget, EvalPlan, ResolvedProfile, SandboxDescriptor } from './types.ts'
 
-/** With no history for a harness, an attempt is assumed to take this long. */
+/** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
+const DEFAULT_FAKE_MS = 1000
 /** The most recent runs whose durations feed the estimate. */
 const HISTORY_RUNS = 30
 
@@ -33,7 +34,9 @@ export type RunPlan = {
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
-  return sorted.length % 2 ? (sorted[mid] as number) : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
+  return sorted.length % 2
+    ? (sorted[mid] as number)
+    : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2
 }
 
 /** Attempt durations from the latest recorded and scratch runs, by eval and harness. */
@@ -67,11 +70,12 @@ export async function historyDurations(root: string, historyDir: string) {
       }
     }
   }
-  return (id: string, harness: string) => {
+  return (id: string, harness: string, kind: string) => {
     const own = byEval.get(`${id}\0${harness}`)
     if (own?.length) return median(own)
     const any = byHarness.get(harness)
-    return any?.length ? median(any) : DEFAULT_ATTEMPT_MS
+    if (any?.length) return median(any)
+    return kind === 'fake' ? DEFAULT_FAKE_MS : DEFAULT_ATTEMPT_MS
   }
 }
 
@@ -98,7 +102,7 @@ export async function buildPlan(options: {
     if (attempt.plan.skip) continue
     attempts++
     cells.add(`${id}\0${attempt.cell.key}`)
-    estimateMs += estimate(id, attempt.cell.harness)
+    estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     kinds.add(attempt.harness.kind)
   }

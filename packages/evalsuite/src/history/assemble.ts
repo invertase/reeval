@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
+import { NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
 import { attemptId, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
@@ -8,7 +9,6 @@ import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import { harnessId, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
-import { NO_ENVIRONMENT } from '../environment.ts'
 import { redactSecrets } from '../redact.ts'
 import type {
   Cell,
@@ -555,7 +555,9 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const attempts = evals.flatMap((e) => e.attempts)
   const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length
   const notGated = evals
-    .flatMap((e) => e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gated === false))
+    .flatMap((e) =>
+      e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gated === false),
+    )
     .filter((a) => a.outcome === 'fail').length
   const { profile } = ctx
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>

@@ -296,8 +296,14 @@ export type SkillHelper = {
 
 export type McpHelper = {
   stdio(command: string, args?: string[], options?: { env?: EnvVars }): McpServer
-  http(url: string, options?: { headers?: Record<string, string | Secret | SecretTemplate> }): McpServer
-  sse(url: string, options?: { headers?: Record<string, string | Secret | SecretTemplate> }): McpServer
+  http(
+    url: string,
+    options?: { headers?: Record<string, string | Secret | SecretTemplate> },
+  ): McpServer
+  sse(
+    url: string,
+    options?: { headers?: Record<string, string | Secret | SecretTemplate> },
+  ): McpServer
 }
 
 /** A spec, or a callback that gets the typed helpers and returns one (synchronously). */

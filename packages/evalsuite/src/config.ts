@@ -113,8 +113,7 @@ const unknownKey = (value: object, allowed: string[], where: string) => {
   const key = Object.keys(value).find((k) => !allowed.includes(k))
   if (key === undefined) return
   const hints: Record<string, string> = {
-    reuse:
-      'Reusing control results from .history isn’t built yet; every run runs its controls.',
+    reuse: 'Reusing control results from .history isn’t built yet; every run runs its controls.',
     compare: 'compare only goes on a group or eval; a profile can narrow it with limit.compare.',
   }
   throw new UsageError(
@@ -180,7 +179,10 @@ function checkProfile(name: string, profile: unknown): Profile {
       }
     }
   }
-  if (p.tags !== undefined && (!Array.isArray(p.tags) || p.tags.some((t) => typeof t !== 'string'))) {
+  if (
+    p.tags !== undefined &&
+    (!Array.isArray(p.tags) || p.tags.some((t) => typeof t !== 'string'))
+  ) {
     throw new UsageError(`${where}.tags must be a list of tag filters`)
   }
   if (p.record !== undefined && !RECORD.includes(p.record)) {
@@ -249,7 +251,9 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   const historyDir = resolve(root, user.history?.dir ?? join(evalRoot(include), '.history'))
   const harness = user.harness === undefined ? [cursor()] : [user.harness].flat()
   if (harness.length === 0) {
-    throw new UsageError('harness is an empty list in es.config.ts. Give at least one, e.g. harness: cursor()')
+    throw new UsageError(
+      'harness is an empty list in es.config.ts. Give at least one, e.g. harness: cursor()',
+    )
   }
   const profiles: Record<string, Profile> = {}
   if (user.profiles !== undefined) {
@@ -327,7 +331,10 @@ export async function resolveConcurrency(
   return config.concurrency ?? defaultConcurrency(await capacity())
 }
 
-function resolveJudge(judge: EsConfig['judge'] = {}, where = 'config.judge'): ResolvedConfig['judge'] {
+function resolveJudge(
+  judge: EsConfig['judge'] = {},
+  where = 'config.judge',
+): ResolvedConfig['judge'] {
   const { model } = judge
   if (typeof model === 'string') {
     const problem = checkModelString(model)

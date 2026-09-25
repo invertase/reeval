@@ -110,7 +110,11 @@ function checkCompare(value: unknown, where: string): void {
         throw new UsageError(`Unknown compare option "${key}" in ${where}`)
       }
     }
-    const { gate, minLift, harness } = value as { gate?: unknown; minLift?: unknown; harness?: unknown }
+    const { gate, minLift, harness } = value as {
+      gate?: unknown
+      minLift?: unknown
+      harness?: unknown
+    }
     if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
       throw new UsageError(`compare.gate must be one of ${GATES.join(', ')} in ${where}`)
     }
@@ -144,7 +148,10 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.runs !== undefined && !(Number.isInteger(o.runs) && o.runs >= 1)) {
     throw new UsageError(`runs must be a whole number of at least 1 (got ${o.runs}) in ${where}`)
   }
-  if (o.tags !== undefined && (!Array.isArray(o.tags) || o.tags.some((t) => typeof t !== 'string'))) {
+  if (
+    o.tags !== undefined &&
+    (!Array.isArray(o.tags) || o.tags.some((t) => typeof t !== 'string'))
+  ) {
     throw new UsageError(`tags must be a list of strings in ${where}`)
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
@@ -357,7 +364,9 @@ export function cascade(
         notes.push(`compare off (${tag})`)
         out.compare = { ...out.compare, variants: [] }
       } else if (out.compare.variants.length > limit.compare.maxVariants) {
-        notes.push(`variants ${out.compare.variants.length} → ${limit.compare.maxVariants} (${tag})`)
+        notes.push(
+          `variants ${out.compare.variants.length} → ${limit.compare.maxVariants} (${tag})`,
+        )
         out.compare = {
           ...out.compare,
           variants: out.compare.variants.slice(0, limit.compare.maxVariants),
@@ -428,9 +437,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
         compare ? (cell.role === 'control' ? 'control' : env.name) : '',
       ].filter(Boolean)
       for (let n = 1; n <= resolved.runs; n++) {
-        const label = [axes.join(' · '), resolved.runs > 1 ? `#${n}` : '']
-          .filter(Boolean)
-          .join(' ')
+        const label = [axes.join(' · '), resolved.runs > 1 ? `#${n}` : ''].filter(Boolean).join(' ')
         attempts.push({
           cell,
           harness,

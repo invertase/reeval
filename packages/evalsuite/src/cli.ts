@@ -1,11 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, readdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
-import { mkdirSync, writeFileSync } from 'node:fs'
 import {
   hostCapacity,
   loadConfig,
@@ -274,7 +273,10 @@ async function prepareRun(flags: Flags) {
       throw new UsageError(`--runs must be a whole number of at least 1 (got ${flags.runs})`)
     }
   }
-  const sandboxes = [config.sandbox, ...(profile?.defaults.sandbox ? [profile.defaults.sandbox] : [])]
+  const sandboxes = [
+    config.sandbox,
+    ...(profile?.defaults.sandbox ? [profile.defaults.sandbox] : []),
+  ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
     if (flags['dry-run'] || !sandboxes.some((s) => s.kind === 'docker')) return hostCapacity()
     const { dockerCapacity } = await import('@evalsuite/sandbox-docker')
@@ -403,25 +405,27 @@ async function executeRun(
       )
     }
     sandboxVersions = await preflight(plan.sandboxes)
-    const { duration } = setup.budget
-    if (duration !== undefined) {
-      budgetTimer = setTimeout(() => {
-        reached = true
-        mkdirSync(stagingDir, { recursive: true })
-        writeFileSync(
-          budgetMarker(stagingDir),
-          `The run reached budget.duration ${duration} before this attempt started`,
-        )
-        renderer.onEvent({
-          type: 'notice',
-          at: Date.now(),
-          level: 'warn',
-          text: `Budget: ${duration} reached; running attempts finish, queued ones are skipped`,
-        })
-      }, parseDuration(duration))
-      budgetTimer.unref()
-    }
     return true
+  }
+  // budget.duration counts from the first attempt's start, not from collecting the files.
+  const startBudget = () => {
+    const { duration } = setup.budget
+    if (duration === undefined || budgetTimer) return
+    budgetTimer = setTimeout(() => {
+      reached = true
+      mkdirSync(stagingDir, { recursive: true })
+      writeFileSync(
+        budgetMarker(stagingDir),
+        `The run reached budget.duration ${duration} before this attempt started`,
+      )
+      renderer.onEvent({
+        type: 'notice',
+        at: Date.now(),
+        level: 'warn',
+        text: `Budget: ${duration} reached; running attempts finish, queued ones are skipped`,
+      })
+    }, parseDuration(duration))
+    budgetTimer.unref()
   }
   let engineRun: EngineRun
   try {
@@ -444,6 +448,7 @@ async function executeRun(
           concurrency,
         }),
       onEvent: (e) => {
+        if (e.type === 'eval-start') startBudget()
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
         if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
         renderer.onEvent(e)

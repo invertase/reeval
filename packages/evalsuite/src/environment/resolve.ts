@@ -125,7 +125,9 @@ function checkSkill(name: string, description: string | undefined, source: strin
     throw new InfraError(`Skill "${name}" in ${source}: the name must be kebab-case`)
   }
   if (!description) {
-    throw new InfraError(`Skill "${name}" in ${source} has no description in its SKILL.md frontmatter`)
+    throw new InfraError(
+      `Skill "${name}" in ${source} has no description in its SKILL.md frontmatter`,
+    )
   }
 }
 
@@ -189,7 +191,13 @@ function unpackNpm(root: string, spec: string) {
   let pack = packs.get(spec)
   if (!pack) {
     pack = (async () => {
-      const dir = join(root, '.es', 'cache', 'skills', `npm-${sha256(spec).slice(0, 16)}-${process.pid}`)
+      const dir = join(
+        root,
+        '.es',
+        'cache',
+        'skills',
+        `npm-${sha256(spec).slice(0, 16)}-${process.pid}`,
+      )
       await rm(dir, { recursive: true, force: true })
       await mkdir(dir, { recursive: true })
       const packed = await run('npm', ['pack', spec, '--silent', '--pack-destination', dir], {
@@ -200,7 +208,8 @@ function unpackNpm(root: string, spec: string) {
         throw new InfraError(`npm pack ${spec} failed: ${packed.stderr.trim()}`)
       }
       const untar = await run('tar', ['-xzf', tarball], { cwd: dir })
-      if (untar.exitCode !== 0) throw new InfraError(`Unpacking ${spec} failed: ${untar.stderr.trim()}`)
+      if (untar.exitCode !== 0)
+        throw new InfraError(`Unpacking ${spec} failed: ${untar.stderr.trim()}`)
       return join(dir, 'package')
     })()
     packs.set(spec, pack)
@@ -221,7 +230,11 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
       const { url } = parseGitRepo(s.repo)
       const { dir, commit } = await cloneSkills(root, url, s.ref)
       const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${s.path ? `:${s.path}` : ''}`
-      return { skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only), source: label, commit }
+      return {
+        skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only),
+        source: label,
+        commit,
+      }
     }
     case 'registry': {
       const [repo = '', name = ''] = s.id.split('@')
@@ -317,7 +330,8 @@ export async function resolveEnvironment(
     for (const source of spec.skills ?? []) {
       const found = await resolveSkills(root, source)
       for (const skill of found.skills) {
-        if (skills.has(skill.name) && !layerSkills.has(skill.name)) overrides.add(`skills.${skill.name}`)
+        if (skills.has(skill.name) && !layerSkills.has(skill.name))
+          overrides.add(`skills.${skill.name}`)
         layerSkills.add(skill.name)
         skills.delete(skill.name)
         skills.set(skill.name, { skill, placement: source.placement, found })
@@ -367,7 +381,10 @@ export async function resolveEnvironment(
     content: isHostFile(v) ? readHostFile(v, envWhere) : v,
   }))
   if (rules !== undefined) {
-    fileList.push({ path: 'AGENTS.md', content: isHostFile(rules) ? readHostFile(rules, envWhere) : rules })
+    fileList.push({
+      path: 'AGENTS.md',
+      content: isHostFile(rules) ? readHostFile(rules, envWhere) : rules,
+    })
   }
   const skillList = [...skills.values()]
   const skillRecords = skillList.map(({ skill, placement, found }) => ({
@@ -432,8 +449,5 @@ export async function resolveEnvironment(
 /** A skill as a `SKILL.md` file plus its other files, for writing into a directory. */
 export function skillFiles(skill: HarnessSkill): Array<{ path: string; content: string }> {
   const front = `---\nname: ${skill.name}\ndescription: ${JSON.stringify(skill.description)}\n---\n`
-  return [
-    { path: 'SKILL.md', content: `${front}${skill.content}` },
-    ...skill.files,
-  ]
+  return [{ path: 'SKILL.md', content: `${front}${skill.content}` }, ...skill.files]
 }

@@ -100,7 +100,9 @@ export function registerTest(
     const budget = budgetMarker(inject('es:run').stagingDir)
     if (existsSync(budget)) {
       lease?.release()
-      ctx.skip(readFileSync(budget, 'utf8') || 'The run reached its budget before this attempt started')
+      ctx.skip(
+        readFileSync(budget, 'utf8') || 'The run reached its budget before this attempt started',
+      )
     }
     const startedAt = Date.now()
     recordArtifact(ctx.task, { type: 'es:start', at: startedAt }).catch(() => {})

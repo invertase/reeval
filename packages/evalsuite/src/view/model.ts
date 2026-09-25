@@ -247,8 +247,7 @@ export function cellRows(e: EvalEntry): CellRow[] {
     passRate: cell.passRate,
     outcome: cell.outcome,
     lift: cell.lift ? Math.round(cell.lift.points * 100) : null,
-    belowMinLift:
-      cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift,
+    belowMinLift: cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift,
     attempts: e.attempts.filter((a) => a.cell === cell.key),
   }))
 }

@@ -107,7 +107,9 @@ const MOVING = /^(?:main|master|HEAD|trunk|develop|dev|latest)$/
 
 /** A git ref that isn't a commit SHA or a version-like tag. */
 export const isMovingRef = (ref: string | undefined) =>
-  ref === undefined || MOVING.test(ref) || !/^(?:[0-9a-f]{7,40}|v?\d+(?:\.\d+)*(?:[-+].*)?)$/.test(ref)
+  ref === undefined ||
+  MOVING.test(ref) ||
+  !/^(?:[0-9a-f]{7,40}|v?\d+(?:\.\d+)*(?:[-+].*)?)$/.test(ref)
 
 /** `github:owner/repo` and GitHub `/tree/<ref>/<path>` URLs, as a clone URL plus ref and path. */
 export function parseGitRepo(repo: string): { url: string; ref?: string; path?: string } {
@@ -325,7 +327,10 @@ function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment 
       checkName(child, `${name}.extend`)
       const where = `${name}.extend("${child}")`
       const base = callerDir() ?? process.cwd()
-      return makeEnvironment(child, [...layers, { name: child, spec: buildSpec(input, where, base) }])
+      return makeEnvironment(child, [
+        ...layers,
+        { name: child, spec: buildSpec(input, where, base) },
+      ])
     },
   })
   return Object.freeze(env) as Environment

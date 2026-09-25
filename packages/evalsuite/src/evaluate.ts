@@ -191,7 +191,11 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       gated: false,
       plan,
     }
-    registerTest(`${name} [${attemptId(first.cell.key, 1)}]`, { mode: 'skip', attempt }, async () => {})
+    registerTest(
+      `${name} [${attemptId(first.cell.key, 1)}]`,
+      { mode: 'skip', attempt },
+      async () => {},
+    )
     return
   }
   const cells: string[] = []
