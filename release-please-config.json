@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "b3fbb6a99e76c53f9772f57c3c92da87610af671",
+  "include-component-in-tag": false,
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "@invertase/foobar",
+      "changelog-path": "CHANGELOG.md",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        { "type": "json", "path": "packages/evalsuite/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}

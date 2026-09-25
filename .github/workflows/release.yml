@@ -1,0 +1,64 @@
+# Releases @invertase/foobar. release-please keeps a release PR open from the Conventional
+# Commits on main (version, CHANGELOG.md); merging it tags vX.Y.Z, creates the GitHub release and
+# publishes to npm with trusted publishing (OIDC, no token). npm's trusted publisher for the
+# package names this file and the `npm` environment, so keep both names in sync with npm.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release-please
+    if: github.repository == 'invertase/evalsuite'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      created: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          # A PR opened with GITHUB_TOKEN triggers no workflows, so the release PR's checks
+          # wouldn't run. RELEASE_PLEASE_TOKEN (a GitHub App or fine-grained token) fixes that.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: publish to npm
+    needs: release-please
+    if: needs.release-please.outputs.created == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.release-please.outputs.tag }}
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      # Trusted publishing needs npm 11.5.1 or later.
+      - run: npm install --global npm@^11.5.1
+      # The build vendors sandbox-docker into dist/, and the packed-install test checks it's there.
+      - run: pnpm build
+      - working-directory: packages/evalsuite
+        run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
+      # pnpm pack rewrites workspace: ranges; npm publishes that tarball over OIDC. Provenance is
+      # automatic with trusted publishing, but npm only generates it for public repositories.
+      - run: pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/pack"
+      - run: npm publish --access public "$RUNNER_TEMP"/pack/*.tgz
