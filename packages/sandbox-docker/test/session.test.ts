@@ -48,9 +48,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
   // nothing may be left behind.
   const delays = [0, 20, 50, 100, 150, 200, 300, 450, 700, 1000]
 
-  test('an abort at any point while creating leaves no container', {
-    todo: "an abort mid docker run loses the container's id (§11.10)",
-  }, async () => {
+  test('an abort at any point while creating leaves no container', async () => {
     const outcomes: string[] = []
     const left: string[] = []
     await Promise.all(

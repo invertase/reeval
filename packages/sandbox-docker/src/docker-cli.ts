@@ -30,6 +30,19 @@ export function removeContainerDetached(id: string): Promise<void> {
   })
 }
 
+/**
+ * Removes every container with `label` (`key=value`) for the next few seconds, in its own process
+ * group so it outlives this process. For a `docker run` killed mid-way: the daemon may create the
+ * container after the CLI dies, and its id never came back.
+ */
+export function sweepLabelDetached(label: string, seconds = 15): void {
+  const filter = `label=${label}`.replaceAll("'", '')
+  const script = `for i in $(seq ${seconds}); do ids=$(docker ps -aq --filter '${filter}'); [ -n "$ids" ] && docker rm -f $ids >/dev/null 2>&1; sleep 1; done`
+  const child = spawn('sh', ['-c', script], { detached: true, stdio: 'ignore' })
+  child.on('error', () => {})
+  child.unref()
+}
+
 export async function dockerAvailable(): Promise<boolean> {
   try {
     return (await docker(['info', '--format', '{{.ServerVersion}}'])).exitCode === 0

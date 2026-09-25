@@ -7,6 +7,8 @@ export const DEFAULT_IMAGE = `evalsuite-sandbox:cursor-${HARNESS_CURSOR_VERSION}
 export const LABEL = {
   managed: 'dev.evalsuite.managed',
   run: 'dev.evalsuite.run',
+  /** Unique per session, so a create cut short can find what it made. */
+  session: 'dev.evalsuite.session',
   agentVersion: 'dev.evalsuite.agent-version',
   harness: 'dev.evalsuite.harness',
 } as const

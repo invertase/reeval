@@ -1,8 +1,9 @@
 import { spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
 import { Readable } from 'node:stream'
 import type { HarnessV1NetworkSandboxSession, HarnessV1SandboxProvider } from '@ai-sdk/harness'
-import { docker, dockerOk, removeContainerDetached } from './docker-cli.ts'
+import { docker, dockerOk, removeContainerDetached, sweepLabelDetached } from './docker-cli.ts'
 import { type Gateway, type GatewayOptions, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
@@ -49,7 +50,8 @@ async function networksOf(id: string): Promise<string[]> {
  * the network policy; without it, the bridge port is published on 127.0.0.1.
  */
 export async function createDockerSession(options: SessionOptions): Promise<DockerSession> {
-  const labels = { [LABEL.managed]: 'true', ...options.labels }
+  const nonce = randomBytes(8).toString('hex')
+  const labels = { [LABEL.managed]: 'true', [LABEL.session]: nonce, ...options.labels }
   const lifetime = Math.ceil((options.lifetimeMs ?? 24 * 3_600_000) / 1000)
   const signal = options.abortSignal
   const id = await dockerOk(
@@ -70,7 +72,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       String(lifetime),
     ],
     { signal, env: options.env },
-  )
+  ).catch((error) => {
+    if (signal?.aborted) sweepLabelDetached(`${LABEL.session}=${nonce}`)
+    throw error
+  })
   let gateway: Gateway | undefined
   let removed: Promise<void> | undefined
   const remove = () => {
