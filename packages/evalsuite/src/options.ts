@@ -1,8 +1,10 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
+import { egressLabel, plannedEgress } from './egress.ts'
 import {
   type AppliedEnvironment,
   applied,
+  checkEgress,
   checkEnv,
   isEnvironment,
   isMovingRef,
@@ -18,6 +20,7 @@ import type {
   CellGate,
   CompareGate,
   Duration,
+  EgressPolicy,
   Environment,
   EnvVars,
   EvalOptions,
@@ -26,6 +29,7 @@ import type {
   HarnessDescriptor,
   JudgeOptions,
   PinnableKey,
+  PlannedEgress,
   ResolvedProfile,
   SandboxDescriptor,
 } from './types.ts'
@@ -38,6 +42,7 @@ const KNOWN = [
   'runs',
   'gate',
   'env',
+  'egress',
   'judge',
   'timeout',
   'tags',
@@ -55,6 +60,8 @@ const SUGGEST: Record<string, string> = {
   trials: 'runs',
   secrets: 'env',
   vars: 'env',
+  network: 'egress',
+  networkPolicy: 'egress',
   tag: 'tags',
   pins: 'pin',
   passRate: 'gate',
@@ -185,6 +192,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     throw new UsageError(`tags must be a list of strings in ${where}`)
   }
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
+  if (o.egress !== undefined) checkEgress(o.egress, where, UsageError)
   checkMaxConcurrent(o.judge?.maxConcurrent, `judge in ${where}`)
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
@@ -281,6 +289,8 @@ export type Resolved = {
   /** Unset means `'all'`. */
   gate: GatePolicy | undefined
   env: EnvVars
+  /** From the config and profile defaults, under the environment; from groups and the eval, over it. */
+  egress: { inherited?: EgressPolicy; own?: EgressPolicy }
   judge: JudgeOptions
   timeout: Duration | undefined
   tags: string[]
@@ -301,7 +311,13 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
   }
 }
 
-function applyLevel(out: Resolved, options: EvalOptions, where: string): void {
+function applyLevel(
+  out: Resolved,
+  options: EvalOptions,
+  where: string,
+  egress: 'inherited' | 'own' = 'own',
+): void {
+  if (options.egress !== undefined) out.egress[egress] = options.egress
   out.harness = applyHarness(out.harness, options.harness, where)
   if (options.sandbox !== undefined) out.sandbox = options.sandbox
   if (options.environment !== undefined) out.environment = options.environment
@@ -336,6 +352,7 @@ export function cascade(
   const out: Resolved = {
     ...base,
     env: { ...base.env },
+    egress: { ...base.egress },
     judge: { ...base.judge },
     tags: [...base.tags],
     pin: [...base.pin],
@@ -348,6 +365,7 @@ export function cascade(
       out,
       { ...defaults, judge: { ...judge, ...defaults.judge } } as EvalOptions,
       `profiles.${profile.name}.defaults`,
+      'inherited',
     )
   }
   for (const { options: own, where: at } of levels) applyLevel(out, own, at)
@@ -420,6 +438,7 @@ export type PlannedAttempt = {
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
   environment: AppliedEnvironment
+  egress: PlannedEgress
   gate: CellGate
   minLift?: number
   n: number
@@ -478,6 +497,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
           harness,
           sandbox: resolved.sandbox,
           environment: env,
+          egress: plannedEgress(resolved.egress, harness, resolved.env, env.layers),
           gate,
           ...(cell.role === 'variant' && compare?.minLift !== undefined
             ? { minLift: compare.minLift }
@@ -559,6 +579,7 @@ export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan 
       ...unbrokered(r.resolved.env, attempts).map(unbrokeredWarning),
     ],
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
+    egress: [...new Set(attempts.map((a) => egressLabel(a.egress)).filter(Boolean))],
   }
 }
 

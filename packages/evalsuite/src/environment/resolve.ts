@@ -22,6 +22,7 @@ import { sha256 } from '../ids.ts'
 import { registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type {
+  EgressPolicy,
   EnvironmentRecord,
   EnvVars,
   HostFile,
@@ -389,6 +390,7 @@ export async function resolveEnvironment(
   root: string,
   where: string,
   rulesFile: string,
+  egress: EgressPolicy = 'allow-all',
 ): Promise<ResolvedEnvironment> {
   const envWhere = `environment ${environment.name} (${where})`
   const overrides = new Set<string>()
@@ -403,7 +405,12 @@ export async function resolveEnvironment(
   const setup: ResolvedStep[] = []
   const seen = { env: new Set<string>(), files: new Set<string>(), mcp: new Set<string>() }
 
+  let egressSet = false
   for (const { spec } of environment.layers) {
+    if (spec.egress !== undefined) {
+      if (egressSet) overrides.add('egress')
+      egressSet = true
+    }
     for (const [k, v] of Object.entries(spec.env ?? {})) {
       if (seen.env.has(k)) overrides.add(`env.${k}`)
       seen.env.add(k)
@@ -539,6 +546,9 @@ export async function resolveEnvironment(
       checks: [...secrets.checks].sort(),
       unset: [...secrets.unset].sort(),
       brokered,
+      ...(egress === 'allow-all'
+        ? {}
+        : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
     }),
   )}`
   return {
@@ -555,6 +565,7 @@ export async function resolveEnvironment(
       secrets: secretNames,
       brokered: brokeredNames,
       unset: [...secrets.unset].sort(),
+      egress,
     },
     setup,
     skills: skillList.filter((s) => s.placement === 'harness').map((s) => s.skill),

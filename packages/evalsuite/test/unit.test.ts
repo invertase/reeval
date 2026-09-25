@@ -521,6 +521,7 @@ const base: Resolved = {
   compare: undefined,
   runs: 3,
   env: {},
+  egress: {},
   judge: {},
   timeout: undefined,
   tags: [],

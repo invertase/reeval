@@ -36,6 +36,7 @@ for (const kind of kinds) {
         timeoutMs: 120_000,
         signal: new AbortController().signal,
         env: { ES_CONTRACT_VAR: 'from-the-sandbox' },
+        egress: { policy: 'allow-all', auto: [] },
       })
       return box
     }

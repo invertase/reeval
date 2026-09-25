@@ -6,8 +6,11 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { networkInterfaces } from 'node:os'
 import { dirname, join } from 'node:path'
-import { describe, test } from 'node:test'
+import { after, before, describe, test } from 'node:test'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli } from './helpers.ts'
@@ -29,8 +32,8 @@ type Feature = {
   canaryEnv?: string
   /** When the check is that the attempt fails, e.g. an infra error; else it must pass. */
   lands?: Pick<EvalExpectation, 'outcome' | 'error'>
-  /** Host variables for `es run`, e.g. what `secret.fromEnv` reads. */
-  hostEnv?: NodeJS.ProcessEnv
+  /** Host variables for `es run`, e.g. what `secret.fromEnv` reads; a function runs at test time. */
+  hostEnv?: NodeJS.ProcessEnv | (() => NodeJS.ProcessEnv)
   /** Runs on the copied project before `es run`. */
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
@@ -58,6 +61,31 @@ const leakyForms = () => {
   ]
   return [...new Set(printed.flatMap((f) => [f, JSON.stringify(f).slice(1, -1)]))]
 }
+
+/**
+ * A listener on the host at an address that isn't loopback (the gateway never reaches loopback),
+ * for the egress fixtures: `ES_EGRESS_HOST` is its address, `ES_EGRESS_TARGET` adds the port.
+ */
+const egressTarget = { host: '', port: 0, requests: 0 }
+const listener = createServer((_, res) => {
+  egressTarget.requests++
+  res.end('es-egress-ok')
+})
+before(async () => {
+  const addresses = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
+    (list ?? []).filter((a) => a.family === 'IPv4' && !a.internal).map((a) => ({ name, ...a })),
+  )
+  const bridge = /^(docker|br-|veth)/
+  egressTarget.host =
+    (addresses.find((a) => !bridge.test(a.name)) ?? addresses[0])?.address ?? '127.0.0.1'
+  await new Promise<void>((resolve) => listener.listen(0, '0.0.0.0', resolve))
+  egressTarget.port = (listener.address() as AddressInfo).port
+})
+after(() => listener.close())
+const egressEnv = () => ({
+  ES_EGRESS_HOST: egressTarget.host,
+  ES_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
+})
 
 /** The `lands` eval's first attempt. */
 const landed = (run: RunRecord) => run.evals.find((e) => e.name === 'lands')?.attempts[0]
@@ -247,6 +275,124 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'egress/allowed-host-reachable',
+    tiers: ['docker'],
+    env: 'listed',
+    canaryEnv: 'closed',
+    hostEnv: egressEnv,
+    canary: /expected 'blocked by the ES egress policy: the …' to be 'es-egress-ok'/,
+    record: ({ run }) => {
+      const egress = landed(run)?.egress
+      assert.deepEqual(egress?.policy, { allow: [egressTarget.host] })
+      assert.deepEqual(egress?.allowed, [egressTarget.host])
+      const [reached, ...more] = egress?.contacted ?? []
+      assert.deepEqual(
+        [reached?.host, reached?.port, reached?.connections, more],
+        [egressTarget.host, egressTarget.port, 1, []],
+      )
+      assert.ok((reached?.sent ?? 0) > 0 && (reached?.received ?? 0) > 'es-egress-ok'.length)
+      assert.deepEqual(egress?.blocked, [])
+    },
+  },
+  {
+    dir: 'egress/blocked-host-recorded',
+    tiers: ['docker'],
+    env: 'listed',
+    canary:
+      /expected 'blocked by the ES egress policy: bloc…' not to contain 'blocked by the ES egress policy'/,
+    record: ({ run }) =>
+      assert.deepEqual(landed(run)?.egress, {
+        policy: { allow: ['api.example.com'] },
+        allowed: ['api.example.com'],
+        recorded: true,
+        contacted: [],
+        blocked: [
+          {
+            host: 'blocked.invalid',
+            port: 80,
+            connections: 1,
+            reason: "blocked.invalid isn't in the allowlist",
+          },
+        ],
+      }),
+  },
+  {
+    dir: 'egress/deny-all',
+    tiers: ['docker'],
+    env: 'closed',
+    canaryEnv: 'open',
+    hostEnv: egressEnv,
+    canary: /expected '200 exit=0' to match/,
+    record: ({ run }) => {
+      const egress = landed(run)?.egress
+      assert.equal(egress?.policy, 'deny-all')
+      assert.deepEqual(egress?.allowed, [])
+      assert.deepEqual(egress?.contacted, [])
+      assert.deepEqual(egress?.blocked, [
+        {
+          host: egressTarget.host,
+          port: egressTarget.port,
+          connections: 1,
+          reason: 'the policy denies all egress',
+        },
+      ])
+    },
+  },
+  {
+    dir: 'egress/secret-hosts-allowed',
+    tiers: ['docker'],
+    env: 'keyed',
+    canaryEnv: 'closed',
+    hostEnv: () => ({ ...egressEnv(), ES_FIXTURE_TOKEN: TOKEN }),
+    canary: /expected 'blocked by the ES egress policy: the …' to be 'es-egress-ok'/,
+    record: ({ run, runDir }) => {
+      const egress = landed(run)?.egress
+      assert.equal(egress?.policy, 'deny-all')
+      assert.deepEqual(
+        egress?.allowed,
+        [egressTarget.host],
+        "the secret's host, allowed automatically",
+      )
+      assert.deepEqual(
+        egress?.contacted.map((h) => h.host),
+        [egressTarget.host],
+      )
+      assert.equal(filesContaining(runDir, TOKEN), '')
+    },
+  },
+  {
+    dir: 'egress/harness-under-deny-all',
+    tiers: ['docker', 'real'],
+    env: 'closed',
+    canary: /expected '403 000' to match/,
+    record: ({ run, tier }) => {
+      const egress = landed(run)?.egress
+      assert.equal(egress?.policy, 'deny-all')
+      assert.deepEqual(egress?.allowed, [
+        'api2.cursor.sh',
+        '*.cursor.sh',
+        'cursor.com',
+        '*.cursor.com',
+      ])
+      assert.ok(
+        egress?.contacted.some((h) => h.host === 'api2.cursor.sh'),
+        JSON.stringify(egress),
+      )
+      const canary = run.evals.find((e) => e.name === 'canary')?.attempts[0]?.egress
+      assert.deepEqual(
+        canary?.blocked.map((h) => [h.host, h.reason]),
+        [['registry.npmjs.org', "registry.npmjs.org isn't in the allowlist"]],
+      )
+      if (tier === 'real') {
+        // Real Cursor talks to more than its API: whatever else it tried is refused and recorded.
+        assert.ok(
+          egress?.blocked.every((h) => !/cursor\.(sh|com)$/.test(h.host)),
+          JSON.stringify(egress),
+        )
+      }
+    },
+  },
+  {
     dir: 'env/files-home',
     tiers: ['fake', 'docker'],
     env: 'home-files',
@@ -411,7 +557,7 @@ function fixtureTests(tiers: Tier[]) {
         f.prepare?.(p.dir)
         const r = await runCli(p.dir, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
           env: {
-            ...f.hostEnv,
+            ...(typeof f.hostEnv === 'function' ? f.hostEnv() : f.hostEnv),
             ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
             ...(tier === 'real'
               ? {

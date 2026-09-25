@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { allowedHosts } from '../egress.ts'
 import { isTimeout } from '../errors.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
-import { InfraError } from '../sandbox/index.ts'
+import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip } from '../text.ts'
 import type { ErrorKind, EvalMeta } from '../types.ts'
 import type { Attempt } from './state.ts'
@@ -32,6 +33,18 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
   const judgeFailed = a.judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
   if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
+}
+
+/** The attempt's egress policy and, when its sandbox records it, what it contacted and was refused. */
+export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
+  const traffic = sandbox?.traffic?.()
+  a.record.egress = {
+    policy: a.spec.egress.policy,
+    allowed: allowedHosts(a.spec.egress),
+    recorded: !!traffic,
+    contacted: traffic?.contacted ?? [],
+    blocked: traffic?.blocked ?? [],
+  }
 }
 
 /** Phase 6: writes the attempt's record, redacted, and returns what the runner reports. */

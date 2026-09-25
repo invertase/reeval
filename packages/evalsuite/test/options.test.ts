@@ -585,6 +585,41 @@ describe('common mistakes', () => {
       /secret\.fromEnv\("K"\): in only applies to a brokered secret; add hosts, e\.g\. \{ hosts: \['api\.example\.com'\], in: \["query"\] \}/,
     ],
     [
+      'egress as a list of hosts',
+      `evaluate('e', { egress: ['api.example.com'] as never }, async () => {})`,
+      /egress is 'allow-all' \(the default\), 'deny-all', or \{ allow: \['api\.example\.com', '\*\.example\.org'\] \} \(got \["api\.example\.com"\]\) in evaluate\("e"\)\. For a list of hosts, use \{ allow: \["api\.example\.com"\] \}\./,
+    ],
+    [
+      'an egress deny list',
+      `group('g', { egress: { deny: ['evil.example'] } as never }, () => {})`,
+      /Unknown egress key "deny" in group\("g"\)\. A policy lists what's allowed; everything else is refused\./,
+    ],
+    [
+      'a URL in an egress allowlist',
+      `defineEnvironment('n', { egress: { allow: ['https://api.example.com/v1'] } })`,
+      /egress\.allow in defineEnvironment\("n"\): hosts are host names, not URLs: use 'api\.example\.com' \(got 'https:\/\/api\.example\.com\/v1'\)/,
+    ],
+    [
+      'a port in an egress allowlist',
+      `evaluate('e', { egress: { allow: ['api.example.com:443'] } }, async () => {})`,
+      /egress\.allow in evaluate\("e"\): hosts are host names without a port: use 'api\.example\.com' \(got 'api\.example\.com:443'\)/,
+    ],
+    [
+      'the network policy under another name',
+      `evaluate('e', { network: 'deny-all' } as never, async () => {})`,
+      /Unknown option "network" in evaluate\("e"\)\. Did you mean "egress"\?/,
+    ],
+    [
+      'deny-all on the fake sandbox',
+      `evaluate('e', { egress: 'deny-all' }, async () => {})`,
+      /evaluate\("e"\) runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy \(its commands run on the host\)\. Run it in docker\(\), or set egress: 'allow-all'\./,
+    ],
+    [
+      "an environment's allowlist on the fake sandbox",
+      `evaluate('e', { environment: defineEnvironment('n', { egress: { allow: ['api.example.com'] } }) }, async () => {})`,
+      /evaluate\("e"\) runs under egress \{ allow: \['api\.example\.com'\] \}, which needs a host allowlist \(api\.example\.com\), but the fake sandbox enforces no egress policy/,
+    ],
+    [
       'two harnesses with one id',
       `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
       /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,

@@ -1,6 +1,6 @@
 import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Brokering } from '../harness/agents.ts'
-import type { SandboxDescriptor } from '../types.ts'
+import type { PlannedEgress, SandboxDescriptor } from '../types.ts'
 import { createFakeSandbox } from './fake.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
@@ -16,6 +16,8 @@ export type SandboxOptions = {
   brokering?: Brokering
   /** User secrets the Docker egress gateway brokers; none is swapped in until `setSubstitutions`. */
   substitutions?: readonly BrokeredSecret[]
+  /** Checked against the sandbox's capabilities at plan time. */
+  egress: PlannedEgress
 }
 
 export async function createSandbox(

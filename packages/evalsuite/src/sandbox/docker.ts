@@ -5,11 +5,13 @@ import {
   DEFAULT_IMAGE,
   imageInfo,
   LABEL,
+  type NetworkPolicy,
   SANDBOX_ROOT,
   type Substitution,
   WORKSPACE_DIR,
 } from '@evalsuite/sandbox-docker'
-import type { DockerSandboxDescriptor } from '../types.ts'
+import { allowedHosts } from '../egress.ts'
+import type { DockerSandboxDescriptor, PlannedEgress } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
@@ -17,6 +19,13 @@ import { InfraError, type Sandbox } from './types.ts'
 export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }
 
 export const isDockerSandbox = (s: Sandbox): s is DockerSandbox => 'network' in s
+
+/** `deny-all` when a restricted policy allows no host at all, else an allowlist. */
+function networkPolicy(egress: PlannedEgress): NetworkPolicy {
+  const hosts = allowedHosts(egress)
+  if (hosts === null) return { mode: 'allow-all' }
+  return hosts.length ? { mode: 'custom', allowedHosts: hosts } : { mode: 'deny-all' }
+}
 
 export async function createDockerSandbox(
   descriptor: DockerSandboxDescriptor,
@@ -36,7 +45,9 @@ export async function createDockerSandbox(
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    egress: brokered.length > 0 && {
+    // Always, so every attempt's egress is recorded; a restricted policy can't start without it.
+    egress: {
+      policy: networkPolicy(options.egress),
       log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
         console.warn(
@@ -53,7 +64,7 @@ export async function createDockerSandbox(
     },
   })
   // Brokered values never enter the container: with no gateway to swap them in, the attempt can't start.
-  if (network.egress?.active === false) {
+  if (network.egress?.active === false && brokered.length > 0) {
     await Promise.resolve(network.destroy()).catch(() => {})
     throw new InfraError(
       `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
@@ -77,6 +88,7 @@ export async function createDockerSandbox(
         abortSignal: opts?.signal,
       }),
     readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
+    ...(network.traffic && network.egress?.active && { traffic: network.traffic }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),

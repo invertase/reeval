@@ -20,6 +20,7 @@ export async function prepareEnvironment(
     root,
     where,
     layoutOf(spec.harness).rulesFile,
+    spec.egress.policy,
   )
   a.env = env
   record.environment = env.record

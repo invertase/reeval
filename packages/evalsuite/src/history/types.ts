@@ -2,6 +2,7 @@ import type {
   AttemptImage,
   Cell,
   CellGate,
+  EgressRecord,
   EnvironmentRecord,
   ErrorKind,
   FileChange,
@@ -101,6 +102,8 @@ export type AttemptRecord = {
   env: { vars: string[]; secrets: string[]; brokered: string[] }
   /** Skills, rules and MCP config visible to the agent in its sandbox, by content hash. */
   context: ContextFile[]
+  /** The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran. */
+  egress: EgressRecord | null
   outcome: Outcome
   error: { kind: ErrorKind; message: string } | null
   durationMs: number

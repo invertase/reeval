@@ -2,6 +2,7 @@
 // `es run --dry-run --json` on a directory under test/plan/ and compares the normalised matrix
 // with test/plan/<dir>/expected/<case>.txt. ES_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
+import { readdirSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import { runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -21,6 +22,8 @@ export const cases: PlanCase[] = [
   { dir: 'images', name: 'install-from-dockerfile', args: [] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
   { dir: 'secrets', name: 'brokered', args: [] },
+  { dir: 'egress', name: 'cascade', args: [] },
+  { dir: 'egress', name: 'profile-defaults', args: ['--profile', 'locked', 'evals/cascade.es.ts'] },
 ]
 
 describe('plan snapshots', { concurrency: true }, () => {
@@ -65,6 +68,35 @@ describe('the JSON plan', { concurrency: true }, () => {
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.equal(r.stdout, '')
     assert.match(r.stderr, /evaluate\.only\/group\.only in evals\/only\.es\.ts isn't allowed in CI/)
+  })
+
+  test('an egress policy the sandbox cannot enforce exits 2 at plan time', async () => {
+    const p = await fixture('plan/egress')
+    const env = { ES_EGRESS_FAKE: '1' }
+    for (const args of [['run', '--dry-run', '--json'], ['run']].map((a) => [
+      ...a,
+      'evals/cascade.es.ts',
+    ])) {
+      const r = await runCli(p.dir, args, { env })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.equal(r.stdout, '', args.join(' '))
+      assert.match(
+        r.stderr,
+        /runs under egress \{ allow: \['config\.example\.com'\] \}, which needs a host allowlist \(config\.example\.com\), but the fake sandbox enforces no egress policy \(its commands run on the host\)\. Run it in docker\(\), or set egress: 'allow-all'\./,
+      )
+    }
+    assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
+  })
+
+  test('the text plan names each restricted policy and its automatic hosts', async () => {
+    const p = await fixture('plan/egress')
+    const r = await runCli(p.dir, ['run', '--dry-run', 'evals/auto.es.ts'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /egress: deny-all \+ auto: generativelanguage\.googleapis\.com, mcp\.example\.com/,
+    )
+    assert.match(r.stdout, /egress: allow api\.example\.com \+ auto: uploads\.example\.com/)
   })
 
   test('--json without --dry-run exits 2 with the fix', async () => {

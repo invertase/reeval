@@ -2,6 +2,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SECRET_NAME } from './redact.ts'
 import type {
+  EgressPolicy,
   Environment,
   EnvironmentHelpers,
   EnvironmentInput,
@@ -26,7 +27,7 @@ export class DefinitionError extends Error {
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
-const SPEC_KEYS = ['env', 'files', 'rules', 'setup', 'skills', 'mcp']
+const SPEC_KEYS = ['env', 'egress', 'files', 'rules', 'setup', 'skills', 'mcp']
 /** Image fields that belong on the sandbox, not the environment. */
 const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
 const SPEC_HINTS: Record<string, string> = {
@@ -35,6 +36,8 @@ const SPEC_HINTS: Record<string, string> = {
   run: 'setup',
   vars: 'env',
   secrets: 'env',
+  network: 'egress',
+  networkPolicy: 'egress',
   skill: 'skills',
   file: 'files',
   agents: 'rules',
@@ -88,6 +91,52 @@ const toPath = (value: string | URL, base: string) => {
 const HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/i
 const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
 
+/** Why `host` isn't a host name or `*.` pattern, or undefined when it is one. */
+function badHost(host: unknown): string | undefined {
+  if (typeof host === 'string' && HOST.test(host)) return undefined
+  if (typeof host === 'string' && /^[a-z]+:\/\//i.test(host)) {
+    return `hosts are host names, not URLs: use '${new URL(host).hostname}' (got '${host}')`
+  }
+  if (typeof host === 'string' && /^[^:/]+:\d+$/.test(host)) {
+    return `hosts are host names without a port: use '${host.split(':')[0]}' (got '${host}')`
+  }
+  return `${JSON.stringify(host)} isn't a host. Use a name like 'api.example.com', or '*.example.com' for its subdomains.`
+}
+
+/** Throws unless `value` is `'allow-all'`, `'deny-all'` or `{ allow: [hosts] }`. */
+export function checkEgress(
+  value: unknown,
+  where: string,
+  Err: new (message: string) => Error = DefinitionError,
+): asserts value is EgressPolicy {
+  if (value === 'allow-all' || value === 'deny-all') return
+  const shape = `egress is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] }`
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    const list = Array.isArray(value)
+      ? ` For a list of hosts, use { allow: ${JSON.stringify(value)} }.`
+      : ''
+    throw new Err(`${shape} (got ${JSON.stringify(value)}) in ${where}.${list}`)
+  }
+  for (const key of Object.keys(value)) {
+    if (key === 'allow') continue
+    const hint =
+      key === 'deny'
+        ? " A policy lists what's allowed; everything else is refused."
+        : key === 'hosts' || key === 'allowedHosts'
+          ? ' Did you mean "allow"?'
+          : ''
+    throw new Err(`Unknown egress key "${key}" in ${where}.${hint}`)
+  }
+  const allow = (value as { allow?: unknown }).allow
+  if (!Array.isArray(allow)) {
+    throw new Err(`${shape} (got ${JSON.stringify(value)}) in ${where}`)
+  }
+  for (const host of allow) {
+    const bad = badHost(host)
+    if (bad) throw new Err(`egress.allow in ${where}: ${bad}`)
+  }
+}
+
 export const SECRET_HOSTS: SecretHelper['hosts'] = Object.freeze({
   gemini: Object.freeze(['generativelanguage.googleapis.com']),
   openai: Object.freeze(['api.openai.com']),
@@ -108,13 +157,8 @@ function secretOptions(options: SecretOptions, what: string): Omit<Secret, 'kind
       )
     }
     for (const host of hosts) {
-      if (typeof host === 'string' && HOST.test(host)) continue
-      const url = typeof host === 'string' && /^[a-z]+:\/\//i.test(host)
-      throw new DefinitionError(
-        url
-          ? `${what}: hosts are host names, not URLs: use '${new URL(host).hostname}' (got '${host}')`
-          : `${what}: ${JSON.stringify(host)} isn't a host. Use a name like 'api.example.com', or '*.example.com' for its subdomains.`,
-      )
+      const bad = badHost(host)
+      if (bad) throw new DefinitionError(`${what}: ${bad}`)
     }
   }
   if (options.in !== undefined) {
@@ -378,6 +422,7 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   }
   const s = spec as EnvironmentSpec
   if (s.env !== undefined) checkEnv(s.env, where)
+  if (s.egress !== undefined) checkEgress(s.egress, where)
   const list = (key: 'setup' | 'skills') => {
     const value = s[key]
     if (value !== undefined && !Array.isArray(value)) {

@@ -1,4 +1,4 @@
-import type { Substitution } from '@evalsuite/sandbox-docker'
+import type { EgressTraffic, Substitution } from '@evalsuite/sandbox-docker'
 import type { ExecResult } from '../types.ts'
 
 export type ExecOptions = { signal?: AbortSignal; env?: Record<string, string>; cwd?: string }
@@ -14,6 +14,8 @@ export interface Sandbox {
   writeFile(path: string, content: string): Promise<void>
   /** With the Docker egress gateway: the brokered secrets it swaps in from now on. */
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
+  /** When the sandbox records egress: the hosts contacted and refused so far. */
+  traffic?(): EgressTraffic
   /** Idempotent, never throws. */
   destroy(): Promise<void>
 }
