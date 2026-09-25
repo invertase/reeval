@@ -19,6 +19,8 @@ export type Agent = {
   brokeredEndpoints: readonly BrokeredEndpoint[]
   /** Where the agent looks for repo skills, relative to the workspace. */
   workspaceSkillDir: string
+  /** The workspace file the agent reads project rules from; environment `rules` land here. */
+  rulesFile: string
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /** Loads the adapter; the package is only imported when an attempt starts. */
@@ -80,6 +82,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       { host: 'api2.cursor.sh', path: { exact: '/auth/exchange_user_api_key' }, method: ['POST'] },
     ],
     workspaceSkillDir: '.cursor/skills',
+    rulesFile: 'AGENTS.md',
     mcpServers: acpMcpServers,
     adapter: async (options) => (await import('@ai-sdk/harness-cursor')).createCursor(options),
   },
@@ -104,6 +107,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       },
     ],
     workspaceSkillDir: '.claude/skills',
+    rulesFile: 'CLAUDE.md',
     mcpServers: claudeMcpServers,
     adapter: async (options) =>
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode(claudeCodeSettings(options)),

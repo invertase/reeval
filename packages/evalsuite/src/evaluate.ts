@@ -18,7 +18,7 @@ import {
 } from './environment/resolve.ts'
 import { isTimeout, UsageError } from './errors.ts'
 import { brokeringFor } from './harness/agents.ts'
-import { createHarness, workspaceSkillDir } from './harness/index.ts'
+import { createHarness, rulesFile, workspaceSkillDir } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
 import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
@@ -454,7 +454,13 @@ async function runAttempt(
   let image: string | undefined
   async function setup() {
     const where = `${id} [${attemptId(spec.cell.key, spec.n)}]`
-    resolved = await resolveEnvironment(spec.environment, spec.env, config.root, where)
+    resolved = await resolveEnvironment(
+      spec.environment,
+      spec.env,
+      config.root,
+      where,
+      rulesFile(spec.harness),
+    )
     record.environment = resolved.record
     const secrets = resolved.record.secrets
     record.env = {

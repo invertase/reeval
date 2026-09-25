@@ -362,7 +362,7 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   // skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills', only: ['genkit'] })
   // skill.registry('owner/repo@skill', { version: 'v1' }), skill.npm('pkg@1.2.3'), skill.inline({ … })
   mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url)
-  rules: file('../rules/house.md'),                       // AGENTS.md in the workspace
+  rules: file('../rules/house.md'),                       // the agent's rules file, see below
   files: { 'docs/api.md': file('../docs/api.md'), '~/.npmrc': 'fund=false\n' },
   image: ['npm i -g firebase-tools@14'],                  // baked into a cached layer, no secrets
   setup: [{ run: 'npm ci', timeout: '5m' }],            // every attempt, before the agent starts
@@ -378,6 +378,9 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   a key the parent has (an env var, a file path, a skill or MCP server name, `rules`), the child
   wins, and the key is listed in the environment's `overrides` in the record. `image` and `setup`
   steps concatenate, parent first.
+- **Rules** go where the harness's agent reads them: `AGENTS.md` for Cursor (and the fake
+  harness), `CLAUDE.md` for Claude Code. They're written after `files`, so they win over a file
+  at the same path. The environment's digest covers the rules' content, not their path.
 - **Skills** go to the harness adapter, which writes them where its agent reads them;
   `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
   for Cursor, `.claude/skills` for Claude Code). A git skill on a moving ref (`main`, or none)

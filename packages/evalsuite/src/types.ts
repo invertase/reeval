@@ -256,7 +256,7 @@ export type EnvironmentSpec = {
   env?: EnvVars
   /** Workspace-relative, or `~/` for home. */
   files?: Record<string, string | HostFile>
-  /** `AGENTS.md` for the workspace. */
+  /** Project rules, written where the harness's agent reads them: `AGENTS.md` for Cursor, `CLAUDE.md` for Claude Code. */
   rules?: string | HostFile
   setup?: SetupStep[]
   skills?: SkillSource[]
@@ -528,7 +528,7 @@ export type EnvironmentRecord = {
   parent: string | null
   /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
   overrides: string[]
-  /** Covers every field except the image id; secret names are included, values never are. */
+  /** Covers every field except the image id and the rules file's path; secret names are included, values never are. */
   digest: string
   image: string[]
   setup: string[]

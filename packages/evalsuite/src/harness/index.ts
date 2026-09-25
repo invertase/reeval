@@ -13,4 +13,8 @@ export async function createHarness(descriptor: HarnessDescriptor): Promise<Harn
 export const workspaceSkillDir = (descriptor: HarnessDescriptor): string =>
   agentOf(descriptor)?.workspaceSkillDir ?? '.agents/skills'
 
+/** Where each harness's agent reads environment `rules` from, relative to the workspace. */
+export const rulesFile = (descriptor: HarnessDescriptor): string =>
+  agentOf(descriptor)?.rulesFile ?? 'AGENTS.md'
+
 export type { Harness }

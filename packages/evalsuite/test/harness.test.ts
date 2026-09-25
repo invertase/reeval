@@ -16,6 +16,8 @@ import {
   scopeTransformations,
 } from '@evalsuite/sandbox-docker'
 import { missingCredentials, resolveConfig } from '../src/config.ts'
+import { resolveEnvironment } from '../src/environment/resolve.ts'
+import { defineEnvironment, layered } from '../src/environment.ts'
 import {
   AGENTS,
   type AgentKind,
@@ -23,7 +25,7 @@ import {
   claudeCodeSettings,
   claudeMcpServers,
 } from '../src/harness/agents.ts'
-import { workspaceSkillDir } from '../src/harness/index.ts'
+import { rulesFile, workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { claudeCode, cursor, fakeHarness } from '../src/harness.ts'
 import { cascade, harnessId, type Level, type Resolved } from '../src/options.ts'
@@ -96,6 +98,51 @@ describe('the Claude Code harness', () => {
     assert.equal(bakedHarnessFor(h), 'claude-code')
     assert.equal(bakedHarnessFor(cursor()), 'cursor')
     assert.equal(bakedHarnessFor(fakeHarness()), 'cursor')
+  })
+
+  test('reads environment rules from CLAUDE.md, and Cursor from AGENTS.md', async () => {
+    const house = defineEnvironment('house', {
+      rules: 'Always write tests.',
+      files: { 'notes.txt': 'hi' },
+    })
+    const forHarness = (h: Parameters<typeof rulesFile>[0]) =>
+      resolveEnvironment(layered(undefined, house), {}, '/p', 'e', rulesFile(h))
+    const claude = await forHarness(claudeCode({ model: 'claude-sonnet-5' }))
+    const composer = await forHarness(cursor())
+    const fake = await forHarness(fakeHarness())
+    const rulesAt = (r: Awaited<typeof claude>) =>
+      r.files.filter((f) => f.content === 'Always write tests.').map((f) => f.path)
+    assert.deepEqual(rulesAt(claude), ['CLAUDE.md'])
+    assert.deepEqual(rulesAt(composer), ['AGENTS.md'])
+    assert.deepEqual(rulesAt(fake), ['AGENTS.md'])
+    assert.deepEqual(
+      claude.record.files.map((f) => f.path),
+      ['notes.txt', 'CLAUDE.md'],
+    )
+    assert.deepEqual(
+      composer.record.files.map((f) => f.path),
+      ['notes.txt', 'AGENTS.md'],
+    )
+    assert.equal(
+      claude.record.digest,
+      composer.record.digest,
+      'the same environment has one digest; the harness is in the fingerprint',
+    )
+    const edited = defineEnvironment('house', {
+      rules: 'Never write tests.',
+      files: { 'notes.txt': 'hi' },
+    })
+    const changed = await resolveEnvironment(layered(undefined, edited), {}, '/p', 'e', 'CLAUDE.md')
+    assert.notEqual(changed.record.digest, claude.record.digest)
+  })
+
+  test('rules win over a file at the same path', async () => {
+    const env = defineEnvironment('both', {
+      files: { 'CLAUDE.md': 'from files' },
+      rules: 'from rules',
+    })
+    const r = await resolveEnvironment(layered(undefined, env), {}, '/p', 'e', 'CLAUDE.md')
+    assert.equal(r.files.findLast((f) => f.path === 'CLAUDE.md')?.content, 'from rules')
   })
 
   test('gets MCP servers in the .mcp.json shape', () => {
