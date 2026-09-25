@@ -43,6 +43,43 @@ export async function readRecord(path: string): Promise<RunRecord> {
   return parseRecord(await readFile(path), path)
 }
 
+/** A run's record file in a history or scratch folder. */
+export const recordFile = (dir: string, runId: string) => join(dir, `${runId}.json`)
+/** A run's artifact directory in a history or scratch folder. */
+export const runDir = (dir: string, runId: string) => join(dir, runId)
+
+/** The top-level `.json` names in `dir` (records land last and whole), sorted; null if it's missing. */
+export async function recordNames(dir: string): Promise<string[] | null> {
+  try {
+    return (await readdir(dir)).filter((n) => n.endsWith('.json') && !n.startsWith('.')).sort()
+  } catch (error) {
+    if (isMissing(error)) return null
+    throw error
+  }
+}
+
+/**
+ * The newest `limit` records across `dirs`, by file name (= start time), oldest first. Files that
+ * aren't readable records are skipped: these feed estimates, not results.
+ */
+export async function recentRecords(dirs: string[], limit: number): Promise<RunRecord[]> {
+  const paths: string[] = []
+  for (const dir of dirs) {
+    const names = (await recordNames(dir).catch(() => null)) ?? []
+    paths.push(...names.map((n) => join(dir, n)))
+  }
+  const recent = paths
+    .sort((a, b) => (a.split('/').at(-1) ?? '').localeCompare(b.split('/').at(-1) ?? ''))
+    .slice(-limit)
+  const records: RunRecord[] = []
+  for (const path of recent) {
+    try {
+      records.push(await readRecord(path))
+    } catch {}
+  }
+  return records
+}
+
 type Cache = {
   /** The mtime of this module: any rebuild of ES drops entries derived by the old code. */
   build: number
@@ -68,14 +105,7 @@ export async function listRuns(
   dir: string,
   recorded: boolean,
 ): Promise<HistoryEntry[]> {
-  let names: string[]
-  try {
-    names = await readdir(dir)
-  } catch (error) {
-    if (isMissing(error)) return []
-    throw error
-  }
-  names = names.filter((n) => n.endsWith('.json') && RUN_ID.test(n.slice(0, -5))).sort()
+  const names = ((await recordNames(dir)) ?? []).filter((n) => RUN_ID.test(n.slice(0, -5)))
   if (names.length === 0) return []
   const cache = await readCache(root)
   let changed = false

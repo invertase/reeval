@@ -1,10 +1,7 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
-import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
-import { scratchDir } from './history/files.ts'
-import type { RunRecord } from './history/types.ts'
+import { recentRecords, scratchDir } from './history/files.ts'
 import { clip, formatDuration } from './text.ts'
 import type {
   Budget,
@@ -48,25 +45,12 @@ const median = (values: number[]) => {
 
 /** Attempt durations from the latest recorded and scratch runs, by eval and harness. */
 export async function historyDurations(root: string, historyDir: string) {
-  const files: string[] = []
-  for (const dir of [historyDir, scratchDir(root)]) {
-    const names = await readdir(dir).catch(() => [])
-    files.push(...names.filter((n) => n.endsWith('.json')).map((n) => join(dir, n)))
-  }
-  const recent = files
-    .sort((a, b) => (a.split('/').at(-1) ?? '').localeCompare(b.split('/').at(-1) ?? ''))
-    .slice(-HISTORY_RUNS)
+  const records = await recentRecords([historyDir, scratchDir(root)], HISTORY_RUNS)
   const byEval = new Map<string, number[]>()
   const byHarness = new Map<string, number[]>()
   const push = (map: Map<string, number[]>, key: string, ms: number) =>
     map.set(key, [...(map.get(key) ?? []), ms])
-  for (const file of recent) {
-    let record: RunRecord
-    try {
-      record = JSON.parse(await readFile(file, 'utf8'))
-    } catch {
-      continue
-    }
+  for (const record of records) {
     for (const e of record.evals ?? []) {
       for (const a of e.attempts ?? []) {
         if (a.outcome !== 'pass' && a.outcome !== 'fail') continue

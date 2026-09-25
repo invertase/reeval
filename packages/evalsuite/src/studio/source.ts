@@ -1,6 +1,6 @@
 import { realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
-import { listRuns, scratchDir } from '../history/files.ts'
+import { listRuns, recordFile, runDir, scratchDir } from '../history/files.ts'
 import type { HistoryEntry } from '../history/types.ts'
 import type { DataTarget } from '../view/paths.ts'
 
@@ -44,11 +44,11 @@ export async function resolveFile(
   target: Extract<DataTarget, { kind: 'record' | 'artifact' }>,
 ): Promise<string | null> {
   for (const dir of dirsOf(source)) {
-    const record = await inside(dir, join(dir, `${target.runId}.json`))
+    const record = await inside(dir, recordFile(dir, target.runId))
     if (!record) continue
     if (target.kind === 'record') return record
-    const runDir = join(dir, target.runId)
-    return inside(runDir, join(runDir, ...target.segments))
+    const artifacts = runDir(dir, target.runId)
+    return inside(artifacts, join(artifacts, ...target.segments))
   }
   return null
 }

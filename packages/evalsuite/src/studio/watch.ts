@@ -1,5 +1,5 @@
 import { type FSWatcher, watch } from 'node:fs'
-import { readdir } from 'node:fs/promises'
+import { recordNames } from '../history/files.ts'
 
 /**
  * Calls `onChange` (debounced) when the set of run records in any of `dirs` changes. Records land
@@ -15,12 +15,8 @@ export function watchRuns(dirs: string[], onChange: () => void, pollMs = 1500) {
   const listing = async () => {
     const parts: string[] = []
     for (const dir of dirs) {
-      try {
-        const names = (await readdir(dir)).filter((n) => n.endsWith('.json') && !n.startsWith('.'))
-        parts.push(`${dir}:${names.sort().join(',')}`)
-      } catch {
-        parts.push(`${dir}:-`)
-      }
+      const names = await recordNames(dir).catch(() => null)
+      parts.push(`${dir}:${names ? names.join(',') : '-'}`)
     }
     return parts.join('|')
   }
