@@ -37,6 +37,70 @@ let n = 0
 /** A command unique to this test that runs until killed: a sleep with a distinct duration. */
 const longCommand = () => `sleep 3000.${process.pid}${++n}`
 
+/** Containers, running or not, with the test label `value`. */
+const labelled = (value: string) =>
+  execFileSync('docker', ['ps', '-aq', '--filter', `label=dev.evalsuite.test=${value}`], {
+    encoding: 'utf8',
+  }).trim()
+
+describe('create and abort', { skip, timeout: 120_000 }, () => {
+  // Across these delays the abort lands before, during and after `docker run`; wherever it lands,
+  // nothing may be left behind.
+  const delays = [0, 20, 50, 100, 150, 200, 300, 450, 700, 1000]
+
+  test('an abort at any point while creating leaves no container', {
+    todo: "an abort mid docker run loses the container's id (§11.10)",
+  }, async () => {
+    const outcomes: string[] = []
+    const left: string[] = []
+    await Promise.all(
+      delays.map(async (ms) => {
+        const label = `abort-${process.pid}-${ms}`
+        const controller = new AbortController()
+        setTimeout(() => controller.abort(new Error('stop')), ms)
+        try {
+          const s = await createDockerSession({
+            image: DEFAULT_IMAGE,
+            labels: { 'dev.evalsuite.test': label },
+            abortSignal: controller.signal,
+          })
+          outcomes.push(`${ms}ms: created`)
+          await s.destroy()
+        } catch (error) {
+          outcomes.push(`${ms}ms: ${(error as Error).message}`)
+        }
+        try {
+          await eventually(`a container for ${label}`, async () => labelled(label) === '', 10_000)
+        } catch {
+          left.push(`${ms}ms`)
+          execFileSync('sh', [
+            '-c',
+            `docker rm -f $(docker ps -aq --filter label=dev.evalsuite.test=${label})`,
+          ])
+        }
+      }),
+    )
+    assert.deepEqual(
+      left,
+      [],
+      `containers left after aborts at: ${left.join(', ')}\n${outcomes.join('\n')}`,
+    )
+  })
+
+  test('the leak check sees a live container (twin: it can fail)', async () => {
+    const label = `twin-${process.pid}`
+    const s = await createDockerSession({
+      image: DEFAULT_IMAGE,
+      labels: { 'dev.evalsuite.test': label },
+    })
+    await assert.rejects(
+      eventually('expected to time out', async () => labelled(label) === '', 1000),
+      /expected to time out/,
+    )
+    await s.destroy()
+  })
+})
+
 describe('exec in a container', { skip, timeout: 60_000 }, () => {
   const sessions: DockerSession[] = []
   const open = async () => {
