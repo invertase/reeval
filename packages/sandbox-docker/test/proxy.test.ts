@@ -14,6 +14,7 @@ import {
   type EgressProxyOptions,
 } from '../src/egress/proxy.ts'
 import type { RequestTransformation } from '../src/egress/rules.ts'
+import type { Substitution } from '../src/egress/substitution.ts'
 
 const PLACEHOLDER = `aisdkhc_${'P'.repeat(43)}`
 const REAL = 'crsr_real_integration_key_0123456789abcdef'
@@ -42,6 +43,14 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
     })
     req.on('end', () => {
       const out = res as http.ServerResponse
+      if (req.url?.startsWith('/echo')) {
+        const echo = JSON.stringify({ headers: req.headers, path: req.url, body })
+        out.writeHead(200, {
+          'content-type': 'application/json',
+          'x-echo-authorization': String(req.headers.authorization ?? ''),
+        })
+        return out.end(echo)
+      }
       if (req.url === '/trailers') {
         out.writeHead(200, { 'content-type': 'application/grpc', trailer: 'grpc-status' })
         out.write('payload')
@@ -570,6 +579,234 @@ describe('egress policy through the proxy', () => {
     } finally {
       proxy.close()
       server.close()
+    }
+  })
+})
+
+describe('brokered secrets through the proxy', () => {
+  const SECRET = 'AIza-real-secret-value-0123456789abcdef'
+  const HOLDER = `es_secret_${'Q'.repeat(32)}`
+  const sub = (over: Partial<Substitution> = {}): Substitution => ({
+    name: 'GEMINI_API_KEY',
+    placeholder: HOLDER,
+    value: SECRET,
+    hosts: [HOST],
+    in: ['header'],
+    ...over,
+  })
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  let other: { port: number; close(): void }
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+    h2 = await startUpstream(HOST, true)
+    other = await startUpstream(OTHER, false)
+  })
+  after(() => {
+    h1.close()
+    h2.close()
+    other.close()
+  })
+  const echoOf = (r: { body: string }) =>
+    JSON.parse(r.body) as { headers: Record<string, string>; path: string; body: string }
+  const reachedUpstream = () => JSON.stringify(seen)
+
+  test('a placeholder inside a header value is swapped on its own host, and logged by name only', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      seen.length = 0
+      await viaProxy(gw, HOST, h1.port, {
+        path: '/echo',
+        headers: { authorization: `Bearer ${HOLDER}`, 'x-goog-api-key': HOLDER },
+      })
+      assert.equal(seen[0]?.headers.authorization, `Bearer ${SECRET}`)
+      assert.equal(seen[0]?.headers['x-goog-api-key'], SECRET)
+      assert.ok(
+        gw.lines.some((l) => l.includes('(substituted GEMINI_API_KEY)')),
+        gw.lines.join('\n'),
+      )
+      assert.doesNotMatch(gw.lines.join('\n'), new RegExp(`${SECRET}|${HOLDER}`))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('responses from a brokered host have the value put back as the placeholder', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        path: '/echo',
+        headers: { authorization: `Bearer ${HOLDER}` },
+      })
+      assert.doesNotMatch(r.body, new RegExp(SECRET), 'the echoed body is scrubbed')
+      assert.match(r.body, new RegExp(HOLDER))
+      assert.equal(r.headers['x-echo-authorization'], `Bearer ${HOLDER}`, 'and the headers')
+      assert.equal(echoOf(r).headers['accept-encoding'], undefined, 'responses come uncompressed')
+      // Twin: the upstream really got the value, so the check above could fail.
+      assert.match(reachedUpstream(), new RegExp(SECRET))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('HTTP/2: substituted on the way out, scrubbed on the way back', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      seen.length = 0
+      const r = await viaProxyH2(gw, HOST, h2.port, '/echo', `Bearer ${HOLDER}`)
+      assert.equal(seen[0]?.headers.authorization, `Bearer ${SECRET}`)
+      assert.equal(echoOf(r).headers.authorization, `Bearer ${HOLDER}`)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('the query and the body are substituted only when a secret opts in', async () => {
+    const gw = await startProxy()
+    try {
+      const request = () =>
+        viaProxy(gw, HOST, h1.port, {
+          method: 'POST',
+          path: `/echo?key=${HOLDER}`,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ key: HOLDER }),
+        })
+      gw.proxy.setSubstitutions([sub()])
+      seen.length = 0
+      await request()
+      assert.equal(seen[0]?.path, `/echo?key=${HOLDER}`, 'headers only by default: query kept')
+      assert.doesNotMatch(reachedUpstream(), new RegExp(SECRET))
+
+      gw.proxy.setSubstitutions([sub({ in: ['header', 'query', 'body'] })])
+      seen.length = 0
+      const r = await request()
+      assert.equal(seen[0]?.path, `/echo?key=${SECRET}`)
+      assert.equal(seen[0]?.headers['content-length'], undefined, 're-framed, not a stale length')
+      assert.match(reachedUpstream(), new RegExp(SECRET))
+      assert.doesNotMatch(r.body, new RegExp(SECRET), 'the echo of the body is scrubbed')
+    } finally {
+      gw.close()
+    }
+  })
+
+  test("a compressed request body isn't substituted: the placeholder goes up and fails closed", async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub({ in: ['header', 'body'] })])
+      seen.length = 0
+      await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/echo',
+        headers: { 'content-encoding': 'x-custom' },
+        body: HOLDER,
+      })
+      assert.doesNotMatch(reachedUpstream(), new RegExp(SECRET))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test("a secret isn't swapped on another host, nor another secret's", async () => {
+    const gw = await startProxy()
+    try {
+      const b = sub({
+        name: 'OTHER_KEY',
+        placeholder: `es_secret_${'B'.repeat(32)}`,
+        value: 'b-real-value-9876543210',
+        hosts: [OTHER],
+      })
+      gw.proxy.setSubstitutions([sub(), b])
+      seen.length = 0
+      // OTHER is decrypted for its own secret, but GEMINI_API_KEY's placeholder stays as it is.
+      await viaProxy(gw, OTHER, other.port, { path: '/echo', headers: { authorization: HOLDER } })
+      assert.equal(seen[0]?.headers.authorization, HOLDER)
+      await viaProxy(gw, HOST, h1.port, {
+        path: '/echo',
+        headers: { authorization: b.placeholder },
+      })
+      assert.equal(seen[1]?.headers.authorization, b.placeholder)
+      assert.doesNotMatch(reachedUpstream(), new RegExp(`${SECRET}|${b.value}`))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a Host header naming another host than the CONNECT target is refused (domain fronting)', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub({ hosts: [HOST, OTHER] })])
+      seen.length = 0
+      const r = await viaProxy(gw, HOST, h1.port, {
+        path: '/echo',
+        headers: { host: OTHER, authorization: HOLDER },
+      })
+      assert.equal(r.status, 421)
+      assert.match(
+        r.body,
+        /the request names other\.upstream\.test, but the connection is to api\.upstream\.test/,
+      )
+      assert.equal(seen.length, 0, 'nothing reached the upstream')
+      // Twin: the same request naming the CONNECT host goes through.
+      const ok = await viaProxy(gw, HOST, h1.port, {
+        path: '/echo',
+        headers: { authorization: HOLDER },
+      })
+      assert.equal(ok.status, 200)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('plain HTTP is never substituted, even to a brokered host', async () => {
+    const plain = http.createServer((req, res) => {
+      record('plain', req)
+      req.resume()
+      res.end('ok')
+    })
+    await new Promise<void>((r) => plain.listen(0, '127.0.0.1', r))
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([
+        sub({ hosts: [HOST, 'plain.upstream.test'], in: ['header', 'query'] }),
+      ])
+      seen.length = 0
+      const port = (plain.address() as net.AddressInfo).port
+      await new Promise<void>((resolve, reject) =>
+        http
+          .get(
+            {
+              host: '127.0.0.1',
+              port: gw.port,
+              path: `http://plain.upstream.test:${port}/x?key=${HOLDER}`,
+              headers: { authorization: HOLDER },
+            },
+            (res) => res.resume().on('end', resolve),
+          )
+          .once('error', reject),
+      )
+      assert.equal(seen[0]?.headers.authorization, HOLDER)
+      assert.equal(seen[0]?.path, `/x?key=${HOLDER}`)
+    } finally {
+      gw.close()
+      plain.close()
+    }
+  })
+
+  test('setSubstitutions replaces the set: an empty one decrypts nothing', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      gw.proxy.setSubstitutions([])
+      await assert.rejects(
+        viaProxy(gw, HOST, h1.port, { path: '/echo' }),
+        /self-signed|unable to verify|certificate/i,
+        'tunnelled blind: the gateway CA is not presented',
+      )
+    } finally {
+      gw.close()
     }
   })
 })

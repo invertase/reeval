@@ -6,6 +6,7 @@ import type { HarnessV1NetworkSandboxSession, HarnessV1SandboxProvider } from '@
 import { docker, dockerOk, removeContainerDetached, sweepLabelDetached } from './docker-cli.ts'
 import { type Gateway, type GatewayOptions, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
+import type { Substitution } from './egress/substitution.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
@@ -31,6 +32,8 @@ export type EgressStatus = { active: true } | { active: false; reason: string }
 export type DockerSession = HarnessV1NetworkSandboxSession & {
   /** Unset when the session wasn't asked to start the gateway. */
   readonly egress?: EgressStatus
+  /** With the gateway: the brokered secrets, each swapped in only on HTTPS to its own hosts. */
+  setSubstitutions?(subs: readonly Substitution[]): Promise<void>
 }
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
@@ -210,6 +213,13 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         },
       }
     : {}
+  const substituting: Pick<DockerSession, 'setSubstitutions'> = gateway
+    ? {
+        async setSubstitutions(subs) {
+          gateway?.setSubstitutions(subs)
+        },
+      }
+    : {}
 
   const session: DockerSession = {
     id,
@@ -221,6 +231,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       return egress
     },
     ...brokering,
+    ...substituting,
     run,
     async spawn(o) {
       const env = envFor(o.env)

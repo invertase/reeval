@@ -185,6 +185,58 @@ describe('egress gateway in Docker', {
     await bridge.kill()
   })
 
+  test('a brokered secret: the upstream gets the value, the container only ever the placeholder', async () => {
+    const secret = 'user-secret-docker-8a7b6c5d4e3f2a1b0c9d'
+    const holder = `es_secret_${'D'.repeat(32)}`
+    const s = await open({
+      image: DEFAULT_IMAGE,
+      egress: egress(),
+      env: { GEMINI_API_KEY: holder },
+    })
+    await s.setSubstitutions?.([
+      {
+        name: 'GEMINI_API_KEY',
+        placeholder: holder,
+        value: secret,
+        hosts: ['upstream.test'],
+        in: ['header'],
+      },
+    ])
+    seen.length = 0
+    // No --cacert: curl trusts the gateway through the system bundle ES points it at.
+    const r = await sh(
+      s,
+      `curl -sS -H "Authorization: Bearer $GEMINI_API_KEY" https://upstream.test:${upstream.port}/v1`,
+    )
+    assert.equal(r.exitCode, 0, r.stderr)
+    assert.equal(seen[0]?.authorization, `Bearer ${secret}`, 'the upstream got the value')
+    assert.equal(
+      JSON.parse(r.stdout).authorization,
+      `Bearer ${holder}`,
+      'the echo came back scrubbed',
+    )
+    const tail = secret.slice(-20)
+    const environ = await sh(s, "cat /proc/[0-9]*/environ | tr '\\0' '\\n'")
+    assert.match(environ.stdout, new RegExp(holder), 'twin: the search sees the placeholder')
+    assert.doesNotMatch(environ.stdout, new RegExp(tail))
+    const files = await sh(
+      s,
+      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
+      { N: tail },
+    )
+    assert.equal(files.stdout.trim(), 'exit=1', `files containing the value: ${files.stdout}`)
+    const env = (await sh(s, 'env')).stdout
+    for (const name of [
+      'SSL_CERT_FILE',
+      'REQUESTS_CA_BUNDLE',
+      'CURL_CA_BUNDLE',
+      'GIT_SSL_CAINFO',
+    ]) {
+      assert.match(env, new RegExp(`^${name}=/etc/ssl/certs/ca-certificates\\.crt$`, 'm'), name)
+    }
+    assert.match(env, /^NODE_USE_ENV_PROXY=1$/m)
+  })
+
   test('a restricted policy leaves the gateway as the only way out', async () => {
     const s = await open({
       image: DEFAULT_IMAGE,

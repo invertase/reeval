@@ -39,6 +39,7 @@ export {
   onEndpoint,
   type RequestTransformation,
 } from './egress/rules.ts'
+export type { SubstituteIn, Substitution } from './egress/substitution.ts'
 export {
   BAKED_HARNESSES,
   BASE_IMAGE,

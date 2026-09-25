@@ -7,11 +7,15 @@ import { createMux, forwarderScript, link } from './mux.ts'
 import type { NetworkPolicy } from './policy.ts'
 import { createEgressProxy, type EgressProxyOptions } from './proxy.ts'
 import type { RequestTransformation } from './rules.ts'
+import type { Substitution } from './substitution.ts'
 
 /** Where the forwarder listens inside the container; every exec gets it as its HTTP(S) proxy. */
 export const PROXY_PORT = 43128
 /** The gateway's CA certificate in the container. The private key never leaves the host. */
 export const CA_PATH = '/usr/local/share/ca-certificates/evalsuite-egress.crt'
+/** Debian's system bundle, which `update-ca-certificates` rebuilds with the gateway's CA in it. */
+export const CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt'
+const BUNDLED = 'es:ca-bundle'
 
 const READY_TIMEOUT_MS = 15_000
 
@@ -23,6 +27,7 @@ export type Gateway = {
   addTransformations(rules: readonly RequestTransformation[]): void
   setTransformations(rules: readonly RequestTransformation[]): void
   setPolicy(policy: NetworkPolicy): void
+  setSubstitutions(subs: readonly Substitution[]): void
   /** A 127.0.0.1 URL on the host that reaches `port` inside the container through the tunnel. */
   portUrl(port: number, protocol: 'ws' | 'http'): Promise<string>
   /** Why the gateway stopped on its own (the forwarder exited), once it has. */
@@ -38,7 +43,7 @@ const installCa = (containerId: string, cert: string, signal?: AbortSignal) =>
       containerId,
       'sh',
       '-c',
-      `mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 || true; }`,
+      `mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
     ],
     { input: cert, signal },
   )
@@ -57,6 +62,7 @@ export async function startGateway(
   if (installed.exitCode !== 0) {
     throw new Error(`couldn't install the gateway CA: ${installed.stderr.trim()}`)
   }
+  const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
   const proxy = createEgressProxy({ ...options, ca })
   const child = spawn(
     'docker',
@@ -136,10 +142,23 @@ export async function startGateway(
       NO_PROXY: noProxy,
       no_proxy: noProxy,
       NODE_EXTRA_CA_CERTS: CA_PATH,
+      // Node 24+ fetch honours the proxy variables only with this.
+      NODE_USE_ENV_PROXY: '1',
+      // Clients with their own trust store (Python requests, curl builds, git) use the system
+      // bundle, which now has the gateway's CA; set only when it does.
+      ...(bundled
+        ? {
+            SSL_CERT_FILE: CA_BUNDLE,
+            REQUESTS_CA_BUNDLE: CA_BUNDLE,
+            CURL_CA_BUNDLE: CA_BUNDLE,
+            GIT_SSL_CAINFO: CA_BUNDLE,
+          }
+        : {}),
     },
     addTransformations: proxy.addTransformations,
     setTransformations: proxy.setTransformations,
     setPolicy: proxy.setPolicy,
+    setSubstitutions: proxy.setSubstitutions,
     get stopped() {
       return stopped
     },
