@@ -34,7 +34,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-studio-app.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/vendor-sandbox-docker.mjs && node scripts/copy-studio-app.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-timeout=120000 --experimental-strip-types --no-warnings test/*.test.ts"
   },
@@ -43,7 +43,6 @@
     "@ai-sdk/harness": "1.0.123",
     "@ai-sdk/harness-cursor": "1.0.36",
     "@ai-sdk/typesafe-ai": "3.0.6",
-    "@evalsuite/sandbox-docker": "workspace:*",
     "@hono/node-server": "2.1.1",
     "ai": "7.0.113",
     "hono": "4.13.9",
@@ -55,6 +54,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@evalsuite/sandbox-docker": "workspace:*",
     "studio-web": "workspace:*"
   }
 }

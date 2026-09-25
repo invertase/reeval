@@ -14,35 +14,36 @@ const hasTools =
   sh('npm', pkgRoot, ['ping'], 15_000).status === 0
 const hasDocker = sh('docker', pkgRoot, ['info']).status === 0
 
-test('the packed packages install into a clean project and run es', {
+test('the packed package installs into a clean project and runs es', {
   skip: !hasTools && 'needs pnpm, npm and the registry',
   timeout: 300_000,
 }, async () => {
   const dir = tempDir('packed')
-  // evalsuite depends on @evalsuite/sandbox-docker, so both tarballs go in, as from the registry.
-  for (const pkg of ['evalsuite', 'sandbox-docker']) {
-    const packed = sh('pnpm', join(pkgRoot, '..', pkg), ['pack', '--pack-destination', dir])
-    assert.equal(packed.status, 0, packed.stdout + packed.stderr)
-  }
-  const tarballs = readdirSync(dir).filter((f) => f.endsWith('.tgz'))
-  const tarball = tarballs.find((f) => f.startsWith('evalsuite-')) as string
-  const docker = tarballs.find((f) => f.includes('sandbox-docker')) as string
-  assert.ok(tarball && docker, tarballs.join(', '))
+  const packed = sh('pnpm', pkgRoot, ['pack', '--pack-destination', dir])
+  assert.equal(packed.status, 0, packed.stdout + packed.stderr)
+  const tarball = readdirSync(dir).find((f) => f.endsWith('.tgz')) as string
+  assert.ok(tarball, readdirSync(dir).join(', '))
   const listing = sh('tar', dir, ['tzf', tarball]).stdout
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.match(listing, /^package\/dist\/setup\.js$/m)
+  assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
+  assert.match(listing, /^package\/dist\/vendor\/sandbox-docker\/docker\/Dockerfile$/m)
+  assert.match(listing, /^package\/dist\/vendor\/sandbox-docker\/dist\/index\.js$/m)
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
-  const dockerListing = sh('tar', dir, ['tzf', docker]).stdout
-  assert.match(dockerListing, /^package\/docker\/Dockerfile$/m)
-  assert.match(dockerListing, /^package\/dist\/index\.js$/m)
+
+  // sandbox-docker is vendored into dist, so nothing in the manifest points at the workspace.
+  const manifest = JSON.parse(listingPackage(dir, tarball))
+  const pkg = manifest.name as string
+  assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
+  assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@evalsuite/')))
 
   const app = join(dir, 'app')
   await mkdir(join(app, 'evals'), { recursive: true })
   await writeFile(join(app, 'package.json'), '{ "name": "app", "private": true, "type": "module" }')
-  await writeFile(join(app, 'es.config.ts'), fakeConfig())
+  await writeFile(join(app, 'es.config.ts'), fakeConfig().replaceAll("'evalsuite", `'${pkg}`))
   await writeFile(
     join(app, 'evals/hello.es.ts'),
-    `import { evaluate, expect } from 'evalsuite'
+    `import { evaluate, expect } from '${pkg}'
 evaluate('hello', async (t) => {
   await t.send('say hi')
   expect(await t.judge('Did it say hi?')).toPass()
@@ -54,23 +55,23 @@ evaluate('hello', async (t) => {
   const added = sh(
     'npm',
     app,
-    ['install', '--no-audit', '--no-fund', '--prefer-online', `../${tarball}`, `../${docker}`],
+    ['install', '--no-audit', '--no-fund', '--prefer-online', `../${tarball}`],
     240_000,
   )
   assert.equal(added.status, 0, added.stdout + added.stderr)
 
   const es = (...args: string[]) => sh(join(app, 'node_modules/.bin/es'), app, args, 60_000)
-  assert.equal(es('--version').stdout.trim(), JSON.parse(listingPackage(dir, tarball)).version)
+  assert.equal(es('--version').stdout.trim(), manifest.version)
   assert.equal(es('image', 'build', '--help').status, 0)
   const run = es('run')
   assert.equal(run.status, 0, run.stdout + run.stderr)
   assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
   assert.equal(es('show').status, 0)
 
-  // `es image build` builds from the installed package's docker/ directory.
+  // `es image build` builds from the vendored docker/ directory inside the installed package.
   const context = sh(process.execPath, app, [
     '-e',
-    "import('@evalsuite/sandbox-docker').then((m) => console.log(m.DOCKER_CONTEXT))",
+    `import('./node_modules/${pkg}/dist/vendor/sandbox-docker/dist/index.js').then((m) => console.log(m.DOCKER_CONTEXT))`,
   ]).stdout.trim()
   assert.ok(context.startsWith(join(app, 'node_modules')), context)
   assert.ok(existsSync(join(context, 'Dockerfile')))
