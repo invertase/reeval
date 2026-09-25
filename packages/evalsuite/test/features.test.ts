@@ -11,7 +11,7 @@ import { DEFAULT_IMAGE, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
-import { expectRun } from './support/oracle.ts'
+import { type EvalExpectation, expectRun } from './support/oracle.ts'
 
 type Tier = 'fake' | 'docker'
 
@@ -23,11 +23,19 @@ type Feature = {
   env: string
   /** What the canary's failure says: proof it failed on the check, not on setup. */
   canary: RegExp
+  /** The canary's environment, when it needs another one; defaults to `env`. */
+  canaryEnv?: string
+  /** When the check is that the attempt fails, e.g. an infra error; else it must pass. */
+  lands?: Pick<EvalExpectation, 'outcome' | 'error'>
+  /** Host variables for `es run`, e.g. what `secret.fromEnv` reads. */
+  hostEnv?: NodeJS.ProcessEnv
   /** Runs on the copied project before `es run`. */
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
-  record?: (run: RunRecord, dir: string) => void
+  record?: (view: { run: RunRecord; project: string; runDir: string }) => void
 }
+
+const TOKEN = 'es-fixture-token-7c1d9a0b52e4'
 
 const skills = (run: RunRecord) => run.environments.flatMap((e) => e.skills)
 
@@ -43,7 +51,7 @@ const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'greeting',
     canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md', '\.\/docs\/tone\.md' \]/,
-    record: (run) =>
+    record: ({ run }) =>
       assert.deepEqual(
         skills(run).map((s) => [s.name, s.placement, s.source]),
         [['house-greeting', 'workspace', 'local:skills/house-greeting']],
@@ -60,7 +68,7 @@ const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'greeting',
     canary: /to include '\.\/evals\/prompts\.md'/,
-    record: (run) =>
+    record: ({ run }) =>
       assert.deepEqual(skills(run)[0]?.excluded, ['.history/', 'evals/', 'greets.es.ts']),
   },
   {
@@ -68,7 +76,7 @@ const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'greeting',
     canary: /to not include '\.\/evals\/prompts\.md'/,
-    record: (run) => assert.deepEqual(skills(run)[0]?.excluded, ['drafts/', 'notes.tmp']),
+    record: ({ run }) => assert.deepEqual(skills(run)[0]?.excluded, ['drafts/', 'notes.tmp']),
   },
   {
     dir: 'skills/git-ref',
@@ -88,13 +96,82 @@ const features: Feature[] = [
       git(repo, 'tag', 'v1')
       commit('v2')
     },
-    record: (run, dir) => {
+    record: ({ run, project }) => {
       const [s] = skills(run)
-      assert.equal(s?.commit, git(join(dir, 'repo'), 'rev-parse', 'v1'))
+      assert.equal(s?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
       assert.match(s?.source ?? '', /#v1:skills$/)
     },
   },
+  {
+    dir: 'skills/harness-placement',
+    tiers: ['fake', 'docker'],
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
+    dir: 'secrets/checks-hidden-from-agent',
+    tiers: ['fake', 'docker'],
+    env: 'tokens',
+    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'unset\\n' to be '\[REDACTED\]\\n'/,
+    record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
+  },
+  {
+    dir: 'secrets/checks-visible-to-checks',
+    tiers: ['fake', 'docker'],
+    env: 'tokens',
+    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
+    canary: /expected '\[REDACTED\]' to be ''/,
+    record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
+  },
+  {
+    dir: 'env/files-home',
+    tiers: ['fake', 'docker'],
+    env: 'home-files',
+    canary: /expected null to be 'from home'/,
+  },
+  {
+    dir: 'env/rules',
+    tiers: ['fake', 'docker'],
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+  },
+  {
+    dir: 'env/setup-order',
+    tiers: ['fake', 'docker'],
+    env: 'ordered',
+    canary: /expected 'one\\ntwo\\n' to be 'two\\none\\n'/,
+  },
+  {
+    dir: 'env/setup-timeout',
+    tiers: ['fake', 'docker'],
+    env: 'slow',
+    canaryEnv: 'quick',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^setup step 1\/1 "sleep 30 && touch slept" in environment slow timed out after 1s \(see setup\.log\)$/,
+      },
+    },
+    canary: /expected '' to be null/,
+  },
 ]
+
+/** Paths under `dir` whose content includes `needle`, one per line; '' when none do. */
+function filesContaining(dir: string, needle: string): string {
+  try {
+    return execFileSync('grep', ['-rlF', needle, dir], { encoding: 'utf8' }).trim()
+  } catch {
+    return ''
+  }
+}
 
 const dockerReady = (() => {
   try {
@@ -141,23 +218,23 @@ describe('feature fixtures', { concurrency: 4 }, () => {
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
         const r = await runCli(p.dir, ['run'], {
-          env: { ES_FIXTURE_SANDBOX: tier },
+          env: { ...f.hostEnv, ES_FIXTURE_SANDBOX: tier },
           timeoutMs: timeout - 10_000,
         })
         const sandbox = tier === 'docker' ? 'docker' : 'fake'
-        const { run } = readRun(p.dir)
+        const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,
           evals: {
-            lands: { outcome: 'pass', attempts: [`fake/${f.env}/${sandbox}#1`] },
+            lands: { outcome: 'pass', ...f.lands, attempts: [`fake/${f.env}/${sandbox}#1`] },
             canary: {
               outcome: 'fail',
-              attempts: [`fake/${f.env}/${sandbox}#1`],
+              attempts: [`fake/${f.canaryEnv ?? f.env}/${sandbox}#1`],
               error: { kind: 'assertion', message: f.canary },
             },
           },
         })
-        f.record?.(run, p.dir)
+        f.record?.({ run, project: p.dir, runDir })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
         if (tier === 'docker') await containersGone(run.runId)
       })

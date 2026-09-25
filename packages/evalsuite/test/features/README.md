@@ -39,6 +39,27 @@ outside. Every user-facing feature or option lands with its fixtures in the same
     of the run record.
 - The table test fails if a directory here is missing from the table, or lacks either eval.
 
+## Checks without an agent, and checks as the agent
+
+- **Checks on what the environment set up** (files, rules, skills, setup steps) don't need a
+  turn: `const box = await t.sandbox()` starts the sandbox, and then `box.exec` and
+  `box.readFile` work (so do `t.exec` and `t.readFile`).
+- **What the agent itself sees** differs from what `t.exec` sees: checks get `to: 'checks'`
+  secrets, and the agent doesn't. Script the fake agent in `es.config.ts` with real sandbox
+  actions, then assert on its transcript:
+
+  ```ts
+  harness: fakeHarness({ script: [[{ exec: 'printenv CHECK_TOKEN || echo unset' }]] })
+  // in the eval: the shell call's stdout
+  turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : []))
+  ```
+
+  There's one step list per `t.send`, and the last list repeats. The steps are `{ exec }`,
+  `{ write: { path: content } }` and `{ reply }`.
+- The fake agent writes **harness-placed skills** to `~/.agents/skills/<name>/`, where the Cursor
+  adapter puts them. Whether Cursor itself reads them from there is a question for the Docker
+  and real-agent tiers.
+
 ## Running
 
 ```bash
