@@ -90,9 +90,13 @@ function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   if (e.state === 'skipped') return { outcome: 'skipped', error: null }
   if (e.state === 'passed') return { outcome: 'pass', error: null }
   const message = e.errors[0] ?? 'Eval failed'
-  const error = isTimeout(message)
-    ? { kind: 'timeout' as const, message: record?.error?.message ?? message }
-    : (record?.error ?? { kind: 'assertion' as const, message })
+  // The worker's own classification wins: "timed out" in an infra error, such as a setup step's
+  // own timeout, isn't the eval's timeout. Without a record, Vitest's message is all there is.
+  const error =
+    record?.error ??
+    (isTimeout(message)
+      ? { kind: 'timeout' as const, message }
+      : { kind: 'assertion' as const, message })
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }
 }
 
