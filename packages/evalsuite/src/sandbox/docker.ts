@@ -35,9 +35,11 @@ export async function createDockerSandbox(
       log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
     },
   })
+  // The key never enters the container: with no gateway to broker it, the attempt can't start.
   if (network.egress?.active === false) {
-    console.warn(
-      `warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it (credential brokering could not start: ${network.egress.reason})`,
+    await Promise.resolve(network.destroy()).catch(() => {})
+    throw new InfraError(
+      `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
     )
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)

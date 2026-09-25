@@ -541,8 +541,10 @@ over `docker exec` to ES, which decrypts only `api2.cursor.sh` (with a CA made f
 whose key stays in memory) and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key
 on the key-exchange request. Other hosts pass through untouched and end to end. The short-lived
 session token the Cursor CLI gets back does live in the container. If the gateway can't start
-(for example, an `image` without `node`), that attempt forwards the key as before and prints a
-warning saying why. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
+(for example, an `image` without `node`), the attempt is an infra error that says why, so a
+change of image can't widen the credential boundary: there's no way to pass the real key in.
+`docker({ from })` or `docker({ dockerfile })` give any Debian or Ubuntu image what the gateway
+needs. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
 
 ## Judges
 

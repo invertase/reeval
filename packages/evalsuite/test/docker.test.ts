@@ -321,7 +321,7 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
     assert.equal(liveContainers(run.runId), '')
   })
 
-  test('Cursor attempts broker the key; the warning only appears when brokering cannot start', async () => {
+  test('Cursor attempts broker the key; without brokering the attempt fails closed', async () => {
     const cursorConfig = (sandbox: string) => `
 import { defineConfig } from 'evalsuite'
 import { cursor } from 'evalsuite/harness'
@@ -347,14 +347,32 @@ evaluate('hi', async (t) => { await t.send('hi') })
     } catch {
       return
     }
-    // No node in the image, so the gateway can't start; nor can the harness, but the warning
-    // comes first.
-    const fallback = await project('docker-no-broker', {
+    // No node in the image, so the gateway can't start: by default that's an infra error, and
+    // the key never enters the container.
+    const refused = await project('docker-no-broker', {
       'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37' })"),
       'evals/d.es.ts': eval_,
     })
-    const b = await runCli(fallback.dir, ['run'], { env })
-    assert.match(b.stdout + b.stderr, warning)
-    assert.match(b.stdout + b.stderr, /credential brokering could not start: the forwarder exited/)
+    const b = await runCli(refused.dir, ['run'], { env })
+    assert.equal(b.code, 3, b.stdout + b.stderr)
+    assert.doesNotMatch(b.stdout + b.stderr, warning)
+    const refusedRun = readRun(refused.dir)
+    assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
+    assert.match(
+      refusedRun.evals[0]?.error?.message ?? '',
+      /^Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and ES adds it\.$/,
+    )
+    assert.equal(liveContainers(refusedRun.run.runId), '')
+
+    // There's no opt-in to pass the real key: the option doesn't exist.
+    const optIn = await project('docker-no-opt-in', {
+      'es.config.ts': cursorConfig(
+        "docker({ image: 'busybox:1.37', credentials: 'allow-real-key' } as never)",
+      ),
+      'evals/d.es.ts': eval_,
+    })
+    const c = await runCli(optIn.dir, ['run'], { env })
+    assert.equal(c.code, 2, c.stdout + c.stderr)
+    assert.match(c.stderr, /Unknown docker\(\) option "credentials"\./)
   })
 })
