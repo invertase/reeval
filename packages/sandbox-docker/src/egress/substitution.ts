@@ -68,6 +68,30 @@ export function substituteRequest(
   return { headers, path, names: [...names] }
 }
 
+/**
+ * Where a request to the secrets' host still carries a placeholder the gateway leaves in place,
+ * because the secret doesn't substitute there: the query without `in: ['query']`, or a header
+ * with only `in: ['query']` or `['body']`. Such a request fails upstream; this names why.
+ */
+export function unsubstituted(
+  subs: readonly Substitution[],
+  request: { host: string; path: string; headers: Headers },
+): Array<{ name: string; where: SubstituteIn; in: readonly SubstituteIn[] }> {
+  const out: Array<{ name: string; where: SubstituteIn; in: readonly SubstituteIn[] }> = []
+  const q = request.path.indexOf('?')
+  const query = q === -1 ? '' : request.path.slice(q)
+  const headers = Object.values(request.headers).flat().filter(Boolean).join('\n')
+  for (const s of substitutionsFor(subs, request.host)) {
+    if (!s.in.includes('query') && query.includes(s.placeholder)) {
+      out.push({ name: s.name, where: 'query', in: s.in })
+    }
+    if (!s.in.includes('header') && headers.includes(s.placeholder)) {
+      out.push({ name: s.name, where: 'header', in: s.in })
+    }
+  }
+  return out
+}
+
 /** Response headers with every real value on the host put back as its placeholder. */
 export function scrubHeaders(subs: readonly Substitution[], headers: Headers): Headers {
   if (subs.length === 0) return headers

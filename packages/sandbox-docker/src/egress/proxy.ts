@@ -18,9 +18,11 @@ import {
   type Substitution,
   scrubber,
   scrubHeaders,
+  type SubstituteIn,
   substituteRequest,
   substitutes,
   substitutionsFor,
+  unsubstituted,
 } from './substitution.ts'
 
 export type EgressProxyOptions = {
@@ -40,6 +42,17 @@ export type EgressProxyOptions = {
   endpoints?: readonly EndpointMatch[]
   /** Called for each request refused under `endpoints`, e.g. to warn outside `ES_DEBUG`. */
   onRefused?: (request: { method: string; url: string }) => void
+  /**
+   * Called when a request to a brokered secret's host carries its placeholder somewhere the
+   * secret doesn't substitute (see `unsubstituted`), so it goes upstream as the placeholder.
+   */
+  onUnsubstituted?: (event: {
+    name: string
+    where: SubstituteIn
+    in: readonly SubstituteIn[]
+    method: string
+    url: string
+  }) => void
 }
 
 export type EgressProxy = {
@@ -254,16 +267,16 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       }
     }
     const own = substitutionsFor(subs, target.host)
-    const substituted = substituteRequest(own, {
-      host: target.host,
-      path,
-      headers: out as IncomingHttpHeaders,
-    })
+    const request = { host: target.host, path, headers: out as IncomingHttpHeaders }
+    const substituted = substituteRequest(own, request)
+    const kept = unsubstituted(own, request)
+    for (const k of kept) options.onUnsubstituted?.({ ...k, method, url })
     // Uncompressed responses, so the scrubber can see what comes back.
     if (own.length) delete substituted.headers['accept-encoding']
     const notes = [
       replaced.length ? `set ${replaced.join(', ')}` : '',
       substituted.names.length ? `substituted ${substituted.names.join(', ')}` : '',
+      ...kept.map((k) => `kept ${k.name}'s placeholder in the ${k.where}`),
     ].filter(Boolean)
     log(`es:egress ${method} ${url} HTTP/${version}${notes.length ? ` (${notes.join('; ')})` : ''}`)
     return { headers: substituted.headers as OutgoingHttpHeaders, path: substituted.path, own }

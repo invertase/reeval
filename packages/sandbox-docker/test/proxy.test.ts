@@ -98,7 +98,7 @@ const rule = (port: number): RequestTransformation => ({
 /** The gateway's proxy on a local TCP port, as the in-container forwarder would reach it. */
 async function startProxy(
   policy: NetworkPolicy = { mode: 'allow-all' },
-  extra: Pick<EgressProxyOptions, 'endpoints' | 'onRefused'> = {},
+  extra: Pick<EgressProxyOptions, 'endpoints' | 'onRefused' | 'onUnsubstituted'> = {},
 ) {
   const ca = createCertificateAuthority()
   const lines: string[] = []
@@ -687,6 +687,38 @@ describe('brokered secrets through the proxy', () => {
       assert.equal(seen[0]?.headers['content-length'], undefined, 're-framed, not a stale length')
       assert.match(reachedUpstream(), new RegExp(SECRET))
       assert.doesNotMatch(r.body, new RegExp(SECRET), 'the echo of the body is scrubbed')
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a placeholder left where its secret is not substituted is reported, by name', async () => {
+    const reported: unknown[] = []
+    const gw = await startProxy(undefined, { onUnsubstituted: (e) => reported.push(e) })
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      await viaProxy(gw, HOST, h1.port, {
+        path: `/echo?key=${HOLDER}`,
+        headers: { authorization: HOLDER },
+      })
+      assert.deepEqual(reported, [
+        {
+          name: 'GEMINI_API_KEY',
+          where: 'query',
+          in: ['header'],
+          method: 'GET',
+          url: `https://${HOST}/echo`,
+        },
+      ])
+      assert.ok(
+        gw.lines.some((l) => l.includes("kept GEMINI_API_KEY's placeholder in the query")),
+        gw.lines.join('\n'),
+      )
+      // Twin: with the query opted in, the same request has nothing to report.
+      reported.length = 0
+      gw.proxy.setSubstitutions([sub({ in: ['header', 'query'] })])
+      await viaProxy(gw, HOST, h1.port, { path: `/echo?key=${HOLDER}` })
+      assert.deepEqual(reported, [])
     } finally {
       gw.close()
     }

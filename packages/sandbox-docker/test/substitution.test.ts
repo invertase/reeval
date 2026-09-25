@@ -8,6 +8,7 @@ import {
   scrubHeaders,
   substituteRequest,
   substitutes,
+  unsubstituted,
 } from '../src/egress/substitution.ts'
 
 const SECRET = 'real-value-0123456789'
@@ -112,5 +113,33 @@ describe('substituteRequest and scrubHeaders', () => {
       scrubHeaders([sub()], { 'x-echo': `key=${SECRET};`, 'set-cookie': [`s=${SECRET}`], n: '1' }),
       { 'x-echo': `key=${HOLDER};`, 'set-cookie': [`s=${HOLDER}`], n: '1' },
     )
+  })
+})
+
+describe('unsubstituted', () => {
+  const request = (path: string, headers: Record<string, string> = {}) => ({
+    host: 'api.example.com',
+    path,
+    headers,
+  })
+
+  test('names a placeholder left in a place its secret does not substitute', () => {
+    assert.deepEqual(unsubstituted([sub()], request(`/v1?key=${HOLDER}`)), [
+      { name: 'KEY', where: 'query', in: ['header'] },
+    ])
+    assert.deepEqual(
+      unsubstituted([sub({ in: ['query'] })], request('/v1', { authorization: HOLDER })),
+      [{ name: 'KEY', where: 'header', in: ['query'] }],
+    )
+  })
+
+  test('twin: nothing is named where the secret substitutes, or on another host', () => {
+    assert.deepEqual(unsubstituted([sub()], request('/v1', { authorization: HOLDER })), [])
+    assert.deepEqual(
+      unsubstituted([sub({ in: ['header', 'query'] })], request(`/?k=${HOLDER}`)),
+      [],
+    )
+    const elsewhere = { ...request(`/v1?key=${HOLDER}`), host: 'other.example.com' }
+    assert.deepEqual(unsubstituted([sub()], elsewhere), [])
   })
 })
