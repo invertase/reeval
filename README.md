@@ -27,24 +27,28 @@ group('greet module', () => {
 
 ```ts
 // es.config.ts
-import { defineConfig, secret } from 'evalsuite'
+import { defineConfig } from 'evalsuite'
 import { cursor } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],
-  harness: [cursor({ model: 'composer-2.5' })], // one harness or a list: each is a matrix cell
+  harness: cursor({ model: 'composer-2.5' }), // one harness or a list: each is its own cell
   sandbox: docker(),
-  runs: 1,                                      // attempts per cell
-  env: { GOOGLE_GENAI_API_KEY: secret('GOOGLE_GENERATIVE_AI_API_KEY') }, // into the sandbox, redacted
-  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 },            // optional; pin the version
+  judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // optional; pin the version
   timeout: '15m',
+  profiles: {
+    pr: { limit: { runs: 1, compare: false }, budget: { attempts: 20 } },
+    nightly: { defaults: { runs: 3 }, record: 'always' },
+  },
+  defaultProfile: { ci: 'pr' },
 })
 ```
 
 ```text
 $ CI=1 es run greet
-es 0.1.0 · 3 eval files · harness cursor/composer-2.5 · sandbox docker · grouped logs
+plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~40s serial (~20s at concurrency 4) · budget 20 attempts ✓
+es 0.1.0 · 3 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 [creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
 [creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  17s
 [creates#1 cursor]  +0:00 sandbox ready 1s
@@ -79,7 +83,7 @@ Duration  40s
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `evalsuite` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). A dependency of `evalsuite` that imports nothing from it |
-| `examples/hello` | The example evals (including a with/without-skill pair and a Python sandbox), with a real config and a fake one |
+| `examples/hello` | The example evals (including a skill `compare` and a Python sandbox), with a real config (with `pr` and `nightly` profiles) and a fake one |
 
 ## Getting started
 
@@ -97,7 +101,8 @@ fake judge with a fixed score:
 
 ```bash
 cd examples/hello
-pnpm es run --config es.fake.config.ts
+pnpm es run --config es.fake.config.ts                       # includes the skill compare and its lift
+pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan, without running
 ```
 
 ### Run a real agent
@@ -121,18 +126,23 @@ pnpm es run --config es.fake.config.ts
 3. Run the evals:
 
    ```bash
-   pnpm es run            # or: pnpm es run greet   (filter by path, eval name or cell)
-   pnpm es run skill --runs 2   # the with/without-skill comparison, twice per cell
+   pnpm es run --dry-run        # the plan: evals, cells, attempts and a time estimate
+   pnpm es run                  # or: pnpm es run greet   (filter by path, eval name or cell)
+   pnpm es run skill --runs 2   # the skill compare: control and variant, twice each, with lift
+   pnpm es run --profile pr     # sized like a PR run: one run per cell, no variants
    ```
 
-The Cursor key is passed into the sandbox container, where the agent can read it. ES masks
-secret-looking environment values in everything it writes to `.es/`.
+The Cursor key stays on the host (see [Secrets](#secrets)). ES masks secret-looking values in
+everything it writes to `.es/`.
 
 ## CLI
 
 ```text
 es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
-  --runs <n>              Attempts per cell, overriding the config, groups and evals
+  --profile <name>        Size the run with a profile (also ES_PROFILE; default: defaultProfile)
+  --dry-run               Print the plan and exit 0 without running anything
+  --force                 Run even when the plan is over budget.attempts
+  --runs <n>              Attempts per cell, overriding the config, profile, groups and evals
   --concurrency <n>       Attempts running at once, across evals and cells (see Concurrency)
   --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
   --record                Also record the run into the history folder (see config.record)
@@ -161,9 +171,9 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 
 | Exit code | Meaning |
 |---|---|
-| 0 | All attempts passed |
-| 1 | At least one attempt failed |
-| 2 | Config, credential or usage error, including no evals matched a filter or tag, an unknown option, `.only` in CI, Docker not running and a refused record |
+| 0 | Every gated cell passed (a control's failures aren't gated by default); also `--dry-run` |
+| 1 | A gated attempt failed, a variant fell below its `minLift`, or `budget.duration` stopped the run |
+| 2 | Config, credential or usage error, including no evals matched a filter or tag, an unknown option or profile, a plan over `budget.attempts`, `.only` in CI, Docker not running and a refused record |
 | 3 | An infrastructure error (sandbox or harness) and no failures |
 | 130 | Interrupted with Ctrl-C. Sandboxes are destroyed and the run is still recorded, as `interrupted` |
 
@@ -178,9 +188,15 @@ a run id or a unique prefix of one, or a git SHA prefix (the newest run at that 
 | `plain` | In CI (`CI`, `BUILD_NUMBER`, `GITHUB_ACTIONS`… as Turborepo detects it) or when stdout isn't a terminal | Append-only lines, never rewritten |
 | `live` | On a terminal | For now the same as `plain`; the redrawn live view comes later |
 
+Every run starts with a **plan line**: the profile and why it was chosen, how many evals, cells
+and attempts it will start, a time estimate (the median of each eval's recent attempts on that
+harness, else 3 minutes each), and the budget. `--dry-run` adds a row per eval (harnesses,
+variants, runs, attempts, and what the profile changed) and stops there.
+
 Plain output prefixes every line about an attempt with a short, stable tag. `[greet#1 cursor]`
-is the eval's tag, its run number within the cell, and the cell's axes that vary (`with-skill`,
-`cursor:composer-2`), or the harness when nothing varies. The tag is the first distinctive words
+is the eval's tag, its run number within the cell, and what tells the eval's cells apart (the
+harness when there are several, and `control` or the variant's name with `compare`), or the
+harness kind when nothing varies. The tag is the first distinctive words
 of the eval's name (words most evals in the file share don't count), so `grep '\[greet#1'` finds
 one attempt's lines even when several run at once. Prefixes are coloured when colour is on.
 
@@ -203,7 +219,7 @@ one attempt's lines even when several run at once. Prefixes are coloured when co
 
 Plain output ends with a summary: the evals as a file › group tree with outcome, duration,
 lowest judge score and turns (or, for evals with several attempts, the pass count and rate and
-a row per cell with its pass rate and lift over `baseline`); then the failing attempts grouped
+a row per cell with its pass rate, its role, and each variant's lift over its control); then the failing attempts grouped
 by kind (judge verdicts, assertions with Vitest's diff and code frame, timeouts, the tail of
 infra errors, cancelled), each with its artifact directory; then totals and the results path.
 Cost appears when the harness reports it (Cursor doesn't).
@@ -216,12 +232,14 @@ Cost appears when the harness reports it (Cursor doesn't).
 | `ES_OUTPUT_LOGS` | `--output-logs` |
 | `ES_HEARTBEAT` | Heartbeat interval, e.g. `30s`; `0` is off |
 | `ES_CONCURRENCY` | `--concurrency` |
+| `ES_PROFILE` | `--profile` |
 | `NO_COLOR`, `FORCE_COLOR` | Turn colour off or on |
 
 If your agent isn't detected, set `ES_UI=agent` (or `AI_AGENT=<name>`).
 
 ```text
 $ ES_UI=agent es run
+plan  2 evals · 2 cells · 2 attempts · ~2s serial (~1s at concurrency 4)
 es run: 1 eval file
 FAIL evals/mix.es.ts › mix › judge says no (497ms, judge)
   judge  fail 0.30 (≥ 0.8)  ok?
@@ -252,8 +270,8 @@ export default defineConfig({
 })
 ```
 
-- **Order.** The other cells of a run that has started go first, so a baseline and its
-  with-skill cell run side by side. Then the eval with the fewest runs started, so every eval
+- **Order.** The other cells of a run that has started go first, so a control and its
+  variants run side by side. Then the eval with the fewest runs started, so every eval
   gets a first result early.
 - **Timeouts** start when an attempt starts, not while it waits for a slot, and durations
   leave out the wait.
@@ -270,7 +288,7 @@ export default defineConfig({
 
 | Import | Exports |
 |---|---|
-| `evalsuite` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment`, `baseline`, `secret` and the types |
+| `evalsuite` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment` and the types |
 | `evalsuite/harness` | `cursor()`, `fakeHarness()` |
 | `evalsuite/sandbox` | `docker()`, `fakeSandbox()` |
 | `evalsuite/judge` | `fakeJudge()` and the judge types |
@@ -295,84 +313,155 @@ export default defineConfig({
   `await expect(t.exec(cmd)).toSucceed()` and `expect(verdict).toPass()`. All the usual
   `expect` matchers work too.
 
-### Options, matrices and repeats
+### Options, cells and runs
 
-`defineConfig`, `group` and `evaluate` take the same options, which cascade config → outer
-group → inner group → eval:
+`defineConfig`, `group` and `evaluate` take the same options, which cascade config → profile
+defaults → outer group → inner group → eval:
 
 | Option | Cascade | Meaning |
 |---|---|---|
-| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2' })]` |
-| `sandbox` | replace | Where it runs: `docker()`, `docker({ from: 'python:3.12-slim' })`, … |
-| `environment` | replace | What's in the sandbox: `baseline` (default) or `defineEnvironment(…)`, or a list |
+| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2' })]`. The only list: each harness is its own cell |
+| `environment` | replace | What the eval runs in: one `defineEnvironment(…)`. None by default |
+| `compare` | replace | Variants to run next to the environment (groups and evals only); `false` opts out |
+| `sandbox` | replace | Where it runs: one `docker()`, `docker({ from: 'python:3.12-slim' })`, … |
 | `runs` | replace | Attempts per cell (default 1); `es run --runs n` overrides every level |
-| `env` | merge by name | Variables for the sandbox; `secret(from?)` passes a host variable, redacted |
+| `env` | merge by name | Variables for the sandbox; strings, or `secret.fromEnv(…)` from a callback |
 | `judge` | merge by field | `{ model, threshold, providerOptions }`; no default model |
-| `timeout` | replace | Per attempt, e.g. `'10m'`; image builds don't count |
+| `timeout` | replace | Per attempt, e.g. `'10m'`; image builds and setup steps don't count |
 | `tags` | union | Filter with `es run --tag slow` or `--tag '!slow'` |
+| `pin` | union | `['harness' \| 'runs' \| 'compare']`: keys a profile's `limit` may not narrow |
 
-`harness`, `sandbox` and `environment` are matrix axes. A list replaces the inherited one, and
-a function edits it: `{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }`.
-Each eval runs once per **cell** (harness × environment × sandbox) and `runs` times per cell;
-each run is an **attempt** with its own fresh sandbox, id `<harness>/<environment>/<sandbox>#<n>`
-(e.g. `cursor:composer-2.5/with-house-greeting/docker#2`). Give two values of one axis distinct
-ids with `id`: `cursor({ model: 'composer-2', id: 'fast' })`. Each attempt's lines are prefixed
-with the eval's tag, its run number and the axes that vary (`[greets#1 with-house-greeting]`),
-and the summary lists each cell's pass rate, with the lift over `baseline` when the environment
-axis includes it (a real `CI=1 es run skill`, trimmed):
-
-```text
-[greets#1 baseline] ✗ evals/skill.es.ts › house greeting › greets in the house style  49s
-[greets#1 baseline]  +0:01 turn 1 done 47s · 29 tool calls, 2 file edits
-[greets#1 baseline]  +0:48 $ node -e "import('./greet.js').then((m) => {…  exit 1 79ms
-…
-[greets#1 with-house-greeting] ✓ evals/skill.es.ts › house greeting › greets in the house style  17s
-…
-
-Summary
- evals/skill.es.ts
-   house greeting
-     ✗ greets in the house style      1/2   50%  2 attempts
-         cursor:composer-2.5/baseline/docker               0/1    0%
-         cursor:composer-2.5/with-house-greeting/docker    1/1  100%   lift +100 pts
-…
-Attempts  1 passed · 1 failed (2 attempts, 1 evals)
-```
-
-A cell fails if any of its attempts fails, and so does the run's exit code.
+A harness list replaces the inherited one, and a function edits it:
+`{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }`. Each eval runs
+once per **cell** and `runs` times per cell; each run is an **attempt** with its own fresh
+sandbox, id `<harness>/<environment or ->/<sandbox>#<n>` (e.g.
+`cursor:composer-2.5/with-house-greeting/docker#2`). Give two harnesses distinct ids with `id`:
+`cursor({ model: 'composer-2', id: 'fast' })`. A cell fails if any of its attempts fails.
 
 ### Environments
 
-The sandbox is *where* the agent runs; an environment is *what's in it* — the treatment you
-compare with and without:
+The sandbox is *where* the agent runs; an environment is *what it runs in*: skills, MCP
+servers, files, rules, variables, secrets and setup steps. It's declarative: pass a spec, or a
+callback that destructures the typed helpers it needs (`secret`, `skill`, `mcp`, `file`):
 
 ```ts
-import { baseline, defineEnvironment, evaluate } from 'evalsuite'
+import { defineEnvironment } from 'evalsuite'
 
-export const withHouseGreeting = defineEnvironment('with-house-greeting', (env) => {
-  env.skill('./skills/house-greeting')              // a SKILL.md dir, a dir of them, or a git URL:
-  // env.skill('https://github.com/org/skills', { ref: 'v1', path: 'skills', skills: ['x'] })
-  env.mcp('docs', 'npx -y @acme/docs-mcp')          // or { command, args, env } / { url, headers }
-  env.rules('./rules/house.md')                     // AGENTS.md in the workspace (markdown or a .md path)
-  env.file('docs/api.md', { from: './docs/api.md' }) // workspace file, or ~/… for the home directory
-  env.exec('npm i -g firebase-tools')               // baked into a cached image layer (no secrets)
-  env.secret('FIREBASE_TOKEN')                      // this treatment only
-  env.exec('firebase use demo --token "$FIREBASE_TOKEN"', { cache: false }) // every attempt, with secrets
-  env.var('NODE_ENV', 'test')
-  env.use(otherEnvironment)                         // compose
-})
+export const genkitBase = defineEnvironment('genkit-base', ({ secret }) => ({
+  env: { GOOGLE_GENAI_API_KEY: secret.fromEnv('GOOGLE_GENERATIVE_AI_API_KEY') },
+}))
 
-evaluate('greets in the house style', { environment: [baseline, withHouseGreeting] }, async (t) => { … })
+export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill }) => ({
+  skills: [skill.local('../skills/genkit')],              // relative to this file
+  // skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills', only: ['genkit'] })
+  // skill.registry('owner/repo@skill', { version: 'v1' }), skill.npm('pkg@1.2.3'), skill.inline({ … })
+  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url)
+  rules: file('../rules/house.md'),                       // AGENTS.md in the workspace
+  files: { 'docs/api.md': file('../docs/api.md'), '~/.npmrc': 'fund=false\n' },
+  image: ['npm i -g firebase-tools@14'],                  // baked into a cached layer, no secrets
+  setup: [{ run: 'npm ci', timeout: '5m' }],            // every attempt, before the agent starts
+}))
 ```
 
-- Skills go to the harness adapter, which writes them where its agent reads them (for Cursor,
-  the agent's `.agents/skills`). MCP servers are passed to the agent session the same way.
-- Files, rules and per-attempt steps are applied before the workspace snapshot, so they never
-  show in the agent's diff. Paths are relative to the project root.
-- Cached `exec` steps become an `evalsuite-env:<hash>` image layer built on first use. A cached
-  step that references a declared secret is refused.
+- **Phases, always in this order:** `image` steps are baked into an `evalsuite-env:<hash>` layer
+  on first use (no secrets; the log is in `.es/cache/images/`). Each attempt then sets `env`,
+  writes `files` and `rules`, runs `setup` steps in order (with secrets, outside the eval
+  timeout, output in the attempt's `setup.log`), snapshots the workspace, and starts the agent
+  with its `skills` and `mcp`. Files, rules and setup never show in the agent's diff.
+- **`extend` is the only composition:** the child's spec layers on the parent's. Wherever it sets
+  a key the parent has (an env var, a file path, a skill or MCP server name, `rules`), the child
+  wins, and the key is listed in the environment's `overrides` in the record. `image` and `setup`
+  steps concatenate, parent first.
+- **Skills** go to the harness adapter, which writes them where its agent reads them;
+  `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
+  for Cursor). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
+  commit is recorded either way.
+- The callback runs once, synchronously, when the file loads; a returned Promise is an error.
+  Group and eval options stay plain objects (a function there is an error, since it would be
+  ambiguous with the body).
 - The record fingerprints every environment (skill hashes and git commits, MCP server names,
   files, variable and secret *names*), and each cell's fingerprint includes it.
+
+### Compare
+
+`compare` answers "does this environment help?": each variant runs next to the inherited
+environment (the **control**), with the same prompt and checks, on every harness:
+
+```ts
+group('genkit flows', { environment: genkitBase, compare: [genkitSkill], runs: 3 }, () => {
+  evaluate('builds a runnable recipe flow', async (t) => { … })
+})
+```
+
+- A variant cell runs `control.extend(variant)`: the variant wins on shared keys, and the
+  overrides are listed under the cell in the summary and in the record.
+- **Gating:** by default (`gate: 'variants'`) only variant cells decide pass/fail. The control is
+  expected to be worse, so its failures print as `(not gated)` and don't fail the run.
+  `gate: 'all'` gates the control too; `gate: 'none'` only reports.
+- **Lift** is the variant's pass rate minus the control's, on the same harness, stored in the
+  variant cell as `lift: { vs, points, controlPassRate, variantPassRate, n }`. `minLift`
+  (points from -1 to 1) fails a variant cell below it: `compare: { variants: [b], minLift: 0 }`
+  means "no worse than the control". `compare.harness` limits the variants to some harnesses.
+- There's no built-in `baseline`: with no environment, the control is empty. `compare` can't be
+  set in `es.config.ts` (it would multiply every eval), and a variant is an environment, never
+  an object with its own checks (write a separate eval).
+
+A real `es run skill --runs 2` (`examples/hello/evals/skill.es.ts`, trimmed):
+
+```text
+plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 4)
+[greets#2 with-house-greeting] ✓ evals/skill.es.ts › house greeting › greets in the house style  16s
+[greets#1 with-house-greeting] ✓ evals/skill.es.ts › house greeting › greets in the house style  17s
+[greets#1 control] ✗ evals/skill.es.ts › house greeting › greets in the house style  27s  (not gated)
+…
+Summary
+ evals/skill.es.ts
+   house greeting
+     ✓ greets in the house style      2/4   50%  4 attempts
+         cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts
+…
+Attempts  2 passed · 2 failed, not gated (4 attempts, 1 evals)
+```
+
+### Profiles, the plan and budgets
+
+Profiles size a run without touching the eval files. `defaults` fill in what evals don't set
+(they sit *under* groups and evals); `limit` sits *over* every eval and can only narrow:
+
+```ts
+profiles: {
+  pr: {
+    limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] }, // ids only
+    budget: { attempts: 20 },
+  },
+  nightly: { defaults: { runs: 3, harness: [composer, gpt] }, record: 'always', budget: { duration: '2h' } },
+},
+defaultProfile: { ci: 'pr' },
+```
+
+- **Selection:** `--profile`, then `ES_PROFILE`, then `defaultProfile.ci` when `CI` is set (or
+  `defaultProfile.local`), then none. The plan line says which and why, and the record keeps it.
+- **`limit`:** `runs` becomes at most the limit; `harness` keeps only the listed ids (an eval
+  left with none is skipped, and the plan says why); `compare: false` runs the control only, and
+  `{ maxVariants: n }` keeps the first n. `pin: ['compare']` on a group or eval skips the limit
+  for that key; `--runs` beats everything, pins included.
+- **A profile** can also set `judge` (a default), `record`, `tags` (filters like `--tag`) and
+  `budget`, which wins over the config's field by field.
+- **`budget.attempts`** is checked against the plan before anything starts: over it, `es run`
+  exits 2 and says what to narrow (`--force` runs it anyway). **`budget.duration`** counts from
+  the first attempt: once it's reached, running attempts finish, queued ones are skipped, and
+  the run is recorded with `status: 'budget'` (exit 1). There's no cost budget: Cursor reports
+  no usage, so `budget.usd` is an error.
+
+```text
+$ CI=1 es run --dry-run          # examples/hello, real config
+plan  profile pr (auto: CI is set) · 15 evals · 16 cells · 16 attempts · ~6m 05s serial (~1m 31s at concurrency 4) · budget 20 attempts ✓
+eval                                                              harnesses  variants  runs  attempts  notes
+evals/brokering.es.ts › the agent authenticates without seeing…   1          —         1     1
+…
+evals/skill.es.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
+```
 
 ### Sandboxes
 
@@ -380,16 +469,19 @@ evaluate('greets in the house style', { environment: [baseline, withHouseGreetin
 `docker({ image })` uses another image that already has the harness baked in.
 `docker({ from: 'python:3.12-slim' })` bakes Node, git and the Cursor CLI onto a Debian or
 Ubuntu based toolchain image on first use and caches it, so evals can use Python, Go, Dart and
-so on (`examples/hello/evals/python.es.ts`).
+so on (`examples/hello/evals/python.es.ts`). An eval has one sandbox: comparing toolchains needs
+different checks, so that's a separate eval.
 
 ### Secrets
 
-`env: { NAME: secret() }` passes the host's `NAME` into the sandbox (`secret('OTHER')` reads
-`OTHER`), for the agent, its commands, MCP servers and `t.exec`. Values travel through the
-docker CLI's environment, never its arguments, are masked in everything ES writes, and only
-their names are recorded. A literal string under a secret-looking name (`*_KEY`, `*_TOKEN`, …)
-is refused, and a missing config-level secret stops the run before it starts. Anything you pass
-in is readable by the agent.
+Secrets come from the `secret` helper of a `defineEnvironment` or `defineConfig` callback:
+`secret.fromEnv('HOST_VAR')` reads the host variable, `secret()` reads the one named like its
+key, `{ optional: true }` skips an unset one (the record says so), and `{ to: 'checks' }` gives it
+only to `t.exec` and setup steps, never the agent's container. `secret.template('Bearer ${TOKEN}')`
+builds MCP headers. Values travel through the docker CLI's environment, never its arguments, are
+masked in everything ES writes, and only their names are recorded. A literal string under a
+secret-looking name (`*_KEY`, `*_TOKEN`, …) is refused, and a missing config-level secret stops
+the run before it starts. Anything you pass to the agent is readable by the agent.
 
 The harness's own `CURSOR_API_KEY` never enters the container. Each Cursor attempt starts an
 egress gateway: the container's HTTP(S) proxy is a small forwarder that sends every connection
@@ -446,6 +538,7 @@ evals/.history/
       transcript.jsonl                         timed agent events, one per line (below)
       diff.patch                               the agent's changes (dependency noise dropped)
       judge-input.json                         what each judge call saw
+      setup.log                                each environment setup step's output
       checks/<n>.log                           each t.exec: command, exit code, stdout, stderr
 ```
 
@@ -492,7 +585,7 @@ diff, checks, judge) and activity counts, and `summary.md` quotes each eval's la
 ### Studio
 
 `es studio` opens the history in a browser: runs (commit, branch, author or CI, pass counts, cost,
-duration, drift), a run's eval tree with per-cell pass rates and lift, one eval across runs, a
+duration, drift), a run's eval tree with per-cell pass rates, roles and lift, one eval across runs, a
 compare of two runs, and each attempt's transcript, diff, checks, judge input and state. It
 listens on `127.0.0.1:4984` (or the next free port) and prints a URL with a session token; new
 runs appear as they're recorded, and unrecorded runs from `.es/runs/` are labelled scratch.
@@ -514,10 +607,14 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   `es checkout <run>` recreates that state in a git worktree.
 - **Dependencies:** lockfile hashes (`pnpm-lock.yaml`, `package-lock.json`, `pubspec.lock`,
   `Cargo.lock`, …), and per eval the eval file's hash and a fingerprint.
-- **Cells:** per eval, each cell's key, fingerprint and pass rate, and each attempt's cell,
-  run number, image, and variable and secret names.
-- **Environments:** each environment's digest, baked and per-attempt steps, skills (hash and
-  git commit), MCP server names, files, and variable and secret names.
+- **Plan and profile:** what the run planned (evals, cells, attempts, estimate), its budget, and
+  the profile with the reason it was chosen; `status` is `complete`, `interrupted` or `budget`.
+- **Cells:** per eval, each cell's key, role (`control` or `variant`), whether it's gated, its
+  fingerprint, pass rate, overrides and, for variants, lift; and each attempt's cell, run
+  number, image, and variable and secret names.
+- **Environments:** each environment's digest, parent and overrides, image and setup steps,
+  skills (source, hash, git commit, placement), MCP server names, files, and variable and
+  secret names (and optional ones that were unset).
 - **Stack:** every sandbox image's tag, content-addressed id and registry digests, with its
   agent CLI version; the harness and AI SDK package versions; the harnesses; the judge
   model, the model ids the provider reported, and a judge version; the skills, rules and MCP
