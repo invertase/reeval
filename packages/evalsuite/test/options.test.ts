@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
@@ -25,6 +25,10 @@ description: The organisation's greeting style. Use when writing greetings.
 
 Greet people with "Ahoy, <name>!".
 `
+
+const REVIEWER_DESCRIPTION = `Reviews an agent skill before it ships: frontmatter, triggering and
+progressive disclosure.
+Use when: someone asks for a skill review.`
 
 /** A fake agent that writes ok.txt only when it's given a skill. */
 const SKILLED = `fakeHarness({ withSkill: { files: { 'ok.txt': 'yes' } } })`
@@ -736,5 +740,36 @@ evaluate('loads it', { environment: env }, async (t) => {
         ['house-rules', 'workspace'],
       ],
     )
+  })
+
+  test("a local skill's evals/ and *.es.ts stay out of the sandbox; a block description parses", async () => {
+    const p = await project('skill-hygiene', {
+      'es.config.ts': fakeConfig(),
+      'evals/h.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const env = defineEnvironment('reviewer', ({ skill }) => ({
+  skills: [skill.local('../skills/skill-reviewer', { placement: 'workspace' })],
+}))
+evaluate('staged', { environment: env }, async (t) => {
+  await t.send('x')
+  const md = await t.readFile('.agents/skills/skill-reviewer/SKILL.md')
+  expect(md).toContain(${JSON.stringify(`description: ${JSON.stringify(REVIEWER_DESCRIPTION)}`)})
+  expect(md).toContain('# Skill reviewer')
+  expect(await t.readFile('.agents/skills/skill-reviewer/docs/checklist.md')).toContain('# Checklist')
+  const listed = (await t.exec('cd .agents/skills/skill-reviewer && find . -type f | LC_ALL=C sort')).stdout
+  expect(listed.trim().split('\\n')).toEqual(['./SKILL.md', './docs/checklist.md'])
+})
+`,
+    })
+    cpSync(
+      new URL('./fixtures/skill-reviewer', import.meta.url),
+      join(p.dir, 'skills/skill-reviewer'),
+      {
+        recursive: true,
+      },
+    )
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [s] = readRun(p.dir).run.environments[0]?.skills ?? []
+    assert.deepEqual([s?.name, s?.excluded], ['skill-reviewer', ['evals/', 'review.es.ts']])
   })
 })

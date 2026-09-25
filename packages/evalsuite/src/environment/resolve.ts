@@ -10,6 +10,7 @@ import { parseDuration } from '../config.ts'
 import {
   type AppliedEnvironment,
   checkImageSecrets,
+  DEFAULT_SKILL_EXCLUDE,
   isHostFile,
   isSecret,
   isSecretTemplate,
@@ -127,22 +128,50 @@ export function parseSkillMd(
   return { name: field('name'), description: field('description'), body: match[2] ?? '' }
 }
 
-function parseSkill(dir: string, source: string): HarnessSkill {
+/** A gitignore-style test for `DEFAULT_SKILL_EXCLUDE`-shaped patterns against a skill-relative path. */
+export function excludeMatcher(patterns: readonly string[]) {
+  const rules = patterns.map((pattern) => {
+    const dirOnly = pattern.endsWith('/')
+    const body = pattern.replace(/\/+$/, '')
+    const anchored = body.includes('/')
+    const glob = body
+      .replace(/^\/+/, '')
+      .split('*')
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[^/]*')
+    return { dirOnly, re: new RegExp(`${anchored ? '^' : '(?:^|/)'}${glob}$`) }
+  })
+  return (path: string, isDir: boolean) =>
+    rules.some((r) => (isDir || !r.dirOnly) && r.re.test(path))
+}
+
+type LoadedSkill = { skill: HarnessSkill; excluded: string[] }
+
+function parseSkill(dir: string, source: string, exclude: readonly string[]): LoadedSkill {
   const text = readFileSync(join(dir, 'SKILL.md'), 'utf8')
   const front = parseSkillMd(text, `Skill ${basename(dir)} in ${source}`)
   const name = front.name || basename(dir)
   checkSkill(name, front.description, source)
-  const files: HarnessSkill['files'] = readdirSync(dir, { recursive: true, withFileTypes: true })
-    .filter((entry) => entry.isFile())
-    .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/'))
-    .filter((path) => path !== 'SKILL.md' && !path.split('/').includes('.git'))
+  const skip = excludeMatcher(exclude)
+  const paths: string[] = []
+  const excluded: string[] = []
+  const walk = (rel: string) => {
+    for (const entry of readdirSync(join(dir, rel), { withFileTypes: true })) {
+      const path = rel ? `${rel}/${entry.name}` : entry.name
+      const isDir = entry.isDirectory()
+      if (entry.name === '.git') continue
+      if (skip(path, isDir)) excluded.push(isDir ? `${path}/` : path)
+      else if (isDir) walk(path)
+      else if (entry.isFile() && path !== 'SKILL.md') paths.push(path)
+    }
+  }
+  walk('')
+  const files = paths
     .sort()
     .map((path) => ({ path, content: readFileSync(join(dir, path), 'utf8') }))
   return {
-    name,
-    description: front.description ?? '',
-    content: front.body,
-    files,
+    skill: { name, description: front.description ?? '', content: front.body, files },
+    excluded: excluded.sort(),
   }
 }
 
@@ -157,7 +186,12 @@ function checkSkill(name: string, description: string | undefined, source: strin
   }
 }
 
-function loadSkills(dir: string, source: string, only?: string[]): HarnessSkill[] {
+function loadSkills(
+  dir: string,
+  source: string,
+  only?: string[],
+  exclude: readonly string[] = DEFAULT_SKILL_EXCLUDE,
+): LoadedSkill[] {
   if (!existsSync(dir) || !statSync(dir).isDirectory()) {
     throw new InfraError(`Skill source ${source} isn't a directory`)
   }
@@ -170,15 +204,15 @@ function loadSkills(dir: string, source: string, only?: string[]): HarnessSkill[
   if (dirs.length === 0) {
     throw new InfraError(`Skill source ${source} has no SKILL.md (and no subdirectories with one)`)
   }
-  const skills = dirs.map((d) => parseSkill(d, source))
+  const skills = dirs.map((d) => parseSkill(d, source, exclude))
   if (!only) return skills
-  const missing = only.filter((n) => !skills.some((s) => s.name === n))
+  const missing = only.filter((n) => !skills.some((s) => s.skill.name === n))
   if (missing.length) {
     throw new InfraError(
-      `only: ${JSON.stringify(missing)} not found in ${source} (found: ${skills.map((s) => s.name).join(', ')})`,
+      `only: ${JSON.stringify(missing)} not found in ${source} (found: ${skills.map((s) => s.skill.name).join(', ')})`,
     )
   }
-  return skills.filter((s) => only.includes(s.name))
+  return skills.filter((s) => only.includes(s.skill.name))
 }
 
 async function git(args: string[], cwd: string, what: string) {
@@ -244,20 +278,20 @@ function unpackNpm(root: string, spec: string) {
   return pack
 }
 
-type Found = { skills: HarnessSkill[]; source: string; commit: string | null }
+type Found = { skills: LoadedSkill[]; source: string; commit: string | null }
 
 async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
   switch (s.source) {
     case 'local': {
       const label = `local:${relative(root, s.path).split(sep).join('/') || '.'}`
-      return { skills: loadSkills(s.path, label, s.only), source: label, commit: null }
+      return { skills: loadSkills(s.path, label, s.only, s.exclude), source: label, commit: null }
     }
     case 'git': {
       const { url } = parseGitRepo(s.repo)
       const { dir, commit } = await cloneSkills(root, url, s.ref)
       const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${s.path ? `:${s.path}` : ''}`
       return {
-        skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only),
+        skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only, s.exclude),
         source: label,
         commit,
       }
@@ -272,15 +306,20 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
     case 'npm': {
       const dir = await unpackNpm(root, s.spec)
       const label = `npm:${s.spec}:${s.path}`
-      return { skills: loadSkills(join(dir, s.path), label, s.only), source: label, commit: null }
+      return {
+        skills: loadSkills(join(dir, s.path), label, s.only, s.exclude),
+        source: label,
+        commit: null,
+      }
     }
     case 'inline': {
       checkSkill(s.name, s.description, 'skill.inline')
       const files = Object.entries(s.files)
         .sort(([a], [b]) => (a < b ? -1 : 1))
         .map(([path, content]) => ({ path, content }))
+      const skill = { name: s.name, description: s.description, content: s.content, files }
       return {
-        skills: [{ name: s.name, description: s.description, content: s.content, files }],
+        skills: [{ skill, excluded: [] }],
         source: 'inline',
         commit: null,
       }
@@ -311,7 +350,10 @@ export async function resolveEnvironment(
   const env: EnvVars = { ...optionsEnv }
   const files = new Map<string, string | HostFile>()
   const mcp = new Map<string, McpServer>()
-  const skills = new Map<string, { skill: HarnessSkill; placement: SkillPlacement; found: Found }>()
+  const skills = new Map<
+    string,
+    LoadedSkill & { placement: SkillPlacement; source: string; commit: string | null }
+  >()
   let rules: string | HostFile | undefined
   const image: ResolvedEnvironment['image'] = []
   const setup: ResolvedStep[] = []
@@ -355,12 +397,17 @@ export async function resolveEnvironment(
     const layerSkills = new Set<string>()
     for (const source of spec.skills ?? []) {
       const found = await resolveSkills(root, source)
-      for (const skill of found.skills) {
-        if (skills.has(skill.name) && !layerSkills.has(skill.name))
-          overrides.add(`skills.${skill.name}`)
-        layerSkills.add(skill.name)
-        skills.delete(skill.name)
-        skills.set(skill.name, { skill, placement: source.placement, found })
+      for (const loaded of found.skills) {
+        const name = loaded.skill.name
+        if (skills.has(name) && !layerSkills.has(name)) overrides.add(`skills.${name}`)
+        layerSkills.add(name)
+        skills.delete(name)
+        skills.set(name, {
+          ...loaded,
+          placement: source.placement,
+          source: found.source,
+          commit: found.commit,
+        })
       }
     }
   }
@@ -413,12 +460,13 @@ export async function resolveEnvironment(
     })
   }
   const skillList = [...skills.values()]
-  const skillRecords = skillList.map(({ skill, placement, found }) => ({
+  const skillRecords = skillList.map(({ skill, placement, source, commit, excluded }) => ({
     name: skill.name,
-    source: found.source,
-    commit: found.commit,
+    source,
+    commit,
     sha256: skillHash(skill),
     placement,
+    excluded,
   }))
   const fileRecords = fileList.map((f) => ({ path: f.path, sha256: sha256(f.content) }))
   const secretNames = [...new Set([...secrets.names, ...secrets.checks])].sort()

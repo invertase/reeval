@@ -1,0 +1,11 @@
+{
+  "skill_name": "skill-reviewer",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the skill in drafts/greeter",
+      "expected_output": "Flags the missing 'Use when' clause in the description",
+      "files": ["evals/files/greeter/SKILL.md"]
+    }
+  ]
+}

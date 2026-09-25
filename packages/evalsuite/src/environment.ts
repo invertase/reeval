@@ -120,10 +120,25 @@ export function parseGitRepo(repo: string): { url: string; ref?: string; path?: 
   return { url: repo }
 }
 
+/**
+ * What a skill directory leaves out of the sandbox unless `exclude` says otherwise: eval material
+ * (skill-creator keeps `evals/` in the skill), run history and ES eval files. `.git` is always left out.
+ */
+export const DEFAULT_SKILL_EXCLUDE: readonly string[] = ['/evals/', '.history/', '*.es.ts']
+
 function skillHelper(base: string): SkillHelper {
   const placement = (p: string | undefined) => {
     if (p === undefined || p === 'harness' || p === 'workspace') return p ?? 'harness'
     throw new DefinitionError(`skill placement must be 'harness' or 'workspace' (got ${p})`)
+  }
+  const exclude = (e: readonly string[] | undefined) => {
+    if (e === undefined) return {}
+    if (!Array.isArray(e) || e.some((p) => typeof p !== 'string' || !p.replace(/\//g, ''))) {
+      throw new DefinitionError(
+        `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.es.ts'] (got ${JSON.stringify(e)})`,
+      )
+    }
+    return { exclude: [...e] }
   }
   return {
     local: (path, o = {}) => ({
@@ -131,6 +146,7 @@ function skillHelper(base: string): SkillHelper {
       source: 'local',
       path: toPath(path, base),
       ...(o.only ? { only: [...o.only] } : {}),
+      ...exclude(o.exclude),
       placement: placement(o.placement),
     }),
     git: (repo, o = {}) => {
@@ -147,6 +163,7 @@ function skillHelper(base: string): SkillHelper {
         ...(ref ? { ref } : {}),
         ...(path ? { path } : {}),
         ...(o.only ? { only: [...o.only] } : {}),
+        ...exclude(o.exclude),
         placement: placement(o.placement),
       }
     },
@@ -168,6 +185,7 @@ function skillHelper(base: string): SkillHelper {
       spec,
       path: o.path ?? 'skills',
       ...(o.only ? { only: [...o.only] } : {}),
+      ...exclude(o.exclude),
       placement: placement(o.placement),
     }),
     inline: (skill, o = {}) => ({

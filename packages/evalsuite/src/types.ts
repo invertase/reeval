@@ -213,10 +213,17 @@ export type McpServer =
 export type SkillPlacement = 'harness' | 'workspace'
 
 export type SkillSource = { kind: 'skill'; placement: SkillPlacement } & (
-  | { source: 'local'; path: string; only?: string[] }
-  | { source: 'git'; repo: string; ref?: string; path?: string; only?: string[] }
+  | { source: 'local'; path: string; only?: string[]; exclude?: string[] }
+  | {
+      source: 'git'
+      repo: string
+      ref?: string
+      path?: string
+      only?: string[]
+      exclude?: string[]
+    }
   | { source: 'registry'; id: string; version?: string }
-  | { source: 'npm'; spec: string; path: string; only?: string[] }
+  | { source: 'npm'; spec: string; path: string; only?: string[]; exclude?: string[] }
   | {
       source: 'inline'
       name: string
@@ -276,18 +283,25 @@ export type SecretHelper = {
 }
 
 type SkillCommon = { placement?: SkillPlacement }
+type SkillDirOptions = SkillCommon & {
+  only?: string[]
+  /**
+   * Paths in each skill directory to leave out of the sandbox, gitignore-style: `*` matches within
+   * a name, a leading or inner `/` anchors to the skill root, a trailing `/` matches directories
+   * only, and anything else matches a name at any depth. Replaces `DEFAULT_SKILL_EXCLUDE`
+   * (`/evals/`, `.history/`, `*.es.ts`); spread it to add to it. `.git` is always left out.
+   */
+  exclude?: readonly string[]
+}
 export type SkillHelper = {
   /** A directory with a `SKILL.md`, or a directory of them, relative to the calling file. */
-  local(path: string | URL, options?: SkillCommon & { only?: string[] }): SkillSource
+  local(path: string | URL, options?: SkillDirOptions): SkillSource
   /** `https://…`, `git@…`, `github:owner/repo` or a GitHub `/tree/<ref>/<path>` URL. */
-  git(
-    repo: string,
-    options?: SkillCommon & { ref?: string; path?: string; only?: string[] },
-  ): SkillSource
+  git(repo: string, options?: SkillDirOptions & { ref?: string; path?: string }): SkillSource
   /** A skills.sh id, `owner/repo@skill`; `version` is a git ref. */
   registry(id: string, options?: SkillCommon & { version?: string }): SkillSource
   /** A pinned npm package spec; skills are read from `path` inside it (default `skills`). */
-  npm(spec: string, options?: SkillCommon & { path?: string; only?: string[] }): SkillSource
+  npm(spec: string, options?: SkillDirOptions & { path?: string }): SkillSource
   inline(
     skill: { name: string; description: string; content: string; files?: Record<string, string> },
     options?: SkillCommon,
@@ -512,6 +526,8 @@ export type EnvironmentRecord = {
     commit: string | null
     sha256: string
     placement: SkillPlacement
+    /** Paths left out of the sandbox by `exclude` (directories end in `/`); `.git` isn't listed. */
+    excluded: string[]
   }>
   mcp: string[]
   files: Array<{ path: string; sha256: string }>

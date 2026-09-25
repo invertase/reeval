@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import {
   defaultConcurrency,
@@ -10,8 +12,14 @@ import {
   resolveConfig,
   selectProfile,
 } from '../src/config.ts'
-import { parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
-import { defineEnvironment, isMovingRef, layered, parseGitRepo } from '../src/environment.ts'
+import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
+import {
+  DEFAULT_SKILL_EXCLUDE,
+  defineEnvironment,
+  isMovingRef,
+  layered,
+  parseGitRepo,
+} from '../src/environment.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -555,6 +563,88 @@ test('SKILL.md frontmatter is parsed as YAML', () => {
   assert.throws(() => parseSkillMd(md('description: Use when: x'), 's'), /isn't valid YAML/)
   assert.throws(() => parseSkillMd(md('description: 42'), 's'), /must be a string/)
   assert.throws(() => parseSkillMd(md('- a list'), 's'), /must be a YAML mapping/)
+})
+
+test('excludeMatcher is gitignore-style', () => {
+  const m = excludeMatcher(DEFAULT_SKILL_EXCLUDE)
+  assert.equal(m('evals', true), true)
+  assert.equal(m('evals', false), false, 'a trailing / matches directories only')
+  assert.equal(m('references/evals', true), false, 'a leading / anchors to the skill root')
+  assert.equal(m('.history', true), true)
+  assert.equal(m('scripts/.history', true), true, 'an unanchored name matches at any depth')
+  assert.equal(m('greet.es.ts', false), true)
+  assert.equal(m('scripts/greet.es.ts', false), true)
+  assert.equal(m('scripts/greet.ts', false), false)
+  assert.equal(m('greetXes.ts', false), false, 'dots are literal')
+  const custom = excludeMatcher(['drafts/*.md', 'secret.txt'])
+  assert.equal(custom('drafts/a.md', false), true)
+  assert.equal(custom('x/drafts/a.md', false), false, 'an inner / anchors too')
+  assert.equal(custom('drafts/sub/a.md', false), false, '* stays within a name')
+  assert.equal(custom('deep/secret.txt', false), true)
+})
+
+test('skill directories leave out eval material, recorded as excluded', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'es-skill-'))
+  const write = (path: string, content: string) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  write(
+    'skills/greet/SKILL.md',
+    '---\nname: greet\ndescription: |\n  Greets.\n  Politely.\n---\nHi.',
+  )
+  write('skills/greet/references/tone.md', 'Warm.')
+  write('skills/greet/references/evals/notes.md', 'Kept: only the root evals/ is eval material.')
+  write('skills/greet/evals/evals.json', '{"prompts":["secret"]}')
+  write('skills/greet/evals/.history/run.json', '{}')
+  write('skills/greet/greet.es.ts', 'evaluate()')
+  write('skills/greet/scripts/.history/x', 'x')
+  write('skills/greet/.git/HEAD', 'ref: refs/heads/main')
+  write('skills/greet/drafts/next.md', 'WIP')
+  try {
+    const env = (exclude?: string[]) =>
+      defineEnvironment('e', ({ skill }) => ({
+        skills: [skill.local(join(root, 'skills'), exclude ? { exclude } : {})],
+      }))
+    const r = await resolveEnvironment(layered(undefined, env()), {}, root, 'e')
+    const [s] = r.skills
+    assert.equal(s?.description, 'Greets.\nPolitely.')
+    assert.deepEqual(
+      s?.files.map((f) => f.path),
+      ['drafts/next.md', 'references/evals/notes.md', 'references/tone.md'],
+    )
+    assert.deepEqual(r.record.skills[0]?.excluded, ['evals/', 'greet.es.ts', 'scripts/.history/'])
+
+    const custom = await resolveEnvironment(
+      layered(undefined, env([...DEFAULT_SKILL_EXCLUDE, 'drafts/'])),
+      {},
+      root,
+      'e',
+    )
+    assert.deepEqual(custom.record.skills[0]?.excluded, [
+      'drafts/',
+      'evals/',
+      'greet.es.ts',
+      'scripts/.history/',
+    ])
+    assert.notEqual(custom.record.skills[0]?.sha256, r.record.skills[0]?.sha256)
+
+    const none = await resolveEnvironment(layered(undefined, env([])), {}, root, 'e')
+    assert.deepEqual(none.record.skills[0]?.excluded, [], 'an empty list replaces the defaults')
+    assert.ok(none.skills[0]?.files.some((f) => f.path === 'evals/evals.json'))
+    assert.ok(!none.skills[0]?.files.some((f) => f.path.startsWith('.git/')), '.git always goes')
+
+    writeFileSync(join(root, 'skills/greet/evals/evals.json'), '{"prompts":["changed"]}')
+    const edited = await resolveEnvironment(layered(undefined, env()), {}, root, 'e')
+    assert.equal(edited.record.digest, r.record.digest, 'editing evals keeps the fingerprint')
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+  assert.throws(
+    () =>
+      defineEnvironment('bad', ({ skill }) => ({ skills: [skill.local('.', { exclude: ['/'] })] })),
+    /skill exclude must be an array of paths or globs/,
+  )
 })
 
 test('git refs and repo shorthands', () => {

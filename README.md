@@ -375,7 +375,13 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
 - **Skills** go to the harness adapter, which writes them where its agent reads them;
   `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
   for Cursor). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
-  commit is recorded either way.
+  commit is recorded either way. `SKILL.md` frontmatter is YAML, so block descriptions
+  (`description: |` or `>`) work.
+- **Eval material stays out of the sandbox:** a skill directory (`local`, `git`, `npm`,
+  `registry`) leaves out `.git` and `DEFAULT_SKILL_EXCLUDE`: a root `/evals/` (skill-creator's
+  convention), any `.history/` and any `*.es.ts`. `exclude` replaces the list, gitignore-style
+  (`skill.local(dir, { exclude: [...DEFAULT_SKILL_EXCLUDE, 'drafts/'] })`, or `[]` for
+  everything); the paths left out are recorded as the skill's `excluded`.
 - The callback runs once, synchronously, when the file loads; a returned Promise is an error.
   Group and eval options stay plain objects (a function there is an error, since it would be
   ambiguous with the body).
