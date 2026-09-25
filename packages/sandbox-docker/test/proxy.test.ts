@@ -8,7 +8,11 @@ import { after, before, describe, test } from 'node:test'
 import tls from 'node:tls'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
-import { createEgressProxy, type EgressProxy } from '../src/egress/proxy.ts'
+import {
+  createEgressProxy,
+  type EgressProxy,
+  type EgressProxyOptions,
+} from '../src/egress/proxy.ts'
 import type { RequestTransformation } from '../src/egress/rules.ts'
 
 const PLACEHOLDER = `aisdkhc_${'P'.repeat(43)}`
@@ -83,10 +87,14 @@ const rule = (port: number): RequestTransformation => ({
 })
 
 /** The gateway's proxy on a local TCP port, as the in-container forwarder would reach it. */
-async function startProxy(policy: NetworkPolicy = { mode: 'allow-all' }) {
+async function startProxy(
+  policy: NetworkPolicy = { mode: 'allow-all' },
+  extra: Pick<EgressProxyOptions, 'endpoints' | 'onRefused'> = {},
+) {
   const ca = createCertificateAuthority()
   const lines: string[] = []
   const proxy = createEgressProxy({
+    ...extra,
     ca,
     policy,
     log: (l) => {
@@ -400,6 +408,93 @@ describe('egress proxy', () => {
     } finally {
       plain.close()
     }
+  })
+})
+
+describe('brokered endpoints through the proxy', () => {
+  // A host-wide rule, like the Claude Code adapter's, narrowed by the endpoint list.
+  const hostWide: RequestTransformation = {
+    match: {
+      host: HOST,
+      headers: [{ key: { exact: 'Authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+    },
+    transform: { headers: { Authorization: `Bearer ${REAL}` } },
+  }
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  let gw: Gw
+  const refused: string[] = []
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+    h2 = await startUpstream(HOST, true)
+    gw = await startProxy(
+      { mode: 'allow-all' },
+      {
+        endpoints: [{ host: HOST, path: { exact: '/v1/messages' }, method: ['POST'] }],
+        onRefused: ({ method, url }) => refused.push(`${method} ${url}`),
+      },
+    )
+    gw.proxy.addTransformations([hostWide])
+  })
+  after(() => {
+    gw.close()
+    h1.close()
+    h2.close()
+  })
+  const auth = { authorization: `Bearer ${PLACEHOLDER}` }
+
+  test('a listed endpoint gets the real key', async () => {
+    seen.length = 0
+    const r = await viaProxy(gw, HOST, h1.port, {
+      method: 'POST',
+      path: '/v1/messages?beta=true',
+      headers: auth,
+    })
+    assert.equal(r.status, 200)
+    assert.equal(JSON.parse(r.body).authorization, `Bearer ${REAL}`)
+    // The twin of the absence checks below: the same search finds a request that got through.
+    assert.match(everything(), /\/v1\/messages/)
+  })
+
+  test('an unlisted endpoint fails at once with a 403 that says why, and never goes upstream', async () => {
+    seen.length = 0
+    refused.length = 0
+    for (const [method, path] of [
+      ['GET', '/v1/models'],
+      ['POST', '/v1/files'],
+      ['GET', '/v1/messages'],
+    ] as const) {
+      const started = Date.now()
+      const r = await viaProxy(gw, HOST, h1.port, { method, path, headers: auth })
+      assert.equal(r.status, 403, `${method} ${path}`)
+      assert.match(r.body, /refused .* isn't one of the endpoints ES brokers it for/)
+      assert.ok(Date.now() - started < 5_000, 'refused, not left hanging')
+    }
+    assert.equal(seen.length, 0, 'nothing reached upstream')
+    assert.doesNotMatch(everything(), new RegExp(`${REAL}|${PLACEHOLDER}`))
+    assert.deepEqual(refused, [
+      `GET https://${HOST}/v1/models`,
+      `POST https://${HOST}/v1/files`,
+      `GET https://${HOST}/v1/messages`,
+    ])
+    assert.ok(gw.lines.some((l) => l.endsWith('refused (not a brokered endpoint)')))
+  })
+
+  test('the refusal holds over HTTP/2', async () => {
+    seen.length = 0
+    const r = await viaProxyH2(gw, HOST, h2.port, '/v1/files', `Bearer ${PLACEHOLDER}`)
+    assert.equal(r.status, 403)
+    assert.equal(seen.length, 0)
+  })
+
+  test('a request without the placeholder is not ours to refuse', async () => {
+    seen.length = 0
+    const r = await viaProxy(gw, HOST, h1.port, {
+      path: '/v1/models',
+      headers: { authorization: 'Bearer sk-not-brokered' },
+    })
+    assert.equal(r.status, 200)
+    assert.equal(JSON.parse(r.body).authorization, 'Bearer sk-not-brokered')
   })
 })
 

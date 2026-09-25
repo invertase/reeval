@@ -1,15 +1,17 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import {
+  type BakedHarness,
   buildDockerfile,
   buildImage,
   buildInstallLayer,
-  DEFAULT_IMAGE,
   dockerfileTag,
   ES_BASE_ARG,
   harnessImageFor,
+  harnessLabel,
   type ImageInfo,
   type InstallStep,
+  imageFor,
   imageInfo,
   installLayerTag,
   LABEL,
@@ -17,8 +19,12 @@ import {
 import { parseDuration } from '../config.ts'
 import { stepCommand } from '../environment.ts'
 import { withLease } from '../scheduler/client.ts'
-import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
+import type { AttemptImage, DockerSandboxDescriptor, HarnessDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
+
+/** Whose CLI a harness's image carries. The fake harness runs in Cursor's. */
+export const imageHarness = (harness: HarnessDescriptor): BakedHarness =>
+  harness.kind === 'fake' ? 'cursor' : harness.kind
 
 /**
  * One image build at a time across the run's workers. Whoever gets the lease looks for the
@@ -87,11 +93,12 @@ const buildLogger = (root: string, ref: string) => {
 
 /**
  * The image with the harness in it that the sandbox's `install` layer (if any) goes on: ES's
- * image, `image` as is, `from` with Node and the harness baked on, or the built Dockerfile (with
- * them baked on unless it starts from ES's image).
+ * image for the harness, `image` as is, `from` with Node and the harness baked on, or the built
+ * Dockerfile (with them baked on unless it's built on that harness's image).
  */
 async function harnessBase(
   sandbox: DockerSandboxDescriptor,
+  harness: BakedHarness,
   root: string,
   signal: AbortSignal,
   options: PrepareOptions,
@@ -103,11 +110,11 @@ async function harnessBase(
     return true
   }
   const bake = async (from: string) => {
-    const ref = harnessImageFor(from)
+    const ref = harnessImageFor(harness, from)
     const force = rebuild(ref)
     const info =
       (force ? null : await imageInfo(ref)) ??
-      (await buildOnce(ref, () => buildImage(log, { from, signal }), signal, force))
+      (await buildOnce(ref, () => buildImage(log, { harness, from, signal }), signal, force))
     if (!info) throw new InfraError(`The sandbox image ${ref} disappeared after building`)
     return { ref, info }
   }
@@ -124,11 +131,11 @@ async function harnessBase(
   if (sandbox.from) return { ...(await bake(sandbox.from)), dockerfile: null }
   if (sandbox.dockerfile) {
     const path = sandbox.dockerfile
-    const { tag, sha256 } = dockerfileTag(path)
+    const { tag, sha256 } = dockerfileTag(path, harness)
     const dockerfile = { path: projectPath(root, path), sha256 }
-    if (usesEsBase(path) && !(await imageInfo(DEFAULT_IMAGE))) {
+    if (usesEsBase(path) && !(await imageInfo(imageFor(harness)))) {
       throw new InfraError(
-        `${dockerfile.path} starts FROM \${${ES_BASE_ARG}}, and ${DEFAULT_IMAGE} isn't built. Build it once with: es image build`,
+        `${dockerfile.path} starts FROM \${${ES_BASE_ARG}}, and ${imageFor(harness)} isn't built. Build it once with: es image build`,
       )
     }
     const force = rebuild(tag)
@@ -140,7 +147,7 @@ async function harnessBase(
         (force ? null : await imageInfo(tag)) ??
         (await buildOnce(
           tag,
-          () => buildDockerfile(path, { signal, log: logFile.write, force: true }),
+          () => buildDockerfile(path, { harness, signal, log: logFile.write, force: true }),
           signal,
           force,
         ))
@@ -149,28 +156,32 @@ async function harnessBase(
       throw new InfraError(`${(error as Error).message}\n(full log: ${logFile.file})`)
     }
     if (!built) throw new InfraError(`The image ${tag} disappeared after building`)
-    // Built on ES's sandbox image (or another harness image), so the bootstrap is already there.
-    if (built.labels[LABEL.agentVersion]) return { ref: tag, info: built, dockerfile }
+    // Built on this harness's image, so its CLI is already there. Any other base, including
+    // another harness's image, gets this harness baked on.
+    if (built.labels[LABEL.harness] === harnessLabel(harness)) {
+      return { ref: tag, info: built, dockerfile }
+    }
     return { ...(await bake(tag)), dockerfile }
   }
-  const info = await imageInfo(DEFAULT_IMAGE)
-  if (!info)
-    throw new InfraError(`Docker image ${DEFAULT_IMAGE} not found. Build it with: es image build`)
-  return { ref: DEFAULT_IMAGE, info, dockerfile: null }
+  const ref = imageFor(harness)
+  const info = await imageInfo(ref)
+  if (!info) throw new InfraError(`Docker image ${ref} not found. Build it with: es image build`)
+  return { ref, info, dockerfile: null }
 }
 
 /**
- * The image an attempt's container starts from: the sandbox's harness image (built on first use
- * for `from` and `dockerfile`), plus a cached layer with its `install` commands. Each build's log
- * goes to `.es/cache/images/` under `root`.
+ * The image an attempt's container starts from: the sandbox's image for the harness (built on
+ * first use for `from` and `dockerfile`), plus a cached layer with its `install` commands. Each
+ * build's log goes to `.es/cache/images/` under `root`.
  */
 export async function prepareImage(
   sandbox: DockerSandboxDescriptor,
+  harness: BakedHarness,
   root: string,
   signal: AbortSignal,
   options: PrepareOptions = {},
 ): Promise<AttemptImage> {
-  const base = await harnessBase(sandbox, root, signal, options)
+  const base = await harnessBase(sandbox, harness, root, signal, options)
   const agentCli = base.info.labels[LABEL.agentVersion] ?? null
   const steps = installSteps(sandbox)
   const install = (sandbox.install ?? []).map(stepCommand)

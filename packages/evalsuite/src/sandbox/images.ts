@@ -1,30 +1,55 @@
 // `es image build`: every image the planned attempts' Docker sandboxes need, built or listed.
 import {
+  type BakedHarness,
   buildImage,
-  DEFAULT_IMAGE,
   dockerAvailable,
   dockerfileTag,
   ES_BASE_ARG,
   harnessImageFor,
+  imageFor,
   imageInfo,
 } from '@evalsuite/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import { sandboxId } from '../options.ts'
-import type { AttemptImage, DockerSandboxDescriptor, SandboxDescriptor } from '../types.ts'
-import { installSteps, prepareImage, projectPath, type Rebuild, usesEsBase } from './prepare.ts'
+import type {
+  AttemptImage,
+  DockerSandboxDescriptor,
+  HarnessDescriptor,
+  SandboxDescriptor,
+} from '../types.ts'
+import {
+  imageHarness,
+  installSteps,
+  prepareImage,
+  projectPath,
+  type Rebuild,
+  usesEsBase,
+} from './prepare.ts'
 
-/** `id` is the sandbox's cell id, plus `+ install` and a number where that's ambiguous. */
-export type ImageTarget = { id: string; sandbox: DockerSandboxDescriptor; evals: number }
+/**
+ * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, plus
+ * the harness unless it's Cursor, `+ install`, and a number where that's still ambiguous.
+ */
+export type ImageTarget = {
+  id: string
+  harness: BakedHarness
+  sandbox: DockerSandboxDescriptor
+  evals: number
+}
 
-/** The distinct Docker sandboxes, in first-use order, with how many evals use each. */
-export function imageTargets(uses: Array<{ id: string; sandbox: SandboxDescriptor }>) {
+/** The distinct Docker sandbox and harness pairs, in first-use order, with how many evals use each. */
+export function imageTargets(
+  uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }>,
+) {
   const targets = new Map<string, ImageTarget & { seen: Set<string> }>()
-  for (const { id, sandbox } of uses) {
+  for (const { id, sandbox, ...use } of uses) {
     if (sandbox.kind !== 'docker') continue
+    const harness = imageHarness(use.harness)
     const { maxConcurrent: _, id: __, ...image } = sandbox
-    const key = JSON.stringify(image)
+    const key = JSON.stringify({ harness, image })
     const target = targets.get(key) ?? {
-      id: sandboxId(sandbox),
+      id: harness === 'cursor' ? sandboxId(sandbox) : `${sandboxId(sandbox)} · ${harness}`,
+      harness,
       sandbox,
       evals: 0,
       seen: new Set(),
@@ -49,7 +74,7 @@ type Stage = { what: string; ref: string; action: string }
 
 /** How each target's image is made, in build order, without building anything. */
 export async function imageStages(target: ImageTarget, root: string): Promise<Stage[]> {
-  const { sandbox } = target
+  const { sandbox, harness } = target
   const stages: Stage[] = []
   if (sandbox.image) {
     const found = await imageInfo(sandbox.image)
@@ -61,11 +86,11 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   } else if (sandbox.from) {
     stages.push({
       what: `from ${sandbox.from}`,
-      ref: harnessImageFor(sandbox.from),
+      ref: harnessImageFor(harness, sandbox.from),
       action: 'rebuild: Node, git and the harness bootstrap on top',
     })
   } else if (sandbox.dockerfile) {
-    const { tag } = dockerfileTag(sandbox.dockerfile)
+    const { tag } = dockerfileTag(sandbox.dockerfile, harness)
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,
@@ -73,15 +98,19 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     })
     stages.push(
       usesEsBase(sandbox.dockerfile)
-        ? { what: 'harness', ref: tag, action: `inherited: FROM \${${ES_BASE_ARG}}` }
+        ? {
+            what: 'harness',
+            ref: tag,
+            action: `inherited: FROM \${${ES_BASE_ARG}}, which is ${imageFor(harness)}`,
+          }
         : {
             what: 'harness',
-            ref: harnessImageFor(tag),
+            ref: harnessImageFor(harness, tag),
             action: 'rebuild: Node, git and the harness bootstrap on top',
           },
     )
   } else {
-    stages.push({ what: 'base', ref: DEFAULT_IMAGE, action: 'rebuild: the harness bootstrap' })
+    stages.push({ what: 'base', ref: imageFor(harness), action: 'rebuild: the harness bootstrap' })
   }
   const steps = installSteps(sandbox)
   if (steps.length) {
@@ -94,12 +123,17 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   return stages
 }
 
-/** Whether ES's own image has to be built first: used directly, or as a Dockerfile's base. */
-export const needsDefault = (targets: ImageTarget[]) =>
-  targets.some(
-    ({ sandbox: s }) =>
-      (!s.image && !s.from && !s.dockerfile) || (s.dockerfile && usesEsBase(s.dockerfile)),
-  )
+/** ES's harness images to build first: used directly, or as a Dockerfile's `ES_BASE`. */
+export const esImages = (targets: ImageTarget[]): BakedHarness[] => [
+  ...new Set(
+    targets
+      .filter(
+        ({ sandbox: s }) =>
+          (!s.image && !s.from && !s.dockerfile) || (s.dockerfile && usesEsBase(s.dockerfile)),
+      )
+      .map((t) => t.harness),
+  ),
+]
 
 /** `es image build --dry-run`: one block per sandbox. */
 export async function imagePlanLines(targets: ImageTarget[], root: string): Promise<string[]> {
@@ -136,9 +170,9 @@ export async function buildImages(
     }
   }
   const rebuild: Rebuild = { done: new Set() }
-  if (needsDefault(targets)) {
-    await buildImage(log)
-    rebuild.done.add(DEFAULT_IMAGE)
+  for (const harness of esImages(targets)) {
+    await buildImage(log, { harness })
+    rebuild.done.add(imageFor(harness))
   }
   const signal = new AbortController().signal
   const built: Array<ImageTarget & { image: AttemptImage }> = []
@@ -146,7 +180,7 @@ export async function buildImages(
     log(`Preparing ${target.id}`)
     built.push({
       ...target,
-      image: await prepareImage(target.sandbox, root, signal, { log, rebuild }),
+      image: await prepareImage(target.sandbox, target.harness, root, signal, { log, rebuild }),
     })
   }
   return built

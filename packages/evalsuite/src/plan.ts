@@ -193,6 +193,8 @@ export type PlanEval = {
 /** A Docker sandbox image the plan needs, and how it's made, as `es image build --dry-run` lists it. */
 export type PlanImage = {
   id: string
+  /** Whose CLI the image carries. */
+  harness: string
   evals: number
   stages: Array<{ what: string; ref: string; action: string }>
 }

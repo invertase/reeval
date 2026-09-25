@@ -17,15 +17,16 @@ import {
 import { isRegistryDigest } from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
-import { createPolicyCheck, DEFAULT_ALLOWED_HOSTS, hostAllowed } from '../src/egress/policy.ts'
+import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
 import {
   applyTransformations,
   decrypts,
+  type EndpointMatch,
   matches,
   type OutboundRequest,
   type RequestTransformation,
 } from '../src/egress/rules.ts'
-import { HARNESS_CURSOR_VERSION } from '../src/image.ts'
+import { DEFAULT_IMAGE, HARNESS_PACKAGES, harnessLabel, imageFor } from '../src/image.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const PLACEHOLDER = `aisdkhc_${'A'.repeat(43)}`
@@ -56,6 +57,64 @@ describe('request transformations', () => {
     assert.equal(headers.authorization, `Bearer ${REAL}`)
     assert.equal(headers['content-type'], 'application/json')
     assert.deepEqual(replaced, ['authorization'])
+  })
+
+  test('with endpoints, a host-wide rule only keys requests on them, and refuses the rest', () => {
+    const hostWide: RequestTransformation = {
+      match: {
+        host: 'api.anthropic.com',
+        headers: [{ key: { exact: 'x-api-key' }, value: { exact: PLACEHOLDER } }],
+      },
+      transform: { headers: { 'x-api-key': REAL } },
+    }
+    const endpoints: EndpointMatch[] = [
+      { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
+      { host: 'api.anthropic.com', path: { regex: '^/api/eval/sdk-[A-Za-z0-9_-]+$' } },
+    ]
+    const call = (method: string, path: string, key = PLACEHOLDER) =>
+      applyTransformations(
+        [hostWide],
+        { host: 'api.anthropic.com', method, path, headers: { 'x-api-key': key } },
+        endpoints,
+      )
+    const keyed = call('POST', '/v1/messages?beta=true')
+    assert.equal(keyed.headers['x-api-key'], REAL)
+    assert.equal(keyed.refused, false)
+    assert.equal(call('GET', '/api/eval/sdk-abc123').headers['x-api-key'], REAL, 'any method')
+    const misses: Array<[string, string]> = [
+      ['GET', '/v1/messages'],
+      ['POST', '/v1/messages/batches'],
+      ['POST', '/v1/files'],
+      ['GET', '/v1/models'],
+      ['POST', '/api/eval/sdk-abc/../../v1/files'],
+    ]
+    for (const [method, path] of misses) {
+      const r = call(method, path)
+      assert.equal(r.refused, true, `${method} ${path}`)
+      assert.deepEqual(r.replaced, [], `${method} ${path}`)
+      assert.doesNotMatch(JSON.stringify(r.headers), new RegExp(REAL), `${method} ${path}`)
+    }
+    const unbrokered = call('GET', '/v1/models', 'sk-someone-else')
+    assert.equal(unbrokered.refused, false, 'no rule applies, so it is not ours to refuse')
+    assert.equal(unbrokered.headers['x-api-key'], 'sk-someone-else')
+    const open = applyTransformations([hostWide], {
+      host: 'api.anthropic.com',
+      method: 'GET',
+      path: '/v1/models',
+      headers: { 'x-api-key': PLACEHOLDER },
+    })
+    assert.equal(open.headers['x-api-key'], REAL, 'without endpoints, the rule alone decides')
+    const tagging: RequestTransformation = {
+      match: { host: 'api.anthropic.com' },
+      transform: { headers: { 'x-tag': 'es' } },
+    }
+    const tagged = applyTransformations(
+      [tagging],
+      { host: 'api.anthropic.com', method: 'GET', path: '/v1/models', headers: {} },
+      endpoints,
+    )
+    assert.equal(tagged.refused, false, 'a rule with no placeholder to key on refuses nothing')
+    assert.equal(tagged.headers['x-tag'], undefined, 'and it does not apply off the endpoints')
   })
 
   test('host, path, method and header value must all match', () => {
@@ -135,7 +194,18 @@ describe('network policy', () => {
     assert.equal(hostAllowed(['*.cursor.sh'], 'cursor.sh'), false)
     assert.equal(hostAllowed(['*.cursor.sh'], 'evilcursor.sh'), false)
     assert.ok(hostAllowed(['GitHub.com'], 'github.com.'))
-    assert.ok(hostAllowed(DEFAULT_ALLOWED_HOSTS, 'raw.githubusercontent.com'))
+    assert.ok(hostAllowed(defaultAllowedHosts('cursor'), 'raw.githubusercontent.com'))
+  })
+
+  test("each harness's default allowlist has its own hosts and not the others'", () => {
+    const cursor = defaultAllowedHosts('cursor')
+    const claude = defaultAllowedHosts('claude-code')
+    assert.ok(hostAllowed(cursor, 'api2.cursor.sh'))
+    assert.ok(hostAllowed(claude, 'api.anthropic.com'))
+    assert.equal(hostAllowed(cursor, 'api.anthropic.com'), false)
+    assert.equal(hostAllowed(claude, 'api2.cursor.sh'), false)
+    assert.equal(hostAllowed(claude, 'anthropic.com.evil.example'), false)
+    for (const hosts of [cursor, claude]) assert.ok(hostAllowed(hosts, 'registry.npmjs.org'))
   })
 
   test('allow-all allows anything but loopback and link-local', async () => {
@@ -368,7 +438,7 @@ describe('package boundary', () => {
       for (const [, spec] of source.matchAll(/from '([^']+)'/g)) {
         assert.match(
           spec ?? '',
-          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor)?(\/|$))/,
+          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$))/,
           `${file} imports ${spec}`,
         )
       }
@@ -377,11 +447,21 @@ describe('package boundary', () => {
     assert.equal(pkg.dependencies.evalsuite, undefined)
   })
 
-  test('ships the Docker build context and pins the harness adapter', () => {
+  test('ships the Docker build context and pins every harness adapter', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     assert.ok(pkg.files.includes('docker'))
     assert.match(readFileSync(join(root, 'docker/Dockerfile'), 'utf8'), /^FROM node:/m)
-    assert.equal(pkg.dependencies['@ai-sdk/harness-cursor'], HARNESS_CURSOR_VERSION)
+    for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
+      assert.equal(pkg.dependencies[name], version, name)
+    }
+  })
+
+  test('each harness has its own image, tagged and labelled with its adapter version', () => {
+    const { cursor, 'claude-code': claude } = HARNESS_PACKAGES
+    assert.equal(imageFor('cursor'), `evalsuite-sandbox:cursor-${cursor.version}`)
+    assert.equal(imageFor('claude-code'), `evalsuite-sandbox:claude-code-${claude.version}`)
+    assert.equal(DEFAULT_IMAGE, imageFor('cursor'))
+    assert.equal(harnessLabel('claude-code'), `@ai-sdk/harness-claude-code@${claude.version}`)
   })
 })
 
@@ -419,19 +499,32 @@ describe('image recipes', () => {
     writeFileSync(join(dir, 'tool.sh'), 'echo 1\n')
     writeFileSync(join(dir, '.dockerignore'), 'scratch\nDockerfile\n')
     mkdirSync(join(dir, 'scratch'))
-    const first = dockerfileTag(file)
+    const first = dockerfileTag(file, 'cursor')
     assert.match(first.tag, /^evalsuite-dockerfile:es-recipe-[a-z0-9]+-[0-9a-f]{16}$/)
     assert.deepEqual(contextFiles(dir, file), ['.dockerignore', 'Dockerfile', 'tool.sh'])
     writeFileSync(join(dir, 'scratch', 'notes.txt'), 'ignored')
-    assert.equal(dockerfileTag(file).tag, first.tag, 'ignored files do not change the hash')
+    assert.equal(
+      dockerfileTag(file, 'cursor').tag,
+      first.tag,
+      'ignored files do not change the hash',
+    )
     writeFileSync(join(dir, 'tool.sh'), 'echo 2\n')
-    const edited = dockerfileTag(file)
+    const edited = dockerfileTag(file, 'cursor')
     assert.notEqual(edited.tag, first.tag, 'a context file changes the hash')
     writeFileSync(file, 'FROM debian:bookworm-slim\nCOPY tool.sh /usr/local/bin/tool\nRUN true\n')
-    assert.notEqual(dockerfileTag(file).tag, edited.tag, 'the Dockerfile changes the hash')
+    assert.notEqual(
+      dockerfileTag(file, 'cursor').tag,
+      edited.tag,
+      'the Dockerfile changes the hash',
+    )
     const named = join(dir, 'python.Dockerfile')
     writeFileSync(named, 'FROM python:3.12-slim\n')
-    assert.match(dockerfileTag(named).tag, /^evalsuite-dockerfile:python-dockerfile-/)
+    assert.match(dockerfileTag(named, 'cursor').tag, /^evalsuite-dockerfile:python-dockerfile-/)
+    assert.notEqual(
+      dockerfileTag(file, 'claude-code').tag,
+      dockerfileTag(file, 'cursor').tag,
+      "ES_BASE is the harness's image, so each harness builds its own",
+    )
   })
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {

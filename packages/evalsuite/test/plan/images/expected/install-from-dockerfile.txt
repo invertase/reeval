@@ -11,4 +11,4 @@ image docker:python:3.12-slim · 1 evals
   from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
 image docker:docker · 1 evals
   dockerfile docker/Dockerfile  evalsuite-dockerfile:docker-4b04d523876ed99d  (docker build (layer cache), tagged by content hash)
-  harness                       evalsuite-dockerfile:docker-4b04d523876ed99d  (inherited: FROM ${ES_BASE})
+  harness                       evalsuite-dockerfile:docker-4b04d523876ed99d  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)

@@ -923,7 +923,7 @@ evaluate('fake', { sandbox: (await import('evalsuite/sandbox')).fakeSandbox() },
     )
     assert.match(
       out,
-      /^docker:tools · 1 eval\n {2}dockerfile docker\/tools\/Dockerfile +evalsuite-dockerfile:tools-[0-9a-f]{16} +\(docker build \(layer cache\), tagged by content hash\)\n {2}harness +evalsuite-dockerfile:tools-[0-9a-f]{16} +\(inherited: FROM \$\{ES_BASE\}\)$/m,
+      /^docker:tools · 1 eval\n {2}dockerfile docker\/tools\/Dockerfile +evalsuite-dockerfile:tools-[0-9a-f]{16} +\(docker build \(layer cache\), tagged by content hash\)\n {2}harness +evalsuite-dockerfile:tools-[0-9a-f]{16} +\(inherited: FROM \$\{ES_BASE\}, which is evalsuite-sandbox:cursor-[\d.]+\)$/m,
     )
     assert.match(
       out,

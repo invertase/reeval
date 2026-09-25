@@ -23,7 +23,7 @@ import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
-import type { RunContext, SandboxDescriptor } from './types.ts'
+import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 
@@ -183,7 +183,10 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
   const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
   const { docker } = await import('./sandbox.ts')
   let root = process.cwd()
-  let uses: Array<{ id: string; sandbox: SandboxDescriptor }> = [{ id: '', sandbox: docker() }]
+  const { cursor } = await import('./harness.ts')
+  let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
+    { id: '', harness: cursor(), sandbox: docker() },
+  ]
   if (existsSync(resolve(flags.config))) {
     const setup = await prepareRun({ ...flags, 'dry-run': true })
     const ctx = await startRun(setup)
@@ -202,8 +205,8 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
       },
     })
     uses = planned.length
-      ? planned.map((p) => ({ id: p.id, sandbox: p.attempt.sandbox }))
-      : [{ id: '', sandbox: config.sandbox }]
+      ? planned.map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox }))
+      : config.harness.map((harness) => ({ id: '', harness, sandbox: config.sandbox }))
   }
   const targets = imageTargets(uses)
   if (targets.length === 0) {
@@ -452,16 +455,17 @@ async function executeRun(
       root: config.root,
       historyDir: config.history.dir,
     })
+    const { imageStages, imageTargets } = await import('./sandbox/images.ts')
+    const targets = imageTargets(
+      planned
+        .filter((p) => !p.attempt.plan.skip)
+        .map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox })),
+    )
     if (setup.json) {
-      const { imageStages, imageTargets } = await import('./sandbox/images.ts')
-      const targets = imageTargets(
-        planned
-          .filter((p) => !p.attempt.plan.skip)
-          .map((p) => ({ id: p.id, sandbox: p.attempt.sandbox })),
-      )
       const images = await Promise.all(
         targets.map(async (t) => ({
           id: t.id,
+          harness: t.harness,
           evals: t.evals,
           stages: await imageStages(t, config.root),
         })),
@@ -486,7 +490,7 @@ async function executeRun(
         `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
       )
     }
-    sandboxVersions = await preflight(plan.sandboxes)
+    sandboxVersions = await preflight(targets)
     return true
   }
   // budget.duration counts from the first attempt's start, not from collecting the files.

@@ -7,7 +7,12 @@ import tls from 'node:tls'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
 import { link } from './mux.ts'
 import { createPolicyCheck, type Lookup, type NetworkPolicy } from './policy.ts'
-import { applyTransformations, decrypts, type RequestTransformation } from './rules.ts'
+import {
+  applyTransformations,
+  decrypts,
+  type EndpointMatch,
+  type RequestTransformation,
+} from './rules.ts'
 
 export type EgressProxyOptions = {
   ca: CertificateAuthority
@@ -19,6 +24,13 @@ export type EgressProxyOptions = {
   lookup?: Lookup
   /** Let the gateway reach the host's loopback addresses. For tests only. */
   allowLoopback?: boolean
+  /**
+   * The only requests a credential may be swapped into. A request a transformation matches that
+   * isn't one of them gets a 403 from the gateway, not the placeholder sent upstream.
+   */
+  endpoints?: readonly EndpointMatch[]
+  /** Called for each request refused under `endpoints`, e.g. to warn outside `ES_DEBUG`. */
+  onRefused?: (request: { method: string; url: string }) => void
 }
 
 export type EgressProxy = {
@@ -177,22 +189,40 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     server.emit('connection', socket)
   }
 
+  /** The headers to send upstream, or a reason the request is refused (already logged). */
   function transformed(
     target: Target,
     method: string,
     path: string,
     headers: IncomingHttpHeaders,
     version: string,
-  ) {
-    const { headers: out, replaced } = applyTransformations(rules, {
-      host: target.host,
-      method,
-      path,
-      headers: endToEnd(headers, ['upgrade', 'connection']) as IncomingHttpHeaders,
-    })
+  ): { headers: OutgoingHttpHeaders; refused?: string } {
+    const {
+      headers: out,
+      replaced,
+      refused,
+    } = applyTransformations(
+      rules,
+      {
+        host: target.host,
+        method,
+        path,
+        headers: endToEnd(headers, ['upgrade', 'connection']) as IncomingHttpHeaders,
+      },
+      options.endpoints,
+    )
+    const url = `https://${target.host}${pathOnly(path)}`
+    if (refused) {
+      log(`es:egress ${method} ${url} HTTP/${version} refused (not a brokered endpoint)`)
+      options.onRefused?.({ method, url })
+      return {
+        headers: {},
+        refused: `ES egress gateway: refused ${method} ${url}. It carries a brokered credential, and it isn't one of the endpoints ES brokers it for.`,
+      }
+    }
     const set = replaced.length ? ` (set ${replaced.join(', ')})` : ''
-    log(`es:egress ${method} https://${target.host}${pathOnly(path)} HTTP/${version}${set}`)
-    return out as OutgoingHttpHeaders
+    log(`es:egress ${method} ${url} HTTP/${version}${set}`)
+    return { headers: out as OutgoingHttpHeaders }
   }
 
   async function onDecrypted(
@@ -202,7 +232,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   ) {
     const method = req.method ?? 'GET'
     const path = req.url ?? '/'
-    const headers = transformed(target, method, path, req.headers, req.httpVersion)
+    const { headers, refused } = transformed(target, method, path, req.headers, req.httpVersion)
+    if (refused) {
+      req.resume()
+      return res.writeHead(403, { 'content-type': 'text/plain' }).end(`${refused}\n`)
+    }
     delete headers.upgrade
     delete headers.connection
     const authority = target.port === 443 ? target.host : `${target.host}:${target.port}`
@@ -263,7 +297,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   function onUpgrade(target: Target, req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     const method = req.method ?? 'GET'
     const path = req.url ?? '/'
-    const headers = transformed(target, method, path, req.headers, req.httpVersion)
+    const { headers, refused } = transformed(target, method, path, req.headers, req.httpVersion)
+    if (refused) return reply(socket, 403, refused)
     const upstream = https.request({
       host: target.address,
       servername: net.isIP(target.host) ? undefined : target.host,

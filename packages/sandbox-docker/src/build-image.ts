@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { prepareSandboxForHarness } from '@ai-sdk/harness/agent'
-import { createCursor } from '@ai-sdk/harness-cursor'
+import { type HarnessAgentAdapter, prepareSandboxForHarness } from '@ai-sdk/harness/agent'
 import { docker, dockerOk } from './docker-cli.ts'
 import {
   BASE_IMAGE,
-  DEFAULT_IMAGE,
-  HARNESS_CURSOR_VERSION,
+  type BakedHarness,
+  harnessLabel,
+  imageFor,
   LABEL,
   SANDBOX_ROOT,
   WORKSPACE_DIR,
@@ -31,9 +31,26 @@ const slugify = (text: string, max: number) =>
 /** The build context of ES's base image, shipped in the package. */
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
-/** The image `docker({ from })` evals run in: `from` plus Node, git and the baked harness. */
-export const harnessImageFor = (from: string) =>
-  `${DEFAULT_IMAGE}-${slugify(from, 40) || 'image'}-${sha256(from).slice(0, 8)}`
+/** The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. */
+export const harnessImageFor = (harness: BakedHarness, from: string) =>
+  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(from).slice(0, 8)}`
+
+/** How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves. */
+const BOOTSTRAPS: Record<
+  BakedHarness,
+  { name: string; cli: string; adapter: () => Promise<HarnessAgentAdapter> }
+> = {
+  cursor: {
+    name: 'Cursor',
+    cli: 'agent',
+    adapter: async () => (await import('@ai-sdk/harness-cursor')).createCursor(),
+  },
+  'claude-code': {
+    name: 'Claude Code',
+    cli: 'claude',
+    adapter: async () => (await import('@ai-sdk/harness-claude-code')).createClaudeCode(),
+  },
+}
 
 /**
  * Adds what the harness bridge needs to a Debian or Ubuntu based toolchain image: Node (copied
@@ -57,17 +74,18 @@ WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}
 const tail = (text: string) => text.trim().split('\n').slice(-15).join('\n')
 
 /**
- * Bakes the Cursor harness bootstrap (which installs the Cursor CLI) into an image, so the
- * image tag pins the CLI build. Rebuild after bumping `@ai-sdk/harness-cursor`. With `from`,
- * the base is that toolchain image instead of ES's Node image.
+ * Bakes a harness's bootstrap (which installs its agent's CLI) into an image, so the image tag
+ * pins the CLI build. Rebuild after bumping the adapter. With `from`, the base is that toolchain
+ * image instead of ES's Node image.
  */
 export async function buildImage(
   log: (line: string) => void,
-  options: { from?: string; signal?: AbortSignal } = {},
+  options: { harness: BakedHarness; from?: string; signal?: AbortSignal },
 ): Promise<{ image: string; agentVersion: string }> {
-  const { from, signal } = options
-  const base = from ? `${harnessImageFor(from)}-base` : BASE_IMAGE
-  const target = from ? harnessImageFor(from) : DEFAULT_IMAGE
+  const { harness, from, signal } = options
+  const bootstrap = BOOTSTRAPS[harness]
+  const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
+  const target = from ? harnessImageFor(harness, from) : imageFor(harness)
   log(`Building ${base}${from ? ` from ${from}` : ''}`)
   const build = from
     ? await docker(['build', '--quiet', '--tag', base, '-'], {
@@ -81,7 +99,7 @@ export async function buildImage(
     )
   }
 
-  log('Installing the Cursor harness bootstrap')
+  log(`Installing the ${bootstrap.name} harness bootstrap`)
   const session = await createDockerSession({
     image: base,
     lifetimeMs: 30 * 60_000,
@@ -90,22 +108,22 @@ export async function buildImage(
   try {
     await prepareSandboxForHarness({
       session,
-      harnesses: [createCursor()],
+      harnesses: [await bootstrap.adapter()],
       sandboxConfig: { workDir: WORKSPACE_DIR },
     })
     const found = await session.run({
-      command: `find "$HOME/.ai-sdk-harness" -name agent \\( -type f -o -type l \\) -perm -u+x | head -1`,
+      command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
     })
     const bin = found.stdout.trim()
-    if (!bin) throw new Error('The harness bootstrap did not install the Cursor CLI')
+    if (!bin) throw new Error(`The harness bootstrap did not install the ${bootstrap.name} CLI`)
     const version = await session.run({ command: `'${bin}' --version` })
     const agentVersion = version.stdout.trim() || 'unknown'
-    log(`Cursor CLI ${agentVersion}`)
+    log(`${bootstrap.name} CLI ${agentVersion}`)
 
     await dockerOk([
       'commit',
       '--change',
-      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="@ai-sdk/harness-cursor@${HARNESS_CURSOR_VERSION}"`,
+      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"`,
       '--change',
       `WORKDIR ${SANDBOX_ROOT}`,
       '--change',
@@ -246,13 +264,16 @@ export function contextFiles(context: string, dockerfile: string): string[] {
 }
 
 /**
- * The tag of a `docker({ dockerfile })` build: a hash of the Dockerfile, every file of its build
- * context (its directory, less `.dockerignore`) and ES's base image, so an edit to any of them
- * builds anew.
+ * The tag of a `docker({ dockerfile })` build for a harness: a hash of the Dockerfile, every file
+ * of its build context (its directory, less `.dockerignore`) and the harness's image that
+ * `ES_BASE` names, so an edit to any of them builds anew.
  */
-export function dockerfileTag(dockerfile: string): { tag: string; sha256: string } {
+export function dockerfileTag(
+  dockerfile: string,
+  harness: BakedHarness,
+): { tag: string; sha256: string } {
   const context = dirname(dockerfile)
-  const hash = createHash('sha256').update(`${ES_BASE_ARG}=${DEFAULT_IMAGE}\0`)
+  const hash = createHash('sha256').update(`${ES_BASE_ARG}=${imageFor(harness)}\0`)
   for (const path of contextFiles(context, dockerfile)) {
     const full = join(context, path)
     const stat = lstatSync(full)
@@ -270,15 +291,20 @@ export function dockerfileTag(dockerfile: string): { tag: string; sha256: string
 
 /**
  * Builds the user's Dockerfile with plain `docker build` (so Docker's layer cache applies), from
- * its directory, with `ES_BASE` set to ES's sandbox image. Rebuilds even when the tag exists
- * with `force`, as `es image build` does.
+ * its directory, with `ES_BASE` set to the harness's sandbox image. Rebuilds even when the tag
+ * exists with `force`, as `es image build` does.
  */
 export async function buildDockerfile(
   dockerfile: string,
-  options: { signal?: AbortSignal; log?: (output: string) => void; force?: boolean } = {},
+  options: {
+    harness: BakedHarness
+    signal?: AbortSignal
+    log?: (output: string) => void
+    force?: boolean
+  },
 ): Promise<string> {
-  const { signal } = options
-  const { tag } = dockerfileTag(dockerfile)
+  const { harness, signal } = options
+  const { tag } = dockerfileTag(dockerfile, harness)
   if (!options.force) {
     const exists = await docker(['image', 'inspect', '--format', '{{.Id}}', tag], { signal })
     if (exists.exitCode === 0) return tag
@@ -291,7 +317,7 @@ export async function buildDockerfile(
       '--file',
       dockerfile,
       '--build-arg',
-      `${ES_BASE_ARG}=${DEFAULT_IMAGE}`,
+      `${ES_BASE_ARG}=${imageFor(harness)}`,
       '--tag',
       tag,
       dirname(dockerfile),

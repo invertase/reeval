@@ -55,26 +55,43 @@ export function matches(rule: RequestTransformation, request: OutboundRequest): 
   return !match.headers || matchPairs(match.headers, headerPairs(request.headers), true)
 }
 
+/**
+ * A request a brokered credential may be sent on: the host, and optionally the path and methods,
+ * in the same shape as a request transformation's `match`.
+ */
+export type EndpointMatch = Pick<RequestTransformation['match'], 'host' | 'path' | 'method'>
+
+/** Whether the request is one of the endpoints (host, path and method, where given). */
+export const onEndpoint = (endpoints: readonly EndpointMatch[], request: OutboundRequest) =>
+  endpoints.some((match) => matches({ match, transform: { headers: {} } }, request))
+
 /** Whether the gateway must decrypt connections to `host`: some rule could apply there. */
 export const decrypts = (rules: readonly RequestTransformation[], host: string) =>
   rules.some((r) => normaliseHost(r.match.host) === normaliseHost(host))
 
 /**
  * The request's headers after every matching rule, in order, so later rules win. Returns the
- * (lower-case) names that were replaced, for logging without values.
+ * (lower-case) names that were replaced, for logging without values. With `endpoints`, no rule
+ * applies off them, and a request carrying a rule's placeholder there is `refused`.
  */
 export function applyTransformations(
   rules: readonly RequestTransformation[],
   request: OutboundRequest,
-): { headers: OutboundRequest['headers']; replaced: string[] } {
+  endpoints?: readonly EndpointMatch[],
+): { headers: OutboundRequest['headers']; replaced: string[]; refused: boolean } {
   const headers = { ...request.headers }
   const replaced = new Set<string>()
-  for (const rule of rules) {
-    if (!matches(rule, request)) continue
+  const matching = rules.filter((rule) => matches(rule, request))
+  if (endpoints && matching.length && !onEndpoint(endpoints, request)) {
+    // Refused when the request carries what a rule keys on (a placeholder); a rule that only
+    // adds headers just doesn't apply here.
+    return { headers, replaced: [], refused: matching.some((r) => r.match.headers?.length) }
+  }
+  for (const rule of matching) {
     for (const [name, value] of Object.entries(rule.transform.headers)) {
       headers[name.toLowerCase()] = value
       replaced.add(name.toLowerCase())
     }
   }
-  return { headers, replaced: [...replaced] }
+  return { headers, replaced: [...replaced], refused: false }
 }

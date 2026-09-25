@@ -96,6 +96,42 @@ describe('egress gateway in Docker', {
     upstream.close()
   })
 
+  test('with endpoints, a host-wide rule keys only those; the rest get a 403 from the gateway', async () => {
+    const s = await open({
+      image: DEFAULT_IMAGE,
+      egress: egress({
+        endpoints: [{ host: 'upstream.test', path: { exact: '/v1/messages' }, method: ['POST'] }],
+      }),
+    })
+    await s.addRequestTransformations?.([
+      {
+        match: {
+          host: 'upstream.test',
+          headers: [{ key: { exact: 'Authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+        },
+        transform: { headers: { Authorization: `Bearer ${REAL}` } },
+      },
+    ])
+    const call = (method: string, path: string) =>
+      sh(
+        s,
+        `curl -sS --max-time 20 -o /dev/null -w '%{http_code}' -X ${method} -H "Authorization: Bearer $KEY" https://upstream.test:${upstream.port}${path}`,
+        { KEY: PLACEHOLDER },
+      )
+    seen.length = 0
+    assert.equal((await call('POST', '/v1/messages?beta=true')).stdout, '200')
+    assert.equal(seen[0]?.authorization, `Bearer ${REAL}`)
+    seen.length = 0
+    for (const [method, path] of [
+      ['GET', '/v1/models'],
+      ['POST', '/v1/files'],
+    ]) {
+      const r = await call(method as string, path as string)
+      assert.equal(r.stdout, '403', `${method} ${path}: ${r.stderr}`)
+    }
+    assert.equal(seen.length, 0, 'refused requests never reach upstream')
+  })
+
   test('the container gets only the placeholder; the exchange request upstream gets the key', async () => {
     const s = await open({ image: DEFAULT_IMAGE, egress: egress() })
     assert.deepEqual(s.egress, { active: true })

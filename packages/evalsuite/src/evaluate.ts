@@ -463,8 +463,9 @@ async function runAttempt(
     }
     record.image = null
     if (spec.sandbox.kind === 'docker') {
-      const { prepareImage } = await import('./sandbox/prepare.ts')
-      record.image = await prepareImage(spec.sandbox, config.root, testSignal)
+      const { imageHarness, prepareImage } = await import('./sandbox/prepare.ts')
+      const harness = imageHarness(spec.harness)
+      record.image = await prepareImage(spec.sandbox, harness, config.root, testSignal)
       image = record.image.ref
     }
   }

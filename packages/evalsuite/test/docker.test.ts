@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { DEFAULT_IMAGE, HARNESS_CURSOR_VERSION, LABEL } from '@evalsuite/sandbox-docker'
+import { DEFAULT_IMAGE, HARNESS_PACKAGES, LABEL } from '@evalsuite/sandbox-docker'
 import { pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const dockerReady = (() => {
@@ -32,9 +32,11 @@ export default defineConfig({
 })
 `
 
-test('the pinned harness version matches the installed adapter', () => {
+test('the pinned harness versions match the installed adapters', () => {
   const pkg = JSON.parse(readFileSync(`${pkgRoot}/package.json`, 'utf8'))
-  assert.equal(pkg.dependencies['@ai-sdk/harness-cursor'], HARNESS_CURSOR_VERSION)
+  for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
+    assert.equal(pkg.dependencies[name], version, name)
+  }
 })
 
 // Per test, not on the describe: a skipped describe hides its tests from the summary's count.

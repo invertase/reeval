@@ -1,17 +1,24 @@
 import { lookup as dnsLookup } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 import type { HarnessV1NetworkPolicy } from '@ai-sdk/harness'
+import type { BakedHarness } from '../image.ts'
 
 export type NetworkPolicy = HarnessV1NetworkPolicy
 
 export type Lookup = (host: string) => Promise<string[]>
 
-/** The hosts the Cursor CLI talks to at runtime. */
-export const CURSOR_HOSTS = ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com']
+/** The hosts each harness's CLI talks to at runtime. */
+export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
+  cursor: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
+  'claude-code': ['api.anthropic.com', '*.anthropic.com'],
+}
 
-/** Cursor plus the package registries and GitHub, for a restricted policy that still installs. */
-export const DEFAULT_ALLOWED_HOSTS = [
-  ...CURSOR_HOSTS,
+/**
+ * The harness's own hosts plus the package registries and GitHub, for a restricted policy that
+ * still installs. Only that harness's hosts: a Cursor attempt can't reach Anthropic.
+ */
+export const defaultAllowedHosts = (harness: BakedHarness) => [
+  ...HARNESS_HOSTS[harness],
   'registry.npmjs.org',
   'registry.yarnpkg.com',
   'github.com',
