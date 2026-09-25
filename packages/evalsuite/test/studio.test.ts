@@ -64,10 +64,11 @@ describe('studio data paths', () => {
   })
 })
 
-// A real history: three recorded runs of the fake agent (pass, fail, two cells × two runs) and
-// one scratch run.
-const evalFile = `import { evaluate, expect, group } from 'evalsuite'
-group('greet', () => {
+// A real history: three recorded runs of the fake agent (pass, fail, a control and a variant ×
+// two runs) and one scratch run.
+const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'evalsuite'
+const other = defineEnvironment('other', {})
+group('greet', process.env.ES_TEST_COMPARE ? { compare: [other], runs: 2 } : {}, () => {
   evaluate('writes hello', async (t) => {
     await t.send('write hello.txt')
     await expect(t.exec('test -f hello.txt')).toSucceed()
@@ -91,22 +92,15 @@ before(async () => {
       harness: agent,
       judge: '{ model: fakeJudge({ score: 0.2 }) }',
     }),
-    'es.matrix.config.ts': fakeConfig({
-      harness: agent,
-      extra: "runs: 2, environment: [baseline, defineEnvironment('other', () => {})],",
-    }).replace(
-      "import { defineConfig } from 'evalsuite'",
-      "import { baseline, defineConfig, defineEnvironment } from 'evalsuite'",
-    ),
   })
   dir = p.dir
-  for (const args of [
-    ['run', '--record'],
-    ['run', '--record', '--config', 'es.fail.config.ts'],
-    ['run', '--record', '--config', 'es.matrix.config.ts'],
-    ['run'],
-  ]) {
-    const r = await runCli(dir, args)
+  for (const [args, env] of [
+    [['run', '--record']],
+    [['run', '--record', '--config', 'es.fail.config.ts']],
+    [['run', '--record'], { ES_TEST_COMPARE: '1' }],
+    [['run']],
+  ] as Array<[string[], NodeJS.ProcessEnv?]>) {
+    const r = await runCli(dir, args, { env })
     assert.ok(r.code === 0 || r.code === 1, r.stderr + r.stdout)
   }
   source = { root: dir, historyDir: join(dir, 'evals/.history'), scratch: true }
@@ -131,7 +125,7 @@ describe('view-models over a real history', () => {
     assert.match(evalHeader?.slug ?? '', /^evals-hello-es-ts-greet-writes-hello-/)
     assert.deepEqual(
       evalHeader?.cells.map((c) => [c.key, c.pass, c.runs]),
-      [['fake/baseline/fake', 1, 1]],
+      [['fake/-/fake', 1, 1]],
     )
   })
 
@@ -176,10 +170,10 @@ describe('view-models over a real history', () => {
     assert.deepEqual(tree[0]?.tally, { pass: 4, fail: 0, infra: 0, skipped: 0 })
     const rows = cellRows(matrix.evals[0] as RunRecord['evals'][number])
     assert.deepEqual(
-      rows.map((r) => [r.environment, r.pass, r.runs, r.lift, r.attempts.length]),
+      rows.map((r) => [r.environment, r.role, r.gated, r.pass, r.runs, r.lift, r.attempts.length]),
       [
-        ['baseline', 2, 2, null, 2],
-        ['other', 2, 2, 0, 2],
+        ['-', 'control', false, 2, 2, null, 2],
+        ['other', 'variant', true, 2, 2, 0, 2],
       ],
     )
   })

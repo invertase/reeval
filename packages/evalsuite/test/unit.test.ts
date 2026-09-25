@@ -8,7 +8,10 @@ import {
   parseDuration,
   resolveConcurrency,
   resolveConfig,
+  selectProfile,
 } from '../src/config.ts'
+import { resolveEnvironment } from '../src/environment/resolve.ts'
+import { defineEnvironment, isMovingRef, layered, parseGitRepo } from '../src/environment.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -17,6 +20,7 @@ import { compare, stackChanges } from '../src/history/views.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
+import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { clip } from '../src/text.ts'
 
@@ -31,11 +35,9 @@ test('resolveConfig defaults', () => {
   const c = resolveConfig({}, '/p')
   assert.deepEqual(c.include, ['evals/**/*.es.ts'])
   assert.deepEqual(c.harness, [{ kind: 'cursor' }])
-  assert.deepEqual(c.sandbox, [{ kind: 'docker' }])
-  assert.deepEqual(
-    c.environment.map((e) => e.name),
-    ['baseline'],
-  )
+  assert.deepEqual(c.sandbox, { kind: 'docker' })
+  assert.equal(c.environment, undefined, 'no environment by default')
+  assert.deepEqual(c.profiles, {})
   assert.equal(c.runs, 1)
   assert.equal(c.judge.model, undefined, 'no default judge model')
   assert.equal(c.timeoutMs, 900_000)
@@ -210,12 +212,12 @@ const entry = (
   git: null,
   runner: 'local',
   harnesses: ['cursor:composer-2.5'],
-  summary: { evals: 1, attempts: 1, pass: 0, fail: 0, infraError: 0, skipped: 0 },
+  summary: { evals: 1, attempts: 1, pass: 0, fail: 0, notGated: 0, infraError: 0, skipped: 0 },
   stack: {
     imageIds: ['sha256:aaa'],
     agentClis: ['1.0'],
     harnesses: ['cursor:composer-2.5'],
-    environments: ['baseline@abc'],
+    environments: ['base@abc'],
     judgeModel: 'google/gemini-3.8-flash',
     judgeServed: ['gemini-3.8-flash-001'],
     judgeVersion: 'v1',
@@ -413,4 +415,140 @@ test('clip cuts on a word boundary with an ellipsis', () => {
   assert.match(cut, /(instruction,|numbered|every)…$/)
   assert.equal(clip('short', 200), 'short')
   assert.equal(clip('x'.repeat(300), 10), `${'x'.repeat(9)}…`)
+})
+
+const base: Resolved = {
+  harness: [
+    { kind: 'fake', id: 'a' },
+    { kind: 'fake', id: 'b' },
+  ],
+  sandbox: { kind: 'fake' },
+  environment: undefined,
+  compare: undefined,
+  runs: 3,
+  env: {},
+  judge: {},
+  timeout: undefined,
+  tags: [],
+  pin: [],
+}
+
+test('expand: per harness, the control then each variant; labels name the role', () => {
+  const skill = defineEnvironment('skill', { env: { A: '1' } })
+  const { resolved } = cascade(base, [{ options: { compare: [skill], runs: 1 }, where: 'e' }], 'e')
+  const attempts = expand(resolved)
+  assert.deepEqual(
+    attempts.map((a) => [a.cell.key, a.cell.role, a.gated, a.label]),
+    [
+      ['a/-/fake', 'control', false, 'a · control'],
+      ['a/skill/fake', 'variant', true, 'a · skill'],
+      ['b/-/fake', 'control', false, 'b · control'],
+      ['b/skill/fake', 'variant', true, 'b · skill'],
+    ],
+  )
+})
+
+test('cascade: profile defaults sit under evals, limits narrow unless pinned, --runs wins', () => {
+  const skill = defineEnvironment('skill', {})
+  const profile = {
+    name: 'pr',
+    reason: '--profile',
+    defaults: { runs: 5 },
+    limit: { runs: 1, compare: false as const, harness: ['a'] },
+    judge: {},
+    tags: [],
+    budget: {},
+  }
+  const narrowed = cascade(base, [{ options: { compare: [skill] }, where: 'e' }], 'e', { profile })
+  assert.equal(narrowed.resolved.runs, 1)
+  assert.deepEqual(
+    narrowed.resolved.harness.map((h) => h.id),
+    ['a'],
+  )
+  assert.deepEqual(narrowed.resolved.compare?.variants, [])
+  assert.deepEqual(narrowed.notes, [
+    'runs 5 → 1 (profile pr)',
+    'harnesses 2 → 1 (profile pr)',
+    'compare off (profile pr)',
+  ])
+  const pinned = cascade(
+    base,
+    [{ options: { compare: [skill], pin: ['runs', 'compare'] }, where: 'e' }],
+    'e',
+    { profile, runs: 2 },
+  )
+  assert.equal(pinned.resolved.runs, 2, '--runs beats pins')
+  assert.equal(pinned.resolved.compare?.variants.length, 1)
+  const skipped = cascade(
+    base,
+    [{ options: { harness: { kind: 'fake', id: 'c' } }, where: 'e' }],
+    'e',
+    { profile },
+  )
+  assert.equal(skipped.skip, 'no harness left: profile pr allows a')
+})
+
+test('layered environments and overrides', async () => {
+  const main = defineEnvironment('main', ({ secret }) => ({
+    env: { KEY: secret.fromEnv('ES_UNIT_KEY', { optional: true }), MODE: 'main' },
+    files: { 'a.txt': 'main' },
+    setup: ['echo one'],
+  }))
+  const branch = main.extend('branch', { env: { MODE: 'branch' }, setup: ['echo two'] })
+  const other = defineEnvironment('other', { files: { 'a.txt': 'other' }, rules: 'Be terse.' })
+  const applied = layered(main, branch)
+  assert.deepEqual(
+    applied.layers.map((l) => l.name),
+    ['main', 'branch'],
+    'the variant layers skip what the control already has',
+  )
+  const r = await resolveEnvironment(applied, {}, '/p', 'e')
+  assert.deepEqual(r.record.overrides, ['env.MODE'])
+  assert.deepEqual(r.record.setup, ['echo one', 'echo two'])
+  assert.deepEqual(r.record.unset, ['KEY'])
+  assert.equal(r.vars.MODE, 'branch')
+  const crossed = await resolveEnvironment(layered(main, other), {}, '/p', 'e')
+  assert.deepEqual(crossed.record.overrides, ['files.a.txt'])
+  assert.equal(crossed.record.parent, 'main')
+  assert.ok(crossed.files.some((f) => f.path === 'AGENTS.md' && f.content === 'Be terse.'))
+})
+
+test('git refs and repo shorthands', () => {
+  assert.equal(isMovingRef('main'), true)
+  assert.equal(isMovingRef(undefined), true)
+  assert.equal(isMovingRef('feature/x'), true)
+  assert.equal(isMovingRef('v2.4.0'), false)
+  assert.equal(isMovingRef('0.3.0'), false)
+  assert.equal(isMovingRef('a1b2c3d'), false)
+  assert.deepEqual(parseGitRepo('github:invertase/genkit-skills'), {
+    url: 'https://github.com/invertase/genkit-skills.git',
+  })
+  assert.deepEqual(parseGitRepo('https://github.com/invertase/skills/tree/v1/skills/genkit'), {
+    url: 'https://github.com/invertase/skills.git',
+    ref: 'v1',
+    path: 'skills/genkit',
+  })
+})
+
+test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {
+  const config = resolveConfig(
+    {
+      budget: { attempts: 50 },
+      defaultProfile: { ci: 'pr', local: 'dev' },
+      profiles: { pr: { budget: { duration: '1h' } }, dev: {}, nightly: { record: 'always' } },
+    },
+    '/p',
+  )
+  assert.equal(selectProfile(config, 'nightly', {})?.reason, '--profile')
+  assert.equal(selectProfile(config, undefined, { ES_PROFILE: 'nightly' })?.name, 'nightly')
+  const ci = selectProfile(config, undefined, { CI: 'true' })
+  assert.deepEqual(
+    [ci?.name, ci?.reason, ci?.budget],
+    ['pr', 'auto: CI is set', { attempts: 50, duration: '1h' }],
+  )
+  assert.equal(selectProfile(config, undefined, {})?.reason, 'default')
+  assert.throws(
+    () => selectProfile(config, 'nope', {}),
+    /Unknown profile "nope"\. Profiles in es\.config\.ts: pr, dev, nightly\./,
+  )
 })

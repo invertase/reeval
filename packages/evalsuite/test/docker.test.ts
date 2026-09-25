@@ -80,20 +80,29 @@ evaluate('docker', async (t) => {
   })
 
   test(
-    'environment exec steps bake into a cached layer; secrets reach the container',
+    'image steps bake into a cached layer; setup runs outside the timeout; secrets reach the container or only checks',
     docker,
     async () => {
-      const eval_ = `import { defineEnvironment, evaluate, expect, secret } from 'evalsuite'
-const tools = defineEnvironment('tools', (env) => {
-  env.exec('echo layer > /opt/es-layer && date +%s%N > /opt/es-built')
-  env.file('~/.config/es/hint.txt', 'from home')
-})
-evaluate('layered', { environment: tools, env: { DB_URL: secret('ES_TEST_DB_URL') } }, async (t) => {
+      const eval_ = `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const tools = defineEnvironment('tools', ({ secret }) => ({
+  image: [{ run: 'echo layer > /opt/es-layer && date +%s%N > /opt/es-built', timeout: '2m' }],
+  files: { '~/.config/es/hint.txt': 'from home' },
+  env: {
+    DB_URL: secret.fromEnv('ES_TEST_DB_URL'),
+    CHECK_ONLY: secret.fromEnv('ES_TEST_DB_URL', { to: 'checks' }),
+  },
+  setup: [{ run: 'sleep 6 && printf %s "$CHECK_ONLY" > /tmp/check-only', timeout: '30s' }],
+}))
+evaluate('layered', { environment: tools, timeout: '5s' }, async (t) => {
   await t.send('x')
   expect((await t.exec('cat /opt/es-layer')).stdout).toBe('layer\\n')
   expect((await t.exec('printf %s "$DB_URL"')).stdout).toBe('postgres://u:pw-long-enough@db')
   expect((await t.exec('cat ~/.config/es/hint.txt')).stdout).toBe('from home')
   await t.exec('cat /opt/es-built')
+  expect((await t.exec('cat /tmp/check-only')).stdout).toBe('postgres://u:pw-long-enough@db')
+  const pid1 = (await t.exec("tr '\\\\0' '\\\\n' < /proc/1/environ")).stdout
+  expect(pid1).toContain('DB_URL=')
+  expect(pid1).not.toContain('CHECK_ONLY')
 })
 `
       const p = await project('docker-env', {
@@ -107,9 +116,10 @@ evaluate('layered', { environment: tools, env: { DB_URL: secret('ES_TEST_DB_URL'
         run.evals[0]?.read(run.evals[0].trial.checks[3]?.log.path ?? '') ?? ''
       const a = readRun(p.dir)
       assert.match(a.evals[0]?.trial.image?.ref ?? '', /^evalsuite-env:[0-9a-f]{16}$/)
-      assert.deepEqual(a.run.environments[0]?.baked, [
+      assert.deepEqual(a.run.environments[0]?.image, [
         'echo layer > /opt/es-layer && date +%s%N > /opt/es-built',
       ])
+      assert.ok(a.evals[0]?.trial.files.setupLog, 'setup.log is kept')
       assert.doesNotMatch(JSON.stringify(a.run), /pw-long-enough/, 'declared secrets are redacted')
       const second = await runCli(p.dir, ['run'], { env, ...slow })
       assert.equal(second.code, 0, second.stdout + second.stderr)
@@ -122,8 +132,8 @@ evaluate('layered', { environment: tools, env: { DB_URL: secret('ES_TEST_DB_URL'
   test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`
     const env = `import { defineEnvironment } from 'evalsuite'
-export const fresh = defineEnvironment('fresh', (env) => {
-  env.exec('echo ${nonce} > /opt/es-nonce && date +%s%N > /opt/es-built')
+export const fresh = defineEnvironment('fresh', {
+  image: ['echo ${nonce} > /opt/es-nonce && date +%s%N > /opt/es-built'],
 })
 `
     const file = (name: string) => `import { evaluate } from 'evalsuite'

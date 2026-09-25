@@ -30,6 +30,7 @@ describe('engine', () => {
       attempts: 1,
       pass: 1,
       fail: 0,
+      notGated: 0,
       infraError: 0,
       skipped: 0,
     })
@@ -138,6 +139,7 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
       attempts: 2,
       pass: 1,
       fail: 0,
+      notGated: 0,
       infraError: 0,
       skipped: 1,
     })
@@ -292,10 +294,10 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     const [input] = JSON.parse(e.read(e.trial.files.judgeInput?.path ?? ''))
     assert.equal(input.question, 'Did it write hello.txt?')
     assert.equal(input.state.task, 'write hello.txt')
-    assert.equal(e.trial.id, 'fake/baseline/fake#1')
+    assert.equal(e.trial.id, 'fake/-/fake#1')
     assert.match(
       e.trial.files.diff?.path ?? '',
-      new RegExp(`^${e.slug}/fake-baseline-fake-[0-9a-f]{6}/1/diff\\.patch$`),
+      new RegExp(`^${e.slug}/fake-fake-[0-9a-f]{6}/1/diff\\.patch$`),
     )
     assert.equal(
       e.trial.files.transcript?.path,
@@ -395,13 +397,14 @@ evaluate('passes', async () => {})
       env: { ES_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
     })
     assert.equal(r.code, 1)
-    const out = r.stdout.trimEnd().split('\n')
+    const [plan, ...out] = r.stdout.trimEnd().split('\n')
+    assert.match(plan ?? '', /^plan {2}2 evals · 2 cells · 2 attempts · ~/)
     assert.equal(out[0], 'es run: 1 eval file')
     assert.match(out[1] ?? '', /^FAIL evals\/agent\.es\.ts › agent eval \(\d+ms, judge\)$/)
     assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
     assert.match(
       out[3] ?? '',
-      /^ {2}record: \.es\/runs\/[^/]+\/evals-agent-es-ts-agent-eval-[0-9a-f]{6}\/fake-baseline-fake-[0-9a-f]{6}\/1$/,
+      /^ {2}record: \.es\/runs\/[^/]+\/evals-agent-es-ts-agent-eval-[0-9a-f]{6}\/fake-fake-[0-9a-f]{6}\/1$/,
     )
     assert.equal(out[4], '1 passed, 1 failed')
     assert.match(out[5] ?? '', /^summary: \.es\/runs\/[^/]+\/summary\.md$/)
@@ -565,7 +568,7 @@ evaluate('early', async (t) => { await t.judge('?') })
     const r = await runCli(p.dir, ['run'], {
       timeoutMs: 20_000,
       onOutput: (stdout, pid) => {
-        if (!stdout.startsWith('es ')) return false
+        if (!/^es /m.test(stdout)) return false
         process.kill(pid, 'SIGINT')
         return true
       },

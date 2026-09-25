@@ -18,16 +18,25 @@ const s = (seconds: number) => T0 + seconds * 1000
 const GREET = 'evals/hello.es.ts › greet module › creates a tested greet module'
 const DEFAULT = 'evals/hello.es.ts › greet module › adds a default name in a follow-up turn'
 
-const CELL = 'cursor:composer-2.5/baseline/docker'
+const CELL = 'cursor:composer-2.5/-/docker'
 const keyOf = (id: string) => `${id} # ${CELL}#1`
 const attempt = (name: string, group: string[]): AttemptMeta => ({
   name,
   groups: group,
   tags: [],
-  cell: { key: CELL, harness: 'cursor:composer-2.5', environment: 'baseline', sandbox: 'docker' },
+  cell: {
+    key: CELL,
+    harness: 'cursor:composer-2.5',
+    environment: '-',
+    sandbox: 'docker',
+    role: 'control',
+  },
   n: 1,
   label: '',
   harness: { kind: 'cursor', model: 'composer-2.5' },
+  sandbox: { kind: 'docker' },
+  gated: true,
+  plan: { harnesses: 1, variants: null, runs: 1, attempts: 1, notes: [], warnings: [] },
 })
 
 const progress = (id: string, at: number, p: Omit<Progress, 'at'>): EsEvent =>
@@ -107,7 +116,7 @@ const entry = (r: EvalResult, turns: number, judge?: number): EvalEntry =>
 const record = {
   durationMs: 365_000,
   cost: { usd: null },
-  summary: { evals: 2, attempts: 2, pass: 1, fail: 1, infraError: 0, skipped: 0 },
+  summary: { evals: 2, attempts: 2, pass: 1, fail: 1, notGated: 0, infraError: 0, skipped: 0 },
   evals: [entry(greetResult, 1, 0.92), entry(defaultResult, 2)],
 } as unknown as RunRecord
 
