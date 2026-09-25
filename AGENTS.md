@@ -45,6 +45,8 @@ its files import `evalsuite`.
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
+| `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
+| `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`; `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`) and Claude Code (`@ai-sdk/harness-claude-code`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
