@@ -31,10 +31,11 @@ export function run(
   const { signal } = options
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason)
+    const detached = options.detached ?? true
     const child = spawn(cmd, args, {
       cwd: options.cwd,
       stdio: 'pipe',
-      detached: options.detached ?? true,
+      detached,
       env: options.env ? { ...process.env, ...options.env } : process.env,
     })
     const out: Buffer[] = []
@@ -43,7 +44,16 @@ export function run(
     child.stderr.on('data', (d) => {
       stderr += d
     })
-    const onAbort = () => child.kill('SIGKILL')
+    // A detached child leads its own process group: kill the group, or grandchildren (a `git`
+    // under `sh -c`) outlive the abort.
+    const onAbort = () => {
+      try {
+        if (detached && child.pid) process.kill(-child.pid, 'SIGKILL')
+        else child.kill('SIGKILL')
+      } catch {
+        child.kill('SIGKILL')
+      }
+    }
     signal?.addEventListener('abort', onAbort, { once: true })
     child.on('error', reject)
     child.on('close', (code) => {
