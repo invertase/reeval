@@ -27,11 +27,15 @@ export {
 } from './docker-cli.ts'
 export { CA_PATH, PROXY_PORT } from './egress/gateway.ts'
 export {
+  DOCKER_EGRESS,
   defaultAllowedHosts,
+  type EgressCapabilities,
   HARNESS_HOSTS,
   hostAllowed,
   type NetworkPolicy,
+  PACKAGE_HOSTS,
 } from './egress/policy.ts'
+export type { BlockedHost, ContactedHost, EgressTraffic } from './egress/proxy.ts'
 export {
   applyTransformations,
   type EndpointMatch,

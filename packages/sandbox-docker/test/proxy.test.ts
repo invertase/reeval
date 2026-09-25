@@ -4,10 +4,12 @@ import http from 'node:http'
 import http2 from 'node:http2'
 import https from 'node:https'
 import net from 'node:net'
+import { duplexPair } from 'node:stream'
 import { after, before, describe, test } from 'node:test'
 import tls from 'node:tls'
 import { gzipSync } from 'node:zlib'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
+import { link } from '../src/egress/mux.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import {
   createEgressProxy,
@@ -132,6 +134,8 @@ async function startProxy(
     EgressProxyOptions,
     'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens'
   > = {},
+  /** Hand each connection over as a plain Duplex, as the gateway's mux streams are. */
+  asMux = false,
 ) {
   const ca = createCertificateAuthority()
   const lines: string[] = []
@@ -147,7 +151,15 @@ async function startProxy(
     lookup: async (host) => (host.endsWith('.test') ? ['127.0.0.1'] : ['203.0.113.1']),
     allowLoopback: true,
   })
-  const server = net.createServer((s) => proxy.handle(s))
+  // Each connection reaches the proxy as a plain Duplex, as the gateway's mux streams do.
+  const raw = new Set<net.Socket>()
+  const server = net.createServer((s) => {
+    if (!asMux) return proxy.handle(s)
+    raw.add(s)
+    const [ours, theirs] = duplexPair()
+    link(s, ours)
+    proxy.handle(theirs)
+  })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
   return {
     proxy,
@@ -156,6 +168,7 @@ async function startProxy(
     port: (server.address() as net.AddressInfo).port,
     close() {
       proxy.close()
+      for (const s of raw) s.destroy()
       server.close()
     },
   }
@@ -582,6 +595,59 @@ describe('egress policy through the proxy', () => {
           .once('error', () => resolve(0)),
       )
       assert.equal(plain, 403)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('records each host reached, with its bytes, and each host refused, with why', async () => {
+    const gw = await startProxy({ mode: 'custom', allowedHosts: [HOST] }, {}, true)
+    try {
+      gw.proxy.addTransformations([rule(0)])
+      const ok = await viaProxy(gw, HOST, h1.port, { path: '/echo' })
+      assert.equal(ok.status, 200)
+      for (let i = 0; i < 2; i++) assert.equal((await connect(gw, OTHER, h1.port)).ok, false)
+      const plain = await new Promise<number>((resolve) =>
+        http
+          .get({ host: '127.0.0.1', port: gw.port, path: 'http://elsewhere.test/' }, (res) => {
+            res.resume()
+            resolve(res.statusCode ?? 0)
+          })
+          .once('error', () => resolve(0)),
+      )
+      assert.equal(plain, 403)
+      const { contacted, blocked } = gw.proxy.traffic()
+      assert.deepEqual(
+        contacted.map((h) => [h.host, h.port, h.connections]),
+        [[HOST, h1.port, 1]],
+      )
+      const [reached] = contacted
+      assert.ok((reached?.sent ?? 0) > 0, 'the request and the TLS handshake count as sent')
+      assert.ok((reached?.received ?? 0) > ok.body.length, 'the response counts as received')
+      assert.deepEqual(blocked, [
+        {
+          host: 'elsewhere.test',
+          port: 80,
+          connections: 1,
+          reason: "elsewhere.test isn't in the allowlist",
+        },
+        { host: OTHER, port: h1.port, connections: 2, reason: `${OTHER} isn't in the allowlist` },
+      ])
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('allow-all records what it lets through and refuses only the always-denied', async () => {
+    const gw = await startProxy({ mode: 'allow-all' }, {}, true)
+    try {
+      assert.ok((await connect(gw, HOST, h1.port)).ok)
+      const { contacted, blocked } = gw.proxy.traffic()
+      assert.deepEqual(
+        contacted.map((h) => h.host),
+        [HOST],
+      )
+      assert.deepEqual(blocked, [])
     } finally {
       gw.close()
     }

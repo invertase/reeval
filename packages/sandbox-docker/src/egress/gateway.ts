@@ -5,7 +5,7 @@ import { docker } from '../docker-cli.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
 import type { NetworkPolicy } from './policy.ts'
-import { createEgressProxy, type EgressProxyOptions } from './proxy.ts'
+import { createEgressProxy, type EgressProxyOptions, type EgressTraffic } from './proxy.ts'
 import type { RequestTransformation } from './rules.ts'
 import type { Substitution } from './substitution.ts'
 
@@ -28,6 +28,8 @@ export type Gateway = {
   setTransformations(rules: readonly RequestTransformation[]): void
   setPolicy(policy: NetworkPolicy): void
   setSubstitutions(subs: readonly Substitution[]): void
+  /** The hosts the sandbox contacted and was refused so far. */
+  traffic(): EgressTraffic
   /** A 127.0.0.1 URL on the host that reaches `port` inside the container through the tunnel. */
   portUrl(port: number, protocol: 'ws' | 'http'): Promise<string>
   /** Why the gateway stopped on its own (the forwarder exited), once it has. */
@@ -159,6 +161,7 @@ export async function startGateway(
     setTransformations: proxy.setTransformations,
     setPolicy: proxy.setPolicy,
     setSubstitutions: proxy.setSubstitutions,
+    traffic: proxy.traffic,
     get stopped() {
       return stopped
     },

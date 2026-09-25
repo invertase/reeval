@@ -65,9 +65,26 @@ export type EgressProxyOptions = {
   derivedTokens?: readonly DerivedTokens[]
 }
 
+/**
+ * A host the sandbox reached through the gateway. `sent` and `received` are the bytes between the
+ * sandbox and the gateway after the policy let the connection through, TLS included.
+ */
+export type ContactedHost = {
+  host: string
+  port: number
+  connections: number
+  sent: number
+  received: number
+}
+/** A host the policy refused, and why. */
+export type BlockedHost = { host: string; port: number; connections: number; reason: string }
+/** What went through the gateway, sorted by host and port. */
+export type EgressTraffic = { contacted: ContactedHost[]; blocked: BlockedHost[] }
+
 export type EgressProxy = {
   /** Serves one connection from the sandbox: an HTTP proxy client (CONNECT or absolute URLs). */
   handle(connection: Duplex): void
+  traffic(): EgressTraffic
   addTransformations(rules: readonly RequestTransformation[]): void
   setTransformations(rules: readonly RequestTransformation[]): void
   setPolicy(policy: NetworkPolicy): void
@@ -138,6 +155,54 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     return s
   }
 
+  const contacted = new Map<string, ContactedHost>()
+  const blocked = new Map<string, BlockedHost>()
+  /** The host each sandbox connection's bytes count towards: its latest allowed request's. */
+  const counting = new WeakMap<Duplex, ContactedHost>()
+  /** Bytes a connection sent before the policy decided whose they are: the request itself. */
+  const unclaimed = new WeakMap<Duplex, number>()
+  const contact = (connection: Duplex, host: string, port: number) => {
+    const key = `${host}:${port}`
+    let entry = contacted.get(key)
+    if (!entry) {
+      entry = { host, port, connections: 0, sent: 0, received: 0 }
+      contacted.set(key, entry)
+    }
+    entry.connections++
+    entry.sent += unclaimed.get(connection) ?? 0
+    unclaimed.delete(connection)
+    counting.set(connection, entry)
+  }
+  const block = (connection: Duplex, host: string, port: number, reason: string) => {
+    const key = `${host}:${port}`
+    const entry = blocked.get(key) ?? { host, port, connections: 0, reason }
+    entry.connections++
+    blocked.set(key, entry)
+    counting.delete(connection)
+    unclaimed.delete(connection)
+  }
+  /** Counts what the connection carries each way, without reading it or changing its flow. */
+  const countBytes = (connection: Duplex) => {
+    const push = connection.push.bind(connection)
+    connection.push = (chunk: unknown, encoding?: BufferEncoding) => {
+      const entry = counting.get(connection)
+      const n = chunk ? Buffer.byteLength(chunk as Buffer) : 0
+      if (entry) entry.sent += n
+      else unclaimed.set(connection, (unclaimed.get(connection) ?? 0) + n)
+      return push(chunk, encoding)
+    }
+    const write = connection.write.bind(connection) as (...args: unknown[]) => boolean
+    connection.write = ((chunk: unknown, ...rest: unknown[]) => {
+      const entry = counting.get(connection)
+      if (entry && chunk) entry.received += Buffer.byteLength(chunk as Buffer)
+      return write(chunk, ...rest)
+    }) as Duplex['write']
+  }
+  const byHost = <T extends { host: string; port: number }>(entries: Iterable<T>) =>
+    [...entries]
+      .map((e) => ({ ...e }))
+      .sort((a, b) => a.host.localeCompare(b.host) || a.port - b.port)
+
   const credentialsFor = (host: string) => {
     let creds = leaves.get(host)
     if (!creds) {
@@ -157,8 +222,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`es:egress CONNECT ${host}:${port} denied (${verdict.reason})`)
+        if (verdict.status === 403) block(socket, host, port, verdict.reason)
+        else contact(socket, host, port)
         return reply(socket, verdict.status, `blocked by the ES egress policy: ${verdict.reason}`)
       }
+      contact(socket, host, port)
       const target = { host, port, address: verdict.address }
       if (decrypts(rules, host) || substitutes(allSubs(), host) || hostAllowed(tokenHosts, host)) {
         log(`es:egress CONNECT ${host}:${port} decrypt`)
@@ -194,11 +262,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`es:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
+        if (verdict.status === 403) block(req.socket, host, port, verdict.reason)
+        else contact(req.socket, host, port)
         return res
           .writeHead(verdict.status)
           .end(`blocked by the ES egress policy: ${verdict.reason}\n`)
       }
       log(`es:egress ${req.method} http://${host}:${port}${url.pathname}`)
+      contact(req.socket, host, port)
       const upstream = http.request({
         host: verdict.address,
         port,
@@ -547,9 +618,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   return {
     handle(connection) {
       track(connection)
+      countBytes(connection)
       connection.on('error', () => connection.destroy())
       front.emit('connection', connection)
     },
+    traffic: () => ({ contacted: byHost(contacted.values()), blocked: byHost(blocked.values()) }),
     addTransformations(more) {
       rules = [...rules, ...more]
     },

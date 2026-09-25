@@ -258,6 +258,33 @@ describe('network policy', () => {
     }
   })
 
+  test('an unlisted host is refused before any DNS lookup', async () => {
+    const asked: string[] = []
+    const counting = async (host: string) => {
+      asked.push(host)
+      return lookup(host)
+    }
+    const check = createPolicyCheck(
+      { mode: 'custom', allowedHosts: ['github.com'] },
+      { lookup: counting },
+    )
+    const verdict = await check('unresolvable.invalid')
+    assert.deepEqual(verdict, {
+      allowed: false,
+      status: 403,
+      reason: "unresolvable.invalid isn't in the allowlist",
+    })
+    assert.deepEqual(asked, [])
+    // Twin: a listed host is looked up, and so is any host when the policy allows CIDRs.
+    assert.equal((await check('github.com')).allowed, true)
+    const cidrs = createPolicyCheck(
+      { mode: 'custom', allowedCIDRs: ['10.0.0.0/8'] },
+      { lookup: counting },
+    )
+    assert.equal((await cidrs('internal.corp')).allowed, true)
+    assert.deepEqual(asked, ['github.com', 'internal.corp'])
+  })
+
   test('deny-all denies everything', async () => {
     const check = createPolicyCheck({ mode: 'deny-all' }, { lookup })
     const verdict = await check('api2.cursor.sh')

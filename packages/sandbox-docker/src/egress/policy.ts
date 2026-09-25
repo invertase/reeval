@@ -7,18 +7,27 @@ export type NetworkPolicy = HarnessV1NetworkPolicy
 
 export type Lookup = (host: string) => Promise<string[]>
 
+/**
+ * What a sandbox provider can do about egress. `enforce`: nothing (`none`), `allow-all` or
+ * `deny-all` only (`all-or-nothing`), or a host allowlist too (`allowlist`). `record`: whether
+ * it reports the hosts the sandbox contacted and was refused.
+ */
+export type EgressCapabilities = {
+  enforce: 'none' | 'all-or-nothing' | 'allowlist'
+  record: boolean
+}
+
+/** The Docker sandbox enforces every policy through its egress gateway, and records what passes. */
+export const DOCKER_EGRESS: EgressCapabilities = { enforce: 'allowlist', record: true }
+
 /** The hosts each harness's CLI talks to at runtime. */
 export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   cursor: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
   'claude-code': ['api.anthropic.com', '*.anthropic.com'],
 }
 
-/**
- * The harness's own hosts plus the package registries and GitHub, for a restricted policy that
- * still installs. Only that harness's hosts: a Cursor attempt can't reach Anthropic.
- */
-export const defaultAllowedHosts = (harness: BakedHarness) => [
-  ...HARNESS_HOSTS[harness],
+/** The package registries and GitHub, for a restricted policy that still installs. */
+export const PACKAGE_HOSTS: readonly string[] = Object.freeze([
   'registry.npmjs.org',
   'registry.yarnpkg.com',
   'github.com',
@@ -26,6 +35,15 @@ export const defaultAllowedHosts = (harness: BakedHarness) => [
   '*.githubusercontent.com',
   'pypi.org',
   'files.pythonhosted.org',
+])
+
+/**
+ * The harness's own hosts plus `PACKAGE_HOSTS`. Only that harness's hosts: a Cursor attempt
+ * can't reach Anthropic.
+ */
+export const defaultAllowedHosts = (harness: BakedHarness) => [
+  ...HARNESS_HOSTS[harness],
+  ...PACKAGE_HOSTS,
 ]
 
 /**
@@ -99,6 +117,11 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     if (policy.mode === 'deny-all') {
       return { allowed: false, status: 403, reason: 'the policy denies all egress' }
     }
+    // Refused before any DNS lookup, so an unlisted host is never resolved on the agent's behalf.
+    const listed = hostAllowed(custom?.allowedHosts ?? [], host)
+    if (custom && !listed && !custom.allowedCIDRs?.length) {
+      return { allowed: false, status: 403, reason: `${host} isn't in the allowlist` }
+    }
     let addresses: string[]
     try {
       addresses = isIP(host) ? [host] : await lookup(host)
@@ -118,7 +141,7 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     if (addresses.some((a) => inList(deniedCidrs, a))) {
       return { allowed: false, status: 403, reason: `${host} is in a denied range` }
     }
-    if (hostAllowed(custom.allowedHosts ?? [], host)) return { allowed: true, address: first }
+    if (listed) return { allowed: true, address: first }
     if (custom.allowedCIDRs?.length && addresses.every((a) => inList(allowedCidrs, a))) {
       return { allowed: true, address: first }
     }
