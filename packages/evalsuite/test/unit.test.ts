@@ -30,7 +30,21 @@ import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
 import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
+import { createFakeSandbox } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
+
+test('the fake sandbox reads and writes ~/ paths in its home', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    await box.writeFile('~/.config/es/hint.txt', 'from home')
+    assert.equal(await box.readFile('~/.config/es/hint.txt'), 'from home')
+    assert.equal(readFileSync(join(box.home, '.config/es/hint.txt'), 'utf8'), 'from home')
+    assert.equal(await box.readFile('.config/es/hint.txt'), null, 'not in the workspace')
+    assert.equal((await box.exec('cat ~/.config/es/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
 
 test('parseDuration', () => {
   assert.equal(parseDuration('90s'), 90_000)

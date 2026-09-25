@@ -19,6 +19,8 @@ export async function createFakeSandbox(
   const workdir = join(base, 'work')
   await mkdir(workdir)
   let destroyed: Promise<void> | undefined
+  const resolve = (path: string) =>
+    path.startsWith('~/') ? join(base, path.slice(2)) : join(workdir, path)
 
   return {
     workdir,
@@ -29,9 +31,9 @@ export async function createFakeSandbox(
         signal,
       }),
     home: base,
-    readFile: (path) => readFile(join(workdir, path), 'utf8').catch(() => null),
+    readFile: (path) => readFile(resolve(path), 'utf8').catch(() => null),
     async writeFile(path, content) {
-      const target = path.startsWith('~/') ? join(base, path.slice(2)) : join(workdir, path)
+      const target = resolve(path)
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, content)
     },
