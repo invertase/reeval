@@ -56,6 +56,7 @@ export type EngineOptions = {
 const require = createRequire(import.meta.url)
 export const vitestVersion: string = require('vitest/package.json').version
 export const engineVersions = { vitest: vitestVersion }
+const packageName: string = require('../../package.json').name
 
 // ES's own frames (src/ via source maps, or dist/) are noise in an eval's stack trace.
 const esDirs = ['../../src/', '../../dist/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
@@ -159,13 +160,17 @@ function moduleProblems(root: string, modules: readonly TestModule[]) {
  * is never loaded and doesn't matter.
  */
 export function vitestMismatch(root: string): string | undefined {
-  let theirs: string
-  try {
-    const evalsuite = createRequire(`${root}/`).resolve('evalsuite/package.json')
-    theirs = createRequire(evalsuite).resolve('vitest/package.json')
-  } catch {
-    return undefined
-  }
+  const theirs = [...new Set([packageName, 'evalsuite'])]
+    .map((name) => {
+      try {
+        const evalsuite = createRequire(`${root}/`).resolve(`${name}/package.json`)
+        return createRequire(evalsuite).resolve('vitest/package.json')
+      } catch {
+        return undefined
+      }
+    })
+    .find((path) => path !== undefined)
+  if (!theirs) return undefined
   const ours = require.resolve('vitest/package.json')
   if (realpathSync(theirs) === realpathSync(ours)) return undefined
   return `The evalsuite this project resolves uses another copy of vitest (${theirs}) than this es (${ours}). Run the project's own es, e.g. npx es.`

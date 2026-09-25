@@ -191,6 +191,14 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     await writeFile(join(vitest, 'package.json'), manifest('vitest'))
     assert.match(vitestMismatch(dir) ?? '', /uses another copy of vitest/)
     assert.equal(vitestMismatch((await project('same-evalsuite', {})).dir), undefined)
+
+    const { name } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
+    const published = tempDir('other-published')
+    const publishedVitest = join(published, 'node_modules', name, 'node_modules/vitest')
+    await mkdir(publishedVitest, { recursive: true })
+    await writeFile(join(published, 'node_modules', name, 'package.json'), manifest(name))
+    await writeFile(join(publishedVitest, 'package.json'), manifest('vitest'))
+    assert.match(vitestMismatch(published) ?? '', /uses another copy of vitest/)
   })
 
   test('only the engine module imports vitest', () => {

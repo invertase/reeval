@@ -1,9 +1,12 @@
 {
-  "name": "evalsuite",
-  "version": "0.1.0",
+  "name": "@invertase/foobar",
+  "version": "0.0.1",
   "description": "ES (Eval Suite): an eval runner for coding agents",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22.6"
+  },
   "bin": {
     "es": "./dist/cli.js"
   },
@@ -33,6 +36,10 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/vendor-sandbox-docker.mjs && node scripts/copy-studio-app.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",

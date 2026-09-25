@@ -21,7 +21,7 @@ importers:
   examples/hello:
     dependencies:
       evalsuite:
-        specifier: workspace:*
+        specifier: workspace:@invertase/foobar@*
         version: link:../../packages/evalsuite
 
   packages/evalsuite:
