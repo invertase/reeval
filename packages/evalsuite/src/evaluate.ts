@@ -469,7 +469,11 @@ async function runAttempt(
   const checkEnv = () => (resolved?.checkVars ?? {}) as Record<string, string>
 
   const requireSandbox = () => {
-    if (!sandbox) throw new Error('No sandbox yet: call t.send() before t.exec() or t.readFile()')
+    if (!sandbox) {
+      throw new Error(
+        'No sandbox yet: call t.send() or await t.sandbox() before t.exec() or t.readFile()',
+      )
+    }
     return sandbox
   }
   const exec = async (command: string) => {
@@ -547,6 +551,20 @@ async function runAttempt(
     return [box, session]
   }
 
+  // One start, whether t.sandbox() or the first t.send() asks first, or both at once.
+  let starting: Promise<[Sandbox, HarnessSession]> | undefined
+  const start = () => {
+    starting ??= (async () => {
+      clock?.pause()
+      try {
+        return await timed('setupMs', startSession)
+      } finally {
+        clock?.resume()
+      }
+    })()
+    return starting
+  }
+
   const t: EvalContext = {
     get signal() {
       return signal
@@ -555,18 +573,12 @@ async function runAttempt(
     exec,
     readFile,
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },
+    async sandbox() {
+      await start()
+      return { exec, readFile }
+    },
     async send(prompt) {
-      let started: [Sandbox, HarnessSession]
-      if (sandbox && session) started = [sandbox, session]
-      else {
-        clock?.pause()
-        try {
-          started = await timed('setupMs', startSession)
-        } finally {
-          clock?.resume()
-        }
-      }
-      const [box, agent] = started
+      const [box, agent] = await start()
       const entry = {
         prompt,
         text: '',

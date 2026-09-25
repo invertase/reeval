@@ -308,8 +308,12 @@ export default defineConfig({
   the sandbox. It returns an immutable `Turn` with `prompt`, `text`, `status`, `transcript`,
   `diff` (the changes since the eval started) and `exec`/`readFile`. Call it again for
   multi-turn evals.
-- `t.exec(command)`, `t.readFile(path)`, `t.turns`, `t.signal` (aborted on timeout or
-  Ctrl-C) and `t.attempt` (`{ id, cell, n }`: which cell and run this is).
+- `await t.sandbox()` starts the sandbox and the agent session without a turn, for checks on
+  what the environment set up (files, rules, skills, setup steps). It returns `{ exec, readFile }`.
+  `t.send()` starts them too; calling both starts them once.
+- `t.exec(command)`, `t.readFile(path)` (workspace-relative, or `~/` for the home directory),
+  `t.turns`, `t.signal` (aborted on timeout or Ctrl-C) and `t.attempt` (`{ id, cell, n }`: which
+  cell and run this is).
 - `await t.judge(question, options?)` asks the judge a yes/no question about the latest turn.
   It sees the task, the agent's final message, the changed files and the diff. It returns
   `{ verdict, score, threshold, question, model }`. Pass `{ on: turn }` to grade an earlier

@@ -116,7 +116,13 @@ export type EvalContext = {
   /** Asks the judge a yes/no question about the latest turn (or `options.on`). */
   judge(question: string, options?: JudgeCallOptions): Promise<Verdict>
   exec(command: string): Promise<ExecResult>
+  /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
   readFile(path: string): Promise<string | null>
+  /**
+   * Starts the sandbox and the agent session without a turn, for checks on what the environment
+   * set up. `t.send()` starts them too; calling both starts them once.
+   */
+  sandbox(): Promise<Pick<EvalContext, 'exec' | 'readFile'>>
   /** Every turn so far, oldest first. */
   readonly turns: readonly Turn[]
   /** Aborted on timeout or Ctrl-C. */
