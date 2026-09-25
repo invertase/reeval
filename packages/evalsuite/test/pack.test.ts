@@ -49,10 +49,12 @@ evaluate('hello', async (t) => {
 })
 `,
   )
+  // --prefer-online: a stale cached packument misses versions published since, but tarballs
+  // still come from the cache.
   const added = sh(
     'npm',
     app,
-    ['install', '--no-audit', '--no-fund', '--prefer-offline', `../${tarball}`, `../${docker}`],
+    ['install', '--no-audit', '--no-fund', '--prefer-online', `../${tarball}`, `../${docker}`],
     240_000,
   )
   assert.equal(added.status, 0, added.stdout + added.stderr)
