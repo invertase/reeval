@@ -148,3 +148,28 @@ jobs:
         run: |
           pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/pack"
           npm publish --dry-run --access public "$RUNNER_TEMP"/pack/*.tgz
+
+  report:
+    if: always() && github.event_name == 'pull_request'
+    needs: [lint, typecheck, build, unit, features, docker, studio, pack]
+    runs-on: ubuntu-24.04
+    permissions: { actions: read, pull-requests: write }
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "ci-report ${GITHUB_SHA::7} run $RUN"
+            echo '```'
+            gh api "repos/$REPO/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.name != "report") | "\(.conclusion // .status)\t\(((.completed_at // (now | todate)) | fromdate) - (.started_at | fromdate))s\t\(.name)"'
+            echo '```'
+            for id in $(gh api "repos/$REPO/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.conclusion == "failure") | .id'); do
+              echo "<details><summary>$(gh api "repos/$REPO/actions/jobs/$id" --jq .name)</summary>"; echo; echo '```'
+              gh api "repos/$REPO/actions/jobs/$id/logs" | grep -vE '^\S+ *$' | tail -60 | cut -c1-300
+              echo '```'; echo '</details>'
+            done
+          } > report.md
+          gh pr comment "$PR" --repo "$REPO" --body-file report.md
