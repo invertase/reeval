@@ -107,13 +107,34 @@ export function PassRate({ rate, className }: { rate: number | null; className?:
   return <span className={cn('tabular font-medium', tone, className)}>{formatPercent(rate)}</span>
 }
 
-export function Lift({ points }: { points: number | null }) {
+const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n)}`
+
+/** Lift in points, with its 95% interval; muted when the interval spans 0. */
+export function Lift({
+  points,
+  interval,
+}: {
+  points: number | null
+  interval?: { lo: number; hi: number; withinNoise: boolean } | null
+}) {
   if (points === null) return <span className="text-muted-foreground">–</span>
-  const tone = points > 0 ? 'text-pass' : points < 0 ? 'text-fail' : 'text-muted-foreground'
+  const noise = interval?.withinNoise ?? false
+  const tone = noise
+    ? 'text-muted-foreground'
+    : points > 0
+      ? 'text-pass'
+      : points < 0
+        ? 'text-fail'
+        : 'text-muted-foreground'
   return (
     <span className={cn('tabular font-medium', tone)}>
-      {points > 0 ? '+' : ''}
-      {points} pts
+      {signed(points)} pts
+      {interval ? (
+        <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+          95% {signed(interval.lo)}…{signed(interval.hi)}
+          {noise ? ' · within noise' : ''}
+        </span>
+      ) : null}
     </span>
   )
 }

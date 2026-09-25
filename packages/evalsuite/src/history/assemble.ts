@@ -3,15 +3,17 @@ import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
-import { attemptId, evalSlug, recordFileName, sha256 } from '../ids.ts'
+import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import { harnessId, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
+import { liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
+  CellGate,
   EnvironmentRecord,
   EvalRecord,
   FileChange,
@@ -19,6 +21,7 @@ import type {
   Outcome,
   RunContext,
 } from '../types.ts'
+import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
   type AttemptFiles,
@@ -27,6 +30,7 @@ import {
   type ContextFile,
   type EvalEntry,
   type FileRef,
+  type FingerprintParts,
   type GitInfo,
   type JudgementRecord,
   type Lift,
@@ -36,8 +40,8 @@ import {
   type Stack,
 } from './types.ts'
 
-/** Final messages are kept whole in the record unless they're this big. */
-const TURN_TEXT_LIMIT = 64 * 1024
+/** Final messages are cut at this size in the record; `transcript.jsonl` keeps them whole. */
+const TURN_TEXT_LIMIT = 8 * 1024
 /** A single tool output, check stream or file diff bigger than this keeps its head and tail. */
 export const OUTPUT_CAP = 128 * 1024
 const HEAD = 96 * 1024
@@ -118,6 +122,13 @@ const passRateOf = (outcomes: Outcome[]) => {
 const withoutCaps = <T extends { maxConcurrent?: number }>({ maxConcurrent: _, ...rest }: T) => rest
 
 const harnessModel = (h: HarnessDescriptor) => (h.kind === 'cursor' ? (h.model ?? null) : null)
+
+/** A cell fingerprint: the hash of its parts, so each part can be compared on its own. */
+export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
+
+/** `<index>:<question hash>`, which follows one verdict across runs. */
+export const judgementKey = (index: number, question: string) =>
+  `${index}:${sha256(question).slice(0, 12)}`
 
 /** Collects artifact files, redacting before anything is hashed. */
 class Artifacts {
@@ -229,14 +240,9 @@ function judgeInputs(record: EvalRecord, diff: string | null, diffPath: string) 
   })
 }
 
-async function sourceHash(root: string, file: string): Promise<string | null> {
-  const bytes = await readFile(join(root, file)).catch(() => null)
-  return bytes ? sha256(bytes) : null
-}
-
 /** What the run's attempts have in common, gathered while their records are read. */
 class Seen {
-  readonly sources = new Map<string, string | null>()
+  readonly sources = new Map<string, Source[]>()
   readonly byEval = new Map<string, EvalEntry>()
   readonly contexts = new Map<string, ContextFile>()
   readonly resolvedJudges = new Set<string>()
@@ -269,19 +275,20 @@ class Seen {
     }
   }
 
-  entry(e: EngineEval, sourceHash: string | null): EvalEntry {
+  entry(e: EngineEval, sources: Source[]): EvalEntry {
     let entry = this.byEval.get(e.id)
     if (!entry) {
+      const key = e.id
       entry = {
         id: e.id,
-        slug: evalSlug(e.id),
+        key,
+        slug: evalSlug(key),
         file: e.file,
         group: e.group,
         name: e.name,
         tags: e.attempt?.tags ?? [],
         fingerprint: '',
-        sourceHash,
-        fixtureHash: null,
+        sources,
         outcome: 'skipped',
         passRate: null,
         cells: [],
@@ -304,13 +311,32 @@ const UNKNOWN_CELL: Cell = {
 /** minLift per cell, kept aside while attempts are added; see `rollUp`. */
 const minLifts = new WeakMap<CellRecord, number>()
 
-function cellOf(entry: EvalEntry, cell: Cell, gated: boolean): CellRecord {
+const EMPTY_PARTS: FingerprintParts = {
+  sources: '',
+  harness: '',
+  environment: null,
+  image: null,
+  agentCli: null,
+  judge: '',
+  context: '',
+}
+
+function cellOf(
+  entry: EvalEntry,
+  cell: Cell,
+  gate: CellGate,
+  harness: HarnessDescriptor | undefined,
+): CellRecord {
   let found = entry.cells.find((c) => c.key === cell.key)
   if (!found) {
     found = {
       ...cell,
       fingerprint: '',
-      gated,
+      fingerprintParts: EMPTY_PARTS,
+      environmentDigest: null,
+      harnessKind: harness?.kind ?? 'unknown',
+      model: harness ? harnessModel(harness) : null,
+      gate,
       overrides: [],
       runs: 0,
       pass: 0,
@@ -325,7 +351,8 @@ function cellOf(entry: EvalEntry, cell: Cell, gated: boolean): CellRecord {
   return found
 }
 
-type JudgeFingerprint = { model: string | null; threshold: number }
+/** Over the judge's model, threshold and version: a new judge is a new measurement. */
+type JudgeFingerprint = string
 
 /** Reads one attempt's worker record, files its artifacts and adds it to its eval and cell. */
 async function addAttempt(
@@ -340,36 +367,43 @@ async function addAttempt(
   const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
   const { outcome, error } = mergeOutcome(e, record)
   if (!seen.sources.has(e.file)) {
-    seen.sources.set(e.file, await sourceHash(ctx.config.root, e.file))
+    seen.sources.set(e.file, await traceSources(ctx.config.root, e.file))
   }
-  const srcHash = seen.sources.get(e.file) ?? null
+  const sources = seen.sources.get(e.file) ?? []
   const context = record?.context ?? []
   seen.add(record, cell, e)
-  const entry = seen.entry(e, srcHash)
-  const cellRecord = cellOf(entry, cell, e.attempt?.gated ?? true)
+  const entry = seen.entry(e, sources)
+  const cellRecord = cellOf(entry, cell, e.attempt?.gate ?? 'all', e.attempt?.harness)
   if (e.attempt?.minLift !== undefined) minLifts.set(cellRecord, e.attempt.minLift)
   if (record?.environment?.overrides.length && cellRecord.overrides.length === 0) {
     cellRecord.overrides = [...record.environment.overrides]
   }
+  const environment = record?.environment
+  if (environment && environment.name !== NO_ENVIRONMENT) {
+    cellRecord.environmentDigest = environment.digest
+  }
   // Skipped attempts never ran, so they have no environment or image to fingerprint.
   if (!cellRecord.fingerprint || record) {
-    cellRecord.fingerprint = sha256(
-      JSON.stringify({
-        sourceHash: srcHash,
-        harness: e.attempt?.harness ?? null,
-        environment: record?.environment?.digest ?? cell.environment,
-        image: record?.image?.id ?? null,
-        agentCli: record?.image?.agentCli ?? null,
-        judge,
-        context,
-      }),
-    )
+    const parts: FingerprintParts = {
+      sources: sha256(JSON.stringify(sources)),
+      harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
+      environment: environment?.digest ?? null,
+      image: record?.image?.id ?? null,
+      agentCli: record?.image?.agentCli ?? null,
+      judge,
+      context: sha256(JSON.stringify(context)),
+    }
+    cellRecord.fingerprintParts = parts
+    cellRecord.fingerprint = fingerprintOf(parts)
   }
   entry.attempts.push({
+    key: attemptKey(entry.key, cell.key, n),
     id: attemptId(cell.key, n),
     cell: cell.key,
     n,
-    image: record?.image ?? null,
+    seq: null,
+    startedAt: record?.startedAt ?? null,
+    imageId: record?.image?.id ?? null,
     env: record?.env ?? { vars: [], secrets: [] },
     context,
     outcome,
@@ -408,10 +442,9 @@ function attemptEvidence(
   if (record?.judgeInputs?.length) {
     files.judgeInput = out.json(`${dir}/judge-input.json`, judgeInputs(record, patch, 'diff.patch'))
   }
-  const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j) => ({
+  const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j, i) => ({
     ...j,
-    reason: null,
-    evidence: [],
+    key: judgementKey(i, j.question),
   }))
   return {
     turns: (record?.turns ?? []).map((t) => ({
@@ -440,18 +473,36 @@ function attemptEvidence(
   }
 }
 
-/** Lift of each variant cell over the control on the same harness and sandbox. */
+/** Lift of a variant cell over the control on the same harness and sandbox, with its interval. */
 function liftOf(control: CellRecord, variant: CellRecord): Lift | undefined {
   if (control.passRate === null || variant.passRate === null) return undefined
   const minLift = minLifts.get(variant)
+  const c = { pass: control.pass, counted: control.pass + control.fail }
+  const v = { pass: variant.pass, counted: variant.pass + variant.fail }
+  const { points, low, high } = liftInterval(
+    { pass: v.pass, n: v.counted },
+    { pass: c.pass, n: c.counted },
+  )
   return {
     vs: control.key,
-    points: Math.round((variant.passRate - control.passRate) * 1000) / 1000,
-    controlPassRate: control.passRate,
-    variantPassRate: variant.passRate,
-    n: Math.min(control.pass + control.fail, variant.pass + variant.fail),
+    control: c,
+    variant: v,
+    points: round3(points),
+    interval: { lo: round3(low), hi: round3(high), level: 0.95, method: 'newcombe-wilson' },
+    withinNoise: low < 0 && high > 0,
     ...(minLift !== undefined ? { minLift } : {}),
   }
+}
+
+/**
+ * A cell's outcome by its gate. `'all'` and `'none'` take the worst attempt; `{ passRate }` passes
+ * when enough of the passes and fails are passes, and is an infra error only when nothing counted.
+ */
+export function cellOutcome(outcomes: Outcome[], gate: CellGate): Outcome {
+  if (gate === 'all' || gate === 'none') return worstOutcome(outcomes)
+  const rate = passRateOf(outcomes)
+  if (rate === null) return worstOutcome(outcomes)
+  return rate >= gate.passRate ? 'pass' : 'fail'
 }
 
 /** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */
@@ -465,7 +516,7 @@ function rollUp(evals: EvalEntry[]): void {
       c.infraError = outcomes.filter((o) => o === 'infra_error').length
       c.skipped = outcomes.filter((o) => o === 'skipped').length
       c.passRate = passRateOf(outcomes)
-      c.outcome = worstOutcome(outcomes)
+      c.outcome = cellOutcome(outcomes, c.gate)
     }
     for (const c of entry.cells) {
       if (c.role !== 'variant') continue
@@ -475,18 +526,40 @@ function rollUp(evals: EvalEntry[]): void {
       const lift = control && liftOf(control, c)
       if (!lift) continue
       c.lift = lift
-      if (lift.minLift !== undefined && lift.points < lift.minLift && c.outcome === 'pass') {
+      if (lift.minLift !== undefined && lift.interval.lo < lift.minLift && c.outcome === 'pass') {
         c.outcome = 'fail'
       }
     }
     entry.outcome = worstOutcome(
-      entry.cells.map((c) => (!c.gated && c.outcome === 'fail' ? 'pass' : c.outcome)),
+      entry.cells.map((c) => (c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome)),
     )
-    entry.passRate = passRateOf(entry.attempts.map((a) => a.outcome))
+    const gated = new Set(entry.cells.filter((c) => c.gate !== 'none').map((c) => c.key))
+    entry.passRate = passRateOf(
+      entry.attempts.filter((a) => gated.has(a.cell)).map((a) => a.outcome),
+    )
     entry.fingerprint = sha256(
       JSON.stringify(entry.cells.map((c) => [c.key, c.fingerprint]).sort()),
     )
   }
+}
+
+/** Start order across the run, by when each attempt's worker began it. */
+function sequence(evals: EvalEntry[]): void {
+  const started = evals
+    .flatMap((e) => e.attempts)
+    .filter((a) => a.startedAt !== null)
+    .sort((a, b) =>
+      (a.startedAt as string) < (b.startedAt as string)
+        ? -1
+        : (a.startedAt as string) > (b.startedAt as string)
+          ? 1
+          : a.key < b.key
+            ? -1
+            : 1,
+    )
+  started.forEach((a, i) => {
+    a.seq = i + 1
+  })
 }
 
 /** The run's git state, with the uncommitted changes kept as `worktree.patch` when they fit. */
@@ -551,16 +624,23 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     }),
   )
   const seen = new Seen(input.sandbox)
-  const judge = { model: judgeModel, threshold: config.judge.threshold }
+  const judge = sha256(
+    JSON.stringify({
+      model: judgeModel,
+      threshold: config.judge.threshold,
+      version: judgeVersion(input.es, packageVersions(input.enginePackages), judgeModel ?? ''),
+    }),
+  )
   for (const e of engine.evals) await addAttempt(e, ctx, seen, out, judge)
   const evals = [...seen.byEval.values()]
   rollUp(evals)
+  sequence(evals)
 
   const attempts = evals.flatMap((e) => e.attempts)
   const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length
   const notGated = evals
     .flatMap((e) =>
-      e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gated === false),
+      e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gate === 'none'),
     )
     .filter((a) => a.outcome === 'fail').length
   const { profile } = ctx
@@ -605,7 +685,6 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     },
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
-      harnesses: config.harness.map(harnessId),
       sandbox: sandboxId(config.sandbox),
       environment: config.environment?.name ?? null,
       runs: config.runs,

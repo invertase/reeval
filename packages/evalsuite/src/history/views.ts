@@ -158,6 +158,9 @@ const STATUS_LABEL: Record<CompareStatus, string> = {
   infra: 'infra error',
 }
 
+/** `: evals/helpers.ts changed, harness config changed` for a row that isn't comparable. */
+const why = (r: CompareRow) => (r.changes?.length ? `: ${r.changes.join(', ')}` : '')
+
 const ORDER: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added', 'removed', 'same']
 
 const describeRun = (e: HistoryEntry, reach: Reachability) =>
@@ -187,7 +190,7 @@ export function formatCompare(
       '|---|---|---|---|',
       ...sorted.map(
         (r) =>
-          `| ${r.id.replace(/\|/g, '\\|')} | ${mark(r.base)} | ${mark(r.head)} | ${STATUS_LABEL[r.status]} |`,
+          `| ${r.id.replace(/\|/g, '\\|')} | ${mark(r.base)} | ${mark(r.head)} | ${STATUS_LABEL[r.status]}${why(r)} |`,
       ),
       '',
     ].join('\n')
@@ -198,7 +201,8 @@ export function formatCompare(
     ...(changes.length ? [`stack changed: ${changeText}`] : []),
     '',
     ...sorted.map(
-      (r) => `  ${mark(r.base)} → ${mark(r.head)}  ${STATUS_LABEL[r.status].padEnd(24)}  ${r.id}`,
+      (r) =>
+        `  ${mark(r.base)} → ${mark(r.head)}  ${STATUS_LABEL[r.status].padEnd(24)}  ${r.id}${why(r)}`,
     ),
   ].join('\n')
 }

@@ -38,6 +38,7 @@ describe('the JSON plan', { concurrency: true }, () => {
       'concurrency',
       'estimateMs',
       'warnings',
+      'hints',
       'evals',
       'excluded',
       'images',

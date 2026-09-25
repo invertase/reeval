@@ -1,3 +1,4 @@
+import { gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import type { Colors } from './colors.ts'
@@ -74,8 +75,6 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   return c.dim(cols.join('  '))
 }
 
-const points = (p: number) => `${p >= 0 ? '+' : '−'}${Math.round(Math.abs(p) * 100)} pts`
-
 /** Pass rate per cell for evals with several attempts; with compare, each cell's role and lift. */
 function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
   if (e.attempts.length < 2) return []
@@ -88,10 +87,12 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     let note = ''
     if (cell.lift) {
       const { minLift } = cell.lift
-      const below = minLift !== undefined && cell.lift.points < minLift
-      const text = `lift ${points(cell.lift.points)}${minLift !== undefined ? ` (minLift ${Math.round(minLift * 100)})` : ''}`
+      const below = minLift !== undefined && cell.lift.interval.lo < minLift
+      const text = `${liftLabel(cell.lift)}${minLift !== undefined ? ` (minLift ${Math.round(minLift * 100)})` : ''}`
       note = `   ${below ? c.red(`${text} ✗`) : text}`
-    } else if (compare && !cell.gated && cell.fail > 0) note = `   ${c.dim('not gated')}`
+    } else if (compare && cell.gate === 'none' && cell.fail > 0) note = `   ${c.dim('not gated')}`
+    if (cell.gate !== 'all' && cell.gate !== 'none')
+      note += `   ${c.dim(`gate ${gateLabel(cell.gate)}`)}`
     const rows = [
       `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  ${pct(cell.passRate)}${note}${infra}`,
     ]
@@ -165,14 +166,13 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
       lines.push('', c.bold(`${kind.title} (${members.length})`))
       for (const { entry, attempt, outcome } of members) {
         const result = resultFor(entry, attempt, e.results)
-        const reasons = attempt.judgements.filter((j) => j.verdict !== 'pass').map((j) => j.reason)
         const which = entry.attempts.length > 1 ? `  ${c.dim(attempt.id)}` : ''
-        const gated = entry.cells.find((x) => x.key === attempt.cell)?.gated !== false
+        const gated = entry.cells.find((x) => x.key === attempt.cell)?.gate !== 'none'
         lines.push(
           ` ${mark(c, outcome)} ${entry.id}${which}${gated ? '' : `  ${c.dim('(not gated)')}`}`,
         )
         if (outcome !== 'cancelled') {
-          for (const line of failureLines(c, result, { max: FAILURE_LINES, reasons }))
+          for (const line of failureLines(c, result, { max: FAILURE_LINES }))
             lines.push(`   ${line}`)
         }
         lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, attempt.cell, attempt.n)}`)
@@ -186,9 +186,9 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
   const label = record.summary.attempts === record.summary.evals ? '   Evals' : 'Attempts'
   const lifted = record.evals.flatMap((entry) =>
     entry.cells.flatMap((cell) =>
-      cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift
+      cell.lift?.minLift !== undefined && cell.lift.interval.lo < cell.lift.minLift
         ? [
-            `${entry.id}  ${cell.key} lift ${points(cell.lift.points)}, below minLift ${Math.round(cell.lift.minLift * 100)}`,
+            `${entry.id}  ${cell.key} ${liftLabel(cell.lift)}: its lower bound is below minLift ${Math.round(cell.lift.minLift * 100)}`,
           ]
         : [],
     ),

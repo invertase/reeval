@@ -372,6 +372,15 @@ export type CompareOptions =
 
 export type PinnableKey = 'harness' | 'runs' | 'compare'
 
+/**
+ * How a cell's attempts decide its outcome: `'all'` (the default) passes only when every attempt
+ * passes; `{ passRate }` passes when at least that share of its passes and fails are passes.
+ */
+export type GatePolicy = 'all' | { passRate: number }
+
+/** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
+export type CellGate = GatePolicy | 'none'
+
 export type EvalOptions = {
   /** The only list: each harness is its own cell. */
   harness?: HarnessOption
@@ -381,6 +390,8 @@ export type EvalOptions = {
   compare?: CompareOptions
   /** Attempts per cell. */
   runs?: number
+  /** How each cell's attempts decide its outcome; default `'all'`. */
+  gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
   judge?: JudgeOptions
@@ -411,6 +422,7 @@ export type ProfileDefaults = {
   sandbox?: SandboxDescriptor
   environment?: Environment
   runs?: number
+  gate?: GatePolicy
   env?: EnvVars
   judge?: ConfigJudgeOptions
   timeout?: Duration
@@ -443,6 +455,8 @@ export type EsConfig = {
   sandbox?: SandboxDescriptor
   environment?: Environment
   runs?: number
+  /** How each cell's attempts decide its outcome; default `'all'`. */
+  gate?: GatePolicy
   env?: EnvVars
   judge?: ConfigJudgeOptions
   timeout?: Duration
@@ -489,6 +503,8 @@ export type ResolvedConfig = {
   sandbox: SandboxDescriptor
   environment: Environment | undefined
   runs: number
+  /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
+  gate: GatePolicy | undefined
   env: EnvVars
   judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
@@ -586,6 +602,8 @@ export type JudgeInput = {
 
 /** Full per-attempt payload, written to disk by the worker. */
 export type EvalRecord = {
+  /** When the worker began the attempt (its scheduler lease), for start order across the run. */
+  startedAt?: string
   outcome: Exclude<Outcome, 'skipped'>
   error: { kind: ErrorKind; message: string } | null
   turns: TurnRecord[]
@@ -613,6 +631,8 @@ export type EvalPlan = {
   /** Variants run, of those the eval compares; null without `compare`. */
   variants: { run: number; of: number } | null
   runs: number
+  /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
+  gate?: GatePolicy
   attempts: number
   notes: string[]
   /** Why the eval doesn't run at all, e.g. a profile's harness limit left none. */
@@ -632,8 +652,8 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** Whether this attempt's failures fail the run; controls aren't, by default. */
-  gated: boolean
+  /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
+  gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
   minLift?: number
   plan: EvalPlan

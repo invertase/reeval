@@ -12,7 +12,7 @@ import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { AttemptRecord, EvalEntry, RunRecord } from '../src/history/types.ts'
+import type { AttemptRecord, EvalEntry, RunRecord, Stack } from '../src/history/types.ts'
 
 export const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = join(pkgRoot, 'dist/cli.js')
@@ -134,6 +134,8 @@ export function runCli(
 export type EvalView = EvalEntry & {
   error: AttemptRecord['error']
   trial: AttemptRecord
+  /** The first attempt's image, from `stack.images`. */
+  image: Stack['images'][number] | null
   /** A file of the run's artifact directory, by path inside it. */
   read(path: string): string
 }
@@ -160,7 +162,8 @@ export function readRun(
   const read = (path: string) => readFileSync(join(dir, path), 'utf8')
   const evals = run.evals.map((e) => {
     const trial = e.attempts[0] as AttemptRecord
-    return { ...e, error: trial.error, trial, read }
+    const image = run.stack.images.find((i) => i.id === trial.imageId) ?? null
+    return { ...e, error: trial.error, trial, image, read }
   })
   return { run, dir, evals, read }
 }

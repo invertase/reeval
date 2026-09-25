@@ -11,12 +11,14 @@ import {
 import { UsageError } from './errors.ts'
 import type {
   Cell,
+  CellGate,
   CompareGate,
   Duration,
   Environment,
   EnvVars,
   EvalOptions,
   EvalPlan,
+  GatePolicy,
   HarnessDescriptor,
   JudgeOptions,
   PinnableKey,
@@ -30,6 +32,7 @@ const KNOWN = [
   'environment',
   'compare',
   'runs',
+  'gate',
   'env',
   'judge',
   'timeout',
@@ -50,6 +53,19 @@ const SUGGEST: Record<string, string> = {
   vars: 'env',
   tag: 'tags',
   pins: 'pin',
+  passRate: 'gate',
+  threshold: 'gate',
+}
+
+/** Throws unless `value` is `'all'` or `{ passRate }` with a rate in (0, 1]. */
+export function checkGate(value: unknown, where: string): void {
+  if (value === 'all') return
+  const rate = (value as { passRate?: unknown })?.passRate
+  const keys = typeof value === 'object' && value !== null ? Object.keys(value) : []
+  if (keys.length === 1 && typeof rate === 'number' && rate > 0 && rate <= 1) return
+  throw new UsageError(
+    `gate is 'all' (every attempt passes) or { passRate } with a share above 0 and at most 1, e.g. gate: { passRate: 0.8 } (got ${JSON.stringify(value)}) in ${where}`,
+  )
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 const GATES: CompareGate[] = ['variants', 'all', 'none']
@@ -157,6 +173,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.runs !== undefined && !(Number.isInteger(o.runs) && o.runs >= 1)) {
     throw new UsageError(`runs must be a whole number of at least 1 (got ${o.runs}) in ${where}`)
   }
+  if (o.gate !== undefined) checkGate(o.gate, where)
   if (
     o.tags !== undefined &&
     (!Array.isArray(o.tags) || o.tags.some((t) => typeof t !== 'string'))
@@ -257,6 +274,8 @@ export type Resolved = {
   environment: Environment | undefined
   compare: NormalizedCompare | undefined
   runs: number
+  /** Unset means `'all'`. */
+  gate: GatePolicy | undefined
   env: EnvVars
   judge: JudgeOptions
   timeout: Duration | undefined
@@ -284,6 +303,7 @@ function applyLevel(out: Resolved, options: EvalOptions, where: string): void {
   if (options.environment !== undefined) out.environment = options.environment
   if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
   if (options.runs !== undefined) out.runs = options.runs
+  if (options.gate !== undefined) out.gate = options.gate
   if (options.timeout !== undefined) out.timeout = options.timeout
   Object.assign(out.env, options.env)
   Object.assign(out.judge, options.judge)
@@ -396,7 +416,7 @@ export type PlannedAttempt = {
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
   environment: AppliedEnvironment
-  gated: boolean
+  gate: CellGate
   minLift?: number
   n: number
   label: string
@@ -407,10 +427,12 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
   const { compare } = resolved
   const sandbox = sandboxId(resolved.sandbox)
   const control = applied(resolved.environment)
+  const policy = resolved.gate ?? 'all'
+  const gateIf = (gated: boolean): CellGate => (gated ? policy : 'none')
   const attempts: PlannedAttempt[] = []
   for (const harness of resolved.harness) {
     const hid = harnessId(harness)
-    const cells: Array<{ env: AppliedEnvironment; cell: Cell; gated: boolean }> = [
+    const cells: Array<{ env: AppliedEnvironment; cell: Cell; gate: CellGate }> = [
       {
         env: control,
         cell: {
@@ -420,7 +442,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
           sandbox,
           role: 'control',
         },
-        gated: !compare || compare.gate === 'all',
+        gate: gateIf(!compare || compare.gate === 'all'),
       },
     ]
     if (compare && (!compare.harness || compare.harness.includes(hid))) {
@@ -436,11 +458,11 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
             role: 'variant',
             variant: v.name,
           },
-          gated: compare.gate !== 'none',
+          gate: gateIf(compare.gate !== 'none'),
         })
       }
     }
-    for (const { env, cell, gated } of cells) {
+    for (const { env, cell, gate } of cells) {
       const axes = [
         resolved.harness.length > 1 ? hid : '',
         compare ? (cell.role === 'control' ? 'control' : env.name) : '',
@@ -452,7 +474,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
           harness,
           sandbox: resolved.sandbox,
           environment: env,
-          gated,
+          gate,
           ...(cell.role === 'variant' && compare?.minLift !== undefined
             ? { minLift: compare.minLift }
             : {}),
@@ -497,6 +519,7 @@ export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan 
       ? { run: resolved.compare.variants.length, of: resolved.compare.of }
       : null,
     runs: resolved.runs,
+    ...(resolved.gate !== undefined ? { gate: resolved.gate } : {}),
     attempts: skip ? 0 : attempts.length,
     notes,
     ...(skip ? { skip } : {}),

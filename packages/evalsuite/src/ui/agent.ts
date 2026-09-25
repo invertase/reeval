@@ -35,7 +35,7 @@ export class AgentRenderer implements Renderer {
     const detail = [
       formatDuration(result.durationMs),
       kind,
-      result.attempt?.gated === false ? 'not gated' : '',
+      result.attempt?.gate === 'none' ? 'not gated' : '',
     ]
       .filter(Boolean)
       .join(', ')

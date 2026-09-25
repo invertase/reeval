@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { appendFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { fingerprintOf } from '../src/history/assemble.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
 
@@ -287,7 +288,7 @@ describe('recording runs into evals/.history', () => {
     assert.match(run.stack.judge.version, /^[0-9a-f]{12}$/)
     assert.equal('reproducibility' in run, false)
     assert.deepEqual(run.stack.fingerprintScope.length > 0, true)
-    assert.equal(run.evals[0]?.fixtureHash, null)
+    assert.equal('fixtureHash' in (run.evals[0] ?? {}), false)
     assert.equal(sh(p.dir, 'diff', '--cached', '--name-only'), '', "the user's index is untouched")
 
     const shown = await runCli(p.dir, ['show', 'latest'])
@@ -317,5 +318,125 @@ describe('recording runs into evals/.history', () => {
     assert.equal(r.code, 2)
     assert.match(r.stderr, /\/worktree\.patch/)
     assert.deepEqual(recordedRuns(p.dir), [])
+  })
+})
+
+describe('what a record says about comparability', () => {
+  const importing = `import { evaluate, expect } from 'evalsuite'
+import { prompt } from './helpers.ts'
+evaluate('agent', async (t) => {
+  await t.send(prompt)
+  expect(await t.judge('Did it write hello.txt?')).toPass()
+})
+`
+  const compareJson = async (dir: string) => {
+    const r = await runCli(dir, ['compare', '--json'])
+    assert.equal(r.code, 0, r.stderr)
+    return JSON.parse(r.stdout) as { rows: Array<{ status: string; changes?: string[] }> }
+  }
+
+  test('an imported helper is part of the fingerprint, and es compare names what changed', async () => {
+    const p = await gitProject('traced', {
+      'evals/agent.es.ts': importing,
+      'evals/helpers.ts': "export const prompt = 'write hello.txt'\n",
+      'evals/unrelated.ts': 'export const x = 1\n',
+    })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const base = readRun(p.dir, { history: HISTORY })
+    const [entry] = base.run.evals
+    assert.deepEqual(
+      entry?.sources.map((s) => s.path),
+      ['evals/agent.es.ts', 'evals/helpers.ts'],
+    )
+    for (const cell of entry?.cells ?? []) {
+      assert.equal(cell.fingerprint, fingerprintOf(cell.fingerprintParts))
+    }
+
+    // Twin: a file the eval doesn't import changes nothing.
+    await writeFile(join(p.dir, 'evals/unrelated.ts'), 'export const x = 2\n')
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.equal(readRun(p.dir).run.evals[0]?.fingerprint, entry?.fingerprint)
+    assert.deepEqual(
+      (await compareJson(p.dir)).rows.map((r) => r.status),
+      ['same'],
+    )
+
+    await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt!'\n")
+    assert.equal((await runCli(p.dir)).code, 0)
+    const [row] = (await compareJson(p.dir)).rows
+    assert.deepEqual([row?.status, row?.changes], ['drift', ['evals/helpers.ts changed']])
+    const text = await runCli(p.dir, ['compare'])
+    assert.match(
+      text.stdout,
+      /changed \(not comparable\) +evals\/agent\.es\.ts › agent: evals\/helpers\.ts changed/,
+    )
+
+    await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt'\n")
+    await writeFile(
+      join(p.dir, 'es.config.ts'),
+      fakeConfig({ harness: harness('Wrote it, differently') }),
+    )
+    assert.equal((await runCli(p.dir)).code, 0)
+    const [config] = (await compareJson(p.dir)).rows
+    assert.deepEqual(config?.changes, ['harness config changed'])
+  })
+
+  test("a turn's text is cut at 8 KB in the record; transcript.jsonl keeps it whole", async () => {
+    const long = 'x'.repeat(20_000)
+    const p = await project('turn-cap', {
+      'es.config.ts': fakeConfig({ harness: `{ text: '${long}' }` }),
+      'evals/t.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('long', async (t) => { await t.send('x') })\n`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const [e] = readRun(p.dir).evals
+    const text = e?.trial.turns[0]?.text ?? ''
+    assert.ok(text.startsWith('x'.repeat(8 * 1024)) && !text.startsWith('x'.repeat(8 * 1024 + 1)))
+    assert.match(text, /\[es: truncated 20000 characters;/)
+    assert.ok(e?.read(e.trial.files.transcript?.path ?? '').includes(long))
+  })
+
+  test('cells join environments by digest, not name; attempts and verdicts have keys', async () => {
+    const p = await project('joins', {
+      'es.config.ts': fakeConfig({ extra: 'concurrency: 1,' }),
+      'evals/e.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const one = defineEnvironment('tools', { env: { FLAVOUR: 'one' } })
+const two = defineEnvironment('tools', { env: { FLAVOUR: 'two' } })
+evaluate('uses one', { environment: one, runs: 3 }, async (t) => {
+  await t.send('x')
+  expect(await t.judge('Is it fine?')).toPass()
+})
+evaluate('uses two', { environment: two }, async (t) => { await t.send('x') })
+evaluate('uses none', async (t) => { await t.send('x') })
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { run } = readRun(p.dir)
+    const cell = (name: string) => run.evals.find((e) => e.name === name)?.cells[0]
+    for (const name of ['uses one', 'uses two']) {
+      const c = cell(name)
+      const byDigest = run.environments.filter((e) => e.digest === c?.environmentDigest)
+      assert.equal(byDigest.length, 1, `${name} resolves to one environment`)
+      // Twin: the old join by name is ambiguous here.
+      assert.equal(run.environments.filter((e) => e.name === c?.environment).length, 2)
+    }
+    assert.notEqual(cell('uses one')?.environmentDigest, cell('uses two')?.environmentDigest)
+    assert.equal(cell('uses none')?.environmentDigest, null)
+    assert.deepEqual([cell('uses one')?.harnessKind, cell('uses one')?.model], ['fake', null])
+
+    const attempts = run.evals.flatMap((e) => e.attempts)
+    assert.deepEqual(
+      attempts.map((a) => a.seq).sort((a, b) => (a ?? 0) - (b ?? 0)),
+      [1, 2, 3, 4, 5],
+      'concurrency 1: one start order across the run',
+    )
+    const one = run.evals.find((e) => e.name === 'uses one')
+    assert.deepEqual(
+      one?.attempts.map((a) => a.key),
+      [1, 2, 3].map((n) => `${one?.key} # fake/tools/fake#${n}`),
+    )
+    assert.ok(attempts.every((a) => a.startedAt && a.imageId === null))
+    assert.match(one?.attempts[0]?.judgements[0]?.key ?? '', /^0:[0-9a-f]{12}$/)
+    assert.equal('config' in run && 'harnesses' in run.config, false)
+    assert.equal(run.runner.kind === 'local' || run.runner.pr !== undefined, true)
   })
 })

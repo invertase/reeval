@@ -15,9 +15,13 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
     runner: record.runner.kind,
     ci:
       record.runner.kind === 'ci'
-        ? { provider: record.runner.provider, runUrl: record.runner.runUrl }
+        ? {
+            provider: record.runner.provider,
+            runUrl: record.runner.runUrl,
+            pr: record.runner.pr,
+          }
         : null,
-    harnesses: record.config.harnesses,
+    harnesses: record.stack.harnesses.map((h) => h.id),
     summary: record.summary,
     costUsd: record.cost.usd,
     stack: {
@@ -35,19 +39,40 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
     },
     evals: record.evals.map((e) => ({
       id: e.id,
+      key: e.key,
       slug: e.slug,
       fingerprint: e.fingerprint,
+      sources: e.sources,
       outcome: e.outcome,
       passRate: e.passRate,
       cells: e.cells.map((c) => ({
         key: c.key,
         role: c.role,
-        gated: c.gated,
+        ...(c.variant !== undefined ? { variant: c.variant } : {}),
+        harness: c.harness,
+        model: c.model,
+        environment: c.environment,
+        environmentDigest: c.environmentDigest,
+        gate: c.gate,
+        fingerprint: c.fingerprint,
+        fingerprintParts: c.fingerprintParts,
         runs: c.runs,
         pass: c.pass,
         fail: c.fail,
         infraError: c.infraError,
         skipped: c.skipped,
+        passRate: c.passRate,
+        ...(c.lift
+          ? {
+              lift: {
+                vs: c.lift.vs,
+                points: c.lift.points,
+                lo: c.lift.interval.lo,
+                hi: c.lift.interval.hi,
+                withinNoise: c.lift.withinNoise,
+              },
+            }
+          : {}),
       })),
     })),
   }

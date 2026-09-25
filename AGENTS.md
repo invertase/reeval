@@ -273,13 +273,22 @@ group('genkit flows', { environment: genkitBase, compare: [genkitSkill], runs: 3
 
 - A variant cell runs `control.extend(variant)`: the variant wins on shared keys, and the
   overrides are listed under the cell in the summary and in the record.
-- **Gating:** by default (`gate: 'variants'`) only variant cells decide pass/fail. The control is
-  expected to be worse, so its failures print as `(not gated)` and don't fail the run.
-  `gate: 'all'` gates the control too; `gate: 'none'` only reports.
+- **Which cells gate:** by default (`compare.gate: 'variants'`) only variant cells decide
+  pass/fail. The control is expected to be worse, so its failures print as `(not gated)` and
+  don't fail the run. `compare.gate: 'all'` gates the control too; `'none'` only reports.
+- **How a cell passes** is the separate `gate` option (on the config, a profile's defaults, a
+  group or an eval). The default, `'all'`, passes a cell only when every attempt passes, which
+  gets harder to meet as `runs` grows, even for an agent that's no worse. `gate: { passRate: 0.8 }`
+  passes a cell when at least 80% of its passes and fails are passes (infra errors don't count).
+  The plan prints a one-line hint when evals run more than once with the default gate.
 - **Lift** is the variant's pass rate minus the control's, on the same harness, stored in the
-  variant cell as `lift: { vs, points, controlPassRate, variantPassRate, n }`. `minLift`
-  (points from -1 to 1) fails a variant cell below it: `compare: { variants: [b], minLift: 0 }`
-  means "no worse than the control". `compare.harness` limits the variants to some harnesses.
+  variant cell as `lift: { vs, control: { pass, counted }, variant: { pass, counted }, points,
+  interval, withinNoise }`. `interval` is the 95% interval on the difference (Newcombe's method,
+  from each side's Wilson interval), and `withinNoise` says it spans 0: at a few attempts per
+  cell, a lift of +100 pts is often within noise, and the summary says so. `minLift` (points from
+  -1 to 1) fails a variant cell whose interval's **lower bound** is below it:
+  `compare: { variants: [b], minLift: 0 }` means "confidently no worse than the control".
+  `compare.harness` limits the variants to some harnesses.
 - There's no built-in `baseline`: with no environment, the control is empty. `compare` can't be
   set in `es.config.ts` (it would multiply every eval), and a variant is an environment, never
   an object with its own checks (write a separate eval).
@@ -297,7 +306,7 @@ Summary
    house greeting
      ✓ greets in the house style      2/4   50%  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts
+         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
 …
 Attempts  2 passed · 2 failed, not gated (4 attempts, 1 evals)
 ```
@@ -683,13 +692,20 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   changes, tracked and untracked, are saved as `worktree.patch` with their hash.
   `es checkout <run>` recreates that state in a git worktree.
 - **Dependencies:** lockfile hashes (`pnpm-lock.yaml`, `package-lock.json`, `pubspec.lock`,
-  `Cargo.lock`, …), and per eval the eval file's hash and a fingerprint.
+  `Cargo.lock`, …), and per eval its sources (the eval file and every local file it imports,
+  directly or not, by hash) and a fingerprint.
 - **Plan and profile:** what the run planned (evals, cells, attempts, estimate), its budget, and
   the profile with the reason it was chosen; `status` is `complete`, `interrupted` or `budget`.
-- **Cells:** per eval, each cell's key, role (`control` or `variant`), whether it's gated, its
-  fingerprint, pass rate, overrides and, for variants, lift; and each attempt's cell, run
-  number, image (tag, id, agent CLI, the base, `install` commands, and for `dockerfile` its path
-  and content hash), and variable and secret names.
+- **Cells:** per eval, each cell's key, role (`control` or `variant`), its `gate` (`'all'`,
+  `{ passRate }`, or `'none'` when it doesn't gate), its harness kind and model, its
+  environment's digest (the key into the run's environments), pass rate, overrides and, for
+  variants, lift with its interval. Its fingerprint is the hash of `fingerprintParts` (sources,
+  harness config, environment, image, agent CLI, judge and agent context), so `es compare` can
+  say which part changed: `not comparable: evals/helpers.ts changed`.
+- **Attempts:** each attempt's key (unique in the run), cell, run number, start order and time,
+  image id (details in the stack), variable and secret names, turns (text cut at 8 KB; the
+  whole message is in `transcript.jsonl`) and verdicts, each with a key that follows the same
+  question across runs.
 - **Environments:** each environment's digest, parent and overrides, setup steps,
   skills (source, hash, git commit, placement), MCP server names, files, and variable and
   secret names (and optional ones that were unset).

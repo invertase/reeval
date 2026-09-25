@@ -52,22 +52,6 @@ function Verdict({ j }: { j: JudgementRecord }) {
             <dd className="font-mono">{j.resolvedModel}</dd>
           </>
         ) : null}
-        <dt className="text-muted-foreground">Reason</dt>
-        <dd className={j.reason ? '' : 'text-muted-foreground italic'}>
-          {j.reason ?? 'None recorded: this judge returns a probability, not an explanation.'}
-        </dd>
-        {j.evidence.length ? (
-          <>
-            <dt className="text-muted-foreground">Evidence</dt>
-            <dd>
-              <ul className="list-disc pl-4">
-                {j.evidence.map((e) => (
-                  <li key={e}>{e}</li>
-                ))}
-              </ul>
-            </dd>
-          </>
-        ) : null}
       </dl>
     </div>
   )

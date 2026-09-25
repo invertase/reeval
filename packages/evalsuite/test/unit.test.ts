@@ -473,7 +473,7 @@ test('expand: per harness, the control then each variant; labels name the role',
   const { resolved } = cascade(base, [{ options: { compare: [skill], runs: 1 }, where: 'e' }], 'e')
   const attempts = expand(resolved)
   assert.deepEqual(
-    attempts.map((a) => [a.cell.key, a.cell.role, a.gated, a.label]),
+    attempts.map((a) => [a.cell.key, a.cell.role, a.gate !== 'none', a.label]),
     [
       ['a/-/fake', 'control', false, 'a · control'],
       ['a/skill/fake', 'variant', true, 'a · skill'],

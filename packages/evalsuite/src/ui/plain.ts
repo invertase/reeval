@@ -191,7 +191,7 @@ export class PlainRenderer implements Renderer {
     const outcome = outcomeOf(result)
     const failed = outcome !== 'pass' && outcome !== 'skipped'
     const time = outcome === 'skipped' ? '' : `  ${c.dim(formatDuration(result.durationMs))}`
-    const ungated = failed && result.attempt?.gated === false ? `  ${c.dim('(not gated)')}` : ''
+    const ungated = failed && result.attempt?.gate === 'none' ? `  ${c.dim('(not gated)')}` : ''
     const head = `${this.#prefix(a)} ${mark(c, outcome)} ${result.id}${time}${ungated}`
     const { outputLogs, githubActions, logPrefix } = this.#o.output
 

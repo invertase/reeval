@@ -135,6 +135,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     environment: config.environment,
     compare: undefined,
     runs: config.runs,
+    gate: config.gate,
     env: config.env,
     judge: config.judge,
     timeout: undefined,
@@ -189,7 +190,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       label: '',
       harness: first.harness,
       sandbox: first.sandbox,
-      gated: false,
+      gate: 'none',
       plan,
     }
     registerTest(
@@ -211,7 +212,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       label: planned.label,
       harness: planned.harness,
       sandbox: planned.sandbox,
-      gated: planned.gated,
+      gate: planned.gate,
       ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
       plan,
     }
@@ -418,6 +419,7 @@ async function runAttempt(
   const { runId, stagingDir, config } = getRunContext()
   const id = evalId(relativeFile(config.root, file), [...spec.groups, spec.name])
   const record: EvalRecord = {
+    startedAt: new Date().toISOString(),
     outcome: 'pass',
     error: null,
     turns: [],

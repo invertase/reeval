@@ -243,9 +243,9 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
               </TableCell>
               {showLift ? (
                 <TableCell className="text-right">
-                  <Lift points={row.lift} />
+                  <Lift points={row.lift} interval={row.liftInterval} />
                   {row.belowMinLift ? (
-                    <div className="text-[11px] text-fail">below minLift</div>
+                    <div className="text-[11px] text-fail">lower bound below minLift</div>
                   ) : null}
                 </TableCell>
               ) : null}
@@ -421,7 +421,8 @@ export function RunPage() {
             </span>
           </span>
           <span className="font-mono text-xs text-muted-foreground">
-            {record.config.harnesses.join(', ')} · judge {record.config.judgeModel ?? 'none'}
+            {record.stack.harnesses.map((h) => h.id).join(', ')} · judge{' '}
+            {record.config.judgeModel ?? 'none'}
             {record.profile ? ` · profile ${record.profile.name}` : ''}
           </span>
         </div>

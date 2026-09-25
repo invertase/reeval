@@ -473,6 +473,7 @@ async function executeRun(
     const lines = [planLine(plan)]
     if (setup.dryRun) lines.push(...planTable(plan))
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
+    lines.push(...plan.hints.map((h) => `hint: ${h}`))
     renderer.onEvent({ type: 'plan', at: Date.now(), lines })
     if (setup.dryRun) return false
     checkAttemptBudget(plan, setup.force)

@@ -79,7 +79,7 @@ plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency
 …
      ✓ greets in the house style      2/4   50%  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
-         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts
+         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
 ```
 
 ## Run it

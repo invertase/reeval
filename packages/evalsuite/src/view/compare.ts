@@ -1,4 +1,4 @@
-import type { HistoryEntry, StackSummary } from '../history/types.ts'
+import type { FingerprintParts, HistoryEntry, StackSummary } from '../history/types.ts'
 import type { Outcome } from '../types.ts'
 
 export type CompareStatus = 'regressed' | 'fixed' | 'same' | 'drift' | 'added' | 'removed' | 'infra'
@@ -8,6 +8,8 @@ export type CompareRow = {
   status: CompareStatus
   base: Outcome | null
   head: Outcome | null
+  /** For `drift`: what changed, e.g. `evals/helpers.ts changed` or `harness config changed`. */
+  changes?: string[]
 }
 
 export type StackChange = {
@@ -27,7 +29,7 @@ const STACK_FIELDS: Array<{ field: keyof StackSummary; label: string; outside: b
   { field: 'judgeModel', label: 'judge model', outside: false },
   { field: 'threshold', label: 'judge threshold', outside: false },
   { field: 'judgeServed', label: 'judge model served', outside: true },
-  { field: 'judgeVersion', label: 'judge version', outside: true },
+  { field: 'judgeVersion', label: 'judge version', outside: false },
   { field: 'fingerprintScope', label: 'fingerprint scope', outside: true },
 ]
 
@@ -56,8 +58,53 @@ export function stackChanges(
   return changes
 }
 
-type Comparable = Pick<HistoryEntry, 'stack'> & {
-  evals: Array<Pick<HistoryEntry['evals'][number], 'id' | 'fingerprint' | 'outcome'>>
+type ComparableEval = Pick<
+  HistoryEntry['evals'][number],
+  'id' | 'fingerprint' | 'outcome' | 'sources' | 'cells'
+>
+
+type Comparable = Pick<HistoryEntry, 'stack'> & { evals: ComparableEval[] }
+
+/** Which source files were added, removed or changed. */
+export function sourceChanges(
+  before: ComparableEval['sources'],
+  after: ComparableEval['sources'],
+): string[] {
+  const a = new Map(before.map((s) => [s.path, s.sha256]))
+  const b = new Map(after.map((s) => [s.path, s.sha256]))
+  return [...new Set([...a.keys(), ...b.keys()])].sort().flatMap((path) => {
+    if (!a.has(path)) return [`${path} added`]
+    if (!b.has(path)) return [`${path} removed`]
+    return a.get(path) === b.get(path) ? [] : [`${path} changed`]
+  })
+}
+
+const PART_LABELS: Record<Exclude<keyof FingerprintParts, 'sources'>, string> = {
+  harness: 'harness config',
+  environment: 'environment',
+  image: 'image',
+  agentCli: 'agent CLI',
+  judge: 'judge',
+  context: 'agent context',
+}
+
+/** Why two runs of an eval aren't comparable: the source files and fingerprint parts that differ. */
+export function whyChanged(base: ComparableEval, head: ComparableEval): string[] {
+  const out = sourceChanges(base.sources, head.sources)
+  const keys = [...new Set([...base.cells, ...head.cells].map((c) => c.key))]
+  const parts = new Set<string>()
+  for (const key of keys) {
+    const b = base.cells.find((c) => c.key === key)
+    const h = head.cells.find((c) => c.key === key)
+    if (!b || !h) {
+      out.push(`cell ${key} ${b ? 'removed' : 'added'}`)
+      continue
+    }
+    for (const part of Object.keys(PART_LABELS) as Array<keyof typeof PART_LABELS>) {
+      if (b.fingerprintParts[part] !== h.fingerprintParts[part]) parts.add(PART_LABELS[part])
+    }
+  }
+  return [...out, ...[...parts].map((p) => `${p} changed`)]
 }
 
 export function compare(base: Comparable, head: Comparable): CompareRow[] {
@@ -71,7 +118,8 @@ export function compare(base: Comparable, head: Comparable): CompareRow[] {
     if (!h) return { ...row, status: 'removed' }
     if (b.outcome === 'infra_error' || h.outcome === 'infra_error')
       return { ...row, status: 'infra' }
-    if (b.fingerprint !== h.fingerprint) return { ...row, status: 'drift' }
+    if (b.fingerprint !== h.fingerprint)
+      return { ...row, status: 'drift', changes: whyChanged(b, h) }
     if (graderChanged && b.outcome !== h.outcome) return { ...row, status: 'drift' }
     if (b.outcome === 'pass' && h.outcome === 'fail') return { ...row, status: 'regressed' }
     if (b.outcome === 'fail' && h.outcome === 'pass') return { ...row, status: 'fixed' }

@@ -67,7 +67,11 @@ export function renderPlan(plan: PlanDocument): string {
         i === 0 ? `${e.id}${tags}` : '',
         c.key,
         c.role === 'variant' ? `variant ${c.variant}` : 'control',
-        c.gated ? 'gated' : 'ungated',
+        c.gate === 'none'
+          ? 'ungated'
+          : c.gate === 'all'
+            ? 'gated'
+            : `gated passRate ${c.gate.passRate}`,
         `×${c.runs}`,
         [c.minLift === undefined ? '' : `minLift ${c.minLift}`, ...(i === 0 ? e.notes : [])]
           .filter(Boolean)
@@ -83,6 +87,7 @@ export function renderPlan(plan: PlanDocument): string {
   return [
     head.join(' · '),
     ...plan.warnings.map((w) => `warning: ${w}`),
+    ...plan.hints.map((h) => `hint: ${h}`),
     ...table(rows),
     `excluded: ${excluded.length ? excluded.join(', ') : '—'}`,
     ...images,

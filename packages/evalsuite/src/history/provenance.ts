@@ -65,12 +65,22 @@ export function runnerInfo(env = process.env): RunnerInfo {
         ? `${env.GITHUB_SERVER_URL}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`
         : null
     const attempt = Number(env.GITHUB_RUN_ATTEMPT)
-    return { kind: 'ci', provider: 'github', runUrl, attempt: attempt || null }
+    // Pull request events check out refs/pull/<n>/merge and set the base branch.
+    const number = Number(/^refs\/pull\/(\d+)\//.exec(env.GITHUB_REF ?? '')?.[1])
+    const pr =
+      number || env.GITHUB_BASE_REF
+        ? { number: number || null, baseRef: env.GITHUB_BASE_REF || null }
+        : null
+    return { kind: 'ci', provider: 'github', runUrl, attempt: attempt || null, pr }
   }
   if (env.GITLAB_CI) {
-    return { kind: 'ci', provider: 'gitlab', runUrl: env.CI_JOB_URL ?? null, attempt: null }
+    const iid = Number(env.CI_MERGE_REQUEST_IID)
+    const pr = iid
+      ? { number: iid, baseRef: env.CI_MERGE_REQUEST_TARGET_BRANCH_NAME || null }
+      : null
+    return { kind: 'ci', provider: 'gitlab', runUrl: env.CI_JOB_URL ?? null, attempt: null, pr }
   }
-  return { kind: 'ci', provider: 'unknown', runUrl: null, attempt: null }
+  return { kind: 'ci', provider: 'unknown', runUrl: null, attempt: null, pr: null }
 }
 
 /** Who a run belongs to, as a file-name segment: `ci` in CI, else the git user. */

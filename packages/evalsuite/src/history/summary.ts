@@ -1,7 +1,7 @@
 import { clip, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { warnings } from './state.ts'
-import type { AttemptRecord, EvalEntry, RunRecord } from './types.ts'
+import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
 
 export const OUTCOME_MARK: Record<Outcome, string> = {
   pass: '✓',
@@ -28,16 +28,32 @@ export function summaryCounts(s: RunRecord['summary']): string {
   return `${parts.join(' · ')}${scope}`
 }
 
-/** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts)`. */
+const signedPoints = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
+
+/** A gate policy as written in the config: `all`, or `passRate 0.8`. */
+export const gateLabel = (gate: CellRecord['gate']) =>
+  gate === 'all' || gate === 'none' ? gate : `passRate ${gate.passRate}`
+
+/**
+ * `lift +40 pts (95% −12…+72, 4/5 vs 2/5)`, and `within noise` when the interval spans 0: at a
+ * few attempts per cell, a point estimate alone says far more than the attempts can.
+ */
+export function liftLabel(lift: NonNullable<CellRecord['lift']>): string {
+  const { interval, variant, control } = lift
+  const range = `95% ${signedPoints(interval.lo)}…${signedPoints(interval.hi)}`
+  const counts = `${variant.pass}/${variant.counted} vs ${control.pass}/${control.counted}`
+  return `lift ${signedPoints(lift.points)} pts (${range}, ${counts})${lift.withinNoise ? ', within noise' : ''}`
+}
+
+/** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts …)`. */
 export function cellCounts(e: EvalEntry): string {
   return e.cells
     .map((c) => {
       const notes = [
         c.role === 'control' && e.cells.some((x) => x.role === 'variant') ? 'control' : '',
-        c.gated ? '' : 'not gated',
-        c.lift
-          ? `lift ${c.lift.points >= 0 ? '+' : '−'}${Math.round(Math.abs(c.lift.points) * 100)} pts`
-          : '',
+        c.gate === 'none' ? 'not gated' : '',
+        c.gate !== 'all' && c.gate !== 'none' ? `gate ${gateLabel(c.gate)}` : '',
+        c.lift ? liftLabel(c.lift) : '',
         c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
       ].filter(Boolean)
       return `${c.key} ${c.pass}/${c.pass + c.fail}${notes.length ? ` (${notes.join(', ')})` : ''}`
@@ -207,7 +223,7 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
       ? `, after ${j.retries.length} ${j.retries.length === 1 ? 'retry' : 'retries'}`
       : ''
     lines.push(
-      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}${j.reason ? ` — ${j.reason}` : ''}`,
+      `- Judge **${j.verdict}** ${j.score.toFixed(2)} (threshold ${j.threshold}, ${j.model}${retried}): ${j.question}`,
     )
   }
   for (const c of a.checks) {

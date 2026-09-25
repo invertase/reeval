@@ -61,16 +61,19 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
     const { run, evals } = readRun(p.dir)
     assert.equal(run.summary.attempts, 4)
-    assert.deepEqual(run.config.harnesses, ['good', 'bad'])
+    assert.deepEqual(
+      run.stack.harnesses.map((h) => h.id),
+      ['bad', 'good'],
+    )
     assert.deepEqual(run.plan, { evals: 1, cells: 2, attempts: 4, estimateMs: run.plan.estimateMs })
     const [e] = evals
     assert.equal(e?.outcome, 'fail')
     assert.equal(e?.passRate, 0.5)
     assert.deepEqual(
-      e?.cells.map((c) => [c.key, c.role, c.gated, c.runs, c.pass, c.passRate, c.outcome]),
+      e?.cells.map((c) => [c.key, c.role, c.gate, c.runs, c.pass, c.passRate, c.outcome]),
       [
-        ['good/-/fake', 'control', true, 2, 2, 1, 'pass'],
-        ['bad/-/fake', 'control', true, 2, 0, 0, 'fail'],
+        ['good/-/fake', 'control', 'all', 2, 2, 1, 'pass'],
+        ['bad/-/fake', 'control', 'all', 2, 0, 0, 'fail'],
       ],
     )
     assert.deepEqual(
@@ -244,15 +247,17 @@ group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
     assert.equal(run.summary.notGated, 2)
     const [control, variant] = e?.cells ?? []
     assert.deepEqual(
-      [control?.role, control?.gated, variant?.role, variant?.variant, variant?.gated],
-      ['control', false, 'variant', 'skilled', true],
+      [control?.role, control?.gate, variant?.role, variant?.variant, variant?.gate],
+      ['control', 'none', 'variant', 'skilled', 'all'],
     )
+    // 2/2 against 0/2: Newcombe's interval from the Wilson bounds [0.342, 1] and [0, 0.658].
     assert.deepEqual(variant?.lift, {
       vs: 'fake/base/fake',
+      control: { pass: 0, counted: 2 },
+      variant: { pass: 2, counted: 2 },
       points: 1,
-      controlPassRate: 0,
-      variantPassRate: 1,
-      n: 2,
+      interval: { lo: 0.07, hi: 1, level: 0.95, method: 'newcombe-wilson' },
+      withinNoise: false,
     })
     assert.deepEqual(variant?.overrides, ['env.MODE'])
     const envRecords = Object.fromEntries(run.environments.map((x) => [x.name, x]))
@@ -286,11 +291,14 @@ evaluate('no worse', { compare: { variants: [skilled], minLift: 0.5, gate: 'none
     assert.equal(r.code, 1, r.stdout + r.stderr)
     const [all, noWorse] = readRun(p.dir).evals
     assert.equal(all?.outcome, 'fail', 'a gated control fails the eval')
-    assert.equal(all?.cells[0]?.gated, true)
+    assert.equal(all?.cells[0]?.gate, 'all')
     assert.equal(noWorse?.cells[1]?.lift?.points, -1)
     assert.equal(noWorse?.cells[1]?.outcome, 'fail')
     assert.equal(noWorse?.outcome, 'pass', "gate 'none' reports but never fails")
-    assert.match(r.stdout, /lift −100 pts \(minLift 50\) ✗/)
+    assert.match(
+      r.stdout,
+      /lift −100 pts \(95% −100…\+12, 0\/1 vs 1\/1\), within noise \(minLift 50\) ✗/,
+    )
   })
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {
@@ -314,6 +322,64 @@ evaluate('scoped', { compare: { variants: [skilled], harness: ['b'] } }, async (
 
 // Which evals, cells and attempts a profile plans is pinned by the plan snapshots in
 // plan.test.ts (test/plan/profiles); these check what a run does with that plan.
+describe('gate policies', () => {
+  // One attempt in five fails, always the third: a steady 80% agent.
+  const flaky = (name: string, options: string) =>
+    `evaluate('${name}', { runs: 5${options} }, async (t) => {
+  if (t.attempt.n === 3) throw new Error('the third attempt fails')
+})`
+
+  test("'all' by default, { passRate } per eval or group, with a hint when runs > 1 and no gate", async () => {
+    const p = await project('gates', {
+      'es.config.ts': fakeConfig(),
+      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+${flaky('default', '')}
+${flaky('at 0.8', ', gate: { passRate: 0.8 }')}
+${flaky('at 0.9', ', gate: { passRate: 0.9 }')}
+group('rated', { gate: { passRate: 0.6 } }, () => {
+  ${flaky('inherits 0.6', '')}
+  ${flaky('back to all', ", gate: 'all'")}
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /^hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: \{ passRate: 0\.8 \} to gate on a pass rate instead$/m,
+    )
+    const cells = readRun(p.dir).evals.map((e) => [
+      e.name,
+      e.cells[0]?.gate,
+      e.cells[0]?.passRate,
+      e.cells[0]?.outcome,
+      e.outcome,
+    ])
+    assert.deepEqual(cells, [
+      ['default', 'all', 0.8, 'fail', 'fail'],
+      ['at 0.8', { passRate: 0.8 }, 0.8, 'pass', 'pass'],
+      ['at 0.9', { passRate: 0.9 }, 0.8, 'fail', 'fail'],
+      ['inherits 0.6', { passRate: 0.6 }, 0.8, 'pass', 'pass'],
+      ['back to all', 'all', 0.8, 'fail', 'fail'],
+    ])
+    assert.match(r.stdout, /gate passRate 0\.8/, 'the summary names a non-default gate')
+
+    const quiet = await runCli(p.dir, ['run', 'at 0.8'])
+    assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
+    assert.doesNotMatch(quiet.stdout, /^hint:/m, 'no hint when every eval that repeats has a gate')
+  })
+
+  test('a config-level gate applies to every eval', async () => {
+    const p = await project('config-gate', {
+      'es.config.ts': fakeConfig({ extra: 'gate: { passRate: 0.8 },' }),
+      'evals/g.es.ts': `import { evaluate } from 'evalsuite'\n${flaky('steady', '')}\n`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.deepEqual(readRun(p.dir).evals[0]?.cells[0]?.gate, { passRate: 0.8 })
+  })
+})
+
 describe('profiles', () => {
   test('a plan over budget.attempts exits 2 unless --force; the text --dry-run shows it', async () => {
     const p = await fixture('plan/profiles')
@@ -447,6 +513,16 @@ describe('common mistakes', () => {
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,
+    ],
+    [
+      'a gate as a percentage',
+      `evaluate('e', { gate: { passRate: 80 } }, async () => {})`,
+      /gate is 'all' \(every attempt passes\) or \{ passRate \} with a share above 0 and at most 1, e\.g\. gate: \{ passRate: 0\.8 \} \(got \{"passRate":80\}\) in evaluate\("e"\)/,
+    ],
+    [
+      'passRate instead of gate',
+      `evaluate('e', { passRate: 0.8 } as never, async () => {})`,
+      /Unknown option "passRate" in evaluate\("e"\)\. Did you mean "gate"\?/,
     ],
     [
       'no harness',

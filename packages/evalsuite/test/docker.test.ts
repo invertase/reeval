@@ -127,7 +127,7 @@ evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stri
       const built = (run: ReturnType<typeof readRun>) =>
         run.evals[0]?.read(run.evals[0].trial.checks[6]?.log.path ?? '') ?? ''
       const a = readRun(p.dir)
-      const image = a.evals[0]?.trial.image
+      const image = a.evals[0]?.image
       assert.match(image?.ref ?? '', /^evalsuite-install:[0-9a-f]{16}$/)
       assert.equal(image?.base, DEFAULT_IMAGE)
       assert.deepEqual(
@@ -146,7 +146,7 @@ evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stri
       assert.equal(second.code, 0, second.stdout + second.stderr)
       const b = readRun(p.dir)
       assert.equal(built(a), built(b), 'the second run reused the cached layer')
-      assert.equal(b.evals[0]?.trial.image?.id, image?.id)
+      assert.equal(b.evals[0]?.image?.id, image?.id)
       assert.equal(liveContainers(b.run.runId), '')
     },
   )
@@ -211,7 +211,7 @@ evaluate('${name}', { sandbox: fresh, runs: 2 }, async (t) => {
     const { run, read } = readRun(p.dir)
     const attempts = run.evals.flatMap((e) => e.attempts)
     assert.equal(attempts.length, 4)
-    const ids = new Set(attempts.map((a) => a.image?.id))
+    const ids = new Set(attempts.map((a) => a.imageId))
     const built = new Set(attempts.map((a) => read(a.checks[0]?.log.path ?? '')))
     try {
       assert.equal(readFileSync(builds, 'utf8'), 'build\n', 'one docker build for four attempts')
@@ -219,7 +219,11 @@ evaluate('${name}', { sandbox: fresh, runs: 2 }, async (t) => {
       assert.equal(built.size, 1, 'every attempt saw the same build')
       assert.equal(liveContainers(run.runId), '')
     } finally {
-      const refs = new Set(attempts.map((a) => a.image?.ref).filter(Boolean) as string[])
+      const refs = new Set(
+        attempts
+          .map((a) => run.stack.images.find((i) => i.id === a.imageId)?.ref)
+          .filter(Boolean) as string[],
+      )
       for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
     }
   })
@@ -267,7 +271,7 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       const first = await runCli(p.dir, ['run'], slow)
       assert.equal(first.code, 0, first.stdout + first.stderr)
       const a = readRun(p.dir)
-      const image = (name: string) => a.evals.find((e) => e.name === name)?.trial.image
+      const image = (name: string) => a.evals.find((e) => e.name === name)?.image
       const tools = image('tools')
       const deb = image('deb')
       for (const i of [tools, deb]) if (i) refs.add(i.ref)
@@ -285,19 +289,15 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       writeFileSync(join(p.dir, 'evals/tools/scratch/notes.txt'), 'ignored')
       const same = await runCli(p.dir, ['run', 'tools'], slow)
       assert.equal(same.code, 0, same.stdout + same.stderr)
-      assert.equal(
-        readRun(p.dir).evals[0]?.trial.image?.id,
-        tools?.id,
-        'an ignored file changes nothing',
-      )
+      assert.equal(readRun(p.dir).evals[0]?.image?.id, tools?.id, 'an ignored file changes nothing')
 
       writeFileSync(join(p.dir, 'evals/tools/greeting.txt'), 'bonjour\n')
       const edited = await runCli(p.dir, ['run', 'tools'], slow)
       assert.equal(edited.code, 0, edited.stdout + edited.stderr)
       const b = readRun(p.dir).evals[0]
-      if (b?.trial.image) refs.add(b.trial.image.ref)
-      assert.notEqual(b?.trial.image?.ref, tools?.ref, 'a context file edit is a new tag')
-      assert.notEqual(b?.trial.image?.dockerfile?.sha256, tools?.dockerfile?.sha256)
+      if (b?.image) refs.add(b.image.ref)
+      assert.notEqual(b?.image?.ref, tools?.ref, 'a context file edit is a new tag')
+      assert.notEqual(b?.image?.dockerfile?.sha256, tools?.dockerfile?.sha256)
       assert.equal(b?.read(b.trial.checks[0]?.log.path ?? '').includes('bonjour'), true)
     } finally {
       for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })

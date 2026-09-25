@@ -1,8 +1,8 @@
 import type {
   AttemptRecord,
-  CellCounts,
   CellRecord,
   EvalEntry,
+  HistoryCell,
   HistoryEntry,
   RunRecord,
 } from '../history/types.ts'
@@ -213,7 +213,9 @@ export type CellRow = {
   environment: string
   sandbox: string
   role: CellRecord['role']
+  /** Whether the cell's failures fail the eval: its gate isn't `'none'`. */
   gated: boolean
+  gate: CellRecord['gate']
   overrides: string[]
   runs: number
   pass: number
@@ -224,7 +226,9 @@ export type CellRow = {
   outcome: Outcome
   /** A variant's lift over its control, in whole points (from the record), else null. */
   lift: number | null
-  /** The variant is below its compare's `minLift`. */
+  /** Its 95% interval in whole points, and whether that spans 0. */
+  liftInterval: { lo: number; hi: number; withinNoise: boolean } | null
+  /** The interval's lower bound is below the compare's `minLift`. */
   belowMinLift: boolean
   attempts: AttemptRecord[]
 }
@@ -237,7 +241,8 @@ export function cellRows(e: EvalEntry): CellRow[] {
     environment: cell.environment,
     sandbox: cell.sandbox,
     role: cell.role,
-    gated: cell.gated,
+    gated: cell.gate !== 'none',
+    gate: cell.gate,
     overrides: cell.overrides,
     runs: cell.runs,
     pass: cell.pass,
@@ -247,7 +252,14 @@ export function cellRows(e: EvalEntry): CellRow[] {
     passRate: cell.passRate,
     outcome: cell.outcome,
     lift: cell.lift ? Math.round(cell.lift.points * 100) : null,
-    belowMinLift: cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift,
+    liftInterval: cell.lift
+      ? {
+          lo: Math.round(cell.lift.interval.lo * 100),
+          hi: Math.round(cell.lift.interval.hi * 100),
+          withinNoise: cell.lift.withinNoise,
+        }
+      : null,
+    belowMinLift: cell.lift?.minLift !== undefined && cell.lift.interval.lo < cell.lift.minLift,
     attempts: e.attempts.filter((a) => a.cell === cell.key),
   }))
 }
@@ -262,7 +274,7 @@ export type EvalHistoryPoint = {
   run: HistoryEntry
   outcome: Outcome
   passRate: number | null
-  cells: CellCounts[]
+  cells: HistoryCell[]
   /** The fingerprint differs from the previous run that had this eval. */
   changed: boolean
 }

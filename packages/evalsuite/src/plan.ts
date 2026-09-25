@@ -6,6 +6,7 @@ import { clip, formatDuration } from './text.ts'
 import type {
   Budget,
   Cell,
+  CellGate,
   Duration,
   EvalPlan,
   ResolvedProfile,
@@ -31,6 +32,8 @@ export type RunPlan = {
   concurrency: number
   budget: Budget
   warnings: string[]
+  /** Advice that doesn't stop the run, e.g. about the default gate. */
+  hints: string[]
   sandboxes: SandboxDescriptor[]
   harnessKinds: string[]
 }
@@ -107,9 +110,19 @@ export async function buildPlan(options: {
     concurrency: options.concurrency,
     budget: options.budget,
     warnings: [...warnings],
+    hints: gateHint([...rows.values()]),
     sandboxes: [...sandboxes.values()],
     harnessKinds: [...kinds],
   }
+}
+
+/** One line when evals run several times under the default gate, which every attempt must pass. */
+function gateHint(rows: PlanRow[]): string[] {
+  const n = rows.filter((r) => !r.plan.skip && r.plan.runs > 1 && r.plan.gate === undefined).length
+  if (n === 0) return []
+  return [
+    `${plural(n, 'eval')} ${n === 1 ? 'runs' : 'run'} more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead`,
+  ]
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -163,7 +176,7 @@ export function planTable(plan: RunPlan): string[] {
   return [line(header), ...rows.map(line)]
 }
 
-export type PlanCell = Cell & { gated: boolean; minLift?: number; runs: number }
+export type PlanCell = Cell & { gate: CellGate; minLift?: number; runs: number }
 
 export type PlanEval = {
   id: string
@@ -192,6 +205,7 @@ export type PlanDocument = {
   concurrency: number
   estimateMs: number
   warnings: string[]
+  hints: string[]
   evals: PlanEval[]
   excluded: ExcludedEval[]
   images: PlanImage[]
@@ -225,7 +239,7 @@ export function planDocument(
     else {
       e.cells.push({
         ...attempt.cell,
-        gated: attempt.gated,
+        gate: attempt.gate,
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
         runs: 1,
       })
@@ -248,6 +262,7 @@ export function planDocument(
     concurrency: plan.concurrency,
     estimateMs: plan.estimateMs,
     warnings: plan.warnings,
+    hints: plan.hints,
     evals: [...evals.values()],
     excluded,
     images,

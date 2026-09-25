@@ -1,4 +1,5 @@
 profile nightly (--profile) · 5 evals · 13 cells · 35 attempts
+hint: 5 evals run more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
 evals/p.es.ts › plain                a/-/fake        control          gated    ×3
                                      b/-/fake        control          gated    ×3
 evals/p.es.ts › compared             a/-/fake        control          ungated  ×3

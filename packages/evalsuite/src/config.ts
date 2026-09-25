@@ -29,6 +29,7 @@ const CONFIG_KEYS = [
   'sandbox',
   'environment',
   'runs',
+  'gate',
   'env',
   'judge',
   'timeout',
@@ -40,7 +41,16 @@ const CONFIG_KEYS = [
   'defaultProfile',
 ]
 const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
-const DEFAULTS_KEYS = ['harness', 'sandbox', 'environment', 'runs', 'env', 'judge', 'timeout']
+const DEFAULTS_KEYS = [
+  'harness',
+  'sandbox',
+  'environment',
+  'runs',
+  'gate',
+  'env',
+  'judge',
+  'timeout',
+]
 const LIMIT_KEYS = ['runs', 'compare', 'harness']
 
 export type ConfigInput = EsConfig | ((helpers: ConfigHelpers) => EsConfig)
@@ -280,6 +290,7 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     sandbox: user.sandbox ?? docker(),
     environment: user.environment,
     runs: user.runs ?? 1,
+    gate: user.gate,
     env: user.env ?? {},
     budget: checkBudget(user.budget, 'budget'),
     profiles,

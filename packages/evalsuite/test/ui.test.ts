@@ -35,7 +35,7 @@ const attempt = (name: string, group: string[]): AttemptMeta => ({
   label: '',
   harness: { kind: 'cursor', model: 'composer-2.5' },
   sandbox: { kind: 'docker' },
-  gated: true,
+  gate: 'all',
   plan: { harnesses: 1, variants: null, runs: 1, attempts: 1, notes: [], warnings: [] },
 })
 
@@ -108,7 +108,7 @@ const entry = (r: EvalResult, turns: number, judge?: number): EvalEntry =>
         judgements:
           judge === undefined
             ? []
-            : [{ verdict: 'pass', score: judge, threshold: 0.8, question: 'q', reason: null }],
+            : [{ verdict: 'pass', score: judge, threshold: 0.8, question: 'q', key: '0:q' }],
       },
     ],
   }) as unknown as EvalEntry

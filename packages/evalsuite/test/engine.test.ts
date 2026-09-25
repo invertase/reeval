@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -298,8 +299,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
         threshold: 0.8,
         question: 'Did it write hello.txt?',
         model: 'fake',
-        reason: null,
-        evidence: [],
+        key: `0:${createHash('sha256').update('Did it write hello.txt?').digest('hex').slice(0, 12)}`,
       },
     ])
     const [input] = JSON.parse(e.read(e.trial.files.judgeInput?.path ?? ''))

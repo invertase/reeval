@@ -1,4 +1,5 @@
 no profile · 5 evals · 7 cells · 11 attempts
+hint: 2 evals run more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
 evals/p.es.ts › plain                a/-/fake        control          gated    ×3
 evals/p.es.ts › compared             a/-/fake        control          ungated  ×1
                                      a/skilled/fake  variant skilled  gated    ×1

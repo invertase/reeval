@@ -41,6 +41,7 @@ const none = <span className="font-sans text-muted-foreground">none</span>
 
 export function State({ record, attempt }: { record: RunRecord; attempt: AttemptRecord }) {
   const { git, stack } = record
+  const image = stack.images.find((i) => i.id === attempt.imageId)
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <Section
@@ -91,23 +92,22 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
       <Section title="This attempt">
         <Row k="Cell">{attempt.cell}</Row>
         <Row k="Image">
-          {attempt.image ? (
+          {image ? (
             <>
-              {attempt.image.ref}{' '}
-              <span className="text-muted-foreground">{attempt.image.id.slice(0, 19)}</span>
-              {attempt.image.agentCli ? <div>agent CLI {attempt.image.agentCli}</div> : null}
-              {attempt.image.dockerfile ? (
+              {image.ref} <span className="text-muted-foreground">{image.id.slice(0, 19)}</span>
+              {image.agentCli ? <div>agent CLI {image.agentCli}</div> : null}
+              {image.dockerfile ? (
                 <div>
-                  dockerfile {attempt.image.dockerfile.path}{' '}
+                  dockerfile {image.dockerfile.path}{' '}
                   <span className="text-muted-foreground">
-                    {attempt.image.dockerfile.sha256.slice(0, 12)}
+                    {image.dockerfile.sha256.slice(0, 12)}
                   </span>
                 </div>
               ) : null}
-              {attempt.image.install?.length ? (
+              {image.install?.length ? (
                 <div>
-                  install on {attempt.image.base}
-                  {attempt.image.install.map((command) => (
+                  install on {image.base}
+                  {image.install.map((command) => (
                     <div key={command} className="text-muted-foreground">
                       $ {command}
                     </div>

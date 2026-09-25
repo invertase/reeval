@@ -1,6 +1,7 @@
 import type {
   AttemptImage,
   Cell,
+  CellGate,
   EnvironmentRecord,
   ErrorKind,
   FileChange,
@@ -40,7 +41,14 @@ export type GitInfo = {
 }
 
 export type RunnerInfo =
-  | { kind: 'ci'; provider: string; runUrl: string | null; attempt: number | null }
+  | {
+      kind: 'ci'
+      provider: string
+      runUrl: string | null
+      attempt: number | null
+      /** The pull request a CI run built, when the provider says (GitHub Actions). */
+      pr: { number: number | null; baseRef: string | null } | null
+    }
   | { kind: 'local'; hostHash: string }
 
 /** One failed judge try that was retried, and the backoff before the next. */
@@ -54,9 +62,11 @@ export type JudgementRecord = {
   model: string
   /** The model id the provider says served the call, when it reports one. */
   resolvedModel?: string
-  /** Evaluation models return a probability only, so this is null until a judge explains itself. */
-  reason: string | null
-  evidence: string[]
+  /**
+   * `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a
+   * verdict can be followed across runs (and an edited question starts a new series).
+   */
+  key: string
   /** Transient provider errors retried before this verdict, with the backoff before each retry. */
   retries?: JudgeRetry[]
 }
@@ -74,14 +84,19 @@ export type AttemptFiles = {
 export type ContextFile = { path: string; sha256: string }
 
 export type AttemptRecord = {
-  /** `<cell key>#<n>`. */
+  /** `<eval key> # <cell key>#<n>`: unique in the run. */
+  key: string
+  /** `<cell key>#<n>`: unique in its eval. */
   id: string
   /** The cell's key; see `EvalEntry.cells`. */
   cell: string
   /** Run number within the cell, from 1. */
   n: number
-  /** The image the container started from; null for the fake sandbox. */
-  image: AttemptImage | null
+  /** Start order across the run, from 1; null for attempts that never started. */
+  seq: number | null
+  startedAt: string | null
+  /** The image the container started from, in `stack.images`; null for the fake sandbox. */
+  imageId: string | null
   /** Names of the variables and secrets set in the sandbox; values are never recorded. */
   env: { vars: string[]; secrets: string[] }
   /** Skills, rules and MCP config visible to the agent in its sandbox, by content hash. */
@@ -89,7 +104,7 @@ export type AttemptRecord = {
   outcome: Outcome
   error: { kind: ErrorKind; message: string } | null
   durationMs: number
-  /** `text` is the agent's final message, whole unless it's over 64 KB. */
+  /** `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. */
   turns: Array<{
     prompt: string
     status: TurnStatus
@@ -114,25 +129,26 @@ export type AttemptRecord = {
 }
 
 export type EvalEntry = {
+  /** `file › group › … › name`, as shown. */
   id: string
-  /** Directory name inside the artifact directory. */
+  /** What the eval is matched on across runs; its `id` for now. */
+  key: string
+  /** Directory name inside the artifact directory, from `key`. */
   slug: string
   file: string
   group: string[]
   name: string
   /** Results are comparable only when fingerprints match. */
   fingerprint: string
-  /** sha256 of the eval file (its imports aren't traced yet). */
-  sourceHash: string | null
-  /** Evals have no fixtures until workspace seeding lands; always null for now. */
-  fixtureHash: string | null
+  /** The eval file and every local file it imports, directly or not, by content hash. */
+  sources: Array<{ path: string; sha256: string }>
   tags: string[]
   /**
    * Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if
    * all were, else `pass`. An ungated cell's failures don't fail the eval.
    */
   outcome: Outcome
-  /** pass / (pass + fail) over every attempt; infra errors and skips excluded. */
+  /** pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded. */
   passRate: number | null
   cells: CellRecord[]
   attempts: AttemptRecord[]
@@ -142,22 +158,46 @@ export type EvalEntry = {
 export type Lift = {
   /** The control cell's key. */
   vs: string
+  /** Passes out of counted attempts (passes and fails) on each side. */
+  control: { pass: number; counted: number }
+  variant: { pass: number; counted: number }
   /** Variant pass rate minus control pass rate, from -1 to 1. */
   points: number
-  controlPassRate: number
-  variantPassRate: number
-  /** Counted attempts (passes and fails) in the smaller of the two cells. */
-  n: number
-  /** Set when the compare has a `minLift`; the cell fails below it. */
+  /** 95% interval on the difference, by Newcombe's hybrid score method from two Wilson intervals. */
+  interval: { lo: number; hi: number; level: 0.95; method: 'newcombe-wilson' }
+  /** The interval spans 0: the attempts can't tell the variant from the control. */
+  withinNoise: boolean
+  /** Set when the compare has a `minLift`; the cell fails when `interval.lo` is below it. */
   minLift?: number
+}
+
+/** Each input of a cell fingerprint, hashed on its own, so a change can be named. */
+export type FingerprintParts = {
+  /** Over `EvalEntry.sources`. */
+  sources: string
+  /** Over the harness descriptor, less concurrency caps. */
+  harness: string
+  environment: string | null
+  image: string | null
+  agentCli: string | null
+  /** Over the judge's model, threshold and version. */
+  judge: string
+  /** Over the attempt's context files. */
+  context: string
 }
 
 /** One harness and environment of an eval, and how its attempts went. */
 export type CellRecord = Cell & {
-  /** Covers the eval source, harness, environment digest, image and judge settings. */
+  /** `sha256` of `fingerprintParts`; results are comparable only when it matches. */
   fingerprint: string
-  /** Whether this cell's failures fail the eval (a control's don't, by default). */
-  gated: boolean
+  fingerprintParts: FingerprintParts
+  /** The environment's digest: the join key into `RunRecord.environments`; null for none. */
+  environmentDigest: string | null
+  harnessKind: string
+  /** The configured harness model, when it has one. */
+  model: string | null
+  /** How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval. */
+  gate: CellGate
   /** Environment keys the variant replaced on the control's (or a child on its parent's). */
   overrides: string[]
   runs: number
@@ -166,7 +206,7 @@ export type CellRecord = Cell & {
   infraError: number
   skipped: number
   passRate: number | null
-  /** The attempts' worst outcome; a variant below its `minLift` is `fail` too. */
+  /** By `gate` (`'none'` reports the worst outcome); a variant below its `minLift` fails too. */
   outcome: Outcome
   lift?: Lift
 }
@@ -234,7 +274,6 @@ export type RunRecord = {
   plan: { evals: number; cells: number; attempts: number; estimateMs: number }
   budget: { attempts?: number; duration?: string | number } | null
   config: {
-    harnesses: string[]
     sandbox: string
     environment: string | null
     runs: number
@@ -294,11 +333,26 @@ export type StackSummary = {
   fingerprintScope: string[]
 }
 
-/** Per-cell attempt counts in a `HistoryEntry`, enough for pass rates without the record. */
-export type CellCounts = Pick<
+/** A cell in a `HistoryEntry`: enough to follow cells, variants and lift across runs. */
+export type HistoryCell = Pick<
   CellRecord,
-  'key' | 'role' | 'gated' | 'runs' | 'pass' | 'fail' | 'infraError' | 'skipped'
->
+  | 'key'
+  | 'role'
+  | 'variant'
+  | 'harness'
+  | 'model'
+  | 'environment'
+  | 'environmentDigest'
+  | 'gate'
+  | 'fingerprint'
+  | 'fingerprintParts'
+  | 'runs'
+  | 'pass'
+  | 'fail'
+  | 'infraError'
+  | 'skipped'
+  | 'passRate'
+> & { lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean } }
 
 /**
  * One line of the derived history listing: cached locally by the CLI, and the run header in the
@@ -313,18 +367,24 @@ export type HistoryEntry = {
   author: string
   git: Pick<GitInfo, 'sha' | 'branch' | 'dirty'> | null
   runner: RunnerInfo['kind']
-  /** The CI provider and its run page, for CI runs. */
-  ci: { provider: string; runUrl: string | null } | null
+  /** The CI provider, its run page and pull request, for CI runs. */
+  ci: {
+    provider: string
+    runUrl: string | null
+    pr: { number: number | null; baseRef: string | null } | null
+  } | null
   harnesses: string[]
   summary: RunSummary
   costUsd: number | null
   stack: StackSummary
   evals: Array<{
     id: string
+    key: string
     slug: string
     fingerprint: string
+    sources: EvalEntry['sources']
     outcome: Outcome
     passRate: number | null
-    cells: CellCounts[]
+    cells: HistoryCell[]
   }>
 }
