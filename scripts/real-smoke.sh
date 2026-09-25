@@ -14,5 +14,6 @@ if [ -z "${GOOGLE_GENERATIVE_AI_API_KEY:-}" ]; then
   echo "examples/hello smoke skipped: GOOGLE_GENERATIVE_AI_API_KEY isn't set"
   exit 0
 fi
+# The built CLI, not the es bin: pnpm links a bin only if it existed at install time.
 cd examples/hello
-pnpm es run --profile smoke
+node ../../packages/evalsuite/dist/cli.js run --profile smoke
