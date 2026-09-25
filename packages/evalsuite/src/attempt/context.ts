@@ -13,6 +13,12 @@ const HOME_CONTEXT_PATHS = [
   '.claude/CLAUDE.md',
   '.claude/settings.json',
   '.claude/skills',
+  '.gemini/GEMINI.md',
+  '.gemini/AGENTS.md',
+  '.gemini/config/skills',
+  '.gemini/config/rules',
+  '.gemini/config/mcp_config.json',
+  '.gemini/antigravity-cli/settings.json',
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
@@ -25,6 +31,7 @@ const CONTEXT_PATHS = [
   ...HOME_CONTEXT_PATHS.map((p) => `$HOME/${p}`),
   'AGENTS.md',
   'CLAUDE.md',
+  'GEMINI.md',
   '.cursorrules',
   '.cursor/rules',
   '.cursor/skills',
@@ -32,6 +39,8 @@ const CONTEXT_PATHS = [
   '.claude/settings.json',
   '.claude/skills',
   '.agents/skills',
+  '.agents/rules',
+  '.agents/mcp_config.json',
   '.mcp.json',
 ]
 

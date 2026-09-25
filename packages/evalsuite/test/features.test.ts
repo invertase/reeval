@@ -449,6 +449,33 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/antigravity-rules',
+    tiers: ['fake', 'docker'],
+    image: 'antigravity',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/antigravity-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'antigravity',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/antigravity-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'antigravity',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
     dir: 'harness/cursor-workspace-skills',
     tiers: ['fake', 'docker'],
     env: 'greeting',

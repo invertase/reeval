@@ -4,6 +4,7 @@ import type {
   HarnessV1NetworkSandboxSession,
   HarnessV1RequestTransformation,
 } from '@ai-sdk/harness'
+import { antigravityEndpoints } from '@evalsuite/harness-antigravity'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -13,13 +14,14 @@ import {
   type AgentKind,
   acpMcpServers,
   agentAuth,
+  antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
   layoutOf,
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
-import { claudeCode, cursor, fakeHarness } from '../src/harness.ts'
+import { antigravity, claudeCode, cursor, fakeHarness } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 
@@ -100,14 +102,14 @@ describe('the Claude Code harness', () => {
   test("a fake agent with a layout is placed exactly like that agent, in that agent's image", () => {
     // The fixtures under test/features/harness/ run the fake agent with a layout, so this is
     // what makes them evidence for the real harnesses.
-    for (const real of [claudeCode({ model: 'opus' }), cursor()]) {
+    for (const real of [claudeCode({ model: 'opus' }), cursor(), antigravity({ model: 'm' })]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
       assert.equal(imageHarness(fake), imageHarness(real), real.kind)
     }
     assert.throws(
       () => fakeHarness({ layout: 'codex' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity' \(got "codex"\)/,
     )
   })
 
@@ -168,6 +170,54 @@ describe('the Claude Code harness', () => {
   })
 })
 
+describe('the Antigravity harness', () => {
+  test('is plain data with its own cell id, and needs a model', () => {
+    const h = antigravity({ model: 'gemini-3.8-flash-medium' })
+    assert.deepEqual(h, { kind: 'antigravity', model: 'gemini-3.8-flash-medium' })
+    assert.equal(harnessId(h), 'antigravity:gemini-3.8-flash-medium')
+    assert.equal(harnessId(antigravity({ model: 'gemini-3.8-flash-low', id: 'agy' })), 'agy')
+    assert.throws(
+      () => antigravity({} as never),
+      /antigravity\(\) needs a model, e\.g\. antigravity\(\{ model: 'gemini-3\.8-flash-medium' \}\)/,
+    )
+  })
+
+  test('is accepted by the config and needs GEMINI_API_KEY', () => {
+    const config = resolveConfig({ harness: [antigravity({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [
+      'GEMINI_API_KEY',
+    ])
+    assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [])
+  })
+
+  test('reads rules from AGENTS.md, repo skills from .agents/skills and home skills from ~/.gemini/config/skills', () => {
+    const h = antigravity({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: '.agents/skills',
+      harnessSkillDir: '.gemini/config/skills',
+    })
+    assert.equal(imageHarness(h), 'antigravity')
+  })
+
+  test("gets MCP servers in the CLI's mcp_config.json shape (serverUrl, not url)", () => {
+    assert.deepEqual(
+      antigravityMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        docs: { transport: 'sse', url: 'https://docs.example/sse', headers: { A: 'b' } },
+      }),
+      {
+        files: { command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        docs: { serverUrl: 'https://docs.example/sse', headers: { A: 'b' } },
+      },
+    )
+  })
+
+  test("the catalog's endpoints are the adapter's", () => {
+    assert.deepEqual(AGENTS.antigravity.endpoints, antigravityEndpoints())
+  })
+})
+
 /** A sandbox session that records the adapter's request transformations, then stops the start. */
 function recordingSession(): {
   session: HarnessV1NetworkSandboxSession
@@ -208,6 +258,10 @@ const HOST_CREDENTIALS = [
   'CLAUDE_CODE_OAUTH_TOKEN',
   'AI_GATEWAY_API_KEY',
   'CURSOR_API_KEY',
+  'GEMINI_API_KEY',
+  'GOOGLE_API_KEY',
+  'GOOGLE_GEMINI_BASE_URL',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
 ]
 
 /**
@@ -325,10 +379,91 @@ describe('credential brokering per agent', () => {
     assert.equal(brokeringFor(claudeCode({ model: 'opus' }))?.tokens, undefined)
   })
 
+  test("Antigravity's adapter brokers only GEMINI_API_KEY to the Gemini API, whatever else the host has", async () => {
+    const rules = await adapterRules('antigravity', {
+      ...everything,
+      GEMINI_API_KEY: 'AIza-real',
+      GOOGLE_API_KEY: 'host-google',
+      GOOGLE_GENERATIVE_AI_API_KEY: 'host-judge',
+      GOOGLE_GEMINI_BASE_URL: 'https://proxy.example',
+    })
+    assert.equal(rules.length, 1)
+    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com', 'never the host proxy')
+    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
+  })
+
+  test("the key is swapped in on Antigravity's model endpoint only; anything else is refused", async () => {
+    const brokering = brokeringFor(antigravity({ model: 'm' }))
+    assert.equal(brokering?.credential, 'GEMINI_API_KEY')
+    const rules = await adapterRules('antigravity', { GEMINI_API_KEY: 'AIza-real' })
+    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
+    assert.match(placeholder, /^aisdkhc_/)
+    const send = (method: string, path: string) =>
+      applyTransformations(
+        rules,
+        {
+          host: 'generativelanguage.googleapis.com',
+          method,
+          path,
+          headers: { 'x-goog-api-key': placeholder },
+        },
+        brokering?.endpoints,
+      )
+    for (const path of [
+      '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse',
+      '/v1beta/models/gemini-3.1-flash-lite-preview:streamGenerateContent?alt=sse',
+    ]) {
+      assert.equal(send('POST', path).headers['x-goog-api-key'], 'AIza-real', path)
+    }
+    for (const [method, path] of [
+      ['GET', '/v1beta/models'],
+      ['GET', '/v1beta/models/gemini-3.8-flash:streamGenerateContent'],
+      ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
+      ['POST', '/v1beta/files'],
+      ['POST', '/upload/v1beta/files'],
+      ['POST', '/v1beta/cachedContents'],
+    ] as const) {
+      const r = send(method, path)
+      assert.equal(r.refused, true, `${method} ${path}`)
+      assert.equal(r.headers['x-goog-api-key'], placeholder, `${method} ${path}`)
+    }
+  })
+
+  test("Antigravity fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    process.env.GEMINI_API_KEY = 'AIza-real'
+    try {
+      const agent = AGENTS.antigravity
+      const adapter = await agent.adapter({ auth: agentAuth(agent) })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let spawned = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            spawn: async () => {
+              spawned = true
+              throw new Error('spawned')
+            },
+          },
+        }),
+        /can't broker GEMINI_API_KEY/,
+      )
+      assert.equal(spawned, false)
+    } finally {
+      delete process.env.GEMINI_API_KEY
+    }
+  })
+
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
     await assert.rejects(
       adapterRules('claude-code', { AI_GATEWAY_API_KEY: 'host-gateway' }),
       /ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate/,
+    )
+    await assert.rejects(
+      adapterRules('antigravity', { GOOGLE_GENERATIVE_AI_API_KEY: 'host-judge' }),
+      /GEMINI_API_KEY isn't set, so the Antigravity harness can't authenticate/,
     )
   })
 })
@@ -554,5 +689,60 @@ describe('the Cursor harness', () => {
       0,
     )
     assert.equal(event?.type === 'tool' && event.tool, 'mcp__stamp__house_stamp')
+  })
+})
+
+describe('Antigravity transcripts', () => {
+  const call = (id: string, toolName: string, input: unknown) => ({
+    ms: 10,
+    part: { type: 'tool-call', toolCallId: id, toolName, input },
+  })
+  const result = (id: string, output: unknown) => ({
+    ms: 20,
+    part: { type: 'tool-result', toolCallId: id, output },
+  })
+
+  test("its native tool shapes normalise like the other agents' (CLI 1.2.11)", () => {
+    const events = normaliseStream(
+      [
+        call('w', 'write', { TargetFile: '/es/workspace/a.txt', file_path: '/es/workspace/a.txt' }),
+        result('w', null),
+        call('e', 'edit', { TargetFile: '/es/workspace/a.txt', file_path: '/es/workspace/a.txt' }),
+        result('e', null),
+        call('b', 'bash', { CommandLine: 'cat a.txt', command: 'cat a.txt' }),
+        result('b', 'hi\r\nthere\r\n'),
+        call('s', 'webSearch', { query: 'antigravity cli' }),
+        result('s', 'Search results'),
+        call('f', 'webFetch', { Url: 'https://example.com', url: 'https://example.com' }),
+        result('f', 'Example Domain'),
+        call('r', 'read', { AbsolutePath: '/nope.txt', file_path: '/nope.txt' }),
+        {
+          ms: 25,
+          part: { type: 'tool-error', toolCallId: 'r', error: 'stat /nope.txt: no such file' },
+        },
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) =>
+        e.type === 'file-edit'
+          ? [e.type, e.path, e.kind]
+          : e.type === 'web-search'
+            ? [e.type, e.query]
+            : e.type === 'web-fetch'
+              ? [e.type, e.url, e.ok]
+              : e.type === 'tool'
+                ? [e.type, e.tool, e.output, e.ok]
+                : [e.type],
+      ),
+      [
+        ['file-edit', '/es/workspace/a.txt', 'modify'],
+        ['file-edit', '/es/workspace/a.txt', 'modify'],
+        ['tool', 'bash', 'hi\nthere\n', true],
+        ['web-search', 'antigravity cli'],
+        ['web-fetch', 'https://example.com', true],
+        ['tool', 'read', 'stat /nope.txt: no such file', false],
+      ],
+    )
   })
 })

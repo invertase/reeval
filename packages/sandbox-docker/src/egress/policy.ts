@@ -24,6 +24,9 @@ export const DOCKER_EGRESS: EgressCapabilities = { enforce: 'allowlist', record:
 export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   cursor: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
   'claude-code': ['api.anthropic.com', '*.anthropic.com'],
+  // The Gemini API only: with a Gemini API key the CLI needs no Google sign-in hosts, and its
+  // auto-updater is off.
+  antigravity: ['generativelanguage.googleapis.com'],
 }
 
 /** The package registries and GitHub, for a restricted policy that still installs. */

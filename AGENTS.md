@@ -49,14 +49,15 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`; `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
-| `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`) and Claude Code (`@ai-sdk/harness-claude-code`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
+| `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`), Claude Code (`@ai-sdk/harness-claude-code`) and Antigravity (`@evalsuite/harness-antigravity`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
+| `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/harness-antigravity`) like `sandbox-docker` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/sandbox-docker`), so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts` (the coding evals under Claude Code), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
+| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts` and `es.antigravity.config.ts` (the coding evals under Claude Code and Antigravity), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
 
 ## Development
 
@@ -99,10 +100,13 @@ gateway against local HTTP/1.1, HTTP/2 and WebSocket servers; and real container
 the header swap, searches `env`, `/proc` and the filesystem for the key, and checks a restricted
 policy leaves no route out. ES's Docker tests build real `install` layers and Dockerfiles (one
 `FROM ${ES_BASE}`, one on a Debian base that gets the harness baked on, for Cursor and for Claude
-Code) and check the cache and the record, and start real Claude Code with a made-up key to check
-brokering end to end. The Docker tests skip unless Docker is running and the sandbox images have
-been built (Cursor's, and Claude Code's for its tests: `es image build` in a project whose config
-uses `claudeCode()`, such as `examples/hello` with `--config es.claude.config.ts`);
+Code) and check the cache and the record, and start real Claude Code and Antigravity with a
+made-up key to check brokering end to end. With `GEMINI_API_KEY` set, one more runs the real
+Antigravity CLI (it edits the workspace, answers from its rules and a home skill, and a script it
+runs sees only the placeholder); without the key it skips and says why. The Docker tests skip unless Docker is running and the sandbox images have
+been built (Cursor's, and Claude Code's or Antigravity's for theirs: `es image build` in a project
+whose config uses `claudeCode()` or `antigravity()`, such as `examples/hello` with
+`--config es.claude.config.ts` or `--config es.antigravity.config.ts`);
 `ES_TEST_REQUIRE_DOCKER=1` (which `pnpm test:docker` sets) makes them fail instead.
 
 For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/es-demo` builds a demo project
@@ -175,7 +179,8 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into ES's image for it,
-   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-1.0.37`, `claude-code-1.0.128`), so
+   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-1.0.37`, `claude-code-1.0.128`,
+   `antigravity-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 
@@ -183,6 +188,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    cd examples/hello
    pnpm es image build
    pnpm es image build --config es.claude.config.ts   # Claude Code's image
+   pnpm es image build --config es.antigravity.config.ts   # Antigravity's image
    ```
 
 2. Put your credentials in `examples/hello/.env.local`. It is gitignored.
@@ -190,6 +196,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    ```bash
    CURSOR_API_KEY=...
    ANTHROPIC_API_KEY=...              # for es.claude.config.ts
+   GEMINI_API_KEY=...                 # for es.antigravity.config.ts (a Gemini API key)
    GOOGLE_GENERATIVE_AI_API_KEY=...   # the example's judge (google/*) and the Genkit evals' sandbox
    # TYPESAFE_AI_API_KEY=...          # for typesafe-ai/* judges such as Jev (or AI_GATEWAY_API_KEY)
    ```
@@ -203,6 +210,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    pnpm es run --profile pr     # sized like a PR run: one run per cell, no variants
    pnpm es run --profile smoke  # the nightly smoke: two judge-free evals, once, on composer-2.5
    pnpm es run --config es.claude.config.ts   # the coding evals under Claude Code
+   pnpm es run --config es.antigravity.config.ts   # the coding evals under Antigravity
    ```
 
 The harness keys stay on the host (see [Secrets](#secrets)). ES masks secret-looking values in
@@ -215,18 +223,20 @@ judge's keys; a brokered secret that goes in a header fails its attempt the same
 | Import | Exports |
 |---|---|
 | `@invertase/foobar` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment`, `DEFAULT_SKILL_EXCLUDE`, `DEFAULT_EGRESS_ALLOW` and the types |
-| `@invertase/foobar/harness` | `cursor()`, `claudeCode()`, `fakeHarness()` |
+| `@invertase/foobar/harness` | `cursor()`, `claudeCode()`, `antigravity()`, `fakeHarness()` |
 | `@invertase/foobar/sandbox` | `docker()`, `fakeSandbox()` |
 | `@invertase/foobar/judge` | `fakeJudge()`, `RECOMMENDED_JUDGE_MODEL`, `DEFAULT_THRESHOLD` and the judge types |
 | `@invertase/foobar/view` | Browser-safe run headers, the studio's file layout and view-models |
 
 - **Harnesses:** `cursor({ model? })` (needs `CURSOR_API_KEY`), `claudeCode({ model })` (needs
-  `ANTHROPIC_API_KEY`; `model` is any id or alias the `claude` CLI takes, and it's required) and
+  `ANTHROPIC_API_KEY`; `model` is any id or alias the `claude` CLI takes, and it's required),
+  `antigravity({ model })` (needs `GEMINI_API_KEY`, a Gemini API key; `model` is a slug `agy models`
+  lists for one, such as `gemini-3.8-flash-medium`, and it's required) and
   `fakeHarness({ … })`, a scripted agent for tests and dry runs (its `script` steps are
   `{ exec }`, `{ write }`, `{ reply }` and `{ mcp: '<server>/<tool>' }`, which calls a stdio MCP
   server's tool in the sandbox). `fakeHarness({ layout:
-  'claude-code' })` behaves like that agent without a key: its image, and where it reads rules and
-  skills. Real harnesses need `docker()`, and each authenticates only with its own key, passed to
+  'claude-code' })` (or `'antigravity'`) behaves like that agent without a key: its image, and
+  where it reads rules and skills. Real harnesses need `docker()`, and each authenticates only with its own key, passed to
   its adapter explicitly: a host `AI_GATEWAY_API_KEY`, subscription or keychain is never used.
 - `evaluate(name, [options,] fn)`, plus `evaluate.skip`, `evaluate.only`, `evaluate.todo(name)`
   and `evaluate.for(cases)(name, [options,] (t, item) => …)` (the name can use `$key`, `%s` and
@@ -318,9 +328,11 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   concatenate, parent first.
 - **Skills** go to the harness adapter, which writes them where its agent reads them;
   `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
-  for Cursor, `.claude/skills` for Claude Code).
-- **Rules** land where the harness's agent reads them: `AGENTS.md` for Cursor, `CLAUDE.md` for
-  Claude Code. The digest hashes their content, not the path, so one environment has one digest
+  for Cursor, `.claude/skills` for Claude Code, `.agents/skills` for Antigravity). Antigravity's
+  adapter puts harness-placed skills in `~/.gemini/config/skills`, where CLI 1.2.11 reads them
+  (its docs say `~/.gemini/antigravity-cli/skills`, which it doesn't read).
+- **Rules** land where the harness's agent reads them: `AGENTS.md` for Cursor and Antigravity,
+  `CLAUDE.md` for Claude Code. The digest hashes their content, not the path, so one environment has one digest
   on every harness (the harness is in the cell's fingerprint). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
   commit is recorded either way. `SKILL.md` frontmatter is YAML, so block descriptions
   (`description: |` or `>`) work.
@@ -547,12 +559,17 @@ harness's brokered endpoints:
 |---|---|
 | Cursor | `POST /auth/exchange_user_api_key` |
 | Claude Code | `POST /v1/messages`, `POST /v1/messages/count_tokens`, `GET /api/claude_code/settings`, `GET /api/claude_code/policy_limits` |
+| Antigravity | `POST generativelanguage.googleapis.com/v1beta/models/<model>:streamGenerateContent` (its model, and a lite one for titles) |
 
 A request carrying the placeholder anywhere else gets a 403 from the gateway, never the key, and
 the attempt's output prints `warning: the egress gateway refused POST https://…`, so a CLI update
 that needs a new endpoint fails loudly rather than hanging or leaking. Claude Code runs with
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (no telemetry or feature-flag fetches, so flags
-can't change between runs). Other hosts pass through untouched and end to end. If the gateway can't start
+can't change between runs). Antigravity runs with a Gemini API key only (never the CLI's Google
+sign-in, which Google's terms don't allow automating), telemetry off in its settings and
+`AGY_CLI_DISABLE_AUTO_UPDATE=true` (`1` doesn't turn it off). CLI 1.2.11 still fetches feature
+flags from `antigravity-unleash.goog` and logs to `play.googleapis.com`; neither gets the key.
+Other hosts pass through untouched and end to end. If the gateway can't start
 (for example, an `image` without `node`), the attempt is an infra error that names the key, so a
 change of image can't widen the credential boundary: there's no way to pass the real key in.
 `docker({ from })` or `docker({ dockerfile })` give any Debian or Ubuntu image what the gateway

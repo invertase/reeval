@@ -1,6 +1,7 @@
 // `evalsuite/harness`: agent harness descriptors. The implementations load lazily in workers.
 import { UsageError } from './errors.ts'
 import type {
+  AntigravityHarnessDescriptor,
   ClaudeCodeHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
@@ -29,7 +30,22 @@ export const claudeCode = (
   return { kind: 'claude-code', ...options }
 }
 
-const LAYOUTS = ['cursor', 'claude-code']
+/**
+ * The Antigravity CLI, with a Gemini API key. `model` is required, since the CLI's default
+ * changes under you. `id` names the cell; it defaults to `antigravity:<model>`.
+ */
+export const antigravity = (
+  options: Omit<AntigravityHarnessDescriptor, 'kind'>,
+): AntigravityHarnessDescriptor => {
+  if (typeof options?.model !== 'string' || !options.model) {
+    throw new UsageError(
+      "antigravity() needs a model, e.g. antigravity({ model: 'gemini-3.8-flash-medium' })",
+    )
+  }
+  return { kind: 'antigravity', ...options }
+}
+
+const LAYOUTS = ['cursor', 'claude-code', 'antigravity']
 
 const STEP_KEYS = ['exec', 'write', 'reply', 'mcp']
 
@@ -76,6 +92,7 @@ export const fakeHarness = (options: Omit<FakeHarnessDescriptor, 'kind'> = {}) =
 
 export type {
   AgentHarnessDescriptor,
+  AntigravityHarnessDescriptor,
   ClaudeCodeHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,

@@ -81,6 +81,7 @@ const PACKAGES = [
   '@ai-sdk/harness',
   '@ai-sdk/harness-cursor',
   '@ai-sdk/harness-claude-code',
+  '@evalsuite/harness-antigravity',
   '@ai-sdk/google',
   '@ai-sdk/typesafe-ai',
 ]

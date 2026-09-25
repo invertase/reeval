@@ -29,9 +29,11 @@ test('the packed package installs into a clean project and runs es', {
   assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
   assert.match(listing, /^package\/dist\/vendor\/sandbox-docker\/docker\/Dockerfile$/m)
   assert.match(listing, /^package\/dist\/vendor\/sandbox-docker\/dist\/index\.js$/m)
+  assert.match(listing, /^package\/dist\/vendor\/harness-antigravity\/dist\/index\.js$/m)
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
 
-  // sandbox-docker is vendored into dist, so nothing in the manifest points at the workspace.
+  // sandbox-docker and harness-antigravity are vendored into dist, so nothing in the manifest
+  // points at the workspace.
   const manifest = JSON.parse(listingPackage(dir, tarball))
   const pkg = manifest.name as string
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
@@ -75,6 +77,12 @@ evaluate('hello', async (t) => {
   ]).stdout.trim()
   assert.ok(context.startsWith(join(app, 'node_modules')), context)
   assert.ok(existsSync(join(context, 'Dockerfile')))
+  // The vendored Antigravity adapter loads with the installed package's dependencies alone.
+  const adapter = sh(process.execPath, app, [
+    '-e',
+    `import('./node_modules/${pkg}/dist/vendor/harness-antigravity/dist/index.js').then((m) => console.log(m.createAntigravity().harnessId))`,
+  ])
+  assert.equal(adapter.stdout.trim(), 'antigravity', adapter.stderr)
   if (hasDocker) {
     const tag = 'evalsuite-pack-smoke:test'
     const built = sh('docker', app, ['build', '--quiet', '--tag', tag, context], 240_000)

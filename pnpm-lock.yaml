@@ -44,6 +44,9 @@ importers:
       '@ai-sdk/harness-cursor':
         specifier: 1.0.37
         version: 1.0.37(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/provider-utils':
+        specifier: 5.0.47
+        version: 5.0.47(zod@4.6.5)
       '@ai-sdk/typesafe-ai':
         specifier: 3.0.6
         version: 3.0.6(zod@4.6.5)
@@ -75,6 +78,9 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
     devDependencies:
+      '@evalsuite/harness-antigravity':
+        specifier: workspace:0.1.0
+        version: link:../harness-antigravity
       '@evalsuite/sandbox-docker':
         specifier: workspace:*
         version: link:../sandbox-docker
@@ -108,6 +114,9 @@ importers:
       '@ai-sdk/harness-cursor':
         specifier: 1.0.37
         version: 1.0.37(ws@8.21.0)(zod@4.6.5)
+      '@evalsuite/harness-antigravity':
+        specifier: workspace:0.1.0
+        version: link:../harness-antigravity
       ws:
         specifier: 8.21.0
         version: 8.21.0
