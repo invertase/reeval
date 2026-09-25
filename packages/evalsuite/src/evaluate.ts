@@ -10,9 +10,14 @@ import {
   type TestMode,
 } from './engine/runtime.ts'
 import { inCI } from './env.ts'
-import { type ResolvedEnvironment, resolveEnvironment } from './environment/resolve.ts'
-import { isTimeout } from './errors.ts'
-import { createHarness } from './harness/index.ts'
+import {
+  type ResolvedEnvironment,
+  type ResolvedStep,
+  resolveEnvironment,
+  skillFiles,
+} from './environment/resolve.ts'
+import { isTimeout, UsageError } from './errors.ts'
+import { createHarness, workspaceSkillDir } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
 import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
@@ -21,6 +26,7 @@ import type { RetriedError } from './judge/retry.ts'
 import {
   cascade,
   checkOptions,
+  evalPlan,
   expand,
   type Level,
   matchesTags,
@@ -31,7 +37,7 @@ import { redactSecrets } from './redact.ts'
 import { createSandbox, InfraError, type Sandbox } from './sandbox/index.ts'
 import { withLease } from './scheduler/client.ts'
 import type { Limits } from './scheduler/core.ts'
-import { clip } from './text.ts'
+import { clip, formatDuration } from './text.ts'
 import type {
   AttemptMeta,
   Diff,
@@ -69,6 +75,11 @@ function splitArgs<F extends (...args: never[]) => unknown>(
   a: EvalOptions | F | undefined,
   b: EvalOptions | F | undefined,
 ): [EvalOptions, F] {
+  if (typeof a === 'function' && typeof b === 'function') {
+    throw new UsageError(
+      `${what}("${name}") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. Put the secret in an environment (environment: …) or in the config's env.`,
+    )
+  }
   if (typeof a === 'function') return [(b as EvalOptions | undefined) ?? {}, a]
   if (typeof b === 'function') return [(a as EvalOptions | undefined) ?? {}, b]
   throw new TypeError(`${what}("${name}") needs a function`)
@@ -122,12 +133,27 @@ function configLevel(config: ResolvedConfig): Resolved {
     harness: config.harness,
     sandbox: config.sandbox,
     environment: config.environment,
+    compare: undefined,
     runs: config.runs,
     env: config.env,
     judge: config.judge,
     timeout: undefined,
     tags: [],
+    pin: [],
   }
+}
+
+/** Setup steps run outside the eval timeout, so the attempt's own limit makes room for them. */
+function setupAllowance(planned: PlannedAttempt): number {
+  const layers = planned.environment.layers
+  const steps = layers.flatMap((l) => l.spec.setup ?? [])
+  const setupMs = steps.reduce(
+    (ms, step) => ms + parseDuration((typeof step === 'string' ? undefined : step.timeout) ?? '5m'),
+    0,
+  )
+  const baked = layers.some((l) => (l.spec.image ?? []).length > 0)
+  const building = planned.sandbox.kind === 'docker' && (planned.sandbox.from || baked)
+  return setupMs + (building ? SETUP_BUDGET_MS : 0)
 }
 
 function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): void {
@@ -139,17 +165,38 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
     ...groupStack.map((g) => ({ options: g.options, where: `group("${g.name}")` })),
     { options: own, where },
   ]
-  const resolved = cascade(configLevel(ctx.config), levels, where, ctx.runs)
+  const resolvedEval = cascade(configLevel(ctx.config), levels, where, {
+    profile: ctx.profile,
+    runs: ctx.runs,
+  })
+  const { resolved } = resolvedEval
   if (!matchesTags(resolved.tags, ctx.tags)) return
   const timeoutMs =
     resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
   const order = registered++
+  const plannedAttempts = resolvedEval.skip ? [] : expand(resolved)
+  const plan = evalPlan(resolvedEval, plannedAttempts)
+  if (resolvedEval.skip) {
+    const [first] = expand(resolved)
+    if (!first) return
+    const attempt: AttemptMeta = {
+      name,
+      groups,
+      tags: resolved.tags,
+      cell: first.cell,
+      n: 1,
+      label: '',
+      harness: first.harness,
+      sandbox: first.sandbox,
+      gated: false,
+      plan,
+    }
+    registerTest(`${name} [${attemptId(first.cell.key, 1)}]`, { mode: 'skip', attempt }, async () => {})
+    return
+  }
   const cells: string[] = []
-  for (const planned of expand(resolved)) {
+  for (const planned of plannedAttempts) {
     if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
-    const baked = planned.environment.steps.filter((s) => s.kind === 'exec' && s.cache).length
-    const setup =
-      planned.sandbox.kind === 'docker' && (planned.sandbox.from || baked > 0) ? SETUP_BUDGET_MS : 0
     const attempt: AttemptMeta = {
       name,
       groups,
@@ -158,6 +205,10 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       n: planned.n,
       label: planned.label,
       harness: planned.harness,
+      sandbox: planned.sandbox,
+      gated: planned.gated,
+      ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
+      plan,
     }
     const spec: AttemptSpec = {
       ...planned,
@@ -171,7 +222,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
     registerTest(
       `${name} [${attemptId(planned.cell.key, planned.n)}]`,
       {
-        timeout: timeoutMs + setup + GRACE_MS,
+        timeout: timeoutMs + setupAllowance(planned) + GRACE_MS,
         mode,
         attempt,
         gate: (file) => {
@@ -328,6 +379,30 @@ const NO_JUDGE_MODEL =
 
 const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')
 
+/** The eval's timer, paused while the sandbox and its setup steps start. */
+function evalTimer(ms: number) {
+  const controller = new AbortController()
+  let left = ms
+  let since = Date.now()
+  let timer: NodeJS.Timeout | undefined
+  const fire = () =>
+    controller.abort(new DOMException(`Eval timed out after ${ms / 1000}s`, 'TimeoutError'))
+  const start = () => {
+    since = Date.now()
+    timer = setTimeout(fire, Math.max(0, left))
+  }
+  start()
+  return {
+    signal: controller.signal,
+    pause() {
+      clearTimeout(timer)
+      left -= Date.now() - since
+    },
+    resume: start,
+    clear: () => clearTimeout(timer),
+  }
+}
+
 async function runAttempt(
   spec: AttemptSpec,
   fn: EvalFn,
@@ -362,6 +437,7 @@ async function runAttempt(
   // Setup (environment, image build) runs on the test's signal; the eval timer starts after it.
   let signal = testSignal
   let timer: AbortSignal | undefined
+  let clock: ReturnType<typeof evalTimer> | undefined
   const destroy = () => void sandbox?.destroy()
   testSignal.addEventListener('abort', destroy, { once: true })
 
@@ -381,10 +457,11 @@ async function runAttempt(
     record.image = null
     if (spec.sandbox.kind === 'docker') {
       const { prepareImage } = await import('./sandbox/prepare.ts')
-      record.image = await prepareImage(spec.sandbox, resolved.baked, testSignal)
+      record.image = await prepareImage(spec.sandbox, resolved.image, config.root, testSignal)
       image = record.image.ref
     }
   }
+  const checkEnv = () => (resolved?.checkVars ?? {}) as Record<string, string>
 
   const requireSandbox = () => {
     if (!sandbox) throw new Error('No sandbox yet: call t.send() before t.exec() or t.readFile()')
@@ -394,7 +471,7 @@ async function runAttempt(
     const box = requireSandbox()
     const start = performance.now()
     report({ kind: 'check-start', command })
-    const r = await timed('checksMs', () => box.exec(command, { signal }))
+    const r = await timed('checksMs', () => box.exec(command, { signal, env: checkEnv() }))
     const durationMs = Math.round(performance.now() - start)
     record.checks.push({ command, ...r, durationMs })
     report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
@@ -402,11 +479,47 @@ async function runAttempt(
   }
   const readFile = (path: string) => requireSandbox().readFile(path)
 
+  /** Setup steps in order, each with its own timeout; a failure is an infra error. */
+  async function runSetup(box: Sandbox, env: ResolvedEnvironment) {
+    const steps: ResolvedStep[] = [
+      // The fake sandbox has no image to bake into, so it runs image steps here too.
+      ...(spec.sandbox.kind === 'docker'
+        ? []
+        : env.image.map((s) => ({ run: s.run, timeoutMs: s.timeoutMs ?? 5 * 60_000 }))),
+      ...env.setup,
+    ]
+    record.setup = []
+    for (const [i, step] of steps.entries()) {
+      const start = performance.now()
+      const stepSignal = AbortSignal.any([signal, AbortSignal.timeout(step.timeoutMs)])
+      const r = await box
+        .exec(step.run, {
+          signal: stepSignal,
+          env: env.checkVars,
+          ...(step.cwd ? { cwd: step.cwd } : {}),
+        })
+        .catch((error) => {
+          if (signal.aborted) throw error
+          return null
+        })
+      const durationMs = Math.round(performance.now() - start)
+      const output = r ? [r.stdout, r.stderr].filter(Boolean).join('\n') : ''
+      record.setup.push({ run: step.run, exitCode: r?.exitCode ?? null, durationMs, output })
+      if (r?.exitCode === 0) continue
+      const what = `setup step ${i + 1}/${steps.length} "${clip(step.run, 80)}" in environment ${spec.environment.name}`
+      throw new InfraError(
+        r
+          ? `${what} exited ${r.exitCode} after ${formatDuration(durationMs)} (see setup.log):\n${tailOf(r.stderr || r.stdout)}`
+          : `${what} timed out after ${formatDuration(step.timeoutMs)} (see setup.log)`,
+      )
+    }
+  }
+
   async function startSession(): Promise<[Sandbox, HarnessSession]> {
     const env = resolved as ResolvedEnvironment
     const box = await createSandbox(spec.sandbox, {
       runId,
-      timeoutMs: spec.timeoutMs + 60_000,
+      timeoutMs: spec.timeoutMs + setupAllowance(spec) + 60_000,
       signal,
       env: env.vars,
       image,
@@ -416,21 +529,21 @@ async function runAttempt(
     if (signal.aborted) destroy()
     signal.throwIfAborted()
     for (const f of env.files) await box.writeFile(f.path, f.content)
-    // The fake sandbox has no image to bake into, so it runs every step here.
-    const steps =
-      spec.sandbox.kind === 'docker' ? env.perAttempt : [...env.baked, ...env.perAttempt]
-    for (const command of steps) {
-      const r = await box.exec(command, { signal })
-      if (r.exitCode !== 0) {
-        throw new InfraError(
-          `Setup step "${command}" for environment ${spec.environment.name} exited ${r.exitCode}:\n${tailOf(r.stderr || r.stdout)}`,
-        )
+    const skillDir = workspaceSkillDir(spec.harness)
+    for (const skill of env.workspaceSkills) {
+      for (const f of skillFiles(skill)) {
+        await box.writeFile(`${skillDir}/${skill.name}/${f.path}`, f.content)
       }
     }
+    await runSetup(box, env)
     await snapshot(box, signal)
     if (spec.sandbox.kind === 'docker') record.context = await agentContext(box, signal)
     const harness = await createHarness(spec.harness)
-    session = await harness.start(box, signal, { skills: env.skills, mcp: env.mcp })
+    session = await harness.start(box, signal, {
+      skills: env.skills,
+      workspaceSkills: env.workspaceSkills.map((s) => s.name),
+      mcp: env.mcp,
+    })
     report({ kind: 'sandbox-ready', ms: Math.round(performance.now() - setupStart) })
     return [box, session]
   }
@@ -444,8 +557,17 @@ async function runAttempt(
     readFile,
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },
     async send(prompt) {
-      const [box, agent] =
-        sandbox && session ? [sandbox, session] : await timed('setupMs', startSession)
+      let started: [Sandbox, HarnessSession]
+      if (sandbox && session) started = [sandbox, session]
+      else {
+        clock?.pause()
+        try {
+          started = await timed('setupMs', startSession)
+        } finally {
+          clock?.resume()
+        }
+      }
+      const [box, agent] = started
       const entry = {
         prompt,
         text: '',
@@ -540,7 +662,8 @@ async function runAttempt(
   try {
     report({ kind: 'sandbox' })
     await timed('setupMs', setup)
-    timer = AbortSignal.timeout(spec.timeoutMs)
+    clock = evalTimer(spec.timeoutMs)
+    timer = clock.signal
     signal = AbortSignal.any([testSignal, timer])
     timer.addEventListener('abort', destroy, { once: true })
     await fn(t)
@@ -556,6 +679,7 @@ async function runAttempt(
     if (timedOut()) throw new Error(`Eval timed out after ${spec.timeoutMs / 1000}s`)
     throw error
   } finally {
+    clock?.clear()
     if (sandbox) report({ kind: 'cleanup' })
     testSignal.removeEventListener('abort', destroy)
     await session?.close().catch(() => {})

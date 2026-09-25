@@ -13,4 +13,8 @@ export async function createHarness(descriptor: HarnessDescriptor): Promise<Harn
   }
 }
 
+/** Where each harness's agent looks for repo skills, relative to the workspace. */
+export const workspaceSkillDir = (descriptor: HarnessDescriptor): string =>
+  descriptor.kind === 'cursor' ? '.cursor/skills' : '.agents/skills'
+
 export type { Harness }

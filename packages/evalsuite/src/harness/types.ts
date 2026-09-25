@@ -1,6 +1,6 @@
-import type { HarnessSkill } from '../environment/resolve.ts'
+import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type { McpServer, TranscriptEvent, TurnStatus } from '../types.ts'
+import type { TranscriptEvent, TurnStatus } from '../types.ts'
 
 export type HarnessResult = {
   /** The agent's final message for the turn. */
@@ -22,8 +22,10 @@ export interface HarnessSession {
 /** What an environment gives the agent itself; each adapter puts it where its agent looks. */
 export type Treatments = {
   skills: HarnessSkill[]
+  /** Skills already written into the workspace's skill directory (placement `workspace`). */
+  workspaceSkills: string[]
   /** Secret values are already resolved. */
-  mcp: Record<string, McpServer>
+  mcp: Record<string, ResolvedMcpServer>
 }
 
 export interface Harness {

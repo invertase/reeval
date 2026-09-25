@@ -1,138 +1,391 @@
+import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { Environment, EnvironmentStep, McpServer, Secret, SkillOptions } from './types.ts'
+import { SECRET_NAME } from './redact.ts'
+import type {
+  Environment,
+  EnvironmentHelpers,
+  EnvironmentInput,
+  EnvironmentLayer,
+  EnvironmentSpec,
+  EnvVars,
+  HostFile,
+  McpHelper,
+  McpServer,
+  Secret,
+  SecretHelper,
+  SecretTemplate,
+  SkillHelper,
+  SkillSource,
+} from './types.ts'
 
 export class DefinitionError extends Error {
   override name = 'DefinitionError'
 }
 
-export interface EnvironmentBuilder {
-  /** Inlines another environment's steps, in order. */
-  use(other: Environment): void
-  /**
-   * Runs a shell command. By default it's baked into a cached image layer, where secrets don't
-   * exist; `{ cache: false }` runs it in every fresh sandbox instead, with secrets set.
-   */
-  exec(command: string, options?: { cache?: boolean }): void
-  /**
-   * A skill directory (with a `SKILL.md`), a directory of them, or a git URL. Paths are relative to
-   * the project root; pass a `URL` for one relative to your file.
-   */
-  skill(source: string | URL, options?: SkillOptions): void
-  /** An MCP server: a command line, `{ command, args, env }`, or `{ url, headers }`. */
-  mcp(name: string, server: string | McpServer): void
-  /** `AGENTS.md` for the workspace: markdown, or the path of a `.md` file. */
-  rules(markdownOrPath: string | URL): void
-  /** Writes a file into the workspace, or the home directory for a `~/` path. */
-  file(path: string, content: string | { from: string | URL }): void
-  var(name: string, value: string): void
-  /** Passes host variable `from` (default: `name`) into the sandbox as `name`, redacted. */
-  secret(name: string, from?: string): void
+const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
+const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
+const SPEC_KEYS = ['image', 'env', 'files', 'rules', 'setup', 'skills', 'mcp']
+const SPEC_HINTS: Record<string, string> = {
+  exec: 'setup (every attempt) or image (baked)',
+  steps: 'setup',
+  run: 'setup',
+  vars: 'env',
+  secrets: 'env',
+  skill: 'skills',
+  file: 'files',
+  agents: 'rules',
+  use: 'extend',
 }
 
-const NAME = /^[A-Za-z0-9][A-Za-z0-9._@-]*$/
-const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
+export const isSecret = (value: unknown): value is Secret =>
+  typeof value === 'object' && value !== null && (value as Secret).kind === 'secret'
 
-const toPath = (value: string | URL) => (value instanceof URL ? fileURLToPath(value) : value)
+export const isSecretTemplate = (value: unknown): value is SecretTemplate =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as SecretTemplate).kind === 'secret-template'
+
+export const isHostFile = (value: unknown): value is HostFile =>
+  typeof value === 'object' && value !== null && (value as HostFile).kind === 'file'
+
+export const isEnvironment = (value: unknown): value is Environment =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as Environment).kind === 'environment' &&
+  Array.isArray((value as Environment).layers)
+
+// ES's own files, so a stack trace's first frame outside them is the file that called us.
+const OWN_DIRS = ['../src/', '../dist/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
+
+/** The directory of the file that called into ES, from the stack; relative paths resolve here. */
+export function callerDir(): string | undefined {
+  const limit = Error.stackTraceLimit
+  Error.stackTraceLimit = 30
+  const stack = new Error().stack ?? ''
+  Error.stackTraceLimit = limit
+  for (const line of stack.split('\n').slice(1)) {
+    const match = /(?:\(|at )((?:file:\/\/)?\/[^()]*?|[A-Za-z]:[\\/][^()]*?):\d+:\d+\)?\s*$/.exec(
+      line,
+    )
+    if (!match?.[1]) continue
+    const file = match[1].startsWith('file://') ? fileURLToPath(match[1]) : match[1]
+    if (OWN_DIRS.some((d) => file.startsWith(d)) || file.includes('/node_modules/')) continue
+    return dirname(file)
+  }
+  return undefined
+}
+
+const toPath = (value: string | URL, base: string) => {
+  const path = value instanceof URL ? fileURLToPath(value) : value
+  return isAbsolute(path) ? path : resolve(base, path)
+}
+
+function secretHelper(): SecretHelper {
+  const secret = (() => ({ kind: 'secret' })) as SecretHelper
+  secret.fromEnv = (host, options = {}) => {
+    if (typeof host !== 'string' || !VAR.test(host)) {
+      throw new DefinitionError(
+        `secret.fromEnv(${JSON.stringify(host)}) needs a host variable name`,
+      )
+    }
+    const to = options.to ?? 'agent'
+    if (to !== 'agent' && to !== 'checks') {
+      throw new DefinitionError(`secret.fromEnv("${host}"): to must be 'agent' or 'checks'`)
+    }
+    return {
+      kind: 'secret',
+      from: host,
+      ...(options.optional ? { optional: true } : {}),
+      ...(to === 'checks' ? { to } : {}),
+    }
+  }
+  secret.template = (template) => ({ kind: 'secret-template', template })
+  return secret
+}
+
+const MOVING = /^(?:main|master|HEAD|trunk|develop|dev|latest)$/
+
+/** A git ref that isn't a commit SHA or a version-like tag. */
+export const isMovingRef = (ref: string | undefined) =>
+  ref === undefined || MOVING.test(ref) || !/^(?:[0-9a-f]{7,40}|v?\d+(?:\.\d+)*(?:[-+].*)?)$/.test(ref)
+
+/** `github:owner/repo` and GitHub `/tree/<ref>/<path>` URLs, as a clone URL plus ref and path. */
+export function parseGitRepo(repo: string): { url: string; ref?: string; path?: string } {
+  const short = /^github:([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(repo)
+  if (short) return { url: `https://github.com/${short[1]}.git` }
+  const tree = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/tree\/([^/]+)(?:\/(.+))?$/.exec(repo)
+  if (tree) return { url: `https://github.com/${tree[1]}.git`, ref: tree[2], path: tree[3] }
+  return { url: repo }
+}
+
+function skillHelper(base: string): SkillHelper {
+  const placement = (p: string | undefined) => {
+    if (p === undefined || p === 'harness' || p === 'workspace') return p ?? 'harness'
+    throw new DefinitionError(`skill placement must be 'harness' or 'workspace' (got ${p})`)
+  }
+  return {
+    local: (path, o = {}) => ({
+      kind: 'skill',
+      source: 'local',
+      path: toPath(path, base),
+      ...(o.only ? { only: [...o.only] } : {}),
+      placement: placement(o.placement),
+    }),
+    git: (repo, o = {}) => {
+      if (typeof repo !== 'string' || !repo) {
+        throw new DefinitionError('skill.git() needs a repository URL')
+      }
+      const parsed = parseGitRepo(repo)
+      const ref = o.ref ?? parsed.ref
+      const path = o.path ?? parsed.path
+      return {
+        kind: 'skill',
+        source: 'git',
+        repo,
+        ...(ref ? { ref } : {}),
+        ...(path ? { path } : {}),
+        ...(o.only ? { only: [...o.only] } : {}),
+        placement: placement(o.placement),
+      }
+    },
+    registry: (id, o = {}) => {
+      if (!/^[\w.-]+\/[\w.-]+@[a-z0-9-]+$/.test(id)) {
+        throw new DefinitionError(`skill.registry("${id}") needs an id like owner/repo@skill`)
+      }
+      return {
+        kind: 'skill',
+        source: 'registry',
+        id,
+        ...(o.version ? { version: o.version } : {}),
+        placement: placement(o.placement),
+      }
+    },
+    npm: (spec, o = {}) => ({
+      kind: 'skill',
+      source: 'npm',
+      spec,
+      path: o.path ?? 'skills',
+      ...(o.only ? { only: [...o.only] } : {}),
+      placement: placement(o.placement),
+    }),
+    inline: (skill, o = {}) => ({
+      kind: 'skill',
+      source: 'inline',
+      name: skill.name,
+      description: skill.description,
+      content: skill.content,
+      files: { ...skill.files },
+      placement: placement(o.placement),
+    }),
+  }
+}
+
+const mcpHelper: McpHelper = {
+  stdio: (command, args = [], o = {}) => {
+    if (typeof command !== 'string' || !command) {
+      throw new DefinitionError('mcp.stdio() needs a command')
+    }
+    return { kind: 'mcp', transport: 'stdio', command, args: [...args], env: { ...o.env } }
+  },
+  http: (url, o = {}) => ({ kind: 'mcp', transport: 'http', url, headers: { ...o.headers } }),
+  sse: (url, o = {}) => ({ kind: 'mcp', transport: 'sse', url, headers: { ...o.headers } }),
+}
+
+/** The helpers a callback gets, with relative paths resolving against `base`. */
+export function helpersFor(base: string): EnvironmentHelpers {
+  return {
+    secret: secretHelper(),
+    skill: skillHelper(base),
+    mcp: mcpHelper,
+    file: (path) => ({ kind: 'file', path: toPath(path, base) }),
+  }
+}
+
+/** Throws on env variables that aren't strings or secrets, or look like literal secrets. */
+export function checkEnv(env: unknown, where: string, Err = DefinitionError): void {
+  if (typeof env !== 'object' || env === null || Array.isArray(env)) {
+    throw new Err(`env must be an object of variables in ${where}`)
+  }
+  for (const [name, value] of Object.entries(env)) {
+    if (!VAR.test(name)) throw new Err(`env.${name} in ${where} isn't a valid variable name`)
+    if (isSecret(value)) continue
+    if (typeof value !== 'string') {
+      throw new Err(`env.${name} in ${where} must be a string or secret.fromEnv()`)
+    }
+    if (SECRET_NAME.test(name)) {
+      throw new Err(
+        `env.${name} in ${where} is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.`,
+      )
+    }
+  }
+}
 
 /** `$NAME` or `${NAME}` for any of `names`. */
 export function referencedSecret(command: string, names: string[]): string | undefined {
   return names.find((n) => new RegExp(`\\$(?:\\{${n}\\}|${n}(?![A-Za-z0-9_]))`).test(command))
 }
 
-/**
- * Defines what an eval's sandbox gets before the agent starts: skills, MCP servers, rules, files,
- * installed tools and variables. Use a list of environments as a matrix axis, e.g.
- * `environment: [baseline, withSkill]`.
- */
-export function defineEnvironment(
+export const stepCommand = (step: string | { run: string }) =>
+  typeof step === 'string' ? step : step.run
+
+/** Env keys set to secrets, anywhere in these layers. */
+export const secretKeys = (layers: readonly EnvironmentLayer[], extra: EnvVars = {}) => [
+  ...new Set(
+    [...layers.map((l) => l.spec.env ?? {}), extra].flatMap((env) =>
+      Object.entries(env).flatMap(([k, v]) => (isSecret(v) ? [k] : [])),
+    ),
+  ),
+]
+
+/** Image steps are baked, so a step that reads a secret of the environment can never work. */
+export function checkImageSecrets(
   name: string,
-  build: (env: EnvironmentBuilder) => void,
-): Environment {
-  if (typeof name !== 'string' || !NAME.test(name)) {
-    throw new DefinitionError(
-      `defineEnvironment needs a name of letters, digits, ".", "_", "@" or "-" (got ${JSON.stringify(name)})`,
-    )
-  }
-  const steps: EnvironmentStep[] = []
-  const secrets = () => steps.flatMap((s) => (s.kind === 'secret' ? [s.name] : []))
-  const checkVar = (method: string, v: string) => {
-    if (!VAR.test(v))
-      throw new DefinitionError(
-        `env.${method}("${v}") in environment ${name}: not a valid variable name`,
-      )
-  }
-  const env: EnvironmentBuilder = {
-    use(other) {
-      if (other?.kind !== 'environment') {
-        throw new DefinitionError(
-          `env.use() in environment ${name} needs an environment from defineEnvironment()`,
+  layers: readonly EnvironmentLayer[],
+  extra: EnvVars = {},
+  Err: new (message: string) => Error = DefinitionError,
+): void {
+  const secrets = secretKeys(layers, extra)
+  for (const layer of layers) {
+    for (const step of layer.spec.image ?? []) {
+      const command = stepCommand(step)
+      if (referencedSecret(command, secrets)) {
+        throw new Err(
+          `image step "${command}" in environment ${name} uses a secret; image steps are baked and never see secrets. Move it to setup.`,
         )
       }
-      steps.push(...other.steps)
-    },
-    exec(command, options = {}) {
-      const cache = options.cache ?? true
-      const secret = cache ? referencedSecret(command, secrets()) : undefined
-      if (secret) {
-        throw new DefinitionError(
-          `env.exec(${JSON.stringify(command)}) in environment ${name} references the secret ${secret}, ` +
-            'but cached steps are baked into an image and never see secrets. ' +
-            'Pass { cache: false } to run it in each sandbox instead.',
-        )
-      }
-      steps.push({ kind: 'exec', command, cache })
-    },
-    skill(source, options = {}) {
-      steps.push({ kind: 'skill', source: toPath(source), options: { ...options } })
-    },
-    mcp(serverName, server) {
-      if (typeof server === 'string') {
-        const [command, ...args] = server.trim().split(/\s+/)
-        if (!command)
-          throw new DefinitionError(
-            `env.mcp("${serverName}") in environment ${name} needs a command`,
-          )
-        steps.push({ kind: 'mcp', name: serverName, server: { command, args } })
-      } else {
-        steps.push({ kind: 'mcp', name: serverName, server: structuredClone(server) })
-      }
-    },
-    rules(markdownOrPath) {
-      const value = toPath(markdownOrPath)
-      const isFile = /\.md$/i.test(value) && !value.includes('\n')
-      steps.push(
-        isFile
-          ? { kind: 'file', path: 'AGENTS.md', from: value }
-          : { kind: 'rules', content: value },
-      )
-    },
-    file(path, content) {
-      steps.push(
-        typeof content === 'string'
-          ? { kind: 'file', path, content }
-          : { kind: 'file', path, from: toPath(content.from) },
-      )
-    },
-    var(varName, value) {
-      checkVar('var', varName)
-      steps.push({ kind: 'var', name: varName, value: String(value) })
-    },
-    secret(varName, from = varName) {
-      checkVar('secret', varName)
-      checkVar('secret', from)
-      steps.push({ kind: 'secret', name: varName, from })
-    },
+    }
   }
-  build(env)
-  return Object.freeze({ kind: 'environment', name, steps: Object.freeze(steps) })
 }
 
-/** The empty environment: the control that treatments are compared against. */
-export const baseline: Environment = defineEnvironment('baseline', () => {})
+function checkSpec(spec: unknown, where: string): EnvironmentSpec {
+  if (typeof spec !== 'object' || spec === null || Array.isArray(spec)) {
+    throw new DefinitionError(`${where} must be an object or a callback that returns one`)
+  }
+  for (const key of Object.keys(spec)) {
+    if (SPEC_KEYS.includes(key)) continue
+    const hint = SPEC_HINTS[key] ? ` Did you mean "${SPEC_HINTS[key]}"?` : ''
+    throw new DefinitionError(`Unknown field "${key}" in ${where}.${hint}`)
+  }
+  const s = spec as EnvironmentSpec
+  if (s.env !== undefined) checkEnv(s.env, where)
+  const list = (key: 'image' | 'setup' | 'skills') => {
+    const value = s[key]
+    if (value !== undefined && !Array.isArray(value)) {
+      throw new DefinitionError(`${key} in ${where} must be a list`)
+    }
+    return value ?? []
+  }
+  for (const step of [...list('image'), ...list('setup')]) {
+    const run = typeof step === 'string' ? step : (step as { run?: unknown })?.run
+    if (typeof run !== 'string' || !run.trim()) {
+      throw new DefinitionError(`Steps in ${where} are strings or { run, timeout? } objects`)
+    }
+  }
+  for (const skill of list('skills')) {
+    if ((skill as SkillSource)?.kind !== 'skill') {
+      throw new DefinitionError(
+        `skills in ${where} must come from the skill helper, e.g. skills: [skill.local('./skills')] (got ${JSON.stringify(skill)})`,
+      )
+    }
+  }
+  for (const [name, server] of Object.entries(s.mcp ?? {})) {
+    if ((server as McpServer)?.kind !== 'mcp') {
+      throw new DefinitionError(
+        `mcp.${name} in ${where} must come from the mcp helper, e.g. mcp.stdio('npx', ['-y', 'server'])`,
+      )
+    }
+  }
+  for (const [path, value] of Object.entries(s.files ?? {})) {
+    if (typeof value !== 'string' && !isHostFile(value)) {
+      throw new DefinitionError(`files["${path}"] in ${where} must be a string or file(path)`)
+    }
+  }
+  if (s.rules !== undefined && typeof s.rules !== 'string' && !isHostFile(s.rules)) {
+    throw new DefinitionError(`rules in ${where} must be markdown or file(path)`)
+  }
+  return structuredClone(s)
+}
 
-/** Passes host variable `from` (default: the key it's set under) into the sandbox, redacted. */
-export const secret = (from?: string): Secret =>
-  from ? { kind: 'secret', from } : { kind: 'secret' }
+function buildSpec(input: EnvironmentInput, where: string, base: string): EnvironmentSpec {
+  const spec = typeof input === 'function' ? input(helpersFor(base)) : input
+  if (spec instanceof Promise || typeof (spec as { then?: unknown })?.then === 'function') {
+    throw new DefinitionError(
+      `${where} returned a Promise. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead.`,
+    )
+  }
+  return checkSpec(spec, where)
+}
 
-export const isSecret = (value: unknown): value is Secret =>
-  typeof value === 'object' && value !== null && (value as Secret).kind === 'secret'
+function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment {
+  checkImageSecrets(name, layers)
+  const env = { kind: 'environment' as const, name, layers: Object.freeze(layers) }
+  Object.defineProperty(env, 'extend', {
+    enumerable: false,
+    value(child: string, input: EnvironmentInput) {
+      checkName(child, `${name}.extend`)
+      const where = `${name}.extend("${child}")`
+      const base = callerDir() ?? process.cwd()
+      return makeEnvironment(child, [...layers, { name: child, spec: buildSpec(input, where, base) }])
+    },
+  })
+  return Object.freeze(env) as Environment
+}
+
+function checkName(name: unknown, what: string): asserts name is string {
+  if (typeof name !== 'string' || !NAME.test(name)) {
+    throw new DefinitionError(
+      `${what} needs a name of letters, digits, ".", "_", "@", "+" or "-" (got ${JSON.stringify(name)})`,
+    )
+  }
+}
+
+/**
+ * What an eval runs in: skills, MCP servers, files, rules, variables, secrets and setup steps.
+ * Pass a spec, or a callback that destructures the typed helpers it needs:
+ *
+ *     defineEnvironment('genkit', ({ secret, skill }) => ({
+ *       env: { GOOGLE_GENAI_API_KEY: secret.fromEnv('GOOGLE_GENERATIVE_AI_API_KEY') },
+ *       skills: [skill.local('../skills/genkit')],
+ *     }))
+ *
+ * The callback runs once, synchronously. Relative paths resolve against the calling file.
+ */
+export function defineEnvironment(name: string, input: EnvironmentInput): Environment {
+  checkName(name, 'defineEnvironment')
+  const base = callerDir() ?? process.cwd()
+  return makeEnvironment(name, [
+    { name, spec: buildSpec(input, `defineEnvironment("${name}")`, base) },
+  ])
+}
+
+/** What an attempt runs in: the environment's layers, or the control's then the variant's. */
+export type AppliedEnvironment = {
+  name: string
+  parent: string | null
+  layers: EnvironmentLayer[]
+}
+
+export const NO_ENVIRONMENT = '-'
+
+export function applied(env: Pick<Environment, 'name' | 'layers'> | undefined): AppliedEnvironment {
+  if (!env) return { name: NO_ENVIRONMENT, parent: null, layers: [] }
+  return {
+    name: env.name,
+    parent: env.layers.at(-2)?.name ?? null,
+    layers: [...env.layers],
+  }
+}
+
+/** `control.extend(variant)`: the variant's own layers on the control's, skipping shared ones. */
+export function layered(
+  control: Pick<Environment, 'name' | 'layers'> | undefined,
+  variant: Pick<Environment, 'name' | 'layers'>,
+): AppliedEnvironment {
+  const base = control?.layers ?? []
+  const seen = new Set(base.map((l) => JSON.stringify(l)))
+  return {
+    name: variant.name,
+    parent: control?.name ?? null,
+    layers: [...base, ...variant.layers.filter((l) => !seen.has(JSON.stringify(l)))],
+  }
+}

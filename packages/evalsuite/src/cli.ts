@@ -5,20 +5,25 @@ import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import {
   hostCapacity,
   loadConfig,
   missingCredentials,
+  parseDuration,
   resolveConcurrency,
+  selectProfile,
   UsageError,
 } from './config.ts'
-import type { EngineRun } from './engine/node.ts'
+import { budgetMarker } from './engine/cancel.ts'
+import type { EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
-import { preflight } from './preflight.ts'
+import type { RunPlan } from './plan.ts'
+import { preflight, type SandboxVersions } from './preflight.ts'
 import type { RunContext } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -35,6 +40,10 @@ const HELP = `es ${version} — eval runner for coding agents
 
 Usage:
   es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+    --profile <name>        Size the run with a profile from es.config.ts (also ES_PROFILE;
+                            default: defaultProfile.ci in CI, else defaultProfile.local)
+    --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0
+    --force                 Run even when the plan is over budget.attempts
     --runs <n>              Attempts per cell, overriding the config, groups and evals
     --concurrency <n>       Attempts running at once across evals and cells (default 8, at
                             most one per CPU and GB of Docker memory; also ES_CONCURRENCY)
@@ -95,6 +104,9 @@ function parse(argv: string[]) {
       limit: { type: 'string' },
       'fail-on-regression': { type: 'boolean' },
       runs: { type: 'string' },
+      profile: { type: 'string' },
+      'dry-run': { type: 'boolean' },
+      force: { type: 'boolean' },
       concurrency: { type: 'string' },
       ui: { type: 'string' },
       'log-order': { type: 'string' },
@@ -158,7 +170,7 @@ async function run(argv: string[]): Promise<number> {
 
 type Flags = ReturnType<typeof parse>['values']
 
-/** `es run`: check, start, run the engine, then write the run and pick the exit code. */
+/** `es run`: check, plan, run the engine, then write the run and pick the exit code. */
 async function runCommand(flags: Flags, filters: string[]): Promise<number> {
   const setup = await prepareRun(flags)
   const ctx = await startRun(setup)
@@ -173,13 +185,18 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
         join(ctx.scratch, ctx.runId, evalSlug(id), evalSlug(cell), String(n)),
       ),
   })
-  let engineRun: EngineRun
+  let executed: Awaited<ReturnType<typeof executeRun>>
   try {
-    engineRun = await executeRun(ctx, filters, renderer)
+    executed = await executeRun(ctx, setup, filters, renderer)
   } catch (error) {
     renderer.close()
     await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
+  }
+  const { engineRun, plan, sandboxVersions, budgetReached } = executed
+  if (engineRun.stopped || !plan) {
+    renderer.close()
+    return EXIT.ok
   }
 
   const { lockfiles } = await import('./history/state.ts')
@@ -191,9 +208,11 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
     startedAt: ctx.startedAt,
     endedAt: new Date(),
     interrupted: interrupted || engineRun.cancelled,
+    budgetReached: budgetReached(),
+    plan,
     es: version,
     enginePackages: engineVersions,
-    sandbox: setup.sandboxVersions,
+    sandbox: sandboxVersions,
     worktreePatch: ctx.worktreePatch,
     lockfiles: await lockfiles(ctx.config.root),
     git: ctx.git,
@@ -216,20 +235,22 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
   }
 
   const { config } = ctx
-  const autoRecord =
-    flags.record || config.record === 'always' || (config.record === 'ci' && inCI())
+  const mode = setup.record
+  const autoRecord = flags.record || mode === 'always' || (mode === 'ci' && inCI())
   if (autoRecord && record.status === 'complete') {
     const { record: recordCmd } = await import('./commands.ts')
     console.log(await recordCmd(config, record.runId, flags))
   }
 
   if (interrupted || engineRun.cancelled) return EXIT.interrupted
-  if (record.summary.fail > 0 || engineRun.unhandledErrors.length > 0) return EXIT.failed
-  if (record.summary.infraError > 0) return EXIT.infra
+  const outcomes = record.evals.map((e) => e.outcome)
+  if (outcomes.includes('fail') || engineRun.unhandledErrors.length > 0) return EXIT.failed
+  if (record.status === 'budget') return EXIT.failed
+  if (outcomes.includes('infra_error')) return EXIT.infra
   return EXIT.ok
 }
 
-/** Everything that can fail before a run starts: output mode, config, keys, Docker, flags. */
+/** Everything that can fail before the evals are collected: output mode, config, profile, flags. */
 async function prepareRun(flags: Flags) {
   const output = resolveOutput({
     flags: {
@@ -243,14 +264,9 @@ async function prepareRun(flags: Flags) {
     agent: detectAgent().name,
   })
   loadEnvFiles(process.cwd())
-  const config = await loadConfig(flags.config)
-  const missing = missingCredentials(config)
-  if (missing.length) {
-    throw new UsageError(
-      `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
-    )
-  }
-  const sandboxVersions = await preflight(config)
+  const named = flags.profile ?? (process.env.ES_PROFILE || undefined)
+  const config = await loadConfig(flags.config, 'run', named)
+  const profile = selectProfile(config, flags.profile)
   let runs: number | undefined
   if (flags.runs !== undefined) {
     runs = Number(flags.runs)
@@ -258,13 +274,27 @@ async function prepareRun(flags: Flags) {
       throw new UsageError(`--runs must be a whole number of at least 1 (got ${flags.runs})`)
     }
   }
+  const sandboxes = [config.sandbox, ...(profile?.defaults.sandbox ? [profile.defaults.sandbox] : [])]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
-    if (!config.sandbox.some((s) => s.kind === 'docker')) return hostCapacity()
+    if (flags['dry-run'] || !sandboxes.some((s) => s.kind === 'docker')) return hostCapacity()
     const { dockerCapacity } = await import('@evalsuite/sandbox-docker')
     return (await dockerCapacity()) ?? hostCapacity()
   })
-  return { output, config, runs, tags: flags.tag ?? [], concurrency, sandboxVersions }
+  return {
+    output,
+    config,
+    profile,
+    runs,
+    tags: [...(flags.tag ?? []), ...(profile?.tags ?? [])],
+    concurrency,
+    budget: profile?.budget ?? config.budget,
+    record: profile?.record ?? config.record,
+    dryRun: !!flags['dry-run'],
+    force: !!flags.force,
+  }
 }
+
+type Prepared = Awaited<ReturnType<typeof prepareRun>>
 
 type StartedRun = RunContext & {
   startedAt: Date
@@ -278,10 +308,11 @@ type StartedRun = RunContext & {
 /** The run's id and the state it starts from: commit, uncommitted changes, author. */
 async function startRun({
   config,
+  profile,
   runs,
   tags,
   concurrency,
-}: Awaited<ReturnType<typeof prepareRun>>): Promise<StartedRun> {
+}: Prepared): Promise<StartedRun> {
   const startedAt = new Date()
   const git = await gitInfo(config.root, [config.history.dir])
   const { worktreePatch } = await import('./history/state.ts')
@@ -310,6 +341,7 @@ async function startRun({
     runs,
     tags,
     concurrency,
+    profile,
     startedAt,
     git,
     worktreePatch: patch,
@@ -318,60 +350,128 @@ async function startRun({
   }
 }
 
-/** Runs the engine with live output and Ctrl-C handling; a run that matches nothing exits 2. */
+function noMatch(config: StartedRun['config'], filters: string[], tags: string[]) {
+  const narrowed = [
+    filters.length ? `filter "${filters.join(' ')}"` : '',
+    tags.length ? `tags ${tags.join(', ')}` : '',
+  ].filter(Boolean)
+  return new UsageError(
+    `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
+  )
+}
+
+/**
+ * Collects the evals and prints the plan; stops there for `--dry-run`, or on a budget, credential
+ * or Docker problem (exit 2). Then runs the engine with live output and Ctrl-C handling.
+ */
 async function executeRun(
   ctx: StartedRun,
+  setup: Prepared,
   filters: string[],
   renderer: ReturnType<typeof createRenderer>,
-): Promise<EngineRun> {
-  const { runId, stagingDir, config, runs, tags, concurrency } = ctx
+) {
+  const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
   const { runEngine } = await import('./engine/node.ts')
-  const engineRun = await runEngine({
-    // Provided to every worker, so only what evals need; not the worktree patch.
-    run: { runId, stagingDir, config, runs, tags, concurrency },
-    filters,
-    onRunStart: (files) =>
-      renderer.onEvent({
-        type: 'run-start',
-        at: Date.now(),
-        version,
-        files,
-        harness: config.harness.map(harnessId).join(', '),
-        sandbox: config.sandbox.map(sandboxId).join(', '),
-        concurrency,
-      }),
-    onEvent: (e) => {
-      // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
-      if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
-      renderer.onEvent(e)
-    },
-    onCancellable: (cancel) => {
-      process.on('SIGINT', () => {
-        if (interrupted) {
-          renderer.close()
-          process.exit(EXIT.interrupted)
-        }
-        interrupted = true
+  const { buildPlan, checkAttemptBudget, planLine, planTable } = await import('./plan.ts')
+  let plan: RunPlan | undefined
+  let sandboxVersions: SandboxVersions = { images: [] }
+  let reached = false
+  let budgetTimer: NodeJS.Timeout | undefined
+  const onPlan = async (planned: PlannedItem[], matched: number) => {
+    if (matched === 0) throw noMatch(config, filters, tags)
+    plan = await buildPlan({
+      planned,
+      profile,
+      budget: setup.budget,
+      concurrency,
+      root: config.root,
+      historyDir: config.history.dir,
+    })
+    const lines = [planLine(plan)]
+    if (setup.dryRun) lines.push(...planTable(plan))
+    lines.push(...plan.warnings.map((w) => `warning: ${w}`))
+    renderer.onEvent({ type: 'plan', at: Date.now(), lines })
+    if (setup.dryRun) return false
+    checkAttemptBudget(plan, setup.force)
+    const missing = missingCredentials(config, process.env, {
+      harnessKinds: plan.harnessKinds,
+      profile,
+    })
+    if (missing.length) {
+      throw new UsageError(
+        `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
+      )
+    }
+    sandboxVersions = await preflight(plan.sandboxes)
+    const { duration } = setup.budget
+    if (duration !== undefined) {
+      budgetTimer = setTimeout(() => {
+        reached = true
+        mkdirSync(stagingDir, { recursive: true })
+        writeFileSync(
+          budgetMarker(stagingDir),
+          `The run reached budget.duration ${duration} before this attempt started`,
+        )
         renderer.onEvent({
           type: 'notice',
           at: Date.now(),
           level: 'warn',
-          text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+          text: `Budget: ${duration} reached; running attempts finish, queued ones are skipped`,
         })
-        cancel()
-      })
-    },
-  })
-  if (engineRun.noFiles || (engineRun.evals.length === 0 && !interrupted)) {
-    const narrowed = [
-      filters.length ? `filter "${filters.join(' ')}"` : '',
-      tags.length ? `tags ${tags.join(', ')}` : '',
-    ].filter(Boolean)
-    throw new UsageError(
-      `No evals matched ${config.include.join(', ')}${narrowed.length ? ` with ${narrowed.join(' and ')}` : ''}`,
-    )
+      }, parseDuration(duration))
+      budgetTimer.unref()
+    }
+    return true
   }
-  return engineRun
+  let engineRun: EngineRun
+  try {
+    engineRun = await runEngine({
+      // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
+      // an environment's `extend` method doesn't cross to the workers.
+      run: JSON.parse(
+        JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
+      ),
+      filters,
+      onPlan,
+      onRunStart: (files) =>
+        renderer.onEvent({
+          type: 'run-start',
+          at: Date.now(),
+          version,
+          files,
+          harness: config.harness.map(harnessId).join(', '),
+          sandbox: sandboxId(config.sandbox),
+          concurrency,
+        }),
+      onEvent: (e) => {
+        // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
+        if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
+        renderer.onEvent(e)
+      },
+      onCancellable: (cancel) => {
+        process.on('SIGINT', () => {
+          if (interrupted) {
+            renderer.close()
+            process.exit(EXIT.interrupted)
+          }
+          interrupted = true
+          renderer.onEvent({
+            type: 'notice',
+            at: Date.now(),
+            level: 'warn',
+            text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
+          })
+          cancel()
+        })
+      },
+    })
+  } finally {
+    clearTimeout(budgetTimer)
+  }
+  if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted)) {
+    throw noMatch(config, filters, tags)
+  }
+  return { engineRun, plan, sandboxVersions, budgetReached: () => reached }
 }
 
 // `es run | head` closes stdout early; that isn't an error.

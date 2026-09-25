@@ -1,3 +1,5 @@
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import {
   buildEnvironmentLayer,
   buildImage,
@@ -7,6 +9,7 @@ import {
   type ImageInfo,
   imageInfo,
   LABEL,
+  type LayerStep,
 } from '@evalsuite/sandbox-docker'
 import { withLease } from '../scheduler/client.ts'
 import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
@@ -42,11 +45,13 @@ async function buildOnce(
 
 /**
  * The image an attempt's container starts from: the sandbox image (built from `from` on first
- * use), plus a cached layer with the environment's baked `exec` steps.
+ * use), plus a cached layer with the environment's `image` steps. Each layer's build log goes to
+ * `.es/cache/images/<hash>.log` under `root`.
  */
 export async function prepareImage(
   sandbox: DockerSandboxDescriptor,
-  baked: string[],
+  steps: LayerStep[],
+  root: string,
   signal: AbortSignal,
 ): Promise<AttemptImage> {
   if (sandbox.image && sandbox.from) {
@@ -61,12 +66,22 @@ export async function prepareImage(
   }
   if (!info) throw new InfraError(`Docker image ${ref} not found. Build it with: es image build`)
   const agentCli = info.labels[LABEL.agentVersion] ?? null
-  if (baked.length > 0) {
+  if (steps.length > 0) {
     const parent = { ref, id: info.id }
-    ref = environmentLayerTag(parent, baked)
-    info =
-      (await imageInfo(ref)) ??
-      (await buildOnce(ref, () => buildEnvironmentLayer(parent, baked, signal), signal))
+    ref = environmentLayerTag(parent, steps)
+    const logFile = join(root, '.es', 'cache', 'images', `${ref.split(':')[1]}.log`)
+    const log = (output: string) => {
+      mkdirSync(join(root, '.es', 'cache', 'images'), { recursive: true })
+      writeFileSync(logFile, output)
+    }
+    try {
+      info =
+        (await imageInfo(ref)) ??
+        (await buildOnce(ref, () => buildEnvironmentLayer(parent, steps, { signal, log }), signal))
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw new InfraError(`${(error as Error).message}\n(full log: ${logFile})`)
+    }
     if (!info) throw new InfraError(`The environment layer ${ref} disappeared after building`)
   }
   return { ref, id: info.id, agentCli }

@@ -174,6 +174,7 @@ function pruneFailed(nodes: TreeNode[]): TreeNode[] {
 
 function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slug: string }) {
   const showLift = rows.some((r) => r.lift !== null)
+  const compare = rows.some((r) => r.role === 'variant')
   return (
     <div className="overflow-hidden rounded-lg border">
       <Table>
@@ -181,6 +182,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
           <TableRow className="hover:bg-transparent">
             <TableHead>Harness</TableHead>
             <TableHead>Environment</TableHead>
+            {compare ? <TableHead>Role</TableHead> : null}
             <TableHead className="hidden sm:table-cell">Sandbox</TableHead>
             <TableHead>Attempts</TableHead>
             <TableHead className="text-right">Pass rate</TableHead>
@@ -191,7 +193,30 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
           {rows.map((row) => (
             <TableRow key={row.key} className="hover:bg-transparent">
               <TableCell className="font-mono text-xs">{row.harness}</TableCell>
-              <TableCell className="font-mono text-xs">{row.environment}</TableCell>
+              <TableCell className="font-mono text-xs">
+                {row.environment === '-' ? (
+                  <span className="text-muted-foreground">none</span>
+                ) : (
+                  row.environment
+                )}
+                {row.overrides.length ? (
+                  <div className="mt-0.5 font-sans text-[11px] text-muted-foreground">
+                    overrides {row.overrides.join(', ')}
+                  </div>
+                ) : null}
+              </TableCell>
+              {compare ? (
+                <TableCell>
+                  <div className="flex items-center gap-1.5 text-xs">
+                    {row.role}
+                    {row.gated ? null : (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                        not gated
+                      </Badge>
+                    )}
+                  </div>
+                </TableCell>
+              ) : null}
               <TableCell className="hidden font-mono text-xs sm:table-cell">
                 {row.sandbox}
               </TableCell>
@@ -219,6 +244,9 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
               {showLift ? (
                 <TableCell className="text-right">
                   <Lift points={row.lift} />
+                  {row.belowMinLift ? (
+                    <div className="text-[11px] text-fail">below minLift</div>
+                  ) : null}
                 </TableCell>
               ) : null}
             </TableRow>
@@ -394,6 +422,7 @@ export function RunPage() {
           </span>
           <span className="font-mono text-xs text-muted-foreground">
             {record.config.harnesses.join(', ')} · judge {record.config.judgeModel ?? 'none'}
+            {record.profile ? ` · profile ${record.profile.name}` : ''}
           </span>
         </div>
         <TallyBar

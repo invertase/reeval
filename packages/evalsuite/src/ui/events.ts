@@ -73,6 +73,8 @@ export type EsEvent =
       /** How many attempts run at once. */
       concurrency: number
     }
+  /** The plan line (and, for `--dry-run`, its table and warnings), before anything runs. */
+  | { type: 'plan'; at: number; lines: string[] }
   /** Every attempt in a file, once it's collected (skipped ones too, so tags are stable). */
   | { type: 'collected'; at: number; file: string; evals: CollectedEval[] }
   | ({ type: 'eval-start'; at: number } & AttemptRef)

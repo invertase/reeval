@@ -1,6 +1,7 @@
 import type {
   AttemptRecord,
   CellCounts,
+  CellRecord,
   EvalEntry,
   HistoryEntry,
   RunRecord,
@@ -211,6 +212,9 @@ export type CellRow = {
   harness: string
   environment: string
   sandbox: string
+  role: CellRecord['role']
+  gated: boolean
+  overrides: string[]
   runs: number
   pass: number
   fail: number
@@ -218,41 +222,35 @@ export type CellRow = {
   skipped: number
   passRate: number | null
   outcome: Outcome
-  /** Pass-rate points over the `baseline` environment cell with the same harness and sandbox. */
+  /** A variant's lift over its control, in whole points (from the record), else null. */
   lift: number | null
+  /** The variant is below its compare's `minLift`. */
+  belowMinLift: boolean
   attempts: AttemptRecord[]
 }
 
-/** One row per harness × environment × sandbox cell, with lift over `baseline`. */
+/** One row per cell: controls and variants, with each variant's recorded lift. */
 export function cellRows(e: EvalEntry): CellRow[] {
-  return e.cells.map((cell) => {
-    const base = e.cells.find(
-      (b) =>
-        b.environment === 'baseline' &&
-        b.harness === cell.harness &&
-        b.sandbox === cell.sandbox &&
-        b.key !== cell.key,
-    )
-    const lift =
-      base && base.passRate !== null && cell.passRate !== null
-        ? Math.round((cell.passRate - base.passRate) * 100)
-        : null
-    return {
-      key: cell.key,
-      harness: cell.harness,
-      environment: cell.environment,
-      sandbox: cell.sandbox,
-      runs: cell.runs,
-      pass: cell.pass,
-      fail: cell.fail,
-      infraError: cell.infraError,
-      skipped: cell.skipped,
-      passRate: cell.passRate,
-      outcome: cell.outcome,
-      lift,
-      attempts: e.attempts.filter((a) => a.cell === cell.key),
-    }
-  })
+  return e.cells.map((cell) => ({
+    key: cell.key,
+    harness: cell.harness,
+    environment: cell.environment,
+    sandbox: cell.sandbox,
+    role: cell.role,
+    gated: cell.gated,
+    overrides: cell.overrides,
+    runs: cell.runs,
+    pass: cell.pass,
+    fail: cell.fail,
+    infraError: cell.infraError,
+    skipped: cell.skipped,
+    passRate: cell.passRate,
+    outcome: cell.outcome,
+    lift: cell.lift ? Math.round(cell.lift.points * 100) : null,
+    belowMinLift:
+      cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift,
+    attempts: e.attempts.filter((a) => a.cell === cell.key),
+  }))
 }
 
 /** Whether an eval needs the cells table: several cells, or several runs of one. */

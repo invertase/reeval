@@ -1,14 +1,33 @@
-// Worker side of environments: reads skills and files on the host, resolves secrets, and computes
-// the digest that goes into fingerprints. Nothing here touches the sandbox.
+// Worker side of environments: layers an attempt's environments, reads skills and files on the
+// host, resolves secrets, and computes the digest that goes into fingerprints. Nothing here
+// touches the sandbox.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
-import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, join, relative, sep } from 'node:path'
 import { run } from '@evalsuite/sandbox-docker/process'
-import { isSecret, referencedSecret } from '../environment.ts'
+import { parseDuration } from '../config.ts'
+import {
+  type AppliedEnvironment,
+  checkImageSecrets,
+  isHostFile,
+  isSecret,
+  isSecretTemplate,
+  parseGitRepo,
+  stepCommand,
+} from '../environment.ts'
 import { sha256 } from '../ids.ts'
 import { registerSecret } from '../redact.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { Environment, EnvironmentRecord, EnvVars, McpServer, SkillOptions } from '../types.ts'
+import type {
+  EnvironmentRecord,
+  EnvVars,
+  HostFile,
+  McpServer,
+  Secret,
+  SecretTemplate,
+  SkillPlacement,
+  SkillSource,
+} from '../types.ts'
 
 /** The harness-neutral skill shape the harness adapters take. */
 export type HarnessSkill = {
@@ -18,44 +37,63 @@ export type HarnessSkill = {
   files: Array<{ path: string; content: string }>
 }
 
+/** An MCP server with its secrets resolved, for the harness adapter. */
+export type ResolvedMcpServer =
+  | { transport: 'stdio'; command: string; args: string[]; env: Record<string, string> }
+  | { transport: 'http' | 'sse'; url: string; headers: Record<string, string> }
+
+export type ResolvedStep = { run: string; timeoutMs: number; cwd?: string }
+
 export type ResolvedEnvironment = {
   record: EnvironmentRecord
-  /** Cached `exec` steps, in order: baked into an image layer. */
-  baked: string[]
-  /** `exec({ cache: false })` steps, run in each fresh sandbox. */
-  perAttempt: string[]
+  /** Baked into a cached image layer, in order. */
+  image: Array<{ run: string; timeoutMs?: number }>
+  /** Run in each fresh sandbox, in order, before the agent starts. */
+  setup: ResolvedStep[]
+  /** Handed to the harness adapter. */
   skills: HarnessSkill[]
-  mcp: Record<string, McpServer>
+  /** Written into the harness's repo skill directory. */
+  workspaceSkills: HarnessSkill[]
+  mcp: Record<string, ResolvedMcpServer>
   /** Workspace-relative, or `~/` for the home directory. */
   files: Array<{ path: string; content: string }>
-  /** Every variable for the sandbox, secret values included. Never write this anywhere. */
+  /** The container's variables, secret values included. Never write this anywhere. */
   vars: Record<string, string>
+  /** `to: 'checks'` secrets: only for `t.exec` and setup steps. */
+  checkVars: Record<string, string>
 }
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const GIT_SOURCE = /^(?:https?:\/\/|git@|ssh:\/\/|file:\/\/)|\.git$/
+const DEFAULT_SETUP_TIMEOUT = '5m'
 
-function secretValue(name: string, from: string, where: string): string {
+type Secrets = { names: string[]; checks: string[]; unset: string[] }
+
+function hostValue(name: string, secret: Secret, where: string, secrets: Secrets) {
+  const from = secret.from ?? name
   const value = process.env[from]
   if (!value) {
+    if (secret.optional) {
+      secrets.unset.push(name)
+      return undefined
+    }
     const source = from === name ? name : `${name} (from ${from})`
     throw new InfraError(
       `Secret ${source} for ${where} isn't set. Set it in the environment or .env.local.`,
     )
   }
   registerSecret(value)
+  if (secret.to === 'checks') secrets.checks.push(name)
+  else secrets.names.push(name)
   return value
 }
 
-function resolveVars(env: EnvVars, where: string, secrets: string[]): Record<string, string> {
-  const out: Record<string, string> = {}
-  for (const [name, value] of Object.entries(env)) {
-    if (isSecret(value)) {
-      out[name] = secretValue(name, value.from ?? name, where)
-      secrets.push(name)
-    } else out[name] = value
-  }
-  return out
+function template(value: SecretTemplate, where: string): string {
+  return value.template.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
+    const v = process.env[name]
+    if (!v) throw new InfraError(`secret.template needs ${name} for ${where}, and it isn't set`)
+    registerSecret(v)
+    return v
+  })
 }
 
 function parseSkill(dir: string, source: string): HarnessSkill {
@@ -67,21 +105,28 @@ function parseSkill(dir: string, source: string): HarnessSkill {
     if (kv?.[1]) front[kv[1]] = (kv[2] ?? '').replace(/^(['"])(.*)\1$/, '$2').trim()
   }
   const name = front.name || basename(dir)
-  if (!SKILL_NAME.test(name)) {
-    throw new InfraError(`Skill "${name}" in ${source}: the name must be kebab-case`)
-  }
-  if (!front.description) {
-    throw new InfraError(
-      `Skill "${name}" in ${source} has no description in its SKILL.md frontmatter`,
-    )
-  }
+  checkSkill(name, front.description, source)
   const files: HarnessSkill['files'] = readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
     .map((entry) => relative(dir, join(entry.parentPath, entry.name)).split(sep).join('/'))
     .filter((path) => path !== 'SKILL.md' && !path.split('/').includes('.git'))
     .sort()
     .map((path) => ({ path, content: readFileSync(join(dir, path), 'utf8') }))
-  return { name, description: front.description, content: match ? (match[2] ?? '') : text, files }
+  return {
+    name,
+    description: front.description ?? '',
+    content: match ? (match[2] ?? '') : text,
+    files,
+  }
+}
+
+function checkSkill(name: string, description: string | undefined, source: string) {
+  if (!SKILL_NAME.test(name)) {
+    throw new InfraError(`Skill "${name}" in ${source}: the name must be kebab-case`)
+  }
+  if (!description) {
+    throw new InfraError(`Skill "${name}" in ${source} has no description in its SKILL.md frontmatter`)
+  }
 }
 
 function loadSkills(dir: string, source: string, only?: string[]): HarnessSkill[] {
@@ -102,7 +147,7 @@ function loadSkills(dir: string, source: string, only?: string[]): HarnessSkill[
   const missing = only.filter((n) => !skills.some((s) => s.name === n))
   if (missing.length) {
     throw new InfraError(
-      `skills: ${JSON.stringify(missing)} not found in ${source} (found: ${skills.map((s) => s.name).join(', ')})`,
+      `only: ${JSON.stringify(missing)} not found in ${source} (found: ${skills.map((s) => s.name).join(', ')})`,
     )
   }
   return skills.filter((s) => only.includes(s.name))
@@ -137,151 +182,258 @@ function cloneSkills(root: string, url: string, ref: string | undefined) {
   return clone
 }
 
-async function resolveSkills(root: string, source: string, options: SkillOptions) {
-  if (GIT_SOURCE.test(source)) {
-    const { dir, commit } = await cloneSkills(root, source, options.ref)
-    const at = options.path ? join(dir, options.path) : dir
-    const label = `${source}${options.ref ? `#${options.ref}` : ''}${options.path ? `:${options.path}` : ''}`
-    return { skills: loadSkills(at, label, options.skills), source: label, commit }
+const packs = new Map<string, Promise<string>>()
+
+/** `npm pack` into the cache, unpacked; returns the package directory. */
+function unpackNpm(root: string, spec: string) {
+  let pack = packs.get(spec)
+  if (!pack) {
+    pack = (async () => {
+      const dir = join(root, '.es', 'cache', 'skills', `npm-${sha256(spec).slice(0, 16)}-${process.pid}`)
+      await rm(dir, { recursive: true, force: true })
+      await mkdir(dir, { recursive: true })
+      const packed = await run('npm', ['pack', spec, '--silent', '--pack-destination', dir], {
+        cwd: dir,
+      })
+      const tarball = packed.stdout.trim().split('\n').at(-1)
+      if (packed.exitCode !== 0 || !tarball) {
+        throw new InfraError(`npm pack ${spec} failed: ${packed.stderr.trim()}`)
+      }
+      const untar = await run('tar', ['-xzf', tarball], { cwd: dir })
+      if (untar.exitCode !== 0) throw new InfraError(`Unpacking ${spec} failed: ${untar.stderr.trim()}`)
+      return join(dir, 'package')
+    })()
+    packs.set(spec, pack)
+    pack.catch(() => packs.delete(spec))
   }
-  const dir = isAbsolute(source) ? source : resolve(root, source)
-  return { skills: loadSkills(dir, source, options.skills), source, commit: null }
+  return pack
+}
+
+type Found = { skills: HarnessSkill[]; source: string; commit: string | null }
+
+async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
+  switch (s.source) {
+    case 'local': {
+      const label = `local:${relative(root, s.path).split(sep).join('/') || '.'}`
+      return { skills: loadSkills(s.path, label, s.only), source: label, commit: null }
+    }
+    case 'git': {
+      const { url } = parseGitRepo(s.repo)
+      const { dir, commit } = await cloneSkills(root, url, s.ref)
+      const label = `${s.repo}${s.ref ? `#${s.ref}` : ''}${s.path ? `:${s.path}` : ''}`
+      return { skills: loadSkills(s.path ? join(dir, s.path) : dir, label, s.only), source: label, commit }
+    }
+    case 'registry': {
+      const [repo = '', name = ''] = s.id.split('@')
+      const { dir, commit } = await cloneSkills(root, `https://github.com/${repo}.git`, s.version)
+      const label = `registry:${s.id}${s.version ? `#${s.version}` : ''}`
+      const at = existsSync(join(dir, 'skills')) ? join(dir, 'skills') : dir
+      return { skills: loadSkills(at, label, [name]), source: label, commit }
+    }
+    case 'npm': {
+      const dir = await unpackNpm(root, s.spec)
+      const label = `npm:${s.spec}:${s.path}`
+      return { skills: loadSkills(join(dir, s.path), label, s.only), source: label, commit: null }
+    }
+    case 'inline': {
+      checkSkill(s.name, s.description, 'skill.inline')
+      const files = Object.entries(s.files)
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([path, content]) => ({ path, content }))
+      return {
+        skills: [{ name: s.name, description: s.description, content: s.content, files }],
+        source: 'inline',
+        commit: null,
+      }
+    }
+  }
 }
 
 const skillHash = (s: HarnessSkill) => sha256(JSON.stringify(s))
 
+const readHostFile = (f: HostFile, where: string) => {
+  if (!existsSync(f.path)) throw new InfraError(`${f.path} for ${where} doesn't exist`)
+  return readFileSync(f.path, 'utf8')
+}
+
 /**
- * Applies the options `env` (merged down the cascade) under the environment's own steps.
- * `where` names the eval for error messages.
+ * Layers the environment (root first; a later layer wins on shared keys, and each such key is
+ * an override), over the options `env` merged down the cascade. `where` names the attempt.
  */
 export async function resolveEnvironment(
-  environment: Environment,
+  environment: AppliedEnvironment,
   optionsEnv: EnvVars,
   root: string,
   where: string,
 ): Promise<ResolvedEnvironment> {
-  const secretNames: string[] = []
-  const vars = resolveVars(optionsEnv, where, secretNames)
-  const baked: string[] = []
-  const perAttempt: string[] = []
-  const skills: HarnessSkill[] = []
-  const skillRecords: EnvironmentRecord['skills'] = []
-  const mcp: Record<string, McpServer> = {}
-  const files: ResolvedEnvironment['files'] = []
   const envWhere = `environment ${environment.name} (${where})`
+  checkImageSecrets(environment.name, environment.layers, optionsEnv, InfraError)
+  const overrides = new Set<string>()
+  const env: EnvVars = { ...optionsEnv }
+  const files = new Map<string, string | HostFile>()
+  const mcp = new Map<string, McpServer>()
+  const skills = new Map<string, { skill: HarnessSkill; placement: SkillPlacement; found: Found }>()
+  let rules: string | HostFile | undefined
+  const image: ResolvedEnvironment['image'] = []
+  const setup: ResolvedStep[] = []
+  const seen = { env: new Set<string>(), files: new Set<string>(), mcp: new Set<string>() }
 
-  for (const step of environment.steps) {
-    switch (step.kind) {
-      case 'exec':
-        ;(step.cache ? baked : perAttempt).push(step.command)
-        break
-      case 'skill': {
-        const found = await resolveSkills(root, step.source, step.options)
-        for (const skill of found.skills) {
-          const i = skills.findIndex((s) => s.name === skill.name)
-          if (i >= 0) skills.splice(i, 1)
-          skills.push(skill)
-          skillRecords.push({
-            name: skill.name,
-            source: found.source,
-            commit: found.commit,
-            sha256: skillHash(skill),
-          })
-        }
-        break
-      }
-      case 'mcp': {
-        const server = step.server
-        if ('url' in server) {
-          mcp[step.name] = {
-            url: server.url,
-            headers: resolveVars(server.headers ?? {}, envWhere, secretNames),
-          }
-        } else {
-          mcp[step.name] = {
-            command: server.command,
-            args: server.args ?? [],
-            env: resolveVars(server.env ?? {}, envWhere, secretNames),
-          }
-        }
-        break
-      }
-      case 'rules':
-        files.push({ path: 'AGENTS.md', content: step.content })
-        break
-      case 'file': {
-        let content: string
-        if ('content' in step) content = step.content
-        else {
-          const from = isAbsolute(step.from) ? step.from : resolve(root, step.from)
-          if (!existsSync(from)) throw new InfraError(`${step.from} for ${envWhere} doesn't exist`)
-          content = readFileSync(from, 'utf8')
-        }
-        files.push({ path: step.path, content })
-        break
-      }
-      case 'var':
-        vars[step.name] = step.value
-        break
-      case 'secret':
-        vars[step.name] = secretValue(step.name, step.from, envWhere)
-        if (!secretNames.includes(step.name)) secretNames.push(step.name)
-        break
+  for (const { spec } of environment.layers) {
+    for (const [k, v] of Object.entries(spec.env ?? {})) {
+      if (seen.env.has(k)) overrides.add(`env.${k}`)
+      seen.env.add(k)
+      env[k] = v
     }
-  }
-  for (const command of baked) {
-    const secret = referencedSecret(command, secretNames)
-    if (secret) {
-      throw new InfraError(
-        `env.exec(${JSON.stringify(command)}) in ${envWhere} references the secret ${secret}, ` +
-          'but cached steps are baked into an image and never see secrets. ' +
-          'Pass { cache: false } to run it in each sandbox instead.',
+    for (const [path, v] of Object.entries(spec.files ?? {})) {
+      if (seen.files.has(path)) overrides.add(`files.${path}`)
+      seen.files.add(path)
+      files.set(path, v)
+    }
+    if (spec.rules !== undefined) {
+      if (rules !== undefined) overrides.add('rules')
+      rules = spec.rules
+    }
+    for (const [name, server] of Object.entries(spec.mcp ?? {})) {
+      if (seen.mcp.has(name)) overrides.add(`mcp.${name}`)
+      seen.mcp.add(name)
+      mcp.set(name, server)
+    }
+    for (const step of spec.image ?? []) {
+      image.push(
+        typeof step === 'string'
+          ? { run: step }
+          : { run: step.run, ...(step.timeout ? { timeoutMs: parseDuration(step.timeout) } : {}) },
       )
     }
+    for (const step of spec.setup ?? []) {
+      const s = typeof step === 'string' ? { run: step as string } : step
+      setup.push({
+        run: s.run,
+        timeoutMs: parseDuration(s.timeout ?? DEFAULT_SETUP_TIMEOUT),
+        ...(s.cwd ? { cwd: s.cwd } : {}),
+      })
+    }
+    const layerSkills = new Set<string>()
+    for (const source of spec.skills ?? []) {
+      const found = await resolveSkills(root, source)
+      for (const skill of found.skills) {
+        if (skills.has(skill.name) && !layerSkills.has(skill.name)) overrides.add(`skills.${skill.name}`)
+        layerSkills.add(skill.name)
+        skills.delete(skill.name)
+        skills.set(skill.name, { skill, placement: source.placement, found })
+      }
+    }
   }
-  const uniqueSkills = skillRecords.filter(
-    (r, i) => skillRecords.findLastIndex((x) => x.name === r.name) === i,
-  )
-  const fileRecords = files.map((f) => ({ path: f.path, sha256: sha256(f.content) }))
+
+  const secrets: Secrets = { names: [], checks: [], unset: [] }
+  const vars: Record<string, string> = {}
+  const checkVars: Record<string, string> = {}
+  for (const [name, value] of Object.entries(env)) {
+    if (!isSecret(value)) {
+      vars[name] = value
+      continue
+    }
+    const resolved = hostValue(name, value, envWhere, secrets)
+    if (resolved === undefined) continue
+    if (value.to === 'checks') checkVars[name] = resolved
+    else vars[name] = resolved
+  }
+  const secretOf = (value: string | Secret | SecretTemplate, key: string): string | undefined => {
+    if (typeof value === 'string') return value
+    if (isSecretTemplate(value)) return template(value, envWhere)
+    return hostValue(key, value, envWhere, secrets)
+  }
+  const resolvedMcp: Record<string, ResolvedMcpServer> = {}
+  for (const [name, s] of mcp) {
+    if (s.transport === 'stdio') {
+      const e: Record<string, string> = {}
+      for (const [k, v] of Object.entries(s.env)) {
+        const r = secretOf(v, k)
+        if (r !== undefined) e[k] = r
+      }
+      resolvedMcp[name] = { transport: 'stdio', command: s.command, args: s.args, env: e }
+    } else {
+      const h: Record<string, string> = {}
+      for (const [k, v] of Object.entries(s.headers)) {
+        const r = secretOf(v, k)
+        if (r !== undefined) h[k] = r
+      }
+      resolvedMcp[name] = { transport: s.transport, url: s.url, headers: h }
+    }
+  }
+
+  const fileList = [...files].map(([path, v]) => ({
+    path,
+    content: isHostFile(v) ? readHostFile(v, envWhere) : v,
+  }))
+  if (rules !== undefined) {
+    fileList.push({ path: 'AGENTS.md', content: isHostFile(rules) ? readHostFile(rules, envWhere) : rules })
+  }
+  const skillList = [...skills.values()]
+  const skillRecords = skillList.map(({ skill, placement, found }) => ({
+    name: skill.name,
+    source: found.source,
+    commit: found.commit,
+    sha256: skillHash(skill),
+    placement,
+  }))
+  const fileRecords = fileList.map((f) => ({ path: f.path, sha256: sha256(f.content) }))
+  const secretNames = [...new Set([...secrets.names, ...secrets.checks])].sort()
   const varNames = Object.keys(vars)
-    .filter((n) => !secretNames.includes(n))
+    .filter((n) => !secrets.names.includes(n))
     .sort()
   const literalVars = Object.fromEntries(varNames.map((n) => [n, vars[n]]))
   const mcpShape = Object.fromEntries(
-    Object.entries(mcp).map(([name, s]) =>
-      'url' in s
-        ? [name, { url: s.url, headers: Object.keys(s.headers ?? {}).sort() }]
-        : [name, { command: s.command, args: s.args, env: Object.keys(s.env ?? {}).sort() }],
+    Object.entries(resolvedMcp).map(([name, s]) =>
+      s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: Object.keys(s.env).sort() }]
+        : [name, { transport: s.transport, url: s.url, headers: Object.keys(s.headers).sort() }],
     ),
   )
   const digest = `sha256:${sha256(
     JSON.stringify({
-      baked,
-      perAttempt,
-      skills: uniqueSkills.map((s) => [s.name, s.sha256]),
+      image,
+      setup,
+      skills: skillRecords.map((s) => [s.name, s.sha256, s.placement]),
       mcp: mcpShape,
       files: fileRecords,
       vars: literalVars,
-      secrets: [...secretNames].sort(),
+      secrets: secretNames,
+      checks: [...secrets.checks].sort(),
+      unset: [...secrets.unset].sort(),
     }),
   )}`
   return {
     record: {
       name: environment.name,
+      parent: environment.parent,
+      overrides: [...overrides],
       digest,
-      baked,
-      perAttempt,
-      skills: uniqueSkills,
-      mcp: Object.keys(mcp).sort(),
+      image: image.map(stepCommand),
+      setup: setup.map(stepCommand),
+      skills: skillRecords,
+      mcp: Object.keys(resolvedMcp).sort(),
       files: fileRecords,
       vars: varNames,
-      secrets: [...secretNames].sort(),
+      secrets: secretNames,
+      unset: [...secrets.unset].sort(),
     },
-    baked,
-    perAttempt,
-    skills,
-    mcp,
-    files,
+    image,
+    setup,
+    skills: skillList.filter((s) => s.placement === 'harness').map((s) => s.skill),
+    workspaceSkills: skillList.filter((s) => s.placement === 'workspace').map((s) => s.skill),
+    mcp: resolvedMcp,
+    files: fileList,
     vars,
+    checkVars,
   }
+}
+
+/** A skill as a `SKILL.md` file plus its other files, for writing into a directory. */
+export function skillFiles(skill: HarnessSkill): Array<{ path: string; content: string }> {
+  const front = `---\nname: ${skill.name}\ndescription: ${JSON.stringify(skill.description)}\n---\n`
+  return [
+    { path: 'SKILL.md', content: `${front}${skill.content}` },
+    ...skill.files,
+  ]
 }

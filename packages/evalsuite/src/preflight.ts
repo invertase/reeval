@@ -1,6 +1,6 @@
 import { DEFAULT_IMAGE, dockerAvailable, imageInfo, LABEL } from '@evalsuite/sandbox-docker'
 import { UsageError } from './errors.ts'
-import type { ResolvedConfig } from './types.ts'
+import type { SandboxDescriptor } from './types.ts'
 
 export type SandboxImage = {
   ref: string
@@ -11,17 +11,17 @@ export type SandboxImage = {
 /** The config's Docker images, found before the run; groups and evals may add others. */
 export type SandboxVersions = { images: SandboxImage[] }
 
-/** Checks Docker and the config's sandbox images before any eval starts. */
-export async function preflight(config: ResolvedConfig): Promise<SandboxVersions> {
-  const dockers = config.sandbox.flatMap((s) => (s.kind === 'docker' ? [s] : []))
+/** Checks Docker and the planned attempts' sandbox images before any eval starts. */
+export async function preflight(sandboxes: SandboxDescriptor[]): Promise<SandboxVersions> {
+  const dockers = sandboxes.flatMap((s) => (s.kind === 'docker' ? [s] : []))
   if (dockers.length === 0) return { images: [] }
   if (!(await dockerAvailable())) {
     throw new UsageError('Docker is not running. Start Docker and try again.')
   }
   const images: SandboxImage[] = []
   // `from` images are built on first use, so there's nothing to check yet.
-  for (const s of dockers.filter((d) => !d.from)) {
-    const ref = s.image ?? DEFAULT_IMAGE
+  const refs = new Set(dockers.filter((d) => !d.from).map((d) => d.image ?? DEFAULT_IMAGE))
+  for (const ref of refs) {
     const info = await imageInfo(ref)
     if (!info) {
       throw new UsageError(`Sandbox image ${ref} not found. Build it once with: es image build`)

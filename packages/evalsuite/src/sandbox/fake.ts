@@ -22,8 +22,12 @@ export async function createFakeSandbox(
 
   return {
     workdir,
-    exec: (command, opts) =>
-      run('sh', ['-c', command], { cwd: workdir, env: { HOME: base, ...env }, ...opts }),
+    exec: (command, { cwd, env: extra, signal } = {}) =>
+      run('sh', ['-c', command], {
+        cwd: cwd ? join(workdir, cwd) : workdir,
+        env: { HOME: base, ...env, ...extra },
+        signal,
+      }),
     home: base,
     readFile: (path) => readFile(join(workdir, path), 'utf8').catch(() => null),
     async writeFile(path, content) {

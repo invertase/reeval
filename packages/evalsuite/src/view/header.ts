@@ -41,6 +41,8 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
       passRate: e.passRate,
       cells: e.cells.map((c) => ({
         key: c.key,
+        role: c.role,
+        gated: c.gated,
         runs: c.runs,
         pass: c.pass,
         fail: c.fail,

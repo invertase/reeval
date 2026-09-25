@@ -18,7 +18,8 @@ const cell = (s: string) => s.replace(/\|/g, '\\|').replace(/\n/g, ' ')
 export function summaryCounts(s: RunRecord['summary']): string {
   const parts = [
     s.pass && `${s.pass} passed`,
-    s.fail && `${s.fail} failed`,
+    s.fail - s.notGated > 0 && `${s.fail - s.notGated} failed`,
+    s.notGated > 0 && `${s.notGated} failed, not gated`,
     s.infraError && `${s.infraError} infra error`,
     s.skipped && `${s.skipped} skipped`,
   ].filter(Boolean)
@@ -27,9 +28,19 @@ export function summaryCounts(s: RunRecord['summary']): string {
   return `${parts.join(' · ')}${scope}`
 }
 
-/** `baseline 0/2 · with-skill 2/2`: passes over counted attempts per cell. */
+/** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts)`. */
 export function cellCounts(e: EvalEntry): string {
-  return e.cells.map((c) => `${c.key} ${c.pass}/${c.pass + c.fail}`).join(' · ')
+  return e.cells
+    .map((c) => {
+      const notes = [
+        c.role === 'control' && e.cells.some((x) => x.role === 'variant') ? 'control' : '',
+        c.gated ? '' : 'not gated',
+        c.lift ? `lift ${c.lift.points >= 0 ? '+' : '−'}${Math.round(Math.abs(c.lift.points) * 100)} pts` : '',
+        c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
+      ].filter(Boolean)
+      return `${c.key} ${c.pass}/${c.pass + c.fail}${notes.length ? ` (${notes.join(', ')})` : ''}`
+    })
+    .join(' · ')
 }
 
 function judgeCell(e: EvalEntry): string {
@@ -121,7 +132,9 @@ export function renderSummary(run: RunRecord): string {
   const lines = [
     `# ES run ${run.runId}`,
     '',
-    `${summaryCounts(run.summary)}${run.status === 'interrupted' ? ' · **interrupted**' : ''} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
+    `${summaryCounts(run.summary)}${run.status === 'complete' ? '' : ` · **${run.status === 'budget' ? 'budget reached' : run.status}**`} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
+    '',
+    `Plan: ${run.profile ? `profile ${run.profile.name} (${run.profile.reason}) · ` : ''}${run.plan.evals} evals · ${run.plan.cells} cells · ${run.plan.attempts} attempts${run.budget ? ` · budget ${[run.budget.attempts !== undefined ? `${run.budget.attempts} attempts` : '', run.budget.duration ?? ''].filter(Boolean).join(', ')}` : ''}`,
     '',
     '## State',
     '',
@@ -220,6 +233,7 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     )
   }
   const links = [
+    a.files.setupLog && `[setup log](${a.files.setupLog.path})`,
     a.files.transcript && `[transcript](${a.files.transcript.path})`,
     a.files.diff && `[diff](${a.files.diff.path})`,
     a.files.judgeInput && `[judge input](${a.files.judgeInput.path})`,

@@ -6,7 +6,9 @@ import { attemptId, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
 import { harnessId, sandboxId } from '../options.ts'
+import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
+import { NO_ENVIRONMENT } from '../environment.ts'
 import { redactSecrets } from '../redact.ts'
 import type {
   Cell,
@@ -21,11 +23,13 @@ import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT 
 import {
   type AttemptFiles,
   type AttemptRecord,
+  type CellRecord,
   type ContextFile,
   type EvalEntry,
   type FileRef,
   type GitInfo,
   type JudgementRecord,
+  type Lift,
   type RunnerInfo,
   type RunRecord,
   SCHEMA_VERSION,
@@ -45,6 +49,9 @@ export type AssembleInput = {
   startedAt: Date
   endedAt: Date
   interrupted: boolean
+  /** `budget.duration` stopped new attempts from starting. */
+  budgetReached: boolean
+  plan: RunPlan
   author: string
   es: string
   /** Name and version of the embedded test engine. */
@@ -248,7 +255,7 @@ class Seen {
       const repoDigests = this.digests.get(record.image.id) ?? []
       this.images.set(record.image.id, { ...record.image, repoDigests })
     }
-    if (record?.environment) {
+    if (record?.environment && record.environment.name !== NO_ENVIRONMENT) {
       const key = `${record.environment.name}\0${record.environment.digest}`
       this.environments.set(key, record.environment)
     }
@@ -287,14 +294,20 @@ const UNKNOWN_CELL: Cell = {
   harness: 'unknown',
   environment: 'unknown',
   sandbox: 'unknown',
+  role: 'control',
 }
 
-function cellOf(entry: EvalEntry, cell: Cell): EvalEntry['cells'][number] {
+/** minLift per cell, kept aside while attempts are added; see `rollUp`. */
+const minLifts = new WeakMap<CellRecord, number>()
+
+function cellOf(entry: EvalEntry, cell: Cell, gated: boolean): CellRecord {
   let found = entry.cells.find((c) => c.key === cell.key)
   if (!found) {
     found = {
       ...cell,
       fingerprint: '',
+      gated,
+      overrides: [],
       runs: 0,
       pass: 0,
       fail: 0,
@@ -329,7 +342,11 @@ async function addAttempt(
   const context = record?.context ?? []
   seen.add(record, cell, e)
   const entry = seen.entry(e, srcHash)
-  const cellRecord = cellOf(entry, cell)
+  const cellRecord = cellOf(entry, cell, e.attempt?.gated ?? true)
+  if (e.attempt?.minLift !== undefined) minLifts.set(cellRecord, e.attempt.minLift)
+  if (record?.environment?.overrides.length && cellRecord.overrides.length === 0) {
+    cellRecord.overrides = [...record.environment.overrides]
+  }
   // Skipped attempts never ran, so they have no environment or image to fingerprint.
   if (!cellRecord.fingerprint || record) {
     cellRecord.fingerprint = sha256(
@@ -368,6 +385,15 @@ function attemptEvidence(
   'turns' | 'timings' | 'activity' | 'judgements' | 'checks' | 'changedFiles' | 'files'
 > {
   const files: AttemptFiles = {}
+  if (record?.setup?.length) {
+    const log = record.setup
+      .map(
+        (s) =>
+          `$ ${s.run}\n${s.exitCode === null ? 'timed out' : `exit ${s.exitCode}`} after ${s.durationMs}ms\n${capText(s.output)}${s.output.endsWith('\n') || !s.output ? '' : '\n'}`,
+      )
+      .join('\n')
+    files.setupLog = out.add(`${dir}/setup.log`, log)
+  }
   if (record && record.turns.length > 0) {
     files.transcript = out.add(`${dir}/transcript.jsonl`, transcriptLines(record))
     const raw = rawLines(record)
@@ -410,7 +436,21 @@ function attemptEvidence(
   }
 }
 
-/** Per-cell and per-eval counts, pass rates, outcomes and fingerprints, once every attempt is in. */
+/** Lift of each variant cell over the control on the same harness and sandbox. */
+function liftOf(control: CellRecord, variant: CellRecord): Lift | undefined {
+  if (control.passRate === null || variant.passRate === null) return undefined
+  const minLift = minLifts.get(variant)
+  return {
+    vs: control.key,
+    points: Math.round((variant.passRate - control.passRate) * 1000) / 1000,
+    controlPassRate: control.passRate,
+    variantPassRate: variant.passRate,
+    n: Math.min(control.pass + control.fail, variant.pass + variant.fail),
+    ...(minLift !== undefined ? { minLift } : {}),
+  }
+}
+
+/** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */
 function rollUp(evals: EvalEntry[]): void {
   for (const entry of evals) {
     for (const c of entry.cells) {
@@ -423,9 +463,22 @@ function rollUp(evals: EvalEntry[]): void {
       c.passRate = passRateOf(outcomes)
       c.outcome = worstOutcome(outcomes)
     }
-    const outcomes = entry.attempts.map((a) => a.outcome)
-    entry.outcome = worstOutcome(outcomes)
-    entry.passRate = passRateOf(outcomes)
+    for (const c of entry.cells) {
+      if (c.role !== 'variant') continue
+      const control = entry.cells.find(
+        (x) => x.role === 'control' && x.harness === c.harness && x.sandbox === c.sandbox,
+      )
+      const lift = control && liftOf(control, c)
+      if (!lift) continue
+      c.lift = lift
+      if (lift.minLift !== undefined && lift.points < lift.minLift && c.outcome === 'pass') {
+        c.outcome = 'fail'
+      }
+    }
+    entry.outcome = worstOutcome(
+      entry.cells.map((c) => (!c.gated && c.outcome === 'fail' ? 'pass' : c.outcome)),
+    )
+    entry.passRate = passRateOf(entry.attempts.map((a) => a.outcome))
     entry.fingerprint = sha256(
       JSON.stringify(entry.cells.map((c) => [c.key, c.fingerprint]).sort()),
     )
@@ -485,8 +538,8 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     JSON.stringify({
       include: config.include,
       harness: config.harness.map(withoutCaps),
-      sandbox: config.sandbox.map(withoutCaps),
-      environment: config.environment,
+      sandbox: withoutCaps(config.sandbox),
+      environment: config.environment ?? null,
       runs: config.runs,
       env: config.env,
       judge: withoutCaps(config.judge),
@@ -501,11 +554,17 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
 
   const attempts = evals.flatMap((e) => e.attempts)
   const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length
+  const notGated = evals
+    .flatMap((e) => e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gated === false))
+    .filter((a) => a.outcome === 'fail').length
+  const { profile } = ctx
+  const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
+    list === undefined ? undefined : [list].flat().map(harnessId)
   const record: RunRecord = {
     kind: 'es-run',
     schemaVersion: SCHEMA_VERSION,
     runId,
-    status: input.interrupted ? 'interrupted' : 'complete',
+    status: input.interrupted ? 'interrupted' : input.budgetReached ? 'budget' : 'complete',
     startedAt: input.startedAt.toISOString(),
     endedAt: input.endedAt.toISOString(),
     durationMs: input.endedAt.getTime() - input.startedAt.getTime(),
@@ -515,10 +574,34 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     dependencies: { lockfiles: input.lockfiles },
     stack: stackOf(input, seen, judgeModel),
     environments: [...seen.environments.values()].sort(byName((e) => e.name)),
+    profile: profile
+      ? {
+          name: profile.name,
+          reason: profile.reason,
+          defaults: JSON.parse(
+            JSON.stringify({
+              harness: ids(profile.defaults.harness),
+              environment: profile.defaults.environment?.name,
+              sandbox: profile.defaults.sandbox && sandboxId(profile.defaults.sandbox),
+              runs: profile.defaults.runs,
+              timeout: profile.defaults.timeout,
+              env: profile.defaults.env && Object.keys(profile.defaults.env).sort(),
+            }),
+          ),
+          limit: profile.limit,
+        }
+      : null,
+    plan: {
+      evals: input.plan.evals,
+      cells: input.plan.cells,
+      attempts: input.plan.attempts,
+      estimateMs: Math.round(input.plan.estimateMs),
+    },
+    budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {
       harnesses: config.harness.map(harnessId),
-      sandboxes: config.sandbox.map(sandboxId),
-      environments: config.environment.map((e) => e.name),
+      sandbox: sandboxId(config.sandbox),
+      environment: config.environment?.name ?? null,
       runs: config.runs,
       judgeModel,
       threshold: config.judge.threshold,
@@ -534,6 +617,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       attempts: attempts.length,
       pass: count('pass'),
       fail: count('fail'),
+      notGated,
       infraError: count('infra_error'),
       skipped: count('skipped'),
     },

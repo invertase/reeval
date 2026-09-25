@@ -1,10 +1,10 @@
-import { evaluate, expect, group, secret } from 'evalsuite'
+import { evaluate, expect, group } from 'evalsuite'
+import { genkit } from './environments.ts'
 
 // Ports of the Lightsage coding evals. Each prompt and judge question is unchanged.
-// The apps the agent builds call Gemini, so the key goes into the sandbox (redacted in records).
-const gemini = secret('GOOGLE_GENERATIVE_AI_API_KEY')
-
-group('genkit apps', { env: { GOOGLE_GENAI_API_KEY: gemini, GEMINI_API_KEY: gemini } }, () => {
+// The apps the agent builds call Gemini, so the genkit environment puts the key in the sandbox
+// (redacted in records).
+group('genkit apps', { environment: genkit }, () => {
   evaluate('builds a runnable Genkit recipe flow', async (t) => {
     await t.send(
       'Build a Genkit JavaScript flow that accepts a meal idea and returns a structured recipe with a title, ingredient list, and numbered instructions. Configure it to use a supported model through environment-based credentials, and make the flow runnable locally with a sample request.',

@@ -51,7 +51,12 @@ export async function createDockerSandbox(
     home,
     network,
     exec: async (command, opts) =>
-      network.run({ command, workingDirectory: workdir, abortSignal: opts?.signal }),
+      network.run({
+        command,
+        workingDirectory: opts?.cwd ? posix.resolve(workdir, opts.cwd) : workdir,
+        ...(opts?.env ? { env: opts.env } : {}),
+        abortSignal: opts?.signal,
+      }),
     readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
     writeFile: async (path, content) => network.writeTextFile({ path: resolve(path), content }),
     destroy: async () => {

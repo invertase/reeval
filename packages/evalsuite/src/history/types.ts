@@ -62,6 +62,8 @@ export type JudgementRecord = {
 }
 
 export type AttemptFiles = {
+  /** Each environment setup step's command, exit code, duration and output. */
+  setupLog?: FileRef
   transcript?: FileRef
   /** Unnormalised harness stream parts, only with `ES_RAW_TRANSCRIPT=1`. */
   rawTranscript?: FileRef
@@ -125,7 +127,10 @@ export type EvalEntry = {
   /** Evals have no fixtures until workspace seeding lands; always null for now. */
   fixtureHash: string | null
   tags: string[]
-  /** `fail` if any cell failed, else `infra_error` if any errored, else `skipped` if all were, else `pass`. */
+  /**
+   * Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if
+   * all were, else `pass`. An ungated cell's failures don't fail the eval.
+   */
   outcome: Outcome
   /** pass / (pass + fail) over every attempt; infra errors and skips excluded. */
   passRate: number | null
@@ -133,17 +138,37 @@ export type EvalEntry = {
   attempts: AttemptRecord[]
 }
 
-/** One harness × environment × sandbox combination of an eval, and how its attempts went. */
+/** A variant cell's pass rate against the control's, on the same harness and sandbox. */
+export type Lift = {
+  /** The control cell's key. */
+  vs: string
+  /** Variant pass rate minus control pass rate, from -1 to 1. */
+  points: number
+  controlPassRate: number
+  variantPassRate: number
+  /** Counted attempts (passes and fails) in the smaller of the two cells. */
+  n: number
+  /** Set when the compare has a `minLift`; the cell fails below it. */
+  minLift?: number
+}
+
+/** One harness and environment of an eval, and how its attempts went. */
 export type CellRecord = Cell & {
   /** Covers the eval source, harness, environment digest, image and judge settings. */
   fingerprint: string
+  /** Whether this cell's failures fail the eval (a control's don't, by default). */
+  gated: boolean
+  /** Environment keys the variant replaced on the control's (or a child on its parent's). */
+  overrides: string[]
   runs: number
   pass: number
   fail: number
   infraError: number
   skipped: number
   passRate: number | null
+  /** The attempts' worst outcome; a variant below its `minLift` is `fail` too. */
   outcome: Outcome
+  lift?: Lift
 }
 
 /** Counts attempts, except `evals`. */
@@ -151,7 +176,10 @@ export type RunSummary = {
   evals: number
   attempts: number
   pass: number
+  /** Every failed attempt, including `notGated` ones. */
   fail: number
+  /** Failed attempts in ungated cells (controls, by default), which don't fail the run. */
+  notGated: number
   infraError: number
   skipped: number
 }
@@ -169,7 +197,8 @@ export type RunRecord = {
   schemaVersion: typeof SCHEMA_VERSION
   /** Also the file name: `<UTC start>_<short sha>_<author or ci>`. */
   runId: string
-  status: 'complete' | 'interrupted'
+  /** `budget` when `budget.duration` stopped new attempts from starting. */
+  status: 'complete' | 'interrupted' | 'budget'
   startedAt: string
   endedAt: string
   durationMs: number
@@ -183,10 +212,31 @@ export type RunRecord = {
   stack: Stack
   /** Each environment the run applied, fingerprinted; secret values are never included. */
   environments: EnvironmentRecord[]
+  /** The profile the run was sized with, and why it was chosen. */
+  profile: {
+    name: string
+    reason: string
+    defaults: {
+      harness?: string[]
+      environment?: string
+      sandbox?: string
+      runs?: number
+      timeout?: string | number
+      env?: string[]
+    }
+    limit: {
+      runs?: number
+      compare?: false | { maxVariants: number }
+      harness?: string[]
+    }
+  } | null
+  /** What the run planned before it started. */
+  plan: { evals: number; cells: number; attempts: number; estimateMs: number }
+  budget: { attempts?: number; duration?: string | number } | null
   config: {
     harnesses: string[]
-    sandboxes: string[]
-    environments: string[]
+    sandbox: string
+    environment: string | null
     runs: number
     judgeModel: string | null
     threshold: number
@@ -247,7 +297,7 @@ export type StackSummary = {
 /** Per-cell attempt counts in a `HistoryEntry`, enough for pass rates without the record. */
 export type CellCounts = Pick<
   CellRecord,
-  'key' | 'runs' | 'pass' | 'fail' | 'infraError' | 'skipped'
+  'key' | 'role' | 'gated' | 'runs' | 'pass' | 'fail' | 'infraError' | 'skipped'
 >
 
 /**

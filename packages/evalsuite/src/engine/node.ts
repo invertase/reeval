@@ -6,12 +6,18 @@ import { availableParallelism } from 'node:os'
 import { Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { configDefaults } from 'vitest/config'
-import { createVitest, type Reporter, type TestCase, type Vitest } from 'vitest/node'
+import {
+  createVitest,
+  type Reporter,
+  type TestCase,
+  type TestModule,
+  type Vitest,
+} from 'vitest/node'
 import { inCI } from '../env.ts'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
 import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
-import type { RunContext } from '../types.ts'
+import type { AttemptMeta, RunContext } from '../types.ts'
 import type { EsEvent, EvalResult } from '../ui/events.ts'
 import { cancelMarker } from './cancel.ts'
 import type {} from './runtime.ts'
@@ -24,7 +30,12 @@ export type EngineRun = {
   unhandledErrors: string[]
   cancelled: boolean
   noFiles: boolean
+  /** `onPlan` said not to run, e.g. for `--dry-run`. */
+  stopped: boolean
 }
+
+/** One planned attempt, from collecting the eval files without running them. */
+export type PlannedItem = { id: string; key: string; file: string; attempt: AttemptMeta }
 
 export type EngineOptions = {
   run: RunContext
@@ -35,6 +46,11 @@ export type EngineOptions = {
   onEvent?: (e: EsEvent) => void
   /** Called once the engine can be cancelled, with a function that cancels the run. */
   onCancellable?: (cancel: () => void) => void
+  /**
+   * Called with every attempt the run would start, after collecting the files and before any
+   * attempt runs. Resolve false to stop there; throw to fail the run.
+   */
+  onPlan?: (planned: PlannedItem[], matched: number) => Promise<boolean>
 }
 
 const require = createRequire(import.meta.url)
@@ -115,6 +131,28 @@ const ONLY_IN_CI = /Unexpected \.only modifier/
 const onlyInCi = (file: string) =>
   `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
 
+/** A usage mistake an eval file made while registering (exit 2), and any other module errors. */
+function moduleProblems(root: string, modules: readonly TestModule[]) {
+  let usage: string | undefined
+  const unhandled: string[] = []
+  for (const module of modules) {
+    const file = relativeFile(root, module.moduleId)
+    for (const test of module.children.allTests()) {
+      if ((test.result().errors ?? []).some((e) => ONLY_IN_CI.test(e.message ?? ''))) {
+        usage = onlyInCi(file)
+      }
+    }
+    for (const error of module.errors()) {
+      if (error.name === 'OnlyInCiError' || ONLY_IN_CI.test(error.message)) {
+        usage = onlyInCi(file)
+      } else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
+        usage = `${file}: ${error.message}`
+      } else unhandled.push(error.message)
+    }
+  }
+  return { usage, unhandled }
+}
+
 /**
  * Evals register through the `evalsuite` the project resolves, so that copy must run on this
  * engine's Vitest; two copies break registration. A project's own Vitest, for its own tests,
@@ -140,14 +178,20 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   let cancelled = false
   let usage: string | undefined
 
-  const emit = options.onEvent ?? (() => {})
+  // Collecting for the plan runs the same reporter hooks; only the real run reports.
+  let collecting = false
+  const onEvent = options.onEvent ?? (() => {})
+  const emit = (e: EsEvent) => {
+    if (!collecting) onEvent(e)
+  }
   const keysByTask = new Map<string, string>()
   const skipped = (test: TestCase) => test.options.mode === 'skip' || test.options.mode === 'todo'
   const reporter: Reporter = {
     onTestRunStart(specifications) {
-      options.onRunStart?.(specifications.length)
+      if (!collecting) options.onRunStart?.(specifications.length)
     },
     onTestModuleCollected(module) {
+      if (collecting) return
       const tests = [...module.children.allTests()].map((test) => ({
         test,
         ...identify(config.root, test),
@@ -188,11 +232,13 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       })
     },
     onTestCaseResult(test) {
+      if (collecting) return
       const e = toEngineEval(config.root, test, vitest)
       evals.set(e.key, e)
       if (matchesName(e)) emit({ type: 'eval-end', at: Date.now(), result: e })
     },
     onTestRunEnd(modules, errors, reason) {
+      if (collecting) return
       // Attempts finish in any order; results are listed by file, then as declared.
       const byFile = [...modules].sort((a, b) => (a.moduleId < b.moduleId ? -1 : 1))
       const finished = new Map(evals)
@@ -201,18 +247,15 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         for (const test of module.children.allTests()) {
           const e = toEngineEval(config.root, test, vitest)
           evals.set(e.key, finished.get(e.key) ?? e)
-          if (e.errors.some((m) => ONLY_IN_CI.test(m))) usage = onlyInCi(e.file)
-        }
-        for (const error of module.errors()) {
-          const file = relativeFile(config.root, module.moduleId)
-          if (error.name === 'OnlyInCiError' || ONLY_IN_CI.test(error.message)) {
-            usage = onlyInCi(file)
-          } else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
-            usage = `${file}: ${error.message}`
-          } else unhandledErrors.push(error.message)
         }
       }
-      unhandledErrors = [...unhandledErrors, ...errors.map((e) => e.message ?? String(e))]
+      const problems = moduleProblems(config.root, byFile)
+      usage ??= problems.usage
+      unhandledErrors = [
+        ...unhandledErrors,
+        ...problems.unhandled,
+        ...errors.map((e) => e.message ?? String(e)),
+      ]
       if (reason === 'interrupted') cancelled = true
     },
   }
@@ -282,7 +325,31 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       specs = await vitest.globTestSpecifications()
     }
     if (specs.length === 0)
-      return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true }
+      return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+
+    if (options.onPlan) {
+      collecting = true
+      const collected = await vitest.collectTests(specs)
+      collecting = false
+      const problems = moduleProblems(config.root, collected.testModules)
+      if (problems.usage) throw new UsageError(problems.usage)
+      const tests = [...collected.testModules]
+        .sort((a, b) => (a.moduleId < b.moduleId ? -1 : 1))
+        .flatMap((m) => [...m.children.allTests()])
+      const planned: PlannedItem[] = []
+      let matched = 0
+      for (const test of tests) {
+        const e = toEngineEval(config.root, test)
+        if (!matchesName(e)) continue
+        matched++
+        const { attempt } = e
+        if (!attempt || (skipped(test) && !attempt.plan.skip)) continue
+        planned.push({ id: e.id, key: e.key, file: e.file, attempt })
+      }
+      if (!(await options.onPlan(planned, matched))) {
+        return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
+      }
+    }
 
     scheduler = await startSchedulerServer({ gatherFiles: Math.min(specs.length, workers) })
     vitest.provide('es:scheduler', scheduler.address)
@@ -296,6 +363,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     })
     await vitest.runTestSpecifications(specs, true)
   } catch (error) {
+    if (error instanceof UsageError) throw error
     const detail = stderr.text.trim()
     throw new Error(`${(error as Error).message}${detail ? `\n${detail}` : ''}`)
   } finally {
@@ -304,5 +372,5 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   }
   if (usage) throw new UsageError(usage)
   const matching = [...evals.values()].filter(matchesName)
-  return { evals: matching, unhandledErrors, cancelled, noFiles: false }
+  return { evals: matching, unhandledErrors, cancelled, noFiles: false, stopped: false }
 }

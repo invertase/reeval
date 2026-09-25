@@ -1,25 +1,47 @@
-// The options cascade shared by the config, groups and evals, and the matrix ids derived from it.
+// The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
-import { isSecret } from './environment.ts'
+import {
+  type AppliedEnvironment,
+  applied,
+  checkEnv,
+  isEnvironment,
+  isMovingRef,
+  layered,
+} from './environment.ts'
 import { UsageError } from './errors.ts'
-import { SECRET_NAME } from './redact.ts'
 import type {
-  Axis,
   Cell,
+  CompareGate,
   Duration,
   Environment,
   EnvVars,
   EvalOptions,
+  EvalPlan,
   HarnessDescriptor,
   JudgeOptions,
+  PinnableKey,
+  ResolvedProfile,
   SandboxDescriptor,
 } from './types.ts'
 
-const KNOWN = ['harness', 'sandbox', 'environment', 'runs', 'env', 'judge', 'timeout', 'tags']
+const KNOWN = [
+  'harness',
+  'sandbox',
+  'environment',
+  'compare',
+  'runs',
+  'env',
+  'judge',
+  'timeout',
+  'tags',
+  'pin',
+]
 const SUGGEST: Record<string, string> = {
   harnesses: 'harness',
   sandboxes: 'sandbox',
   environments: 'environment',
+  baseline: 'environment',
+  variants: 'compare',
   repeat: 'runs',
   repeats: 'runs',
   iterations: 'runs',
@@ -27,10 +49,12 @@ const SUGGEST: Record<string, string> = {
   secrets: 'env',
   vars: 'env',
   tag: 'tags',
+  pins: 'pin',
 }
+const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
+const GATES: CompareGate[] = ['variants', 'all', 'none']
 
-const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
-const ID = /^[A-Za-z0-9._:@-]+$/
+const ID = /^[A-Za-z0-9._:@+-]+$/
 
 const sanitize = (text: string) =>
   (text.split('/').at(-1) ?? text).replace(/[^A-Za-z0-9._:@-]+/g, '-')
@@ -51,23 +75,10 @@ export function sandboxId(s: SandboxDescriptor): string {
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
   `${harness}/${environment}/${sandbox}`
 
-/** Throws on keys that aren't options, suggesting the likely one. */
-export function checkOptions(options: object, where: string, allowed = KNOWN): void {
-  for (const key of Object.keys(options)) {
-    if (allowed.includes(key)) continue
-    const hint = SUGGEST[key] ? ` Did you mean "${SUGGEST[key]}"?` : ''
-    throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
-  }
-  const { runs, tags, env } = options as EvalOptions
-  if (runs !== undefined && !(Number.isInteger(runs) && runs >= 1)) {
-    throw new UsageError(`runs must be a whole number of at least 1 (got ${runs}) in ${where}`)
-  }
-  if (tags !== undefined && (!Array.isArray(tags) || tags.some((t) => typeof t !== 'string'))) {
-    throw new UsageError(`tags must be a list of strings in ${where}`)
-  }
-  if (env !== undefined) checkEnv(env, where)
-  checkMaxConcurrent((options as EvalOptions).judge?.maxConcurrent, `judge in ${where}`)
-}
+const isHarness = (v: unknown) =>
+  (v as { kind?: string })?.kind === 'cursor' || (v as { kind?: string })?.kind === 'fake'
+const isSandbox = (v: unknown) =>
+  (v as { kind?: string })?.kind === 'docker' || (v as { kind?: string })?.kind === 'fake'
 
 function checkMaxConcurrent(value: unknown, where: string): void {
   if (value === undefined || (Number.isInteger(value) && (value as number) >= 1)) return
@@ -76,76 +87,137 @@ function checkMaxConcurrent(value: unknown, where: string): void {
   )
 }
 
-export function checkEnv(env: EnvVars, where: string): void {
-  if (typeof env !== 'object' || env === null || Array.isArray(env)) {
-    throw new UsageError(`env must be an object of variables in ${where}`)
+const describe = (value: unknown) => {
+  if (Array.isArray(value)) return `a list of ${value.length}`
+  if (typeof value === 'object' && value !== null) {
+    const keys = Object.keys(value)
+    return keys.length ? `an object with ${keys.map((k) => `"${k}"`).join(', ')}` : 'an object'
   }
-  for (const [name, value] of Object.entries(env)) {
-    if (!VAR.test(name)) throw new UsageError(`env.${name} in ${where} isn't a valid variable name`)
-    if (isSecret(value)) continue
-    if (typeof value !== 'string') {
-      throw new UsageError(`env.${name} in ${where} must be a string or secret()`)
-    }
-    if (SECRET_NAME.test(name)) {
+  return JSON.stringify(value) ?? String(value)
+}
+
+function checkCompare(value: unknown, where: string): void {
+  if (value === false) return
+  const variants = Array.isArray(value) ? value : (value as { variants?: unknown })?.variants
+  if (!Array.isArray(value)) {
+    if (typeof value !== 'object' || value === null || !Array.isArray(variants)) {
       throw new UsageError(
-        `env.${name} in ${where} is a literal string. Pass secrets with secret() so they're redacted and never recorded.`,
+        `compare takes environments (got ${describe(value)}) in ${where}. Use compare: [a, b], or { variants: [a, b], gate?, minLift?, harness? }.`,
+      )
+    }
+    for (const key of Object.keys(value)) {
+      if (!['variants', 'gate', 'minLift', 'harness'].includes(key)) {
+        throw new UsageError(`Unknown compare option "${key}" in ${where}`)
+      }
+    }
+    const { gate, minLift, harness } = value as { gate?: unknown; minLift?: unknown; harness?: unknown }
+    if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
+      throw new UsageError(`compare.gate must be one of ${GATES.join(', ')} in ${where}`)
+    }
+    if (minLift !== undefined && !(typeof minLift === 'number' && minLift >= -1 && minLift <= 1)) {
+      throw new UsageError(`compare.minLift is points from -1 to 1 (got ${minLift}) in ${where}`)
+    }
+    if (harness !== undefined && !Array.isArray(harness)) {
+      throw new UsageError(`compare.harness must be a list of harness ids in ${where}`)
+    }
+  }
+  if ((variants as unknown[]).length === 0) {
+    throw new UsageError(`compare has no variants in ${where}. Give at least one environment.`)
+  }
+  for (const v of variants as unknown[]) {
+    if (!isEnvironment(v)) {
+      throw new UsageError(
+        `compare takes environments (got ${describe(v)}) in ${where}. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval.`,
       )
     }
   }
 }
 
-function checkAxisValue(
-  kind: 'harness' | 'sandbox' | 'environment',
-  value: unknown,
-  where: string,
-) {
-  const v = value as { kind?: string }
-  const ok =
-    kind === 'environment'
-      ? v?.kind === 'environment'
-      : kind === 'harness'
-        ? v?.kind === 'cursor' || v?.kind === 'fake'
-        : v?.kind === 'docker' || v?.kind === 'fake'
-  if (ok) {
-    checkMaxConcurrent((value as { maxConcurrent?: unknown }).maxConcurrent, `${kind} in ${where}`)
-    return
+/** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
+export function checkOptions(options: object, where: string, allowed = KNOWN): void {
+  for (const key of Object.keys(options)) {
+    if (allowed.includes(key)) continue
+    const hint = SUGGEST[key] ? ` Did you mean "${SUGGEST[key]}"?` : ''
+    throw new UsageError(`Unknown option "${key}" in ${where}.${hint}`)
   }
-  const example = { harness: 'cursor()', sandbox: 'docker()', environment: 'defineEnvironment(…)' }[
-    kind
-  ]
-  throw new UsageError(`${kind} in ${where} must be like ${example} (got ${JSON.stringify(value)})`)
+  const o = options as EvalOptions
+  if (o.runs !== undefined && !(Number.isInteger(o.runs) && o.runs >= 1)) {
+    throw new UsageError(`runs must be a whole number of at least 1 (got ${o.runs}) in ${where}`)
+  }
+  if (o.tags !== undefined && (!Array.isArray(o.tags) || o.tags.some((t) => typeof t !== 'string'))) {
+    throw new UsageError(`tags must be a list of strings in ${where}`)
+  }
+  if (o.env !== undefined) checkEnv(o.env, where, UsageError)
+  checkMaxConcurrent(o.judge?.maxConcurrent, `judge in ${where}`)
+  if (o.environment !== undefined) {
+    if (Array.isArray(o.environment)) {
+      throw new UsageError(
+        `environment takes one environment, not a list (${where}). To compare environments, use compare: [a, b]; the inherited environment is the control.`,
+      )
+    }
+    if (!isEnvironment(o.environment)) {
+      throw new UsageError(
+        `environment in ${where} must come from defineEnvironment(…) (got ${describe(o.environment)})`,
+      )
+    }
+  }
+  if (o.sandbox !== undefined) {
+    if (Array.isArray(o.sandbox)) {
+      throw new UsageError(
+        `sandbox takes one sandbox, not a list (${where}). Different toolchains need different checks, so write a separate eval per sandbox.`,
+      )
+    }
+    if (!isSandbox(o.sandbox)) {
+      throw new UsageError(`sandbox in ${where} must be like docker() (got ${describe(o.sandbox)})`)
+    }
+    checkMaxConcurrent(o.sandbox.maxConcurrent, `sandbox in ${where}`)
+  }
+  if (o.compare !== undefined) checkCompare(o.compare, where)
+  if (o.pin !== undefined) {
+    const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]
+    if (bad.length) {
+      throw new UsageError(
+        `pin accepts harness, runs and compare (got ${bad.map(String).join(', ')}) in ${where}`,
+      )
+    }
+  }
 }
 
-function applyAxis<T>(
-  kind: 'harness' | 'sandbox' | 'environment',
-  inherited: T[],
-  value: Axis<T> | undefined,
+function applyHarness(
+  inherited: HarnessDescriptor[],
+  value: EvalOptions['harness'],
   where: string,
-): T[] {
+): HarnessDescriptor[] {
   if (value === undefined) return inherited
-  const next = typeof value === 'function' ? (value as (i: T[]) => T | T[])(inherited) : value
+  const next = typeof value === 'function' ? value(inherited) : value
   const list = Array.isArray(next) ? next : [next]
   if (list.length === 0) {
-    const example = { harness: 'cursor()', sandbox: 'docker()', environment: 'baseline' }[kind]
     throw new UsageError(
-      `${kind} is an empty list in ${where}. Give at least one, e.g. ${kind}: ${example}`,
+      `harness is an empty list in ${where}. Give at least one, e.g. harness: cursor()`,
     )
   }
-  for (const item of list) checkAxisValue(kind, item, where)
+  for (const item of list) {
+    if (!isHarness(item)) {
+      throw new UsageError(`harness in ${where} must be like cursor() (got ${describe(item)})`)
+    }
+    checkMaxConcurrent(item.maxConcurrent, `harness in ${where}`)
+  }
   return list
 }
 
-function checkUnique<T>(kind: string, list: T[], id: (t: T) => string, where: string, fix: string) {
+function checkUnique(list: HarnessDescriptor[], where: string) {
   const seen = new Set<string>()
   for (const item of list) {
-    const key = id(item)
+    const key = harnessId(item)
     if (!ID.test(key)) {
       throw new UsageError(
-        `The ${kind} id "${key}" in ${where} may only use letters, digits and . _ : @ -`,
+        `The harness id "${key}" in ${where} may only use letters, digits and . _ : @ + -`,
       )
     }
     if (seen.has(key)) {
-      throw new UsageError(`Two ${kind}s in ${where} resolve to the id "${key}". ${fix}`)
+      throw new UsageError(
+        `Two harnesses in ${where} resolve to the id "${key}". Give one an id, e.g. cursor({ model: '…', id: '…' })`,
+      )
     }
     seen.add(key)
   }
@@ -153,104 +225,267 @@ function checkUnique<T>(kind: string, list: T[], id: (t: T) => string, where: st
 
 export type Level = { options: EvalOptions; where: string }
 
+export type NormalizedCompare = {
+  variants: Environment[]
+  gate: CompareGate
+  minLift?: number
+  /** Harness ids; unset means every harness the eval runs. */
+  harness?: string[]
+  /** How many variants the eval asked for, before a profile's limit. */
+  of: number
+}
+
 export type Resolved = {
   harness: HarnessDescriptor[]
-  sandbox: SandboxDescriptor[]
-  environment: Environment[]
+  sandbox: SandboxDescriptor
+  environment: Environment | undefined
+  compare: NormalizedCompare | undefined
   runs: number
   env: EnvVars
   judge: JudgeOptions
   timeout: Duration | undefined
   tags: string[]
+  pin: PinnableKey[]
 }
 
-/** Config, then each enclosing group, then the eval: axes replace, `env` and `judge` merge, tags add up. */
+function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
+  if (value === undefined || value === false) return undefined
+  if (Array.isArray(value)) return { variants: value, gate: 'variants', of: value.length }
+  return {
+    variants: value.variants,
+    gate: value.gate ?? 'variants',
+    ...(value.minLift !== undefined ? { minLift: value.minLift } : {}),
+    ...(value.harness
+      ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
+      : {}),
+    of: value.variants.length,
+  }
+}
+
+function applyLevel(out: Resolved, options: EvalOptions, where: string): void {
+  out.harness = applyHarness(out.harness, options.harness, where)
+  if (options.sandbox !== undefined) out.sandbox = options.sandbox
+  if (options.environment !== undefined) out.environment = options.environment
+  if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
+  if (options.runs !== undefined) out.runs = options.runs
+  if (options.timeout !== undefined) out.timeout = options.timeout
+  Object.assign(out.env, options.env)
+  Object.assign(out.judge, options.judge)
+  for (const tag of options.tags ?? []) if (!out.tags.includes(tag)) out.tags.push(tag)
+  for (const key of options.pin ?? []) if (!out.pin.includes(key)) out.pin.push(key)
+}
+
+export type ResolvedEval = {
+  resolved: Resolved
+  /** What a profile changed, for the plan's notes column. */
+  notes: string[]
+  /** Set when a profile's limit leaves the eval nothing to run. */
+  skip?: string
+}
+
+/**
+ * Config, then the profile's defaults, then each enclosing group, then the eval; then the
+ * profile's limit (narrowing only, except pinned keys); then `--runs`.
+ */
 export function cascade(
   base: Resolved,
   levels: Level[],
   where: string,
-  runsOverride?: number,
-): Resolved {
+  options: { profile?: ResolvedProfile | null; runs?: number } = {},
+): ResolvedEval {
   const out: Resolved = {
     ...base,
     env: { ...base.env },
     judge: { ...base.judge },
     tags: [...base.tags],
+    pin: [...base.pin],
   }
-  for (const { options, where: at } of levels) {
-    out.harness = applyAxis('harness', out.harness, options.harness, at)
-    out.sandbox = applyAxis('sandbox', out.sandbox, options.sandbox, at)
-    out.environment = applyAxis('environment', out.environment, options.environment, at)
-    if (options.runs !== undefined) out.runs = options.runs
-    if (options.timeout !== undefined) out.timeout = options.timeout
-    Object.assign(out.env, options.env)
-    Object.assign(out.judge, options.judge)
-    for (const tag of options.tags ?? []) if (!out.tags.includes(tag)) out.tags.push(tag)
+  const { profile } = options
+  const notes: string[] = []
+  if (profile) {
+    const { defaults, judge } = profile
+    applyLevel(
+      out,
+      { ...defaults, judge: { ...judge, ...defaults.judge } } as EvalOptions,
+      `profiles.${profile.name}.defaults`,
+    )
   }
-  if (runsOverride !== undefined) out.runs = runsOverride
-  checkUnique(
-    'harness',
-    out.harness,
-    harnessId,
-    where,
-    "Give one an id, e.g. cursor({ model: '…', id: '…' })",
-  )
-  checkUnique(
-    'sandbox',
-    out.sandbox,
-    sandboxId,
-    where,
-    "Give one an id, e.g. docker({ from: '…', id: '…' })",
-  )
-  checkUnique(
-    'environment',
-    out.environment,
-    (e) => e.name,
-    where,
-    'Environment names must be unique.',
-  )
-  return out
+  for (const { options: own, where: at } of levels) applyLevel(out, own, at)
+  checkUnique(out.harness, where)
+  if (profile?.defaults.harness !== undefined && levels.some((l) => l.options.harness)) {
+    notes.push('harness set by the eval')
+  }
+  const ids = out.harness.map(harnessId)
+  const scope = out.compare?.harness
+  const missing = scope?.filter((id) => !ids.includes(id)) ?? []
+  if (missing.length) {
+    throw new UsageError(
+      `compare.harness lists ${missing.join(', ')}, which ${where} doesn't run (it runs ${ids.join(', ')}).`,
+    )
+  }
+  for (const v of out.compare?.variants ?? []) {
+    if (v.name === out.environment?.name) {
+      throw new UsageError(
+        `compare in ${where} lists ${v.name}, which is already the control (its environment). List only the alternatives.`,
+      )
+    }
+  }
+  const names = out.compare?.variants.map((v) => v.name) ?? []
+  const dupe = names.find((n, i) => names.indexOf(n) !== i)
+  if (dupe) throw new UsageError(`compare in ${where} lists two variants named ${dupe}`)
+
+  let skip: string | undefined
+  const limit = profile?.limit
+  if (profile && limit) {
+    const tag = `profile ${profile.name}`
+    const pinned = (key: PinnableKey) => out.pin.includes(key)
+    if (limit.runs !== undefined && !pinned('runs') && out.runs > limit.runs) {
+      notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
+      out.runs = limit.runs
+    }
+    if (limit.harness && !pinned('harness')) {
+      const kept = out.harness.filter((h) => limit.harness?.includes(harnessId(h)))
+      if (kept.length === 0) {
+        skip = `no harness left: ${tag} allows ${limit.harness.join(', ') || 'none'}`
+      } else if (kept.length < out.harness.length) {
+        notes.push(`harnesses ${out.harness.length} → ${kept.length} (${tag})`)
+        out.harness = kept
+      }
+    }
+    if (out.compare && limit.compare !== undefined && !pinned('compare')) {
+      if (limit.compare === false) {
+        notes.push(`compare off (${tag})`)
+        out.compare = { ...out.compare, variants: [] }
+      } else if (out.compare.variants.length > limit.compare.maxVariants) {
+        notes.push(`variants ${out.compare.variants.length} → ${limit.compare.maxVariants} (${tag})`)
+        out.compare = {
+          ...out.compare,
+          variants: out.compare.variants.slice(0, limit.compare.maxVariants),
+        }
+      }
+    }
+    const pins = out.pin.filter((k) =>
+      k === 'compare' ? limit.compare !== undefined && out.compare : limit[k] !== undefined,
+    )
+    if (pins.length) notes.push(`pinned: ${pins.join(', ')}`)
+  }
+  if (options.runs !== undefined) out.runs = options.runs
+  return { resolved: out, notes, ...(skip ? { skip } : {}) }
 }
 
 export type PlannedAttempt = {
   cell: Cell
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  environment: Environment
+  environment: AppliedEnvironment
+  gated: boolean
+  minLift?: number
   n: number
   label: string
 }
 
-/** Harness, then environment, then sandbox, then run number. */
+/** Per harness: the control, then each variant it compares on; then run numbers. */
 export function expand(resolved: Resolved): PlannedAttempt[] {
-  const vary = {
-    harness: resolved.harness.length > 1,
-    environment: resolved.environment.length > 1,
-    sandbox: resolved.sandbox.length > 1,
-  }
+  const { compare } = resolved
+  const sandbox = sandboxId(resolved.sandbox)
+  const control = applied(resolved.environment)
   const attempts: PlannedAttempt[] = []
   for (const harness of resolved.harness) {
-    for (const environment of resolved.environment) {
-      for (const sandbox of resolved.sandbox) {
-        const ids = {
-          harness: harnessId(harness),
-          environment: environment.name,
-          sandbox: sandboxId(sandbox),
-        }
-        const cell: Cell = { key: cellKey(ids.harness, ids.environment, ids.sandbox), ...ids }
-        const axes = (['harness', 'environment', 'sandbox'] as const)
-          .filter((a) => vary[a])
-          .map((a) => ids[a])
-        for (let n = 1; n <= resolved.runs; n++) {
-          const label = [axes.join(' · '), resolved.runs > 1 ? `#${n}` : '']
-            .filter(Boolean)
-            .join(' ')
-          attempts.push({ cell, harness, sandbox, environment, n, label })
-        }
+    const hid = harnessId(harness)
+    const cells: Array<{ env: AppliedEnvironment; cell: Cell; gated: boolean }> = [
+      {
+        env: control,
+        cell: {
+          key: cellKey(hid, control.name, sandbox),
+          harness: hid,
+          environment: control.name,
+          sandbox,
+          role: 'control',
+        },
+        gated: !compare || compare.gate === 'all',
+      },
+    ]
+    if (compare && (!compare.harness || compare.harness.includes(hid))) {
+      for (const v of compare.variants) {
+        const env = layered(resolved.environment, v)
+        cells.push({
+          env,
+          cell: {
+            key: cellKey(hid, env.name, sandbox),
+            harness: hid,
+            environment: env.name,
+            sandbox,
+            role: 'variant',
+            variant: v.name,
+          },
+          gated: compare.gate !== 'none',
+        })
+      }
+    }
+    for (const { env, cell, gated } of cells) {
+      const axes = [
+        resolved.harness.length > 1 ? hid : '',
+        compare ? (cell.role === 'control' ? 'control' : env.name) : '',
+      ].filter(Boolean)
+      for (let n = 1; n <= resolved.runs; n++) {
+        const label = [axes.join(' · '), resolved.runs > 1 ? `#${n}` : '']
+          .filter(Boolean)
+          .join(' ')
+        attempts.push({
+          cell,
+          harness,
+          sandbox: resolved.sandbox,
+          environment: env,
+          gated,
+          ...(cell.role === 'variant' && compare?.minLift !== undefined
+            ? { minLift: compare.minLift }
+            : {}),
+          n,
+          label,
+        })
       }
     }
   }
   return attempts
+}
+
+/** Warnings about what an eval's environments pull in, e.g. skills at a moving git ref. */
+export function environmentWarnings(attempts: PlannedAttempt[]): string[] {
+  const out = new Set<string>()
+  for (const a of attempts) {
+    for (const layer of a.environment.layers) {
+      for (const s of layer.spec.skills ?? []) {
+        if (s.source === 'git' && isMovingRef(s.ref)) {
+          const ref = s.ref ? `moving ref "${s.ref}"` : 'no ref (the default branch)'
+          out.add(
+            `skill.git(${s.repo}) uses ${ref}: results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).`,
+          )
+        }
+        if (s.source === 'registry' && !s.version) {
+          out.add(
+            `skill.registry(${s.id}) has no version: results aren't comparable over time. Pin one (the resolved commit is recorded either way).`,
+          )
+        }
+      }
+    }
+  }
+  return [...out]
+}
+
+/** The plan row for an eval. */
+export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan {
+  const { resolved, notes, skip } = r
+  return {
+    harnesses: skip ? 0 : resolved.harness.length,
+    variants: resolved.compare
+      ? { run: resolved.compare.variants.length, of: resolved.compare.of }
+      : null,
+    runs: resolved.runs,
+    attempts: skip ? 0 : attempts.length,
+    notes,
+    ...(skip ? { skip } : {}),
+    warnings: environmentWarnings(attempts),
+  }
 }
 
 /** `--tag a --tag !b`: every entry must hold. */

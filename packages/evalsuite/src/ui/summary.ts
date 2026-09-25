@@ -74,22 +74,31 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   return c.dim(cols.join('  '))
 }
 
-/** Pass rate per cell for evals with several attempts, and lift against the `baseline` environment. */
+const points = (p: number) => `${p >= 0 ? '+' : '−'}${Math.round(Math.abs(p) * 100)} pts`
+
+/** Pass rate per cell for evals with several attempts; with compare, each cell's role and lift. */
 function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
   if (e.attempts.length < 2) return []
+  const compare = e.cells.some((cell) => cell.role === 'variant')
   const width = Math.max(...e.cells.map((cell) => cell.key.length))
-  return e.cells.map((cell) => {
-    const base = e.cells.find(
-      (b) =>
-        b.environment === 'baseline' && b.harness === cell.harness && b.sandbox === cell.sandbox,
-    )
-    const lift =
-      base && base !== cell && base.passRate !== null && cell.passRate !== null
-        ? `   lift ${cell.passRate >= base.passRate ? '+' : ''}${Math.round((cell.passRate - base.passRate) * 100)} pts`
-        : ''
-    const infra = cell.infraError ? c.yellow(`   ${cell.infraError} infra`) : ''
+  return e.cells.flatMap((cell) => {
+    const role = compare ? `  ${cell.role.padEnd(7)}` : ''
     const counts = `${cell.pass}/${cell.pass + cell.fail}`.padStart(5)
-    return `${indent}${c.dim(cell.key.padEnd(width))}  ${counts}  ${pct(cell.passRate)}${lift}${infra}`
+    const infra = cell.infraError ? c.yellow(`   ${cell.infraError} infra`) : ''
+    let note = ''
+    if (cell.lift) {
+      const { minLift } = cell.lift
+      const below = minLift !== undefined && cell.lift.points < minLift
+      const text = `lift ${points(cell.lift.points)}${minLift !== undefined ? ` (minLift ${Math.round(minLift * 100)})` : ''}`
+      note = `   ${below ? c.red(`${text} ✗`) : text}`
+    } else if (compare && !cell.gated && cell.fail > 0) note = `   ${c.dim('not gated')}`
+    const rows = [
+      `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  ${pct(cell.passRate)}${note}${infra}`,
+    ]
+    if (cell.overrides.length) {
+      rows.push(`${indent}  ${c.dim(`overrides: ${cell.overrides.join(', ')}`)}`)
+    }
+    return rows
   })
 }
 
@@ -120,10 +129,11 @@ function tree(c: Colors, evals: EvalEntry[]): string[] {
 }
 
 export function totals(c: Colors, s: RunSummary, cancelled = 0): string {
-  const fail = s.fail - cancelled
+  const fail = s.fail - s.notGated - cancelled
   const parts = [
     s.pass && c.green(`${s.pass} passed`),
     fail > 0 && c.red(`${fail} failed`),
+    s.notGated > 0 && c.dim(`${s.notGated} failed, not gated`),
     s.infraError && c.yellow(`${s.infraError} infra error`),
     cancelled && c.yellow(`${cancelled} cancelled`),
     s.skipped && c.dim(`${s.skipped} skipped`),
@@ -157,7 +167,8 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
         const result = resultFor(entry, attempt, e.results)
         const reasons = attempt.judgements.filter((j) => j.verdict !== 'pass').map((j) => j.reason)
         const which = entry.attempts.length > 1 ? `  ${c.dim(attempt.id)}` : ''
-        lines.push(` ${mark(c, outcome)} ${entry.id}${which}`)
+        const gated = entry.cells.find((x) => x.key === attempt.cell)?.gated !== false
+        lines.push(` ${mark(c, outcome)} ${entry.id}${which}${gated ? '' : `  ${c.dim('(not gated)')}`}`)
         if (outcome !== 'cancelled') {
           for (const line of failureLines(c, result, { max: FAILURE_LINES, reasons }))
             lines.push(`   ${line}`)
@@ -171,6 +182,20 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
 
   const cancelled = failing.filter((f) => f.outcome === 'cancelled').length
   const label = record.summary.attempts === record.summary.evals ? '   Evals' : 'Attempts'
+  const lifted = record.evals.flatMap((entry) =>
+    entry.cells.flatMap((cell) =>
+      cell.lift?.minLift !== undefined && cell.lift.points < cell.lift.minLift
+        ? [`${entry.id}  ${cell.key} lift ${points(cell.lift.points)}, below minLift ${Math.round(cell.lift.minLift * 100)}`]
+        : [],
+    ),
+  )
+  if (lifted.length) {
+    lines.push('', c.bold(c.red(`Lift below minLift (${lifted.length})`)))
+    for (const line of lifted) lines.push(` ${c.red('✗')} ${line}`)
+  }
+  if (record.status === 'budget') {
+    lines.push('', c.yellow('Budget reached: attempts that hadn’t started were skipped'))
+  }
   lines.push(
     '',
     `${c.dim(label)}  ${totals(c, record.summary, cancelled)}`,

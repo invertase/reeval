@@ -119,18 +119,32 @@ export async function buildImage(
   }
 }
 
+/** One baked step: a shell command, killed after `timeoutMs` when set. */
+export type LayerStep = { run: string; timeoutMs?: number }
+
 /**
- * An image with an environment's cached `exec` steps on top of `parent`, tagged by content so
- * it's built once. Secrets never exist here.
+ * An image with an environment's baked steps on top of `parent`, tagged by content so it's built
+ * once. Secrets never exist here.
  */
-export const environmentLayerTag = (parent: { id: string }, steps: string[]) =>
+export const environmentLayerTag = (parent: { id: string }, steps: LayerStep[]) =>
   `evalsuite-env:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
 
+const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
+
+const runLine = (step: LayerStep) => {
+  const command = step.timeoutMs
+    ? `timeout --kill-after=10 ${Math.ceil(step.timeoutMs / 1000)} bash -c ${q(step.run)}`
+    : step.run
+  return `RUN ${command.replace(/\n/g, ' \\\n  ')}`
+}
+
+/** Builds the layer if it's missing. `log` gets the build's output, for a log file. */
 export async function buildEnvironmentLayer(
   parent: { ref: string; id: string },
-  steps: string[],
-  signal?: AbortSignal,
+  steps: LayerStep[],
+  options: { signal?: AbortSignal; log?: (output: string) => void } = {},
 ): Promise<string> {
+  const { signal } = options
   const tag = environmentLayerTag(parent, steps)
   const exists = await docker(['image', 'inspect', '--format', '{{.Id}}', tag], { signal })
   if (exists.exitCode === 0) return tag
@@ -138,13 +152,14 @@ export async function buildEnvironmentLayer(
     `FROM ${parent.ref}`,
     'SHELL ["/bin/bash", "-c"]',
     `WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}`,
-    ...steps.map((s) => `RUN ${s.replace(/\n/g, ' \\\n  ')}`),
+    ...steps.map(runLine),
     `WORKDIR ${SANDBOX_ROOT}`,
   ].join('\n')
-  const build = await docker(['build', '--quiet', '--tag', tag, '-'], { input: dockerfile, signal })
+  const build = await docker(['build', '--tag', tag, '-'], { input: dockerfile, signal })
+  options.log?.(`${dockerfile}\n\n${build.stdout.toString('utf8')}${build.stderr}`)
   if (build.exitCode !== 0) {
     throw new Error(
-      `Building the environment layer (${steps.length} exec steps) failed:\n${tail(build.stderr)}`,
+      `Building the environment layer (${steps.length} image steps) failed:\n${tail(build.stderr)}`,
     )
   }
   return tag

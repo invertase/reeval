@@ -8,14 +8,15 @@ const lineCount = (text: string) =>
 
 /** Writes canned files into the sandbox and returns a canned message on every turn. */
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => ({
-  async start(sandbox, _signal, { skills, mcp }) {
+  async start(sandbox, _signal, { skills, workspaceSkills, mcp }) {
     if (descriptor.failWith) throw new InfraError(descriptor.failWith)
+    const names = [...skills.map((s) => s.name), ...workspaceSkills]
     const loaded = [
-      skills.length ? `skills: ${skills.map((s) => s.name).join(', ')}` : '',
+      names.length ? `skills: ${names.join(', ')}` : '',
       Object.keys(mcp).length ? `mcp: ${Object.keys(mcp).join(', ')}` : '',
     ].filter(Boolean)
     let calls = 0
-    const skilled = skills.length > 0 && descriptor.withSkill
+    const skilled = names.length > 0 && descriptor.withSkill
     const files = (skilled ? descriptor.withSkill?.files : undefined) ?? descriptor.files ?? {}
     const reply = (skilled ? descriptor.withSkill?.text : undefined) ?? descriptor.text ?? 'Done.'
     const flaked = Math.random() < (descriptor.flakeRate ?? 0)

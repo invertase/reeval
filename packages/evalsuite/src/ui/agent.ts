@@ -32,7 +32,13 @@ export class AgentRenderer implements Renderer {
     if (outcome === 'pass' || outcome === 'skipped') return
     this.#printed.add(result.key)
     const kind = outcome === 'fail' ? (result.meta?.errorKind ?? 'assertion') : null
-    const detail = [formatDuration(result.durationMs), kind].filter(Boolean).join(', ')
+    const detail = [
+      formatDuration(result.durationMs),
+      kind,
+      result.attempt?.gated === false ? 'not gated' : '',
+    ]
+      .filter(Boolean)
+      .join(', ')
     const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
     this.#write(`${WORD[outcome]} ${result.id}${which} (${detail})`)
     if (outcome !== 'cancelled') {
@@ -50,6 +56,9 @@ export class AgentRenderer implements Renderer {
 
   onEvent(e: EsEvent): void {
     switch (e.type) {
+      case 'plan':
+        for (const line of e.lines) this.#write(line)
+        return
       case 'run-start':
         this.#write(`es run: ${e.files} eval file${e.files === 1 ? '' : 's'}`)
         return
@@ -81,7 +90,8 @@ export class AgentRenderer implements Renderer {
         const cancelled = failing.filter((f) => f.outcome === 'cancelled').length
         const parts = [
           s.pass && `${s.pass} passed`,
-          s.fail - cancelled > 0 && `${s.fail - cancelled} failed`,
+          s.fail - s.notGated - cancelled > 0 && `${s.fail - s.notGated - cancelled} failed`,
+          s.notGated > 0 && `${s.notGated} failed, not gated`,
           s.infraError && `${s.infraError} infra error`,
           cancelled && `${cancelled} cancelled`,
           s.skipped && `${s.skipped} skipped`,

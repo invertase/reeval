@@ -6,6 +6,7 @@ export {
   DOCKER_CONTEXT,
   environmentLayerTag,
   harnessImageFor,
+  type LayerStep,
 } from './build-image.ts'
 export {
   type DockerResult,

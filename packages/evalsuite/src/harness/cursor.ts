@@ -3,7 +3,8 @@ import { createCursor } from '@ai-sdk/harness-cursor'
 import { WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
 import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { CursorHarnessDescriptor, McpServer, TranscriptEvent, TurnStatus } from '../types.ts'
+import type { ResolvedMcpServer } from '../environment/resolve.ts'
+import type { CursorHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
 import { normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
@@ -11,12 +12,12 @@ const pairs = (values: Record<string, unknown> = {}) =>
   Object.entries(values).map(([name, value]) => ({ name, value: String(value) }))
 
 /** ES's MCP servers in the ACP `session/new` shape the Cursor adapter forwards as is. */
-export function acpMcpServers(servers: Record<string, McpServer>): Record<string, unknown> {
+export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(servers).map(([name, s]) =>
-      'url' in s
-        ? [name, { type: 'http', url: s.url, headers: pairs(s.headers) }]
-        : [name, { command: s.command, args: s.args ?? [], env: pairs(s.env) }],
+      s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
+        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
     ),
   )
 }

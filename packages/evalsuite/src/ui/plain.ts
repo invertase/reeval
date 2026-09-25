@@ -127,6 +127,11 @@ export class PlainRenderer implements Renderer {
         this.#write(c.dim(`es ${e.version} · ${files} · ${setup} · ${order}`))
         return
       }
+      case 'plan':
+        for (const [i, line] of e.lines.entries()) {
+          this.#write(line.startsWith('warning:') ? c.yellow(line) : i === 0 ? line : c.dim(line))
+        }
+        return
       case 'collected':
         this.#tags.addFile(e.evals)
         for (const x of e.evals) if (!x.skipped) this.#queued.add(x.key)
@@ -186,7 +191,8 @@ export class PlainRenderer implements Renderer {
     const outcome = outcomeOf(result)
     const failed = outcome !== 'pass' && outcome !== 'skipped'
     const time = outcome === 'skipped' ? '' : `  ${c.dim(formatDuration(result.durationMs))}`
-    const head = `${this.#prefix(a)} ${mark(c, outcome)} ${result.id}${time}`
+    const ungated = failed && result.attempt?.gated === false ? `  ${c.dim('(not gated)')}` : ''
+    const head = `${this.#prefix(a)} ${mark(c, outcome)} ${result.id}${time}${ungated}`
     const { outputLogs, githubActions, logPrefix } = this.#o.output
 
     const showDetail =
@@ -209,7 +215,7 @@ export class PlainRenderer implements Renderer {
     if (showDetail) for (const line of lines) this.#write(this.#detail(a, line, prefixed))
     for (const line of errors) this.#write(prefixed ? `${this.#prefix(a)}  ${line}` : ` ${line}`)
     if (group) this.#write('::endgroup::')
-    if (githubActions && failed) {
+    if (githubActions && failed && !ungated) {
       const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
       const title = ghEscape(`${result.id}${which}`, true)
       const message = ghEscape(failureLines(colors(false), result, { max: ERROR_LINES }).join('\n'))

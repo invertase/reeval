@@ -135,7 +135,9 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
               <span className="text-muted-foreground">
                 {e.digest.replace(/^sha256:/, '').slice(0, 12)}
               </span>
+              {e.parent ? ` · extends ${e.parent}` : ''}
               {e.skills.length ? ` · skills ${e.skills.map((s) => s.name).join(', ')}` : ''}
+              {e.overrides.length ? ` · overrides ${e.overrides.join(', ')}` : ''}
             </div>
           ))}
         </Row>

@@ -1,14 +1,14 @@
 // Worker-side half of the engine adapter. Together with ./node.ts, this is the only
 // code allowed to import `vitest`.
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { afterAll, describe, inject, recordArtifact, test, expect as vitestExpect } from 'vitest'
 import { acquire, type Lease, useScheduler } from '../scheduler/client.ts'
 import type { Limits, Rank } from '../scheduler/core.ts'
 import type { SchedulerAddress } from '../scheduler/protocol.ts'
 import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
-import { cancelMarker } from './cancel.ts'
+import { budgetMarker, cancelMarker } from './cancel.ts'
 
 declare module 'vitest' {
   interface ProvidedContext {
@@ -96,6 +96,11 @@ export function registerTest(
         if (ctx.signal.aborted) ctx.skip('The run was cancelled before this attempt started')
         throw error
       }
+    }
+    const budget = budgetMarker(inject('es:run').stagingDir)
+    if (existsSync(budget)) {
+      lease?.release()
+      ctx.skip(readFileSync(budget, 'utf8') || 'The run reached its budget before this attempt started')
     }
     const startedAt = Date.now()
     recordArtifact(ctx.task, { type: 'es:start', at: startedAt }).catch(() => {})
