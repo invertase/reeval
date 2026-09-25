@@ -2,8 +2,10 @@
 // running, and what a create leaves behind.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import http from 'node:http'
 import { after, describe, test } from 'node:test'
-import { DEFAULT_IMAGE } from '../src/image.ts'
+import { PROXY_PORT } from '../src/egress/gateway.ts'
+import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession } from '../src/session.ts'
 
 const dockerReady = (() => {
@@ -96,6 +98,60 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
       /expected to time out/,
     )
     await s.destroy()
+  })
+})
+
+/** A GET that resolves with the body, or rejects on an error or after `ms` without an answer. */
+const get = (url: string, ms: number) =>
+  new Promise<string>((resolve, reject) => {
+    const req = http.get(url, (res) => {
+      let body = ''
+      res.on('data', (d) => {
+        body += d
+      })
+      res.on('end', () => resolve(body))
+      res.on('error', reject)
+    })
+    req.setTimeout(ms, () => req.destroy(new Error(`no answer within ${ms}ms`)))
+    req.once('error', reject)
+  })
+
+describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () => {
+  test('the session reports it, and ports fail fast with the reason', {
+    todo: 'after start, the forwarder exiting only destroys the mux (§11.10)',
+  }, async () => {
+    const s = await createDockerSession({
+      image: DEFAULT_IMAGE,
+      labels: { 'dev.evalsuite.test': 'forwarder' },
+      egress: true,
+    })
+    try {
+      const server = await s.spawn({
+        command: `node -e "require('http').createServer((q, r) => r.end('bridge ok')).listen(${BRIDGE_PORT}, '0.0.0.0')"`,
+      })
+      const { url } = await s.getPortEndpoint({ port: BRIDGE_PORT, protocol: 'http' })
+      await eventually('the bridge answers', () =>
+        get(url, 1000).then(
+          (b) => b === 'bridge ok',
+          () => false,
+        ),
+      )
+      // The forwarder is the one process whose command line has the proxy port.
+      const killed = await s.run({
+        command: `pkill -KILL -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}'`,
+      })
+      assert.equal(killed.exitCode, 0, 'pkill found the forwarder')
+      await eventually('the session reports the gateway stopped', async () => s.egress?.active === false)
+      assert.match(s.egress?.active === false ? s.egress.reason : '', /forwarder exited/)
+      await assert.rejects(get(url, 3000), (error: Error) => !/no answer within/.test(error.message))
+      await assert.rejects(
+        s.getPortEndpoint({ port: BRIDGE_PORT, protocol: 'http' }),
+        /isn't reachable: the egress gateway stopped: the forwarder exited/,
+      )
+      await server.kill()
+    } finally {
+      await s.destroy()
+    }
   })
 })
 
