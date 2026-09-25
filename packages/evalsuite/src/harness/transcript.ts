@@ -148,6 +148,18 @@ function fileEdits(
 }
 
 /**
+ * The tool's name. ACP reports an MCP call under a per-call id, with the server and tool in its
+ * input; those are named `mcp__<server>__<tool>`, as Claude Code names its own.
+ */
+function toolName(part: StampedPart['part']): string {
+  const input = record(part.input)
+  if (typeof input.providerIdentifier === 'string' && typeof input.toolName === 'string') {
+    return `mcp__${input.providerIdentifier}__${input.toolName}`
+  }
+  return str(part.toolName)
+}
+
+/**
  * Turns an AI SDK harness stream into ES transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
  * query or URL, and the harness's duplicate `fileChange` events dropped. Tool durations come
@@ -177,7 +189,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     const start = t?.start ?? call.ms
     const durationMs = t?.end !== undefined ? t.end - start : end.ms - call.ms
     const input = record(call.part.input)
-    const name = str(call.part.toolName)
+    const name = toolName(call.part)
     const output = failed ? errorText(end.part.error) : end.part.output
     const base = { ...stamp(call.ms), durationMs }
     if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
@@ -291,7 +303,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         ...stamp(call.ms),
         type: 'tool',
         toolCallId: id,
-        tool: str(call.part.toolName),
+        tool: toolName(call.part),
         input: call.part.input,
         output: null,
         ok: false,
