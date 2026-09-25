@@ -142,7 +142,7 @@ export async function startGateway(
       NO_PROXY: noProxy,
       no_proxy: noProxy,
       NODE_EXTRA_CA_CERTS: CA_PATH,
-      // Node 24+ fetch honours the proxy variables only with this.
+      // Node's fetch (22.21+, 24+) honours the proxy variables only with this.
       NODE_USE_ENV_PROXY: '1',
       // Clients with their own trust store (Python requests, curl builds, git) use the system
       // bundle, which now has the gateway's CA; set only when it does.

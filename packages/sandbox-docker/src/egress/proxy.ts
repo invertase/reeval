@@ -15,10 +15,10 @@ import {
 } from './rules.ts'
 import {
   bodySubstituter,
+  type SubstituteIn,
   type Substitution,
   scrubber,
   scrubHeaders,
-  type SubstituteIn,
   substituteRequest,
   substitutes,
   substitutionsFor,
@@ -35,6 +35,8 @@ export type EgressProxyOptions = {
   lookup?: Lookup
   /** Let the gateway reach the host's loopback addresses. For tests only. */
   allowLoopback?: boolean
+  /** `false` sends responses from brokered hosts back unscrubbed. For tests only. */
+  scrubResponses?: boolean
   /**
    * The only requests a credential may be swapped into. A request a transformation matches that
    * isn't one of them gets a 403 from the gateway, not the placeholder sent upstream.
@@ -298,13 +300,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   }
 
   /** The response body as sent to the sandbox: real values put back as placeholders. */
+  const scrubs = options.scrubResponses !== false
   function responseBody(up: Readable, own: Substitution[]): Readable | Transform {
-    return own.length ? up.pipe(scrubber(own)) : up
+    return own.length && scrubs ? up.pipe(scrubber(own)) : up
   }
 
   const responseHeaders = (headers: IncomingHttpHeaders, own: Substitution[]) => {
     const out = endToEnd(headers)
-    if (!own.length) return out
+    if (!own.length || !scrubs) return out
     delete out['content-length']
     return scrubHeaders(own, out as Record<string, string>) as OutgoingHttpHeaders
   }

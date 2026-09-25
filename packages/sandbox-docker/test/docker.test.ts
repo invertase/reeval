@@ -6,6 +6,7 @@ import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
+import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
 
@@ -21,22 +22,43 @@ const dockerReady =
     }
   })()
 
+/** ES's image with Python on top, built once and then from Docker's layer cache. */
+const PYTHON_IMAGE = `evalsuite-test-python:${DEFAULT_IMAGE.split(':')[1]}`
+const pythonImage = () => {
+  try {
+    execFileSync('docker', ['build', '-q', '-t', PYTHON_IMAGE, '-'], {
+      input: `FROM ${DEFAULT_IMAGE}\nRUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*\n`,
+      stdio: ['pipe', 'ignore', 'pipe'],
+    })
+    return true
+  } catch {
+    return false
+  }
+}
+
 const PLACEHOLDER = `aisdkhc_${'Z'.repeat(43)}`
 const REAL = 'crsr_docker_test_real_key_9f8e7d6c5b4a39281706'
 /** What the in-container search looks for: a distinctive tail, so the full key never goes in. */
 const NEEDLE = REAL.slice(-20)
 
 const upstreamCa = createCertificateAuthority()
-const seen: { path: string; authorization?: string }[] = []
+const seen: { path: string; authorization?: string; body: string }[] = []
 
+/** Echoes the Authorization header and the body back as JSON. */
 function startUpstream(): Promise<{ port: number; close(): void }> {
   const leaf = issueServerCertificate(upstreamCa, 'upstream.test')
   const server = https.createServer(
     { key: leaf.key.export({ type: 'pkcs8', format: 'pem' }), cert: leaf.cert },
     (req, res) => {
-      seen.push({ path: req.url ?? '', authorization: req.headers.authorization })
-      req.resume()
-      req.on('end', () => res.end(JSON.stringify({ authorization: req.headers.authorization })))
+      let body = ''
+      req.setEncoding('utf8')
+      req.on('data', (d) => {
+        body += d
+      })
+      req.on('end', () => {
+        seen.push({ path: req.url ?? '', authorization: req.headers.authorization, body })
+        res.end(JSON.stringify({ authorization: req.headers.authorization, body }))
+      })
     },
   )
   return new Promise((resolve) =>
@@ -235,6 +257,92 @@ describe('egress gateway in Docker', {
       assert.match(env, new RegExp(`^${name}=/etc/ssl/certs/ca-certificates\\.crt$`, 'm'), name)
     }
     assert.match(env, /^NODE_USE_ENV_PROXY=1$/m)
+  })
+
+  const token = 'user-token-docker-1f2e3d4c5b6a79880a1b'
+  const tokenHolder = `es_secret_${'T'.repeat(32)}`
+  const brokered = async (
+    image: string,
+    over: Partial<EgressOptions> = {},
+    where: Substitution['in'] = ['header'],
+  ) => {
+    const s = await open({ image, egress: egress(over), env: { SERVICE_TOKEN: tokenHolder } })
+    await s.setSubstitutions?.([
+      {
+        name: 'SERVICE_TOKEN',
+        placeholder: tokenHolder,
+        value: token,
+        hosts: ['upstream.test'],
+        in: where,
+      },
+    ])
+    seen.length = 0
+    return s
+  }
+
+  test('a body substituted on the way out is reflected back through curl as the placeholder', async () => {
+    const url = `https://upstream.test:${upstream.port}/reflect`
+    const reflect = async (s: DockerSession) => {
+      const r = await sh(
+        s,
+        `curl -sS -H 'content-type: application/json' --data "{\\"token\\":\\"$SERVICE_TOKEN\\"}" ${url}`,
+      )
+      assert.equal(r.exitCode, 0, r.stderr)
+      assert.equal(seen.at(-1)?.body, `{"token":"${token}"}`, 'the upstream got the value')
+      return r.stdout
+    }
+    const scrubbed = await reflect(await brokered(DEFAULT_IMAGE, {}, ['header', 'body']))
+    assert.equal(JSON.parse(scrubbed).body, `{"token":"${tokenHolder}"}`)
+    assert.doesNotMatch(scrubbed, new RegExp(token))
+    const raw = await reflect(
+      await brokered(DEFAULT_IMAGE, { scrubResponses: false }, ['header', 'body']),
+    )
+    assert.match(raw, new RegExp(token), 'twin: unscrubbed, the search finds the value')
+  })
+
+  test('Python and curl trust the gateway; against another bundle they refuse it', async (t) => {
+    if (!pythonImage()) return t.skip(`couldn't build ${PYTHON_IMAGE}`)
+    const s = await brokered(PYTHON_IMAGE)
+    const url = `https://upstream.test:${upstream.port}/ca`
+    const clients = {
+      python: `python3 -c 'import os, urllib.request as u; print(u.urlopen(u.Request("${url}", headers={"Authorization": "Bearer " + os.environ["SERVICE_TOKEN"]})).read().decode())'`,
+      curl: `curl -sS -H "Authorization: Bearer $SERVICE_TOKEN" ${url}`,
+    }
+    for (const [name, command] of Object.entries(clients)) {
+      const r = await sh(s, command)
+      assert.equal(r.exitCode, 0, `${name}: ${r.stderr}`)
+      assert.equal(JSON.parse(r.stdout).authorization, `Bearer ${tokenHolder}`, name)
+    }
+    assert.deepEqual(
+      seen.map((r) => r.authorization),
+      [`Bearer ${token}`, `Bearer ${token}`],
+    )
+    // Twin: against a bundle without the gateway's CA, both refuse the connection, so they do
+    // verify. Python follows the variables; Debian's curl always reads the hashed /etc/ssl/certs
+    // too, which no variable turns off, so it's told with flags.
+    await sh(s, 'printf "%s" "$PEM" > /tmp/other.pem', { PEM: upstreamCa.cert })
+    const refused = [
+      sh(s, clients.python, { SSL_CERT_FILE: '/tmp/other.pem', SSL_CERT_DIR: '/nonexistent' }),
+      sh(s, clients.curl.replace(/^curl /, 'curl --cacert /tmp/other.pem --capath /nonexistent ')),
+    ]
+    for (const r of await Promise.all(refused)) {
+      assert.notEqual(r.exitCode, 0, `verified against another bundle: ${r.stdout}`)
+      assert.match(r.stderr, /certificate|SSL/i)
+    }
+  })
+
+  test('Node fetch goes through the gateway with NODE_USE_ENV_PROXY, and not without it', async () => {
+    const s = await brokered(DEFAULT_IMAGE)
+    const url = `https://upstream.test:${upstream.port}/fetch`
+    const script = `fetch("${url}", { headers: { authorization: "Bearer " + process.env.SERVICE_TOKEN } }).then((r) => r.text()).then(console.log, (e) => { console.error(String(e.cause ?? e)); process.exit(1) })`
+    const r = await sh(s, `node -e '${script}'`)
+    assert.equal(r.exitCode, 0, r.stderr)
+    assert.equal(JSON.parse(r.stdout).authorization, `Bearer ${tokenHolder}`)
+    assert.equal(seen[0]?.authorization, `Bearer ${token}`)
+    // Twin: without it, Node 22's fetch ignores the proxy and can't even resolve the host.
+    const direct = await sh(s, `env -u NODE_USE_ENV_PROXY node -e '${script}'`)
+    assert.notEqual(direct.exitCode, 0)
+    assert.match(direct.stderr, /ENOTFOUND|EAI_AGAIN|getaddrinfo/)
   })
 
   test('a restricted policy leaves the gateway as the only way out', async () => {
