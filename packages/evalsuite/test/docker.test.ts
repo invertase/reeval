@@ -40,7 +40,12 @@ test('the pinned harness version matches the installed adapter', () => {
 // Per test, not on the describe: a skipped describe hides its tests from the summary's count.
 /** A first run may build an environment layer. */
 const slow = { timeoutMs: 240_000 }
-const docker = { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}`, timeout: 300_000 }
+// ES_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
+const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+const docker = {
+  skip: !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`,
+  timeout: 300_000,
+}
 
 describe('docker sandbox', () => {
   test('runs checks in the container, diffs, and removes it', docker, async () => {
@@ -321,58 +326,62 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
     assert.equal(liveContainers(run.runId), '')
   })
 
-  test('Cursor attempts broker the key; without brokering the attempt fails closed', async () => {
-    const cursorConfig = (sandbox: string) => `
+  test(
+    'Cursor attempts broker the key; without brokering the attempt fails closed',
+    docker,
+    async () => {
+      const cursorConfig = (sandbox: string) => `
 import { defineConfig } from 'evalsuite'
 import { cursor } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
 export default defineConfig({ harness: cursor(), sandbox: ${sandbox}, timeout: '60s' })
 `
-    const eval_ = `import { evaluate } from 'evalsuite'
+      const eval_ = `import { evaluate } from 'evalsuite'
 evaluate('hi', async (t) => { await t.send('hi') })
 `
-    const warning = /CURSOR_API_KEY is passed into the sandbox container/
-    // A made-up key: the sandbox and the gateway start, then the Cursor API refuses the key.
-    const env = { CURSOR_API_KEY: 'crsr_not_a_real_key_0000000000000000' }
-    const brokered = await project('docker-brokered', {
-      'es.config.ts': cursorConfig('docker()'),
-      'evals/d.es.ts': eval_,
-    })
-    const a = await runCli(brokered.dir, ['run'], { env })
-    assert.doesNotMatch(a.stdout + a.stderr, warning)
-    assert.equal(liveContainers(readRun(brokered.dir).run.runId), '')
+      const warning = /CURSOR_API_KEY is passed into the sandbox container/
+      // A made-up key: the sandbox and the gateway start, then the Cursor API refuses the key.
+      const env = { CURSOR_API_KEY: 'crsr_not_a_real_key_0000000000000000' }
+      const brokered = await project('docker-brokered', {
+        'es.config.ts': cursorConfig('docker()'),
+        'evals/d.es.ts': eval_,
+      })
+      const a = await runCli(brokered.dir, ['run'], { env })
+      assert.doesNotMatch(a.stdout + a.stderr, warning)
+      assert.equal(liveContainers(readRun(brokered.dir).run.runId), '')
 
-    try {
-      execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
-    } catch {
-      return
-    }
-    // No node in the image, so the gateway can't start: by default that's an infra error, and
-    // the key never enters the container.
-    const refused = await project('docker-no-broker', {
-      'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37' })"),
-      'evals/d.es.ts': eval_,
-    })
-    const b = await runCli(refused.dir, ['run'], { env })
-    assert.equal(b.code, 3, b.stdout + b.stderr)
-    assert.doesNotMatch(b.stdout + b.stderr, warning)
-    const refusedRun = readRun(refused.dir)
-    assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
-    assert.match(
-      refusedRun.evals[0]?.error?.message ?? '',
-      /^Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and ES adds it\.$/,
-    )
-    assert.equal(liveContainers(refusedRun.run.runId), '')
+      try {
+        execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      } catch {
+        return
+      }
+      // No node in the image, so the gateway can't start: by default that's an infra error, and
+      // the key never enters the container.
+      const refused = await project('docker-no-broker', {
+        'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37' })"),
+        'evals/d.es.ts': eval_,
+      })
+      const b = await runCli(refused.dir, ['run'], { env })
+      assert.equal(b.code, 3, b.stdout + b.stderr)
+      assert.doesNotMatch(b.stdout + b.stderr, warning)
+      const refusedRun = readRun(refused.dir)
+      assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
+      assert.match(
+        refusedRun.evals[0]?.error?.message ?? '',
+        /^Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and ES adds it\.$/,
+      )
+      assert.equal(liveContainers(refusedRun.run.runId), '')
 
-    // There's no opt-in to pass the real key: the option doesn't exist.
-    const optIn = await project('docker-no-opt-in', {
-      'es.config.ts': cursorConfig(
-        "docker({ image: 'busybox:1.37', credentials: 'allow-real-key' } as never)",
-      ),
-      'evals/d.es.ts': eval_,
-    })
-    const c = await runCli(optIn.dir, ['run'], { env })
-    assert.equal(c.code, 2, c.stdout + c.stderr)
-    assert.match(c.stderr, /Unknown docker\(\) option "credentials"\./)
-  })
+      // There's no opt-in to pass the real key: the option doesn't exist.
+      const optIn = await project('docker-no-opt-in', {
+        'es.config.ts': cursorConfig(
+          "docker({ image: 'busybox:1.37', credentials: 'allow-real-key' } as never)",
+        ),
+        'evals/d.es.ts': eval_,
+      })
+      const c = await runCli(optIn.dir, ['run'], { env })
+      assert.equal(c.code, 2, c.stdout + c.stderr)
+      assert.match(c.stderr, /Unknown docker\(\) option "credentials"\./)
+    },
+  )
 })

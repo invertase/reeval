@@ -9,14 +9,17 @@ import { createCertificateAuthority, issueServerCertificate } from '../src/egres
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
 
-const dockerReady = (() => {
-  try {
-    execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
-    return true
-  } catch {
-    return false
-  }
-})()
+// ES_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
+const dockerReady =
+  process.env.ES_TEST_REQUIRE_DOCKER === '1' ||
+  (() => {
+    try {
+      execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
+      return true
+    } catch {
+      return false
+    }
+  })()
 
 const PLACEHOLDER = `aisdkhc_${'Z'.repeat(43)}`
 const REAL = 'crsr_docker_test_real_key_9f8e7d6c5b4a39281706'
