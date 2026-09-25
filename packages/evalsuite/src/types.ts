@@ -159,7 +159,7 @@ export type CursorHarnessDescriptor = {
 /** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
 export type ClaudeCodeHarnessDescriptor = {
   kind: 'claude-code'
-  /** A model id or alias the `claude` CLI accepts, e.g. `claude-opus-5-5` or `opus`. */
+  /** A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`. */
   model: string
   /** Cell id; defaults to `claude-code:<model>`. */
   id?: string

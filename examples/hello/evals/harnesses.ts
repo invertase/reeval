@@ -2,4 +2,4 @@
 import { claudeCode, cursor } from 'evalsuite/harness'
 
 export const composer = cursor({ model: 'composer-2.5' }) // id cursor:composer-2.5
-export const claude = claudeCode({ model: 'claude-opus-5-5' }) // id claude-code:claude-opus-5-5
+export const claude = claudeCode({ model: 'claude-sonnet-5' }) // id claude-code:claude-sonnet-5

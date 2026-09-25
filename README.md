@@ -325,7 +325,7 @@ defaults → outer group → inner group → eval:
 
 | Option | Cascade | Meaning |
 |---|---|---|
-| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-opus-5-5' })]`. The only list: each harness is its own cell |
+| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-sonnet-5' })]`. The only list: each harness is its own cell |
 | `environment` | replace | What the eval runs in: one `defineEnvironment(…)`. None by default |
 | `compare` | replace | Variants to run next to the environment (groups and evals only); `false` opts out |
 | `sandbox` | replace | Where it runs: one `docker()`, `docker({ from: 'python:3.12-slim' })`, … |
@@ -340,7 +340,7 @@ A harness list replaces the inherited one, and a function edits it:
 `{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }`. Each eval runs
 once per **cell** and `runs` times per cell; each run is an **attempt** with its own fresh
 sandbox, id `<harness>/<environment or ->/<sandbox>#<n>` (e.g.
-`cursor:composer-2.5/with-house-greeting/docker#2`, `claude-code:claude-opus-5-5/-/docker#1`). Give
+`cursor:composer-2.5/with-house-greeting/docker#2`, `claude-code:claude-sonnet-5/-/docker#1`). Give
 two harnesses distinct ids with `id`: `cursor({ model: 'composer-2', id: 'fast' })`. A cell fails
 if any of its attempts fails.
 
