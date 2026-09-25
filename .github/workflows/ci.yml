@@ -143,11 +143,14 @@ jobs:
       - run: pnpm build
       - working-directory: packages/evalsuite
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
-      # What release.yml publishes, without publishing it.
+      # What release.yml publishes, without publishing it. npm's dry run still refuses a version
+      # that's already published, so this packs a throwaway prerelease of it.
       - name: npm publish --dry-run
+        working-directory: packages/evalsuite
         run: |
-          pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/pack"
-          npm publish --dry-run --access public "$RUNNER_TEMP"/pack/*.tgz
+          npm version --no-git-tag-version "$(node -p "require('./package.json').version")-ci.$GITHUB_RUN_ID"
+          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
+          npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/pack/*.tgz
 
   report:
     if: always() && github.event_name == 'pull_request'
@@ -168,7 +171,7 @@ jobs:
             echo '```'
             for id in $(gh api "repos/$REPO/actions/runs/$RUN/jobs?per_page=100" --jq '.jobs[] | select(.conclusion == "failure") | .id'); do
               echo "<details><summary>$(gh api "repos/$REPO/actions/jobs/$id" --jq .name)</summary>"; echo; echo '```'
-              gh api "repos/$REPO/actions/jobs/$id/logs" | grep -vE '^\S+ *$' | tail -60 | cut -c1-300
+              gh api "repos/$REPO/actions/jobs/$id/logs" 2>&1 | tail -80 | cut -c1-300
               echo '```'; echo '</details>'
             done
           } > report.md
