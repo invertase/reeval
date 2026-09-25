@@ -14,7 +14,8 @@
     "coverage": "pnpm build && node scripts/coverage.mjs run",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "example": "pnpm --filter hello-example es run"
+    "example": "pnpm --filter hello-example es run",
+    "smoke:real": "bash scripts/real-smoke.sh"
   },
   "devDependencies": {
     "@bcoe/v8-coverage": "1.0.2",

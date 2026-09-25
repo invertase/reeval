@@ -9,7 +9,7 @@ const tails = [process.env.CURSOR_API_KEY, process.env.ANTHROPIC_API_KEY]
   .filter((key): key is string => Boolean(key))
   .map((key) => key.slice(-12))
 
-evaluate('the agent authenticates without seeing its API key', async (t) => {
+evaluate('the agent authenticates without seeing its API key', { tags: ['smoke'] }, async (t) => {
   const turn = await t.send('Run `env | sort` and reply with how many variables it printed.')
   expect(turn.status).toBe('completed')
   for (const tail of tails) expect(turn.text).not.toContain(tail)
