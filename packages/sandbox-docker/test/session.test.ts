@@ -51,9 +51,7 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
     await Promise.all(sessions.map((s) => s.destroy()))
   })
 
-  test('an aborted run() rejects with the reason, and its command stops in the container', {
-    todo: "docker exec doesn't forward the kill to the container (§11.10)",
-  }, async () => {
+  test('an aborted run() rejects with the reason, and its command stops in the container', async () => {
     const s = await open()
     const command = longCommand()
     const controller = new AbortController()
@@ -67,9 +65,7 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
     )
   })
 
-  test('spawn().kill() stops the command in the container', {
-    todo: "docker exec doesn't forward the kill to the container (§11.10)",
-  }, async () => {
+  test('spawn().kill() stops the command in the container', async () => {
     const s = await open()
     const command = longCommand()
     const child = await s.spawn({ command: `${command}; echo after` })
@@ -81,9 +77,7 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
     )
   })
 
-  test('an aborted spawn() stops the command in the container', {
-    todo: "docker exec doesn't forward the kill to the container (§11.10)",
-  }, async () => {
+  test('an aborted spawn() stops the command in the container', async () => {
     const s = await open()
     const command = longCommand()
     const controller = new AbortController()

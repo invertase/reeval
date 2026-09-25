@@ -34,6 +34,9 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
 
 const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 
+/** Set on every exec, so a kill can find the command's whole process tree in the container. */
+const EXEC_MARKER = 'ES_EXEC_ID'
+
 /** The Docker networks a container is attached to. */
 async function networksOf(id: string): Promise<string[]> {
   const out = await dockerOk(['inspect', '--format', '{{json .NetworkSettings.Networks}}', id])
@@ -111,25 +114,55 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   }
   const envFor = (env?: Record<string, string>) => (gateway ? { ...gateway.env, ...env } : env)
 
-  const execArgs = (command: string, cwd?: string, env?: Record<string, string>) => [
+  let execs = 0
+  const execArgs = (
+    command: string,
+    marker: string,
+    cwd?: string,
+    env?: Record<string, string>,
+  ) => [
     'exec',
     '--interactive',
     '--workdir',
     cwd ? posix.resolve(SANDBOX_ROOT, cwd) : SANDBOX_ROOT,
+    '--env',
+    `${EXEC_MARKER}=${marker}`,
     ...Object.keys(env ?? {}).flatMap((k) => ['--env', k]),
     id,
     'bash',
     '-c',
     command,
   ]
+  const nextMarker = () => `${id.slice(0, 12)}-${++execs}`
+  /**
+   * Killing the host's `docker exec` client doesn't stop the command in the container, so kill
+   * every process there that inherited this exec's marker: the command and all it started.
+   */
+  const killExec = (marker: string) =>
+    docker([
+      'exec',
+      id,
+      'sh',
+      '-c',
+      `for e in /proc/[0-9]*/environ; do grep -qsxzF ${q(`${EXEC_MARKER}=${marker}`)} "$e" && kill -9 "$(basename "$(dirname "$e")")" 2>/dev/null; done; true`,
+    ]).then(
+      () => {},
+      () => {},
+    )
 
   const run: HarnessV1NetworkSandboxSession['run'] = async (o) => {
     const env = envFor(o.env)
-    const r = await docker(execArgs(o.command, o.workingDirectory, env), {
-      env,
-      signal: o.abortSignal,
-    })
-    return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
+    const marker = nextMarker()
+    try {
+      const r = await docker(execArgs(o.command, marker, o.workingDirectory, env), {
+        env,
+        signal: o.abortSignal,
+      })
+      return { exitCode: r.exitCode, stdout: r.stdout.toString('utf8'), stderr: r.stderr }
+    } catch (error) {
+      if (o.abortSignal?.aborted) await killExec(marker)
+      throw error
+    }
   }
 
   const readBinaryFile = async (o: { path: string; abortSignal?: AbortSignal }) => {
@@ -183,7 +216,8 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     run,
     async spawn(o) {
       const env = envFor(o.env)
-      const child = spawn('docker', execArgs(o.command, o.workingDirectory, env), {
+      const marker = nextMarker()
+      const child = spawn('docker', execArgs(o.command, marker, o.workingDirectory, env), {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: true,
         env: env ? { ...process.env, ...env } : process.env,
@@ -191,15 +225,17 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const exited = new Promise<{ exitCode: number }>((resolve) =>
         child.on('close', (code) => resolve({ exitCode: code ?? 1 })),
       )
-      o.abortSignal?.addEventListener('abort', () => child.kill('SIGKILL'), { once: true })
+      const kill = async () => {
+        child.kill('SIGKILL')
+        await killExec(marker)
+      }
+      o.abortSignal?.addEventListener('abort', () => void kill(), { once: true })
       return {
         pid: child.pid,
         stdout: Readable.toWeb(child.stdout) as ReadableStream<Uint8Array>,
         stderr: Readable.toWeb(child.stderr) as ReadableStream<Uint8Array>,
         wait: () => exited,
-        async kill() {
-          child.kill('SIGKILL')
-        },
+        kill,
       }
     },
     readBinaryFile,
