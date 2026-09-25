@@ -210,6 +210,13 @@ describe('certificates', () => {
 /** Two muxes wired back to back, as the host and the forwarder are over docker exec stdio. */
 function muxPair(window?: number) {
   const opened: { stream: Duplex; port: number }[] = []
+  const waiting: ((stream: Duplex) => void)[] = []
+  const onOpen = (stream: Duplex, port: number) => {
+    opened.push({ stream, port })
+    waiting.shift()?.(stream)
+  }
+  /** The next stream the far side opens: frames arrive on a later tick, not after a set delay. */
+  const peer = () => new Promise<Duplex>((resolve) => waiting.push(resolve))
   let host: ReturnType<typeof createMux>
   let container: ReturnType<typeof createMux>
   let wire = 0
@@ -221,16 +228,16 @@ function muxPair(window?: number) {
       wire += f.length
       setImmediate(() => container.receive(f))
     },
-    onOpen: (stream, port) => opened.push({ stream, port }),
+    onOpen,
   })
   container = createMux({
     Duplex,
     parity: 1,
     window,
     send: (f) => setImmediate(() => host.receive(f)),
-    onOpen: (stream, port) => opened.push({ stream, port }),
+    onOpen,
   })
-  return { host, container, opened, wire: () => wire }
+  return { host, container, opened, peer, wire: () => wire }
 }
 
 const collect = (s: Duplex) =>
@@ -267,10 +274,10 @@ describe('stdio mux', () => {
   })
 
   test('a slow reader holds back its sender instead of buffering everything', async () => {
-    const { host, opened, wire } = muxPair(64 * 1024)
-    const a = host.open(1)
-    await new Promise((r) => setTimeout(r, 5))
-    const peer = opened[0]?.stream as Duplex
+    const pair = muxPair(64 * 1024)
+    const opening = pair.peer()
+    const a = pair.host.open(1)
+    const peer = await opening
     peer.pause()
     let writes = 0
     const pump = async () => {
@@ -282,7 +289,7 @@ describe('stdio mux', () => {
     }
     void pump()
     await new Promise((r) => setTimeout(r, 100))
-    assert.ok(wire() < 200 * 1024, `sent ${wire()} bytes to a paused reader`)
+    assert.ok(pair.wire() < 200 * 1024, `sent ${pair.wire()} bytes to a paused reader`)
     assert.ok(writes < 100)
     const all = collect(peer)
     peer.resume()
@@ -290,10 +297,10 @@ describe('stdio mux', () => {
   })
 
   test('destroying one side resets the peer stream', async () => {
-    const { host, opened } = muxPair()
-    const a = host.open(1)
-    await new Promise((r) => setTimeout(r, 5))
-    const peer = opened[0]?.stream as Duplex
+    const pair = muxPair()
+    const opening = pair.peer()
+    const a = pair.host.open(1)
+    const peer = await opening
     const closed = new Promise((r) => peer.once('close', r))
     a.destroy()
     await closed
