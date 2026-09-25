@@ -413,3 +413,22 @@ export function missingCredentials(
   }
   return missing
 }
+
+/**
+ * Agent credentials the run needs whose value has whitespace or a control character in it, with
+ * where the first one is: a key pasted from a wrapped terminal line picks up a line break, and the
+ * agent then hangs on a request it can't send rather than failing to authenticate.
+ */
+export function malformedCredentials(
+  config: ResolvedConfig,
+  env = process.env,
+  options: { harnessKinds?: string[] } = {},
+): string[] {
+  const kinds = options.harnessKinds ?? config.harness.map((h) => h.kind)
+  return [...new Set(kinds)].flatMap((kind) => {
+    if (!isAgentKind(kind)) return []
+    const name = AGENTS[kind].credential
+    const at = [...(env[name] ?? '')].findIndex((c) => /[\s\p{Cc}]/u.test(c))
+    return at === -1 ? [] : [`${name} (character ${at + 1})`]
+  })
+}
