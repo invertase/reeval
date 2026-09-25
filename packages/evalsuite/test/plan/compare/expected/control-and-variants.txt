@@ -1,0 +1,12 @@
+no profile · 2 evals · 10 cells · 14 attempts
+evals/variants.es.ts › control and two variants               a/base/fake     control          ungated  ×1
+                                                              a/skilled/fake  variant skilled  gated    ×1
+                                                              a/terse/fake    variant terse    gated    ×1
+                                                              b/base/fake     control          ungated  ×1
+                                                              b/skilled/fake  variant skilled  gated    ×1
+                                                              b/terse/fake    variant terse    gated    ×1
+evals/variants.es.ts › every cell gated, with a minimum lift  a/base/fake     control          gated    ×2
+                                                              a/skilled/fake  variant skilled  gated    ×2  minLift 0.2
+                                                              b/base/fake     control          gated    ×2
+                                                              b/skilled/fake  variant skilled  gated    ×2  minLift 0.2
+excluded: —

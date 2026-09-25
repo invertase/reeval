@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { fixture } from './support/fixture.ts'
 
 const config = (extra: string, harness = 'fakeHarness({})') => `
 import { defineConfig } from 'evalsuite'
@@ -311,46 +312,18 @@ evaluate('scoped', { compare: { variants: [skilled], harness: ['b'] } }, async (
   })
 })
 
+// Which evals, cells and attempts a profile plans is pinned by the plan snapshots in
+// plan.test.ts (test/plan/profiles); these check what a run does with that plan.
 describe('profiles', () => {
-  const profiles = `
-  defaultProfile: { ci: 'pr' },
-  profiles: {
-    pr: { limit: { runs: 1, compare: false, harness: ['a'] }, budget: { attempts: 5 }, tags: ['!nightly-only'] },
-    nightly: { defaults: { runs: 3, harness: [fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })] } },
-  },`
-  const evals = `import { defineEnvironment, evaluate } from 'evalsuite'
-const skilled = defineEnvironment('skilled', { env: { MODE: 'x' } })
-evaluate('plain', { runs: 3 }, async (t) => { await t.send('x') })
-evaluate('compared', { compare: [skilled] }, async (t) => { await t.send('x') })
-evaluate('regression', { compare: [skilled], runs: 2, pin: ['compare', 'runs'] }, async (t) => { await t.send('x') })
-evaluate('own harness', { harness: fakeHarness({ id: 'b' }) }, async (t) => { await t.send('x') })
-evaluate('slow', { tags: ['nightly-only'] }, async (t) => { await t.send('x') })
-`
-  const setup = () =>
-    project('profiles', {
-      'es.config.ts': config(profiles, `fakeHarness({ id: 'a' })`),
-      'evals/p.es.ts': `import { fakeHarness } from 'evalsuite/harness'\n${evals}`,
-    })
-
-  test('a limit narrows unless pinned, and --dry-run prints the plan without running', async () => {
-    const p = await setup()
+  test('a plan over budget.attempts exits 2 unless --force; the text --dry-run shows it', async () => {
+    const p = await fixture('plan/profiles')
     const r = await runCli(p.dir, ['run', '--dry-run'], { env: { CI: 'true' } })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
       /^plan {2}profile pr \(auto: CI is set\) · 3 evals \(1 skipped\) · 4 cells · 6 attempts · ~.* · budget 5 attempts ✗$/m,
     )
-    assert.match(r.stdout, /evals\/p\.es\.ts › plain +1 +— +1 +1 +runs 3 → 1 \(profile pr\)/)
-    assert.match(
-      r.stdout,
-      /evals\/p\.es\.ts › compared +1 +0 of 1 +1 +1 +compare off \(profile pr\)/,
-    )
-    assert.match(r.stdout, /evals\/p\.es\.ts › regression +1 +1 +2 +4 +pinned: compare, runs/)
-    assert.match(
-      r.stdout,
-      /evals\/p\.es\.ts › own harness +0 +— +1 +0 +skipped: no harness left: profile pr allows a/,
-    )
-    assert.doesNotMatch(r.stdout, /› slow/, "the profile's tag filter drops it")
+    assert.match(r.stdout, /^eval +harnesses +variants +runs +attempts +notes$/m)
     assert.equal(existsSync(join(p.dir, '.es/runs')), false, 'a dry run writes no run')
 
     const over = await runCli(p.dir, ['run'], { env: { CI: 'true' } })
@@ -377,20 +350,8 @@ evaluate('slow', { tags: ['nightly-only'] }, async (t) => { await t.send('x') })
     )
   })
 
-  test('defaults sit under evals; --profile and ES_PROFILE pick one; typos exit 2', async () => {
-    const p = await setup()
-    const nightly = await runCli(p.dir, ['run', '--dry-run', '--profile', 'nightly'])
-    assert.equal(nightly.code, 0, nightly.stdout + nightly.stderr)
-    assert.match(
-      nightly.stdout,
-      /^plan {2}profile nightly \(--profile\) · 5 evals · 13 cells · 35 attempts/m,
-    )
-    assert.match(nightly.stdout, /› plain +2 +— +3 +6/, 'the eval keeps its own runs')
-    assert.match(nightly.stdout, /› own harness +1 +— +3 +3 +harness set by the eval/)
-    const env = await runCli(p.dir, ['run', '--dry-run'], { env: { ES_PROFILE: 'nightly' } })
-    assert.match(env.stdout, /^plan {2}profile nightly \(ES_PROFILE\)/m)
-    const none = await runCli(p.dir, ['run', '--dry-run'])
-    assert.match(none.stdout, /^plan {2}5 evals · 7 cells · 11 attempts/m, 'no profile locally')
+  test('a profile name typo exits 2 and lists the profiles', async () => {
+    const p = await fixture('plan/profiles')
     const typo = await runCli(p.dir, ['run', '--profile', 'nigthly'])
     assert.equal(typo.code, 2)
     assert.match(

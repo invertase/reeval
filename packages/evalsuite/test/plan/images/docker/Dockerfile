@@ -1,0 +1,3 @@
+ARG ES_BASE
+FROM ${ES_BASE}
+RUN echo seeded > /opt/seeded

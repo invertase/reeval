@@ -1,0 +1,9 @@
+no profile · 5 evals · 7 cells · 11 attempts
+evals/p.es.ts › plain                a/-/fake        control          gated    ×3
+evals/p.es.ts › compared             a/-/fake        control          ungated  ×1
+                                     a/skilled/fake  variant skilled  gated    ×1
+evals/p.es.ts › regression           a/-/fake        control          ungated  ×2
+                                     a/skilled/fake  variant skilled  gated    ×2
+evals/p.es.ts › own harness          b/-/fake        control          gated    ×1
+evals/p.es.ts › slow [nightly-only]  a/-/fake        control          gated    ×1
+excluded: —
