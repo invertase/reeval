@@ -25,6 +25,8 @@ export type Gateway = {
   setPolicy(policy: NetworkPolicy): void
   /** A 127.0.0.1 URL on the host that reaches `port` inside the container through the tunnel. */
   portUrl(port: number, protocol: 'ws' | 'http'): Promise<string>
+  /** Why the gateway stopped on its own (the forwarder exited), once it has. */
+  readonly stopped: string | undefined
   close(): void
 }
 
@@ -84,10 +86,20 @@ export async function startGateway(
   ready.promise = new Promise<void>((resolve, reject) => Object.assign(ready, { resolve, reject }))
   child.stdout.on('data', (chunk: Buffer) => mux.receive(chunk))
   child.once('error', (error) => ready.reject(error))
+  const listeners = new Map<number, Promise<net.Server>>()
+  const tunnels = new Set<net.Socket>()
+  let stopped: string | undefined
   child.once('close', (code) => {
+    const asked = closed
     closed = true
     mux.destroy()
-    ready.reject(new Error(`the forwarder exited (${code}): ${stderr.trim().slice(-500)}`))
+    const reason = `the forwarder exited (${code}): ${stderr.trim().slice(-500)}`.replace(/: $/, '')
+    ready.reject(new Error(reason))
+    if (asked) return
+    // Nothing reaches the container any more: refuse connections instead of letting them hang.
+    stopped = reason
+    for (const socket of tunnels) socket.destroy()
+    for (const l of listeners.values()) void l.then((s) => s.close())
   })
   const timer = setTimeout(
     () => ready.reject(new Error(`the forwarder didn't start within ${READY_TIMEOUT_MS / 1000}s`)),
@@ -96,7 +108,6 @@ export async function startGateway(
   const onAbort = () => ready.reject(signal?.reason)
   signal?.addEventListener('abort', onAbort, { once: true })
 
-  const listeners = new Map<number, Promise<net.Server>>()
   const close = () => {
     closed = true
     child.kill('SIGKILL')
@@ -129,13 +140,20 @@ export async function startGateway(
     addTransformations: proxy.addTransformations,
     setTransformations: proxy.setTransformations,
     setPolicy: proxy.setPolicy,
+    get stopped() {
+      return stopped
+    },
     async portUrl(port, protocol) {
+      if (stopped) throw new Error(`the egress gateway stopped: ${stopped}`)
       let listening = listeners.get(port)
       if (!listening) {
         listening = new Promise((resolve, reject) => {
-          const server = net.createServer({ allowHalfOpen: true }, (socket) =>
-            link(socket, mux.open(port)),
-          )
+          const server = net.createServer({ allowHalfOpen: true }, (socket) => {
+            if (stopped) return socket.destroy()
+            tunnels.add(socket)
+            socket.once('close', () => tunnels.delete(socket))
+            link(socket, mux.open(port))
+          })
           server.once('error', reject)
           server.listen(0, '127.0.0.1', () => resolve(server))
         })

@@ -117,9 +117,7 @@ const get = (url: string, ms: number) =>
   })
 
 describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () => {
-  test('the session reports it, and ports fail fast with the reason', {
-    todo: 'after start, the forwarder exiting only destroys the mux (§11.10)',
-  }, async () => {
+  test('the session reports it, and ports fail fast with the reason', async () => {
     const s = await createDockerSession({
       image: DEFAULT_IMAGE,
       labels: { 'dev.evalsuite.test': 'forwarder' },
@@ -141,9 +139,15 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
         command: `pkill -KILL -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}'`,
       })
       assert.equal(killed.exitCode, 0, 'pkill found the forwarder')
-      await eventually('the session reports the gateway stopped', async () => s.egress?.active === false)
+      await eventually(
+        'the session reports the gateway stopped',
+        async () => s.egress?.active === false,
+      )
       assert.match(s.egress?.active === false ? s.egress.reason : '', /forwarder exited/)
-      await assert.rejects(get(url, 3000), (error: Error) => !/no answer within/.test(error.message))
+      await assert.rejects(
+        get(url, 3000),
+        (error: Error) => !/no answer within/.test(error.message),
+      )
       await assert.rejects(
         s.getPortEndpoint({ port: BRIDGE_PORT, protocol: 'http' }),
         /isn't reachable: the egress gateway stopped: the forwarder exited/,

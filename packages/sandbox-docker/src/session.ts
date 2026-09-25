@@ -216,7 +216,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     description: `Docker container ${id.slice(0, 12)} (${options.image})`,
     defaultWorkingDirectory: SANDBOX_ROOT,
     ports: [BRIDGE_PORT],
-    ...(egress ? { egress } : {}),
+    get egress(): EgressStatus | undefined {
+      if (egress?.active && gateway?.stopped) return { active: false, reason: gateway.stopped }
+      return egress
+    },
     ...brokering,
     run,
     async spawn(o) {
@@ -271,6 +274,11 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       const scheme = protocol === 'ws' ? 'ws' : 'http'
       // The tunnel doesn't depend on the container's networks, which a policy change detaches
       // and reattaches, and Docker Desktop drops published ports on reattach.
+      if (gateway?.stopped) {
+        throw new Error(
+          `Port ${port} of ${id.slice(0, 12)} isn't reachable: the egress gateway stopped: ${gateway.stopped}`,
+        )
+      }
       if (gateway) return { url: await gateway.portUrl(port, scheme) }
       const mapped = await docker(['port', id, `${port}/tcp`])
       const hostPort = mapped.stdout.toString('utf8').split('\n')[0]?.split(':').at(-1)
