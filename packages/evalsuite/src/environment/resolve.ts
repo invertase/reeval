@@ -8,7 +8,7 @@ import { basename, join, relative, sep } from 'node:path'
 import type { Substitution } from '@evalsuite/sandbox-docker'
 import { run } from '@evalsuite/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
-import { parseDuration } from '../config.ts'
+import { badCharacterAt, parseDuration } from '../config.ts'
 import {
   type AppliedEnvironment,
   DEFAULT_SKILL_EXCLUDE,
@@ -95,6 +95,12 @@ function broker(
   where: readonly Substitution['in'][number][] = ['header'],
   phase: BrokeredSecret['phase'] = 'agent',
 ): string {
+  const at = badCharacterAt(value)
+  if (at && where.includes('header')) {
+    throw new InfraError(
+      `${name} has whitespace or a line break in it (character ${at}), so it can't go in a request header. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
+    )
+  }
   const sub = { name, placeholder: placeholder(), value, hosts: [...hosts], in: [...where], phase }
   secrets.brokered.push(sub)
   return sub.placeholder

@@ -5,7 +5,7 @@ import type {
   HarnessV1RequestTransformation,
 } from '@ai-sdk/harness'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
-import { missingCredentials, resolveConfig } from '../src/config.ts'
+import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered } from '../src/environment.ts'
 import {
@@ -60,6 +60,26 @@ describe('the Claude Code harness', () => {
       ['ANTHROPIC_API_KEY'],
     )
     assert.deepEqual(missingCredentials(config, {}, { harnessKinds: ['fake'] }), [])
+  })
+
+  test('names agent and judge keys with a line break in them, never other variables', () => {
+    const config = resolveConfig(
+      { harness: [cursor()], judge: { model: 'google/gemini-3.8-flash' } },
+      '/p',
+    )
+    const wrapped = 'AQ.abc\n   │ def'
+    assert.deepEqual(
+      malformedCredentials(config, {
+        CURSOR_API_KEY: 'crsr_ok',
+        GOOGLE_GENERATIVE_AI_API_KEY: wrapped,
+        UNRELATED: wrapped,
+      }),
+      ['GOOGLE_GENERATIVE_AI_API_KEY (character 7)'],
+    )
+    assert.deepEqual(malformedCredentials(config, { CURSOR_API_KEY: ` ${'k'}` }), [
+      'CURSOR_API_KEY (character 1)',
+    ])
+    assert.deepEqual(malformedCredentials(config, {}), [], 'unset is missingCredentials')
   })
 
   test('reads rules from CLAUDE.md and repo skills from .claude/skills, in its own image', () => {
