@@ -6,17 +6,19 @@ import type { Duplex, Readable, Transform } from 'node:stream'
 import tls from 'node:tls'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
 import { link } from './mux.ts'
-import { createPolicyCheck, type Lookup, type NetworkPolicy } from './policy.ts'
+import { createPolicyCheck, hostAllowed, type Lookup, type NetworkPolicy } from './policy.ts'
 import {
   applyTransformations,
   decrypts,
   type EndpointMatch,
+  onEndpoint,
   type RequestTransformation,
 } from './rules.ts'
 import {
   bodySubstituter,
   type SubstituteIn,
   type Substitution,
+  scrubbedInBodies,
   scrubber,
   scrubHeaders,
   substituteRequest,
@@ -24,6 +26,7 @@ import {
   substitutionsFor,
   unsubstituted,
 } from './substitution.ts'
+import { type DerivedTokens, tokeniseResponse } from './tokens.ts'
 
 export type EgressProxyOptions = {
   ca: CertificateAuthority
@@ -55,6 +58,11 @@ export type EgressProxyOptions = {
     method: string
     url: string
   }) => void
+  /**
+   * Tokens the agent derives from its brokered key. Their exchange's response reaches the sandbox
+   * with placeholders, and the real tokens are swapped back in on their hosts, in headers only.
+   */
+  derivedTokens?: readonly DerivedTokens[]
 }
 
 export type EgressProxy = {
@@ -112,6 +120,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const log = options.log ?? (() => {})
   let rules: RequestTransformation[] = []
   let subs: Substitution[] = []
+  /** Substitutions for derived tokens, added as their exchanges answer; kept by setSubstitutions. */
+  let tokens: Substitution[] = []
+  const allSubs = () => (tokens.length ? [...subs, ...tokens] : subs)
+  const derived = options.derivedTokens ?? []
+  const tokenHosts = derived.flatMap((d) => [d.endpoint.host, ...d.hosts])
   let check = createPolicyCheck(options.policy, options)
   const leaves = new Map<string, { key: string | Buffer; cert: string }>()
   const open = new Set<Duplex>()
@@ -147,7 +160,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         return reply(socket, verdict.status, `blocked by the ES egress policy: ${verdict.reason}`)
       }
       const target = { host, port, address: verdict.address }
-      if (decrypts(rules, host) || substitutes(subs, host)) {
+      if (decrypts(rules, host) || substitutes(allSubs(), host) || hostAllowed(tokenHosts, host)) {
         log(`es:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) socket.unshift(head)
@@ -232,6 +245,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     path: string
     own: Substitution[]
     refused?: { status: number; reason: string }
+    /** Set when this is a token exchange, whose response gets placeholders for its tokens. */
+    exchange?: DerivedTokens
   } {
     const named = String(headers[':authority'] ?? headers.host ?? '')
     const asked = parseAuthority(named, target.port).host
@@ -268,20 +283,28 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         },
       }
     }
-    const own = substitutionsFor(subs, target.host)
+    const own = substitutionsFor(allSubs(), target.host)
     const request = { host: target.host, path, headers: out as IncomingHttpHeaders }
     const substituted = substituteRequest(own, request)
     const kept = unsubstituted(own, request)
     for (const k of kept) options.onUnsubstituted?.({ ...k, method, url })
-    // Uncompressed responses, so the scrubber can see what comes back.
-    if (own.length) delete substituted.headers['accept-encoding']
+    const exchange = derived.find((d) =>
+      onEndpoint([d.endpoint], { host: target.host, method, path, headers: {} }),
+    )
+    // Uncompressed responses, so the scrubber and the tokeniser can see what comes back.
+    if (scrubbedInBodies(own).length || exchange) delete substituted.headers['accept-encoding']
     const notes = [
       replaced.length ? `set ${replaced.join(', ')}` : '',
       substituted.names.length ? `substituted ${substituted.names.join(', ')}` : '',
       ...kept.map((k) => `kept ${k.name}'s placeholder in the ${k.where}`),
     ].filter(Boolean)
     log(`es:egress ${method} ${url} HTTP/${version}${notes.length ? ` (${notes.join('; ')})` : ''}`)
-    return { headers: substituted.headers as OutgoingHttpHeaders, path: substituted.path, own }
+    return {
+      headers: substituted.headers as OutgoingHttpHeaders,
+      path: substituted.path,
+      own,
+      ...(exchange ? { exchange } : {}),
+    }
   }
 
   /**
@@ -302,14 +325,67 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   /** The response body as sent to the sandbox: real values put back as placeholders. */
   const scrubs = options.scrubResponses !== false
   function responseBody(up: Readable, own: Substitution[]): Readable | Transform {
-    return own.length && scrubs ? up.pipe(scrubber(own)) : up
+    return scrubbedInBodies(own).length && scrubs ? up.pipe(scrubber(own)) : up
   }
 
   const responseHeaders = (headers: IncomingHttpHeaders, own: Substitution[]) => {
     const out = endToEnd(headers)
     if (!own.length || !scrubs) return out
-    delete out['content-length']
+    if (scrubbedInBodies(own).length) delete out['content-length']
     return scrubHeaders(own, out as Record<string, string>) as OutgoingHttpHeaders
+  }
+
+  /** Most an exchange's response may be; it's a few hundred bytes of JSON. */
+  const EXCHANGE_LIMIT = 1 << 20
+
+  /**
+   * A token exchange's response, read whole, with each token replaced by a placeholder. A success
+   * that can't be read (compressed, too big, not JSON) is a 502: the real tokens never go through.
+   */
+  function tokenised(
+    exchange: DerivedTokens,
+    url: string,
+    status: number,
+    headers: IncomingHttpHeaders,
+    up: Readable,
+    res: Response,
+    own: Substitution[],
+  ) {
+    const chunks: Buffer[] = []
+    let size = 0
+    const refuse = (why: string) => {
+      log(`es:egress ${url} response refused (${why})`)
+      if (!res.headersSent) {
+        res
+          .writeHead(502, { 'content-type': 'text/plain' })
+          .end(`ES egress gateway: couldn't keep ${exchange.name}'s tokens out of the sandbox: ${why}
+`)
+      } else res.destroy()
+    }
+    up.on('data', (chunk: Buffer) => {
+      size += chunk.length
+      if (size <= EXCHANGE_LIMIT) chunks.push(chunk)
+    })
+    up.once('error', (error) => refuse(error.message))
+    up.once('end', () => {
+      const body = Buffer.concat(chunks)
+      const out = responseHeaders(headers, own)
+      if (status < 200 || status >= 300) return res.writeHead(status, out).end(body)
+      const encoding = String(headers['content-encoding'] ?? 'identity')
+      if (encoding !== 'identity') return refuse(`the response is ${encoding}-encoded`)
+      if (size > EXCHANGE_LIMIT) return refuse(`the response is over ${EXCHANGE_LIMIT} bytes`)
+      let result: ReturnType<typeof tokeniseResponse>
+      try {
+        result = tokeniseResponse(exchange, body.toString('utf8'), tokens)
+      } catch (error) {
+        return refuse((error as Error).message)
+      }
+      tokens = [...tokens, ...result.added]
+      log(`es:egress ${url} tokenised ${result.fields.join(', ') || 'nothing'} (${exchange.name})`)
+      const text = Buffer.from(result.body)
+      delete out['content-encoding']
+      res.writeHead(status, { ...out, 'content-length': String(text.length) }).end(text)
+    })
   }
 
   async function onDecrypted(
@@ -318,13 +394,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     res: Response,
   ) {
     const method = req.method ?? 'GET'
-    const { headers, path, own, refused } = transformed(
+    const { headers, path, own, refused, exchange } = transformed(
       target,
       method,
       req.url ?? '/',
       req.headers,
       req.httpVersion,
     )
+    const url = `https://${target.host}${pathOnly(req.url ?? '/')}`
     if (refused) {
       req.resume()
       return res
@@ -347,7 +424,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         agent,
         ca,
       })
-      return forwardHttp1(body, res, upstream, own)
+      return forwardHttp1(body, res, upstream, own, exchange && { exchange, url })
     }
     const stream = session.request({
       ...headers,
@@ -362,6 +439,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     stream.once('error', fail)
     stream.once('response', (h) => {
+      if (exchange) return tokenised(exchange, url, Number(h[':status']), h, stream, res, own)
       res.writeHead(Number(h[':status']), responseHeaders(h, own))
       stream.once('trailers', (t) =>
         res.addTrailers(responseHeaders(t, own) as Record<string, string>),
@@ -377,8 +455,13 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     res: Response,
     upstream: http.ClientRequest,
     own: Substitution[] = [],
+    tokenise?: { exchange: DerivedTokens; url: string },
   ) {
     upstream.once('response', (up) => {
+      if (tokenise) {
+        const { exchange, url } = tokenise
+        return tokenised(exchange, url, up.statusCode ?? 502, up.headers, up, res, own)
+      }
       res.writeHead(up.statusCode ?? 502, responseHeaders(up.headers, own))
       up.once('end', () => {
         if (Object.keys(up.trailers).length) {

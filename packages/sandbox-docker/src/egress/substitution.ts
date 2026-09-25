@@ -14,6 +14,11 @@ export type Substitution = {
   /** Host patterns as in the egress allowlist: `api.example.com`, `*.example.com`. */
   hosts: readonly string[]
   in: readonly SubstituteIn[]
+  /**
+   * `false` scrubs response headers only: scrubbing a body holds back its last bytes until more
+   * arrive, which stalls a long-lived stream. For values the upstream never echoes in a body.
+   */
+  scrubBodies?: boolean
 }
 
 /** The substitutions whose hosts include `host`. */
@@ -165,9 +170,13 @@ export class ReplaceStream extends Transform {
   }
 }
 
+/** The substitutions whose values are scrubbed from response bodies (see `scrubBodies`). */
+export const scrubbedInBodies = (subs: readonly Substitution[]) =>
+  subs.filter((s) => s.scrubBodies !== false)
+
 /** A stream putting each real value back as its placeholder: for responses from brokered hosts. */
 export const scrubber = (subs: readonly Substitution[]) =>
-  new ReplaceStream(subs.map((s) => [s.value, s.placeholder] as const))
+  new ReplaceStream(scrubbedInBodies(subs).map((s) => [s.value, s.placeholder] as const))
 
 /** A stream swapping placeholders for values, for request bodies of secrets that opt in. */
 export const bodySubstituter = (subs: readonly Substitution[]) =>

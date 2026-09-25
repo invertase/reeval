@@ -43,6 +43,13 @@ const REAL = 'crsr_docker_test_real_key_9f8e7d6c5b4a39281706'
 /** What the in-container search looks for: a distinctive tail, so the full key never goes in. */
 const NEEDLE = REAL.slice(-20)
 
+/** An exchange's response: JWTs whose signatures are the part that must never enter. */
+const SIGNATURE = 'real-docker-signature-5e4d3c2b1a09'
+const TOKENS = {
+  accessToken: `eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjIwMDAwMDAwMDB9.${SIGNATURE}`,
+  refreshToken: `eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjIxMDAwMDAwMDB9.${SIGNATURE}-r`,
+}
+
 const upstreamCa = createCertificateAuthority()
 const seen: { path: string; authorization?: string; body: string }[] = []
 
@@ -59,6 +66,7 @@ function startUpstream(): Promise<{ port: number; close(): void }> {
       })
       req.on('end', () => {
         seen.push({ path: req.url ?? '', authorization: req.headers.authorization, body })
+        if (req.url === '/tokens') return res.end(JSON.stringify(TOKENS))
         res.end(JSON.stringify({ authorization: req.headers.authorization, body }))
       })
     },
@@ -259,6 +267,52 @@ describe('egress gateway in Docker', {
       assert.match(env, new RegExp(`^${name}=/etc/ssl/certs/ca-certificates\\.crt$`, 'm'), name)
     }
     assert.match(env, /^NODE_USE_ENV_PROXY=1$/m)
+  })
+
+  test('derived tokens: auth.json holds placeholders, and requests carry the real token upstream', async () => {
+    const s = await open({
+      image: DEFAULT_IMAGE,
+      egress: egress({
+        derivedTokens: [
+          {
+            name: 'CURSOR_API_KEY',
+            endpoint: { host: 'upstream.test', path: { exact: '/tokens' }, method: ['POST'] },
+            fields: ['accessToken', 'refreshToken'],
+            hosts: ['upstream.test'],
+          },
+        ],
+      }),
+    })
+    const base = `https://upstream.test:${upstream.port}`
+    // As the CLI does: store the exchange's tokens, then send the access token on later requests.
+    const stored = await sh(
+      s,
+      `mkdir -p ~/.config/cursor && curl -sS -X POST ${base}/tokens > ~/.config/cursor/auth.json`,
+    )
+    assert.equal(stored.exitCode, 0, stored.stderr)
+    seen.length = 0
+    const used = await sh(
+      s,
+      `T=$(sed -E 's/.*"accessToken":"([^"]*)".*/\\1/' ~/.config/cursor/auth.json); curl -sS -o /dev/null -H "Authorization: Bearer $T" ${base}/v1`,
+    )
+    assert.equal(used.exitCode, 0, used.stderr)
+    assert.equal(seen[0]?.authorization, `Bearer ${TOKENS.accessToken}`, 'upstream got the token')
+    const auth = (await sh(s, 'cat ~/.config/cursor/auth.json')).stdout
+    assert.match(auth, /"accessToken":"eyJhbGciOiJIUzI1NiJ9\.eyJleHAiOjIwMDAwMDAwMDB9\.es_secret_/)
+    const files = await sh(
+      s,
+      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
+      { N: SIGNATURE },
+    )
+    assert.equal(files.stdout.trim(), 'exit=1', `files containing a real token: ${files.stdout}`)
+    // Twin: the same search for the placeholder's signature finds auth.json.
+    const signature = /\.(es_secret_\w+)"/.exec(auth)?.[1] ?? ''
+    const twin = await sh(
+      s,
+      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
+      { N: signature },
+    )
+    assert.match(twin.stdout, /\.config\/cursor\/auth\.json/)
   })
 
   const token = 'user-token-docker-1f2e3d4c5b6a79880a1b'

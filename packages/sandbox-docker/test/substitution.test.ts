@@ -10,6 +10,7 @@ import {
   substitutes,
   unsubstituted,
 } from '../src/egress/substitution.ts'
+import { type DerivedTokens, tokeniseResponse, tokenPlaceholder } from '../src/egress/tokens.ts'
 
 const SECRET = 'real-value-0123456789'
 const HOLDER = `es_secret_${'Z'.repeat(32)}`
@@ -141,5 +142,54 @@ describe('unsubstituted', () => {
     )
     const elsewhere = { ...request(`/v1?key=${HOLDER}`), host: 'other.example.com' }
     assert.deepEqual(unsubstituted([sub()], elsewhere), [])
+  })
+})
+
+describe('derived tokens', () => {
+  const derived: DerivedTokens = {
+    name: 'CURSOR_API_KEY',
+    endpoint: { host: 'api2.cursor.sh', path: { exact: '/auth/exchange_user_api_key' } },
+    fields: ['accessToken', 'refreshToken'],
+    hosts: ['*.cursor.sh'],
+  }
+
+  test('a JWT keeps its header and claims; anything else gets a plain placeholder', () => {
+    assert.match(
+      tokenPlaceholder('aGVhZA.Y2xhaW1z.c2ln'),
+      /^aGVhZA\.Y2xhaW1z\.es_secret_[0-9A-Za-z]{43}$/,
+    )
+    assert.match(tokenPlaceholder('opaque-token'), /^es_secret_[0-9A-Za-z]{32}$/)
+    assert.notEqual(tokenPlaceholder('a.b.c'), tokenPlaceholder('a.b.c'), 'fresh each time')
+  })
+
+  test('each token field gets a header-only substitution on the token hosts, kept out of bodies', () => {
+    const { body, added, fields } = tokeniseResponse(
+      derived,
+      JSON.stringify({ accessToken: 'a.b.c', refreshToken: 'opaque', n: 1 }),
+      [],
+    )
+    assert.deepEqual(fields, ['accessToken', 'refreshToken'])
+    assert.deepEqual(
+      added.map((s) => [s.name, s.value, s.hosts, s.in, s.scrubBodies]),
+      [
+        ['CURSOR_API_KEY accessToken', 'a.b.c', ['*.cursor.sh'], ['header'], false],
+        ['CURSOR_API_KEY refreshToken', 'opaque', ['*.cursor.sh'], ['header'], false],
+      ],
+    )
+    assert.deepEqual(JSON.parse(body), {
+      accessToken: added[0]?.placeholder,
+      refreshToken: added[1]?.placeholder,
+      n: 1,
+    })
+  })
+
+  test('a token seen before keeps its placeholder; missing fields and non-objects', () => {
+    const first = tokeniseResponse(derived, '{"accessToken":"a.b.c"}', [])
+    const again = tokeniseResponse(derived, '{"accessToken":"a.b.c"}', first.added)
+    assert.deepEqual(again.added, [])
+    assert.equal(JSON.parse(again.body).accessToken, first.added[0]?.placeholder)
+    assert.deepEqual(tokeniseResponse(derived, '{"other":1}', []).fields, [])
+    assert.throws(() => tokeniseResponse(derived, '[1]', []), /not a JSON object/)
+    assert.throws(() => tokeniseResponse(derived, 'oops', []), SyntaxError)
   })
 })
