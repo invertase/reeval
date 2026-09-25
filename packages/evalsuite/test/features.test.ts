@@ -288,6 +288,21 @@ export const features: Feature[] = [
     canary: /to contain 'MARMALADE'/,
   },
   {
+    dir: 'harness/claude-code-harness-skills',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = landed(run)?.context ?? []
+      assert.ok(
+        seen.some((c) => c.path === '~/.claude/skills/house-greeting/SKILL.md'),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
     dir: 'harness/cursor-workspace-skills',
     tiers: ['fake', 'docker'],
     env: 'greeting',
