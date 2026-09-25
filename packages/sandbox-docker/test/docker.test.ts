@@ -63,6 +63,18 @@ const egress = (over: Partial<EgressOptions> = {}): EgressOptions => ({
 const sh = async (s: DockerSession, command: string, env?: Record<string, string>) =>
   s.run({ command, ...(env ? { env } : {}) })
 
+// Interfaces with IFF_UP set. Docker Desktop's kernel adds tunnel devices (gre0, sit0…) that stay
+// down, and names an interface attached later eth1 rather than eth0.
+const upInterfaces = async (s: DockerSession) =>
+  (
+    await sh(
+      s,
+      'for f in /sys/class/net/*/flags; do [ $(( $(cat "$f") & 1 )) -eq 1 ] && basename "$(dirname "$f")"; done; true',
+    )
+  ).stdout
+    .split('\n')
+    .filter(Boolean)
+
 describe('egress gateway in Docker', {
   skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}`,
 }, () => {
@@ -139,7 +151,7 @@ describe('egress gateway in Docker', {
       image: DEFAULT_IMAGE,
       egress: egress({ policy: { mode: 'custom', allowedHosts: ['upstream.test'] } }),
     })
-    assert.equal((await sh(s, 'ls /sys/class/net')).stdout.trim(), 'lo')
+    assert.deepEqual(await upInterfaces(s), ['lo'])
     const allowed = await sh(
       s,
       `curl -sS https://upstream.test:${upstream.port}/x -o /dev/null -w '%{http_code}'`,
@@ -167,7 +179,7 @@ describe('egress gateway in Docker', {
     assert.match(denied.stderr, /403/)
 
     await s.setNetworkPolicy?.({ mode: 'allow-all' })
-    assert.match((await sh(s, 'ls /sys/class/net')).stdout, /eth0/)
+    assert.ok((await upInterfaces(s)).some((i) => /^eth\d+$/.test(i)))
     const published = await s.getPortEndpoint({ port: 43210, protocol: 'http' })
     assert.notEqual(published.url, url)
     assert.equal(await retry(() => get(published.url)), 'bridge ok')
