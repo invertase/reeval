@@ -2,24 +2,24 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { skillFiles } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
+import { layoutOf } from './agents.ts'
 import type { Harness } from './types.ts'
 
 const lineCount = (text: string) =>
   text ? text.split('\n').length - (text.endsWith('\n') ? 1 : 0) : 0
 
-/** Where the Cursor adapter puts harness-placed skills: the ACP agent's `~/.agents/skills`. */
-export const FAKE_HARNESS_SKILL_DIR = '~/.agents/skills'
-
 /**
  * Writes canned files and returns a canned message on every turn, after running its `script`'s
- * real sandbox actions. Harness-placed skills are written where the Cursor adapter puts them.
+ * real sandbox actions. Harness-placed skills are written under `~/` where its layout's adapter
+ * puts them (`~/.agents/skills` by default, as Cursor's does).
  */
 export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness => ({
   async start(sandbox, _signal, { skills, workspaceSkills, mcp }) {
     if (descriptor.failWith) throw new InfraError(descriptor.failWith)
+    const dir = `~/${layoutOf(descriptor).harnessSkillDir}`
     for (const skill of skills) {
       for (const f of skillFiles(skill)) {
-        await sandbox.writeFile(`${FAKE_HARNESS_SKILL_DIR}/${skill.name}/${f.path}`, f.content)
+        await sandbox.writeFile(`${dir}/${skill.name}/${f.path}`, f.content)
       }
     }
     const names = [...skills.map((s) => s.name), ...workspaceSkills]

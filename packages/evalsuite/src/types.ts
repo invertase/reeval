@@ -158,6 +158,12 @@ export type FakeHarnessDescriptor = {
   script?: FakeScriptStep[][]
   /** The most attempts on this harness kind at once, across the run. */
   maxConcurrent?: number
+  /**
+   * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
+   * `.claude/skills` for `claude-code`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`)
+   * in Cursor's image.
+   */
+  layout?: 'cursor' | 'claude-code'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -175,8 +181,18 @@ export type CursorHarnessDescriptor = {
   /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
 }
+/** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
+export type ClaudeCodeHarnessDescriptor = {
+  kind: 'claude-code'
+  /** A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`. */
+  model: string
+  /** Cell id; defaults to `claude-code:<model>`. */
+  id?: string
+  /** The most Claude Code attempts at once, across the run, e.g. for the account's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
-export type AgentHarnessDescriptor = CursorHarnessDescriptor
+export type AgentHarnessDescriptor = CursorHarnessDescriptor | ClaudeCodeHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {
@@ -271,7 +287,7 @@ export type EnvironmentSpec = {
   env?: EnvVars
   /** Workspace-relative, or `~/` for home. */
   files?: Record<string, string | HostFile>
-  /** `AGENTS.md` for the workspace. */
+  /** Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code. */
   rules?: string | HostFile
   setup?: SetupStep[]
   skills?: SkillSource[]
@@ -559,7 +575,7 @@ export type EnvironmentRecord = {
   parent: string | null
   /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
   overrides: string[]
-  /** Covers every field; secret names are included, values never are. The image is the sandbox's. */
+  /** Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's. */
   digest: string
   setup: string[]
   skills: Array<{

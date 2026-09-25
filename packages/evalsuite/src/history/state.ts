@@ -80,6 +80,7 @@ const PACKAGES = [
   'ai',
   '@ai-sdk/harness',
   '@ai-sdk/harness-cursor',
+  '@ai-sdk/harness-claude-code',
   '@ai-sdk/google',
   '@ai-sdk/typesafe-ai',
 ]

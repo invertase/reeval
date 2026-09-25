@@ -59,6 +59,10 @@ outside. Every user-facing feature or option lands with its fixtures in the same
 - The fake agent writes **harness-placed skills** to `~/.agents/skills/<name>/`, where the Cursor
   adapter puts them. Whether Cursor itself reads them from there is a question for the Docker
   and real-agent tiers.
+- **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
+  `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
+  agent's image, so a fixture under `harness/` covers what a real harness receives. List the
+  fixture's `image` in its row when it isn't Cursor's, so the Docker tier knows what to need.
 
 ## Running
 

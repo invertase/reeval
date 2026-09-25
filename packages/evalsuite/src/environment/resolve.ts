@@ -333,13 +333,15 @@ const readHostFile = (f: HostFile, where: string) => {
 
 /**
  * Layers the environment (root first; a later layer wins on shared keys, and each such key is
- * an override), over the options `env` merged down the cascade. `where` names the attempt.
+ * an override), over the options `env` merged down the cascade. `where` names the attempt, and
+ * `rulesFile` is the workspace file the harness's agent reads `rules` from.
  */
 export async function resolveEnvironment(
   environment: AppliedEnvironment,
   optionsEnv: EnvVars,
   root: string,
   where: string,
+  rulesFile: string,
 ): Promise<ResolvedEnvironment> {
   const envWhere = `environment ${environment.name} (${where})`
   const overrides = new Set<string>()
@@ -441,12 +443,8 @@ export async function resolveEnvironment(
     path,
     content: isHostFile(v) ? readHostFile(v, envWhere) : v,
   }))
-  if (rules !== undefined) {
-    fileList.push({
-      path: 'AGENTS.md',
-      content: isHostFile(rules) ? readHostFile(rules, envWhere) : rules,
-    })
-  }
+  const rulesContent =
+    rules === undefined ? undefined : isHostFile(rules) ? readHostFile(rules, envWhere) : rules
   const skillList = [...skills.values()]
   const skillRecords = skillList.map(({ skill, placement, source, commit, excluded }) => ({
     name: skill.name,
@@ -457,6 +455,10 @@ export async function resolveEnvironment(
     excluded,
   }))
   const fileRecords = fileList.map((f) => ({ path: f.path, sha256: sha256(f.content) }))
+  // Hashed apart from the files, so one environment has one digest whichever file its rules go to.
+  const rulesRecord =
+    rulesContent === undefined ? undefined : { path: rulesFile, sha256: sha256(rulesContent) }
+  if (rulesContent !== undefined) fileList.push({ path: rulesFile, content: rulesContent })
   const secretNames = [...new Set([...secrets.names, ...secrets.checks])].sort()
   const varNames = Object.keys(vars)
     .filter((n) => !secrets.names.includes(n))
@@ -475,6 +477,7 @@ export async function resolveEnvironment(
       skills: skillRecords.map((s) => [s.name, s.sha256, s.placement]),
       mcp: mcpShape,
       files: fileRecords,
+      rules: rulesRecord?.sha256,
       vars: literalVars,
       secrets: secretNames,
       checks: [...secrets.checks].sort(),
@@ -490,7 +493,7 @@ export async function resolveEnvironment(
       setup: setup.map(stepCommand),
       skills: skillRecords,
       mcp: Object.keys(resolvedMcp).sort(),
-      files: fileRecords,
+      files: rulesRecord ? [...fileRecords, rulesRecord] : fileRecords,
       vars: varNames,
       secrets: secretNames,
       unset: [...secrets.unset].sort(),

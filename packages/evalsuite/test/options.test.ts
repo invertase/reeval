@@ -530,6 +530,21 @@ describe('common mistakes', () => {
       /harness is an empty list in evaluate\("e"\)/,
     ],
     [
+      'a harness kind ES does not know',
+      `evaluate('e', { harness: { kind: 'codex' } as never }, async () => {})`,
+      /harness in evaluate\("e"\) must be like cursor\(\) \(got an object with "kind"\)/,
+    ],
+    [
+      'Claude Code without a model',
+      `evaluate('e', { harness: (await import('evalsuite/harness')).claudeCode({} as never) }, async () => {})`,
+      /claudeCode\(\) needs a model, e\.g\. claudeCode\(\{ model: 'claude-sonnet-5' \}\)/,
+    ],
+    [
+      'a fake agent layout ES does not know',
+      `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code' \(got "codex"\)/,
+    ],
+    [
       'a fake agent script that is not one list per turn',
       `evaluate('e', { harness: fakeHarness({ script: [{ exec: 'ls' }] as never }) }, async () => {})`,
       /fakeHarness\(\{ script \}\) takes one list of steps per turn, e\.g\. script: \[\[\{ exec: 'cat notes\.txt' \}, \{ reply: 'done' \}\]\]/,

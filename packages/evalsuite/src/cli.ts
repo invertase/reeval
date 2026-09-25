@@ -73,8 +73,8 @@ Usage:
     --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
     --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
   es image build [filter...]
-                            Build every image the evals' Docker sandboxes need: ES's image (bakes
-                            in the Cursor CLI), from and dockerfile images, install layers
+                            Build every image the evals' Docker sandboxes need, per harness: ES's
+                            image (bakes in its CLI), from and dockerfile images, install layers
     --dry-run               List the images and how each is made, without building
   es --version
   es --help

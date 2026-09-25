@@ -18,7 +18,7 @@ import {
 } from './environment/resolve.ts'
 import { isTimeout, UsageError } from './errors.ts'
 import { brokeringFor } from './harness/agents.ts'
-import { createHarness, workspaceSkillDir } from './harness/index.ts'
+import { createHarness, layoutOf, workspaceSkillDir } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
 import { type JudgeState, judgeModelName, runJudge } from './judge/index.ts'
@@ -331,6 +331,8 @@ const CONTEXT_PATHS = [
   '$HOME/.cursor/skills',
   '$HOME/.cursor/skills-cursor',
   '$HOME/.agents/skills',
+  '$HOME/.claude/CLAUDE.md',
+  '$HOME/.claude/settings.json',
   '$HOME/.claude/skills',
   'AGENTS.md',
   'CLAUDE.md',
@@ -338,6 +340,8 @@ const CONTEXT_PATHS = [
   '.cursor/rules',
   '.cursor/skills',
   '.cursor/mcp.json',
+  '.claude/settings.json',
+  '.claude/skills',
   '.agents/skills',
   '.mcp.json',
 ]
@@ -453,7 +457,13 @@ async function runAttempt(
   let image: string | undefined
   async function setup() {
     const where = `${id} [${attemptId(spec.cell.key, spec.n)}]`
-    resolved = await resolveEnvironment(spec.environment, spec.env, config.root, where)
+    resolved = await resolveEnvironment(
+      spec.environment,
+      spec.env,
+      config.root,
+      where,
+      layoutOf(spec.harness).rulesFile,
+    )
     record.environment = resolved.record
     const secrets = resolved.record.secrets
     record.env = {

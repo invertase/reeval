@@ -4,7 +4,7 @@ import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, HarnessDescriptor } from '../types.ts'
 
-/** The kind of a real agent's harness, e.g. `cursor`. */
+/** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
 
 /** Where an agent reads what the environment gives it. */
@@ -13,6 +13,8 @@ export type Layout = {
   rulesFile: string
   /** The repo skill directory for `placement: 'workspace'`, relative to the workspace. */
   workspaceSkillDir: string
+  /** Where the adapter puts harness-placed skills, under `~/`; the fake agent writes them there. */
+  harnessSkillDir: string
 }
 
 /** What ES needs to know about a real agent; everything else is the same for all of them. */
@@ -54,10 +56,31 @@ export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Recor
   )
 }
 
-/** Where each agent with an image reads rules and repo skills. */
+/** The `.mcp.json` shape. */
+export function claudeMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) =>
+      s.transport === 'stdio'
+        ? [name, { type: 'stdio', command: s.command, args: s.args, env: s.env }]
+        : [name, { type: s.transport, url: s.url, headers: s.headers }],
+    ),
+  )
+}
+
+/** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
-  cursor: { rulesFile: 'AGENTS.md', workspaceSkillDir: '.cursor/skills' },
-  'claude-code': { rulesFile: 'CLAUDE.md', workspaceSkillDir: '.claude/skills' },
+  cursor: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.cursor/skills',
+    harnessSkillDir: '.agents/skills',
+  },
+  'claude-code': {
+    rulesFile: 'CLAUDE.md',
+    workspaceSkillDir: '.claude/skills',
+    harnessSkillDir: '.claude/skills',
+  },
 }
 
 /** Every real agent ES can drive, by harness kind. */
@@ -73,6 +96,36 @@ export const AGENTS: Record<AgentKind, Agent> = {
     mcpServers: acpMcpServers,
     adapter: async (options) => (await import('@ai-sdk/harness-cursor')).createCursor(options),
   },
+  'claude-code': {
+    ...LAYOUTS['claude-code'],
+    name: 'Claude Code',
+    factory: 'claudeCode',
+    credential: 'ANTHROPIC_API_KEY',
+    // What CLI 2.1.276 sends the key on, with non-essential traffic off (checked in Docker).
+    // Anything else gets a 403 from the gateway and a warning that names the request.
+    endpoints: [
+      { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
+      { host: 'api.anthropic.com', path: { exact: '/v1/messages/count_tokens' }, method: ['POST'] },
+      { host: 'api.anthropic.com', path: { exact: '/api/claude_code/settings' }, method: ['GET'] },
+      {
+        host: 'api.anthropic.com',
+        path: { exact: '/api/claude_code/policy_limits' },
+        method: ['GET'],
+      },
+    ],
+    mcpServers: claudeMcpServers,
+    adapter: async (options) =>
+      (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
+        ...options,
+        env: {
+          // The CLI refuses to skip permissions as root unless told it's in a sandbox.
+          IS_SANDBOX: '1',
+          // No telemetry, error reporting or feature-flag fetches: fewer endpoints for the key,
+          // and flags that can't change between runs.
+          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        },
+      }),
+  },
 }
 
 export const isAgentKind = (kind: unknown): kind is AgentKind =>
@@ -81,6 +134,19 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
 export const agentOf = (h: HarnessDescriptor): Agent | undefined =>
   h.kind === 'fake' ? undefined : AGENTS[h.kind]
+
+/** The fake agent's own layout. */
+const FAKE_LAYOUT: Layout = {
+  rulesFile: 'AGENTS.md',
+  workspaceSkillDir: '.agents/skills',
+  harnessSkillDir: '.agents/skills',
+}
+
+/** Where a harness's agent reads rules and skills; a fake one with `layout` mimics that agent. */
+export function layoutOf(descriptor: HarnessDescriptor): Layout {
+  if (descriptor.kind !== 'fake') return LAYOUTS[descriptor.kind]
+  return descriptor.layout ? LAYOUTS[descriptor.layout] : FAKE_LAYOUT
+}
 
 /** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */
 export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {

@@ -58,7 +58,8 @@ function searchReferences(output: unknown): number | null {
 }
 
 /** Claude Code's bridge sends errors as `{ message }` objects; Cursor's as strings or Errors. */
-const errorText = (error: unknown) => str(error) || str(record(error).message) || String(error)
+export const errorText = (error: unknown) =>
+  str(error) || str(record(error).message) || String(error)
 
 /** Lines added and removed across unified-diff hunks, each `{ lines: ['+x', '-y', ' z'] }`. */
 function hunkDelta(hunks: unknown[]): { added: number; removed: number } {

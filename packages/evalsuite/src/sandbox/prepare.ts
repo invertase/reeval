@@ -22,9 +22,9 @@ import { withLease } from '../scheduler/client.ts'
 import type { AttemptImage, DockerSandboxDescriptor, HarnessDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
 
-/** Whose CLI a harness's image carries. The fake harness runs in Cursor's. */
+/** Whose CLI a harness's image carries. The fake harness runs in its `layout`'s, else Cursor's. */
 export const imageHarness = (harness: HarnessDescriptor): BakedHarness =>
-  harness.kind === 'fake' ? 'cursor' : harness.kind
+  harness.kind === 'fake' ? (harness.layout ?? 'cursor') : harness.kind
 
 /**
  * One image build at a time across the run's workers. Whoever gets the lease looks for the

@@ -4,7 +4,7 @@ import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
 import { AGENTS, agentAuth } from './agents.ts'
-import { normaliseStream, type StampedPart } from './transcript.ts'
+import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
@@ -56,7 +56,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             }
             return finish(await result.text, 'completed')
           } catch (error) {
-            const message = (error as Error).message
+            const message = errorText(error)
             const at = Date.now() - startedAt
             return finish('', turnSignal.aborted ? 'aborted' : 'error', [
               { type: 'error', message, ts: new Date(startedAt + at).toISOString(), atMs: at },

@@ -7,7 +7,7 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { DEFAULT_IMAGE, LABEL } from '@evalsuite/sandbox-docker'
+import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -33,11 +33,14 @@ type Feature = {
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
   record?: (view: { run: RunRecord; project: string; runDir: string }) => void
+  /** ES's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
+  image?: BakedHarness
 }
 
 const TOKEN = 'es-fixture-token-7c1d9a0b52e4'
 
 const skills = (run: RunRecord) => run.environments.flatMap((e) => e.skills)
+const envFiles = (run: RunRecord) => run.environments.flatMap((e) => e.files.map((f) => f.path))
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
@@ -142,6 +145,46 @@ const features: Feature[] = [
     canary: /expected null to be 'Always write tests\.'/,
   },
   {
+    dir: 'harness/claude-code-rules',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['CLAUDE.md']),
+  },
+  {
+    dir: 'harness/cursor-rules',
+    tiers: ['fake', 'docker'],
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/claude-code-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/cursor-workspace-skills',
+    tiers: ['fake', 'docker'],
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/claude-code-dockerfile',
+    tiers: ['docker'],
+    image: 'claude-code',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/agent\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.agentCli ?? '', /\(Claude Code\)$/)
+    },
+  },
+  {
     dir: 'env/setup-order',
     tiers: ['fake', 'docker'],
     env: 'ordered',
@@ -173,14 +216,15 @@ function filesContaining(dir: string, needle: string): string {
   }
 }
 
-const dockerReady = (() => {
+const imageBuilt = (ref: string) => {
   try {
-    execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
+    execFileSync('docker', ['image', 'inspect', ref], { stdio: 'ignore' })
     return true
   } catch {
     return false
   }
-})()
+}
+const dockerReady = imageBuilt(DEFAULT_IMAGE)
 const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
 /** `ES_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
 const only = process.env.ES_FIXTURE_TIERS?.split(',')
@@ -199,10 +243,12 @@ async function containersGone(runId: string, deadlineMs = 20_000): Promise<void>
   assert.equal(left, '', `containers of run ${runId} still exist after ${deadlineMs / 1000}s`)
 }
 
-function skipTier(tier: Tier): string | false {
+function skipTier(tier: Tier, image?: BakedHarness): string | false {
   if (only && !only.includes(tier)) return `ES_FIXTURE_TIERS=${only.join(',')}`
-  if (tier === 'docker' && !dockerReady && !requireDocker)
-    return `needs Docker and ${DEFAULT_IMAGE}`
+  if (tier === 'docker' && !requireDocker) {
+    if (!dockerReady) return `needs Docker and ${DEFAULT_IMAGE}`
+    if (image && !imageBuilt(imageFor(image))) return `needs ${imageFor(image)}`
+  }
   return false
 }
 
@@ -210,7 +256,7 @@ describe('feature fixtures', { concurrency: 4 }, () => {
   for (const f of features) {
     for (const tier of f.tiers) {
       const timeout = tier === 'docker' ? 240_000 : 60_000
-      test(`${f.dir} [${tier}]`, { skip: skipTier(tier), timeout }, async () => {
+      test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, async () => {
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
         const r = await runCli(p.dir, ['run'], {

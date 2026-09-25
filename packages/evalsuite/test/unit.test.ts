@@ -552,12 +552,12 @@ test('layered environments and overrides', async () => {
     ['main', 'branch'],
     'the variant layers skip what the control already has',
   )
-  const r = await resolveEnvironment(applied, {}, '/p', 'e')
+  const r = await resolveEnvironment(applied, {}, '/p', 'e', 'AGENTS.md')
   assert.deepEqual(r.record.overrides, ['env.MODE'])
   assert.deepEqual(r.record.setup, ['echo one', 'echo two'])
   assert.deepEqual(r.record.unset, ['KEY'])
   assert.equal(r.vars.MODE, 'branch')
-  const crossed = await resolveEnvironment(layered(main, other), {}, '/p', 'e')
+  const crossed = await resolveEnvironment(layered(main, other), {}, '/p', 'e', 'AGENTS.md')
   assert.deepEqual(crossed.record.overrides, ['files.a.txt'])
   assert.equal(crossed.record.parent, 'main')
   assert.ok(crossed.files.some((f) => f.path === 'AGENTS.md' && f.content === 'Be terse.'))
@@ -648,7 +648,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
       defineEnvironment('e', ({ skill }) => ({
         skills: [skill.local(join(root, 'skills'), exclude ? { exclude } : {})],
       }))
-    const r = await resolveEnvironment(layered(undefined, env()), {}, root, 'e')
+    const r = await resolveEnvironment(layered(undefined, env()), {}, root, 'e', 'AGENTS.md')
     const [s] = r.skills
     assert.equal(s?.description, 'Greets.\nPolitely.')
     assert.deepEqual(
@@ -662,6 +662,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
       {},
       root,
       'e',
+      'AGENTS.md',
     )
     assert.deepEqual(custom.record.skills[0]?.excluded, [
       'drafts/',
@@ -671,13 +672,13 @@ test('skill directories leave out eval material, recorded as excluded', async ()
     ])
     assert.notEqual(custom.record.skills[0]?.sha256, r.record.skills[0]?.sha256)
 
-    const none = await resolveEnvironment(layered(undefined, env([])), {}, root, 'e')
+    const none = await resolveEnvironment(layered(undefined, env([])), {}, root, 'e', 'AGENTS.md')
     assert.deepEqual(none.record.skills[0]?.excluded, [], 'an empty list replaces the defaults')
     assert.ok(none.skills[0]?.files.some((f) => f.path === 'evals/evals.json'))
     assert.ok(!none.skills[0]?.files.some((f) => f.path.startsWith('.git/')), '.git always goes')
 
     writeFileSync(join(root, 'skills/greet/evals/evals.json'), '{"prompts":["changed"]}')
-    const edited = await resolveEnvironment(layered(undefined, env()), {}, root, 'e')
+    const edited = await resolveEnvironment(layered(undefined, env()), {}, root, 'e', 'AGENTS.md')
     assert.equal(edited.record.digest, r.record.digest, 'editing evals keeps the fingerprint')
   } finally {
     rmSync(root, { recursive: true, force: true })

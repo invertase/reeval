@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { DEFAULT_IMAGE, HARNESS_PACKAGES, LABEL } from '@evalsuite/sandbox-docker'
+import { DEFAULT_IMAGE, HARNESS_PACKAGES, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import { pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const dockerReady = (() => {
@@ -46,6 +46,18 @@ const slow = { timeoutMs: 240_000 }
 const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
 const docker = {
   skip: !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`,
+  timeout: 300_000,
+}
+const claudeImageBuilt = (() => {
+  try {
+    execFileSync('docker', ['image', 'inspect', imageFor('claude-code')], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+const claudeImage = {
+  skip: !claudeImageBuilt && !requireDocker && `needs Docker and ${imageFor('claude-code')}`,
   timeout: 300_000,
 }
 
@@ -314,6 +326,82 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
     }
   })
 
+  test("dockerfile + claudeCode(): ES_BASE is Claude Code's image; another base gets the claude CLI baked on", {
+    ...claudeImage,
+    timeout: 900_000,
+  }, async () => {
+    const nonce = `${Date.now()}-${process.pid}`
+    const p = await project('docker-dockerfile-claude', {
+      'es.config.ts': `
+import { defineConfig } from 'evalsuite'
+import { claudeCode } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({ harness: claudeCode({ model: 'claude-sonnet-5' }), sandbox: docker() })
+`,
+      'evals/tools/Dockerfile': `ARG ES_BASE\nFROM \${ES_BASE}\nRUN echo ${nonce} > /opt/nonce\n`,
+      'evals/deb.Dockerfile': `FROM debian:bookworm-slim\nRUN echo ${nonce} > /opt/deb\n`,
+      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('tools', { sandbox: docker({ dockerfile: './tools/Dockerfile' }) }, async () => {})
+evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async () => {})
+`,
+    })
+    const refs = new Set<string>()
+    const claudeCli = (ref: string) =>
+      execFileSync(
+        'docker',
+        [
+          'run',
+          '--rm',
+          '--entrypoint',
+          'sh',
+          ref,
+          '-c',
+          'find "$HOME/.ai-sdk-harness" -name claude \\( -type f -o -type l \\) -perm -u+x | head -1',
+        ],
+        { encoding: 'utf8' },
+      ).trim()
+    const label = (ref: string) =>
+      execFileSync(
+        'docker',
+        ['image', 'inspect', '--format', `{{index .Config.Labels "${LABEL.harness}"}}`, ref],
+        { encoding: 'utf8' },
+      ).trim()
+    try {
+      // No credentials: es image build never starts an agent.
+      const build = await runCli(p.dir, ['image', 'build', 'tools', 'deb'], {
+        timeoutMs: 800_000,
+        env: { ANTHROPIC_API_KEY: '' },
+      })
+      assert.equal(build.code, 0, build.stdout + build.stderr)
+      const toolsRef = /^docker:tools · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      const debRef = /^docker:deb\.Dockerfile · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      refs.add(toolsRef)
+      refs.add(debRef)
+      assert.match(toolsRef, /^evalsuite-dockerfile:tools-[0-9a-f]{16}$/, build.stdout)
+      assert.match(
+        debRef,
+        /^evalsuite-sandbox:claude-code-[\d.]+-evalsuite-dockerfile-deb-dockerfile-/,
+        build.stdout,
+      )
+      const claudeLabel = `${HARNESS_PACKAGES['claude-code'].name}@${HARNESS_PACKAGES['claude-code'].version}`
+      for (const ref of [toolsRef, debRef]) {
+        assert.equal(label(ref), claudeLabel, ref)
+        assert.match(claudeCli(ref), /\/claude$/, ref)
+      }
+    } finally {
+      for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
+      for (const ref of [...refs].filter((r) => r.startsWith('evalsuite-sandbox:'))) {
+        execFileSync('docker', ['rmi', '-f', `${ref}-base`], { stdio: 'ignore' })
+      }
+      execFileSync(
+        'sh',
+        ['-c', `docker images -q 'evalsuite-dockerfile:deb-dockerfile-*' | xargs -r docker rmi -f`],
+        { stdio: 'ignore' },
+      )
+    }
+  })
+
   test('a timeout removes the container', docker, async () => {
     const p = await project('docker-timeout', {
       'es.config.ts': config('{ delayMs: 60_000 }'),
@@ -384,6 +472,80 @@ evaluate('hi', async (t) => { await t.send('hi') })
       const c = await runCli(optIn.dir, ['run'], { env })
       assert.equal(c.code, 2, c.stdout + c.stderr)
       assert.match(c.stderr, /Unknown docker\(\) option "credentials"\./)
+    },
+  )
+
+  test(
+    'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',
+    claudeImage,
+    async () => {
+      const claudeConfig = (sandbox: string) => `
+import { defineConfig } from 'evalsuite'
+import { claudeCode } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({
+  harness: claudeCode({ model: 'claude-sonnet-5' }),
+  sandbox: ${sandbox},
+  timeout: '90s',
+})
+`
+      const eval_ = `import { evaluate, expect } from 'evalsuite'
+evaluate('hi', async (t) => {
+  const turn = await t.send('Reply with the word hi.')
+  expect(turn.transcript.some((e) => e.type === 'error' && /401/.test(e.message ?? ''))).toBe(true)
+  const environ = await t.exec('env; cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
+  expect(environ.stdout).toMatch(/^ANTHROPIC_API_KEY=aisdkhc_[\\w-]{43}$/m)
+  expect(environ.stdout).not.toContain('not_a_real_key')
+})
+`
+      // A made-up key, and a host AI Gateway key the adapter must ignore: the sandbox, the
+      // gateway and the CLI start, the gateway swaps the key in, and Anthropic refuses it (401).
+      const env = {
+        ANTHROPIC_API_KEY: 'sk-ant-not_a_real_key_000000000000000000',
+        AI_GATEWAY_API_KEY: 'gw-not-used',
+        ES_DEBUG: '1',
+      }
+      const brokered = await project('docker-claude-brokered', {
+        'es.config.ts': claudeConfig('docker()'),
+        'evals/d.es.ts': eval_,
+      })
+      const started = Date.now()
+      const a = await runCli(brokered.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const out = a.stdout + a.stderr
+      assert.equal(a.code, 0, out)
+      assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
+      assert.match(
+        out,
+        /es:egress POST https:\/\/api\.anthropic\.com\/v1\/messages HTTP\/[\d.]+ \(set x-api-key\)/,
+      )
+      // The twin of the check below: the same search finds the gateway's lines.
+      assert.match(out, /es:egress /)
+      assert.doesNotMatch(
+        out,
+        /refused|ai-gateway\.vercel\.sh/,
+        'only its endpoints, never the AI Gateway',
+      )
+      const run = readRun(brokered.dir)
+      assert.equal(liveContainers(run.run.runId), '')
+
+      try {
+        execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
+      } catch {
+        return
+      }
+      const refused = await project('docker-claude-no-broker', {
+        'es.config.ts': claudeConfig("docker({ image: 'busybox:1.37' })"),
+        'evals/d.es.ts': eval_,
+      })
+      const b = await runCli(refused.dir, ['run'], { env })
+      assert.equal(b.code, 3, b.stdout + b.stderr)
+      const refusedRun = readRun(refused.dir)
+      assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
+      assert.match(
+        refusedRun.evals[0]?.error?.message ?? '',
+        /^Can't keep ANTHROPIC_API_KEY out of the sandbox: credential brokering could not start/,
+      )
+      assert.equal(liveContainers(refusedRun.run.runId), '')
     },
   )
 })

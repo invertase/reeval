@@ -46,14 +46,14 @@ its files import `evalsuite`.
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
-| `packages/evalsuite/src/harness` | The Cursor harness (`@ai-sdk/harness-cursor`) and a fake harness |
+| `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`) and Claude Code (`@ai-sdk/harness-claude-code`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/sandbox-docker`), so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr` and `nightly` profiles), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
+| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr` and `nightly` profiles), `es.claude.config.ts` (the coding evals under Claude Code), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
 
 ## Development
 
@@ -86,8 +86,11 @@ tests: request-transformation and policy matching, certificates and the stdio mu
 gateway against local HTTP/1.1, HTTP/2 and WebSocket servers; and real containers, where it checks
 the header swap, searches `env`, `/proc` and the filesystem for the key, and checks a restricted
 policy leaves no route out. ES's Docker tests build real `install` layers and Dockerfiles (one
-`FROM ${ES_BASE}`, one on a Debian base that gets the harness baked on) and check the cache and
-the record. The Docker tests skip unless Docker is running and the sandbox image has been built;
+`FROM ${ES_BASE}`, one on a Debian base that gets the harness baked on, for Cursor and for Claude
+Code) and check the cache and the record, and start real Claude Code with a made-up key to check
+brokering end to end. The Docker tests skip unless Docker is running and the sandbox images have
+been built (Cursor's, and Claude Code's for its tests: `es image build` in a project whose config
+uses `claudeCode()`, such as `examples/hello` with `--config es.claude.config.ts`);
 `ES_TEST_REQUIRE_DOCKER=1` (which `pnpm test:docker` sets) makes them fail instead.
 
 For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/es-demo` builds a demo project
@@ -118,20 +121,22 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 
 ### With a real agent
 
-1. Build the sandbox images once. This bakes the Cursor CLI into `evalsuite-sandbox:cursor-<version>`,
-   so the image tag pins the CLI build, then builds every other image the evals' sandboxes need
-   (`from`, `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping
-   `@ai-sdk/harness-cursor`.
+1. Build the sandbox images once. This bakes each planned harness's CLI into ES's image for it,
+   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-1.0.37`, `claude-code-1.0.128`), so
+   the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
+   `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 
    ```bash
    cd examples/hello
    pnpm es image build
+   pnpm es image build --config es.claude.config.ts   # Claude Code's image
    ```
 
 2. Put your credentials in `examples/hello/.env.local`. It is gitignored.
 
    ```bash
    CURSOR_API_KEY=...
+   ANTHROPIC_API_KEY=...              # for es.claude.config.ts
    GOOGLE_GENERATIVE_AI_API_KEY=...   # the example's judge (google/*) and the Genkit evals' sandbox
    # TYPESAFE_AI_API_KEY=...          # for typesafe-ai/* judges such as Jev (or AI_GATEWAY_API_KEY)
    ```
@@ -143,9 +148,10 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    pnpm es run                  # or: pnpm es run greet   (filter by path, eval name or cell)
    pnpm es run skill --runs 2   # the skill compare: control and variant, twice each, with lift
    pnpm es run --profile pr     # sized like a PR run: one run per cell, no variants
+   pnpm es run --config es.claude.config.ts   # the coding evals under Claude Code
    ```
 
-The Cursor key stays on the host (see [Secrets](#secrets)). ES masks secret-looking values in
+The harness keys stay on the host (see [Secrets](#secrets)). ES masks secret-looking values in
 everything it writes to `.es/`.
 
 ## Authoring API
@@ -153,11 +159,17 @@ everything it writes to `.es/`.
 | Import | Exports |
 |---|---|
 | `@invertase/foobar` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment`, `DEFAULT_SKILL_EXCLUDE` and the types |
-| `@invertase/foobar/harness` | `cursor()`, `fakeHarness()` |
+| `@invertase/foobar/harness` | `cursor()`, `claudeCode()`, `fakeHarness()` |
 | `@invertase/foobar/sandbox` | `docker()`, `fakeSandbox()` |
 | `@invertase/foobar/judge` | `fakeJudge()`, `RECOMMENDED_JUDGE_MODEL`, `DEFAULT_THRESHOLD` and the judge types |
 | `@invertase/foobar/view` | Browser-safe run headers, the studio's file layout and view-models |
 
+- **Harnesses:** `cursor({ model? })` (needs `CURSOR_API_KEY`), `claudeCode({ model })` (needs
+  `ANTHROPIC_API_KEY`; `model` is any id or alias the `claude` CLI takes, and it's required) and
+  `fakeHarness({ … })`, a scripted agent for tests and dry runs. `fakeHarness({ layout:
+  'claude-code' })` behaves like that agent without a key: its image, and where it reads rules and
+  skills. Real harnesses need `docker()`, and each authenticates only with its own key, passed to
+  its adapter explicitly: a host `AI_GATEWAY_API_KEY`, subscription or keychain is never used.
 - `evaluate(name, [options,] fn)`, plus `evaluate.skip`, `evaluate.only`, `evaluate.todo(name)`
   and `evaluate.for(cases)(name, [options,] (t, item) => …)` (the name can use `$key`, `%s` and
   `%#`). `fn` receives the eval context `t`.
@@ -189,7 +201,7 @@ defaults → outer group → inner group → eval:
 
 | Option | Cascade | Meaning |
 |---|---|---|
-| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2' })]`. The only list: each harness is its own cell |
+| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-sonnet-5' })]`. The only list: each harness is its own cell |
 | `environment` | replace | What the eval runs in: one `defineEnvironment(…)`. None by default |
 | `compare` | replace | Variants to run next to the environment (groups and evals only); `false` opts out |
 | `sandbox` | replace | Where it runs and what's baked into its image: one `docker()`, `docker({ install: […] })`, `docker({ dockerfile: './Dockerfile' })`, … |
@@ -230,7 +242,7 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   // skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills', only: ['genkit'] })
   // skill.registry('owner/repo@skill', { version: 'v1' }), skill.npm('pkg@1.2.3'), skill.inline({ … })
   mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url)
-  rules: file('../rules/house.md'),                       // AGENTS.md in the workspace
+  rules: file('../rules/house.md'),                       // AGENTS.md (CLAUDE.md for Claude Code)
   files: { 'docs/api.md': file('../docs/api.md'), '~/.npmrc': 'fund=false\n' },
   setup: [{ run: 'npm ci', timeout: '5m' }],            // every attempt, before the agent starts
 }))
@@ -246,7 +258,10 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   concatenate, parent first.
 - **Skills** go to the harness adapter, which writes them where its agent reads them;
   `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
-  for Cursor). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
+  for Cursor, `.claude/skills` for Claude Code).
+- **Rules** land where the harness's agent reads them: `AGENTS.md` for Cursor, `CLAUDE.md` for
+  Claude Code. The digest hashes their content, not the path, so one environment has one digest
+  on every harness (the harness is in the cell's fingerprint). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
   commit is recorded either way. `SKILL.md` frontmatter is YAML, so block descriptions
   (`description: |` or `>`) work.
 - **Eval material stays out of the sandbox:** a skill directory (`local`, `git`, `npm`,
@@ -360,7 +375,7 @@ environment. A sandbox has one base, and optionally `install` commands on top:
 ```ts
 import { docker } from '@invertase/foobar/sandbox'
 
-docker()                                          // ES's image: Node 22 and the Cursor CLI
+docker()                                          // ES's image: Node 22 and the harness's CLI
 docker({ image: 'ghcr.io/acme/agent:1' })         // already has the harness, used as is
 docker({ from: 'python:3.12-slim' })              // ES bakes Node, git and the harness on top
 docker({ dockerfile: './sandbox/Dockerfile' })    // yours, relative to this file
@@ -376,23 +391,27 @@ docker({ install: ['npm i -g firebase-tools@14'] }) // on any base but dockerfil
 - **`dockerfile`** is built with plain `docker build` from the Dockerfile's directory, so Docker's
   layer cache applies, and tagged `evalsuite-dockerfile:<name>-<hash>`: a hash of the Dockerfile,
   every file of the build context (less `.dockerignore`, or `<name>.dockerignore` next to it) and
-  ES's image tag. It builds on first use, and again when any of those change. ES passes
-  `--build-arg ES_BASE=evalsuite-sandbox:cursor-<version>`. **The harness bootstrap:** start the
+  the harness's image tag. It builds on first use, and again when any of those change. ES passes
+  `--build-arg ES_BASE=<ES's image for the harness>`, e.g. `evalsuite-sandbox:claude-code-1.0.128`
+  for a `claudeCode()` cell, so each harness builds its own. **The harness bootstrap:** start the
   Dockerfile `ARG ES_BASE` / `FROM ${ES_BASE}` to layer on ES's image, which already has Node,
-  git and the Cursor CLI, so the result is used as is (ES checks the image's
-  `dev.evalsuite.agent-version` label). From any other base, which must be Debian or Ubuntu
-  based, ES treats the built image like `from`: it adds Node, pnpm, git and bash, runs the
-  harness bootstrap and caches that as `evalsuite-sandbox:cursor-<version>-<your image>`. Either
-  way, keep `root` as the user and leave `/es` alone. `install` doesn't combine with
+  git and the harness's CLI, so the result is used as is (ES checks the image's
+  `dev.evalsuite.harness` label names that harness's adapter). From any other base (including
+  another harness's image), which must be Debian or Ubuntu based, ES treats the built image like
+  `from`: it adds Node, pnpm, git and bash, runs the harness bootstrap and caches that as
+  `evalsuite-sandbox:<harness>-<version>-<your image>`. Either way, keep `root` as the user and
+  leave `/es` alone. `install` doesn't combine with
   `dockerfile`: put the commands in it as `RUN` lines.
 - **Mistakes** are usage errors when the file loads: two bases (`image`, `from`, `dockerfile`),
   `install` with `dockerfile`, an empty `install`, a Dockerfile that doesn't exist, and `image`,
   `install` or `dockerfile` on an environment.
 - **`es image build`** collects the evals as `--dry-run` does (filters, `--tag` and `--profile`
-  apply) and builds every image their sandboxes need: ES's image when a sandbox or a
-  `FROM ${ES_BASE}` Dockerfile uses it, then each `from` and `dockerfile` image (rebuilt, so the
-  Cursor CLI stays current) and each `install` layer (only when its base or commands changed).
-  `es image build --dry-run` lists each sandbox's images and how they're made, without building.
+  apply) and builds every image their sandboxes need, per harness: ES's image for each harness
+  whose sandbox or `FROM ${ES_BASE}` Dockerfile uses it, then each `from` and `dockerfile` image
+  (rebuilt, so the CLI stays current) and each `install` layer (only when its base or commands
+  changed). `es image build --dry-run` lists each sandbox and harness pair's images and how
+  they're made, without building (`docker · claude-code` is `docker()` for Claude Code; Cursor
+  and the fake harness share Cursor's image). `--dry-run --json` lists them too, with `harness`.
   Otherwise `es run` builds `from`, `dockerfile` and `install` images on first use.
 
 `examples/hello` has one of each: `python.es.ts` (`from`), `jq.es.ts` (`install`) and
@@ -410,13 +429,25 @@ masked in everything ES writes, and only their names are recorded. A literal str
 secret-looking name (`*_KEY`, `*_TOKEN`, …) is refused, and a missing config-level secret stops
 the run before it starts. Anything you pass to the agent is readable by the agent.
 
-The harness's own `CURSOR_API_KEY` never enters the container. Each Cursor attempt starts an
-egress gateway: the container's HTTP(S) proxy is a small forwarder that sends every connection
-over `docker exec` to ES, which decrypts only `api2.cursor.sh` (with a CA made for that attempt,
-whose key stays in memory) and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key
-on the key-exchange request. Other hosts pass through untouched and end to end. The short-lived
+The harness's own key (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`) never enters the container. Each
+real-agent attempt starts an egress gateway: the container's HTTP(S) proxy is a small forwarder
+that sends every connection over `docker exec` to ES, which decrypts only the harness's API host
+(`api2.cursor.sh`, `api.anthropic.com`; with a CA made for that attempt, whose key stays in
+memory) and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key, but only on the
+harness's brokered endpoints:
+
+| Harness | Endpoints that get the key |
+|---|---|
+| Cursor | `POST /auth/exchange_user_api_key` |
+| Claude Code | `POST /v1/messages`, `POST /v1/messages/count_tokens`, `GET /api/claude_code/settings`, `GET /api/claude_code/policy_limits` |
+
+A request carrying the placeholder anywhere else gets a 403 from the gateway, never the key, and
+the attempt's output prints `warning: the egress gateway refused POST https://…`, so a CLI update
+that needs a new endpoint fails loudly rather than hanging or leaking. Claude Code runs with
+`CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (no telemetry or feature-flag fetches, so flags
+can't change between runs). Other hosts pass through untouched and end to end. The short-lived
 session token the Cursor CLI gets back does live in the container. If the gateway can't start
-(for example, an `image` without `node`), the attempt is an infra error that says why, so a
+(for example, an `image` without `node`), the attempt is an infra error that names the key, so a
 change of image can't widen the credential boundary: there's no way to pass the real key in.
 `docker({ from })` or `docker({ dockerfile })` give any Debian or Ubuntu image what the gateway
 needs. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
@@ -479,8 +510,8 @@ es studio                 Browse runs, evals and transcripts in the web studio (
 es studio build           Write the studio as a static site: --out <dir> (studio-dist)
                           --scratch --no-artifacts
 es image build [filter...]
-                          Build every image the evals' Docker sandboxes need: ES's image (bakes
-                          in the Cursor CLI), from and dockerfile images, install layers
+                          Build every image the evals' Docker sandboxes need, per harness: ES's
+                          image (bakes in its CLI), from and dockerfile images, install layers
   --dry-run               List the images and how each is made, without building
 es --version | es --help
 ```
