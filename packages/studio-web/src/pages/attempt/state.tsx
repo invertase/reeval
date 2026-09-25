@@ -96,6 +96,24 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
               {attempt.image.ref}{' '}
               <span className="text-muted-foreground">{attempt.image.id.slice(0, 19)}</span>
               {attempt.image.agentCli ? <div>agent CLI {attempt.image.agentCli}</div> : null}
+              {attempt.image.dockerfile ? (
+                <div>
+                  dockerfile {attempt.image.dockerfile.path}{' '}
+                  <span className="text-muted-foreground">
+                    {attempt.image.dockerfile.sha256.slice(0, 12)}
+                  </span>
+                </div>
+              ) : null}
+              {attempt.image.install?.length ? (
+                <div>
+                  install on {attempt.image.base}
+                  {attempt.image.install.map((command) => (
+                    <div key={command} className="text-muted-foreground">
+                      $ {command}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : (
             <span className="font-sans text-muted-foreground">none (fake sandbox)</span>

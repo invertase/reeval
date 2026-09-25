@@ -80,12 +80,16 @@ evaluate('docker', async (t) => {
   })
 
   test(
-    'image steps bake into a cached layer; setup runs outside the timeout; secrets reach the container or only checks',
+    'install bakes into a cached layer; setup runs outside the timeout; secrets reach the container or only checks',
     docker,
     async () => {
+      const install = [
+        { run: 'pwd > /opt/es-cwd && ls /es/workspace | wc -l > /opt/es-workspace', timeout: '2m' },
+        '(printenv DB_URL || echo none) > /opt/es-secret && echo layer > /opt/es-layer && date +%s%N > /opt/es-built',
+      ]
       const eval_ = `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
 const tools = defineEnvironment('tools', ({ secret }) => ({
-  image: [{ run: 'echo layer > /opt/es-layer && date +%s%N > /opt/es-built', timeout: '2m' }],
   files: { '~/.config/es/hint.txt': 'from home' },
   env: {
     DB_URL: secret.fromEnv('ES_TEST_DB_URL'),
@@ -93,9 +97,12 @@ const tools = defineEnvironment('tools', ({ secret }) => ({
   },
   setup: [{ run: 'sleep 6 && printf %s "$CHECK_ONLY" > /tmp/check-only', timeout: '30s' }],
 }))
-evaluate('layered', { environment: tools, timeout: '5s' }, async (t) => {
+evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stringify(install)} }), timeout: '5s' }, async (t) => {
   await t.send('x')
   expect((await t.exec('cat /opt/es-layer')).stdout).toBe('layer\\n')
+  expect((await t.exec('cat /opt/es-cwd')).stdout).toBe('/\\n')
+  expect((await t.exec('cat /opt/es-workspace')).stdout).toBe('0\\n')
+  expect((await t.exec('cat /opt/es-secret')).stdout).toBe('none\\n')
   expect((await t.exec('printf %s "$DB_URL"')).stdout).toBe('postgres://u:pw-long-enough@db')
   expect((await t.exec('cat ~/.config/es/hint.txt')).stdout).toBe('from home')
   await t.exec('cat /opt/es-built')
@@ -113,32 +120,64 @@ evaluate('layered', { environment: tools, timeout: '5s' }, async (t) => {
       const first = await runCli(p.dir, ['run'], { env, ...slow })
       assert.equal(first.code, 0, first.stdout + first.stderr)
       const built = (run: ReturnType<typeof readRun>) =>
-        run.evals[0]?.read(run.evals[0].trial.checks[3]?.log.path ?? '') ?? ''
+        run.evals[0]?.read(run.evals[0].trial.checks[6]?.log.path ?? '') ?? ''
       const a = readRun(p.dir)
-      assert.match(a.evals[0]?.trial.image?.ref ?? '', /^evalsuite-env:[0-9a-f]{16}$/)
-      assert.deepEqual(a.run.environments[0]?.image, [
-        'echo layer > /opt/es-layer && date +%s%N > /opt/es-built',
-      ])
+      const image = a.evals[0]?.trial.image
+      assert.match(image?.ref ?? '', /^evalsuite-install:[0-9a-f]{16}$/)
+      assert.equal(image?.base, DEFAULT_IMAGE)
+      assert.deepEqual(
+        image?.install,
+        install.map((s) => (typeof s === 'string' ? s : s.run)),
+      )
+      assert.equal(image?.dockerfile, null)
+      assert.deepEqual(
+        a.run.stack.images.map((i) => i.ref),
+        [image?.ref],
+      )
+      assert.equal('image' in (a.run.environments[0] ?? {}), false)
       assert.ok(a.evals[0]?.trial.files.setupLog, 'setup.log is kept')
       assert.doesNotMatch(JSON.stringify(a.run), /pw-long-enough/, 'declared secrets are redacted')
       const second = await runCli(p.dir, ['run'], { env, ...slow })
       assert.equal(second.code, 0, second.stdout + second.stderr)
       const b = readRun(p.dir)
       assert.equal(built(a), built(b), 'the second run reused the cached layer')
+      assert.equal(b.evals[0]?.trial.image?.id, image?.id)
       assert.equal(liveContainers(b.run.runId), '')
     },
   )
 
+  test('a failing install command names itself and is an infra error', docker, async () => {
+    const p = await project('docker-install-fail', {
+      'es.config.ts': config('{}'),
+      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('broken', { sandbox: docker({ install: ['echo one', 'exit 9', 'echo never'] }) }, async (t) => {
+  await t.send('x')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], slow)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    assert.match(
+      r.stdout + r.stderr,
+      /Building the install layer \(3 commands\) failed: install 2\/3 exited 9: exit 9/,
+    )
+    assert.match(
+      r.stdout + r.stderr,
+      /full log: .+\.es\/cache\/images\/evalsuite-install-[0-9a-f]{16}\.log/,
+    )
+  })
+
   test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`
-    const env = `import { defineEnvironment } from 'evalsuite'
-export const fresh = defineEnvironment('fresh', {
-  image: ['echo ${nonce} > /opt/es-nonce && date +%s%N > /opt/es-built'],
+    const env = `import { docker } from 'evalsuite/sandbox'
+export const fresh = docker({
+  install: ['echo ${nonce} > /opt/es-nonce && date +%s%N > /opt/es-built'],
 })
 `
     const file = (name: string) => `import { evaluate } from 'evalsuite'
 import { fresh } from './env.ts'
-evaluate('${name}', { environment: fresh, runs: 2 }, async (t) => {
+evaluate('${name}', { sandbox: fresh, runs: 2 }, async (t) => {
   await t.send('x')
   await t.exec('cat /opt/es-built')
 })
@@ -177,6 +216,94 @@ evaluate('${name}', { environment: fresh, runs: 2 }, async (t) => {
     } finally {
       const refs = new Set(attempts.map((a) => a.image?.ref).filter(Boolean) as string[])
       for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
+    }
+  })
+
+  test('dockerfile: FROM the ES_BASE arg inherits the harness; another base gets it baked on; es image build builds them', {
+    ...docker,
+    timeout: 900_000,
+  }, async () => {
+    const nonce = `${Date.now()}-${process.pid}`
+    const p = await project('docker-dockerfile', {
+      'es.config.ts': config('{}'),
+      'evals/tools/Dockerfile': `ARG ES_BASE\nFROM \${ES_BASE}\nCOPY greeting.txt /opt/greeting.txt\nRUN echo ${nonce} > /opt/nonce\n`,
+      'evals/tools/greeting.txt': 'hello\n',
+      'evals/tools/.dockerignore': 'scratch\n',
+      'evals/deb.Dockerfile': `FROM debian:bookworm-slim\nRUN echo ${nonce} > /opt/deb\n`,
+      'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('tools', { sandbox: docker({ dockerfile: './tools/Dockerfile' }) }, async (t) => {
+  await t.send('x')
+  const greeting = (await t.exec('cat /opt/greeting.txt')).stdout
+  expect(greeting).toMatch(/^(hello|bonjour)\\n$/)
+  expect((await t.exec('cat /opt/nonce')).stdout).toBe('${nonce}\\n')
+  expect((await t.exec('pwd')).stdout).toBe('/es/workspace\\n')
+})
+evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (t) => {
+  await t.send('x')
+  expect((await t.exec('cat /opt/deb')).stdout).toBe('${nonce}\\n')
+  expect((await t.exec('grep -c bookworm /etc/os-release')).exitCode).toBe(0)
+  expect((await t.exec('node --version && git --version')).exitCode).toBe(0)
+})
+`,
+    })
+    const refs = new Set<string>()
+    try {
+      // Only the deb eval, so ES's own image (a FROM \${ES_BASE} Dockerfile needs it) isn't rebuilt.
+      const planned = await runCli(p.dir, ['image', 'build', '--dry-run', 'deb'])
+      assert.equal(planned.code, 0, planned.stdout + planned.stderr)
+      assert.match(planned.stdout, /^images {2}1 sandbox image/m)
+      const build = await runCli(p.dir, ['image', 'build', 'deb'], { timeoutMs: 600_000 })
+      assert.equal(build.code, 0, build.stdout + build.stderr)
+      const debRef = /^docker:deb\.Dockerfile: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      assert.match(debRef, /^evalsuite-sandbox:cursor-[\d.]+-evalsuite-dockerfile-deb-dockerfile-/)
+      refs.add(debRef)
+
+      const first = await runCli(p.dir, ['run'], slow)
+      assert.equal(first.code, 0, first.stdout + first.stderr)
+      const a = readRun(p.dir)
+      const image = (name: string) => a.evals.find((e) => e.name === name)?.trial.image
+      const tools = image('tools')
+      const deb = image('deb')
+      for (const i of [tools, deb]) if (i) refs.add(i.ref)
+      assert.match(tools?.ref ?? '', /^evalsuite-dockerfile:tools-[0-9a-f]{16}$/)
+      assert.equal(tools?.base, tools?.ref)
+      assert.equal(tools?.dockerfile?.path, 'evals/tools/Dockerfile')
+      assert.match(tools?.dockerfile?.sha256 ?? '', /^[0-9a-f]{64}$/)
+      assert.match(tools?.agentCli ?? '', /\d/, 'the harness label comes from ES_BASE')
+      assert.equal(deb?.ref, debRef, 'the run used the image es image build made')
+      assert.equal(deb?.dockerfile?.path, 'evals/deb.Dockerfile')
+      assert.match(deb?.agentCli ?? '', /\d/)
+      assert.deepEqual(deb?.install, [])
+
+      mkdirSync(join(p.dir, 'evals/tools/scratch'))
+      writeFileSync(join(p.dir, 'evals/tools/scratch/notes.txt'), 'ignored')
+      const same = await runCli(p.dir, ['run', 'tools'], slow)
+      assert.equal(same.code, 0, same.stdout + same.stderr)
+      assert.equal(
+        readRun(p.dir).evals[0]?.trial.image?.id,
+        tools?.id,
+        'an ignored file changes nothing',
+      )
+
+      writeFileSync(join(p.dir, 'evals/tools/greeting.txt'), 'bonjour\n')
+      const edited = await runCli(p.dir, ['run', 'tools'], slow)
+      assert.equal(edited.code, 0, edited.stdout + edited.stderr)
+      const b = readRun(p.dir).evals[0]
+      if (b?.trial.image) refs.add(b.trial.image.ref)
+      assert.notEqual(b?.trial.image?.ref, tools?.ref, 'a context file edit is a new tag')
+      assert.notEqual(b?.trial.image?.dockerfile?.sha256, tools?.dockerfile?.sha256)
+      assert.equal(b?.read(b.trial.checks[0]?.log.path ?? '').includes('bonjour'), true)
+    } finally {
+      for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
+      for (const ref of [...refs].filter((r) => r.startsWith('evalsuite-sandbox:'))) {
+        execFileSync('docker', ['rmi', '-f', `${ref}-base`], { stdio: 'ignore' })
+      }
+      execFileSync(
+        'sh',
+        ['-c', `docker images -q 'evalsuite-dockerfile:deb-dockerfile-*' | xargs -r docker rmi -f`],
+        { stdio: 'ignore' },
+      )
     }
   })
 

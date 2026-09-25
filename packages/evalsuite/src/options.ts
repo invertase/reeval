@@ -68,6 +68,10 @@ export function harnessId(h: HarnessDescriptor): string {
 export function sandboxId(s: SandboxDescriptor): string {
   if (s.id) return s.id
   if (s.kind === 'fake') return 'fake'
+  if (s.dockerfile) {
+    const [file = '', dir = ''] = s.dockerfile.split(/[\\/]/).reverse()
+    return `docker:${sanitize(file === 'Dockerfile' ? dir || file : file)}`
+  }
   const image = s.image ?? s.from
   return image ? `docker:${sanitize(image)}` : 'docker'
 }

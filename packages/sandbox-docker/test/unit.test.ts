@@ -1,10 +1,19 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { X509Certificate } from 'node:crypto'
-import { readdirSync, readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import {
+  contextFiles,
+  dockerfileTag,
+  dockerignoreMatcher,
+  installLayerTag,
+  installScript,
+} from '../src/build-image.ts'
 import { isRegistryDigest } from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
@@ -373,5 +382,83 @@ describe('package boundary', () => {
     assert.ok(pkg.files.includes('docker'))
     assert.match(readFileSync(join(root, 'docker/Dockerfile'), 'utf8'), /^FROM node:/m)
     assert.equal(pkg.dependencies['@ai-sdk/harness-cursor'], HARNESS_CURSOR_VERSION)
+  })
+})
+
+describe('image recipes', () => {
+  const tmp = () => mkdtempSync(join(tmpdir(), 'es-recipe-'))
+
+  test('.dockerignore rules match as Docker reads them', () => {
+    const ignored = dockerignoreMatcher(
+      [
+        '# comment',
+        'node_modules',
+        '/dist/',
+        '*.log',
+        '**/cache',
+        'docs/**/*.md',
+        '!docs/keep.md',
+        '',
+      ].join('\n'),
+    )
+    assert.equal(ignored('node_modules/a/b.js'), true, 'a directory excludes what is in it')
+    assert.equal(ignored('src/node_modules/x'), false, 'patterns are anchored at the context root')
+    assert.equal(ignored('dist/index.js'), true)
+    assert.equal(ignored('build.log'), true)
+    assert.equal(ignored('logs/build.log'), false, '* stays within one path segment')
+    assert.equal(ignored('a/b/cache/x'), true, '** spans directories')
+    assert.equal(ignored('docs/guide/intro.md'), true)
+    assert.equal(ignored('docs/keep.md'), false, '! re-includes; the last matching rule wins')
+    assert.equal(ignored('src/index.ts'), false)
+  })
+
+  test('the Dockerfile tag hashes the Dockerfile and its build context, less .dockerignore', () => {
+    const dir = tmp()
+    const file = join(dir, 'Dockerfile')
+    writeFileSync(file, 'FROM debian:bookworm-slim\nCOPY tool.sh /usr/local/bin/tool\n')
+    writeFileSync(join(dir, 'tool.sh'), 'echo 1\n')
+    writeFileSync(join(dir, '.dockerignore'), 'scratch\nDockerfile\n')
+    mkdirSync(join(dir, 'scratch'))
+    const first = dockerfileTag(file)
+    assert.match(first.tag, /^evalsuite-dockerfile:es-recipe-[a-z0-9]+-[0-9a-f]{16}$/)
+    assert.deepEqual(contextFiles(dir, file), ['.dockerignore', 'Dockerfile', 'tool.sh'])
+    writeFileSync(join(dir, 'scratch', 'notes.txt'), 'ignored')
+    assert.equal(dockerfileTag(file).tag, first.tag, 'ignored files do not change the hash')
+    writeFileSync(join(dir, 'tool.sh'), 'echo 2\n')
+    const edited = dockerfileTag(file)
+    assert.notEqual(edited.tag, first.tag, 'a context file changes the hash')
+    writeFileSync(file, 'FROM debian:bookworm-slim\nCOPY tool.sh /usr/local/bin/tool\nRUN true\n')
+    assert.notEqual(dockerfileTag(file).tag, edited.tag, 'the Dockerfile changes the hash')
+    const named = join(dir, 'python.Dockerfile')
+    writeFileSync(named, 'FROM python:3.12-slim\n')
+    assert.match(dockerfileTag(named).tag, /^evalsuite-dockerfile:python-dockerfile-/)
+  })
+
+  test('install commands run in order from /, in one script, stopping at the first failure', () => {
+    const dir = tmp()
+    const out = join(dir, 'out.txt')
+    const script = installScript([
+      { run: `pwd >> ${out}` },
+      { run: `echo "it's two" >> ${out}\necho line >> ${out}` },
+      { run: 'exit 7' },
+      { run: `echo never >> ${out}` },
+    ])
+    const r = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
+    assert.equal(r.status, 7)
+    assert.equal(readFileSync(out, 'utf8'), "/\nit's two\nline\n")
+    assert.match(r.stderr, /es: install 3\/4 exited 7: exit 7/)
+    assert.match(
+      installScript([{ run: 'sleep 1', timeoutMs: 90_000 }]),
+      /timeout --kill-after=10 90 bash -c 'sleep 1'/,
+    )
+  })
+
+  test('install layers are keyed on the base image id and the exact list', () => {
+    const steps = [{ run: 'apt-get install -y jq' }]
+    const tag = installLayerTag({ id: 'sha256:a' }, steps)
+    assert.match(tag, /^evalsuite-install:[0-9a-f]{16}$/)
+    assert.notEqual(installLayerTag({ id: 'sha256:b' }, steps), tag)
+    assert.notEqual(installLayerTag({ id: 'sha256:a' }, [...steps, { run: 'true' }]), tag)
+    assert.equal(installLayerTag({ id: 'sha256:a' }, [{ run: 'apt-get install -y jq' }]), tag)
   })
 })

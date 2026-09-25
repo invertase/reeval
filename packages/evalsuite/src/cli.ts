@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
 import {
@@ -23,7 +23,7 @@ import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
-import type { RunContext } from './types.ts'
+import type { RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 
@@ -71,7 +71,10 @@ Usage:
   es studio build           Write the studio as a static site for Pages, Netlify or any host
     --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
     --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
-  es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
+  es image build [filter...]
+                            Build every image the evals' Docker sandboxes need: ES's image (bakes
+                            in the Cursor CLI), from and dockerfile images, install layers
+    --dry-run               List the images and how each is made, without building
   es --version
   es --help
 
@@ -135,11 +138,13 @@ async function run(argv: string[]): Promise<number> {
     console.log(HELP)
     return values.help ? EXIT.ok : EXIT.usage
   }
-  if (command === 'image' && filters[0] === 'build') {
-    const { buildImage } = await import('@evalsuite/sandbox-docker')
-    const { image } = await buildImage((line) => console.log(dim(line)))
-    console.log(green(`Built ${image}`))
-    return EXIT.ok
+  if (command === 'image') {
+    if (filters[0] !== 'build') {
+      throw new UsageError(
+        `Unknown command "image ${filters[0] ?? ''}". Did you mean es image build?`,
+      )
+    }
+    return imageBuildCommand(values, filters.slice(1))
   }
   if (command === 'studio') {
     const config = await loadConfig(values.config, 'studio')
@@ -168,6 +173,54 @@ async function run(argv: string[]): Promise<number> {
 }
 
 type Flags = ReturnType<typeof parse>['values']
+
+/**
+ * `es image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
+ * sandboxes need; with `--dry-run`, lists them instead. Without a config, just ES's image.
+ */
+async function imageBuildCommand(flags: Flags, filters: string[]): Promise<number> {
+  const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
+  const { docker } = await import('./sandbox.ts')
+  let root = process.cwd()
+  let uses: Array<{ id: string; sandbox: SandboxDescriptor }> = [{ id: '', sandbox: docker() }]
+  if (existsSync(resolve(flags.config))) {
+    const setup = await prepareRun({ ...flags, 'dry-run': true })
+    const ctx = await startRun(setup)
+    const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
+    root = config.root
+    const { runEngine } = await import('./engine/node.ts')
+    let planned: PlannedItem[] = []
+    await runEngine({
+      run: JSON.parse(
+        JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
+      ),
+      filters,
+      onPlan: async (items) => {
+        planned = items.filter((p) => !p.attempt.plan.skip)
+        return false
+      },
+    })
+    uses = planned.length
+      ? planned.map((p) => ({ id: p.id, sandbox: p.attempt.sandbox }))
+      : [{ id: '', sandbox: config.sandbox }]
+  }
+  const targets = imageTargets(uses)
+  if (targets.length === 0) {
+    console.log('No eval runs in a Docker sandbox, so there are no images to build.')
+    return EXIT.ok
+  }
+  if (flags['dry-run']) {
+    for (const line of await imagePlanLines(targets, root)) console.log(line)
+    return EXIT.ok
+  }
+  const built = await buildImages(targets, root, (line) => console.log(dim(line)))
+  for (const { id, image } of built) {
+    console.log(
+      green(`${id}: ${image.ref}`) + dim(` ${image.id.replace(/^sha256:/, '').slice(0, 12)}`),
+    )
+  }
+  return EXIT.ok
+}
 
 /** `es run`: check, plan, run the engine, then write the run and pick the exit code. */
 async function runCommand(flags: Flags, filters: string[]): Promise<number> {

@@ -9,7 +9,6 @@ import { parse as parseYaml } from 'yaml'
 import { parseDuration } from '../config.ts'
 import {
   type AppliedEnvironment,
-  checkImageSecrets,
   DEFAULT_SKILL_EXCLUDE,
   isHostFile,
   isSecret,
@@ -48,8 +47,6 @@ export type ResolvedStep = { run: string; timeoutMs: number; cwd?: string }
 
 export type ResolvedEnvironment = {
   record: EnvironmentRecord
-  /** Baked into a cached image layer, in order. */
-  image: Array<{ run: string; timeoutMs?: number }>
   /** Run in each fresh sandbox, in order, before the agent starts. */
   setup: ResolvedStep[]
   /** Handed to the harness adapter. */
@@ -345,7 +342,6 @@ export async function resolveEnvironment(
   where: string,
 ): Promise<ResolvedEnvironment> {
   const envWhere = `environment ${environment.name} (${where})`
-  checkImageSecrets(environment.name, environment.layers, optionsEnv, InfraError)
   const overrides = new Set<string>()
   const env: EnvVars = { ...optionsEnv }
   const files = new Map<string, string | HostFile>()
@@ -355,7 +351,6 @@ export async function resolveEnvironment(
     LoadedSkill & { placement: SkillPlacement; source: string; commit: string | null }
   >()
   let rules: string | HostFile | undefined
-  const image: ResolvedEnvironment['image'] = []
   const setup: ResolvedStep[] = []
   const seen = { env: new Set<string>(), files: new Set<string>(), mcp: new Set<string>() }
 
@@ -378,13 +373,6 @@ export async function resolveEnvironment(
       if (seen.mcp.has(name)) overrides.add(`mcp.${name}`)
       seen.mcp.add(name)
       mcp.set(name, server)
-    }
-    for (const step of spec.image ?? []) {
-      image.push(
-        typeof step === 'string'
-          ? { run: step }
-          : { run: step.run, ...(step.timeout ? { timeoutMs: parseDuration(step.timeout) } : {}) },
-      )
     }
     for (const step of spec.setup ?? []) {
       const s = typeof step === 'string' ? { run: step as string } : step
@@ -483,7 +471,6 @@ export async function resolveEnvironment(
   )
   const digest = `sha256:${sha256(
     JSON.stringify({
-      image,
       setup,
       skills: skillRecords.map((s) => [s.name, s.sha256, s.placement]),
       mcp: mcpShape,
@@ -500,7 +487,6 @@ export async function resolveEnvironment(
       parent: environment.parent,
       overrides: [...overrides],
       digest,
-      image: image.map(stepCommand),
       setup: setup.map(stepCommand),
       skills: skillRecords,
       mcp: Object.keys(resolvedMcp).sort(),
@@ -509,7 +495,6 @@ export async function resolveEnvironment(
       secrets: secretNames,
       unset: [...secrets.unset].sort(),
     },
-    image,
     setup,
     skills: skillList.filter((s) => s.placement === 'harness').map((s) => s.skill),
     workspaceSkills: skillList.filter((s) => s.placement === 'workspace').map((s) => s.skill),

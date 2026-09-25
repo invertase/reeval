@@ -1,16 +1,21 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
 import {
-  buildEnvironmentLayer,
+  buildDockerfile,
   buildImage,
+  buildInstallLayer,
   DEFAULT_IMAGE,
-  environmentLayerTag,
+  dockerfileTag,
+  ES_BASE_ARG,
   harnessImageFor,
   type ImageInfo,
+  type InstallStep,
   imageInfo,
+  installLayerTag,
   LABEL,
-  type LayerStep,
 } from '@evalsuite/sandbox-docker'
+import { parseDuration } from '../config.ts'
+import { stepCommand } from '../environment.ts'
 import { withLease } from '../scheduler/client.ts'
 import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
@@ -25,12 +30,13 @@ async function buildOnce(
   ref: string,
   build: () => Promise<unknown>,
   signal: AbortSignal,
+  force = false,
 ): Promise<ImageInfo | null> {
   try {
     return await withLease(
       BUILD_LIMIT,
       async () => {
-        const built = await imageInfo(ref)
+        const built = force ? null : await imageInfo(ref)
         if (built) return built
         await build()
         return imageInfo(ref)
@@ -43,46 +49,152 @@ async function buildOnce(
   }
 }
 
+/** The sandbox's `install` commands, with their timeouts in ms. */
+export const installSteps = (sandbox: DockerSandboxDescriptor): InstallStep[] =>
+  (sandbox.install ?? []).map((step) =>
+    typeof step === 'string'
+      ? { run: step }
+      : { run: step.run, ...(step.timeout ? { timeoutMs: parseDuration(step.timeout) } : {}) },
+  )
+
+/** Whether the Dockerfile starts from ES's sandbox image, which then has to exist first. */
+export const usesEsBase = (dockerfile: string) =>
+  new RegExp(`\\$\\{?${ES_BASE_ARG}\\b`).test(readFileSync(dockerfile, 'utf8'))
+
+export const projectPath = (root: string, path: string) =>
+  relative(root, path).split(sep).join('/') || '.'
+
+/** Rebuild harness images and Dockerfiles once each, even when they exist (`es image build`). */
+export type Rebuild = { done: Set<string> }
+
+type PrepareOptions = {
+  /** Progress lines, e.g. for `es image build`. */
+  log?: (line: string) => void
+  rebuild?: Rebuild
+}
+
+const buildLogger = (root: string, ref: string) => {
+  const dir = join(root, '.es', 'cache', 'images')
+  const file = join(dir, `${ref.replace(/[^A-Za-z0-9._-]+/g, '-')}.log`)
+  return {
+    file,
+    write: (output: string) => {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(file, output)
+    },
+  }
+}
+
 /**
- * The image an attempt's container starts from: the sandbox image (built from `from` on first
- * use), plus a cached layer with the environment's `image` steps. Each layer's build log goes to
- * `.es/cache/images/<hash>.log` under `root`.
+ * The image with the harness in it that the sandbox's `install` layer (if any) goes on: ES's
+ * image, `image` as is, `from` with Node and the harness baked on, or the built Dockerfile (with
+ * them baked on unless it starts from ES's image).
+ */
+async function harnessBase(
+  sandbox: DockerSandboxDescriptor,
+  root: string,
+  signal: AbortSignal,
+  options: PrepareOptions,
+): Promise<{ ref: string; info: ImageInfo; dockerfile: AttemptImage['dockerfile'] }> {
+  const log = options.log ?? ((line: string) => process.env.ES_DEBUG && console.error(line))
+  const rebuild = (ref: string) => {
+    if (!options.rebuild || options.rebuild.done.has(ref)) return false
+    options.rebuild.done.add(ref)
+    return true
+  }
+  const bake = async (from: string) => {
+    const ref = harnessImageFor(from)
+    const force = rebuild(ref)
+    const info =
+      (force ? null : await imageInfo(ref)) ??
+      (await buildOnce(ref, () => buildImage(log, { from, signal }), signal, force))
+    if (!info) throw new InfraError(`The sandbox image ${ref} disappeared after building`)
+    return { ref, info }
+  }
+
+  if (sandbox.image) {
+    const info = await imageInfo(sandbox.image)
+    if (!info) {
+      throw new InfraError(
+        `Docker image ${sandbox.image} not found. docker({ image }) is used as is, so pull or build it first (or use from or dockerfile to have ES build it).`,
+      )
+    }
+    return { ref: sandbox.image, info, dockerfile: null }
+  }
+  if (sandbox.from) return { ...(await bake(sandbox.from)), dockerfile: null }
+  if (sandbox.dockerfile) {
+    const path = sandbox.dockerfile
+    const { tag, sha256 } = dockerfileTag(path)
+    const dockerfile = { path: projectPath(root, path), sha256 }
+    if (usesEsBase(path) && !(await imageInfo(DEFAULT_IMAGE))) {
+      throw new InfraError(
+        `${dockerfile.path} starts FROM \${${ES_BASE_ARG}}, and ${DEFAULT_IMAGE} isn't built. Build it once with: es image build`,
+      )
+    }
+    const force = rebuild(tag)
+    const logFile = buildLogger(root, tag)
+    let built: ImageInfo | null
+    try {
+      log(`Building ${dockerfile.path} as ${tag}`)
+      built =
+        (force ? null : await imageInfo(tag)) ??
+        (await buildOnce(
+          tag,
+          () => buildDockerfile(path, { signal, log: logFile.write, force: true }),
+          signal,
+          force,
+        ))
+    } catch (error) {
+      if (signal.aborted) throw error
+      throw new InfraError(`${(error as Error).message}\n(full log: ${logFile.file})`)
+    }
+    if (!built) throw new InfraError(`The image ${tag} disappeared after building`)
+    // Built on ES's sandbox image (or another harness image), so the bootstrap is already there.
+    if (built.labels[LABEL.agentVersion]) return { ref: tag, info: built, dockerfile }
+    return { ...(await bake(tag)), dockerfile }
+  }
+  const info = await imageInfo(DEFAULT_IMAGE)
+  if (!info)
+    throw new InfraError(`Docker image ${DEFAULT_IMAGE} not found. Build it with: es image build`)
+  return { ref: DEFAULT_IMAGE, info, dockerfile: null }
+}
+
+/**
+ * The image an attempt's container starts from: the sandbox's harness image (built on first use
+ * for `from` and `dockerfile`), plus a cached layer with its `install` commands. Each build's log
+ * goes to `.es/cache/images/` under `root`.
  */
 export async function prepareImage(
   sandbox: DockerSandboxDescriptor,
-  steps: LayerStep[],
   root: string,
   signal: AbortSignal,
+  options: PrepareOptions = {},
 ): Promise<AttemptImage> {
-  if (sandbox.image && sandbox.from) {
-    throw new InfraError('docker() takes either image or from, not both')
-  }
-  let ref = sandbox.image ?? (sandbox.from ? harnessImageFor(sandbox.from) : DEFAULT_IMAGE)
-  let info = await imageInfo(ref)
-  if (!info && sandbox.from) {
-    const from = sandbox.from
-    const log = (line: string) => process.env.ES_DEBUG && console.error(line)
-    info = await buildOnce(ref, () => buildImage(log, { from, signal }), signal)
-  }
-  if (!info) throw new InfraError(`Docker image ${ref} not found. Build it with: es image build`)
-  const agentCli = info.labels[LABEL.agentVersion] ?? null
-  if (steps.length > 0) {
-    const parent = { ref, id: info.id }
-    ref = environmentLayerTag(parent, steps)
-    const logFile = join(root, '.es', 'cache', 'images', `${ref.split(':')[1]}.log`)
-    const log = (output: string) => {
-      mkdirSync(join(root, '.es', 'cache', 'images'), { recursive: true })
-      writeFileSync(logFile, output)
+  const base = await harnessBase(sandbox, root, signal, options)
+  const agentCli = base.info.labels[LABEL.agentVersion] ?? null
+  const steps = installSteps(sandbox)
+  const install = (sandbox.install ?? []).map(stepCommand)
+  const image = { agentCli, base: base.ref, install, dockerfile: base.dockerfile }
+  if (steps.length === 0) return { ref: base.ref, id: base.info.id, ...image }
+
+  const parent = { ref: base.ref, id: base.info.id }
+  const ref = installLayerTag(parent, steps)
+  const logFile = buildLogger(root, ref)
+  let info: ImageInfo | null
+  try {
+    info = await imageInfo(ref)
+    if (!info) {
+      options.log?.(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
+      info = await buildOnce(
+        ref,
+        () => buildInstallLayer(parent, steps, { signal, log: logFile.write }),
+        signal,
+      )
     }
-    try {
-      info =
-        (await imageInfo(ref)) ??
-        (await buildOnce(ref, () => buildEnvironmentLayer(parent, steps, { signal, log }), signal))
-    } catch (error) {
-      if (signal.aborted) throw error
-      throw new InfraError(`${(error as Error).message}\n(full log: ${logFile})`)
-    }
-    if (!info) throw new InfraError(`The environment layer ${ref} disappeared after building`)
+  } catch (error) {
+    if (signal.aborted) throw error
+    throw new InfraError(`${(error as Error).message}\n(full log: ${logFile.file})`)
   }
-  return { ref, id: info.id, agentCli }
+  if (!info) throw new InfraError(`The install layer ${ref} disappeared after building`)
+  return { ref, id: info.id, ...image }
 }

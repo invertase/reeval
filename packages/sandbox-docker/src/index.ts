@@ -1,12 +1,18 @@
 // `@evalsuite/sandbox-docker`: a local Docker sandbox for AI SDK harnesses, with an egress gateway
 // that brokers credentials and enforces a network policy.
 export {
-  buildEnvironmentLayer,
+  buildDockerfile,
   buildImage,
+  buildInstallLayer,
+  contextFiles,
   DOCKER_CONTEXT,
-  environmentLayerTag,
+  dockerfileTag,
+  dockerignoreMatcher,
+  ES_BASE_ARG,
   harnessImageFor,
-  type LayerStep,
+  type InstallStep,
+  installLayerTag,
+  installScript,
 } from './build-image.ts'
 export {
   type DockerResult,

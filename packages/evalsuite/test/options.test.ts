@@ -453,9 +453,14 @@ describe('common mistakes', () => {
       /group\("genkit"\) got two functions\. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks\./,
     ],
     [
-      'a secret in an image step',
-      `defineEnvironment('firebase', ({ secret }) => ({ env: { FIREBASE_TOKEN: secret.fromEnv('FIREBASE_TOKEN') }, image: ['firebase login --token "$FIREBASE_TOKEN"'] }))`,
-      /image step "firebase login --token "\$FIREBASE_TOKEN"" in environment firebase uses a secret; image steps are baked and never see secrets\. Move it to setup\./,
+      'image steps on an environment',
+      `defineEnvironment('firebase', { image: ['npm i -g firebase-tools'] })`,
+      /"image" isn't an environment field \(defineEnvironment\("firebase"\)\)\. What's baked into the image is the sandbox's: docker\(\{ install: … \}\)\. An environment only runs setup steps, in every attempt, with its secrets\./,
+    ],
+    [
+      'a dockerfile on an environment',
+      `defineEnvironment('py', { dockerfile: './Dockerfile' })`,
+      /"dockerfile" isn't an environment field \(defineEnvironment\("py"\)\)\. What's baked into the image is the sandbox's: docker\(\{ dockerfile: … \}\)/,
     ],
     [
       'an async callback',
@@ -573,7 +578,7 @@ evaluate('e', { environment: main }, async () => {})
 })
 
 describe('environments and secrets', () => {
-  test('skills, MCP, rules, files, image and setup steps and secrets reach the sandbox and the record', async () => {
+  test('skills, MCP, rules, files, setup steps and secrets reach the sandbox and the record', async () => {
     const p = await project('environments', {
       'es.config.ts': `
 import { defineConfig } from 'evalsuite'
@@ -596,7 +601,6 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
   mcp: { docs: mcp.stdio('npx', ['-y', 'docs-mcp', '--port', '0']) },
   rules: 'Always write tests.',
   files: { 'notes/readme.txt': 'hello', 'docs/api.md': file('../docs/api.md') },
-  image: ['echo baked > baked.txt'],
   env: {
     FLAVOUR: 'mint',
     EXTRA_TOKEN: secret.fromEnv('ES_TEST_HOST_TOKEN'),
@@ -623,7 +627,6 @@ evaluate('greets', { compare: [withSkill] }, async (t) => {
   expect(await t.readFile('AGENTS.md')).toBe('Always write tests.')
   expect(await t.readFile('notes/readme.txt')).toBe('hello')
   expect(await t.readFile('docs/api.md')).toBe('# API\\n')
-  expect(await t.readFile('baked.txt')).toBe('baked\\n')
   expect((await t.readFile('secret-length.txt'))?.trim()).toBe('32')
   expect((await t.exec('printf %s "$FLAVOUR"')).stdout).toBe('mint')
   expect((await t.exec('printf %s "$CHECK_TOKEN"')).stdout).toBe('s3cret-value-123')
@@ -647,7 +650,7 @@ evaluate('greets', { compare: [withSkill] }, async (t) => {
     assert.deepEqual(w?.secrets, ['APP_TOKEN', 'CHECK_TOKEN', 'EXTRA_TOKEN'])
     assert.deepEqual(w?.unset, ['MAYBE_TOKEN'])
     assert.deepEqual(w?.vars, ['FLAVOUR', 'MODE'])
-    assert.deepEqual(w?.image, ['echo baked > baked.txt'])
+    assert.equal('image' in (w ?? {}), false, 'environments record no image steps')
     assert.equal(w?.setup.length, 1)
     const [e] = evals
     const variant = e?.attempts.find((a) => a.cell === 'fake/with-skill/fake')
@@ -771,5 +774,120 @@ evaluate('staged', { environment: env }, async (t) => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const [s] = readRun(p.dir).run.environments[0]?.skills ?? []
     assert.deepEqual([s?.name, s?.excluded], ['skill-reviewer', ['evals/', 'review.es.ts']])
+  })
+})
+
+describe('sandbox images', () => {
+  const sandboxCases: Array<[string, string, RegExp]> = [
+    [
+      'two bases',
+      `docker({ image: 'x:1', dockerfile: './Dockerfile' })`,
+      /docker\(\) takes one base image, but got image and dockerfile\. Use image \(has the harness\), from \(a toolchain image ES bakes the harness onto\) or dockerfile\./,
+    ],
+    [
+      'image and from',
+      `docker({ image: 'x:1', from: 'python:3.12-slim' })`,
+      /docker\(\) takes one base image, but got image and from\./,
+    ],
+    [
+      'install with a dockerfile',
+      `docker({ dockerfile: './Dockerfile', install: ['apt-get install -y jq'] })`,
+      /docker\(\) takes dockerfile or install, not both: put the install commands in the Dockerfile as RUN lines/,
+    ],
+    [
+      'a missing dockerfile',
+      `docker({ dockerfile: './nope/Dockerfile' })`,
+      /docker\(\{ dockerfile: "\.\/nope\/Dockerfile" \}\): .+\/evals\/nope\/Dockerfile doesn't exist\. Paths are relative to the file that calls docker\(\)\./,
+    ],
+    [
+      'an empty install',
+      `docker({ install: [] })`,
+      /docker\(\{ install \}\) takes a non-empty list of shell commands/,
+    ],
+    [
+      'an install command that is not a command',
+      `docker({ install: [{ command: 'x' }] as never })`,
+      /docker\(\{ install \}\) commands are strings or \{ run, timeout\? \} objects \(got \{"command":"x"\}\)/,
+    ],
+    [
+      'a bad install timeout',
+      `docker({ install: [{ run: 'x', timeout: 'soon' }] as never })`,
+      /Invalid timeout "soon" for docker\(\{ install \}\) command "x"\. Use e\.g\. "90s" or "15m"\./,
+    ],
+    [
+      'steps instead of install',
+      `docker({ steps: ['x'] } as never)`,
+      /Unknown docker\(\) option "steps"\. Did you mean "install"\?/,
+    ],
+    [
+      'secrets on the sandbox',
+      `docker({ env: {} } as never)`,
+      /Unknown docker\(\) option "env"\. The sandbox is what's baked into the image; variables and secrets belong in defineEnvironment\(\{ env \}\)\./,
+    ],
+  ]
+  for (const [what, sandbox, message] of sandboxCases) {
+    test(`${what} exits 2 with a fix`, async () => {
+      const p = await project('sandbox-mistake', {
+        'es.config.ts': fakeConfig(),
+        'evals/Dockerfile': 'FROM debian:bookworm-slim\n',
+        'evals/o.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('e', { sandbox: ${sandbox} }, async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, `${sandbox}\n${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, message)
+    })
+  }
+
+  test('es image build --dry-run lists every image the planned sandboxes need', async () => {
+    const p = await project('image-plan', {
+      'es.config.ts': `
+import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+import { fakeJudge } from 'evalsuite/judge'
+export default defineConfig({
+  harness: fakeHarness({}),
+  sandbox: docker({ install: ['apt-get update && apt-get install -y jq', { run: 'jq --version', timeout: '1m' }] }),
+  judge: { model: fakeJudge() },
+})
+`,
+      'docker/tools/Dockerfile': `ARG ES_BASE\nFROM \${ES_BASE}\nRUN echo tools\n`,
+      'evals/py.Dockerfile': 'FROM python:3.12-slim\n',
+      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('default', async () => {})
+evaluate('default again', async () => {})
+evaluate('tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }, async () => {})
+evaluate('py', { sandbox: docker({ dockerfile: new URL('./py.Dockerfile', import.meta.url) }) }, async () => {})
+evaluate('from', { sandbox: docker({ from: 'python:3.12-slim', maxConcurrent: 2 }) }, async () => {})
+evaluate('fake', { sandbox: (await import('evalsuite/sandbox')).fakeSandbox() }, async () => {})
+`,
+    })
+    const r = await runCli(p.dir, ['image', 'build', '--dry-run'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const out = r.stdout
+    assert.match(out, /^images {2}4 sandbox images \(nothing built: --dry-run\)$/m)
+    assert.match(
+      out,
+      /^docker \+ install · 2 evals\n {2}base +evalsuite-sandbox:cursor-[\d.]+ +\(rebuild: the harness bootstrap\)\n {2}install 2 commands +evalsuite-install:<base id \+ commands> +\(build unless cached\)$/m,
+    )
+    assert.match(
+      out,
+      /^docker:tools · 1 eval\n {2}dockerfile docker\/tools\/Dockerfile +evalsuite-dockerfile:tools-[0-9a-f]{16} +\(docker build \(layer cache\), tagged by content hash\)\n {2}harness +evalsuite-dockerfile:tools-[0-9a-f]{16} +\(inherited: FROM \$\{ES_BASE\}\)$/m,
+    )
+    assert.match(
+      out,
+      /^docker:py\.Dockerfile · 1 eval\n {2}dockerfile evals\/py\.Dockerfile +evalsuite-dockerfile:py-dockerfile-[0-9a-f]{16} .*\n {2}harness +evalsuite-sandbox:cursor-[\d.]+-evalsuite-dockerfile-py-dockerfile-.+ +\(rebuild: Node, git and the harness bootstrap on top\)$/m,
+    )
+    assert.match(
+      out,
+      /^docker:python:3\.12-slim · 1 eval\n {2}from python:3\.12-slim +evalsuite-sandbox:cursor-[\d.]+-python-3-12-slim-[0-9a-f]{8}/m,
+    )
+    assert.doesNotMatch(out, /fake/)
+    const runs = join(p.dir, '.es', 'runs')
+    assert.equal(existsSync(runs) ? readdirSync(runs).length : 0, 0, 'a dry run writes no run')
   })
 })

@@ -19,12 +19,18 @@ export async function preflight(sandboxes: SandboxDescriptor[]): Promise<Sandbox
     throw new UsageError('Docker is not running. Start Docker and try again.')
   }
   const images: SandboxImage[] = []
-  // `from` images are built on first use, so there's nothing to check yet.
-  const refs = new Set(dockers.filter((d) => !d.from).map((d) => d.image ?? DEFAULT_IMAGE))
+  // `from` and `dockerfile` images are built on first use, so there's nothing to check yet.
+  const refs = new Set(
+    dockers.filter((d) => !d.from && !d.dockerfile).map((d) => d.image ?? DEFAULT_IMAGE),
+  )
   for (const ref of refs) {
     const info = await imageInfo(ref)
     if (!info) {
-      throw new UsageError(`Sandbox image ${ref} not found. Build it once with: es image build`)
+      throw new UsageError(
+        ref === DEFAULT_IMAGE
+          ? `Sandbox image ${ref} not found. Build it once with: es image build`
+          : `Sandbox image ${ref} not found. docker({ image }) is used as is, so pull or build it first.`,
+      )
     }
     images.push({
       ref,

@@ -151,8 +151,9 @@ function setupAllowance(planned: PlannedAttempt): number {
     (ms, step) => ms + parseDuration((typeof step === 'string' ? undefined : step.timeout) ?? '5m'),
     0,
   )
-  const baked = layers.some((l) => (l.spec.image ?? []).length > 0)
-  const building = planned.sandbox.kind === 'docker' && (planned.sandbox.from || baked)
+  const { sandbox } = planned
+  const building =
+    sandbox.kind === 'docker' && !!(sandbox.from || sandbox.dockerfile || sandbox.install?.length)
   return setupMs + (building ? SETUP_BUDGET_MS : 0)
 }
 
@@ -461,7 +462,7 @@ async function runAttempt(
     record.image = null
     if (spec.sandbox.kind === 'docker') {
       const { prepareImage } = await import('./sandbox/prepare.ts')
-      record.image = await prepareImage(spec.sandbox, resolved.image, config.root, testSignal)
+      record.image = await prepareImage(spec.sandbox, config.root, testSignal)
       image = record.image.ref
     }
   }
@@ -485,13 +486,7 @@ async function runAttempt(
 
   /** Setup steps in order, each with its own timeout; a failure is an infra error. */
   async function runSetup(box: Sandbox, env: ResolvedEnvironment) {
-    const steps: ResolvedStep[] = [
-      // The fake sandbox has no image to bake into, so it runs image steps here too.
-      ...(spec.sandbox.kind === 'docker'
-        ? []
-        : env.image.map((s) => ({ run: s.run, timeoutMs: s.timeoutMs ?? 5 * 60_000 }))),
-      ...env.setup,
-    ]
+    const steps: ResolvedStep[] = env.setup
     record.setup = []
     for (const [i, step] of steps.entries()) {
       const start = performance.now()

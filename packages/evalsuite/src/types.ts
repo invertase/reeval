@@ -174,6 +174,13 @@ export type DockerSandboxDescriptor = {
   image?: string
   /** A Debian or Ubuntu based toolchain image; ES bakes Node and the harness on top, cached. */
   from?: string
+  /**
+   * An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from
+   * its directory with `ES_BASE` set to ES's sandbox image and cached by content hash.
+   */
+  dockerfile?: string
+  /** Baked onto the sandbox image in one build container: in order, no secrets, no workspace. */
+  install?: InstallStep[]
   /** The most Docker sandboxes at once, across the run, whatever their image. */
   maxConcurrent?: number
 }
@@ -233,14 +240,13 @@ export type SkillSource = { kind: 'skill'; placement: SkillPlacement } & (
     }
 )
 
-/** Baked into a cached image layer: no secrets, root, cwd `/`. */
-export type ImageStep = string | { run: string; timeout?: Duration }
+/** A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`. */
+export type InstallStep = string | { run: string; timeout?: Duration }
 /** Runs in every attempt before the agent starts, with secrets, outside the eval timeout. */
 export type SetupStep = { run: string; timeout?: Duration; cwd?: string }
 
 /** What an eval runs in: the declarative, phased spec of one environment. */
 export type EnvironmentSpec = {
-  image?: ImageStep[]
   env?: EnvVars
   /** Workspace-relative, or `~/` for home. */
   files?: Record<string, string | HostFile>
@@ -516,9 +522,8 @@ export type EnvironmentRecord = {
   parent: string | null
   /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
   overrides: string[]
-  /** Covers every field except the image id; secret names are included, values never are. */
+  /** Covers every field; secret names are included, values never are. The image is the sandbox's. */
   digest: string
-  image: string[]
   setup: string[]
   skills: Array<{
     name: string
@@ -537,7 +542,19 @@ export type EnvironmentRecord = {
   unset: string[]
 }
 
-export type AttemptImage = { ref: string; id: string; agentCli: string | null }
+/** The image an attempt's container started from, and how ES made it. */
+export type AttemptImage = {
+  ref: string
+  /** Content-addressed image id (`sha256:…`). */
+  id: string
+  agentCli: string | null
+  /** The harness image `install` was baked onto: `ref` itself without `install`. */
+  base: string
+  /** The `docker({ install })` commands, in order. */
+  install: string[]
+  /** `docker({ dockerfile })`: the path from the project root and the build context's hash. */
+  dockerfile: { path: string; sha256: string } | null
+}
 
 /** What one judge call saw, and for a call that failed, why and what was retried first. */
 export type JudgeInput = {

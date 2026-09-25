@@ -7,7 +7,6 @@ import type {
   EnvironmentInput,
   EnvironmentLayer,
   EnvironmentSpec,
-  EnvVars,
   HostFile,
   McpHelper,
   McpServer,
@@ -24,9 +23,11 @@ export class DefinitionError extends Error {
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
-const SPEC_KEYS = ['image', 'env', 'files', 'rules', 'setup', 'skills', 'mcp']
+const SPEC_KEYS = ['env', 'files', 'rules', 'setup', 'skills', 'mcp']
+/** Image fields that belong on the sandbox, not the environment. */
+const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
 const SPEC_HINTS: Record<string, string> = {
-  exec: 'setup (every attempt) or image (baked)',
+  exec: 'setup',
   steps: 'setup',
   run: 'setup',
   vars: 'env',
@@ -240,42 +241,8 @@ export function checkEnv(env: unknown, where: string, Err = DefinitionError): vo
   }
 }
 
-/** `$NAME` or `${NAME}` for any of `names`. */
-export function referencedSecret(command: string, names: string[]): string | undefined {
-  return names.find((n) => new RegExp(`\\$(?:\\{${n}\\}|${n}(?![A-Za-z0-9_]))`).test(command))
-}
-
 export const stepCommand = (step: string | { run: string }) =>
   typeof step === 'string' ? step : step.run
-
-/** Env keys set to secrets, anywhere in these layers. */
-export const secretKeys = (layers: readonly EnvironmentLayer[], extra: EnvVars = {}) => [
-  ...new Set(
-    [...layers.map((l) => l.spec.env ?? {}), extra].flatMap((env) =>
-      Object.entries(env).flatMap(([k, v]) => (isSecret(v) ? [k] : [])),
-    ),
-  ),
-]
-
-/** Image steps are baked, so a step that reads a secret of the environment can never work. */
-export function checkImageSecrets(
-  name: string,
-  layers: readonly EnvironmentLayer[],
-  extra: EnvVars = {},
-  Err: new (message: string) => Error = DefinitionError,
-): void {
-  const secrets = secretKeys(layers, extra)
-  for (const layer of layers) {
-    for (const step of layer.spec.image ?? []) {
-      const command = stepCommand(step)
-      if (referencedSecret(command, secrets)) {
-        throw new Err(
-          `image step "${command}" in environment ${name} uses a secret; image steps are baked and never see secrets. Move it to setup.`,
-        )
-      }
-    }
-  }
-}
 
 function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   if (typeof spec !== 'object' || spec === null || Array.isArray(spec)) {
@@ -283,19 +250,25 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   }
   for (const key of Object.keys(spec)) {
     if (SPEC_KEYS.includes(key)) continue
+    if (SANDBOX_KEYS.includes(key)) {
+      const as = key === 'image' ? 'install' : key
+      throw new DefinitionError(
+        `"${key}" isn't an environment field (${where}). What's baked into the image is the sandbox's: docker({ ${as}: … }). An environment only runs setup steps, in every attempt, with its secrets.`,
+      )
+    }
     const hint = SPEC_HINTS[key] ? ` Did you mean "${SPEC_HINTS[key]}"?` : ''
     throw new DefinitionError(`Unknown field "${key}" in ${where}.${hint}`)
   }
   const s = spec as EnvironmentSpec
   if (s.env !== undefined) checkEnv(s.env, where)
-  const list = (key: 'image' | 'setup' | 'skills') => {
+  const list = (key: 'setup' | 'skills') => {
     const value = s[key]
     if (value !== undefined && !Array.isArray(value)) {
       throw new DefinitionError(`${key} in ${where} must be a list`)
     }
     return value ?? []
   }
-  for (const step of [...list('image'), ...list('setup')]) {
+  for (const step of list('setup')) {
     const run = typeof step === 'string' ? step : (step as { run?: unknown })?.run
     if (typeof run !== 'string' || !run.trim()) {
       throw new DefinitionError(`Steps in ${where} are strings or { run, timeout? } objects`)
@@ -337,7 +310,6 @@ function buildSpec(input: EnvironmentInput, where: string, base: string): Enviro
 }
 
 function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment {
-  checkImageSecrets(name, layers)
   const env = { kind: 'environment' as const, name, layers: Object.freeze(layers) }
   Object.defineProperty(env, 'extend', {
     enumerable: false,
