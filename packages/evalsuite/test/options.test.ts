@@ -552,7 +552,12 @@ describe('common mistakes', () => {
     [
       'a fake agent script step with two actions',
       `evaluate('e', { harness: fakeHarness({ script: [[{ exec: 'ls', reply: 'x' } as never]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \} or \{ reply: string \}/,
+      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \}, \{ reply: string \} or \{ mcp: '<server>\/<tool>' \}/,
+    ],
+    [
+      'a fake agent MCP step without a tool',
+      `evaluate('e', { harness: fakeHarness({ script: [[{ mcp: 'stamp' }]] }) }, async () => {})`,
+      /fakeHarness\(\{ script \}\) steps are .+ or \{ mcp: '<server>\/<tool>' \} \(got \{"mcp":"stamp"\}\)/,
     ],
     [
       'an empty hosts list',

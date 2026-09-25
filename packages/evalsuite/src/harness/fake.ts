@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
-import { skillFiles } from '../environment/resolve.ts'
-import { InfraError } from '../sandbox/types.ts'
+import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
+import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
 import { layoutOf } from './agents.ts'
 import type { Harness } from './types.ts'
@@ -114,6 +114,20 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
             })
           } else if ('write' in step) {
             for (const [path, content] of Object.entries(step.write)) await write(path, content)
+          } else if ('mcp' in step) {
+            const time = at()
+            const [server = '', tool = ''] = step.mcp.split('/')
+            const r = await callMcpTool(sandbox, mcp, server, tool, signal)
+            transcript.push({
+              ...time,
+              type: 'tool',
+              toolCallId: `call_${++calls}`,
+              tool: `mcp__${server}__${tool}`,
+              input: {},
+              output: r.output,
+              ok: r.ok,
+              durationMs: Date.now() - startedAt - time.atMs,
+            })
           } else scripted = step.reply
         }
         if (descriptor.delayMs) {
@@ -132,3 +146,67 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
     }
   },
 })
+
+const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
+
+/**
+ * Starts a stdio MCP server in the sandbox, as an agent would, and calls one tool with no
+ * arguments: initialize, then the call, with stdin held open a moment so the server can answer.
+ */
+async function callMcpTool(
+  sandbox: Sandbox,
+  servers: Record<string, ResolvedMcpServer>,
+  name: string,
+  tool: string,
+  signal: AbortSignal,
+): Promise<{ output: string; ok: boolean }> {
+  const server = servers[name]
+  if (!server) {
+    const known = Object.keys(servers)
+    throw new InfraError(
+      `The fake agent's script calls MCP server "${name}", which the environment doesn't have (it has ${known.length ? known.join(', ') : 'none'})`,
+    )
+  }
+  if (server.transport !== 'stdio') {
+    throw new InfraError(
+      `The fake agent calls stdio MCP servers only; "${name}" is ${server.transport}`,
+    )
+  }
+  const messages = [
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'es-fake-agent', version: '1' },
+      },
+    },
+    { jsonrpc: '2.0', method: 'notifications/initialized' },
+    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: {} } },
+  ].map((m) => q(JSON.stringify(m)))
+  const command = [server.command, ...server.args].map(q).join(' ')
+  const r = await sandbox.exec(`{ printf '%s\\n' ${messages.join(' ')}; sleep 1; } | ${command}`, {
+    signal,
+    env: server.env,
+  })
+  const reply = r.stdout
+    .split('\n')
+    .flatMap((line) => {
+      try {
+        return [
+          JSON.parse(line) as { id?: number; result?: McpResult; error?: { message: string } },
+        ]
+      } catch {
+        return []
+      }
+    })
+    .find((m) => m.id === 2)
+  if (!reply) return { output: r.stderr.trim() || `no reply (exit ${r.exitCode})`, ok: false }
+  if (reply.error) return { output: reply.error.message, ok: false }
+  const text = (reply.result?.content ?? []).flatMap((c) => (c.type === 'text' ? [c.text] : []))
+  return { output: text.join('\n'), ok: !reply.result?.isError }
+}
+
+type McpResult = { content?: Array<{ type: string; text: string }>; isError?: boolean }

@@ -167,12 +167,15 @@ export type FakeHarnessDescriptor = {
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
- * the command's stdout, `write` as file edits, and `reply` is the turn's final message.
+ * the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp`
+ * (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
+ * would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`.
  */
 export type FakeScriptStep =
   | { exec: string }
   | { write: Record<string, string> }
   | { reply: string }
+  | { mcp: string }
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
   model?: string
