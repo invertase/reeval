@@ -71,7 +71,8 @@ Usage:
   es studio build           Write the studio as a static site for Pages, Netlify or any host
     --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
     --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
-  es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
+  es image build [harness…] Build a Docker sandbox image per harness (cursor, claude-code);
+                            by default, for the harness option in the config file only
   es --version
   es --help
 
@@ -137,8 +138,13 @@ async function run(argv: string[]): Promise<number> {
   }
   if (command === 'image' && filters[0] === 'build') {
     const { buildImage } = await import('@evalsuite/sandbox-docker')
-    const { image } = await buildImage((line) => console.log(dim(line)))
-    console.log(green(`Built ${image}`))
+    const { imageBuildTargets } = await import('./sandbox/prepare.ts')
+    const named = filters.slice(1)
+    const configured = named.length ? [] : (await loadConfig(values.config, 'image')).harness
+    for (const harness of imageBuildTargets(named, configured)) {
+      const { image } = await buildImage((line) => console.log(dim(line)), { harness })
+      console.log(green(`Built ${image}`))
+    }
     return EXIT.ok
   }
   if (command === 'studio') {
@@ -404,7 +410,7 @@ async function executeRun(
         `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
       )
     }
-    sandboxVersions = await preflight(plan.sandboxes)
+    sandboxVersions = await preflight(plan.stacks)
     return true
   }
   // budget.duration counts from the first attempt's start, not from collecting the files.

@@ -77,7 +77,7 @@ Duration  40s
 | `packages/evalsuite` | The `evalsuite` package and its `es` CLI |
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
-| `packages/evalsuite/src/harness` | The Cursor harness (`@ai-sdk/harness-cursor`) and a fake harness |
+| `packages/evalsuite/src/harness` | The agent harnesses (Cursor via `@ai-sdk/harness-cursor`, Claude Code via `@ai-sdk/harness-claude-code`) and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/view` | `evalsuite/view`: browser-safe run headers, the studio's file layout and view-models |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
@@ -107,18 +107,21 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 
 ### Run a real agent
 
-1. Build the sandbox image once. This bakes the Cursor CLI into `evalsuite-sandbox:cursor-<version>`,
-   so the image tag pins the CLI build. Rebuild it after bumping `@ai-sdk/harness-cursor`.
+1. Build the sandbox image once per harness. This bakes the agent's CLI into
+   `evalsuite-sandbox:<harness>-<adapter version>`, so the image tag pins the CLI build. Rebuild
+   it after bumping the adapter package (`@ai-sdk/harness-cursor`, `@ai-sdk/harness-claude-code`).
 
    ```bash
    cd examples/hello
-   pnpm es image build
+   pnpm es image build                # the config's harness option (Cursor here)
+   pnpm es image build claude-code    # or name them, e.g. for harnesses set in evals or groups
    ```
 
 2. Put your credentials in `examples/hello/.env.local`. It is gitignored.
 
    ```bash
    CURSOR_API_KEY=...
+   ANTHROPIC_API_KEY=...              # for claudeCode() harnesses (es.claude.config.ts)
    GOOGLE_GENERATIVE_AI_API_KEY=...   # the example's judge (google/*) and the Genkit evals' sandbox
    # TYPESAFE_AI_API_KEY=...          # for typesafe-ai/* judges such as Jev (or AI_GATEWAY_API_KEY)
    ```
@@ -130,9 +133,10 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    pnpm es run                  # or: pnpm es run greet   (filter by path, eval name or cell)
    pnpm es run skill --runs 2   # the skill compare: control and variant, twice each, with lift
    pnpm es run --profile pr     # sized like a PR run: one run per cell, no variants
+   pnpm es run --config es.claude.config.ts hello   # the same evals under Claude Code
    ```
 
-The Cursor key stays on the host (see [Secrets](#secrets)). ES masks secret-looking values in
+The harness's key stays on the host (see [Secrets](#secrets)). ES masks secret-looking values in
 everything it writes to `.es/`.
 
 ## CLI
@@ -162,7 +166,8 @@ es studio                 Browse runs, evals and transcripts in the web studio (
                           --port <n> (4984) --host <addr> --open --no-scratch --no-token
 es studio build           Write the studio as a static site: --out <dir> (studio-dist)
                           --scratch --no-artifacts
-es image build            Build the Docker sandbox image (bakes in the Cursor CLI)
+es image build [harness…] Build a Docker sandbox image per harness (cursor, claude-code);
+                          by default, for the harness option in the config file only
 es --version | es --help
 ```
 
@@ -289,7 +294,7 @@ export default defineConfig({
 | Import | Exports |
 |---|---|
 | `evalsuite` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment` and the types |
-| `evalsuite/harness` | `cursor()`, `fakeHarness()` |
+| `evalsuite/harness` | `cursor()`, `claudeCode()`, `fakeHarness()` |
 | `evalsuite/sandbox` | `docker()`, `fakeSandbox()` |
 | `evalsuite/judge` | `fakeJudge()` and the judge types |
 
@@ -320,7 +325,7 @@ defaults → outer group → inner group → eval:
 
 | Option | Cascade | Meaning |
 |---|---|---|
-| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2' })]`. The only list: each harness is its own cell |
+| `harness` | replace | One harness or a list, e.g. `[cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-opus-5-5' })]`. The only list: each harness is its own cell |
 | `environment` | replace | What the eval runs in: one `defineEnvironment(…)`. None by default |
 | `compare` | replace | Variants to run next to the environment (groups and evals only); `false` opts out |
 | `sandbox` | replace | Where it runs: one `docker()`, `docker({ from: 'python:3.12-slim' })`, … |
@@ -335,8 +340,9 @@ A harness list replaces the inherited one, and a function edits it:
 `{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }`. Each eval runs
 once per **cell** and `runs` times per cell; each run is an **attempt** with its own fresh
 sandbox, id `<harness>/<environment or ->/<sandbox>#<n>` (e.g.
-`cursor:composer-2.5/with-house-greeting/docker#2`). Give two harnesses distinct ids with `id`:
-`cursor({ model: 'composer-2', id: 'fast' })`. A cell fails if any of its attempts fails.
+`cursor:composer-2.5/with-house-greeting/docker#2`, `claude-code:claude-opus-5-5/-/docker#1`). Give
+two harnesses distinct ids with `id`: `cursor({ model: 'composer-2', id: 'fast' })`. A cell fails
+if any of its attempts fails.
 
 ### Environments
 
@@ -374,8 +380,8 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   steps concatenate, parent first.
 - **Skills** go to the harness adapter, which writes them where its agent reads them;
   `placement: 'workspace'` writes them into the repo's skill directory instead (`.cursor/skills`
-  for Cursor). A git skill on a moving ref (`main`, or none) warns in the plan; the resolved
-  commit is recorded either way. `SKILL.md` frontmatter is YAML, so block descriptions
+  for Cursor, `.claude/skills` for Claude Code). A git skill on a moving ref (`main`, or none)
+  warns in the plan; the resolved commit is recorded either way. `SKILL.md` frontmatter is YAML, so block descriptions
   (`description: |` or `>`) work.
 - **Eval material stays out of the sandbox:** a skill directory (`local`, `git`, `npm`,
   `registry`) leaves out `.git` and `DEFAULT_SKILL_EXCLUDE`: a root `/evals/` (skill-creator's
@@ -471,12 +477,12 @@ evals/skill.es.ts › house greeting › greets in the house style    1         
 
 ### Sandboxes
 
-`docker()` uses the image `es image build` makes (Node 22 plus the Cursor CLI).
-`docker({ image })` uses another image that already has the harness baked in.
-`docker({ from: 'python:3.12-slim' })` bakes Node, git and the Cursor CLI onto a Debian or
-Ubuntu based toolchain image on first use and caches it, so evals can use Python, Go, Dart and
-so on (`examples/hello/evals/python.es.ts`). An eval has one sandbox: comparing toolchains needs
-different checks, so that's a separate eval.
+`docker()` uses the image `es image build` makes for the cell's harness (Node 22 plus the agent's
+CLI); the fake harness uses the Cursor one. `docker({ image })` uses another image that already
+has the harness baked in. `docker({ from: 'python:3.12-slim' })` bakes Node, git and the harness's
+CLI onto a Debian or Ubuntu based toolchain image on first use and caches it, so evals can use
+Python, Go, Dart and so on (`examples/hello/evals/python.es.ts`). An eval has one sandbox:
+comparing toolchains needs different checks, so that's a separate eval.
 
 ### Secrets
 
@@ -489,14 +495,20 @@ masked in everything ES writes, and only their names are recorded. A literal str
 secret-looking name (`*_KEY`, `*_TOKEN`, …) is refused, and a missing config-level secret stops
 the run before it starts. Anything you pass to the agent is readable by the agent.
 
-The harness's own `CURSOR_API_KEY` never enters the container. Each Cursor attempt starts an
-egress gateway: the container's HTTP(S) proxy is a small forwarder that sends every connection
-over `docker exec` to ES, which decrypts only `api2.cursor.sh` (with a CA made for that attempt,
-whose key stays in memory) and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key
-on the key-exchange request. Other hosts pass through untouched and end to end. The short-lived
-session token the Cursor CLI gets back does live in the container. If the gateway can't start
-(for example, an `image` without `node`), that attempt forwards the key as before and prints a
-warning saying why. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
+The harness's own key (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`) never enters the container. Each
+agent attempt starts an egress gateway: the container's HTTP(S) proxy is a small forwarder that
+sends every connection over `docker exec` to ES, which decrypts only the agent's API host
+(`api2.cursor.sh`, `api.anthropic.com`; with a CA made for that attempt, whose key stays in memory)
+and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key, only on the requests the
+agent needs: Cursor's key exchange (`POST /auth/exchange_user_api_key`), or Claude Code's model
+calls (`POST /v1/messages`, `/v1/messages/count_tokens`), settings and policy limits
+(`GET /api/claude_code/…`) and feature flags (`POST /api/eval/sdk-…`). Any other request, for
+example to the Files, Batches or Admin APIs, keeps the placeholder. Other hosts pass through
+untouched and end to end.
+The short-lived session token the Cursor CLI gets back does live in the container. If the gateway
+can't start (for example, an `image` without `node`), that attempt forwards the key as before and
+prints a warning saying why. `ES_DEBUG=1` logs each connection and decrypted request (never header
+values).
 
 ## Judges
 

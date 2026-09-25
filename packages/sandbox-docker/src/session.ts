@@ -5,12 +5,22 @@ import type { HarnessV1NetworkSandboxSession, HarnessV1SandboxProvider } from '@
 import { docker, dockerOk, removeContainerDetached } from './docker-cli.ts'
 import { type Gateway, type GatewayOptions, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
+import {
+  type BrokeredEndpoint,
+  type RequestTransformation,
+  scopeTransformations,
+} from './egress/rules.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
 export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
   /** Defaults to `allow-all`. Anything else detaches the container from every Docker network. */
   policy?: NetworkPolicy
+  /**
+   * When set, request transformations only apply to these endpoints: each rule a harness adds
+   * is narrowed to them, and dropped if it overlaps none.
+   */
+  brokeredEndpoints?: readonly BrokeredEndpoint[]
 }
 
 export type SessionOptions = {
@@ -93,8 +103,11 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       detached = []
     }
   }
+  const endpoints = egressOptions?.brokeredEndpoints
+  const scoped = (rules: readonly RequestTransformation[]) =>
+    endpoints ? scopeTransformations(rules, endpoints) : rules
   if (egressOptions) {
-    const { policy = { mode: 'allow-all' }, ...rest } = egressOptions
+    const { policy = { mode: 'allow-all' }, brokeredEndpoints: _, ...rest } = egressOptions
     try {
       // Before anything but `sleep` runs, so a restricted container never has a route out.
       await attach(policy)
@@ -165,10 +178,10 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
           await attach(policy)
         },
         async addRequestTransformations(rules) {
-          gateway?.addTransformations(rules)
+          gateway?.addTransformations(scoped(rules))
         },
         async setRequestTransformations(rules) {
-          gateway?.setTransformations(rules)
+          gateway?.setTransformations(scoped(rules))
         },
       }
     : {}

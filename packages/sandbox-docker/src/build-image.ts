@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { prepareSandboxForHarness } from '@ai-sdk/harness/agent'
-import { createCursor } from '@ai-sdk/harness-cursor'
+import { type HarnessAgentAdapter, prepareSandboxForHarness } from '@ai-sdk/harness/agent'
 import { docker, dockerOk } from './docker-cli.ts'
 import {
   BASE_IMAGE,
-  DEFAULT_IMAGE,
-  HARNESS_CURSOR_VERSION,
+  type BakedHarness,
+  HARNESS_PACKAGES,
+  imageFor,
   LABEL,
   SANDBOX_ROOT,
   WORKSPACE_DIR,
@@ -30,8 +30,25 @@ const slugify = (text: string, max: number) =>
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
 /** The image `docker({ from })` evals run in: `from` plus Node, git and the baked harness. */
-export const harnessImageFor = (from: string) =>
-  `${DEFAULT_IMAGE}-${slugify(from, 40) || 'image'}-${sha256(from).slice(0, 8)}`
+export const harnessImageFor = (harness: BakedHarness, from: string) =>
+  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(from).slice(0, 8)}`
+
+/** How each harness's CLI gets into an image: the adapter's bootstrap, and the binary it leaves. */
+const BOOTSTRAPS: Record<
+  BakedHarness,
+  { label: string; cli: string; adapter: () => Promise<HarnessAgentAdapter> }
+> = {
+  cursor: {
+    label: 'Cursor',
+    cli: 'agent',
+    adapter: async () => (await import('@ai-sdk/harness-cursor')).createCursor(),
+  },
+  'claude-code': {
+    label: 'Claude Code',
+    cli: 'claude',
+    adapter: async () => (await import('@ai-sdk/harness-claude-code')).createClaudeCode(),
+  },
+}
 
 /**
  * Adds what the harness bridge needs to a Debian or Ubuntu based toolchain image: Node (copied
@@ -55,17 +72,19 @@ WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}
 const tail = (text: string) => text.trim().split('\n').slice(-15).join('\n')
 
 /**
- * Bakes the Cursor harness bootstrap (which installs the Cursor CLI) into an image, so the
- * image tag pins the CLI build. Rebuild after bumping `@ai-sdk/harness-cursor`. With `from`,
- * the base is that toolchain image instead of ES's Node image.
+ * Bakes a harness's bootstrap (which installs the agent's CLI) into an image, so the image tag
+ * pins the CLI build. Rebuild after bumping the adapter package. With `from`, the base is that
+ * toolchain image instead of ES's Node image.
  */
 export async function buildImage(
   log: (line: string) => void,
-  options: { from?: string; signal?: AbortSignal } = {},
+  options: { harness?: BakedHarness; from?: string; signal?: AbortSignal } = {},
 ): Promise<{ image: string; agentVersion: string }> {
-  const { from, signal } = options
-  const base = from ? `${harnessImageFor(from)}-base` : BASE_IMAGE
-  const target = from ? harnessImageFor(from) : DEFAULT_IMAGE
+  const { harness = 'cursor', from, signal } = options
+  const bootstrap = BOOTSTRAPS[harness]
+  const pkg = HARNESS_PACKAGES[harness]
+  const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
+  const target = from ? harnessImageFor(harness, from) : imageFor(harness)
   log(`Building ${base}${from ? ` from ${from}` : ''}`)
   const build = from
     ? await docker(['build', '--quiet', '--tag', base, '-'], {
@@ -79,7 +98,7 @@ export async function buildImage(
     )
   }
 
-  log('Installing the Cursor harness bootstrap')
+  log(`Installing the ${bootstrap.label} harness bootstrap`)
   const session = await createDockerSession({
     image: base,
     lifetimeMs: 30 * 60_000,
@@ -88,22 +107,22 @@ export async function buildImage(
   try {
     await prepareSandboxForHarness({
       session,
-      harnesses: [createCursor()],
+      harnesses: [await bootstrap.adapter()],
       sandboxConfig: { workDir: WORKSPACE_DIR },
     })
     const found = await session.run({
-      command: `find "$HOME/.ai-sdk-harness" -name agent \\( -type f -o -type l \\) -perm -u+x | head -1`,
+      command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
     })
     const bin = found.stdout.trim()
-    if (!bin) throw new Error('The harness bootstrap did not install the Cursor CLI')
+    if (!bin) throw new Error(`The harness bootstrap did not install the ${bootstrap.label} CLI`)
     const version = await session.run({ command: `'${bin}' --version` })
     const agentVersion = version.stdout.trim() || 'unknown'
-    log(`Cursor CLI ${agentVersion}`)
+    log(`${bootstrap.label} CLI ${agentVersion}`)
 
     await dockerOk([
       'commit',
       '--change',
-      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="@ai-sdk/harness-cursor@${HARNESS_CURSOR_VERSION}"`,
+      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${pkg.name}@${pkg.version}"`,
       '--change',
       `WORKDIR ${SANDBOX_ROOT}`,
       '--change',

@@ -21,17 +21,28 @@ export {
 } from './docker-cli.ts'
 export { CA_PATH, PROXY_PORT } from './egress/gateway.ts'
 export {
+  CLAUDE_CODE_HOSTS,
   CURSOR_HOSTS,
   DEFAULT_ALLOWED_HOSTS,
   hostAllowed,
   type NetworkPolicy,
 } from './egress/policy.ts'
-export { applyTransformations, matches, type RequestTransformation } from './egress/rules.ts'
 export {
+  applyTransformations,
+  type BrokeredEndpoint,
+  matches,
+  type RequestTransformation,
+  scopeTransformations,
+} from './egress/rules.ts'
+export {
+  BAKED_HARNESSES,
   BASE_IMAGE,
+  type BakedHarness,
   BRIDGE_PORT,
   DEFAULT_IMAGE,
-  HARNESS_CURSOR_VERSION,
+  HARNESS_PACKAGES,
+  imageFor,
+  isBakedHarness,
   LABEL,
   SANDBOX_ROOT,
   WORKSPACE_DIR,

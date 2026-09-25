@@ -55,6 +55,41 @@ export function matches(rule: RequestTransformation, request: OutboundRequest): 
   return !match.headers || matchPairs(match.headers, headerPairs(request.headers), true)
 }
 
+/** An API endpoint that may receive a brokered credential: a host, a path and its methods. */
+export type BrokeredEndpoint = { host: string; path: PartMatcher; method: readonly string[] }
+
+type Match = RequestTransformation['match']
+
+function narrow(match: Match, endpoint: BrokeredEndpoint): Match | undefined {
+  if (normaliseHost(match.host) !== normaliseHost(endpoint.host)) return undefined
+  const method = endpoint.method.filter(
+    (m) => !match.method || match.method.some((r) => r.toUpperCase() === m.toUpperCase()),
+  )
+  if (method.length === 0) return undefined
+  const { path } = endpoint
+  if (match.path) {
+    const sameMatcher = JSON.stringify(match.path) === JSON.stringify(path)
+    if (!sameMatcher && !('exact' in path && matchPart(match.path, path.exact))) return undefined
+  }
+  return { ...match, path, method }
+}
+
+/**
+ * Each rule cut down to the endpoints it overlaps, one rule per endpoint; rules that overlap
+ * none are dropped. A pattern endpoint only keeps a rule with no path or the same pattern.
+ */
+export function scopeTransformations(
+  rules: readonly RequestTransformation[],
+  endpoints: readonly BrokeredEndpoint[],
+): RequestTransformation[] {
+  return rules.flatMap((rule) =>
+    endpoints.flatMap((endpoint) => {
+      const match = narrow(rule.match, endpoint)
+      return match ? [{ ...rule, match }] : []
+    }),
+  )
+}
+
 /** Whether the gateway must decrypt connections to `host`: some rule could apply there. */
 export const decrypts = (rules: readonly RequestTransformation[], host: string) =>
   rules.some((r) => normaliseHost(r.match.host) === normaliseHost(host))

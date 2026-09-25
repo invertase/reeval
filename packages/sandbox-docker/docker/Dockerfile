@@ -1,5 +1,5 @@
-# Base image for ES sandboxes. `es image build` builds this, bakes the Cursor harness
-# bootstrap into it and commits the result as the image evals run in.
+# Base image for ES sandboxes. `es image build` builds this, bakes a harness bootstrap (the
+# agent's CLI) into it and commits the result as the image evals run in.
 FROM node:22-bookworm-slim
 
 RUN apt-get update \

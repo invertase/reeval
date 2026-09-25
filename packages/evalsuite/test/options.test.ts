@@ -488,6 +488,11 @@ describe('common mistakes', () => {
       /harness is an empty list in evaluate\("e"\)/,
     ],
     [
+      'a harness kind ES does not know',
+      `evaluate('e', { harness: { kind: 'codex' } }, async () => {})`,
+      /harness in evaluate\("e"\) must be like cursor\(\) \(got an object with "kind"\)/,
+    ],
+    [
       'two harnesses with one id',
       `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
       /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
@@ -525,12 +530,12 @@ ${body}
     [
       'widening in a profile limit',
       `profiles: { pr: { limit: { harness: [fakeHarness({ id: 'a' })] } } },`,
-      /profiles\.pr\.limit\.harness can only list harness ids to allow \(got fake\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
+      /profiles\.pr\.limit\.harness can only list harness ids to allow \(got fakeHarness\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
     ],
     [
       'a usd budget',
       `budget: { usd: 20 },`,
-      /budget\.usd isn't supported: no harness ES runs reports cost or tokens yet \(Cursor reports no usage\)\. Cap the run with attempts or duration\./,
+      /budget\.usd isn't supported: ES doesn't track cost or tokens yet\. Cap the run with attempts or duration\./,
     ],
     [
       'control reuse',

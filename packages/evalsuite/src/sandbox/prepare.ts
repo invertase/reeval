@@ -1,19 +1,50 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
+  BAKED_HARNESSES,
+  type BakedHarness,
   buildEnvironmentLayer,
   buildImage,
-  DEFAULT_IMAGE,
   environmentLayerTag,
   harnessImageFor,
   type ImageInfo,
+  imageFor,
   imageInfo,
+  isBakedHarness,
   LABEL,
   type LayerStep,
 } from '@evalsuite/sandbox-docker'
+import { UsageError } from '../errors.ts'
 import { withLease } from '../scheduler/client.ts'
-import type { AttemptImage, DockerSandboxDescriptor } from '../types.ts'
+import type { AttemptImage, DockerSandboxDescriptor, HarnessDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
+
+/** The harness whose image an attempt runs in; the fake harness runs in the default one. */
+export const bakedHarnessFor = (harness: HarnessDescriptor): BakedHarness =>
+  harness.kind === 'fake' ? 'cursor' : harness.kind
+
+/** How to get a missing image: `es image build <harness>` for a harness image, else by hand. */
+export function imageHint(ref: string): string {
+  const baked = BAKED_HARNESSES.find((h) => imageFor(h) === ref)
+  return baked ? `Build it once with: es image build ${baked}` : 'Pull or build it first'
+}
+
+/**
+ * The images `es image build` makes: the named harnesses, or else the config's. Throws before
+ * anything is built if a name isn't a harness with an image.
+ */
+export function imageBuildTargets(
+  named: readonly string[],
+  configured: readonly HarnessDescriptor[],
+): BakedHarness[] {
+  const unknown = named.filter((name) => !isBakedHarness(name))
+  if (unknown.length) {
+    throw new UsageError(
+      `Unknown harness "${unknown.join('", "')}". Use one of: ${BAKED_HARNESSES.join(', ')}`,
+    )
+  }
+  return [...new Set(named.length ? named.filter(isBakedHarness) : configured.map(bakedHarnessFor))]
+}
 
 /**
  * One image build at a time across the run's workers. Whoever gets the lease looks for the
@@ -50,6 +81,7 @@ async function buildOnce(
  */
 export async function prepareImage(
   sandbox: DockerSandboxDescriptor,
+  harness: HarnessDescriptor,
   steps: LayerStep[],
   root: string,
   signal: AbortSignal,
@@ -57,14 +89,17 @@ export async function prepareImage(
   if (sandbox.image && sandbox.from) {
     throw new InfraError('docker() takes either image or from, not both')
   }
-  let ref = sandbox.image ?? (sandbox.from ? harnessImageFor(sandbox.from) : DEFAULT_IMAGE)
+  const baked = bakedHarnessFor(harness)
+  let ref = sandbox.image ?? (sandbox.from ? harnessImageFor(baked, sandbox.from) : imageFor(baked))
   let info = await imageInfo(ref)
   if (!info && sandbox.from) {
     const from = sandbox.from
     const log = (line: string) => process.env.ES_DEBUG && console.error(line)
-    info = await buildOnce(ref, () => buildImage(log, { from, signal }), signal)
+    info = await buildOnce(ref, () => buildImage(log, { harness: baked, from, signal }), signal)
   }
-  if (!info) throw new InfraError(`Docker image ${ref} not found. Build it with: es image build`)
+  if (!info) {
+    throw new InfraError(`Docker image ${ref} not found. ${imageHint(ref)}`)
+  }
   const agentCli = info.labels[LABEL.agentVersion] ?? null
   if (steps.length > 0) {
     const parent = { ref, id: info.id }

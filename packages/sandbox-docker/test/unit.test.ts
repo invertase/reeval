@@ -5,18 +5,26 @@ import { join } from 'node:path'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { createCredentialRequestTransformation } from '@ai-sdk/harness/utils'
 import { isRegistryDigest } from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
-import { createPolicyCheck, DEFAULT_ALLOWED_HOSTS, hostAllowed } from '../src/egress/policy.ts'
+import {
+  CLAUDE_CODE_HOSTS,
+  createPolicyCheck,
+  DEFAULT_ALLOWED_HOSTS,
+  hostAllowed,
+} from '../src/egress/policy.ts'
 import {
   applyTransformations,
+  type BrokeredEndpoint,
   decrypts,
   matches,
   type OutboundRequest,
   type RequestTransformation,
+  scopeTransformations,
 } from '../src/egress/rules.ts'
-import { HARNESS_CURSOR_VERSION } from '../src/image.ts'
+import { DEFAULT_IMAGE, HARNESS_PACKAGES, imageFor } from '../src/image.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const PLACEHOLDER = `aisdkhc_${'A'.repeat(43)}`
@@ -47,6 +55,70 @@ describe('request transformations', () => {
     assert.equal(headers.authorization, `Bearer ${REAL}`)
     assert.equal(headers['content-type'], 'application/json')
     assert.deepEqual(replaced, ['authorization'])
+  })
+
+  test('a host-wide rule scoped to endpoints only keys those paths and methods', () => {
+    const hostWide = createCredentialRequestTransformation({
+      matchUrl: 'https://api.anthropic.com',
+      matchHeaders: { 'x-api-key': PLACEHOLDER },
+      transformHeaders: { 'x-api-key': REAL },
+    })
+    const endpoints: BrokeredEndpoint[] = [
+      { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
+      { host: 'api.anthropic.com', path: { exact: '/api/claude_code/settings' }, method: ['GET'] },
+      {
+        host: 'api.anthropic.com',
+        path: { regex: '^/api/eval/sdk-[A-Za-z0-9]+$' },
+        method: ['POST'],
+      },
+    ]
+    const rules = scopeTransformations([hostWide], endpoints)
+    const call = (method: string, path: string, key = PLACEHOLDER) =>
+      applyTransformations(rules, {
+        host: 'api.anthropic.com',
+        method,
+        path,
+        headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+      }).headers
+    const keyed = call('POST', '/v1/messages?beta=true')
+    assert.equal(keyed['x-api-key'], REAL)
+    assert.equal(keyed['anthropic-version'], '2023-06-01')
+    assert.equal(call('GET', '/api/claude_code/settings')['x-api-key'], REAL)
+    assert.equal(call('POST', '/api/eval/sdk-abc123')['x-api-key'], REAL)
+    const misses: Array<[string, string]> = [
+      ['GET', '/v1/messages'],
+      ['POST', '/v1/messages/batches'],
+      ['POST', '/v1/files'],
+      ['GET', '/v1/models'],
+      ['GET', '/v1/organizations/org_1/api_keys'],
+      ['POST', '/api/claude_code/settings'],
+      ['POST', '/api/eval/sdk-abc/../../v1/files'],
+    ]
+    for (const [method, path] of misses) {
+      assert.equal(call(method, path)['x-api-key'], PLACEHOLDER, `${method} ${path}`)
+    }
+    assert.equal(call('POST', '/v1/messages', 'sk-other')['x-api-key'], 'sk-other')
+    assert.ok(decrypts(rules, 'api.anthropic.com'))
+    assert.equal(decrypts(rules, 'platform.claude.com'), false)
+  })
+
+  test('scoping keeps a narrower rule as it is and drops rules that overlap no endpoint', () => {
+    const exchange: BrokeredEndpoint = {
+      host: 'api2.cursor.sh',
+      path: { exact: '/auth/exchange_user_api_key' },
+      method: ['POST'],
+    }
+    assert.deepEqual(scopeTransformations([cursorRule], [exchange]), [cursorRule])
+    const elsewhere: BrokeredEndpoint[] = [
+      { ...exchange, host: 'api.anthropic.com' },
+      { ...exchange, path: { exact: '/other' } },
+      { ...exchange, method: ['GET'] },
+      { ...exchange, path: { regex: '^/auth/.*$' } },
+    ]
+    for (const endpoint of elsewhere) {
+      assert.deepEqual(scopeTransformations([cursorRule], [endpoint]), [], JSON.stringify(endpoint))
+    }
+    assert.deepEqual(scopeTransformations([cursorRule], []), [])
   })
 
   test('host, path, method and header value must all match', () => {
@@ -127,6 +199,14 @@ describe('network policy', () => {
     assert.equal(hostAllowed(['*.cursor.sh'], 'evilcursor.sh'), false)
     assert.ok(hostAllowed(['GitHub.com'], 'github.com.'))
     assert.ok(hostAllowed(DEFAULT_ALLOWED_HOSTS, 'raw.githubusercontent.com'))
+  })
+
+  test('the default allowlist covers every harness', () => {
+    assert.ok(hostAllowed(CLAUDE_CODE_HOSTS, 'api.anthropic.com'))
+    assert.equal(hostAllowed(CLAUDE_CODE_HOSTS, 'anthropic.com.evil.example'), false)
+    for (const host of ['api2.cursor.sh', 'api.anthropic.com', 'registry.npmjs.org']) {
+      assert.ok(hostAllowed(DEFAULT_ALLOWED_HOSTS, host), host)
+    }
   })
 
   test('allow-all allows anything but loopback and link-local', async () => {
@@ -359,7 +439,7 @@ describe('package boundary', () => {
       for (const [, spec] of source.matchAll(/from '([^']+)'/g)) {
         assert.match(
           spec ?? '',
-          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor)?(\/|$))/,
+          /^(node:|\.\.?\/|@ai-sdk\/harness(-cursor|-claude-code)?(\/|$))/,
           `${file} imports ${spec}`,
         )
       }
@@ -368,10 +448,21 @@ describe('package boundary', () => {
     assert.equal(pkg.dependencies.evalsuite, undefined)
   })
 
-  test('ships the Docker build context and pins the harness adapter', () => {
+  test('ships the Docker build context and pins every harness adapter', () => {
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
     assert.ok(pkg.files.includes('docker'))
     assert.match(readFileSync(join(root, 'docker/Dockerfile'), 'utf8'), /^FROM node:/m)
-    assert.equal(pkg.dependencies['@ai-sdk/harness-cursor'], HARNESS_CURSOR_VERSION)
+    for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
+      assert.equal(pkg.dependencies[name], version, name)
+    }
+  })
+
+  test('each harness has its own image, tagged with its adapter version', () => {
+    assert.equal(imageFor('cursor'), `evalsuite-sandbox:cursor-${HARNESS_PACKAGES.cursor.version}`)
+    assert.equal(
+      imageFor('claude-code'),
+      `evalsuite-sandbox:claude-code-${HARNESS_PACKAGES['claude-code'].version}`,
+    )
+    assert.equal(DEFAULT_IMAGE, imageFor('cursor'))
   })
 })

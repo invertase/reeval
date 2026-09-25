@@ -17,6 +17,7 @@ import {
   skillFiles,
 } from './environment/resolve.ts'
 import { isTimeout, UsageError } from './errors.ts'
+import { brokeringFor } from './harness/agents.ts'
 import { createHarness, workspaceSkillDir } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
@@ -328,6 +329,8 @@ const CONTEXT_PATHS = [
   '$HOME/.cursor/skills',
   '$HOME/.cursor/skills-cursor',
   '$HOME/.agents/skills',
+  '$HOME/.claude/CLAUDE.md',
+  '$HOME/.claude/settings.json',
   '$HOME/.claude/skills',
   'AGENTS.md',
   'CLAUDE.md',
@@ -335,6 +338,8 @@ const CONTEXT_PATHS = [
   '.cursor/rules',
   '.cursor/skills',
   '.cursor/mcp.json',
+  '.claude/settings.json',
+  '.claude/skills',
   '.agents/skills',
   '.mcp.json',
 ]
@@ -461,7 +466,13 @@ async function runAttempt(
     record.image = null
     if (spec.sandbox.kind === 'docker') {
       const { prepareImage } = await import('./sandbox/prepare.ts')
-      record.image = await prepareImage(spec.sandbox, resolved.image, config.root, testSignal)
+      record.image = await prepareImage(
+        spec.sandbox,
+        spec.harness,
+        resolved.image,
+        config.root,
+        testSignal,
+      )
       image = record.image.ref
     }
   }
@@ -527,7 +538,7 @@ async function runAttempt(
       signal,
       env: env.vars,
       image,
-      brokerCredentials: spec.harness.kind === 'cursor',
+      brokering: brokeringFor(spec.harness),
     })
     sandbox = box
     if (signal.aborted) destroy()

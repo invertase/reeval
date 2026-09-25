@@ -156,7 +156,19 @@ export type CursorHarnessDescriptor = {
   /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
 }
-export type HarnessDescriptor = FakeHarnessDescriptor | CursorHarnessDescriptor
+/** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
+export type ClaudeCodeHarnessDescriptor = {
+  kind: 'claude-code'
+  /** A model id or alias the `claude` CLI accepts, e.g. `claude-opus-5-5` or `opus`. */
+  model: string
+  /** Cell id; defaults to `claude-code:<model>`. */
+  id?: string
+  /** The most Claude Code attempts at once, across the run, e.g. for the account's rate limits. */
+  maxConcurrent?: number
+}
+/** A real coding agent, driven through its AI SDK harness adapter. */
+export type AgentHarnessDescriptor = CursorHarnessDescriptor | ClaudeCodeHarnessDescriptor
+export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {
   kind: 'fake'

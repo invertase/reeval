@@ -10,6 +10,7 @@ import {
 } from '@evalsuite/sandbox-docker'
 import type { DockerSandboxDescriptor } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
+import { imageHint } from './prepare.ts'
 import { InfraError, type Sandbox } from './types.ts'
 
 /** A Docker sandbox also exposes its harness session, so the harness drives the same container. */
@@ -23,7 +24,7 @@ export async function createDockerSandbox(
 ): Promise<DockerSandbox> {
   const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
   if (!(await imageInfo(image))) {
-    throw new InfraError(`Docker image ${image} not found. Build it with: es image build`)
+    throw new InfraError(`Docker image ${image} not found. ${imageHint(image)}`)
   }
   const network = await createDockerSession({
     image,
@@ -31,13 +32,16 @@ export async function createDockerSandbox(
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    egress: options.brokerCredentials && {
-      log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
-    },
+    egress: options.brokering
+      ? {
+          log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
+          brokeredEndpoints: options.brokering.endpoints,
+        }
+      : undefined,
   })
   if (network.egress?.active === false) {
     console.warn(
-      `warning: CURSOR_API_KEY is passed into the sandbox container, where the agent can read it (credential brokering could not start: ${network.egress.reason})`,
+      `warning: ${options.brokering?.credential} is passed into the sandbox container, where the agent can read it (credential brokering could not start: ${network.egress.reason})`,
     )
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)

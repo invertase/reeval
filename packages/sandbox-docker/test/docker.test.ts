@@ -5,6 +5,7 @@ import https from 'node:https'
 import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
+import { createCredentialRequestTransformation } from '@ai-sdk/harness/utils'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
@@ -26,6 +27,12 @@ const NEEDLE = REAL.slice(-20)
 const upstreamCa = createCertificateAuthority()
 const seen: { path: string; authorization?: string }[] = []
 
+const echoed = (req: http.IncomingMessage) =>
+  JSON.stringify({
+    authorization: req.headers.authorization,
+    'x-api-key': req.headers['x-api-key'],
+  })
+
 function startUpstream(): Promise<{ port: number; close(): void }> {
   const leaf = issueServerCertificate(upstreamCa, 'upstream.test')
   const server = https.createServer(
@@ -33,7 +40,7 @@ function startUpstream(): Promise<{ port: number; close(): void }> {
     (req, res) => {
       seen.push({ path: req.url ?? '', authorization: req.headers.authorization })
       req.resume()
-      req.on('end', () => res.end(JSON.stringify({ authorization: req.headers.authorization })))
+      req.on('end', () => res.end(echoed(req)))
     },
   )
   return new Promise((resolve) =>
@@ -117,6 +124,36 @@ describe('egress gateway in Docker', {
     const env = await sh(s, 'env')
     assert.match(env.stdout, /^HTTPS_PROXY=http:\/\/127\.0\.0\.1:43128$/m)
     assert.match(env.stdout, /^NODE_EXTRA_CA_CERTS=\/usr\/local\/share\/ca-certificates\//m)
+  })
+
+  test('with brokered endpoints, a host-wide rule only keys those endpoints', async () => {
+    const s = await open({
+      image: DEFAULT_IMAGE,
+      egress: egress({
+        brokeredEndpoints: [
+          { host: 'upstream.test', path: { exact: '/v1/messages' }, method: ['POST'] },
+        ],
+      }),
+    })
+    await s.addRequestTransformations?.([
+      createCredentialRequestTransformation({
+        matchUrl: 'https://upstream.test',
+        matchHeaders: { 'x-api-key': PLACEHOLDER },
+        transformHeaders: { 'x-api-key': REAL },
+      }),
+    ])
+    const base = `https://upstream.test:${upstream.port}`
+    const keyOn = async (method: string, path: string) => {
+      const r = await sh(s, `curl -sS -X ${method} -H "x-api-key: $KEY" ${base}${path}`, {
+        KEY: PLACEHOLDER,
+      })
+      assert.equal(r.exitCode, 0, r.stderr)
+      return JSON.parse(r.stdout)['x-api-key']
+    }
+    assert.equal(await keyOn('POST', '/v1/messages?beta=true'), REAL)
+    assert.equal(await keyOn('GET', '/v1/models'), PLACEHOLDER)
+    assert.equal(await keyOn('POST', '/v1/files'), PLACEHOLDER)
+    assert.equal(await keyOn('GET', '/v1/messages'), PLACEHOLDER)
   })
 
   test('env, /proc and files in the container never contain the real key', async () => {

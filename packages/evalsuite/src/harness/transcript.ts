@@ -40,6 +40,63 @@ function lineDelta(before: string, after: string): { added: number; removed: num
 const NEW_FILE = /^-- \/dev\/null$/
 const MANGLED_HEADER = /^\+\+ b\/[^\n]*\n?/
 
+/** Cursor's edit tools take `path`; Claude Code's take `file_path`. */
+const editPath = (input: Record<string, unknown>) => str(input.path) || str(input.file_path)
+
+/**
+ * Cursor reports `referenceCount`; Claude Code lists `results`, where each search is
+ * `{ content: [{ title, url }] }` and plain strings are commentary.
+ */
+function searchReferences(output: unknown): number | null {
+  const { referenceCount, results } = record(output)
+  if (typeof referenceCount === 'number') return referenceCount
+  if (!Array.isArray(results)) return null
+  return results.reduce((n: number, r) => {
+    const links = record(r).content
+    return n + (Array.isArray(links) ? links.length : 0)
+  }, 0)
+}
+
+/** Claude Code's bridge sends errors as `{ message }` objects; Cursor's as strings or Errors. */
+const errorText = (error: unknown) => str(error) || str(record(error).message) || String(error)
+
+/** Lines added and removed across unified-diff hunks, each `{ lines: ['+x', '-y', ' z'] }`. */
+function hunkDelta(hunks: unknown[]): { added: number; removed: number } {
+  let added = 0
+  let removed = 0
+  for (const hunk of hunks) {
+    const lines = record(hunk).lines
+    for (const line of Array.isArray(lines) ? lines : []) {
+      if (str(line).startsWith('+')) added++
+      else if (str(line).startsWith('-')) removed++
+    }
+  }
+  return { added, removed }
+}
+
+/** Claude Code's Write (`type`, `content`) or Edit (`oldString`, `newString`) result. */
+function claudeEdit(toolCallId: string, output: Record<string, unknown>): FileEditEvent {
+  const { originalFile, structuredPatch, content, oldString, newString } = output
+  const created = output.type === 'create' || (output.type === undefined && originalFile === null)
+  const counts =
+    Array.isArray(structuredPatch) && structuredPatch.length > 0
+      ? hunkDelta(structuredPatch)
+      : created
+        ? { added: lines(str(content ?? newString)).length, removed: 0 }
+        : typeof originalFile === 'string' && typeof content === 'string'
+          ? lineDelta(originalFile, content)
+          : typeof oldString === 'string' && typeof newString === 'string'
+            ? lineDelta(oldString, newString)
+            : { added: null, removed: null }
+  return {
+    type: 'file-edit',
+    toolCallId,
+    path: str(output.filePath),
+    kind: created ? 'create' : 'modify',
+    ...counts,
+  }
+}
+
 function fileEdits(
   toolCallId: string,
   output: unknown,
@@ -51,20 +108,22 @@ function fileEdits(
       {
         type: 'file-edit',
         toolCallId,
-        path: str(input.path),
+        path: editPath(input),
         kind: 'delete',
         added: 0,
         removed: null,
       },
     ]
   }
+  const claude = record(output)
+  if (typeof claude.filePath === 'string') return [claudeEdit(toolCallId, claude)]
   const entries = Array.isArray(output) ? output.map(record) : []
   if (entries.length === 0) {
     return [
       {
         type: 'file-edit',
         toolCallId,
-        path: str(input.path),
+        path: editPath(input),
         kind: 'modify',
         added: null,
         removed: null,
@@ -79,7 +138,7 @@ function fileEdits(
     return {
       type: 'file-edit' as const,
       toolCallId,
-      path: str(entry.path) || str(input.path),
+      path: str(entry.path) || editPath(input),
       kind: created ? ('create' as const) : ('modify' as const),
       added,
       removed,
@@ -118,29 +177,30 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     const durationMs = t?.end !== undefined ? t.end - start : end.ms - call.ms
     const input = record(call.part.input)
     const name = str(call.part.toolName)
-    const output = failed ? str(end.part.error) || String(end.part.error) : end.part.output
+    const output = failed ? errorText(end.part.error) : end.part.output
     const base = { ...stamp(call.ms), durationMs }
-    if ((name === 'edit' || name === 'delete') && !failed) {
+    if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
       for (const edit of fileEdits(id, output, name === 'delete', input)) {
         out.push({ at: call.ms, event: { ...base, ...edit } })
       }
       return
     }
     if (name === 'webSearch' && !failed) {
-      const references = record(output).referenceCount
       out.push({
         at: call.ms,
         event: {
           ...base,
           type: 'web-search',
           toolCallId: id,
-          query: str(input.searchTerm),
-          references: typeof references === 'number' ? references : null,
+          query: str(input.searchTerm) || str(input.query),
+          references: searchReferences(output),
         },
       })
       return
     }
-    if (name === 'webFetch') {
+    if (name === 'webFetch' || name === 'WebFetch') {
+      const result = record(output)
+      const status = typeof result.code === 'number' ? result.code : undefined
       out.push({
         at: call.ms,
         event: {
@@ -148,7 +208,10 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
           type: 'web-fetch',
           toolCallId: id,
           url: str(input.url),
-          ok: !failed && record(output).success !== false,
+          ok:
+            !failed &&
+            result.success !== false &&
+            (status === undefined || (status >= 200 && status < 400)),
         },
       })
       return
@@ -215,7 +278,7 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
         break
       }
       case 'error':
-        out.push({ at: ms, event: { ...stamp(ms), type: 'error', message: String(part.error) } })
+        out.push({ at: ms, event: { ...stamp(ms), type: 'error', message: errorText(part.error) } })
         break
     }
   }

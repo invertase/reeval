@@ -8,10 +8,13 @@ export type Lookup = (host: string) => Promise<string[]>
 
 /** The hosts the Cursor CLI talks to at runtime. */
 export const CURSOR_HOSTS = ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com']
+/** The hosts the Claude Code CLI talks to at runtime. */
+export const CLAUDE_CODE_HOSTS = ['api.anthropic.com', '*.anthropic.com']
 
-/** Cursor plus the package registries and GitHub, for a restricted policy that still installs. */
+/** Every harness plus the package registries and GitHub, for a restricted policy that still installs. */
 export const DEFAULT_ALLOWED_HOSTS = [
   ...CURSOR_HOSTS,
+  ...CLAUDE_CODE_HOSTS,
   'registry.npmjs.org',
   'registry.yarnpkg.com',
   'github.com',

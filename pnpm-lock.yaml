@@ -30,11 +30,14 @@ importers:
         specifier: 4.0.79
         version: 4.0.79(zod@4.6.5)
       '@ai-sdk/harness':
-        specifier: 1.0.123
-        version: 1.0.123(ws@8.21.0)(zod@4.6.5)
+        specifier: 1.0.124
+        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/harness-claude-code':
+        specifier: 1.0.128
+        version: 1.0.128(zod@4.6.5)
       '@ai-sdk/harness-cursor':
-        specifier: 1.0.36
-        version: 1.0.36(ws@8.21.0)(zod@4.6.5)
+        specifier: 1.0.37
+        version: 1.0.37(ws@8.21.0)(zod@4.6.5)
       '@ai-sdk/typesafe-ai':
         specifier: 3.0.6
         version: 3.0.6(zod@4.6.5)
@@ -76,11 +79,14 @@ importers:
   packages/sandbox-docker:
     dependencies:
       '@ai-sdk/harness':
-        specifier: 1.0.123
-        version: 1.0.123(ws@8.21.0)(zod@4.6.5)
+        specifier: 1.0.124
+        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/harness-claude-code':
+        specifier: 1.0.128
+        version: 1.0.128(zod@4.6.5)
       '@ai-sdk/harness-cursor':
-        specifier: 1.0.36
-        version: 1.0.36(ws@8.21.0)(zod@4.6.5)
+        specifier: 1.0.37
+        version: 1.0.37(ws@8.21.0)(zod@4.6.5)
       ws:
         specifier: 8.21.0
         version: 8.21.0
@@ -153,26 +159,38 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/gateway@4.0.92':
+    resolution: {integrity: sha512-awX24+QedfcIDTAdwkCUNG08vPJjkQI9KZLGh4Ua+vNbgeaNFJre96OIbBefOD9XPHSVpdXjwqtWmo4Yh7oczw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/google@4.0.79':
     resolution: {integrity: sha512-yKUxBy7jc+poiL9eThYzUo5gdwfpeLLO5AmhMYBMOwunJ9ppdZNxfhyq1F5CbsMPSuOr8AaPwrmEVMwoODFJbA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/harness-acp@1.0.61':
-    resolution: {integrity: sha512-3aezsv47RrY9ISrncPG2296JuKXPAOPg4cBZ2abyCejBx6yU0VZYQRkA77mrzX4YGBgKEt8UO07+cIX8Y5c8ug==}
+  '@ai-sdk/harness-acp@1.0.62':
+    resolution: {integrity: sha512-LvWdPD68v+yEUqI0hIYAJZXK2pj5rLiiN5PP8dV8Oi8JnTUMolQatuUcljwZCq1zEW+IfBbf/ZuUaE/w7fIaxw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/harness-cursor@1.0.36':
-    resolution: {integrity: sha512-NjnvwjNlxT598zQkc7GzYKw5QPJOWDsM0jrnKKZVE7HiZ+ahx9t7NP94RxdMSYQprHv9CwrPJrtWGH/00FHF+w==}
+  '@ai-sdk/harness-claude-code@1.0.128':
+    resolution: {integrity: sha512-99hlPxp9GcdMEDYJYh2tTw1kDTsFZz9CzVlfKJrtujXqQrsct+sEJVjFCeUntuk4tz0Eyv8VDtR5ChMAu3zN2Q==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/harness@1.0.123':
-    resolution: {integrity: sha512-CCyEVOBITqtakXEWnfkegfhcHfeSL7GM5E74uswuMI53ITq4GjFL3hJRuob3ZcPUqfXvaDdHutOixNGnUHn6PQ==}
+  '@ai-sdk/harness-cursor@1.0.37':
+    resolution: {integrity: sha512-RqcKFWGmcTcb55o+JEFvRWop8HK8CcIH9/0hCwKW/y5OqCByhsg0yWqRCIFlyiEaKp8Nh4ki0Kf7Eu29VHcVWw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/harness@1.0.124':
+    resolution: {integrity: sha512-Xtql0Li9M/yYO1QEh8FIgWisHaW756oFJJxdxwSNfQfYR4IFe3E+1HrCn4GbAAiAFlGgKQQ6w5YFWoUhW9WpEg==}
     engines: {node: '>=22'}
     peerDependencies:
       ws: ^8.21.0
@@ -1404,6 +1422,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  ai@7.0.114:
+    resolution: {integrity: sha512-jRMOw7tPMWVYomoHWY5xHBXPQDyKTY1Pn3BX0Rh39UOP6y9FYq6xCIB6khgIC/b9CRg4+IxadwIbie+Eu7yU3g==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   aria-hidden@1.2.6:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
     engines: {node: '>=10'}
@@ -1940,15 +1964,22 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.6.5
 
+  '@ai-sdk/gateway@4.0.92(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
+      '@vercel/oidc': 3.2.0
+      zod: 4.6.5
+
   '@ai-sdk/google@4.0.79(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.18
       '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
       zod: 4.6.5
 
-  '@ai-sdk/harness-acp@1.0.61(zod@4.6.5)':
+  '@ai-sdk/harness-acp@1.0.62(zod@4.6.5)':
     dependencies:
-      '@ai-sdk/harness': 1.0.123(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/harness': 1.0.124(ws@8.21.0)(zod@4.6.5)
       '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
       ws: 8.21.0
       zod: 4.6.5
@@ -1956,10 +1987,20 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
-  '@ai-sdk/harness-cursor@1.0.36(ws@8.21.0)(zod@4.6.5)':
+  '@ai-sdk/harness-claude-code@1.0.128(zod@4.6.5)':
     dependencies:
-      '@ai-sdk/harness': 1.0.123(ws@8.21.0)(zod@4.6.5)
-      '@ai-sdk/harness-acp': 1.0.61(zod@4.6.5)
+      '@ai-sdk/harness': 1.0.124(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
+      ws: 8.21.0
+      zod: 4.6.5
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@ai-sdk/harness-cursor@1.0.37(ws@8.21.0)(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/harness': 1.0.124(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/harness-acp': 1.0.62(zod@4.6.5)
       '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
       zod: 4.6.5
     transitivePeerDependencies:
@@ -1967,11 +2008,11 @@ snapshots:
       - utf-8-validate
       - ws
 
-  '@ai-sdk/harness@1.0.123(ws@8.21.0)(zod@4.6.5)':
+  '@ai-sdk/harness@1.0.124(ws@8.21.0)(zod@4.6.5)':
     dependencies:
       '@ai-sdk/provider': 4.0.18
       '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
-      ai: 7.0.113(zod@4.6.5)
+      ai: 7.0.114(zod@4.6.5)
       zod: 4.6.5
     optionalDependencies:
       ws: 8.21.0
@@ -3082,6 +3123,13 @@ snapshots:
   ai@7.0.113(zod@4.6.5):
     dependencies:
       '@ai-sdk/gateway': 4.0.91(zod@4.6.5)
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
+      zod: 4.6.5
+
+  ai@7.0.114(zod@4.6.5):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.92(zod@4.6.5)
       '@ai-sdk/provider': 4.0.18
       '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
       zod: 4.6.5

@@ -5,6 +5,7 @@ import { createJiti } from 'jiti'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { AGENTS, isAgentKind } from './harness/agents.ts'
 import { cursor } from './harness.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkOptions } from './options.ts'
@@ -128,7 +129,7 @@ export function checkBudget(budget: unknown, where: string): Budget {
   }
   if ('usd' in budget || 'tokens' in budget) {
     throw new UsageError(
-      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported: no harness ES runs reports cost or tokens yet (Cursor reports no usage). Cap the run with attempts or duration.`,
+      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported: ES doesn't track cost or tokens yet. Cap the run with attempts or duration.`,
     )
   }
   unknownKey(budget, ['attempts', 'duration'], where)
@@ -142,8 +143,9 @@ export function checkBudget(budget: unknown, where: string): Budget {
 
 const describeValue = (v: unknown) => {
   if (typeof v !== 'object' || v === null) return JSON.stringify(v)
-  const h = v as HarnessDescriptor
-  return h.kind === 'cursor' || h.kind === 'fake' ? `${h.kind}({ … })` : 'an object'
+  const { kind } = v as HarnessDescriptor
+  if (kind === 'fake') return 'fakeHarness({ … })'
+  return isAgentKind(kind) ? `${AGENTS[kind].factory}({ … })` : 'an object'
 }
 
 function checkProfile(name: string, profile: unknown): Profile {
@@ -370,7 +372,9 @@ export function missingCredentials(
 ): string[] {
   const missing: string[] = []
   const kinds = options.harnessKinds ?? config.harness.map((h) => h.kind)
-  if (kinds.includes('cursor') && !env.CURSOR_API_KEY) missing.push('CURSOR_API_KEY')
+  for (const kind of new Set(kinds)) {
+    if (isAgentKind(kind) && !env[AGENTS[kind].credential]) missing.push(AGENTS[kind].credential)
+  }
   if (config.judge.model !== undefined) {
     const judgeKeys = judgeCredentials(config.judge.model)
     if (judgeKeys.length && !judgeKeys.some((k) => env[k])) missing.push(judgeKeys.join(' or '))

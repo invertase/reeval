@@ -5,8 +5,9 @@ import type { PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
+import type { Stack } from './preflight.ts'
 import { clip, formatDuration } from './text.ts'
-import type { Budget, EvalPlan, ResolvedProfile, SandboxDescriptor } from './types.ts'
+import type { Budget, EvalPlan, ResolvedProfile } from './types.ts'
 
 /** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
@@ -27,7 +28,8 @@ export type RunPlan = {
   concurrency: number
   budget: Budget
   warnings: string[]
-  sandboxes: SandboxDescriptor[]
+  /** Each distinct harness and sandbox pairing, for preflight. */
+  stacks: Stack[]
   harnessKinds: string[]
 }
 
@@ -92,7 +94,7 @@ export async function buildPlan(options: {
   const rows = new Map<string, PlanRow>()
   const cells = new Set<string>()
   const warnings = new Set<string>()
-  const sandboxes = new Map<string, SandboxDescriptor>()
+  const stacks = new Map<string, Stack>()
   const kinds = new Set<string>()
   let attempts = 0
   let estimateMs = 0
@@ -103,7 +105,8 @@ export async function buildPlan(options: {
     attempts++
     cells.add(`${id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
-    sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
+    const stack = { harness: attempt.harness, sandbox: attempt.sandbox }
+    stacks.set(JSON.stringify(stack), stack)
     kinds.add(attempt.harness.kind)
   }
   return {
@@ -116,7 +119,7 @@ export async function buildPlan(options: {
     concurrency: options.concurrency,
     budget: options.budget,
     warnings: [...warnings],
-    sandboxes: [...sandboxes.values()],
+    stacks: [...stacks.values()],
     harnessKinds: [...kinds],
   }
 }
