@@ -99,7 +99,8 @@ await rm(dir, { recursive: true, force: true })
 await mkdir(dir, { recursive: true })
 await cp(join(repo, 'examples/hello'), dir, {
   recursive: true,
-  filter: (src) => !/[\\/](node_modules|\.es|\.history)([\\/]|$)/.test(src),
+  // `.env*` holds the developer's real keys; the demo commits everything it copies.
+  filter: (src) => !/[\\/](node_modules|\.es|\.history|\.env[^\\/]*)([\\/]|$)/.test(src),
 })
 await writeFile(
   join(dir, 'tsconfig.json'),
