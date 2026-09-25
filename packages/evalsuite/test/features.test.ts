@@ -132,11 +132,20 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'greeting',
     canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
+    record: ({ run, tier }) => {
       assert.deepEqual(
         skills(run).map((s) => [s.name, s.placement]),
         [['house-greeting', 'harness']],
-      ),
+      )
+      if (tier === 'fake') return
+      // In the agent's home, taken after the turn: the fake's ~/.agents, or Cursor's adapter home.
+      // Adapters write SKILL.md afresh from its frontmatter and body, so the hash isn't the file's.
+      const seen = landed(run)?.context ?? []
+      assert.ok(
+        seen.some((c) => /^~\/(.+\/)?\.agents\/skills\/house-greeting\/SKILL\.md$/.test(c.path)),
+        JSON.stringify(seen),
+      )
+    },
   },
   {
     dir: 'secrets/checks-hidden-from-agent',

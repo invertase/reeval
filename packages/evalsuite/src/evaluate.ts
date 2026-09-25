@@ -330,20 +330,27 @@ function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; messa
   return { kind: 'assertion', message }
 }
 
+/** Under the home directory, and under each adapter's own home, which an installed CLI runs with. */
+const HOME_CONTEXT_PATHS = [
+  '.cursor/mcp.json',
+  '.cursor/cli-config.json',
+  '.cursor/rules',
+  '.cursor/skills',
+  '.cursor/skills-cursor',
+  '.agents/skills',
+  '.claude/CLAUDE.md',
+  '.claude/settings.json',
+  '.claude/skills',
+]
+/** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
+const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
+
 /**
  * Skills, rules and MCP config the agent could load, with content hashes (never contents).
  * Paths under the home directory are shown as `~/…`; others are relative to the workspace.
  */
 const CONTEXT_PATHS = [
-  '$HOME/.cursor/mcp.json',
-  '$HOME/.cursor/cli-config.json',
-  '$HOME/.cursor/rules',
-  '$HOME/.cursor/skills',
-  '$HOME/.cursor/skills-cursor',
-  '$HOME/.agents/skills',
-  '$HOME/.claude/CLAUDE.md',
-  '$HOME/.claude/settings.json',
-  '$HOME/.claude/skills',
+  ...HOME_CONTEXT_PATHS.map((p) => `$HOME/${p}`),
   'AGENTS.md',
   'CLAUDE.md',
   '.cursorrules',
@@ -357,7 +364,8 @@ const CONTEXT_PATHS = [
 ]
 
 async function agentContext(box: Sandbox, signal: AbortSignal): Promise<EvalRecord['context']> {
-  const script = `for p in ${CONTEXT_PATHS.map((p) => `"${p}"`).join(' ')}; do [ -e "$p" ] && find "$p" -type f 2>/dev/null; done | sort | head -500 | while IFS= read -r f; do printf '%s\t%s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done`
+  const adapterPaths = `for h in ${ADAPTER_HOMES}; do for p in ${HOME_CONTEXT_PATHS.join(' ')}; do echo "$h/$p"; done; done`
+  const script = `{ for p in ${CONTEXT_PATHS.map((p) => `"${p}"`).join(' ')}; do echo "$p"; done; ${adapterPaths}; } | while IFS= read -r p; do [ -e "$p" ] && find "$p" -type f 2>/dev/null; done | sort | head -500 | while IFS= read -r f; do printf '%s\t%s\n' "$(sha256sum "$f" | cut -d' ' -f1)" "$f"; done`
   const r = await box.exec(script, { signal }).catch(() => null)
   if (r?.exitCode !== 0) return []
   const home = (await box.exec('printf %s "$HOME"', { signal }).catch(() => null))?.stdout ?? ''
@@ -572,7 +580,6 @@ async function runAttempt(
     }
     await runSetup(box, env)
     await snapshot(box, signal)
-    if (spec.sandbox.kind === 'docker') record.context = await agentContext(box, signal)
     const harness = await createHarness(spec.harness)
     session = await harness.start(box, signal, {
       skills: env.skills,
@@ -581,6 +588,17 @@ async function runAttempt(
     })
     report({ kind: 'sandbox-ready', ms: Math.round(performance.now() - setupStart) })
     return [box, session]
+  }
+
+  /**
+   * Once, after the first turn (or at teardown when there was none): adapters write harness
+   * skills when a turn starts, so before it the record would miss them.
+   */
+  let contextTaken = false
+  async function takeContext(box: Sandbox, on: AbortSignal) {
+    if (contextTaken || spec.sandbox.kind !== 'docker') return
+    contextTaken = true
+    record.context = await agentContext(box, on)
   }
 
   // One start, whether t.sandbox() or the first t.send() asks first, or both at once.
@@ -624,6 +642,7 @@ async function runAttempt(
       report({ kind: 'turn-start', turn: turnNumber })
       const { raw, ...result } = await timed('agentMs', () => agent.send(prompt, signal))
       Object.assign(entry, result, raw ? { raw } : {})
+      await takeContext(box, signal)
       const count = (...types: string[]) =>
         result.transcript.filter((e) => types.includes(e.type)).length
       report({
@@ -723,6 +742,7 @@ async function runAttempt(
     throw error
   } finally {
     clock?.clear()
+    if (sandbox && !signal.aborted) await takeContext(sandbox, AbortSignal.timeout(30_000))
     if (sandbox) report({ kind: 'cleanup' })
     testSignal.removeEventListener('abort', destroy)
     await session?.close().catch(() => {})
