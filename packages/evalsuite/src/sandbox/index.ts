@@ -1,3 +1,4 @@
+import type { Brokering } from '../harness/agents.ts'
 import type { SandboxDescriptor } from '../types.ts'
 import { createFakeSandbox } from './fake.ts'
 import { InfraError, type Sandbox } from './types.ts'
@@ -10,8 +11,8 @@ export type SandboxOptions = {
   env: Record<string, string>
   /** The prepared image for Docker (see `prepareImage`). */
   image?: string
-  /** Keep the harness's credentials out of the sandbox, behind the Docker egress gateway. */
-  brokerCredentials?: boolean
+  /** The harness's credential, which the Docker egress gateway keeps out of the sandbox. */
+  brokering?: Brokering
 }
 
 export async function createSandbox(

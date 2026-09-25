@@ -9,6 +9,7 @@ import {
   layered,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
+import { isAgentKind } from './harness/agents.ts'
 import type {
   Cell,
   CellGate,
@@ -77,8 +78,8 @@ const sanitize = (text: string) =>
 
 export function harnessId(h: HarnessDescriptor): string {
   if (h.id) return h.id
-  if (h.kind === 'cursor') return h.model ? `cursor:${sanitize(h.model)}` : 'cursor'
-  return 'fake'
+  if (h.kind === 'fake') return 'fake'
+  return h.model ? `${h.kind}:${sanitize(h.model)}` : h.kind
 }
 
 export function sandboxId(s: SandboxDescriptor): string {
@@ -96,7 +97,7 @@ export const cellKey = (harness: string, environment: string, sandbox: string) =
   `${harness}/${environment}/${sandbox}`
 
 const isHarness = (v: unknown) =>
-  (v as { kind?: string })?.kind === 'cursor' || (v as { kind?: string })?.kind === 'fake'
+  (v as { kind?: string })?.kind === 'fake' || isAgentKind((v as { kind?: string })?.kind)
 const isSandbox = (v: unknown) =>
   (v as { kind?: string })?.kind === 'docker' || (v as { kind?: string })?.kind === 'fake'
 

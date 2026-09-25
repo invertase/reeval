@@ -577,7 +577,7 @@ ${body}
     [
       'widening in a profile limit',
       `profiles: { pr: { limit: { harness: [fakeHarness({ id: 'a' })] } } },`,
-      /profiles\.pr\.limit\.harness can only list harness ids to allow \(got fake\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
+      /profiles\.pr\.limit\.harness can only list harness ids to allow \(got fakeHarness\(\{ … \}\)\)\. To add harnesses, use profiles\.pr\.defaults\.harness\./,
     ],
     [
       'a usd budget',

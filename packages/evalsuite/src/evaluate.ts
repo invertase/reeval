@@ -17,6 +17,7 @@ import {
   skillFiles,
 } from './environment/resolve.ts'
 import { isTimeout, UsageError } from './errors.ts'
+import { brokeringFor } from './harness/agents.ts'
 import { createHarness, workspaceSkillDir } from './harness/index.ts'
 import type { HarnessSession } from './harness/types.ts'
 import { attemptId, attemptKey, evalId, recordFileName, relativeFile } from './ids.ts'
@@ -529,7 +530,7 @@ async function runAttempt(
       signal,
       env: env.vars,
       image,
-      brokerCredentials: spec.harness.kind === 'cursor',
+      brokering: brokeringFor(spec.harness),
     })
     sandbox = box
     if (signal.aborted) destroy()

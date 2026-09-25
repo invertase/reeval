@@ -25,21 +25,27 @@ export async function createDockerSandbox(
   if (!(await imageInfo(image))) {
     throw new InfraError(`Docker image ${image} not found. Build it with: es image build`)
   }
+  const { brokering } = options
   const network = await createDockerSession({
     image,
     env: options.env,
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
-    egress: options.brokerCredentials && {
+    egress: brokering && {
       log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
+      endpoints: brokering.endpoints,
+      onRefused: ({ method, url }) =>
+        console.warn(
+          `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints ES brokers it for`,
+        ),
     },
   })
   // The key never enters the container: with no gateway to broker it, the attempt can't start.
   if (network.egress?.active === false) {
     await Promise.resolve(network.destroy()).catch(() => {})
     throw new InfraError(
-      `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
+      `Can't keep ${brokering?.credential} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
     )
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)

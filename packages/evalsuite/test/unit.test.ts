@@ -20,6 +20,7 @@ import {
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
+import { AGENTS, agentAuth, brokeringFor } from '../src/harness/agents.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -33,6 +34,20 @@ import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
+
+test("a harness's auth is only its own credential, and a missing one fails closed", () => {
+  const host = { CURSOR_API_KEY: 'crsr_k', AI_GATEWAY_API_KEY: 'gw_k', ANTHROPIC_API_KEY: 'sk-a' }
+  assert.deepEqual(agentAuth(AGENTS.cursor, host), { CURSOR_API_KEY: 'crsr_k' })
+  assert.throws(
+    () => agentAuth(AGENTS.cursor, { AI_GATEWAY_API_KEY: 'gw_k' }),
+    /^InfraError: CURSOR_API_KEY isn't set, so the Cursor harness can't authenticate/,
+  )
+  assert.deepEqual(brokeringFor({ kind: 'cursor' }), {
+    credential: 'CURSOR_API_KEY',
+    endpoints: AGENTS.cursor.endpoints,
+  })
+  assert.equal(brokeringFor({ kind: 'fake' }), undefined)
+})
 
 test('run ids sort by start time and differ for runs in the same second', () => {
   const start = new Date('2026-09-24T15:27:00.123Z')

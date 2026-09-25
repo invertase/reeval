@@ -1,39 +1,30 @@
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { createCursor } from '@ai-sdk/harness-cursor'
 import { WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
-import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { CursorHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
+import type { AgentHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
+import { AGENTS, agentAuth } from './agents.ts'
 import { normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
-const pairs = (values: Record<string, unknown> = {}) =>
-  Object.entries(values).map(([name, value]) => ({ name, value: String(value) }))
-
-/** ES's MCP servers in the ACP `session/new` shape the Cursor adapter forwards as is. */
-export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
-        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
-    ),
-  )
-}
-
-export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harness {
+/** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
+export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
+  const catalog = AGENTS[descriptor.kind]
   return {
     async start(sandbox, signal, { skills, mcp }) {
+      const auth = agentAuth(catalog)
       const agent = new HarnessAgent({
-        harness: createCursor(Object.keys(mcp).length ? { mcpServers: acpMcpServers(mcp) } : {}),
+        harness: await catalog.adapter({
+          auth,
+          ...(Object.keys(mcp).length ? { mcpServers: catalog.mcpServers(mcp) } : {}),
+        }),
         model: descriptor.model,
         permissionMode: 'allow-all',
         sandboxConfig: { workDir: WORKSPACE_DIR },
         ...(skills.length ? { skills } : {}),
       })
       if (!isDockerSandbox(sandbox)) {
-        throw new InfraError('The Cursor harness needs the Docker sandbox')
+        throw new InfraError(`The ${catalog.name} harness needs the Docker sandbox`)
       }
       let session: Awaited<ReturnType<typeof agent.createSession>>
       try {
@@ -43,7 +34,7 @@ export function createCursorHarness(descriptor: CursorHarnessDescriptor): Harnes
         })
       } catch (error) {
         if (signal.aborted) throw error
-        throw new InfraError(`Cursor harness failed to start: ${(error as Error).message}`)
+        throw new InfraError(`${catalog.name} harness failed to start: ${(error as Error).message}`)
       }
       return {
         async send(prompt, turnSignal) {

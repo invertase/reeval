@@ -175,7 +175,9 @@ export type CursorHarnessDescriptor = {
   /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
 }
-export type HarnessDescriptor = FakeHarnessDescriptor | CursorHarnessDescriptor
+/** A real coding agent, driven through its AI SDK harness adapter. */
+export type AgentHarnessDescriptor = CursorHarnessDescriptor
+export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {
   kind: 'fake'

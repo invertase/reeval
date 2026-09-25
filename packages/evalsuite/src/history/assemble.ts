@@ -121,7 +121,7 @@ const passRateOf = (outcomes: Outcome[]) => {
 /** Concurrency caps change how fast a run goes, not what it measures. */
 const withoutCaps = <T extends { maxConcurrent?: number }>({ maxConcurrent: _, ...rest }: T) => rest
 
-const harnessModel = (h: HarnessDescriptor) => (h.kind === 'cursor' ? (h.model ?? null) : null)
+const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.model ?? null))
 
 /** A cell fingerprint: the hash of its parts, so each part can be compared on its own. */
 export const fingerprintOf = (parts: FingerprintParts) => sha256(JSON.stringify(parts))
