@@ -27,7 +27,7 @@ import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.t
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 
-const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1 }
+const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1, query: 1 }
 
 const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
 
@@ -65,6 +65,10 @@ Usage:
                             --md --json --fail-on-regression
   es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                             (default dir: .es/checkouts/<run>)
+  es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
+                            rebuilt from the records); views: lift, flaky_cells, drift,
+                            failing_attempts, eval_trend, verdict_flips. No argument lists them
+    --json                  Rows as JSON; --schema every table and column; --rebuild from scratch
   es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
     --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
     --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
@@ -124,6 +128,8 @@ function parse(argv: string[]) {
       'no-scratch': { type: 'boolean' },
       'no-token': { type: 'boolean' },
       'no-artifacts': { type: 'boolean' },
+      schema: { type: 'boolean' },
+      rebuild: { type: 'boolean' },
     },
   })
 }
@@ -167,6 +173,10 @@ async function run(argv: string[]): Promise<number> {
         return commands.compareCommand(ctx, filters)
       case 'checkout':
         return commands.checkoutCommand(ctx, filters)
+      case 'query': {
+        const { queryCommand } = await import('./query.ts')
+        return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
+      }
     }
   }
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)

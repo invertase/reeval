@@ -57,7 +57,7 @@ its files import `evalsuite`.
 
 ## Development
 
-You need Node 22.6 or later, pnpm 10 and, for the Docker tests and real runs, a running Docker.
+You need Node 22.13 or later, pnpm 10 and, for the Docker tests and real runs, a running Docker.
 
 ```bash
 pnpm install
@@ -505,6 +505,8 @@ es compare [base] [head]  Diff two runs; base defaults to head's nearest recorde
                           --md --json --fail-on-regression
 es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                           (default dir: .es/checkouts/<run>)
+es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db)
+                          --json --schema --rebuild
 es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
                           --port <n> (4984) --host <addr> --open --no-scratch --no-token
 es studio build           Write the studio as a static site: --out <dir> (studio-dist)
@@ -676,6 +678,41 @@ set), `'always'`, or `'manual'`. `config.history.artifacts` picks what's kept ne
 record: `'all'` (default, passes included, so you can see why something passed),
 `'failures'`, or `'none'`. Single tool outputs, check streams and per-file diffs over 128 KB
 keep their head and tail, with a truncation marker and the full text's sha256.
+
+### Querying across runs
+
+`es query` answers questions across runs with SQL, without opening records by hand. It reads
+`.es/history.db`, a gitignored SQLite projection of every record in `evals/.history/` and
+`.es/runs/` (a recorded run wins over its scratch copy). The database is brought up to date on
+every query, re-reading only records that are new or changed, and can be deleted at any time.
+Statements are read-only and one at a time. It needs Node 22.13 or later (`node:sqlite`).
+
+```bash
+es query                       # the views and tables, with examples
+es query lift                  # a view by name: SELECT * FROM lift
+es query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"
+es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting' AND model LIKE 'composer%'"
+es query "SELECT run_id, eval_key, changed FROM drift ORDER BY run_id DESC LIMIT 20"
+es query "SELECT branch, outcome, COUNT(*) AS n FROM eval_trend GROUP BY branch, outcome" --json
+es query --schema              # every table and view with its columns
+```
+
+The views answer the common questions:
+
+| View | One row per |
+|---|---|
+| `lift` | variant cell per run: its control, both sides' counts, points, the 95% interval (`lo`, `hi`), `within_noise` |
+| `flaky_cells` | cell and fingerprint whose attempts disagreed within a run: how often, first and last seen |
+| `drift` | run where a cell's fingerprint changed from its previous run, with the parts that changed (`sources`, `harness`, `environment`, `image`, `agent_cli`, `judge`, `context`) |
+| `failing_attempts` | failed attempt and skill of its environment (joined by digest), with its harness, model and error |
+| `eval_trend` | eval per run: outcome, pass rate, branch, PR and fingerprint |
+| `verdict_flips` | judge question per cell whose pass rate changed from its previous run |
+
+The tables (`runs`, `evals`, `cells`, `attempts`, `judgements`, `environments`, `env_skills`,
+`artifacts`) mirror the record, and join on `run_id`, `eval_key`, `cell_key` and
+`environment_digest`. Rows print as an aligned table, or as JSON with `--json`; the sync
+summary goes to stderr, so output pipes cleanly. `--rebuild` rebuilds the database from the
+records.
 
 ### Transcripts
 

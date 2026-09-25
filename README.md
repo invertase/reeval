@@ -11,7 +11,7 @@ web studio.
 npm i -D @invertase/foobar   # placeholder name; the CLI is `es`
 ```
 
-You need Node 22.6 or later and, for real runs, a running Docker.
+You need Node 22.13 or later and, for real runs, a running Docker.
 
 ## A minimal eval
 
@@ -112,7 +112,8 @@ Duration  40s
 
 Under a coding agent, ES switches to compact output: one block per failure and the path to its
 record. Commit runs into `evals/.history/` with `es record`, then track them with `es history`
-and `es compare`.
+and `es compare`, or ask across runs with SQL: `es query lift`, or
+`es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`.
 
 ## Studio
 
