@@ -15,7 +15,7 @@ import {
   UsageError,
 } from './config.ts'
 import { budgetMarker } from './engine/cancel.ts'
-import type { EngineRun, PlannedItem } from './engine/node.ts'
+import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
@@ -41,7 +41,8 @@ Usage:
   es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
     --profile <name>        Size the run with a profile from es.config.ts (also ES_PROFILE;
                             default: defaultProfile.ci in CI, else defaultProfile.local)
-    --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0
+    --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0;
+                            with --json, as one JSON document (every cell, and what's excluded)
     --force                 Run even when the plan is over budget.attempts
     --runs <n>              Attempts per cell, overriding the config, groups and evals
     --concurrency <n>       Attempts running at once across evals and cells (default 8, at
@@ -195,8 +196,8 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
         JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
       ),
       filters,
-      onPlan: async (items) => {
-        planned = items.filter((p) => !p.attempt.plan.skip)
+      onPlan: async (collected) => {
+        planned = collected.planned.filter((p) => !p.attempt.plan.skip)
         return false
       },
     })
@@ -228,7 +229,8 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
   const ctx = await startRun(setup)
   const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
-    out: process.stdout,
+    // The JSON plan is the only output of `--dry-run --json`.
+    out: setup.json ? { write: () => true } : process.stdout,
     output: setup.output,
     harness: setup.config.harness[0]?.kind ?? 'agent',
     attemptDir: (id, cell, n) =>
@@ -315,6 +317,11 @@ async function prepareRun(flags: Flags) {
     isTTY: !!process.stdout.isTTY,
     agent: detectAgent().name,
   })
+  if (flags.json && !flags['dry-run']) {
+    throw new UsageError(
+      'es run --json only prints the plan: add --dry-run. A run writes its record to .es/runs; read it with es show --json.',
+    )
+  }
   loadEnvFiles(process.cwd())
   const named = flags.profile ?? (process.env.ES_PROFILE || undefined)
   const config = await loadConfig(flags.config, 'run', named)
@@ -345,6 +352,7 @@ async function prepareRun(flags: Flags) {
     budget: profile?.budget ?? config.budget,
     record: profile?.record ?? config.record,
     dryRun: !!flags['dry-run'],
+    json: !!flags.json,
     force: !!flags.force,
   }
 }
@@ -427,12 +435,14 @@ async function executeRun(
 ) {
   const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
   const { runEngine } = await import('./engine/node.ts')
-  const { buildPlan, checkAttemptBudget, planLine, planTable } = await import('./plan.ts')
+  const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
+    './plan.ts'
+  )
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
   let reached = false
   let budgetTimer: NodeJS.Timeout | undefined
-  const onPlan = async (planned: PlannedItem[], matched: number) => {
+  const onPlan = async ({ planned, excluded, matched }: CollectedPlan) => {
     if (matched === 0) throw noMatch(config, filters, tags)
     plan = await buildPlan({
       planned,
@@ -442,6 +452,24 @@ async function executeRun(
       root: config.root,
       historyDir: config.history.dir,
     })
+    if (setup.json) {
+      const { imageStages, imageTargets } = await import('./sandbox/images.ts')
+      const targets = imageTargets(
+        planned
+          .filter((p) => !p.attempt.plan.skip)
+          .map((p) => ({ id: p.id, sandbox: p.attempt.sandbox })),
+      )
+      const images = await Promise.all(
+        targets.map(async (t) => ({
+          id: t.id,
+          evals: t.evals,
+          stages: await imageStages(t, config.root),
+        })),
+      )
+      const doc = planDocument(plan, planned, excluded, images)
+      process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
+      return false
+    }
     const lines = [planLine(plan)]
     if (setup.dryRun) lines.push(...planTable(plan))
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))

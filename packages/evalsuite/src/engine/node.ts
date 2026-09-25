@@ -37,6 +37,12 @@ export type EngineRun = {
 /** One planned attempt, from collecting the eval files without running them. */
 export type PlannedItem = { id: string; key: string; file: string; attempt: AttemptMeta }
 
+/** An eval collection left out: `.skip`, `.todo`, or a sibling of an `.only`. */
+export type ExcludedEval = { id: string; mode: 'skip' | 'todo' }
+
+/** What a run would start, from collecting the eval files; `matched` counts name-filter hits. */
+export type CollectedPlan = { planned: PlannedItem[]; excluded: ExcludedEval[]; matched: number }
+
 export type EngineOptions = {
   run: RunContext
   filters: string[]
@@ -50,7 +56,7 @@ export type EngineOptions = {
    * Called with every attempt the run would start, after collecting the files and before any
    * attempt runs. Resolve false to stop there; throw to fail the run.
    */
-  onPlan?: (planned: PlannedItem[], matched: number) => Promise<boolean>
+  onPlan?: (collected: CollectedPlan) => Promise<boolean>
 }
 
 const require = createRequire(import.meta.url)
@@ -176,6 +182,39 @@ export function vitestMismatch(root: string): string | undefined {
   return `The evalsuite this project resolves uses another copy of vitest (${theirs}) than this es (${ours}). Run the project's own es, e.g. npx es.`
 }
 
+const skipped = (test: TestCase) => test.options.mode === 'skip' || test.options.mode === 'todo'
+
+/**
+ * The attempts collected modules would start, by file then as declared, and the evals left out.
+ * Evals a tag filter dropped never registered, so they're in neither list.
+ */
+function collectPlan(
+  root: string,
+  modules: readonly TestModule[],
+  matchesName: (e: EngineEval) => boolean,
+): CollectedPlan {
+  const problems = moduleProblems(root, modules)
+  if (problems.usage) throw new UsageError(problems.usage)
+  const tests = [...modules]
+    .sort((a, b) => (a.moduleId < b.moduleId ? -1 : 1))
+    .flatMap((m) => [...m.children.allTests()])
+  const planned: PlannedItem[] = []
+  const excluded = new Map<string, ExcludedEval>()
+  let matched = 0
+  for (const test of tests) {
+    const e = toEngineEval(root, test)
+    if (!matchesName(e)) continue
+    matched++
+    const { attempt } = e
+    if (attempt?.plan.skip || (attempt && !skipped(test))) {
+      planned.push({ id: e.id, key: e.key, file: e.file, attempt })
+    } else if (!excluded.has(e.id)) {
+      excluded.set(e.id, { id: e.id, mode: test.options.mode === 'todo' ? 'todo' : 'skip' })
+    }
+  }
+  return { planned, excluded: [...excluded.values()], matched }
+}
+
 export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const { config } = options.run
   const evals = new Map<string, EngineEval>()
@@ -190,7 +229,6 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     if (!collecting) onEvent(e)
   }
   const keysByTask = new Map<string, string>()
-  const skipped = (test: TestCase) => test.options.mode === 'skip' || test.options.mode === 'todo'
   const reporter: Reporter = {
     onTestRunStart(specifications) {
       if (!collecting) options.onRunStart?.(specifications.length)
@@ -336,22 +374,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       collecting = true
       const collected = await vitest.collectTests(specs)
       collecting = false
-      const problems = moduleProblems(config.root, collected.testModules)
-      if (problems.usage) throw new UsageError(problems.usage)
-      const tests = [...collected.testModules]
-        .sort((a, b) => (a.moduleId < b.moduleId ? -1 : 1))
-        .flatMap((m) => [...m.children.allTests()])
-      const planned: PlannedItem[] = []
-      let matched = 0
-      for (const test of tests) {
-        const e = toEngineEval(config.root, test)
-        if (!matchesName(e)) continue
-        matched++
-        const { attempt } = e
-        if (!attempt || (skipped(test) && !attempt.plan.skip)) continue
-        planned.push({ id: e.id, key: e.key, file: e.file, attempt })
-      }
-      if (!(await options.onPlan(planned, matched))) {
+      const plan = collectPlan(config.root, collected.testModules, matchesName)
+      if (!(await options.onPlan(plan))) {
         return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
       }
     }

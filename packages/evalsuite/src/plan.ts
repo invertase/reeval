@@ -1,12 +1,19 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { PlannedItem } from './engine/node.ts'
+import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
 import type { RunRecord } from './history/types.ts'
 import { clip, formatDuration } from './text.ts'
-import type { Budget, EvalPlan, ResolvedProfile, SandboxDescriptor } from './types.ts'
+import type {
+  Budget,
+  Cell,
+  Duration,
+  EvalPlan,
+  ResolvedProfile,
+  SandboxDescriptor,
+} from './types.ts'
 
 /** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
 const DEFAULT_ATTEMPT_MS = 3 * 60_000
@@ -170,6 +177,97 @@ export function planTable(plan: RunPlan): string[] {
       .join('  ')
       .trimEnd()
   return [line(header), ...rows.map(line)]
+}
+
+export type PlanCell = Cell & { gated: boolean; minLift?: number; runs: number }
+
+export type PlanEval = {
+  id: string
+  file: string
+  groups: string[]
+  name: string
+  tags: string[]
+  /** Why the eval doesn't run at all, else null. */
+  skip: string | null
+  notes: string[]
+  cells: PlanCell[]
+}
+
+/** A Docker sandbox image the plan needs, and how it's made, as `es image build --dry-run` lists it. */
+export type PlanImage = {
+  id: string
+  evals: number
+  stages: Array<{ what: string; ref: string; action: string }>
+}
+
+/** `es run --dry-run --json`: the plan as one document. */
+export type PlanDocument = {
+  profile: { name: string; reason: string } | null
+  totals: { evals: number; skipped: number; cells: number; attempts: number }
+  budget: { attempts: number | null; duration: Duration | null; fits: boolean }
+  concurrency: number
+  estimateMs: number
+  warnings: string[]
+  evals: PlanEval[]
+  excluded: ExcludedEval[]
+  images: PlanImage[]
+}
+
+export function planDocument(
+  plan: RunPlan,
+  planned: PlannedItem[],
+  excluded: ExcludedEval[],
+  images: PlanImage[],
+): PlanDocument {
+  const evals = new Map<string, PlanEval>()
+  for (const { id, file, attempt } of planned) {
+    let e = evals.get(id)
+    if (!e) {
+      e = {
+        id,
+        file,
+        groups: attempt.groups,
+        name: attempt.name,
+        tags: attempt.tags,
+        skip: attempt.plan.skip ?? null,
+        notes: attempt.plan.notes,
+        cells: [],
+      }
+      evals.set(id, e)
+    }
+    if (attempt.plan.skip) continue
+    const cell = e.cells.find((c) => c.key === attempt.cell.key)
+    if (cell) cell.runs++
+    else {
+      e.cells.push({
+        ...attempt.cell,
+        gated: attempt.gated,
+        ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
+        runs: 1,
+      })
+    }
+  }
+  const { attempts, duration } = plan.budget
+  return {
+    profile: plan.profile && { name: plan.profile.name, reason: plan.profile.reason },
+    totals: {
+      evals: plan.evals,
+      skipped: plan.rows.length - plan.evals,
+      cells: plan.cells,
+      attempts: plan.attempts,
+    },
+    budget: {
+      attempts: attempts ?? null,
+      duration: duration ?? null,
+      fits: attempts === undefined || plan.attempts <= attempts,
+    },
+    concurrency: plan.concurrency,
+    estimateMs: plan.estimateMs,
+    warnings: plan.warnings,
+    evals: [...evals.values()],
+    excluded,
+    images,
+  }
 }
 
 /** Exit 2 before anything starts when the plan is over `budget.attempts` (unless `--force`). */
