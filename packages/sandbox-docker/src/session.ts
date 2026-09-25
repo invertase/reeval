@@ -42,8 +42,8 @@ async function networksOf(id: string): Promise<string[]> {
 
 /**
  * A harness sandbox session backed by one local Docker container. Commands and file I/O go
- * through `docker exec`. The bridge port is published on 127.0.0.1, or reached through the
- * egress gateway's tunnel while the container has no network.
+ * through `docker exec`. With the egress gateway, ports are reached through its tunnel whatever
+ * the network policy; without it, the bridge port is published on 127.0.0.1.
  */
 export async function createDockerSession(options: SessionOptions): Promise<DockerSession> {
   const labels = { [LABEL.managed]: 'true', ...options.labels }
@@ -228,9 +228,15 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     },
     async getPortEndpoint({ port, protocol = 'ws' }) {
       const scheme = protocol === 'ws' ? 'ws' : 'http'
-      if (gateway && detached.length > 0) return { url: await gateway.portUrl(port, scheme) }
-      const mapped = await dockerOk(['port', id, `${port}/tcp`])
-      const hostPort = mapped.split('\n')[0]?.split(':').at(-1)
+      // The tunnel doesn't depend on the container's networks, which a policy change detaches
+      // and reattaches, and Docker Desktop drops published ports on reattach.
+      if (gateway) return { url: await gateway.portUrl(port, scheme) }
+      const mapped = await docker(['port', id, `${port}/tcp`])
+      const hostPort = mapped.stdout.toString('utf8').split('\n')[0]?.split(':').at(-1)
+      if (mapped.exitCode !== 0 || !hostPort) {
+        const reason = mapped.stderr.trim() || 'Docker reports no host port for it'
+        throw new Error(`Port ${port} of ${id.slice(0, 12)} isn't reachable: ${reason}`)
+      }
       return { url: `${scheme}://127.0.0.1:${hostPort}` }
     },
     async getPortUrl(o) {

@@ -6,7 +6,7 @@ import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
-import { DEFAULT_IMAGE } from '../src/image.ts'
+import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
 
 const dockerReady = (() => {
@@ -178,11 +178,25 @@ describe('egress gateway in Docker', {
     const denied = await sh(s, `curl -sS https://upstream.test:${upstream.port}/`)
     assert.match(denied.stderr, /403/)
 
+    // Reattached to its networks, the container keeps the same tunnel endpoint: nothing relies on
+    // Docker republishing the port, which Docker Desktop doesn't do on reconnect.
     await s.setNetworkPolicy?.({ mode: 'allow-all' })
     assert.ok((await upInterfaces(s)).some((i) => /^eth\d+$/.test(i)))
-    const published = await s.getPortEndpoint({ port: 43210, protocol: 'http' })
-    assert.notEqual(published.url, url)
-    assert.equal(await retry(() => get(published.url)), 'bridge ok')
+    const reopened = await s.getPortEndpoint({ port: 43210, protocol: 'http' })
+    assert.equal(reopened.url, url)
+    assert.equal(await retry(() => get(reopened.url)), 'bridge ok')
+    await server.kill()
+  })
+
+  test('without the gateway the bridge port is published, and an unpublished port is an error', async () => {
+    const s = await open({ image: DEFAULT_IMAGE })
+    const server = await s.spawn({
+      command: `node -e "require('http').createServer((q, r) => r.end('published ok')).listen(${BRIDGE_PORT}, '0.0.0.0')"`,
+    })
+    const { url } = await s.getPortEndpoint({ port: BRIDGE_PORT, protocol: 'http' })
+    assert.match(url, /^http:\/\/127\.0\.0\.1:\d+$/)
+    assert.equal(await retry(() => get(url)), 'published ok')
+    await assert.rejects(s.getPortEndpoint({ port: 43211 }), /Port 43211 of \w+ isn't reachable/)
     await server.kill()
   })
 
