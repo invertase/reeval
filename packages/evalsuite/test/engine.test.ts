@@ -18,7 +18,7 @@ describe('engine', () => {
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /✓ evals\/math\.es\.ts › math/)
     assert.match(r.stdout, /Evals {2}1 passed \(1\)/)
-    assert.match(r.stdout, /Results {2}\.es\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+\/summary\.md/)
+    assert.match(r.stdout, /Results {2}\.es\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+_[0-9a-z]{4}\/summary\.md/)
     for (const leak of [/vitest/i, /RUN v/, /testTimeout/]) {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
     }
