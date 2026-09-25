@@ -565,20 +565,41 @@ describe('egress policy through the proxy', () => {
     }
   })
 
-  test('the host loopback stays out of reach by default', async () => {
+  test('the host loopback stays out of reach by default, over CONNECT and plain HTTP', async () => {
     const ca = createCertificateAuthority()
     const proxy: EgressProxy = createEgressProxy({ ca, policy: { mode: 'allow-all' } })
     const server = net.createServer((s) => proxy.handle(s))
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
+    let reached = 0
+    const plain = http.createServer((_, res) => {
+      reached++
+      res.end('reached')
+    })
+    await new Promise<void>((r) => plain.listen(0, '127.0.0.1', r))
+    const plainPort = (plain.address() as net.AddressInfo).port
     try {
       const gw = { port: (server.address() as net.AddressInfo).port } as Gw
       for (const host of ['127.0.0.1', 'localhost', '[::1]', '[::]', '169.254.169.254']) {
         const r = await connect(gw, host, h1.port)
         assert.equal(!r.ok && r.status, 403, host)
+        const status = await new Promise<number>((resolve) =>
+          http
+            .get(
+              { host: '127.0.0.1', port: gw.port, path: `http://${host}:${plainPort}/` },
+              (res) => {
+                res.resume()
+                resolve(res.statusCode ?? 0)
+              },
+            )
+            .once('error', () => resolve(0)),
+        )
+        assert.equal(status, 403, `plain HTTP to ${host}`)
       }
+      assert.equal(reached, 0, 'the host listener saw nothing')
     } finally {
       proxy.close()
       server.close()
+      plain.close()
     }
   })
 })

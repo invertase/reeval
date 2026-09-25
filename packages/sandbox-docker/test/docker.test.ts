@@ -6,6 +6,8 @@ import type net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import type { HarnessV1RequestTransformation } from '@ai-sdk/harness'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
+import { PROXY_PORT } from '../src/egress/gateway.ts'
+import type { NetworkPolicy } from '../src/egress/policy.ts'
 import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
@@ -443,17 +445,214 @@ describe('egress gateway in Docker', {
   })
 })
 
-const get = (url: string) =>
-  new Promise<string>((resolve, reject) => {
-    http
-      .get(url, (res) => {
-        let body = ''
-        res.on('data', (d) => {
-          body += d
-        })
-        res.on('end', () => resolve(body))
+describe('egress policy in Docker', {
+  skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE}`,
+}, () => {
+  const allowAll: NetworkPolicy = { mode: 'allow-all' }
+  const denyAll: NetworkPolicy = { mode: 'deny-all' }
+  const custom: NetworkPolicy = { mode: 'custom', allowedHosts: ['upstream.test'] }
+  let upstream: { port: number; close(): void }
+  /** A plain HTTP listener on every host interface, counting what reaches it. */
+  let listener: { port: number; hits: number; close(): void }
+  /** The host as a container on the default bridge reaches it directly. */
+  let hostAddress: string
+  const sessions: DockerSession[] = []
+  const open = async (policy: NetworkPolicy) => {
+    const s = await createDockerSession({ image: DEFAULT_IMAGE, egress: egress({ policy }) })
+    sessions.push(s)
+    return s
+  }
+  const direct = (s: DockerSession) =>
+    sh(
+      s,
+      `curl -sS --noproxy '*' --max-time 3 -o /dev/null -w '%{http_code}' http://${hostAddress}:${listener.port}/`,
+    )
+  /** Only `lo` is up, and a direct connect to the host listener neither succeeds nor lands. */
+  const expectNoDirectRoute = async (s: DockerSession, what: string) => {
+    assert.deepEqual(await upInterfaces(s), ['lo'], what)
+    const hits = listener.hits
+    const r = await direct(s)
+    assert.notEqual(r.exitCode, 0, `${what}: a direct connect got ${r.stdout}`)
+    assert.equal(listener.hits, hits, `${what}: the host listener saw a connection`)
+  }
+  const killForwarder = (s: DockerSession) =>
+    sh(s, `pkill -KILL -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}'`)
+
+  before(async () => {
+    upstream = await startUpstream()
+    const server = http.createServer((_, res) => {
+      box.hits++
+      res.end('host')
+    })
+    const box = { port: 0, hits: 0, close: () => server.close() }
+    await new Promise<void>((r) => server.listen(0, '0.0.0.0', r))
+    box.port = (server.address() as net.AddressInfo).port
+    listener = box
+    // host.docker.internal under Docker Desktop, else the default route's gateway.
+    const probe = await open(allowAll)
+    hostAddress = (
+      await sh(
+        probe,
+        `h=$(getent ahostsv4 host.docker.internal | awk 'NR==1{print $1}'); if [ -z "$h" ]; then g=$(awk '$2=="00000000"{print $3; exit}' /proc/net/route); h=$(printf '%d.%d.%d.%d' 0x\${g:6:2} 0x\${g:4:2} 0x\${g:2:2} 0x\${g:0:2}); fi; echo "$h"`,
+      )
+    ).stdout.trim()
+    assert.match(hostAddress, /^\d+\.\d+\.\d+\.\d+$/)
+  })
+  after(async () => {
+    await Promise.all(sessions.map((s) => s.destroy()))
+    upstream.close()
+    listener.close()
+  })
+
+  test('allowlist: a listed host gets 200, any other a 403 that says why', async () => {
+    const s = await open(custom)
+    await sh(s, 'printf "%s" "$PEM" > /tmp/upstream.pem', { PEM: upstreamCa.cert })
+    seen.length = 0
+    const ok = await sh(
+      s,
+      `curl -sS --cacert /tmp/upstream.pem -o /dev/null -w '%{http_code}' https://upstream.test:${upstream.port}/e1`,
+    )
+    assert.equal(ok.stdout, '200', ok.stderr)
+    assert.deepEqual(
+      seen.map((r) => r.path),
+      ['/e1'],
+    )
+    const plain = await sh(s, `curl -sS -w ' %{http_code}' http://other.test:${upstream.port}/`)
+    assert.match(plain.stdout, /isn't in the allowlist[\s\S]* 403$/)
+    // Twin of "the listed host got 200": the same request to another host doesn't.
+    const other = await sh(
+      s,
+      `curl -sS --cacert /tmp/upstream.pem -w '%{http_code}' https://other.test:${upstream.port}/`,
+    )
+    assert.notEqual(other.stdout, '200')
+    assert.match(other.stderr, /403/)
+    assert.equal(seen.length, 1, 'nothing else reached the upstream')
+  })
+
+  test('no direct route: custom and deny-all, at start and after a switch', async () => {
+    const s = await open(allowAll)
+    // Twin: under allow-all the same direct connect reaches the host listener.
+    const hits = listener.hits
+    assert.equal((await direct(s)).stdout, '200')
+    assert.equal(listener.hits, hits + 1)
+    await expectNoDirectRoute(await open(custom), 'custom at start')
+    await expectNoDirectRoute(await open(denyAll), 'deny-all at start')
+    await s.setNetworkPolicy?.(custom)
+    await expectNoDirectRoute(s, 'allow-all → custom')
+    await s.setNetworkPolicy?.(denyAll)
+    await expectNoDirectRoute(s, 'custom → deny-all')
+  })
+
+  test('policy switch: every transition leaves the right interfaces', async () => {
+    const modes = { a: allowAll, c: custom, d: denyAll } as const
+    const expectMode = async (s: DockerSession, mode: keyof typeof modes, what: string) => {
+      const up = await upInterfaces(s)
+      if (mode === 'a')
+        assert.ok(
+          up.some((i) => /^eth\d+$/.test(i)),
+          `${what}: ${up}`,
+        )
+      else assert.deepEqual(up, ['lo'], what)
+    }
+    // Each sequence walks all six transitions, one from each end.
+    for (const [start, walk] of [
+      ['a', 'cdadca'],
+      ['c', 'dacadc'],
+    ] as const) {
+      const s = await open(modes[start])
+      await expectMode(s, start, `start ${start}`)
+      let from: keyof typeof modes = start
+      for (const to of walk as unknown as (keyof typeof modes)[]) {
+        await s.setNetworkPolicy?.(modes[to])
+        await expectMode(s, to, `${from} → ${to}`)
+        from = to
+      }
+    }
+    const network = `evalsuite-test-${process.pid}`
+    execFileSync('docker', ['network', 'create', network], { stdio: 'ignore' })
+    const s = await createDockerSession({ image: DEFAULT_IMAGE, egress: egress() })
+    try {
+      execFileSync('docker', ['network', 'connect', network, s.id])
+      const networks = () =>
+        Object.keys(
+          JSON.parse(
+            execFileSync(
+              'docker',
+              ['inspect', '--format', '{{json .NetworkSettings.Networks}}', s.id],
+              { encoding: 'utf8' },
+            ),
+          ) ?? {},
+        ).sort()
+      assert.deepEqual(networks(), ['bridge', network])
+      await s.setNetworkPolicy?.(denyAll)
+      assert.deepEqual(networks(), [])
+      assert.deepEqual(await upInterfaces(s), ['lo'])
+      await s.setNetworkPolicy?.(custom)
+      assert.deepEqual(networks(), [], 'restricted → restricted changes nothing')
+      await s.setNetworkPolicy?.(allowAll)
+      assert.deepEqual(networks(), ['bridge', network], 'both networks come back')
+    } finally {
+      await s.destroy()
+      execFileSync('docker', ['network', 'rm', network], { stdio: 'ignore' })
+    }
+  })
+
+  test('port tunnel: same URL and live connection across policy changes', async () => {
+    for (const [start, walk] of [
+      [allowAll, [denyAll, custom, allowAll]],
+      [custom, [denyAll, allowAll, custom]],
+    ] as const) {
+      const s = await open(start)
+      const server = await s.spawn({
+        command: `node -e "require('http').createServer((q, r) => r.end(String(q.socket.remotePort))).listen(43212, '0.0.0.0')"`,
       })
-      .once('error', reject)
+      const { url } = await s.getPortEndpoint({ port: 43212, protocol: 'http' })
+      const agent = new http.Agent({ keepAlive: true, maxSockets: 1 })
+      try {
+        const connection = await retry(() => get(url, agent))
+        for (const policy of walk) {
+          await s.setNetworkPolicy?.(policy)
+          assert.equal((await s.getPortEndpoint({ port: 43212, protocol: 'http' })).url, url)
+          assert.equal(
+            await get(url, agent),
+            connection,
+            `the same connection after ${policy.mode}`,
+          )
+        }
+        // Twin: with the gateway's tunnel gone, the same helper fails, so it went through it.
+        await killForwarder(s)
+        await retry(async () => assert.equal(s.egress?.active, false))
+        await assert.rejects(get(url), (e: Error) => !/no answer within/.test(e.message))
+      } finally {
+        agent.destroy()
+        await server.kill().catch(() => {})
+      }
+    }
+  })
+
+  test('forwarder death: later requests fail fast with a reason; still no direct route', async () => {
+    const s = await open(custom)
+    assert.equal((await killForwarder(s)).exitCode, 0, 'pkill found the forwarder')
+    await retry(async () => assert.equal(s.egress?.active, false))
+    assert.match(s.egress?.active === false ? s.egress.reason : '', /forwarder exited/)
+    const r = await sh(s, `curl -sS --max-time 2 https://upstream.test:${upstream.port}/`)
+    assert.equal(r.exitCode, 7, `refused at once, not a timeout: ${r.stderr}`)
+    assert.match(r.stderr, /Failed to connect|Connection refused|Couldn't connect/)
+    await expectNoDirectRoute(s, 'after the forwarder died')
+  })
+})
+
+const get = (url: string, agent?: http.Agent, ms = 5000) =>
+  new Promise<string>((resolve, reject) => {
+    const req = http.get(url, { agent }, (res) => {
+      let body = ''
+      res.on('data', (d) => {
+        body += d
+      })
+      res.on('end', () => resolve(body))
+    })
+    req.setTimeout(ms, () => req.destroy(new Error(`no answer within ${ms}ms`)))
+    req.once('error', reject)
   })
 
 async function retry<T>(fn: () => Promise<T>, tries = 30): Promise<T> {

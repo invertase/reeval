@@ -229,6 +229,35 @@ describe('network policy', () => {
     assert.equal((await loose('sneaky.example')).allowed, true)
   })
 
+  test('deny list: every always-denied form, under every policy', async () => {
+    const DENIED = [
+      '127.0.0.1',
+      '127.1.2.3',
+      'localhost',
+      '0.0.0.0',
+      '[::]',
+      '[::1]',
+      '[::ffff:127.0.0.1]',
+      '169.254.169.254',
+      '[fe80::1]',
+      'six.loopback.test',
+    ]
+    const resolve = async (host: string) =>
+      host === 'localhost' ? ['127.0.0.1'] : host === 'six.loopback.test' ? ['::1'] : lookup(host)
+    const policies = [{ mode: 'allow-all' }, { mode: 'custom', allowedHosts: DENIED }] as const
+    for (const policy of policies) {
+      const check = createPolicyCheck(policy, { lookup: resolve })
+      for (const host of DENIED) {
+        const verdict = await check(host)
+        assert.equal(verdict.allowed, false, `${policy.mode}: ${host}`)
+        assert.match(!verdict.allowed ? verdict.reason : '', /loopback or link-local/, host)
+      }
+      // Twin: with allowLoopback (every Docker test sets it), the same table goes through.
+      const loose = createPolicyCheck(policy, { lookup: resolve, allowLoopback: true })
+      for (const host of DENIED) assert.equal((await loose(host)).allowed, true, host)
+    }
+  })
+
   test('deny-all denies everything', async () => {
     const check = createPolicyCheck({ mode: 'deny-all' }, { lookup })
     const verdict = await check('api2.cursor.sh')
