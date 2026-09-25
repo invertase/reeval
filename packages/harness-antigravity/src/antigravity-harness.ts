@@ -61,7 +61,10 @@ export type AntigravityHarnessSettings = {
   readonly effort?: AntigravityEffort
   /** MCP servers in the CLI's `mcp_config.json` shape (`command`/`args`/`env` or `serverUrl`/`headers`). */
   readonly mcpServers?: Record<string, unknown>
-  /** Extra keys for the CLI's `settings.json`. `modelProvider` is always `gemini`. */
+  /**
+   * Extra keys for the CLI's `settings.json`. `enableTelemetry` defaults to false, and
+   * `modelProvider` is always `gemini`.
+   */
   readonly settings?: Record<string, unknown>
   /** Extra variables for the CLI process. */
   readonly env?: Record<string, string>
@@ -173,7 +176,7 @@ async function startSession(
     sandbox.writeTextFile({ path: posix.join(home, file), content, abortSignal })
   await write(
     ANTIGRAVITY_SETTINGS_FILE,
-    `${JSON.stringify({ ...settings.settings, modelProvider: 'gemini' }, null, 2)}\n`,
+    `${JSON.stringify({ enableTelemetry: false, ...settings.settings, modelProvider: 'gemini' }, null, 2)}\n`,
   )
   if (settings.mcpServers && Object.keys(settings.mcpServers).length > 0) {
     await write(
@@ -185,7 +188,7 @@ async function startSession(
   const env: Record<string, string> = {
     ...settings.env,
     [ANTIGRAVITY_CREDENTIAL_ENV]: sandboxKey,
-    AGY_CLI_DISABLE_AUTO_UPDATE: '1',
+    AGY_CLI_DISABLE_AUTO_UPDATE: 'true',
     ...(credentials.baseUrl ? { [ANTIGRAVITY_BASE_URL_ENV]: credentials.baseUrl } : {}),
   }
 

@@ -54,7 +54,7 @@ describe('createAntigravity', () => {
     assert.ok(spawned)
     const placeholder = spawned.env.GEMINI_API_KEY ?? ''
     assert.ok(isSandboxCredentialPlaceholder(placeholder), 'a placeholder, not the key')
-    assert.equal(spawned.env.AGY_CLI_DISABLE_AUTO_UPDATE, '1')
+    assert.equal(spawned.env.AGY_CLI_DISABLE_AUTO_UPDATE, 'true', "'1' doesn't turn it off")
     const everything = JSON.stringify([...sandbox.spawned, ...sandbox.files])
     assert.ok(!everything.includes(KEY), 'the key never reaches the sandbox')
     assert.equal(sandbox.transformations.length, 1)
@@ -86,7 +86,7 @@ describe('createAntigravity', () => {
     assert.match(warnings.join('\n'), /credential brokering does not work/)
   })
 
-  test('settings pin the Gemini provider; MCP servers get their own file', async () => {
+  test('settings pin the Gemini provider and turn telemetry off; MCP servers get their own file', async () => {
     const sandbox = fakeSandbox({})
     await start(sandbox, {
       settings: { modelProvider: 'oauth', colorScheme: 'dark' },
@@ -94,7 +94,7 @@ describe('createAntigravity', () => {
     })
     assert.deepEqual(
       JSON.parse(sandbox.files.get('/root/.gemini/antigravity-cli/settings.json') ?? ''),
-      { colorScheme: 'dark', modelProvider: 'gemini' },
+      { enableTelemetry: false, colorScheme: 'dark', modelProvider: 'gemini' },
     )
     assert.deepEqual(JSON.parse(sandbox.files.get('/root/.gemini/config/mcp_config.json') ?? ''), {
       mcpServers: { docs: { serverUrl: 'https://mcp.example/sse', headers: { A: 'b' } } },
