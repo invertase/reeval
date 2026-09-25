@@ -434,6 +434,11 @@ describe('common mistakes', () => {
       /compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
     ],
     [
+      'importing baseline',
+      `evaluate('e', { compare: [(await import('evalsuite') as never as { baseline: never }).baseline] }, async () => {})`,
+      /compare lists undefined in evaluate\("e"\)\. evalsuite has no baseline: the inherited environment is the control of compare; with none, the control is empty\./,
+    ],
+    [
       'pinning something that cannot be pinned',
       `evaluate('e', { pin: ['timeout'] }, async () => {})`,
       /pin accepts harness, runs and compare \(got timeout\)/,

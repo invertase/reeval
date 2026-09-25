@@ -129,6 +129,11 @@ function checkCompare(value: unknown, where: string): void {
     throw new UsageError(`compare has no variants in ${where}. Give at least one environment.`)
   }
   for (const v of variants as unknown[]) {
+    if (v === undefined) {
+      throw new UsageError(
+        `compare lists undefined in ${where}. evalsuite has no baseline: the inherited environment is the control of compare; with none, the control is empty.`,
+      )
+    }
     if (!isEnvironment(v)) {
       throw new UsageError(
         `compare takes environments (got ${describe(v)}) in ${where}. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval.`,
