@@ -536,6 +536,8 @@ export type AnalysisConfig = {
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
   maxInputTokens?: number
+  /** The most tokens the model may answer with (default 8000). ES has no prices, so tokens are the cap. */
+  maxOutputTokens?: number
 }
 
 export type EsConfig = {
@@ -616,7 +618,7 @@ export type ResolvedConfig = {
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
   debug: { keep: number; traceBufferBytes: number }
-  analysis: AnalysisConfig & { maxInputTokens: number }
+  analysis: AnalysisConfig & { maxInputTokens: number; maxOutputTokens: number }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'

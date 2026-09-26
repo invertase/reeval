@@ -207,7 +207,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     ctx.out(
       [
         `digest ${head.runId}${base ? ` vs ${base.runId}` : ''}: ${digest.facts.length} facts, ${digest.evidence.length} evidence items${digest.dropped.length ? ` (${digest.dropped.length} dropped to fit)` : ''}, ${Object.keys(digest.attempts).length} attempts`,
-        `size ${chars} characters ≈ ${Math.ceil(chars / 4)} tokens (cap ${config.analysis.maxInputTokens})`,
+        `size ${chars} characters ≈ ${Math.ceil(chars / 4)} tokens (cap ${config.analysis.maxInputTokens} in, ${config.analysis.maxOutputTokens} out)`,
         `model ${modelName} · ${ANALYSIS_PROMPT_VERSION} · cache ${cached ? 'hit' : 'miss'} (.es/analysis/${key}.json)`,
       ].join('\n'),
     )
@@ -223,7 +223,12 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   } else {
     const resolved = model ?? resolveAnalysisModel(config)
     ctx.err(`analysing ${head.runId}${base ? ` vs ${base.runId}` : ''} with ${resolved.name}…`)
-    const answer = await callAnalysisModel(resolved, digest, promptOf(digest))
+    const answer = await callAnalysisModel(
+      resolved,
+      digest,
+      promptOf(digest),
+      config.analysis.maxOutputTokens,
+    )
     const { body, validation } = validateAnalysis(answer.output, digest, tables)
     const cites = [
       ...body.whatHappened,

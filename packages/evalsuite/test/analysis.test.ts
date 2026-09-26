@@ -527,6 +527,8 @@ describe('es analyze', () => {
     assert.equal(readdirSync(join(p.dir, '.es/analysis')).length, 1)
     const dry = await runCli(p.dir, ['analyze', '--dry-run'])
     assert.match(dry.stdout, /cache hit/)
+    assert.match(dry.stdout, /≈ \d+ tokens \(cap 20000 in, 8000 out\)/)
+    assert.doesNotMatch(again.stdout + dry.stdout, /\$\d|USD/, 'tokens only, never dollars')
     assert.equal((await runCli(p.dir, ['analyze', '--no-cache'])).code, 0)
     assert.equal(calls(p.dir), 2)
     assert.equal(
@@ -611,6 +613,11 @@ describe('es analyze', () => {
         'analysis: { maxInputTokens: 10 },',
         /maxInputTokens must be a whole number of at least 1000/,
       ],
+      [
+        'analysis: { maxOutputTokens: 10 },',
+        /maxOutputTokens must be a whole number of at least 500/,
+      ],
+      ['analysis: { maxCostUsd: 0.25 },', /Unknown option "maxCostUsd" in config\.analysis/],
     ]
     for (const [analysis, message] of cases) {
       const p = await historyProject('analyze-errors', 'dogfood', analysis)

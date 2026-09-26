@@ -1054,7 +1054,8 @@ export default defineConfig({
   analysis: {
     model: 'google/gemini-3.8-flash', // a language model; default: the judge's, when it is one
     instructions: 'Fewer tool calls count as a win. The skill under test is es-good.',
-    maxInputTokens: 20_000,
+    maxInputTokens: 20_000,         // the digest's cap
+    maxOutputTokens: 8_000,         // the answer's cap
   },
 })
 ```
@@ -1064,7 +1065,8 @@ else `AI_GATEWAY_API_KEY` (or `VERCEL_OIDC_TOKEN`) through the AI Gateway. Evalu
 (`typesafe-ai/*`) score yes/no questions and can't write an analysis, so they exit 2, as does a
 missing key; both messages point at `--context`. `fakeAnalysis({ output })` from
 `evalsuite/judge` answers with canned output (or `output(digest)`) through the same parsing and
-validation, for tests. Tokens are reported; there is no price table, so no USD.
+validation, for tests. ES has no prices, so the caps are tokens, not dollars: `maxInputTokens`
+bounds the digest and `maxOutputTokens` the answer, and the footer shows the tokens used and no cost.
 
 ### Transcripts
 

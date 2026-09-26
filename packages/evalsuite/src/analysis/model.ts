@@ -97,6 +97,7 @@ export async function callAnalysisModel(
   model: ResolvedAnalysisModel,
   digest: Digest,
   prompt: string,
+  maxOutputTokens: number,
 ): Promise<ModelAnswer> {
   const started = Date.now()
   const result = await generateText({
@@ -105,6 +106,7 @@ export async function callAnalysisModel(
     prompt,
     output: Output.object({ schema: analysisSchema, name: 'analysis' }),
     temperature: 0.2,
+    maxOutputTokens,
     maxRetries: 3,
   })
   return {

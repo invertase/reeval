@@ -317,7 +317,7 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   }
 }
 
-export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000 } as const
+export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000, maxOutputTokens: 8_000 } as const
 
 function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis'] {
   if (analysis === undefined) return { ...ANALYSIS_DEFAULTS }
@@ -326,8 +326,17 @@ function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis
       "config.analysis must be an object like { model: 'google/gemini-3.8-flash' }",
     )
   }
-  unknownKey(analysis, ['model', 'instructions', 'maxInputTokens'], 'config.analysis')
-  const { model, instructions, maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens } = analysis
+  unknownKey(
+    analysis,
+    ['model', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
+    'config.analysis',
+  )
+  const {
+    model,
+    instructions,
+    maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens,
+    maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
+  } = analysis
   if (typeof model === 'string') {
     const problem = checkModelString(model)
     if (problem) throw new UsageError(problem.replace('Judge model', 'config.analysis.model'))
@@ -344,7 +353,12 @@ function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis
       `config.analysis.maxInputTokens must be a whole number of at least 1000 (got ${maxInputTokens})`,
     )
   }
-  return { ...analysis, maxInputTokens }
+  if (!(Number.isInteger(maxOutputTokens) && maxOutputTokens >= 500)) {
+    throw new UsageError(
+      `config.analysis.maxOutputTokens must be a whole number of at least 500 (got ${maxOutputTokens})`,
+    )
+  }
+  return { ...analysis, maxInputTokens, maxOutputTokens }
 }
 
 /** Runs whose local debug data `.es/debug` keeps, and the trace buffer per attempt. */
