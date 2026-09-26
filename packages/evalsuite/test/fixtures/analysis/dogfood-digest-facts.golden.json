@@ -570,13 +570,17 @@
         "cell": "es-good",
         "skill": "es-good",
         "read": "12/12",
-        "firstReadAtLines": [4]
+        "firstReadAtLines": [
+          4
+        ]
       },
       {
         "cell": "es-weak",
         "skill": "es-weak",
         "read": "12/12",
-        "firstReadAtLines": [4]
+        "firstReadAtLines": [
+          4
+        ]
       }
     ]
   },
@@ -597,13 +601,20 @@
         "pass": "12/12"
       }
     ],
-    "saturated": ["compare", "scaffold"]
+    "saturated": [
+      "compare",
+      "scaffold"
+    ]
   },
   {
     "id": "F26",
     "kind": "judge",
-    "models": ["gemini-3.8-flash"],
-    "threshold": [0.8],
+    "models": [
+      "gemini-3.8-flash"
+    ],
+    "threshold": [
+      0.8
+    ],
     "verdicts": 36,
     "pass": 35,
     "scoresAtLeast098": 35,
@@ -664,17 +675,23 @@
       {
         "eval": "compare",
         "status": "drift",
-        "changes": ["agent context changed"]
+        "changes": [
+          "agent context changed"
+        ]
       },
       {
         "eval": "fix-config",
         "status": "drift",
-        "changes": ["agent context changed"]
+        "changes": [
+          "agent context changed"
+        ]
       },
       {
         "eval": "scaffold",
         "status": "drift",
-        "changes": ["agent context changed"]
+        "changes": [
+          "agent context changed"
+        ]
       }
     ]
   }
