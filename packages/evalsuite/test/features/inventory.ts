@@ -302,7 +302,10 @@ export const inventory: InventoryFeature[] = [
     id: 'mcp.sse',
     area: 'Environments',
     name: '`mcp.sse`',
-    gap: 'No test builds an SSE server entry.',
+    plan: ['egress/cascade'],
+    tests: [
+      'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
+    ],
   },
   {
     id: 'secret.template',

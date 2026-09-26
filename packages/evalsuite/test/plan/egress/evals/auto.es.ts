@@ -6,6 +6,7 @@ const services = defineEnvironment('services', ({ mcp, secret }) => ({
   env: { GEMINI_API_KEY: secret.fromEnv('GEMINI_API_KEY', { hosts: secret.hosts.gemini }) },
   mcp: {
     docs: mcp.http('https://mcp.example.com/v1', { headers: { 'x-api-key': secret() } }),
+    events: mcp.sse('https://events.example.com/sse', { headers: { authorization: secret() } }),
     local: mcp.stdio('node', ['server.js']),
   },
 }))

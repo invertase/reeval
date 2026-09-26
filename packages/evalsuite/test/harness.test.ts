@@ -403,6 +403,42 @@ describe('the Goose harness', () => {
   })
 })
 
+describe('mcp.sse', () => {
+  test('resolves to an SSE server and reaches every harness in its SSE shape, or is refused by name', async () => {
+    const env = defineEnvironment('events', ({ mcp }) => ({
+      mcp: { events: mcp.sse('http://events.example/sse', { headers: { A: 'b' } }) },
+    }))
+    const { mcp } = await resolveEnvironment(layered(undefined, env), {}, '/p', 'e', 'AGENTS.md')
+    assert.deepEqual(mcp, {
+      events: { transport: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } },
+    })
+    const acp = {
+      events: {
+        type: 'sse',
+        url: 'http://events.example/sse',
+        headers: [{ name: 'A', value: 'b' }],
+      },
+    }
+    const expected: Record<AgentKind, unknown> = {
+      cursor: { events: { type: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } } },
+      'claude-code': {
+        events: { type: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } },
+      },
+      antigravity: { events: { serverUrl: 'http://events.example/sse', headers: { A: 'b' } } },
+      opencode: acp,
+      goose:
+        /^InfraError: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
+      pi: /^InfraError: pi has no MCP client, so it can't use the events MCP server$/,
+    }
+    for (const [kind, shape] of Object.entries(expected) as [AgentKind, unknown][]) {
+      const toHarness = () => AGENTS[kind].mcpServers(mcp as never)
+      if (shape instanceof RegExp) assert.throws(toHarness, shape, kind)
+      else assert.deepEqual(toHarness(), shape, kind)
+    }
+    assert.deepEqual(Object.keys(expected).sort(), Object.keys(AGENTS).sort(), 'every harness')
+  })
+})
+
 describe('the pi harness', () => {
   test('is plain data with its own cell id, and needs a Gemini model id', () => {
     const h = pi({ model: 'gemini-3.8-flash' })
