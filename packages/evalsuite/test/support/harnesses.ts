@@ -25,8 +25,13 @@ export type HarnessRow = {
   apiHost: string | null
   /** Whether it reports token usage for each turn; checked either way. */
   tokens: boolean
-  /** The model id the record says served the turns; null when the harness can't say. */
+  /** What every turn's `model` (the model the harness says served it) looks like; null: none. */
   servedModel: RegExp | null
+  /**
+   * What `servedModels` (the models its API requests named, seen by the gateway) must include;
+   * null when its requests don't name one, so the record says it's unknown.
+   */
+  wireModel: RegExp | null
 }
 
 export const harnesses: HarnessRow[] = [
@@ -40,6 +45,7 @@ export const harnesses: HarnessRow[] = [
     apiHost: null,
     tokens: false,
     servedModel: null,
+    wireModel: null,
   },
   {
     id: 'cursor',
@@ -51,6 +57,7 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api2.cursor.sh',
     tokens: false,
     servedModel: null,
+    wireModel: null,
   },
   {
     id: 'antigravity',
@@ -62,6 +69,7 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'generativelanguage.googleapis.com',
     tokens: true,
     servedModel: /^gemini-3\.8-flash/,
+    wireModel: /^gemini-3\.8-flash$/,
   },
   {
     id: 'claude-code',
@@ -73,6 +81,7 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api.anthropic.com',
     tokens: true,
     servedModel: /^claude-haiku-4-5/,
+    wireModel: null,
   },
 ]
 

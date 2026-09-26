@@ -92,6 +92,7 @@ const withTurns = (run: RunRecord) =>
 
 type TurnRecord = AttemptRecord['turns'][number] & {
   usage?: { input: number; output: number; cacheRead: number } | null
+  model?: string | null
 }
 
 /** What one contract run starts: es.config.ts's budget.attempts, which es run enforces too. */
@@ -205,16 +206,18 @@ export const behaviours: Behaviour[] = [
       const attempts = withTurns(ran.run)
       assert.ok(attempts.length > 0, 'no turns ran')
       for (const a of attempts) {
-        const served = a.servedModels
-        if (!row.servedModel) {
-          assert.equal(served, null, `${row.id} can't say, so the record says it's unknown`)
-          continue
+        for (const t of a.turns as TurnRecord[]) {
+          const reported = t.model ?? null
+          if (row.servedModel) assert.match(reported ?? '', row.servedModel, `${a.key}: turn model`)
+          else assert.equal(reported, null, `${row.id} reports no model`)
         }
-        const pattern = row.servedModel
-        assert.ok(
-          served?.some((m) => pattern.test(m)),
-          `${a.key}: served ${JSON.stringify(served)}, expected one to match ${pattern}`,
-        )
+        const wire = row.wireModel
+        if (!wire) assert.equal(a.servedModels, null, `${row.id}'s requests don't name a model`)
+        else
+          assert.ok(
+            a.servedModels?.some((m) => wire.test(m)),
+            `${a.key}: servedModels ${JSON.stringify(a.servedModels)}, expected one to match ${wire}`,
+          )
       }
     },
   },
