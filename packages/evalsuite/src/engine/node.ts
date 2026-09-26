@@ -1,6 +1,6 @@
 // Main-process half of the engine adapter: embeds Vitest and translates its reporter events
 // into ES types. Nothing here leaks Vitest types to callers.
-import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
 import { Writable } from 'node:stream'
@@ -176,7 +176,9 @@ function moduleProblems(root: string, modules: readonly TestModule[]) {
 /**
  * Evals register through the `evalsuite` the project resolves, so that copy must run on this
  * engine's Vitest; two copies break registration. A project's own Vitest, for its own tests,
- * is never loaded and doesn't matter.
+ * is never loaded and doesn't matter. ES depends on a patch range of vitest, but a compatible
+ * version isn't enough: registration lives in module state, so even the same version installed
+ * twice registers nothing. Only the copy counts.
  */
 export function vitestMismatch(root: string): string | undefined {
   const theirs = [...new Set([packageName, 'evalsuite'])]
@@ -192,7 +194,14 @@ export function vitestMismatch(root: string): string | undefined {
   if (!theirs) return undefined
   const ours = require.resolve('vitest/package.json')
   if (realpathSync(theirs) === realpathSync(ours)) return undefined
-  return `The evalsuite this project resolves uses another copy of vitest (${theirs}) than this es (${ours}). Run the project's own es, e.g. npx es.`
+  const version = (path: string): string => {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8')).version ?? 'unknown'
+    } catch {
+      return 'unknown'
+    }
+  }
+  return `The evalsuite this project resolves uses another copy of vitest (${version(theirs)} at ${theirs}) than this es (${vitestVersion} at ${ours}), so its evals won't register. Run the project's own es, e.g. npx es.`
 }
 
 const skipped = (test: TestCase) => test.options.mode === 'skip' || test.options.mode === 'todo'

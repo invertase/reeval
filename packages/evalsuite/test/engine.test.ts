@@ -238,6 +238,37 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     assert.match(vitestMismatch(published) ?? '', /uses another copy of vitest/)
   })
 
+  test('another copy of vitest is reported even when its version is in range', async () => {
+    const ours = JSON.parse(
+      readFileSync(join(pkgRoot, 'node_modules/vitest/package.json'), 'utf8'),
+    ).version
+    const [major, minor] = ours.split('.')
+    for (const version of [ours, `${major}.${minor}.999`]) {
+      const dir = tempDir(`in-range-${version}`)
+      const vitest = join(dir, 'node_modules/evalsuite/node_modules/vitest')
+      await mkdir(vitest, { recursive: true })
+      await writeFile(
+        join(dir, 'node_modules/evalsuite/package.json'),
+        JSON.stringify({ name: 'evalsuite', exports: { './package.json': './package.json' } }),
+      )
+      await writeFile(
+        join(vitest, 'package.json'),
+        JSON.stringify({
+          name: 'vitest',
+          version,
+          exports: { './package.json': './package.json' },
+        }),
+      )
+      const warning = vitestMismatch(dir) ?? ''
+      assert.match(
+        warning,
+        new RegExp(`another copy of vitest \\(${version.replaceAll('.', '\\.')} at `),
+      )
+      assert.match(warning, new RegExp(`this es \\(${ours.replaceAll('.', '\\.')} at `))
+      assert.match(warning, /won't register/)
+    }
+  })
+
   test('only the engine module imports vitest', () => {
     const src = join(pkgRoot, 'src')
     const offenders = readdirSync(src, { recursive: true, withFileTypes: true })
