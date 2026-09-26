@@ -46,14 +46,13 @@ import {
 /** Final messages are cut at this size in the record; `transcript.jsonl` keeps them whole. */
 const TURN_TEXT_LIMIT = 8 * 1024
 
-/** Tokens across every turn that reported them; USD stays null, since ES prices no models. */
+/** Tokens across every turn that reported them. */
 function costOf(attempts: AttemptRecord[]): Cost {
   const usage = sumUsage(attempts.map((a) => a.usage))
   if (!usage) {
-    return { usd: null, inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
+    return { inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
   }
   return {
-    usd: null,
     inputTokens: promptTokens(usage),
     outputTokens: usage.output,
     usage,

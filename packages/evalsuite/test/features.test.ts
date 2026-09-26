@@ -495,7 +495,6 @@ export const features: Feature[] = [
       )
       assert.equal(run.cost.source, 'reported')
       assert.ok((run.cost.inputTokens ?? 0) > 0 && (run.cost.outputTokens ?? 0) > 0)
-      assert.equal(run.cost.usd, null, 'ES prices no models')
     },
   },
   {
