@@ -2,8 +2,7 @@ references/
 node_modules/
 dist/
 .es/
-.env
-.env.local
+.env*
 *.tsbuildinfo
 **/test/.tmp/
 .ignore/
