@@ -160,8 +160,9 @@ function markdown(summary) {
     const p = packages.get(name) ?? {
       lines: { total: 0, covered: 0 },
       branches: { total: 0, covered: 0 },
+      functions: { total: 0, covered: 0 },
     }
-    for (const k of ['lines', 'branches']) {
+    for (const k of ['lines', 'branches', 'functions']) {
       p[k].total += m[k].total
       p[k].covered += m[k].covered
     }
@@ -183,7 +184,8 @@ function markdown(summary) {
     '|---|---|---|---|',
     `| **total** | ${pct(total.lines)} | ${pct(total.branches)} | ${pct(total.functions)} |`,
     ...[...packages].map(
-      ([name, p]) => `| ${name} | ${pct(withPct(p.lines))} | ${pct(withPct(p.branches))} | |`,
+      ([name, p]) =>
+        `| ${name} | ${pct(withPct(p.lines))} | ${pct(withPct(p.branches))} | ${pct(withPct(p.functions))} |`,
     ),
     '',
     '<details><summary>Weakest files (by lines, 20 lines or more)</summary>',
