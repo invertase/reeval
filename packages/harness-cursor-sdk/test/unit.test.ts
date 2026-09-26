@@ -14,6 +14,7 @@ import {
   projectToolCall,
   projectToolResult,
   resolveCursorSdkCredentials,
+  storedShapeProblems,
   storedWebCalls,
   VERSION,
 } from '../src/index.ts'
@@ -94,6 +95,7 @@ describe('bootstrap', () => {
     )
     assert.match(CURSOR_SDK_RUNNER, /recovered: 'Agent\.messages\.list'/)
     assert.match(CURSOR_SDK_RUNNER, /const storedWebCalls = function storedWebCalls\(/)
+    assert.match(CURSOR_SDK_RUNNER, /const storedShapeProblems = function storedShapeProblems\(/)
     assert.doesNotThrow(
       () => new Function(`return async () => {${CURSOR_SDK_RUNNER.replace(/^import .*$/gm, '')}}`),
     )
@@ -113,6 +115,45 @@ describe('bootstrap', () => {
       assert.match(c.id, /^tool_/)
       assert.ok(Number(c.at.completedAtMs) > Number(c.at.startedAtMs), 'the backend times it')
       assert.ok(c.call.result?.success, 'with its result')
+    }
+  })
+})
+
+describe('the stored conversation shape the runner reads (a contract on Agent.messages.list)', () => {
+  const live = () => JSON.parse(fixture('stored-messages.json'))
+  const problems = (messages: unknown) => storedShapeProblems(messages, storedWebCalls(messages))
+
+  test('the live conversation from SDK 1.0.32 has every field the runner reads', () => {
+    assert.equal(storedWebCalls(live()).length, 2)
+    assert.deepEqual(problems(live()), [])
+  })
+
+  test('twins: each field it reads, gone or renamed, is named in the problem', () => {
+    const mutate = (from: string, to: string) =>
+      JSON.parse(JSON.stringify(live()).replaceAll(from, to))
+    const fetchId = storedWebCalls(live())[0]?.id
+    const cases: Array<[string, string, RegExp]> = [
+      ['"startedAtMs"', '"startedAt"', new RegExp(`webFetch ${fetchId}: no startedAtMs`)],
+      ['"completedAtMs"', '"endedAtMs"', /: no completedAtMs/],
+      [
+        '"url":"https://httpbin.org/ip"',
+        '"href":"https://httpbin.org/ip"',
+        /webFetch .*: args has no url/,
+      ],
+      ['"searchTerm"', '"query"', /webSearch .*: args has no searchTerm/],
+      ['"success"', '"ok"', /result has neither success nor error/],
+      [
+        '"webFetchToolCall"',
+        '"webFetchV2ToolCall"',
+        /^an unknown web tool call key webFetchV2ToolCall$/,
+      ],
+    ]
+    for (const [from, to, message] of cases) {
+      const found = problems(mutate(from, to))
+      assert.ok(
+        found.some((p) => message.test(p)),
+        `${from} → ${to}: ${JSON.stringify(found)}`,
+      )
     }
   })
 })
