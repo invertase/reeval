@@ -46,6 +46,21 @@ jobs:
       - run: pnpm build
       - run: pnpm typecheck
 
+  docs:
+    name: docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      # The generated blocks come from dist/cli.js (help, query schema), so build first.
+      - run: pnpm build
+      # Stale generated blocks, reference coverage, sidebar links and the package name.
+      - run: pnpm docs:check
+      # docs.page's own check: internal links, assets and frontmatter targets.
+      - run: npx -y @docs.page/cli@2.1.0 check --external-links warn
+
   unit:
     name: unit and plan (node ${{ matrix.node || 'engines' }})
     runs-on: ubuntu-24.04
