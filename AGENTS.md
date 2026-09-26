@@ -319,7 +319,8 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
 ```
 
 - **Phases, always in this order:** the sandbox's image is ready first (see
-  [Sandboxes](#sandboxes)). Each attempt then sets `env`, writes `files` and `rules`, runs `setup` steps in order (with secrets, outside the eval
+  [Sandboxes](#sandboxes)). Each attempt then sets `env`, writes `files` (a `file()` byte for
+  byte, so archives and images arrive intact) and `rules`, runs `setup` steps in order (with secrets, outside the eval
   timeout, output in the attempt's `setup.log`), snapshots the workspace, and starts the agent
   with its `skills` and `mcp`. Files, rules and setup never show in the agent's diff.
 - **`extend` is the only composition:** the child's spec layers on the parent's. Wherever it sets

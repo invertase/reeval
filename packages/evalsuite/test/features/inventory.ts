@@ -309,6 +309,12 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['env/files-home'],
   },
   {
+    id: 'files.binary',
+    area: 'Environments',
+    name: '`files` from `file()` are copied as bytes',
+    fixtures: ['env/files-binary'],
+  },
+  {
     id: 'env.vars',
     area: 'Environments',
     name: '`env` variables, `secret.fromEnv` and `optional`',

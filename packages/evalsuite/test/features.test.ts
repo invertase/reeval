@@ -5,12 +5,14 @@
 // test/features/README.md for adding one.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
+import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@evalsuite/harness-antigravity'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
@@ -398,6 +400,25 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'home-files',
     canary: /expected null to be 'from home'/,
+  },
+  {
+    dir: 'env/files-binary',
+    tiers: ['fake', 'docker'],
+    env: 'binary-file',
+    canary: /expected '[0-9a-f]+…' to be '[0-9a-f]+…'/,
+    // Every byte value, gzipped: invalid as UTF-8, and a real archive.
+    prepare: (dir) =>
+      writeFileSync(
+        join(dir, 'blob.tgz'),
+        gzipSync(Buffer.from(Array.from({ length: 1024 }, (_, i) => (i * 7) % 256))),
+      ),
+    record: ({ run, project }) => {
+      const sha = createHash('sha256')
+        .update(readFileSync(join(project, 'blob.tgz')))
+        .digest('hex')
+      const env = run.environments.find((e) => e.name === 'binary-file')
+      assert.deepEqual(env?.files, [{ path: 'blob.tgz', sha256: sha }])
+    },
   },
   {
     dir: 'env/rules',
