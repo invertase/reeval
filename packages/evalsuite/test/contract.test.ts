@@ -7,10 +7,10 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { after, before, describe, test } from 'node:test'
-import { LABEL } from '@evalsuite/sandbox-docker'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
 import { BLOCKED_HOST, PLANTED } from './contract/evals/constants.ts'
 import { type CliRun, readRun, runCli } from './helpers.ts'
+import { containersLeft } from './support/containers.ts'
 import { fixture } from './support/fixture.ts'
 import {
   cellOf,
@@ -72,20 +72,6 @@ function filesContaining(dir: string, needle: string): string {
   } catch {
     return ''
   }
-}
-
-/** Containers are removed by a detached `docker rm`, which may finish after the CLI exits. */
-async function containersLeft(runId: string, deadlineMs = 20_000): Promise<string> {
-  const until = Date.now() + deadlineMs
-  let left = ''
-  do {
-    left = execFileSync('docker', ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
-      encoding: 'utf8',
-    }).trim()
-    if (!left) return ''
-    await new Promise((r) => setTimeout(r, 250))
-  } while (Date.now() < until)
-  return left
 }
 
 /** Every attempt that ran an agent turn: what a real row spends. */
