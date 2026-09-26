@@ -1,0 +1,64 @@
+# The real-agent tier: real Cursor in Docker, nightly and on demand. It spends model credit, so
+# it runs only from this repository's own schedule or a manual dispatch (never a PR, so never a
+# fork's code), and only when the CURSOR_API_KEY secret exists.
+name: real
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: gate
+    if: github.repository == 'invertase/evalsuite'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      enabled: ${{ steps.key.outputs.enabled }}
+    steps:
+      - id: key
+        env:
+          HAS_KEY: ${{ secrets.CURSOR_API_KEY != '' }}
+        run: |
+          echo "enabled=$HAS_KEY" >> "$GITHUB_OUTPUT"
+          [ "$HAS_KEY" = true ] || echo "::notice::The real tier is skipped: CURSOR_API_KEY isn't a repository secret"
+
+  real:
+    name: real agents (Cursor)
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      # Eval code runs on the host with the keys, so the job keeps no git token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - uses: ./.github/actions/sandbox-images
+      - name: real-agent smoke
+        env:
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.['smoke:real'] ? 0 : 1)"; then
+            pnpm smoke:real
+          else
+            echo "::notice::This ref has no smoke:real script (the real tier), so there's nothing to run"
+          fi
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: es-runs-${{ github.run_id }}
+          path: examples/hello/.es/runs
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
