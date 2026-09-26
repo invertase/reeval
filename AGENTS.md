@@ -113,15 +113,16 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
   versions and the build context.
-- **Merge with squash**, so the PR title (checked by `commits.yml`) is the commit release-please reads.
-  `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking change
-  bumps the minor.
-- **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open, with the version
-  (`packages/evalsuite/package.json`, the root `package.json` and `.release-please-manifest.json`)
-  and `CHANGELOG.md`. Merging it tags `vX.Y.Z`, creates the GitHub release and runs the publish job
-  in the `npm` environment. That job builds, which vendors `sandbox-docker` in, runs the packed-install test, then publishes the
-  `pnpm pack` tarball with npm trusted publishing (OIDC, no token). Provenance is automatic once
-  the repository is public. Don't publish by hand, and don't edit versions or `CHANGELOG.md` yourself.
+- **Merge with squash,** so the PR title (checked by `commits.yml`) is the commit release-please
+  reads. `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking
+  change bumps the minor too.
+- **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open with the new version
+  (in `packages/evalsuite/package.json`, the root `package.json` and
+  `.release-please-manifest.json`) and `CHANGELOG.md`. Merging it tags `vX.Y.Z`, creates the
+  GitHub release and runs the publish job in the `npm` environment. That job builds (which
+  vendors `sandbox-docker` in), runs the packed-install test, then publishes the `pnpm pack`
+  tarball with npm trusted publishing (OIDC, no token). Provenance is automatic once the
+  repository is public. Don't publish by hand, and don't edit versions or `CHANGELOG.md`.
 
 ### Adding a feature
 
