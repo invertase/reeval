@@ -614,6 +614,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'evalsuite/test/studio.test.ts › serves the app with a strict CSP',
       'evalsuite/test/studio.test.ts › writes a static site',
+      'evalsuite/test/studio.test.ts › a run whose only failures are ungated is passed',
     ],
   },
 

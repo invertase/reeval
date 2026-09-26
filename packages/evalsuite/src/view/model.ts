@@ -110,6 +110,21 @@ export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 
 
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * A run's outcome, as `es run`'s exit code has it: a failed gated cell (or a budget stop) fails
+ * the run, while failures in ungated cells (controls, by default) don't.
+ */
+export function runOutcome(run: {
+  status: RunRecord['status']
+  evals: ReadonlyArray<{ outcome: Outcome }>
+}): Outcome {
+  if (run.status === 'interrupted') return 'skipped'
+  const outcomes = run.evals.map((e) => e.outcome)
+  if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
+  if (outcomes.includes('infra_error')) return 'infra_error'
+  return 'pass'
+}
+
 export type RunRow = {
   entry: HistoryEntry
   passed: number

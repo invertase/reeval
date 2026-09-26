@@ -9,6 +9,7 @@ import {
   formatDuration,
   isMatrix,
   type RunRecord,
+  runOutcome,
   shortSha,
   type TreeNode,
 } from 'evalsuite/view'
@@ -45,15 +46,6 @@ import { cn } from '@/lib/utils'
 
 const route = getRouteApi('/runs/$runId')
 
-export const recordOutcome = (r: RunRecord) =>
-  r.status === 'interrupted'
-    ? 'skipped'
-    : r.summary.fail
-      ? 'fail'
-      : r.summary.infraError
-        ? 'infra_error'
-        : 'pass'
-
 function Meta({ icon: Icon, children }: { icon: typeof Clock; children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -69,7 +61,7 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2.5">
           <h1 className="text-2xl font-semibold tracking-tight">{formatDate(record.startedAt)}</h1>
-          <OutcomeBadge outcome={recordOutcome(record)} />
+          <OutcomeBadge outcome={runOutcome(record)} />
           {record.status === 'interrupted' ? (
             <Badge variant="outline" className="text-infra">
               interrupted
