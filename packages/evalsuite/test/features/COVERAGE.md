@@ -57,7 +57,7 @@
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | — |
 | `secrets: { unbrokered }` and the unbrokered warning | ✓ 2 | — | — | — | — |
-| Secrets masked in everything ES writes | ✓ 2 | — | ● 1 | ● 1 | — |
+| Secrets masked in everything ES writes | ✓ 3 | — | ● 1 | ● 1 | — |
 | `setup` steps: order, a failing step named, `setup.log` | ✓ 1 | — | ● 1 | ● 1 | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — |
 | `extend`, overrides and the environment digest | ✓ 2 | — | ● 1 | ● 1 | — |
@@ -128,7 +128,7 @@
 | `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 8 | — | — | — | ◐ 1 (1 without a canary) |
 | `-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — |
 | Local debug data: `.es/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 3 | — | — | — | ◐ 1 (1 without a canary) |
-| Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 2 | — | — | — | — |
+| Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `es clean` | ✓ 2 | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 3 | — | — | — | — |
 | Eval timeouts and Ctrl-C | ✓ 2 | — | — | — | — |
