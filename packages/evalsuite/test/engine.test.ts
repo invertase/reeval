@@ -936,6 +936,26 @@ evaluate('fine', async () => {})
     assert.equal(infraOnly.code, 3, 'without the failure, the infra error exits 3')
   })
 
+  test('a turn whose agent ignores the abort is cut off shortly after the timeout', async () => {
+    const p = await project('stuck-turn', {
+      'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000, ignoreAbort: true }' }),
+      'evals/agent.es.ts': agentEval('', `{ timeout: '2s' }`),
+    })
+    const started = Date.now()
+    const r = await runCli(p.dir)
+    const out = r.stdout + r.stderr
+    assert.equal(r.code, 1, out)
+    assert.ok(Date.now() - started < 15_000, `waited ${Date.now() - started}ms for a stuck turn`)
+    assert.match(out, /Eval timed out after 2s/)
+    assert.doesNotMatch(out, /Hook timed out|hookTimeout/)
+    const [e] = readRun(p.dir).evals
+    const [turn] = e?.attempts[0]?.turns ?? []
+    // The canary: the stuck turn is still in the record, marked as cut off.
+    assert.equal(turn?.status, 'aborted')
+    assert.equal(e?.error?.kind, 'timeout')
+    assert.deepEqual(liveSandboxes(p), [])
+  })
+
   test('a timeout aborts the agent and destroys the sandbox', async () => {
     const p = await project('timeout', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),

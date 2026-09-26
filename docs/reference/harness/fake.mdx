@@ -68,6 +68,10 @@ npx es run --config es.fake.config.ts
   How long each turn takes. It honours the abort signal, so it's useful for testing timeouts; an aborted turn ends with status `aborted`.
 </Property>
 
+<Property name="ignoreAbort" type="boolean" optional>
+  Sits out `delayMs` even after a timeout or Ctrl-C, like an agent that doesn't stop when it's told to. For testing how your run behaves then: ES waits 3 seconds, then records the turn as `aborted` and moves on.
+</Property>
+
 <Property name="failWith" type="string" optional>
   Throws an infra error with this message before the first turn, to simulate a harness that doesn't start.
 </Property>

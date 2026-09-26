@@ -77,7 +77,7 @@ The sandbox and session start on the first `t.send` (or `t.sandbox()`), so the e
 | Judge calls, retries included | Starting the container and the gateway |
 | Your own code in the eval body | Files, setup steps, the snapshot and the harness bootstrap |
 
-Each setup step has its own `timeout` (5 minutes by default). When the eval's timer fires, the attempt's `t.signal` aborts, the sandbox is destroyed and the outcome is a failure of kind `timeout`.
+Each setup step has its own `timeout` (5 minutes by default). When the eval's timer fires, the attempt's `t.signal` aborts, the sandbox is destroyed and the outcome is a failure of kind `timeout`. An agent that hasn't stopped 3 seconds later has its turn recorded as `aborted`, and ES moves on without it.
 
 ## Infra errors aren't failures
 
