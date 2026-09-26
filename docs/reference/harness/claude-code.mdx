@@ -1,0 +1,103 @@
+---
+title: claudeCode()
+description: The Claude Code harness, its options and id, the key it needs, and the endpoints ES brokers it on.
+---
+
+`claudeCode()` runs the Claude Code CLI in the Docker sandbox. `model` is required.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { claudeCode, cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: [
+    cursor({ model: 'composer-2.5' }),
+    claudeCode({ model: 'claude-sonnet-5' }),
+  ],
+})
+```
+
+## Options
+
+<Property name="model" type="string">
+  A model id or alias the `claude` CLI accepts, such as `claude-sonnet-5` or `sonnet`. Required, since the CLI's default changes under you.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `claude-code:<model>`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Claude Code attempts at once across the run, for example for your account's rate limits.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `ANTHROPIC_API_KEY` |
+| Adapter | `@ai-sdk/harness-claude-code` 1.0.128 |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:claude-code-1.0.128` |
+| Rules file | `CLAUDE.md` |
+| Skills (default placement) | `~/.claude/skills` |
+| Skills (`placement: 'workspace'`) | `.claude/skills` in the workspace |
+| Egress hosts added | `api.anthropic.com`, `*.anthropic.com` |
+
+Build its image once with `es image build` in a project whose config uses `claudeCode()`.
+
+## The key
+
+The harness authenticates only with `ANTHROPIC_API_KEY`, passed to the adapter explicitly. A host `AI_GATEWAY_API_KEY`, a Claude subscription login or a keychain entry is never used, so a run can't quietly bill a different account.
+
+The key never enters the container. The gateway swaps it in on these endpoints of `api.anthropic.com` (what CLI 2.1.276 sends it on) and nowhere else:
+
+| Method | Path |
+|---|---|
+| `POST` | `/v1/messages` |
+| `POST` | `/v1/messages/count_tokens` |
+| `GET` | `/api/claude_code/settings` |
+| `GET` | `/api/claude_code/policy_limits` |
+
+A request carrying the placeholder anywhere else gets a 403 and a `warning: the egress gateway refused …` line, so a CLI update that needs a new endpoint fails loudly.
+
+## Environment
+
+ES starts the CLI with two variables:
+
+| Variable | Why |
+|---|---|
+| `IS_SANDBOX=1` | The CLI refuses to skip permission prompts as root otherwise. |
+| `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` | No telemetry, error reporting or feature-flag fetches, so flags can't change between runs. |
+
+The agent runs with every permission granted, inside the sandbox.
+
+## Skills, rules and MCP
+
+Rules go to `CLAUDE.md` in the workspace. Skills go to `~/.claude/skills` by default, or `.claude/skills` in the workspace with `placement: 'workspace'`. MCP servers are passed in the `.mcp.json` shape.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No `model` | `claudeCode() needs a model, e.g. claudeCode({ model: 'claude-sonnet-5' })` |
+| No key when the attempt starts | `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. Set it in the environment or .env.local.` |
+| A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox` |
+| The CLI doesn't start | `Claude Code harness failed to start: …` |
+
+A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails:
+
+```text
+[creates#1 claude-code] ✗ evals/hello.es.ts › greet module › creates a tested greet module  3s
+[creates#1 claude-code]  +0:00 sandbox ready 2s
+[creates#1 claude-code]  +0:01 turn 1 error 1s · 0 tool calls, 0 file edits
+[creates#1 claude-code]  Error: expected file greet.js to exist
+```
+
+## Related
+
+- [Harnesses guide](/guide/harnesses)
+- [cursor()](/reference/harness/cursor)
+- [Credential brokering](/concepts/credential-brokering)
+- [docker()](/reference/sandbox/docker)

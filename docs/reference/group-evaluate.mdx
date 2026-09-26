@@ -1,0 +1,136 @@
+---
+title: group and evaluate
+description: The signatures of group and evaluate, their skip, only, todo and for variants, name placeholders and eval ids.
+---
+
+`evaluate` declares one eval; `group` names a set of evals and gives them shared options.
+
+```ts title="evals/math.es.ts"
+import { evaluate, expect, group } from '{{ pkg }}'
+
+group('math', { tags: ['smoke'] }, () => {
+  evaluate('writes add.js', { timeout: '5m' }, async (t) => {
+    const turn = await t.send('Create add.js exporting add(a, b).')
+    await expect(turn).toHaveFile('add.js')
+  })
+
+  evaluate.for([
+    { a: 2, b: 3 },
+    { a: 10, b: -4 },
+  ])('adds $a and $b', async (t, { a, b }) => {
+    await t.send(`Create sum.txt containing ${a} + ${b}.`)
+  })
+
+  evaluate.skip('subtracts', async () => {})
+  evaluate.todo('multiplies')
+})
+```
+
+```text
+plan  3 evals · 3 cells · 3 attempts · …
+eval                                   harnesses  variants  runs  attempts  notes
+ge/math.es.ts › math › writes add.js   1          —         1     1
+ge/math.es.ts › math › adds 2 and 3    1          —         1     1
+ge/math.es.ts › math › adds 10 and -4  1          —         1     1
+```
+
+Eval files match `include` in `es.config.ts` (default `evals/**/*.es.ts`). Both functions come from `'{{ pkg }}'`.
+
+## evaluate
+
+```ts
+evaluate(name, fn)
+evaluate(name, options, fn)
+evaluate(name, fn, options)
+```
+
+<Property name="name" type="string">
+  The eval's name. Together with its file and groups it makes the eval id.
+</Property>
+
+<Property name="options" type="EvalOptions" optional>
+  A plain object of options: `harness`, `environment`, `compare`, `sandbox`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`, `tags`, `pin`. See [Options](/reference/options).
+</Property>
+
+<Property name="fn" type="(t: EvalContext) => Promise<void>">
+  The eval body. It runs once per attempt with a fresh `t`. It passes when it returns without throwing. See [The t API](/reference/t).
+</Property>
+
+Every cell of the eval (harness × environment × sandbox, plus `compare` variants) runs `runs` attempts of `fn`.
+
+## group
+
+```ts
+group(name, fn)
+group(name, options, fn)
+group(name, fn, options)
+```
+
+<Property name="name" type="string">
+  The group's name, shown before its evals' names.
+</Property>
+
+<Property name="options" type="GroupOptions" optional>
+  The same keys as `evaluate`. Evals inside inherit them; an inner group or eval overrides them key by key, following the merge rules on [Options](/reference/options).
+</Property>
+
+<Property name="fn" type="() => void">
+  Declares the group's evals and nested groups. It runs while ES collects evals, so keep it synchronous and free of side effects.
+</Property>
+
+## Variants
+
+| Call | What it does |
+|---|---|
+| `evaluate.skip(name, …)` | Declares the eval but doesn't run it; it counts as skipped. |
+| `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
+| `evaluate.todo(name)` | A placeholder with no body; it counts as skipped. |
+| `evaluate.for(cases)(name, …)` | One eval per case. The body gets `(t, item)`. |
+| `group.skip(name, …)` | Skips every eval in the group. |
+| `group.only(name, …)` | Runs only this group's evals within its file. |
+| `group.todo(name)` | A placeholder group. |
+
+`.only` is refused when `CI` is set, so a forgotten `.only` can't shrink a CI run: `evaluate.only isn't allowed in CI` (or `group.only`).
+
+## Names in evaluate.for
+
+`evaluate.for` fills placeholders in the name from each case:
+
+| Placeholder | Becomes |
+|---|---|
+| `$key` | That property of the case (`$a` → `2`) |
+| `%s` | The case itself: a string as is, anything else as JSON |
+| `%#` | The case's index, from 0 |
+
+`evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (case %#)', …)` declares `adds 1 and 2 (case 0)` and `adds 3 and 4 (case 1)`. A `$key` the case doesn't have stays as written.
+
+## Eval ids
+
+An eval's id is its file path (relative to the config's directory), its groups and its name, joined with ` › `:
+
+```text
+ge/math.es.ts › math › writes add.js
+```
+
+The id is what the plan, the reporters, `es history` and the run record show, and what `es run` filters match. Each attempt also has an id, `<cell key>#<n>`, such as `cursor/-/docker#1`.
+
+## Timeouts
+
+`timeout` covers one attempt's body. Starting the sandbox and running setup steps pause the clock. An attempt that runs out fails with `Eval timed out after 300s`, and `t.signal` aborts so you can stop work early.
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| Two functions | `evaluate("x") got two functions. Options must be a plain object; helpers such as secret are only available in defineConfig and defineEnvironment callbacks. …` |
+| An unknown option | `Unknown option "repeat" in evaluate("e"). Did you mean "runs"?` |
+| `.only` in CI | `evaluate.only isn't allowed in CI` |
+
+Errors in an eval file stop the run with exit 2 and name the file. More on [Errors](/reference/errors).
+
+## Related
+
+- [Writing evals](/guide/writing-evals)
+- [Options](/reference/options)
+- [The t API](/reference/t)
+- [Matchers](/reference/matchers)

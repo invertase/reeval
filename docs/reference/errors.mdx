@@ -1,0 +1,108 @@
+---
+title: Errors
+description: Common ES error messages, what each one means, and how to fix it.
+---
+
+ES errors say what's wrong and, usually, what to do. This page groups the common ones by when they happen, with the fix.
+
+```text
+es: Unknown option "harnesses" in es.config.ts. Did you mean "harness"?
+```
+
+## When they happen
+
+| When | Exit code | What it means |
+|---|---|---|
+| Loading the config and eval files, planning | 2 | Nothing ran. Fix the config, the eval file or the command. |
+| Preflight: credentials, Docker, images, budget | 2 | Nothing ran. Set the key, start Docker, build the image, or narrow the run. |
+| During an attempt: a check fails | 1 | The agent's work didn't pass. That's a result, not a bug. |
+| During an attempt: ES or the sandbox fails | 3 | An infra error: the attempt couldn't be judged. It doesn't count as a pass or a fail. |
+| Ctrl-C | 130 | Running attempts are cancelled. |
+
+Errors in an eval file are prefixed with the file (`es: evals/skill.es.ts: …`). See [es run](/reference/cli/run) for exit codes in full.
+
+## Config and options
+
+| Message | Fix |
+|---|---|
+| `Unknown option "repeat" in evaluate("e"). Did you mean "runs"?` | Use the suggested key. See [Options](/reference/options). |
+| `compare can't be set in es.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.` | Move `compare` to a group or eval; narrow it per profile with `limit.compare`. |
+| `env.API_KEY in es.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` | Use the callback form and `secret()` or `secret.fromEnv()`. |
+| `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` | Use a model string in the config. |
+| `The defineConfig callback in es.config.ts returned a Promise. …` | Make the callback synchronous. |
+| `Config file not found: nope.ts` | Check the `--config` path. |
+| `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` | Use `ms`, `s`, `m` or `h`, or a number of milliseconds. |
+| `evaluate("x") got two functions. Options must be a plain object; …` | Options are a plain object. Put secrets in an environment or the config's `env`. |
+| `sandbox takes one sandbox, not a list (…). Different toolchains need different checks, so write a separate eval per sandbox.` | One sandbox per eval. |
+| `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: [a, b]; the inherited environment is the control.` | Use `compare`. |
+| `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. |
+| `evaluate.only isn't allowed in CI` | Remove the `.only` before pushing. |
+
+## Profiles and budgets
+
+| Message | Fix |
+|---|---|
+| `Unknown profile "nigthly". Profiles in es.config.ts: smoke, nightly.` | Check the name in `--profile` or `ES_PROFILE`. |
+| `this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)` | Narrow the run, raise `budget.attempts`, or pass `--force`. |
+| `profiles.pr.budget.usd isn't supported: …` | Cap with `attempts` or `duration`. |
+
+See [Profiles and budgets](/reference/profiles).
+
+## Command line
+
+| Message | Fix |
+|---|---|
+| `No evals matched evals/hello.es.ts, … with filter "nope"` | Check the filter: it matches file paths, eval names and cell keys. |
+| `filter "x" matches no eval file, eval name or cell in …` | One of several filter words matched nothing. |
+| `es run --json only prints the plan: add --dry-run. A run writes its record to .es/runs; read it with es show --json.` | Add `--dry-run`, or use `es show --json` after the run. |
+| `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
+| `Unknown command "image foo". Did you mean es image build?` | Use `es image build`. |
+| `Unknown command "frob". Run es --help.` | See [CLI](/reference/cli). |
+
+## Credentials
+
+| Message | Fix |
+|---|---|
+| `Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.` | Set the harness key and a judge key, in the shell or `.env.local`. |
+| `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). A key copied from a wrapped terminal line picks these up; set it again as one line.` | Set the key again as one line. |
+| `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` | Set the host variable, or mark the secret `optional: true`. |
+| `warning: SENTRY_DSN is in the sandbox as its real value. …` | Add `hosts` to broker it, or accept the warning. `secrets: { unbrokered: 'error' }` makes it an error. |
+| `warning: the egress gateway refused POST https://…: it carries CURSOR_API_KEY's placeholder and isn't one of the endpoints ES brokers it for` | The harness CLI called an endpoint ES doesn't broker. Check for a CLI update and report it. |
+| `No credentials for judge model "…". …` | Set the provider's key or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges). |
+
+## Docker and images
+
+| Message | Fix |
+|---|---|
+| `Docker is not running. Start Docker and try again.` | Start Docker. |
+| `Sandbox image evalsuite-sandbox:cursor-1.0.37 not found. Build it once with: es image build` | Run `es image build`. |
+| `Sandbox image … not found. docker({ image }) is used as is, so pull or build it first.` | Pull or build your image, or use `from` or `dockerfile` so ES builds it. |
+| `ES needs a Debian or Ubuntu based image (glibc and apt-get)` | Use a Debian or Ubuntu base for `from` or `dockerfile`. |
+| `Building the install layer (N commands) failed: …` | Fix the failing `install` command; the build log is in `.es/cache/images/`. |
+| `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). …` | The image has no Node for the egress gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
+| `The Cursor harness needs the Docker sandbox` | Real harnesses run only in `docker()`. |
+
+See [docker()](/reference/sandbox/docker).
+
+## During an attempt
+
+| Message | Fix |
+|---|---|
+| `No sandbox yet: call t.send() or await t.sandbox() before t.exec() or t.readFile()` | Send a turn or `await t.sandbox()` first. |
+| `t.judge() has no turn to grade: call t.send() first` | Send a turn first, or pass `on`. |
+| `t.judge() has no model. …` | Set `judge.model` in the config, group, eval or call. |
+| `expected file greet.js to exist` | The agent didn't create it. Check the transcript. |
+| `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
+| `judge score 0.40 is below 0.8 for "…" (…)` | The judge said no. Read its input in the attempt's `judge-input.json`. |
+| `Eval timed out after 900s` | Raise `timeout`, or make the task smaller. |
+| `setup step 1/2 "npm ci" in environment base exited 1 after …` | Fix the setup step; its output is in the attempt's `setup.log`. An infra error. |
+| `ANTHROPIC_API_KEY isn't set, so the Claude Code harness can't authenticate. …` | Set the key. |
+
+For any failing attempt, `.es/debug` has its `debug.log` and `trace.ndjson`: see [Debug data](/reference/debug-data).
+
+## Related
+
+- [Debugging guide](/guide/debugging)
+- [Debug data](/reference/debug-data)
+- [es run](/reference/cli/run)
+- [defineConfig](/reference/config)

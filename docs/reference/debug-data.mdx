@@ -1,0 +1,129 @@
+---
+title: Debug data
+description: The files ES keeps under .es/debug for each attempt, when each is written, how long they're kept, and the debug config.
+---
+
+Every attempt leaves a debug log under `.es/debug`, and a failing one also leaves a full trace. They're local, redacted, and never recorded to history.
+
+```text
+.es/debug/<runId>/<eval slug>/<cell slug>/<n>/
+  debug.log         every -v line, always
+  requests.ndjson   one line per egress gateway request
+  trace.ndjson      raw payloads, for failing attempts or with -vv
+```
+
+`.es/debug` sits next to `es.config.ts`. Studio's Debug tab shows the same data for an attempt.
+
+## debug.log
+
+Always written. One line per step, with its time and phase: what `es run -v` prints for the attempt.
+
+```text
+2026-09-26T17:32:55.369Z plan      config es.jx.config.ts · no profile · run 20260926T173254Z_nogit_cursor-agent_p7qt · attempt fake/-/fake#1
+2026-09-26T17:32:55.370Z plan      harness fake (es.jx.config.ts or its default)
+…
+2026-09-26T17:32:55.371Z plan      judge fake judge · threshold 0.9 (group("greet"))
+2026-09-26T17:32:55.373Z env       environment - (digest eca09e8f139f)
+2026-09-26T17:32:55.373Z image     none: the fake sandbox runs on the host
+2026-09-26T17:32:55.375Z container fake sandbox at /tmp/es-sandbox-yPD9eE/work
+2026-09-26T17:32:55.386Z env       workspace snapshot taken: the diff starts here
+…
+```
+
+The `plan` lines say where each setting came from (the config, a profile, a group, the eval), which answers most "why did it use that?" questions.
+
+| Phase | What it covers |
+|---|---|
+| `plan` | The attempt's resolved settings and their sources |
+| `image` | Which image, and whether it was built or cached |
+| `container` | Starting the sandbox and the egress gateway |
+| `env` | Variables, secrets, files, rules, skills, MCP, setup steps, the snapshot |
+| `broker` | Which credentials stay on the host, and each substitution |
+| `harness` | Starting the agent, each turn and its tool calls |
+| `gateway` | Each request through the egress gateway |
+| `check` | `t.exec` commands and matchers |
+| `judge` | Each judge call, its score and retries |
+| `teardown` | Stopping the sandbox |
+| `docker` | Every docker command (trace only, or `-vv`) |
+
+## requests.ndjson
+
+Written from an attempt's first gateway request, so only in the Docker sandbox. One JSON object per request:
+
+```text
+{"at":"2026-09-26T17:06:37.759Z","method":"POST","url":"https://api2.cursor.sh/auth/exchange_user_api_key","host":"api2.cursor.sh","port":443,"via":"decrypted","allowed":true,"sent":2,"received":956,"substituted":["CURSOR_API_KEY (authorization)"],"ms":73,"status":200}
+```
+
+<Property name="via" type="'tunnel' | 'decrypted' | 'http'">
+  `decrypted` for hosts the gateway opens to substitute a credential; `tunnel` for HTTPS passed through end to end (only the host is visible); `http` for plain HTTP.
+</Property>
+
+<Property name="allowed" type="boolean">
+  Whether the egress policy let it through. A refused request has `reason`.
+</Property>
+
+<Property name="substituted" type="string[]">
+  The credentials and brokered secrets swapped in, by name, with where.
+</Property>
+
+The other fields are `at`, `method`, `url`, `host`, `port`, `status` (when there was a response), `sent` and `received` (bytes) and `ms`.
+
+## trace.ndjson
+
+A flight recorder. During the attempt ES keeps raw payloads in memory: prompts, every transcript event, judge inputs and provider responses, request headers, DNS decisions and docker commands. The buffer holds `debug.traceBufferMb` megabytes, dropping the oldest entries first. It's written to disk only when the attempt doesn't pass, or for every attempt with `-vv` (`--trace`).
+
+```text
+{"kind":"trace","startedAt":"2026-09-26T17:15:36.464Z","limitBytes":8388608,"dropped":0}
+{"at":"2026-09-26T17:15:36.464Z","ms":0,"phase":"plan","kind":"log","data":{"text":"config es.rt.config.ts · no profile · run 20260926T171535Z_nogit_cursor-agent_9jx6 · attempt fake/-/fake#1"}}
+…
+```
+
+The first line is a header: `limitBytes` is the buffer size and `dropped` how many entries fell out. Each later line has `at`, `ms` (since the attempt started), `phase`, `kind` and `data`. An entry over 256 KB keeps its first 64 KB.
+
+## Retention
+
+At the end of each `es run`, ES keeps the newest `debug.keep` runs (default 20) and removes older ones. `es clean` removes them all, or all but the newest `--keep n`:
+
+```bash
+npx es clean --keep 1
+```
+
+```text
+Removed debug data for 4 runs (106.7 KB) from .es/debug
+```
+
+## Config
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  debug: { keep: 50, traceBufferMb: 16 },
+})
+```
+
+<Property name="keep" type="number" optional>
+  How many runs of debug data to keep. A whole number of at least 1. Default `20`.
+</Property>
+
+<Property name="traceBufferMb" type="number" optional>
+  Megabytes of trace each attempt keeps in memory. Above 0. Default `8`.
+</Property>
+
+| Mistake | Message |
+|---|---|
+| An unknown key | `Unknown option "keepRuns" in config.debug. Use keep, traceBufferMb.` |
+| A bad `keep` | `config.debug.keep must be a whole number of at least 1 (got 0)` |
+| A bad buffer size | `config.debug.traceBufferMb must be a number of megabytes above 0 (got 0)` |
+| A bad `es clean --keep` | `--keep must be a whole number (got x)` |
+
+<Info>
+  Everything in `.es/debug` is redacted like the rest of ES's output, but it holds full prompts, outputs and headers. Keep `.es/` out of git.
+</Info>
+
+## Related
+
+- [Debugging guide](/guide/debugging)
+- [es image build and es clean](/reference/cli/image-clean)
+- [Transcripts](/reference/transcript)
+- [Egress](/reference/egress)

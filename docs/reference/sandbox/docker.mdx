@@ -1,0 +1,123 @@
+---
+title: docker()
+description: The Docker sandbox, its image options, how ES tags and caches images, and the errors it raises.
+---
+
+`docker()` runs each attempt in its own local Docker container. It's the default sandbox, and the only one real harnesses run in.
+
+```ts title="evals/python.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+const python = docker({ from: 'python:3.12-slim', id: 'python' })
+const withJq = docker({
+  install: ['apt-get update && apt-get install -y --no-install-recommends jq'],
+})
+
+evaluate('writes fizzbuzz in python', { sandbox: python }, async (t) => {
+  await t.send('Write fizzbuzz.py and unittest tests for it.')
+  await expect(t.exec('python -m unittest')).toSucceed()
+})
+
+evaluate('counts orders with jq', { sandbox: withJq }, async (t) => {
+  await t.send('Write count.sh, which counts orders.json entries with jq.')
+  await expect(t.exec('bash count.sh')).toSucceed()
+})
+```
+
+Without options, `docker()` uses ES's sandbox image for the harness, which `es image build` makes.
+
+## Options
+
+`image`, `from` and `dockerfile` choose the base; set at most one.
+
+<Property name="from" type="string" optional>
+  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. On first use ES bakes Node, git and the harness on top, and caches the result.
+</Property>
+
+<Property name="dockerfile" type="string | URL" optional>
+  Your Dockerfile, relative to the file that calls `docker()` (or an absolute path or `URL`). ES builds it from its directory with `--build-arg ES_BASE=<ES's sandbox image>`. Start it with `ARG ES_BASE` and `FROM ${ES_BASE}` to layer on ES's image; from any other Debian or Ubuntu base, ES bakes Node and the harness on top, as for `from`.
+</Property>
+
+<Property name="image" type="string" optional>
+  An image that already has the harness baked in, used as is. ES doesn't build or pull it.
+</Property>
+
+<Property name="install" type="Array<string | { run: string, timeout?: string | number }>" optional>
+  Shell commands baked onto the base in one cached layer. They run in order, as root, from `/`, with bash, and never see secrets or the workspace: what needs either belongs in the environment's `setup`. A step's `timeout` kills it (there's none by default). Not with `dockerfile`: put the commands in it as `RUN` lines.
+</Property>
+
+<Property name="id" type="string" optional>
+  The sandbox's id in cell keys and filters. Default `docker`; `docker:<last path segment of the image>` with `image` or `from`; `docker:<directory>` with a file named `Dockerfile`, or `docker:<file name>` otherwise.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Docker sandboxes at once across the run, whatever their image.
+</Property>
+
+## Images and caching
+
+Each harness has its own sandbox image. `es image build` builds the images the config's evals need; `es image build --dry-run` lists them:
+
+```text
+images  4 sandbox images (nothing built: --dry-run)
+docker · 15 evals
+  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+docker + install · 1 eval
+  base               evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
+python · 1 eval
+  from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+docker:sqlite · 1 eval
+  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-2b50887268f17930  (docker build (layer cache), tagged by content hash)
+  harness                              evalsuite-dockerfile:sqlite-2b50887268f17930  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)
+```
+
+| Image | Tag | Rebuilt when |
+|---|---|---|
+| ES's sandbox image | `evalsuite-sandbox:<harness>-<adapter version>` | `es image build` (its toolchain layer is `evalsuite-sandbox-base:latest`) |
+| `from` | `evalsuite-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, then cached |
+| `install` | `evalsuite-install:<hash of base id and commands>` | The base or a command changes |
+| `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile, its context (less `.dockerignore`) or `ES_BASE` changes |
+
+Adapter versions: Cursor `1.0.37`, Claude Code `1.0.128`, Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
+
+What ES adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, with the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.es/cache/images/<tag>.log`.
+
+Image builds don't count toward the eval timeout.
+
+## Inside the container
+
+Every attempt gets a fresh container with the workspace at `/es/workspace`. An egress gateway runs with it: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image ES builds has.
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| Two bases | `docker() takes one base image, but got image and from. Use image (has the harness), from (a toolchain image ES bakes the harness onto) or dockerfile.` |
+| `dockerfile` and `install` | `docker() takes dockerfile or install, not both: put the install commands in the Dockerfile as RUN lines, so there's one recipe for the image.` |
+| A missing Dockerfile | `docker({ dockerfile: "./Dockerfile" }): <full path> doesn't exist. Paths are relative to the file that calls docker().` |
+| `env` on the sandbox | `Unknown docker() option "env". The sandbox is what's baked into the image; variables and secrets belong in defineEnvironment({ env }).` |
+| A near miss | `Unknown docker() option "base". Did you mean "from"?` (also `steps`, `run`, `setup` → `install`; `file`, `build` → `dockerfile`) |
+| An empty `install` | `docker({ install }) takes a non-empty list of shell commands, e.g. install: ['apt-get update && apt-get install -y jq'] (got [])` |
+| A bad install step | `docker({ install }) commands are strings or { run, timeout? } objects (got …)` |
+| A bad install timeout | `Invalid timeout "5 min" for docker({ install }) command "x". Use e.g. "90s" or "15m".` |
+| An empty `image` | `docker({ image }) must be a non-empty string (got "")` |
+
+Before a run, ES checks every image the plan needs:
+
+| Situation | Message |
+|---|---|
+| Docker isn't running | `Docker is not running. Start Docker and try again.` |
+| ES's image isn't built | `Sandbox image evalsuite-sandbox:cursor-1.0.37 not found. Build it once with: es image build` |
+| An `image` that isn't there | `… docker({ image }) is used as is, so pull or build it first.` |
+| A non-Debian base | `ES needs a Debian or Ubuntu based image (glibc and apt-get)` |
+| A failing install step | `Building the install layer (N commands) failed: install i/N exited <code>: <command>`, then the build's last lines |
+| An `image` without Node | `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). The egress gateway needs Node in the image: …` |
+
+## Related
+
+- [Sandboxes guide](/guide/sandboxes)
+- [es image build and es clean](/reference/cli/image-clean)
+- [Egress](/reference/egress)
+- [fakeSandbox()](/reference/sandbox/fake)

@@ -1,0 +1,151 @@
+---
+title: Profiles and budgets
+description: Named presets in es.config.ts that fill in defaults, narrow what runs and cap a run's size.
+---
+
+A profile is a named preset under `profiles` in `es.config.ts`. You pick one with `--profile`, `ES_PROFILE` or `defaultProfile`.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+
+export default defineConfig({
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    pr: {
+      limit: { runs: 1, compare: false, harness: ['cursor'] },
+      budget: { attempts: 20 },
+    },
+    nightly: {
+      defaults: { runs: 3 },
+      record: 'always',
+      budget: { attempts: 80, duration: '2h' },
+    },
+  },
+})
+```
+
+## Which profile runs
+
+The first of these that names a profile wins. The plan line says which one and why.
+
+| Source | Plan says |
+|---|---|
+| `es run --profile nightly` | `profile nightly (--profile)` |
+| `ES_PROFILE=nightly` | `profile nightly (ES_PROFILE)` |
+| `defaultProfile.ci`, when `CI` is set | `profile pr (auto: CI is set)` |
+| `defaultProfile.local`, when `CI` isn't set | `profile dev (default)` |
+
+With none of them, no profile applies. `CI=false` counts as unset. A name that isn't in `profiles` is an error:
+
+```text
+es: Unknown profile "nigthly". Profiles in es.config.ts: smoke, nightly.
+```
+
+## Profile keys
+
+A profile takes `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. Anything else is an error.
+
+<Property name="defaults" type="object" optional>
+  Options that fill in what the config set and the eval files didn't. Accepts `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge` and `timeout`, with the same types as on [Options](/reference/options). They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
+</Property>
+
+<Property name="limit" type="{ runs?, compare?, harness? }" optional>
+  Narrows what the eval files ask for, after the cascade. It never adds work. See [limit](#limit).
+</Property>
+
+<Property name="judge" type="{ model?, threshold?, providerOptions?, maxConcurrent? }" optional>
+  Judge settings for this profile, the same as `defaults.judge`. When both are set, `defaults.judge` wins field by field. In a profile, `model` must be a `"provider/model"` string or `fakeJudge()`.
+</Property>
+
+<Property name="budget" type="{ attempts?, duration? }" optional>
+  Caps the run. Merged over the config's `budget`, key by key. See [budget](#budget).
+</Property>
+
+<Property name="record" type="'manual' | 'ci' | 'always'" optional>
+  Replaces the config's `record` while this profile runs.
+</Property>
+
+<Property name="tags" type="string[]" optional>
+  Tag filters added to any `--tag` flags. Every filter must match: `smoke` keeps evals tagged `smoke`, `!slow` drops evals tagged `slow`.
+</Property>
+
+## limit
+
+`limit` only narrows. Each key applies to an eval unless the eval (or a group around it) lists the key in `pin`.
+
+<Property name="runs" type="number" optional>
+  The most attempts per cell. An eval asking for more runs this many. A whole number of at least 1.
+</Property>
+
+<Property name="compare" type="false | { maxVariants: number }" optional>
+  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants.
+</Property>
+
+<Property name="harness" type="string[]" optional>
+  Harness ids to keep. The others are dropped from each eval; an eval left with none is skipped. It can't add a harness: use `defaults.harness` for that.
+</Property>
+
+The plan shows what `limit` changed in the notes column. This is the `pr` profile above, run in CI against an eval group with `compare` and `runs: 3`, using the fake harness:
+
+```text
+plan  profile pr (auto: CI is set) · 3 evals (1 skipped) · 4 cells · 4 attempts · …
+eval                                    harnesses  variants  runs  attempts  notes
+pf/sized.es.ts › sized › narrowed       1          0 of 1    1     1         runs 3 → 1 (profile pr) · compare off (profile pr)
+pf/sized.es.ts › sized › pinned         1          1         1     2         runs 3 → 1 (profile pr) · pinned: compare
+pf/sized.es.ts › sized › two harnesses  1          0 of 1    1     1         runs 3 → 1 (profile pr) · harnesses 2 → 1 (profile pr) · compare off (profile pr)
+pf/sized.es.ts › sized › other only     0          0 of 1    1     0         skipped: no harness left: profile pr allows fake · …
+```
+
+## pin
+
+An eval that must keep a key whatever the profile says lists it in `pin`: `'runs'`, `'harness'` or `'compare'`. The plan notes `pinned: compare` when a pin blocked a limit. `--runs` still overrides `runs`, pinned or not.
+
+```ts title="evals/skill.es.ts"
+evaluate('keeps its variants', { pin: ['compare'] }, async (t) => {
+  // …
+})
+```
+
+## budget
+
+`budget` sits in the config, in a profile, or both; the profile's keys win.
+
+<Property name="attempts" type="number" optional>
+  The most attempts the plan may have. A bigger plan stops before anything runs (exit 2). `--force` runs it anyway.
+</Property>
+
+<Property name="duration" type="string | number" optional>
+  The longest the run may take, from the first attempt's start: `'2h'`, `'45m'`, or milliseconds. When it's reached, running attempts finish and queued ones are skipped; the run record says so.
+</Property>
+
+The plan line shows the budget and whether the plan fits:
+
+```text
+plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · … · budget 12 attempts ✗
+…
+es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
+```
+
+`usd` and `tokens` are refused: no harness ES runs reports cost or tokens yet.
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| An unknown profile key | `Unknown option "x" in profiles.pr. Use defaults, limit, judge, budget, record, tags.` |
+| `compare` in a profile | `… compare only goes on a group or eval; a profile can narrow it with limit.compare.` |
+| An unknown `defaultProfile` key | `Unknown option "remote" in defaultProfile. Use ci, local.` |
+| A default that isn't a profile | `defaultProfile names "pr", which isn't in profiles (none)` |
+| A harness object in `limit.harness` | `profiles.pr.limit.harness can only list harness ids to allow (got cursor({ … })). To add harnesses, use profiles.pr.defaults.harness.` |
+| A bad `limit.compare` | `profiles.pr.limit.compare must be false or { maxVariants: n }` |
+| A bad `limit.runs` | `profiles.pr.limit.runs must be a whole number of at least 1` |
+| Tags that aren't strings | `profiles.pr.tags must be a list of tag filters` |
+| `budget.usd` | `profiles.pr.budget.usd isn't supported: no harness ES runs reports cost or tokens yet (Cursor reports no usage). Cap the run with attempts or duration.` |
+| A bad `budget.attempts` | `profiles.pr.budget.attempts must be a whole number of at least 1 (got 0)` |
+
+## Related
+
+- [Profiles guide](/guide/profiles)
+- [Options](/reference/options)
+- [defineConfig](/reference/config)
+- [es run](/reference/cli/run)

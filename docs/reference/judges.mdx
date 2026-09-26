@@ -1,0 +1,95 @@
+---
+title: Judges
+description: Judge model strings, how ES picks a provider and key, thresholds, concurrency, retries and fakeJudge.
+---
+
+`t.judge(question)` asks a model a yes/no question about the latest turn and returns a verdict. `expect(verdict).toPass()` fails the eval when the answer is no.
+
+```ts title="evals/greet.es.ts"
+import { evaluate, expect, group } from '{{ pkg }}'
+
+group('greet', { judge: { threshold: 0.9 } }, () => {
+  evaluate('explains its change', async (t) => {
+    await t.send('Create greet.js exporting greet(name).')
+    const verdict = await t.judge(
+      "Does the agent's final message describe what it changed?",
+    )
+    expect(verdict).toPass()
+  })
+})
+```
+
+## Settings
+
+`judge` is accepted in `es.config.ts`, profile `judge` and `defaults.judge`, groups, evals, and as the second argument of `t.judge()`. It merges field by field, the most specific level winning: the call, then the eval, then its groups, then the profile, then the config.
+
+<Property name="model" type="string | FakeJudgeModel | EvaluationModel" optional>
+  `"provider/model"`, such as `typesafe-ai/jev-1.13.0` (ES's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK evaluation model object. There's no default: `t.judge()` without a model fails.
+</Property>
+
+<Property name="threshold" type="number" optional>
+  The score, from 0 to 1, at or above which the verdict is `pass`. Default `0.8`.
+</Property>
+
+<Property name="providerOptions" type="Record<string, Record<string, JSONValue>>" optional>
+  Passed to the provider as is, keyed by provider name.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
+</Property>
+
+`t.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff).
+
+## What the judge sees
+
+The judge gets the turn's prompt as the task, its final message as the output (or `on`), the changed files and the diff, and your question. The score is the model's probability that the answer is yes.
+
+## Providers and keys
+
+ES calls a provider's own package when its key is set, and the Vercel AI Gateway otherwise:
+
+| Provider prefix | Direct key | Package |
+|---|---|---|
+| `typesafe-ai/` | `TYPESAFE_AI_API_KEY` | `@ai-sdk/typesafe-ai` |
+| `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` | `@ai-sdk/google` |
+| Any other | None | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+
+The run checks the judge's key before it starts, with the harness's:
+
+```text
+es: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.
+```
+
+## Retries
+
+A transient provider error (408, 409, 425, 429, a 5xx, or a message about high demand, overload, rate limits or a reset connection) is retried up to six tries in all, with exponential backoff from 2 seconds, capped at 30 seconds, and at least any `retry-after`. Each retry is recorded on the verdict as `{ error, delayMs }`. A judge that still fails is a judge error for the attempt, not a failed check.
+
+## fakeJudge
+
+```ts
+import { fakeJudge } from '{{ pkg }}/judge'
+
+judge: { model: fakeJudge({ score: 0.95 }) }
+```
+
+A judge that returns `score` (default `1`) for every question, with no key and no call. Its model name is `fake`. `'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| No model | `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in es.config.ts, on the group or eval, or pass { model } to this call.` |
+| No turn yet | `t.judge() has no turn to grade: call t.send() first` |
+| No provider prefix | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
+| A model object in the config | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
+| A bad threshold | `config.judge.threshold must be between 0 and 1` |
+| A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
+| No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |
+
+## Related
+
+- [Judges concepts](/concepts/judges)
+- [The t API](/reference/t)
+- [Matchers](/reference/matchers)
+- [Writing evals](/guide/writing-evals)

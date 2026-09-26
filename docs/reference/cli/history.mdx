@@ -53,7 +53,7 @@ es compare [base] [head]  Diff two runs; base defaults to head's nearest recorde
 ```
 {/* /generated:cli-help:compare */}
 
-- **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's first-parent git ancestry, falling back to the previous run by time.
+- **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's git ancestry, falling back to the previous run by time.
 - **Statuses:** `regressed`, `fixed`, `changed (not comparable)`, `infra error`, `new`, `removed` and `same`.
 - **Not comparable** means a fingerprint part or the grader changed, and ES says which: `not comparable: evals/helpers.ts changed`.
 - **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed (`same · cells removed: …`). With no cell in common, it's not comparable.

@@ -1,0 +1,113 @@
+---
+title: Transcripts
+description: The transcript.jsonl file every attempt writes, its event types and their fields.
+---
+
+Every attempt writes `transcript.jsonl`: one JSON object per line, for each prompt, each thing the agent did, and the end of each turn.
+
+```text
+{"ts":"2026-09-26T17:05:40.476Z","atMs":0,"turn":0,"type":"prompt","text":"Create greet.js exporting greet(name) that returns \"Hello, <name>!\", and greet.test.js that tests it with node:test. No dependencies."}
+{"turn":0,"ts":"2026-09-26T17:05:47.231Z","atMs":6755,"type":"reasoning","text":"Planning to create greet.js and greet.test.js with node:test.","durationMs":45}
+{"turn":0,"ts":"2026-09-26T17:05:48.279Z","atMs":7803,"durationMs":81,"type":"tool","toolCallId":"tool_29d50916-8686-42da-9000-d188bcf6d66","tool":"glob","input":{"pattern":"*"},"output":{"totalFiles":0,"truncated":false},"ok":true}
+{"turn":0,"ts":"2026-09-26T17:05:48.324Z","atMs":7848,"durationMs":215,"type":"file-edit","toolCallId":"tool_715082d0-d603-40f7-8bf2-1d58b79bc37","path":"greet.js","kind":"create","added":5,"removed":0}
+…
+{"ts":"2026-09-26T17:05:50.538Z","atMs":10062,"turn":0,"type":"turn-end","status":"completed","durationMs":10062}
+```
+
+That's a real Cursor attempt, trimmed. The same events are in `t.send()`'s `turn.transcript` and in Studio's Transcript tab.
+
+## Where it is
+
+Next to the attempt's other files (`diff.patch`, `judge-input.json`, …), in the run's folder under `.es/runs/`, and in the history folder when the run is recorded. The folders are slugs of the eval id and cell key:
+
+```text
+.es/runs/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
+evals/.history/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
+```
+
+`history.artifacts` in the config decides which attempts keep it in history: `all` (default), `failures` or `none`.
+
+## Common fields
+
+<Property name="type" type="string">
+  The event type, below.
+</Property>
+
+<Property name="turn" type="number">
+  The turn it belongs to, from 0.
+</Property>
+
+<Property name="ts" type="string">
+  When it happened, as an ISO timestamp.
+</Property>
+
+<Property name="atMs" type="number">
+  Milliseconds since the turn started.
+</Property>
+
+<Property name="durationMs" type="number | null">
+  How long it took. `null` when the harness never reported the end. `error` events have none.
+</Property>
+
+## Event types
+
+<Property name="prompt" type="{ text }">
+  The prompt of a turn, first in each turn. `atMs` is 0.
+</Property>
+
+<Property name="text" type="{ text }">
+  A message from the agent. The last `text` of a turn is its final message, whole (the record cuts it at 8 KB).
+</Property>
+
+<Property name="reasoning" type="{ text }">
+  The agent's reasoning, when the harness reports it.
+</Property>
+
+<Property name="file-edit" type="{ toolCallId, path, kind, added, removed }">
+  A file the agent created, modified or deleted. `kind` is `create`, `modify` or `delete`. `added` and `removed` are line counts, or `null` when the harness didn't send the content (deletes, for example).
+</Property>
+
+<Property name="tool" type="{ toolCallId, tool, input, output, ok }">
+  Any other tool call, merged with its result: the harness's tool name (`bash`, `glob`, `mcp__docs__search`), its input and output as the harness reports them, and whether it succeeded.
+</Property>
+
+<Property name="web-search" type="{ toolCallId, query, references }">
+  A web search. `references` is how many sources the harness says it used, or `null`; Cursor sends no URLs or titles.
+</Property>
+
+<Property name="web-fetch" type="{ toolCallId, url, ok }">
+  A fetched URL, and whether the fetch succeeded.
+</Property>
+
+<Property name="error" type="{ message }">
+  An error the harness reported. The turn usually ends with status `error`.
+</Property>
+
+<Property name="turn-end" type="{ status, durationMs }">
+  The end of a turn: `completed`, `aborted` or `error`, and the turn's length. `atMs` equals `durationMs`.
+</Property>
+
+A real `error` event, from a Claude Code attempt on an account without credit:
+
+```text
+{"turn":0,"ts":"2026-09-26T17:09:11.329Z","atMs":1184,"type":"error","message":"Credit balance is too low"}
+```
+
+## Large outputs
+
+A tool output over 128 KB keeps its first 96 KB and last 16 KB, with a marker between them giving the characters left out and the whole output's sha256:
+
+```text
+[es: truncated <n> of <total> characters, sha256 <hash>]
+```
+
+## Raw transcripts
+
+With `ES_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how ES reads a harness, and it can be large.
+
+## Related
+
+- [The t API](/reference/t)
+- [The run record](/reference/record)
+- [Debug data](/reference/debug-data)
+- [Studio](/guide/studio)

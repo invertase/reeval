@@ -1,0 +1,85 @@
+---
+title: cursor()
+description: The Cursor agent harness, its options and id, the key it needs, and how ES brokers that key.
+---
+
+`cursor()` runs the Cursor agent CLI in the Docker sandbox. It's the default harness.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+})
+```
+
+## Options
+
+<Property name="model" type="string" optional>
+  The model the agent uses, as the Cursor CLI names it (`composer-2.5`). Without it, the CLI picks its own default, which can change between versions.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `cursor:<model>`, or `cursor` without a model. Letters, digits and `.`, `_`, `:`, `@`, `+`, `-`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Cursor attempts at once across the run, for example to stay under your account's rate limits. A whole number of at least 1.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `CURSOR_API_KEY` |
+| Adapter | `@ai-sdk/harness-cursor` 1.0.37 |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:cursor-1.0.37` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `~/.agents/skills` |
+| Skills (`placement: 'workspace'`) | `.cursor/skills` in the workspace |
+| Egress hosts added | `api2.cursor.sh`, `*.cursor.sh`, `cursor.com`, `*.cursor.com` |
+
+## The key
+
+ES reads `CURSOR_API_KEY` on the host and passes it to the adapter explicitly: a host AI Gateway key, subscription or keychain is never used. The key never enters the container. The agent sees a placeholder (`aisdkhc_…`), and the egress gateway swaps in the real key on one endpoint only:
+
+| Host | Endpoint |
+|---|---|
+| `api2.cursor.sh` | `POST /auth/exchange_user_api_key` |
+
+The CLI exchanges the key for session tokens. The gateway replaces the `accessToken` and `refreshToken` in that response with placeholders too, and swaps them back on `cursor.sh` and `*.cursor.sh`. With `-v`, the attempt's log shows it:
+
+```text
+broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
+…
+gateway   POST https://api2.cursor.sh/auth/exchange_user_api_key → 200 · allowed · ↑2 B ↓956 B · 73ms · substituted CURSOR_API_KEY (authorization)
+broker    substituted CURSOR_API_KEY (authorization) for api2.cursor.sh (POST https://api2.cursor.sh/auth/exchange_user_api_key)
+```
+
+A request carrying the placeholder anywhere else gets a 403, and the attempt prints `warning: the egress gateway refused …`. See [Credential brokering](/concepts/credential-brokering).
+
+## Skills, rules and MCP
+
+Rules go to `AGENTS.md` in the workspace. Skills with the default placement go to `~/.agents/skills`, where the adapter installs them; `placement: 'workspace'` writes them to `.cursor/skills`. MCP servers go to the agent's ACP session.
+
+The CLI rewrites `~/.cursor/cli-config.json` and `~/.cursor/skills-cursor/.sync-manifest.json` every session. ES records them but leaves them out of the context fingerprint, so runs stay comparable.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No key, before the run | `Missing credentials: CURSOR_API_KEY, … Set them in the environment or .env.local.` |
+| A key with a line break | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). …` |
+| A non-Docker sandbox | `The Cursor harness needs the Docker sandbox` |
+| The CLI doesn't start | `Cursor harness failed to start: …` |
+| The image isn't built | `Sandbox image evalsuite-sandbox:cursor-1.0.37 not found. Build it once with: es image build` |
+
+## Related
+
+- [Harnesses guide](/guide/harnesses)
+- [docker()](/reference/sandbox/docker)
+- [Credential brokering](/concepts/credential-brokering)
+- [Egress](/reference/egress)

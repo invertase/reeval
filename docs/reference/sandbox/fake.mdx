@@ -1,0 +1,63 @@
+---
+title: fakeSandbox()
+description: A temporary directory on the host that stands in for a container, for tests and the fake harness.
+---
+
+`fakeSandbox()` gives each attempt a temporary directory on the host instead of a container. It's for the fake harness and for testing your evals and configs; it isolates nothing.
+
+```ts title="es.fake.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { fakeHarness } from '{{ pkg }}/harness'
+import { fakeJudge } from '{{ pkg }}/judge'
+import { fakeSandbox } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: fakeHarness({ files: { 'greet.js': 'export const greet = 1\n' } }),
+  sandbox: fakeSandbox(),
+  judge: { model: fakeJudge() },
+})
+```
+
+## Options
+
+<Property name="id" type="string" optional>
+  The sandbox's id in cell keys. Default `fake`.
+</Property>
+
+<Property name="dir" type="string" optional>
+  The parent directory for each attempt's temporary directory. Default the OS temp directory.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most fake sandboxes at once across the run.
+</Property>
+
+## What it is
+
+Each attempt gets a directory `es-sandbox-*` under `dir`, with the workspace in `work/`. `HOME` is the attempt's directory, so `~/` paths in `files`, `t.readFile` and skills land there. `t.exec`, setup steps and the fake agent's `exec` steps run with `sh -c` on the host, in the workspace. The directory is removed when the attempt ends.
+
+## What it can't do
+
+<Warning>
+  Commands run on your machine, with your network and your files within reach. Only run evals you trust in it.
+</Warning>
+
+| Feature | In `fakeSandbox()` |
+|---|---|
+| Real harnesses | Refused: `The Cursor harness needs the Docker sandbox` |
+| Egress policy | Not enforced. A plan with `'deny-all'` or an allowlist stops before it runs. |
+| Egress record | Not recorded: the record's `egress.recorded` is `false` |
+| Credential brokering | No gateway, so a brokered secret's placeholder is never swapped for its value |
+| Images | None: `docker()` options don't apply |
+
+An eval that asks for an egress policy the fake sandbox can't enforce is an error:
+
+```text
+es: evals/hello.es.ts: evaluate("greet module › creates greet.js") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
+```
+
+## Related
+
+- [fakeHarness()](/reference/harness/fake)
+- [docker()](/reference/sandbox/docker)
+- [Egress](/reference/egress)
