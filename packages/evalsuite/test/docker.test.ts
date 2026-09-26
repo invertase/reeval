@@ -325,6 +325,62 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
     }
   })
 
+  test('from: a toolchain image gets Node, git and the harness baked on, runs the attempt, and is cached', {
+    ...docker,
+    timeout: 900_000,
+  }, async () => {
+    const p = await project('docker-from', {
+      'es.config.ts': config(
+        `{ script: [[{ exec: 'node -e "process.stdout.write(process.version)"' }]] }`,
+      ),
+      'evals/f.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+const bookworm = docker({ from: 'debian:bookworm-slim' })
+evaluate('bakes', { sandbox: bookworm }, async (t) => {
+  const turn = await t.send('x')
+  const shell = turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : []))
+  expect(shell.join('')).toMatch(/^v22\\./)
+  expect((await t.exec('grep -c bookworm /etc/os-release')).exitCode).toBe(0)
+  expect((await t.exec('git --version && curl --version && pnpm --version')).exitCode).toBe(0)
+  expect((await t.exec('pwd')).stdout).toBe('/es/workspace\\n')
+})
+evaluate('canary', { sandbox: bookworm }, async (t) => {
+  await t.sandbox()
+  expect((await t.exec('grep -c trixie /etc/os-release')).stdout).toBe('1\\n')
+})
+`,
+    })
+    let ref = ''
+    try {
+      const first = await runCli(p.dir, ['run'], { timeoutMs: 600_000 })
+      assert.equal(first.code, 1, first.stdout + first.stderr)
+      const a = readRun(p.dir)
+      const byName = Object.fromEntries(a.evals.map((e) => [e.name, e]))
+      assert.equal(byName.bakes?.outcome, 'pass', first.stdout)
+      assert.equal(byName.canary?.outcome, 'fail')
+      assert.match(byName.canary?.error?.message ?? '', /expected '0\\n' to be '1\\n'/)
+      const image = byName.bakes?.image
+      ref = image?.ref ?? ''
+      assert.match(ref, /^evalsuite-sandbox:cursor-[\d.]+-debian-bookworm-slim-[0-9a-f]{8}$/)
+      assert.equal(image?.base, ref)
+      assert.equal(image?.dockerfile, null)
+      assert.match(image?.agentCli ?? '', /\d/, 'the harness is baked on')
+      assert.deepEqual(
+        byName.bakes?.cells.map((c) => c.key),
+        ['fake/-/docker:debian:bookworm-slim'],
+      )
+
+      const again = await runCli(p.dir, ['run', 'bakes'], slow)
+      assert.equal(again.code, 0, again.stdout + again.stderr)
+      assert.equal(readRun(p.dir).evals[0]?.image?.id, image?.id, 'the second run reuses the image')
+    } finally {
+      if (ref) {
+        execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
+        execFileSync('docker', ['rmi', '-f', `${ref}-base`], { stdio: 'ignore' })
+      }
+    }
+  })
+
   test("dockerfile + claudeCode(): ES_BASE is Claude Code's image; another base gets the claude CLI baked on", {
     ...claudeImage,
     timeout: 900_000,

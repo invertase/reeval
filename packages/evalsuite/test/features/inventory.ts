@@ -481,7 +481,10 @@ export const inventory: InventoryFeature[] = [
     id: 'docker.from',
     area: 'Sandbox',
     name: '`docker({ from })` toolchain images',
-    gap: "Only `es image build --dry-run`'s listing is tested; building on a `from` image and running in it is manual (test-strategy §11.4, I2).",
+    tests: [
+      options('es image build --dry-run lists every image'),
+      docker('from: a toolchain image gets Node, git and the harness baked on'),
+    ],
   },
   {
     id: 'image.build',
