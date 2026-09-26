@@ -94,13 +94,16 @@ await expect(turn).toHaveFile('nope.js')  // right
 ```text
 Summary
  evals/guide-unawaited.es.ts
-   ✓ unawaited     47ms  1 turn
+   ✗ unawaited     45ms  1 turn
+…
+ ✗ evals/guide-unawaited.es.ts › unawaited
+   Error: expected file nope.js to exist
 
-error: expected file nope.js to exist
+   expect(…).toHaveFile() wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`.
 ```
 
 <Warning>
-  An unawaited matcher doesn't fail its eval. The summary says it passed, and the failure only shows as a stray error line after it.
+  An unawaited matcher fails its eval even when its check passes, so a missing `await` shows up as a failure that tells you to add it.
 </Warning>
 
 `toPass()` is synchronous: await `t.judge`, not the `expect`. So are `toHaveSearched(query?)` and `toHaveFetched(url?)`, which check a turn's web calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`, `toMatch`…) work too.
