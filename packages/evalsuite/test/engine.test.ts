@@ -172,6 +172,71 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     })
   })
 
+  test("a skipped group's evals, nested ones too, are recorded as skipped and never run", async () => {
+    const p = await project('group-skip', {
+      'es.config.ts': fakeConfig(),
+      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+group.skip('parked', () => {
+  evaluate('inside', async () => { throw new Error('the body ran') })
+  group('nested', () => {
+    evaluate('deeper', async () => { throw new Error('the body ran') })
+  })
+})
+group.todo('someday')
+evaluate('kept', async () => {})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    assert.deepEqual(
+      run.evals.map((e) => [e.id, e.outcome]),
+      [
+        ['evals/g.es.ts › parked › inside', 'skipped'],
+        ['evals/g.es.ts › parked › nested › deeper', 'skipped'],
+        ['evals/g.es.ts › kept', 'pass'],
+      ],
+      'a todo group has no evals, so it adds none',
+    )
+    assert.equal(run.summary.skipped, 2)
+  })
+
+  test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
+    const p = await project('dotenv', {
+      'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { fakeSandbox } from 'evalsuite/sandbox'
+const id = (name: string) => process.env[name] ?? 'unset'
+export default defineConfig({
+  harness: [fakeHarness({ id: id('ES_T_BOTH') }), fakeHarness({ id: id('ES_T_ENV') }), fakeHarness({ id: id('ES_T_SHELL') })],
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+})
+`,
+      '.env': 'ES_T_BOTH=from-env\nES_T_ENV=only-env\nES_T_SHELL=from-env\n',
+      '.env.local': 'ES_T_BOTH=from-local\nES_T_SHELL=from-local\n',
+      'evals/sees.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('sees', async () => expect(process.env.ES_T_BOTH).toBe('from-local'))
+`,
+      'evals/canary.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
+`,
+    })
+    const env = { ES_T_SHELL: 'from-shell' }
+    const plan = await runCli(p.dir, ['run', '--dry-run', '--json'], { env })
+    assert.equal(plan.code, 0, plan.stdout + plan.stderr)
+    const cells = JSON.parse(plan.stdout).evals[0].cells.map((c: { key: string }) => c.key)
+    assert.deepEqual(cells, ['from-local/-/fake', 'only-env/-/fake', 'from-shell/-/fake'])
+
+    const sees = await runCli(p.dir, ['run', 'sees.es'], { env })
+    assert.equal(sees.code, 0, sees.stdout + sees.stderr)
+    const canary = await runCli(p.dir, ['run', 'canary.es'], { env })
+    assert.equal(canary.code, 1, canary.stdout + canary.stderr)
+    assert.match(
+      readRun(p.dir).evals[0]?.error?.message ?? '',
+      /expected 'from-local' to be 'from-env'/,
+    )
+  })
+
   test('usage errors exit 2', async () => {
     const empty = await project('empty', { 'es.config.ts': fakeConfig() })
     const none = await runCli(empty.dir)
