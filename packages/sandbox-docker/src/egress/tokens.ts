@@ -1,8 +1,7 @@
 // Tokens an agent derives from its brokered key: the gateway replaces them in the exchange's
 // response with placeholders, and swaps the real ones back in on the agent's own hosts.
-import { randomInt } from 'node:crypto'
 import type { EndpointMatch } from './rules.ts'
-import type { Substitution } from './substitution.ts'
+import { placeholder, type Substitution } from './substitution.ts'
 
 export type DerivedTokens = {
   /** The credential the tokens come from, for logs; never a value. */
@@ -15,9 +14,6 @@ export type DerivedTokens = {
   hosts: readonly string[]
 }
 
-const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-const random = (n: number) => Array.from({ length: n }, () => BASE62[randomInt(62)]).join('')
-
 const JWT = /^[\w-]+\.[\w-]+\.[\w-]+$/
 
 /**
@@ -25,9 +21,9 @@ const JWT = /^[\w-]+\.[\w-]+\.[\w-]+$/
  * the real one, and gets `es_secret_…` for a signature; anything else is a plain `es_secret_…`.
  */
 export function tokenPlaceholder(token: string): string {
-  if (!JWT.test(token)) return `es_secret_${random(32)}`
+  if (!JWT.test(token)) return placeholder()
   const [header, claims] = token.split('.')
-  return `${header}.${claims}.es_secret_${random(43)}`
+  return `${header}.${claims}.${placeholder()}`
 }
 
 /**

@@ -1,11 +1,10 @@
 // Worker side of environments: layers an attempt's environments, reads skills and files on the
 // host, resolves secrets, and computes the digest that goes into fingerprints. Nothing here
 // touches the sandbox.
-import { randomInt } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, join, relative, sep } from 'node:path'
-import type { Substitution } from '@evalsuite/sandbox-docker'
+import { placeholder, type Substitution } from '@evalsuite/sandbox-docker'
 import { run } from '@evalsuite/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
 import { badCharacterAt, parseDuration } from '../config.ts'
@@ -72,15 +71,6 @@ export type ResolvedEnvironment = {
 
 /** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
 export type BrokeredSecret = Substitution & { phase: 'agent' | 'checks' }
-
-const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
-
-/** A fresh `es_secret_<32 base62>`: URL-safe, so it survives any encoding a client applies. */
-export function placeholder(): string {
-  let out = 'es_secret_'
-  for (let i = 0; i < 32; i++) out += BASE62[randomInt(BASE62.length)]
-  return out
-}
 
 const SKILL_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const DEFAULT_SETUP_TIMEOUT = '5m'

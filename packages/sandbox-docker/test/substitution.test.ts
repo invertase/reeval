@@ -156,7 +156,7 @@ describe('derived tokens', () => {
   test('a JWT keeps its header and claims; anything else gets a plain placeholder', () => {
     assert.match(
       tokenPlaceholder('aGVhZA.Y2xhaW1z.c2ln'),
-      /^aGVhZA\.Y2xhaW1z\.es_secret_[0-9A-Za-z]{43}$/,
+      /^aGVhZA\.Y2xhaW1z\.es_secret_[0-9A-Za-z]{32}$/,
     )
     assert.match(tokenPlaceholder('opaque-token'), /^es_secret_[0-9A-Za-z]{32}$/)
     assert.notEqual(tokenPlaceholder('a.b.c'), tokenPlaceholder('a.b.c'), 'fresh each time')

@@ -1,7 +1,17 @@
 // Brokered secrets: the sandbox holds a random placeholder, and the gateway swaps in the real value
 // only on HTTPS requests to that secret's own hosts, and swaps it back out of their responses.
+import { randomInt } from 'node:crypto'
 import { Transform, type TransformCallback } from 'node:stream'
 import { hostAllowed } from './policy.ts'
+
+const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+
+/** A fresh `es_secret_<32 base62>`: URL-safe, so it survives any encoding a client applies. */
+export function placeholder(): string {
+  let out = 'es_secret_'
+  for (let i = 0; i < 32; i++) out += BASE62[randomInt(BASE62.length)]
+  return out
+}
 
 /** Where in a request a placeholder may be replaced. Bodies and queries are opt-in. */
 export type SubstituteIn = 'header' | 'query' | 'body'

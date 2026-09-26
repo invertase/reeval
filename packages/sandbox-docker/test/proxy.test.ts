@@ -920,7 +920,7 @@ describe('derived tokens through the proxy', () => {
       const body = JSON.parse(r.body) as Record<string, string>
       const access = body.accessToken ?? ''
       assert.doesNotMatch(r.body, /real-(access|refresh)-signature/)
-      assert.match(access, /^[\w-]+\.[\w-]+\.es_secret_[0-9A-Za-z]{43}$/)
+      assert.match(access, /^[\w-]+\.[\w-]+\.es_secret_[0-9A-Za-z]{32}$/)
       assert.deepEqual(parts(access).slice(0, 2), parts(ACCESS).slice(0, 2), 'header and claims')
       assert.notEqual(body.refreshToken, access, 'one placeholder per token')
       assert.equal(body.kind, 'user', 'other fields untouched')
@@ -950,7 +950,7 @@ describe('derived tokens through the proxy', () => {
     try {
       const r = await viaProxyH2(gw, HOST, h2.port, '/tokens/exchange')
       const { accessToken } = JSON.parse(r.body) as { accessToken: string }
-      assert.match(accessToken, /\.es_secret_[0-9A-Za-z]{43}$/)
+      assert.match(accessToken, /\.es_secret_[0-9A-Za-z]{32}$/)
       assert.doesNotMatch(r.body, /real-access-signature/)
     } finally {
       gw.close()
