@@ -6,6 +6,7 @@ import https from 'node:https'
 import net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import tls from 'node:tls'
+import { gzipSync } from 'node:zlib'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import {
@@ -60,9 +61,18 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         return out.end(echo)
       }
       if (req.url?.startsWith('/tokens/')) {
+        const auth = String(req.headers.authorization ?? '')
         if (req.url === '/tokens/denied') {
           out.writeHead(401, { 'content-type': 'application/json' })
-          return out.end('{"error":"unauthorized"}')
+          return out.end(JSON.stringify({ error: 'unauthorized', auth }))
+        }
+        if (req.url === '/tokens/gzip') {
+          out.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip' })
+          return out.end(gzipSync(JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH })))
+        }
+        if (req.url === '/tokens/echo') {
+          out.writeHead(200, { 'content-type': 'application/json' })
+          return out.end(JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH, auth }))
         }
         if (req.url === '/tokens/garbled') {
           out.writeHead(200, { 'content-type': 'text/plain' })
@@ -990,11 +1000,30 @@ describe('derived tokens through the proxy', () => {
     try {
       const denied = await exchange(gw, '/tokens/denied')
       assert.equal(denied.status, 401)
-      assert.equal(denied.body, '{"error":"unauthorized"}')
+      assert.equal(denied.body, '{"error":"unauthorized","auth":""}')
       const garbled = await exchange(gw, '/tokens/garbled')
       assert.equal(garbled.status, 502)
       assert.match(garbled.body, /couldn't keep CURSOR_API_KEY's tokens out of the sandbox/)
       assert.doesNotMatch(garbled.body, /real-access-signature/)
+      const gzipped = await exchange(gw, '/tokens/gzip')
+      assert.equal(gzipped.status, 502)
+      assert.match(gzipped.body, /the response is gzip-encoded/)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('the brokered key is scrubbed from the exchange response, as from any other', async () => {
+    const gw = await startProxy(undefined, { derivedTokens })
+    try {
+      const key = { name: 'CURSOR_API_KEY', placeholder: 'es_secret_key', value: REAL }
+      gw.proxy.setSubstitutions([{ ...key, hosts: [HOST], in: ['header'] }])
+      const headers = { authorization: `Bearer ${key.placeholder}` }
+      for (const path of ['/tokens/echo', '/tokens/denied']) {
+        const r = await viaProxy(gw, HOST, h1.port, { method: 'POST', path, body: '{}', headers })
+        assert.equal(seen.at(-1)?.headers.authorization, `Bearer ${REAL}`, path)
+        assert.equal(JSON.parse(r.body).auth, `Bearer ${key.placeholder}`, path)
+      }
     } finally {
       gw.close()
     }

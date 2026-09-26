@@ -362,12 +362,13 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
 `)
       } else res.destroy()
     }
-    up.on('data', (chunk: Buffer) => {
+    const scrubbed = responseBody(up, own)
+    scrubbed.on('data', (chunk: Buffer) => {
       size += chunk.length
       if (size <= EXCHANGE_LIMIT) chunks.push(chunk)
     })
     up.once('error', (error) => refuse(error.message))
-    up.once('end', () => {
+    scrubbed.once('end', () => {
       const body = Buffer.concat(chunks)
       const out = responseHeaders(headers, own)
       if (status < 200 || status >= 300) return res.writeHead(status, out).end(body)
