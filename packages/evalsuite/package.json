@@ -1,6 +1,6 @@
 {
   "name": "@invertase/foobar",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "ES (Eval Suite): an eval runner for coding agents",
   "license": "MIT",
   "repository": {
