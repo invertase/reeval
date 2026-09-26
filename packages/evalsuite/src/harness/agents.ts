@@ -98,6 +98,16 @@ const GEMINI_ENDPOINTS = [
   },
 ] as const satisfies readonly EndpointMatch[]
 
+/** Goose's: the model call, and the model list it fetches with the key at the start of a turn. */
+const GOOSE_ENDPOINTS = [
+  ...GEMINI_ENDPOINTS,
+  {
+    host: 'generativelanguage.googleapis.com',
+    path: { regex: '^/v1beta/models$' },
+    method: ['GET'],
+  },
+] as const satisfies readonly EndpointMatch[]
+
 /** The model a Gemini API request names in its URL. */
 const geminiServedModel: ServedModel = ({ host, path }) =>
   host === 'generativelanguage.googleapis.com'
@@ -334,8 +344,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 1.52.0 sends the key on, with session naming off.
-    endpoints: GEMINI_ENDPOINTS,
+    // The requests 1.52.0 sends the key on, with session naming off.
+    endpoints: GOOSE_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>

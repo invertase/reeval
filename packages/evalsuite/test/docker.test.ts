@@ -59,6 +59,18 @@ const claudeImageBuilt = (() => {
     return false
   }
 })()
+const gooseImageBuilt = (() => {
+  try {
+    execFileSync('docker', ['image', 'inspect', imageFor('goose')], { stdio: 'ignore' })
+    return true
+  } catch {
+    return false
+  }
+})()
+const gooseImage = {
+  skip: !gooseImageBuilt && !requireDocker && `needs Docker and ${imageFor('goose')}`,
+  timeout: 300_000,
+}
 const claudeImage = {
   skip: !claudeImageBuilt && !requireDocker && `needs Docker and ${imageFor('claude-code')}`,
   timeout: 300_000,
@@ -825,6 +837,41 @@ evaluate('calls out', async (t) => {
       const leaked = spawnSync('grep', ['-rlF', TOKEN, join(p.dir, '.es')], { encoding: 'utf8' })
       assert.equal(leaked.stdout.trim(), '', 'no file under .es has the key')
       assert.equal(leaked.status, 1, leaked.stderr)
+    },
+  )
+
+  test(
+    'Goose gets the key on the model list it fetches each turn, and nothing is refused',
+    gooseImage,
+    async () => {
+      const p = await project('docker-goose-endpoints', {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { goose } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({ harness: goose({ model: 'gemini-3.8-flash' }), sandbox: docker(), timeout: '90s' })
+`,
+        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
+`,
+      })
+      // A made-up key: Goose lists the models, then Gemini refuses the key on the model call.
+      const env = {
+        GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000',
+        ES_DEBUG: '1',
+      }
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+      const out = r.stdout + r.stderr
+      assert.match(
+        out,
+        /es:egress GET https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models HTTP\/[\d.]+ \(set x-goog-api-key\)/,
+      )
+      // The twin: the model call is brokered the same way, so the search can see a brokered line.
+      assert.match(
+        out,
+        /es:egress POST \S+:streamGenerateContent HTTP\/[\d.]+ \(set x-goog-api-key\)/,
+      )
+      assert.doesNotMatch(out, /refused/)
+      assert.equal(liveContainers(readRun(p.dir).run.runId), '')
     },
   )
 

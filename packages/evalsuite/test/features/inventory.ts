@@ -522,6 +522,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       sandboxDocker('docker', 'env, /proc and files in the container never contain the real key'),
       harness('credential brokering per agent'),
+      docker('Goose gets the key on the model list it fetches each turn, and nothing is refused'),
     ],
     real: ['contract › real key never in the container'],
   },

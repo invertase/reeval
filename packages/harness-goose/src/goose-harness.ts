@@ -40,9 +40,10 @@ export const GOOSE_QUIET_ENV = {
 } as const
 
 /**
- * The model-request endpoint Goose sends the key on, `POST /v1beta/models/<model>:
- * streamGenerateContent` (checked with 1.52.0). A gateway that enforces it refuses the key
- * anywhere else.
+ * The endpoints Goose sends the key on (checked with 1.52.0): the model request, `POST
+ * /v1beta/models/<model>:streamGenerateContent`, and the model list, `GET /v1beta/models`, which
+ * it fetches at the start of every turn. A gateway that enforces them refuses the key anywhere
+ * else.
  */
 export const GOOSE_ENDPOINTS = [
   {
@@ -50,6 +51,8 @@ export const GOOSE_ENDPOINTS = [
     path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
     method: ['POST'],
   },
+  // The model list, fetched with the key at the start of every turn.
+  { host: new URL(GEMINI_API_URL).hostname, path: { regex: '^/v1beta/models$' }, method: ['GET'] },
 ] as const
 
 /** Downloads the pinned release for the sandbox's arch and checks its sha256. */
