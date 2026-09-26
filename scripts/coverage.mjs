@@ -10,7 +10,15 @@
 // Reports, in coverage/report/: index.html, lcov.info, coverage-summary.json and summary.md (the
 // Markdown the CI job summary shows).
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { mergeProcessCovs } from '@bcoe/v8-coverage'
@@ -70,7 +78,8 @@ function prune(dir) {
     } finally {
       rmSync(file)
     }
-    const remap = (url) => (url.startsWith(vendored) ? sandboxDist + url.slice(vendored.length) : url)
+    const remap = (url) =>
+      url.startsWith(vendored) ? sandboxDist + url.slice(vendored.length) : url
     const result = data.result
       .filter((s) => ours.test(s.url) && !s.url.includes('/node_modules/'))
       .map((s) => ({ ...s, url: remap(s.url) }))
@@ -79,7 +88,8 @@ function prune(dir) {
     for (const [url, map] of Object.entries(data['source-map-cache'] ?? {}))
       if (result.some((s) => s.url === url)) maps[url] = map
   }
-  if (processes.length === 0) return console.log(`coverage: nothing in ${relative(root, dir) || dir}`)
+  if (processes.length === 0)
+    return console.log(`coverage: nothing in ${relative(root, dir) || dir}`)
   const merged = { ...mergeProcessCovs(processes), 'source-map-cache': maps }
   writeFileSync(join(dir, `merged-${process.pid}-${Date.now()}.json`), JSON.stringify(merged))
   console.log(`coverage: merged ${processes.length} processes in ${relative(root, dir) || dir}`)
@@ -130,7 +140,9 @@ function typeOnly() {
       if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue
       const built = join(root, 'packages', pkg, 'dist', name.replace(/\.ts$/, '.js'))
       if (!existsSync(built)) continue
-      const code = readFileSync(built, 'utf8').replace(/\/\/# sourceMappingURL=.*$/m, '').trim()
+      const code = readFileSync(built, 'utf8')
+        .replace(/\/\/# sourceMappingURL=.*$/m, '')
+        .trim()
       if (code === 'export {};') files.push(`packages/${pkg}/src/${name}`)
     }
   }
@@ -145,7 +157,10 @@ function markdown(summary) {
   const packages = new Map()
   for (const [path, m] of rows) {
     const name = path.split('/')[1]
-    const p = packages.get(name) ?? { lines: { total: 0, covered: 0 }, branches: { total: 0, covered: 0 } }
+    const p = packages.get(name) ?? {
+      lines: { total: 0, covered: 0 },
+      branches: { total: 0, covered: 0 },
+    }
     for (const k of ['lines', 'branches']) {
       p[k].total += m[k].total
       p[k].covered += m[k].covered
