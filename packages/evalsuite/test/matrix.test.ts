@@ -46,6 +46,7 @@ describe('the matrix check (twins: it can fail)', () => {
       { dir: 'skills/b', tiers: ['fake'], canary: false },
     ],
     planCases: ['matrix/default'],
+    contract: [],
     testSource: (path) =>
       path === 'evalsuite/test/unit.test.ts'
         ? "// covers a comment\nconst label = 'a helper string'\ntest('parses a thing', () => {})"
@@ -103,6 +104,48 @@ describe('the matrix check (twins: it can fail)', () => {
     assert.deepEqual(m.problems, [
       'fixture skills/b covers no feature: add it to an entry in inventory.ts',
       'plan case matrix/default covers no feature: add it to an entry in inventory.ts',
+    ])
+  })
+
+  test('real-suite checks count on the real tier; a behaviour no feature names fails', () => {
+    const real = {
+      ...sources,
+      contract: [
+        { name: 'rules read', canary: true },
+        { name: 'clean teardown', canary: false },
+      ],
+      testSource: (path: string) =>
+        path === 'evalsuite/test/e2e-real.test.ts'
+          ? "test('es query: every view answers', () => {})"
+          : sources.testSource(path),
+    }
+    const m = buildMatrix(
+      [
+        everything,
+        feature({
+          id: 'y',
+          real: ['contract › rules read', 'contract › clean teardown', 'e2e › es query'],
+        }),
+      ],
+      real,
+    )
+    assert.deepEqual(m.problems, [])
+    assert.deepEqual(m.rows[1]?.cells.real, { count: 3, canaries: 1 })
+    const unclaimed = buildMatrix(
+      [
+        everything,
+        feature({
+          id: 'y',
+          real: ['contract › rules read', 'contract › nope', 'e2e › nope', 'rules read'],
+        }),
+      ],
+      real,
+    )
+    assert.deepEqual(unclaimed.problems, [
+      'inventory y: contract.test.ts has no behaviour "nope"',
+      'inventory y: e2e-real.test.ts has no test "nope"',
+      'inventory y: "rules read" isn\'t "contract › <behaviour>" or "e2e › <title>"',
+      'contract behaviour "clean teardown" covers no feature: add it to an entry in inventory.ts',
     ])
   })
 

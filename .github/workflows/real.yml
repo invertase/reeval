@@ -1,42 +1,92 @@
-# The real-agent tier: real Cursor in Docker, nightly and on demand. It spends model credit, so
-# it runs only from this repository's own schedule or a manual dispatch (never a PR, so never a
-# fork's code), and only when the CURSOR_API_KEY secret exists.
+# The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labelled
+# `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code)
+# and only with its secrets, skipping with a notice without them. One run at a time.
+#   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check
+#                        and the CLI end to end, on the pinned agent versions
+#   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy and @cursor/sdk
+#   real agents (Cursor) examples/hello's smoke profile
+# PRs get the pinned contract only. Budgets: each es run's budget.attempts, a ledger per job
+# (contract.yml) and the timeouts below.
 name: real
 
 on:
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      latest:
+        description: Also run the contract on the newest agent CLI and SDK (the drift leg)
+        type: boolean
+        default: true
+  pull_request:
+    types: [labeled, synchronize, reopened]
 
 permissions:
   contents: read
 
 concurrency:
-  group: real
-  cancel-in-progress: false
+  group: real-${{ github.event.pull_request.number || github.ref }}
+  # A PR's newer push replaces its run; the nightly and dispatched runs always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   gate:
     name: gate
-    if: github.repository == 'invertase/evalsuite'
+    # This repository only; on a PR, only its own branches and only with the label.
+    if: >-
+      github.repository == 'invertase/evalsuite' &&
+      (github.event_name != 'pull_request' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        contains(github.event.pull_request.labels.*.name, 'real-agents')))
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     outputs:
-      enabled: ${{ steps.key.outputs.enabled }}
+      enabled: ${{ steps.keys.outputs.enabled }}
     steps:
-      - id: key
+      - id: keys
         env:
-          HAS_KEY: ${{ secrets.CURSOR_API_KEY != '' }}
+          HAS_CURSOR: ${{ secrets.CURSOR_API_KEY != '' }}
+          HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
         run: |
-          echo "enabled=$HAS_KEY" >> "$GITHUB_OUTPUT"
-          [ "$HAS_KEY" = true ] || echo "::notice::The real tier is skipped: CURSOR_API_KEY isn't a repository secret"
+          [ "$HAS_CURSOR" = true ] || echo "::notice::No CURSOR_API_KEY repository secret: the Cursor rows are skipped"
+          [ "$HAS_GEMINI" = true ] || echo "::notice::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity rows are skipped"
+          echo "::notice::No ANTHROPIC_API_KEY for this project: the Claude Code rows are skipped"
+          if [ "$HAS_CURSOR" = true ] || [ "$HAS_GEMINI" = true ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::The real tier is skipped: neither CURSOR_API_KEY nor GOOGLE_GENERATIVE_AI_API_KEY is a repository secret"
+          fi
+
+  pinned:
+    name: contract (pinned)
+    needs: gate
+    if: needs.gate.outputs.enabled == 'true'
+    uses: ./.github/workflows/contract.yml
+    with: { versions: pinned }
+    secrets: inherit
+
+  latest:
+    name: contract (latest)
+    needs: [gate, pinned]
+    # After the pinned leg, pass or fail, so the two never spend at once.
+    if: >-
+      !cancelled() && needs.gate.outputs.enabled == 'true' &&
+      (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.latest))
+    uses: ./.github/workflows/contract.yml
+    with: { versions: latest }
+    secrets: inherit
 
   real:
     name: real agents (Cursor)
-    needs: gate
-    if: needs.gate.outputs.enabled == 'true'
+    needs: [gate, latest]
+    if: >-
+      !cancelled() && needs.gate.outputs.enabled == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,16 +94,11 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
-      - name: real-agent smoke
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
-        run: |
-          if node -e "process.exit(require('./package.json').scripts?.['smoke:real'] ? 0 : 1)"; then
-            pnpm smoke:real
-          else
-            echo "::notice::This ref has no smoke:real script (the real tier), so there's nothing to run"
-          fi
+      # The real-tier fixtures ran in the contract legs; this is examples/hello's smoke profile.
+      - name: examples/hello smoke
+        if: env.CURSOR_API_KEY != '' && env.GOOGLE_GENERATIVE_AI_API_KEY != ''
+        working-directory: examples/hello
+        run: node ../../packages/evalsuite/dist/cli.js run --profile smoke
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

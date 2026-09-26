@@ -430,6 +430,7 @@ async function addAttempt(
     env: record?.env ?? { vars: [], secrets: [], brokered: [] },
     context,
     egress: record?.egress ?? null,
+    servedModels: record?.servedModels ?? null,
     outcome,
     error,
     durationMs: e.durationMs,

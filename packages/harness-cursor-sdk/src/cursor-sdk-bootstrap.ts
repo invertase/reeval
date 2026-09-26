@@ -47,6 +47,49 @@ export function storedWebCalls(
   return found
 }
 
+/**
+ * What's wrong with the stored conversation's web calls, by the fields the runner reads: each
+ * call's `toolCallId`, `startedAtMs` and `completedAtMs`, its `args` (`url` for a fetch,
+ * `searchTerm` for a search) and a `result` with `success` or `error`; and any web tool key the
+ * runner doesn't know (a renamed `webFetchToolCall` would otherwise just find nothing). Empty when
+ * the shape is as the runner expects. The runner embeds this function's source, and reports what
+ * it finds as the turn's unreported tools, with this message.
+ */
+export function storedShapeProblems(
+  value: unknown,
+  calls: StoredWebCall[],
+  recovered: Record<string, string> = CURSOR_SDK_RECOVERED_TOOLS,
+): string[] {
+  const problems: string[] = []
+  const unknown = new Set<string>()
+  const walk = (v: unknown) => {
+    if (Array.isArray(v)) for (const x of v) walk(x)
+    else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) {
+        if (/^web\w*ToolCall$/.test(k) && !(k in recovered)) unknown.add(k)
+        walk(x)
+      }
+    }
+  }
+  walk(value)
+  for (const k of unknown) problems.push(`an unknown web tool call key ${k}`)
+  const target: Record<string, string> = { webFetch: 'url', webSearch: 'searchTerm' }
+  for (const c of calls) {
+    const at = `${c.name} ${c.id}`
+    const epoch = (x: unknown) => x !== undefined && x !== null && !Number.isNaN(Number(x))
+    if (!epoch(c.at.startedAtMs)) problems.push(`${at}: no startedAtMs`)
+    if (!epoch(c.at.completedAtMs)) problems.push(`${at}: no completedAtMs`)
+    const args = c.call?.args
+    const field = target[c.name]
+    if (!args || typeof args !== 'object') problems.push(`${at}: no args`)
+    else if (field && typeof args[field] !== 'string') problems.push(`${at}: args has no ${field}`)
+    const result = c.call?.result
+    if (!result || typeof result !== 'object' || !('success' in result || 'error' in result))
+      problems.push(`${at}: result has neither success nor error`)
+  }
+  return problems
+}
+
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CURSOR_SDK_BOOTSTRAP_DIR = '.harness-bootstrap/cursor-sdk'
 /** The runner's path relative to the bootstrap directory. */
@@ -95,6 +138,7 @@ Cursor.configure({ local: { useHttp1ForAgent: true } })
 
 const RECOVERED = ${JSON.stringify(CURSOR_SDK_RECOVERED_TOOLS)}
 const storedWebCalls = ${storedWebCalls.toString()}
+const storedShapeProblems = ${storedShapeProblems.toString()}
 const epochMs = (v) => (v === undefined || v === null || Number.isNaN(Number(v)) ? undefined : Number(v))
 // As JSON: in memory they're protobuf messages, whose oneofs are { case, value }.
 const listMessages = async (turn) =>
@@ -148,7 +192,10 @@ for (; !stopping; n++) {
     const result = await run.wait()
     try {
       if (before === undefined) throw new Error('the stored conversation could not be read before the turn')
-      const calls = storedWebCalls(await listMessages(turn), RECOVERED)
+      const messages = await listMessages(turn)
+      const calls = storedWebCalls(messages, RECOVERED)
+      const problems = storedShapeProblems(messages, calls.filter((c) => !before.has(c.id)), RECOVERED)
+      if (problems.length) throw new Error(\`the stored conversation's shape changed (@cursor/sdk \${turn.sdkVersion ?? '?'}): \${problems.join('; ')}\`)
       for (const c of calls.filter((c) => !before.has(c.id) && !streamed.has(c.id))) {
         const { toolCallId, ...args } = c.call.args ?? {}
         const base = { type: 'tool_call', agent_id: agent.agentId, run_id: result.id, call_id: c.id, name: c.name, args }

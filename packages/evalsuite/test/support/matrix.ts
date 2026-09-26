@@ -13,7 +13,11 @@ export type Sources = {
   planCases: string[]
   /** A test file's source, by its path under packages/; null when it doesn't exist. */
   testSource: (path: string) => string | null
+  /** contract.test.ts's behaviours, and whether each has a canary. */
+  contract: { name: string; canary: boolean }[]
 }
+
+const E2E = 'evalsuite/test/e2e-real.test.ts'
 
 type Cell = { count: number; canaries: number }
 export type MatrixRow = { feature: InventoryFeature; cells: Record<Tier, Cell> }
@@ -70,6 +74,23 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
         problems.push(`${at}: ${file} has no test "${title}"`)
       else cells.unit.count++
     }
+    for (const ref of feature.real ?? []) {
+      const [suite, title, ...rest] = ref.split(' › ')
+      const behaviour = sources.contract.find((b) => b.name === title)
+      if (rest.length || !title || (suite !== 'contract' && suite !== 'e2e'))
+        problems.push(`${at}: "${ref}" isn't "contract › <behaviour>" or "e2e › <title>"`)
+      else if (suite === 'contract' && !behaviour)
+        problems.push(`${at}: contract.test.ts has no behaviour "${title}"`)
+      else if (
+        suite === 'e2e' &&
+        !testTitles(sources.testSource(E2E) ?? '').some((t) => t.includes(title))
+      )
+        problems.push(`${at}: e2e-real.test.ts has no test "${title}"`)
+      else {
+        cells.real.count++
+        if (behaviour?.canary) cells.real.canaries++
+      }
+    }
     const row = { feature, cells }
     if (feature.gap !== undefined && !feature.gap.trim())
       problems.push(`${at}: a known gap needs its reason`)
@@ -86,6 +107,11 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
   for (const f of sources.fixtures)
     if (!claimed('fixtures', f.dir))
       problems.push(`fixture ${f.dir} covers no feature: add it to an entry in inventory.ts`)
+  for (const b of sources.contract)
+    if (!inventory.some((f) => f.real?.includes(`contract › ${b.name}`)))
+      problems.push(
+        `contract behaviour "${b.name}" covers no feature: add it to an entry in inventory.ts`,
+      )
   for (const c of sources.planCases)
     if (!claimed('plan', c))
       problems.push(`plan case ${c} covers no feature: add it to an entry in inventory.ts`)
@@ -111,8 +137,9 @@ export function renderMarkdown({ rows }: Matrix): string {
     '',
     '- **unit**: plain `node:test` cases, including runner-level tests through the CLI',
     '- **plan**: `es run --dry-run --json` snapshots in `plan.test.ts`',
-    '- **fake**, **docker**, **real**: feature fixtures in `features.test.ts` on the fake sandbox, in Docker, and with real Cursor',
-    '- `● n`: n fixtures, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',
+    '- **fake**, **docker**: feature fixtures in `features.test.ts` on the fake sandbox and in Docker',
+    '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
+    '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',
     '',
   ]
   for (const area of AREAS) {

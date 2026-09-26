@@ -47,6 +47,11 @@ export type Agent = Layout & {
    * refuse instead of passing silently.
    */
   unreported?: (harnessMetadata: unknown) => WebEventType[]
+  /**
+   * The model a brokered request asks the agent's API for, e.g. from its URL; unset when the
+   * requests don't say (Cursor's are protobuf), so the record says it's unknown.
+   */
+  servedModel?: ServedModel
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -71,6 +76,13 @@ export function cursorUnreported(harnessMetadata: unknown): WebEventType[] {
   const tools = meta?.cursorSdk?.unreportedTools
   return Array.isArray(tools) ? tools.flatMap((t) => (WEB_EVENTS[t] ? [WEB_EVENTS[t]] : [])) : []
 }
+
+/** The model a request names, from its method, host and path; undefined when it names none. */
+export type ServedModel = (request: {
+  method: string
+  host: string
+  path: string
+}) => string | undefined
 
 /** Cursor's key exchange: the only request the Cursor SDK sends the API key on. */
 const CURSOR_EXCHANGE = {
@@ -222,6 +234,11 @@ export const AGENTS: Record<AgentKind, Agent> = {
       hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
       why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
     },
+    // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
+    servedModel: ({ host, path }) =>
+      host === 'generativelanguage.googleapis.com'
+        ? /^\/v1beta\/models\/([^/:]+):streamGenerateContent$/.exec(path)?.[1]
+        : undefined,
     mcpServers: antigravityMcpServers,
     adapter: async ({ auth, mcpServers }) =>
       (await import('@evalsuite/harness-antigravity')).createAntigravity({
@@ -283,11 +300,17 @@ export type Brokering = {
   credential: string
   endpoints: readonly EndpointMatch[]
   tokens?: DerivedTokens
+  servedModel?: ServedModel
 }
 
 export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
   const agent = agentOf(h)
   if (!agent) return undefined
-  const { credential, endpoints, tokens } = agent
-  return { credential, endpoints, ...(tokens ? { tokens: { name: credential, ...tokens } } : {}) }
+  const { credential, endpoints, tokens, servedModel } = agent
+  return {
+    credential,
+    endpoints,
+    ...(tokens ? { tokens: { name: credential, ...tokens } } : {}),
+    ...(servedModel ? { servedModel } : {}),
+  }
 }

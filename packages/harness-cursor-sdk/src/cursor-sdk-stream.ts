@@ -111,6 +111,14 @@ const FINISH: Record<string, FinishReason['unified']> = {
   cancelled: 'other',
 }
 
+/** `webFetch <url>` or `webSearch <query>` for a web tool call, else undefined. */
+function webKey(e: CursorSdkMessage): string | undefined {
+  const p = projectToolCall(e.name ?? '', e.args)
+  if (p.toolName !== 'webFetch' && p.toolName !== 'webSearch') return undefined
+  const target = p.input.url ?? p.input.query
+  return typeof target === 'string' ? `${p.toolName} ${target}` : undefined
+}
+
 /**
  * Turns the runner's NDJSON for one turn into harness stream parts, in order. Text and
  * thinking arrive as deltas; a thinking event with `thinking_duration_ms` ends its block.
@@ -130,6 +138,8 @@ export class CursorSdkStreamTranslator {
   private openTools = new Map<string, { toolName: string; dynamic: boolean }>()
   /** Calls already reported, so a late duplicate `completed` doesn't open a second one. */
   private readonly seen = new Set<string>()
+  /** Web calls the stream itself reported, by id and by tool and target. */
+  private readonly streamedWeb = new Set<string>()
   /**
    * The turn's `usage` event, held until its result line: the runner reports the calls it
    * recovers after it, and HarnessAgent refuses content after a step's `finish-step`.
@@ -174,7 +184,7 @@ export class CursorSdkStreamTranslator {
         break
       case 'event':
         this.start(parts)
-        this.event(parts, parsed.event ?? { type: 'unknown' })
+        this.event(parts, parsed.event ?? { type: 'unknown' }, parsed.recovered !== undefined)
         break
       case 'result':
         this.start(parts)
@@ -256,7 +266,7 @@ export class CursorSdkStreamTranslator {
     this.openTools.clear()
   }
 
-  private event(parts: HarnessV1StreamPart[], e: CursorSdkMessage) {
+  private event(parts: HarnessV1StreamPart[], e: CursorSdkMessage, recovered = false) {
     this.agentId ??= e.agent_id
     switch (e.type) {
       case 'thinking': {
@@ -289,6 +299,15 @@ export class CursorSdkStreamTranslator {
       case 'tool_call': {
         const id = e.call_id
         if (!id) return
+        // Should the SDK stream web calls itself one day, the runner's recovered copies of them
+        // are dropped: same id, or the same tool and target under another id.
+        const web = webKey(e)
+        if (recovered) {
+          if (this.streamedWeb.has(id) || (web && this.streamedWeb.has(web))) return
+        } else if (web) {
+          this.streamedWeb.add(id)
+          this.streamedWeb.add(web)
+        }
         const status = e.status ?? 'running'
         let call = this.openTools.get(id)
         if (!call) {

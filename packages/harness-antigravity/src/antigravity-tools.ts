@@ -137,6 +137,12 @@ export function projectToolCall(
   if (EDIT_TOOLS.has(nativeName)) {
     return common('edit', { file_path: str(p.TargetFile) ?? str(p.AbsolutePath) ?? '' })
   }
+  // MCP tools go by `mcp__<server>__<tool>` on every harness, not by the CLI's one generic tool.
+  const server = str(p.ServerName)
+  const mcpTool = str(p.ToolName)
+  if (nativeName === 'call_mcp_tool' && server && mcpTool) {
+    return { toolName: `mcp__${server}__${mcpTool}`, nativeName, input: { ...p }, dynamic: true }
+  }
   switch (nativeName) {
     case 'run_command':
       return common('bash', { command: str(p.CommandLine) ?? str(p.command) ?? '' })

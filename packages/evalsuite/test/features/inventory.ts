@@ -19,6 +19,11 @@ export type InventoryFeature = {
    * `<path under packages/> › <the test's title, or a part of it>`.
    */
   tests?: string[]
+  /**
+   * Checks in the real-agent suites, on every real harness: `contract › <behaviour>` (a behaviour
+   * in contract.test.ts) or `e2e › <the test's title, or a part of it>` (e2e-real.test.ts).
+   */
+  real?: string[]
   /** Why nothing covers it yet. Only for features with no fixture, plan case or test. */
   gap?: string
 }
@@ -200,6 +205,7 @@ export const inventory: InventoryFeature[] = [
       'harness/claude-code-harness-skills',
       'harness/antigravity-home-skills',
     ],
+    real: ['contract › skill placed where the agent reads it, and used'],
   },
   {
     id: 'skill.workspace',
@@ -270,6 +276,7 @@ export const inventory: InventoryFeature[] = [
       harness('gets MCP servers in the .mcp.json shape'),
       secrets('MCP stdio env secrets are brokered only with explicit hosts'),
     ],
+    real: ['contract › stdio MCP server started and called'],
   },
   {
     id: 'mcp.http',
@@ -304,6 +311,7 @@ export const inventory: InventoryFeature[] = [
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
+    real: ['contract › rules read'],
   },
   {
     id: 'files.workspace',
@@ -469,6 +477,7 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker('docker', 'no direct route: custom and deny-all'),
       sandboxDocker('unit', 'deny list: every always-denied form'),
     ],
+    real: ['contract › deny-all plus auto hosts works, a blocked host refused and recorded'],
   },
   {
     id: 'brokering.harness-key',
@@ -479,6 +488,7 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker('docker', 'env, /proc and files in the container never contain the real key'),
       harness('credential brokering per agent'),
     ],
+    real: ['contract › real key never in the container'],
   },
   {
     id: 'ports',
@@ -497,6 +507,7 @@ export const inventory: InventoryFeature[] = [
       sandboxDocker('session', 'an abort at any point while creating leaves no container'),
       'evalsuite/test/concurrency.test.ts › timeouts under concurrency fail every attempt and destroy every sandbox',
     ],
+    real: ['contract › clean teardown', 'e2e › no container outlives the runs'],
   },
 
   // Harnesses
@@ -559,6 +570,10 @@ export const inventory: InventoryFeature[] = [
     name: 'Token usage and the served model, per turn and totalled, from any harness',
     fixtures: ['harness/cursor-reports-usage'],
     tests: [harness('token usage and the served model, from any harness')],
+    real: [
+      'contract › tokens recorded where the harness reports them',
+      'contract › served model recorded',
+    ],
   },
   {
     id: 'harness.web-events',
@@ -572,8 +587,17 @@ export const inventory: InventoryFeature[] = [
       cursorAdapter('stream', 'a real web turn on SDK 1.0.32'),
       cursorAdapter('stream', "the runner's recovered web calls"),
       cursorAdapter('unit', 'storedWebCalls: a live stored conversation'),
+      cursorAdapter(
+        'unit',
+        'the live conversation from SDK 1.0.32 has every field the runner reads',
+      ),
+      cursorAdapter('unit', 'each field it reads, gone or renamed, is named in the problem'),
+      "evalsuite/test/cursor-sdk-shape.test.ts › the image's @cursor/sdk declares every field the runner reads",
+      'evalsuite/test/replay.test.ts › upstream fixed, same ids: each web call once',
+      'evalsuite/test/replay.test.ts › upstream fixed, other ids: each web call once',
       'evalsuite/test/matchers.test.ts › refuse a turn whose harness',
     ],
+    real: ['contract › nothing silently unreported'],
   },
   {
     id: 'harness.fake-script',
@@ -587,9 +611,29 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: 'Transcripts, normalised per harness',
     tests: [
+      "evalsuite/test/replay.test.ts › ES's normaliser still finds its signals",
       harness('a real turn normalises: relative edits, mcp__ names, timed tools'),
       harness('its Edit and Write tools are file edits'),
     ],
+    real: ['contract › file edited and command run, both in the transcript'],
+  },
+
+  {
+    id: 'harness.stream-format',
+    area: 'Harnesses',
+    name: "Each agent CLI's native stream: replayed through the adapters, and checked for format drift",
+    tests: [
+      'evalsuite/test/replay.test.ts › the same tool calls, text and tokens as when it was captured',
+      'evalsuite/test/replay.test.ts › a new event kind, step type, key or tool is a format change',
+    ],
+    real: ['contract › native stream format unchanged'],
+  },
+  {
+    id: 'record.served-model',
+    area: 'Harnesses',
+    name: "The models a harness's API requests named on the wire (`servedModels`)",
+    tests: ['evalsuite/test/harness.test.ts › its brokered requests name the served model'],
+    real: ['contract › served model recorded'],
   },
 
   // Judges and matchers
@@ -641,6 +685,7 @@ export const inventory: InventoryFeature[] = [
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
       docker('two runs with the same agent context are comparable'),
     ],
+    real: ['e2e › a second identical run', 'e2e › es history and es show'],
   },
   {
     id: 'compare.fail-on-regression',
@@ -653,6 +698,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: '`es query`',
     tests: ['evalsuite/test/query.test.ts › the projection matches the record'],
+    real: ['e2e › es query'],
   },
   {
     id: 'query.facts',
@@ -717,6 +763,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
       studio('runs list: a run over a subset of cells is no drift, before or after it'),
     ],
+    real: ['e2e › es studio build'],
   },
   {
     id: 'studio.debug',
@@ -781,6 +828,7 @@ export const inventory: InventoryFeature[] = [
         'reports each request once done, with bytes and names, and each DNS decision',
       ),
     ],
+    real: ['e2e › es run --record -v'],
   },
   {
     id: 'trace',
@@ -800,6 +848,7 @@ export const inventory: InventoryFeature[] = [
       debug('trace.ndjson is kept for a failing attempt, not a passing one unless --trace'),
       debug('a small trace buffer drops the oldest entries and says how many'),
     ],
+    real: ['e2e › es run --record -v'],
   },
   {
     id: 'debug.redaction',

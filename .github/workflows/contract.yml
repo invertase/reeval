@@ -1,0 +1,90 @@
+# The real agents in Docker, on the pinned agent versions or the newest ones: the harness contract,
+# the real-tier feature fixtures (real Cursor, `harness/cursor-web-fetch` among them), the check that
+# @cursor/sdk still declares what the Cursor harness recovers web calls from, and (pinned only) the
+# CLI end to end. Called by real.yml only, which gates it on this repository and its secrets.
+# `versions: latest` first swaps the newest `agy` and @cursor/sdk into the pinned images
+# (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
+# to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
+name: contract
+
+on:
+  workflow_call:
+    inputs:
+      versions:
+        description: pinned (the images as built) or latest (the newest agent CLI and SDK swapped in)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: contract and e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ES_TEST_REAL: '1'
+      ES_TEST_REQUIRE_DOCKER: '1'
+      # Every real row; one without its key skips and says why (Claude Code has none yet).
+      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code
+      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all three rows,
+      # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
+      # first, and fails rather than go over.
+      ES_REAL_ATTEMPT_BUDGET: '56'
+      ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+    steps:
+      # Eval code runs on the host with the keys, so the job keeps no git token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - uses: ./.github/actions/sandbox-images
+      - if: inputs.versions == 'latest'
+        name: swap in the newest agent CLI and SDK
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash scripts/drift/latest-images.sh
+      # One suite at a time, one real row at a time; no retries: a failure is reported as it is.
+      - name: harness contract${{ inputs.versions == 'pinned' && ' and e2e CLI scenarios' || '' }}
+        working-directory: packages/evalsuite
+        env:
+          ES_CONTRACT_SUMMARY: ${{ runner.temp }}/contract-summary.md
+          ES_TEST_KEEP: '1'
+          TMPDIR: ${{ runner.temp }}/es-tests
+        run: |
+          mkdir -p "$TMPDIR"
+          files=test/contract.test.ts
+          [ "${{ inputs.versions }}" = pinned ] && files="$files test/e2e-real.test.ts"
+          node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings $files
+      - name: the stored conversation @cursor/sdk declares
+        working-directory: packages/evalsuite
+        run: node --test --experimental-strip-types --no-warnings test/cursor-sdk-shape.test.ts
+      # Real Cursor: without its key there's nothing to run (real.yml's gate says so).
+      - if: env.CURSOR_API_KEY != ''
+        name: real-tier fixtures on Cursor (web fetch recovery included)
+        working-directory: packages/evalsuite
+        env:
+          ES_FIXTURE_TIERS: real
+          ES_TEST_KEEP: '1'
+          TMPDIR: ${{ runner.temp }}/es-tests
+        run: node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings test/features.test.ts
+      - if: always()
+        name: summary
+        run: |
+          [ -f "$RUNNER_TEMP/contract-summary.md" ] && cat "$RUNNER_TEMP/contract-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          [ -f "$ES_REAL_LEDGER" ] && { echo '### Real attempts reserved'; echo; echo '```'; cat "$ES_REAL_LEDGER"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          true
+      - if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: es-real-${{ inputs.versions }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/es-tests/**/.es/runs
+            ${{ runner.temp }}/es-tests/**/.es/debug
+            ${{ runner.temp }}/es-tests/**/evals/.history
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
