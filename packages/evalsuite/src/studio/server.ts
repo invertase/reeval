@@ -172,7 +172,8 @@ export function createStudioApp(options: StudioServerOptions) {
   app.get('/api/debug/:runId', async (c) => {
     const dir = debugDir(c.req.param('runId'), c.req.query('attempt'))
     const log = dir && (await readText(join(dir, DEBUG_LOG)))
-    if (!dir || log === null) return c.text('No debug data for this attempt', 404)
+    // Most attempts have none (recorded elsewhere, or cleaned): that's an answer, not an error.
+    if (!dir || log === null) return c.json(null, 200, { 'Cache-Control': 'no-cache' })
     const view: DebugView = {
       lines: parseDebugLog(log),
       requests: parseNdjson<DebugRequest>((await readText(join(dir, REQUESTS_FILE))) ?? ''),

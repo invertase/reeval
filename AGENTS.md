@@ -46,11 +46,12 @@ its files import `evalsuite`.
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
 | `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
-| `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`; `index.ts` runs them in order and tears down |
+| `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
 | `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`), Claude Code (`@ai-sdk/harness-claude-code`) and Antigravity (`@evalsuite/harness-antigravity`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
+| `packages/evalsuite/src/debug` | Local debug data: each attempt's trace on the worker (`attempt.ts`: debug.log, requests, the capped trace buffer, reached through async context), docker commands into it (`docker.ts`), and `.es/debug`'s layout, retention and `es clean` (`files.ts`) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
@@ -282,7 +283,8 @@ defaults → outer group → inner group → eval:
 | `pin` | union | `['harness' \| 'runs' \| 'compare']`: keys a profile's `limit` may not narrow |
 
 The config also takes `include` (eval file globs), `profiles`, `defaultProfile`, `concurrency`,
-`record`, `history` and `secrets` (`{ unbrokered: 'error' }`; see [Secrets](#secrets)) (see [Profiles](#profiles-the-plan-and-budgets),
+`record`, `history`, `secrets` (`{ unbrokered: 'error' }`; see [Secrets](#secrets)) and `debug`
+(`{ keep: 20, traceBufferMb: 8 }`; see [Debugging a run](#debugging-a-run)) (see [Profiles](#profiles-the-plan-and-budgets),
 [Concurrency](#concurrency) and [Results](#results)).
 
 A harness list replaces the inherited one, and a function edits it:
@@ -574,7 +576,9 @@ Other hosts pass through untouched and end to end. If the gateway can't start
 (for example, an `image` without `node`), the attempt is an infra error that names the key, so a
 change of image can't widen the credential boundary: there's no way to pass the real key in.
 `docker({ from })` or `docker({ dockerfile })` give any Debian or Ubuntu image what the gateway
-needs. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
+needs. `es run -v` prints a line per request through the gateway (see
+[Debugging a run](#debugging-a-run)); `ES_DEBUG=1` also logs each connection and decrypted
+request to stderr (never header values).
 
 The session tokens the Cursor CLI gets for its key don't enter the container either. The gateway
 reads the exchange's response and hands the CLI placeholders for `accessToken` and
@@ -695,6 +699,9 @@ es run [filter...]        Run evals matching config.include; filters are path, n
   --log-order <order>     stream or grouped
   --log-prefix <prefix>   task or none
   --output-logs <level>   full, errors-only or none
+  -v, --verbose           Each attempt's phase trace as it happens (see Debugging a run)
+  -vv, --trace            Also raw payloads, docker commands, headers and DNS; keeps every trace.ndjson
+es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
 es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
                           --artifacts all|failures|none --allow-incomplete --skip-secret-scan
 es history [filter]       Pass/fail per recorded eval over recent runs
@@ -790,6 +797,64 @@ a full plain-mode run.
 | `NO_COLOR`, `FORCE_COLOR` | Turn colour off or on |
 
 If your agent isn't detected, set `ES_UI=agent` (or `AI_AGENT=<name>`).
+
+### Debugging a run
+
+`es run -v` (`--verbose`) prints a timestamped trace of each attempt as it happens, every line
+prefixed with its attempt's tag, so concurrent attempts stay readable (`grep '\[greet#1'`), and
+kept in the attempt's block with `--log-order grouped` (CI). Agent mode prints the lines too.
+Times are UTC, like the records.
+
+```text
+[brokers#1 fake]  13:09:52 plan      egress allow example.com (es.config.ts or its default)
+[brokers#1 fake]  13:09:52 broker    API_KEY is a placeholder in the sandbox · swapped in on HTTPS to example.com in the header · for the agent and checks
+[brokers#1 fake]  13:09:52 image     cache hit evalsuite-sandbox:cursor-1.0.37 (ES's image for cursor; es image build rebuilds it)
+[brokers#1 fake]  13:09:54 container created f299e736cf29 from evalsuite-sandbox:cursor-1.0.37 in 1113ms
+[brokers#1 fake]  13:09:54 container network policy allow example.com · detached from every Docker network, the gateway is its only way out
+[brokers#1 fake]  13:09:54 harness   tool shell called: $ curl … https://example.com/ …
+[brokers#1 fake]  13:09:54 gateway   GET https://example.com/ → 200 · allowed · ↑0 B ↓559 B · 20ms · substituted API_KEY
+[brokers#1 fake]  13:09:54 broker    substituted API_KEY for example.com (GET https://example.com/)
+[brokers#1 fake]  13:09:54 gateway   CONNECT blocked.example.net:443 → 403 · blocked: blocked.example.net isn't in the allowlist · ↑0 B ↓0 B · 0ms · no key substituted
+[brokers#1 fake]  13:09:54 check     $ echo ok → exit 0 · 38ms
+```
+
+| Phase | What `-v` says |
+|---|---|
+| `plan` | The config file, profile (and why), and where each option came from: `(group("genkit"))`, `(evaluate("…"))`, `(profiles.pr.defaults)`, else the config or its default; what a profile's limit changed |
+| `image` | Cache hit or build, the image id, the base, the agent CLI, which `install` steps ran (none on a cache hit) and the build log's path |
+| `container` | Its id, the network policy (detached or not), whether the egress gateway started and what it brokers |
+| `env` | The environment's digest, variable and secret names, each file and skill with where it went, MCP servers, each setup step with its exit code and time, the diff snapshot |
+| `broker` | Which secrets are placeholders and where they're swapped in, the harness key's endpoints, and each substitution by name and host. Never a value |
+| `harness` | Bootstrap and session start, each turn (prompt, status, time, counts) and each tool call as it happens |
+| `check` | Each `t.exec`: the command, exit code and time |
+| `judge` | The model, time, score against the threshold, verdict and why |
+| `gateway` | One line per request: method, URL, status, allowed or blocked and why, bytes each way, time, and which secret was substituted |
+| `teardown` | Session closed, sandbox destroyed, the outcome, and the record, artifact and debug paths |
+
+`-vv` (or `--trace`) adds, dimmed under their lines: the resolved config and attempt, the resolved
+environment (names, never values), the harness's raw stream parts (text deltas stay off screen)
+and the normalised transcript with tool inputs and outputs, each setup step's and check's
+output, the judge's input and the provider's response, every `docker` command with its
+exit code, time and stdout and stderr (clipped at 4 KB; binary output as a byte count), each
+gateway request's headers (as the sandbox sent and got them: placeholders, never keys) and every
+DNS decision. Times have milliseconds.
+
+**Local debug data.** Whatever the flags, each attempt writes
+`.es/debug/<runId>/<eval-slug>/<cell-slug>/<n>/` (the same layout as its artifacts), which is
+gitignored with `.es/` and never copied into the history folder or the record:
+
+| File | What | When |
+|---|---|---|
+| `debug.log` | The `-v` lines, `<ISO time> <phase> <text>` | Always |
+| `requests.ndjson` | One JSON line per gateway request (the `gateway` lines' fields) | When the gateway saw any |
+| `trace.ndjson` | A header line (`dropped` counts what the cap pushed out), then every entry with `phase`, `kind`, `ms` since the attempt started and its payload | When the attempt fails or errors, or with `-vv` |
+
+The trace is a flight recorder: every attempt buffers it in memory, capped at
+`debug.traceBufferMb` (default 8 MB; the oldest entries go first), and writes it only when it's
+worth keeping. Everything on screen and in these files goes through the same redaction as the
+records, encoded forms included. `es run` keeps the newest `debug.keep` runs' data (default 20)
+and removes older ones when it ends; `es clean` removes all of it, `es clean --keep 3` all but
+the newest three. `es studio` shows it in the attempt's Debug tab.
 
 ```text
 $ ES_UI=agent es run
@@ -946,6 +1011,12 @@ runs appear as they're recorded, and unrecorded runs from `.es/runs/` are labell
 `es studio build --out site` writes the same thing as a static folder (hash routing, relative
 paths) for GitHub Pages, Netlify, Cloudflare Pages or any static host. It includes transcripts
 and other artifacts unless you pass `--no-artifacts`, so host it where the repo's readers are.
+
+In `es studio`, an attempt with local debug data (see [Debugging a run](#debugging-a-run)) gets a
+**Debug** tab: its phase timeline, the gateway's requests and, when it was kept, the raw
+`trace.ndjson`. The server reads `.es/debug` behind the same token (`api/debug/<runId>?attempt=…`);
+a static build never includes it, and runs without local data (another machine's, or cleaned)
+show no tab.
 
 Both modes read one file layout: `studio.json`, `data/index/<YYYY-MM>.json` run headers,
 `data/runs/<runId>.json` records and `data/runs/<runId>/…` artifacts.

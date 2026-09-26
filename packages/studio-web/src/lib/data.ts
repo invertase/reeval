@@ -74,18 +74,11 @@ export const artifactQuery = (runId: string, path: string | undefined) =>
     retry: (count, error) => !(error instanceof NotFoundError) && count < 2,
   })
 
-/** An attempt's local debug data; `null` when there is none (a 404), so the tab stays hidden. */
+/** An attempt's local debug data; `null` when there is none, so the tab stays hidden. */
 export const debugQuery = (runId: string, attemptKey: string, enabled: boolean) =>
   queryOptions({
     queryKey: ['debug', runId, attemptKey],
-    queryFn: async (): Promise<DebugView | null> => {
-      try {
-        return await fetchJson<DebugView>(debugApiPath(runId, attemptKey))
-      } catch (error) {
-        if (error instanceof NotFoundError) return null
-        throw error
-      }
-    },
+    queryFn: () => fetchJson<DebugView | null>(debugApiPath(runId, attemptKey)),
     enabled,
     retry: false,
   })

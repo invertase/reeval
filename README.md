@@ -111,7 +111,10 @@ Duration  40s
 ```
 
 Under a coding agent, ES switches to compact output: one block per failure and the path to its
-record. Commit runs into `evals/.history/` with `es record`, then track them with `es history`
+record. To see what an attempt did step by step, add `-v`: a timestamped line per phase (image,
+container, setup, brokering, each tool call, checks, judge calls, every gateway request).
+`-vv` adds the raw payloads and every `docker` command. Either way each attempt's trace is
+kept locally in `.es/debug`, never in the committed history. Commit runs into `evals/.history/` with `es record`, then track them with `es history`
 and `es compare`, or ask across runs with SQL: `es query lift`, or
 `es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`.
 
@@ -123,7 +126,8 @@ es studio build --out site   # the same thing as a static site for GitHub Pages 
 ```
 
 The studio shows each run's commit, pass counts and drift. For compares it shows per-cell pass
-rates and lift, and for each attempt the transcript, diff, checks and judge input.
+rates and lift, and for each attempt the transcript, diff, checks and judge input. `es studio`
+adds a Debug tab for attempts with local debug data.
 
 ## Learn more
 

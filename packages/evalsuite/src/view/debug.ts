@@ -66,7 +66,10 @@ export type DebugView = {
   trace: boolean
 }
 
-/** The studio server's debug API (`es studio` only): an attempt's DebugView, and its raw trace. */
+/**
+ * The studio server's debug API (`es studio` only): an attempt's DebugView (null when it has no
+ * local data), and its raw trace.
+ */
 export const debugApiPath = (runId: string, attemptKey: string) =>
   `api/debug/${runId}?attempt=${encodeURIComponent(attemptKey)}`
 export const traceApiPath = (runId: string, attemptKey: string) =>
