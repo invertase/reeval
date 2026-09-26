@@ -54,6 +54,7 @@ const cursorAdapter = (file: string, name: string) =>
   `harness-cursor-sdk/test/${file}.test.ts › ${name}`
 const opencodeAdapter = (file: string, name: string) =>
   `harness-opencode/test/${file}.test.ts › ${name}`
+const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -208,6 +209,7 @@ export const inventory: InventoryFeature[] = [
       'harness/claude-code-harness-skills',
       'harness/antigravity-home-skills',
       'harness/opencode-home-skills',
+      'harness/goose-home-skills',
     ],
     real: ['contract › skill placed where the agent reads it, and used'],
   },
@@ -222,6 +224,7 @@ export const inventory: InventoryFeature[] = [
       'harness/claude-code-workspace-skills',
       'harness/antigravity-workspace-skills',
       'harness/opencode-workspace-skills',
+      'harness/goose-workspace-skills',
     ],
   },
   {
@@ -307,13 +310,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, Antigravity and OpenCode, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode and Goose, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
       'harness/claude-code-rules',
       'harness/antigravity-rules',
       'harness/opencode-rules',
+      'harness/goose-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -451,6 +455,7 @@ export const inventory: InventoryFeature[] = [
       'harness/claude-code-dockerfile',
       'harness/antigravity-dockerfile',
       'harness/opencode-dockerfile',
+      'harness/goose-dockerfile',
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
@@ -578,6 +583,26 @@ export const inventory: InventoryFeature[] = [
       harness("the key is swapped in on OpenCode's model endpoint only"),
       harness("OpenCode's edits and writes are file edits, relative to the workspace"),
       opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
+    ],
+  },
+  {
+    id: 'harness.goose',
+    area: 'Harnesses',
+    name: '`goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names',
+    fixtures: [
+      'harness/goose-rules',
+      'harness/goose-workspace-skills',
+      'harness/goose-home-skills',
+      'harness/goose-dockerfile',
+    ],
+    plan: ['goose/goose'],
+    tests: [
+      harness(
+        'Goose reads rules from AGENTS.md, repo skills from .goose/skills, home skills in its own home',
+      ),
+      harness("Goose's adapter brokers only the Gemini key, as GOOGLE_API_KEY, to the Gemini API"),
+      gooseAdapter('stream', 'names a call from its tool_call metadata, and drops the usage'),
+      gooseAdapter('unit', "MCP servers are enabled extensions in Goose's config.yaml"),
     ],
   },
   {

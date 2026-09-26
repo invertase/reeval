@@ -30,6 +30,7 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   // auto-updater is off.
   antigravity: ['generativelanguage.googleapis.com'],
   opencode: ['generativelanguage.googleapis.com'],
+  goose: ['generativelanguage.googleapis.com'],
 }
 
 /** The package registries and GitHub, for a restricted policy that still installs. */
