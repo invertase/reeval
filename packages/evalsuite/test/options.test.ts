@@ -778,6 +778,29 @@ ${body}
     })
   }
 
+  for (const [what, replacement, message] of [
+    [
+      'no export',
+      'defineConfig({',
+      /es\.config\.ts has no default export\. Write export default defineConfig\(\{…\}\)\./,
+    ],
+    [
+      'a named export',
+      'export const config = defineConfig({',
+      /es\.config\.ts has no default export \(it exports config\)\. Write export default defineConfig\(\{…\}\)\./,
+    ],
+  ] as const) {
+    test(`a config with ${what} exits 2 instead of running the default harness`, async () => {
+      const p = await project('config-no-default', {
+        'es.config.ts': fakeConfig().replace('export default defineConfig({', replacement),
+        'evals/o.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('e', async () => {})\n`,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, message)
+    })
+  }
+
   const unbrokeredEval = `import { defineEnvironment, evaluate } from 'evalsuite'
 import { docker } from 'evalsuite/sandbox'
 const keys = defineEnvironment('keys', ({ secret }) => ({

@@ -78,7 +78,16 @@ export async function loadConfig(
   let user: EsConfig = {}
   if (existsSync(path)) {
     const jiti = createJiti(import.meta.url, { moduleCache: false })
-    let exported = (await jiti.import(path, { default: true })) as ConfigInput | Promise<EsConfig>
+    const module = (await jiti.import(path)) as Record<string, unknown>
+    // Without this, a config that forgets `export default` would run the default harness for real.
+    if (!module || typeof module !== 'object' || !('default' in module)) {
+      const names = module && typeof module === 'object' ? Object.keys(module) : []
+      const exportsNote = names.length ? ` (it exports ${names.join(', ')})` : ''
+      throw new UsageError(
+        `${configPath} has no default export${exportsNote}. Write export default defineConfig({…}).`,
+      )
+    }
+    let exported = module.default as ConfigInput | Promise<EsConfig>
     if (typeof exported === 'function') {
       const hostEnv = process.env
       exported = exported({ ...helpersFor(root), ci: inCI(hostEnv), command, hostEnv, profile })
