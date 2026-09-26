@@ -142,11 +142,19 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     })
   } else if (method === 'tools/call') {
     reply(id, { content: [{ type: 'text', text: 'acme-sdk 4.2.0' }] })
+  } else if (id !== undefined) {
+    // Any other request gets "method not found", or the client waits for it.
+    const error = { code: -32601, message: `Method not found: ${method}` }
+    process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id, error })}\n`)
   }
 })
 ```
 
 </Accordion>
+
+<Warning>
+  Answer every request, even ones your server doesn't support. Goose probes `server/discover` before `initialize`; a server that stays silent adds its 10-second timeout to every turn.
+</Warning>
 
 Run only the variant, since the control has no server for the script to call:
 
