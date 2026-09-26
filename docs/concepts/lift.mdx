@@ -24,7 +24,7 @@ Run under the fake agent, which writes the house greeting only when it has the s
 Summary
  evals/skill.es.ts
    house greeting
-     ✓ greets in the house style     5/10  100%  10 attempts
+     ✓ greets in the house style     5/10 · 100% gated  10 attempts
          fake/-/fake                    control    0/5    0%   not gated
          fake/with-house-greeting/fake  variant    5/5  100%   lift +100 pts (95% +39…+100, 5/5 vs 0/5) (minLift 0)   gate passRate 0.8
 …
@@ -84,7 +84,7 @@ The interval is wide when attempts are few. These are ES's own intervals for com
 At two runs per cell only an all-or-nothing difference clears noise. ES's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
 
 ```text
-     ✓ fixes a broken config and explains it      5/6  100%  6 attempts
+     ✓ fixes a broken config and explains it      5/6 · 100% gated  6 attempts
          cursor:composer-2.5/broken-project/es-tarball  control    1/2   50%   not gated
          cursor:composer-2.5/es-weak/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
          cursor:composer-2.5/es-good/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
@@ -101,7 +101,7 @@ One control attempt failed, so both skills show +50 pts, and neither is distingu
 Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
-     ✓ greets in the house style                    4/8  100%  8 attempts
+     ✓ greets in the house style                    4/8 · 100% gated  8 attempts
          cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test

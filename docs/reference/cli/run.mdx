@@ -90,6 +90,17 @@ plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57
 
 Each has an environment variable: `ES_UI`, `ES_LOG_ORDER`, `ES_LOG_PREFIX`, `ES_OUTPUT_LOGS`. See [Output modes](/concepts/output).
 
+## The summary's eval line
+
+An eval with several attempts shows its passes over every counted attempt, then its pass rate, which counts only the gated cells:
+
+| Eval | Line |
+|---|---|
+| Every cell gated | `3/4  75%  4 attempts` |
+| Some cells not gated (controls under `compare.gate: 'variants'`) | `2/4 · 100% gated  4 attempts` |
+
+The `gated` label says the rate leaves out the ungated cells, whose failures don't fail the eval. The studio's eval history labels the rate the same way.
+
 ## What it writes
 
 Every run, including one where nothing passed, writes a scratch run to `.es/runs/<runId>.json` and its artifacts to `.es/runs/<runId>/`. `--record`, or `record: 'ci'` with `CI` set, or `record: 'always'`, also copies it into the history folder. Each attempt's local debug data goes to `.es/debug/`.

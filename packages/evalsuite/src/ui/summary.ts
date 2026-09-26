@@ -2,7 +2,7 @@ import { gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
-import { formatUsage } from '../view/model.ts'
+import { formatUsage, hasUngatedCells } from '../view/model.ts'
 import type { Colors } from './colors.ts'
 import type { EsEvent, EvalResult } from './events.ts'
 import { attemptOutcome, failureLines, formatDuration, mark, type Outcome } from './format.ts'
@@ -67,9 +67,10 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   if (more.length) {
     const pass = e.attempts.filter((a) => a.outcome === 'pass').length
     const counted = e.attempts.filter((a) => a.outcome === 'pass' || a.outcome === 'fail').length
-    return c.dim(
-      `${`${pass}/${counted}`.padStart(7)}  ${pct(e.passRate)}  ${e.attempts.length} attempts`,
-    )
+    const rate = hasUngatedCells(e.cells)
+      ? ` · ${pct(e.passRate).trim()} gated`
+      : `  ${pct(e.passRate)}`
+    return c.dim(`${`${pass}/${counted}`.padStart(7)}${rate}  ${e.attempts.length} attempts`)
   }
   if (attemptOutcome(attempt) === 'cancelled') return c.yellow('cancelled')
   const cols = [formatDuration(attempt.durationMs).padStart(7)]
