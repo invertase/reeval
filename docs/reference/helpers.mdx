@@ -119,11 +119,11 @@ Every skill source takes `placement`: `'harness'` (default) lets the harness ada
 </Property>
 
 <Property name="skill.npm(spec, options?)" type="SkillSource">
-  A pinned npm package, fetched with `npm pack`. Skills are read from `path` inside it, default `skills`.
+  A pinned npm package, fetched with `npm pack` on the host from the registry npm is configured for (`.npmrc` or `npm_config_registry`). Skills are read from `path` inside it, default `skills`.
 </Property>
 
 <Property name="skill.registry(id, options?)" type="SkillSource">
-  A skills.sh id, `owner/repo@skill`. ES clones the GitHub repository and reads the skill from its `skills/` directory when it has one. `version` is a git ref.
+  A skills.sh id, `owner/repo@skill`. ES clones the GitHub repository and reads that one skill from its `skills/` directory when it has one. `version` is a git ref; the record keeps the commit it resolved to.
 </Property>
 
 <Property name="skill.inline(skill, options?)" type="SkillSource">
@@ -133,7 +133,7 @@ Every skill source takes `placement`: `'harness'` (default) lets the harness ada
 Directory sources (`local`, `git`, `npm`) also take:
 
 <Property name="only" type="string[]" optional>
-  The skill names to take from a directory of skills. A name that isn't there is an error.
+  The skill names to take from a directory of skills. A name that isn't there fails each attempt as an infra error: `only: ["name"] not found in <source> (found: …)`.
 </Property>
 
 <Property name="exclude" type="string[]" optional>

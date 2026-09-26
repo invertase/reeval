@@ -6,7 +6,15 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { cpSync, existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { networkInterfaces } from 'node:os'
@@ -39,8 +47,11 @@ type Feature = {
   canaryEnv?: string
   /** When the check is that the attempt fails, e.g. an infra error; else it must pass. */
   lands?: Pick<EvalExpectation, 'outcome' | 'error'>
-  /** Host variables for `es run`, e.g. what `secret.fromEnv` reads; a function runs at test time. */
-  hostEnv?: NodeJS.ProcessEnv | (() => NodeJS.ProcessEnv)
+  /**
+   * Host variables for `es run`, e.g. what `secret.fromEnv` reads; a function runs at test time,
+   * with the copied project's directory.
+   */
+  hostEnv?: NodeJS.ProcessEnv | ((dir: string) => NodeJS.ProcessEnv)
   /** Runs on the copied project before `es run`. */
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
@@ -89,6 +100,80 @@ before(async () => {
   egressTarget.port = (listener.address() as AddressInfo).port
 })
 after(() => listener.close())
+
+/**
+ * A local npm registry for `skill.npm`: `prepare` packs a fixture's package versions into it, and
+ * `npm pack` on the host reaches it through `npm_config_registry`.
+ */
+const npmRegistry = {
+  url: '',
+  packages: new Map<string, Map<string, Buffer>>(),
+  fetched: [] as string[],
+}
+const registry = createServer((req, res) => {
+  const path = decodeURIComponent(req.url ?? '/').slice(1)
+  const tarball = /^(.+)\/-\/([^/]+)\.tgz$/.exec(path)
+  const versions = npmRegistry.packages.get(tarball?.[1] ?? path)
+  if (!versions) {
+    res.statusCode = 404
+    res.end('{}')
+    return
+  }
+  if (tarball) {
+    const body = versions.get(tarball[2] ?? '')
+    if (body) npmRegistry.fetched.push(`${tarball[1]}@${tarball[2]}`)
+    res.statusCode = body ? 200 : 404
+    res.end(body ?? '')
+    return
+  }
+  const name = path
+  const entries = [...versions].map(([version, body]) => [
+    version,
+    {
+      name,
+      version,
+      dist: {
+        tarball: `${npmRegistry.url}${name}/-/${version}.tgz`,
+        shasum: createHash('sha1').update(body).digest('hex'),
+        integrity: `sha512-${createHash('sha512').update(body).digest('base64')}`,
+      },
+    },
+  ])
+  res.setHeader('content-type', 'application/json')
+  res.end(
+    JSON.stringify({
+      name,
+      'dist-tags': { latest: entries.at(-1)?.[0] },
+      versions: Object.fromEntries(entries),
+    }),
+  )
+})
+before(async () => {
+  await new Promise<void>((resolve) => registry.listen(0, '127.0.0.1', resolve))
+  npmRegistry.url = `http://127.0.0.1:${(registry.address() as AddressInfo).port}/`
+})
+after(() => registry.close())
+
+/** Packs each `<dir>/<version>/` with `npm pack` into the local registry, oldest first. */
+function publish(dir: string) {
+  const out = join(dir, '.packed')
+  mkdirSync(out, { recursive: true })
+  for (const version of readdirSync(dir)
+    .filter((v) => /^\d/.test(v))
+    .sort()) {
+    const file = execFileSync('npm', ['pack', '--silent', '--pack-destination', out], {
+      cwd: join(dir, version),
+      encoding: 'utf8',
+    })
+      .trim()
+      .split('\n')
+      .at(-1) as string
+    const { name } = JSON.parse(readFileSync(join(dir, version, 'package.json'), 'utf8'))
+    const versions = npmRegistry.packages.get(name) ?? new Map<string, Buffer>()
+    versions.set(version, readFileSync(join(out, file)))
+    npmRegistry.packages.set(name, versions)
+  }
+}
 const egressEnv = () => ({
   ES_EGRESS_HOST: egressTarget.host,
   ES_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
@@ -163,6 +248,79 @@ export const features: Feature[] = [
       assert.equal(s?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
       assert.match(s?.source ?? '', /#v1:skills$/)
     },
+  },
+  {
+    dir: 'skills/registry-version',
+    tiers: ['fake', 'docker'],
+    env: 'registry-v1',
+    canary: /to contain 'Hello there, <name>\.'/,
+    prepare(dir) {
+      const repo = join(dir, 'registry/acme/skills.git')
+      const commit = (version: string) => {
+        rmSync(join(repo, 'skills'), { recursive: true, force: true })
+        cpSync(join(dir, 'skill-repo', version), repo, { recursive: true })
+        git(repo, 'add', '-A')
+        git(repo, 'commit', '-q', '-m', version)
+      }
+      execFileSync('git', ['init', '-q', '-b', 'main', repo])
+      commit('v1')
+      git(repo, 'tag', 'v1')
+      commit('v2')
+    },
+    // skill.registry clones https://github.com/acme/skills.git; git sends that to the fixture's repo.
+    hostEnv: (dir) => ({
+      GIT_CONFIG_COUNT: '1',
+      GIT_CONFIG_KEY_0: `url.file://${join(dir, 'registry')}/.insteadOf`,
+      GIT_CONFIG_VALUE_0: 'https://github.com/',
+    }),
+    record: ({ run, project }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.source, s.commit]),
+        [
+          [
+            'house-greeting',
+            'registry:acme/skills@house-greeting#v1',
+            git(join(project, 'registry/acme/skills.git'), 'rev-parse', 'v1'),
+          ],
+        ],
+        'only the named skill, at the tagged commit',
+      )
+    },
+  },
+  {
+    dir: 'skills/npm-package',
+    tiers: ['fake', 'docker'],
+    env: 'npm-1.2.3',
+    canary: /to contain 'Hello there, <name>\.'/,
+    prepare: (dir) => publish(join(dir, 'packages')),
+    hostEnv: (dir) => ({
+      npm_config_registry: npmRegistry.url,
+      npm_config_cache: join(dir, '.npm-cache'),
+    }),
+    record: ({ run }) => {
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.source]),
+        [['house-greeting', 'npm:@acme/skills@1.2.3:skills']],
+      )
+      assert.ok(npmRegistry.fetched.includes('@acme/skills@1.2.3'), 'fetched from the registry')
+      assert.ok(!npmRegistry.fetched.includes('@acme/skills@1.2.4'), 'never the latest')
+    },
+  },
+  {
+    dir: 'skills/only-missing',
+    tiers: ['fake', 'docker'],
+    env: 'typo',
+    canaryEnv: 'picked',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^only: \["house-greting"\] not found in local:skills \(found: house-farewell, house-greeting\)$/,
+      },
+    },
+    canary:
+      /expected \[ 'house-greeting' \] to deeply equal \[ 'house-farewell', 'house-greeting' \]/,
   },
   {
     dir: 'skills/harness-placement',
@@ -799,7 +957,7 @@ function fixtureTests(tiers: Tier[]) {
         f.prepare?.(p.dir)
         const r = await runCli(p.dir, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
           env: {
-            ...(typeof f.hostEnv === 'function' ? f.hostEnv() : f.hostEnv),
+            ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
             ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
             ...(tier === 'real'
               ? {
