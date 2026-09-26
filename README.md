@@ -115,8 +115,14 @@ record. To see what an attempt did step by step, add `-v`: a timestamped line pe
 container, setup, brokering, each tool call, checks, judge calls, every gateway request).
 `-vv` adds the raw payloads and every `docker` command. Either way each attempt's trace is
 kept locally in `.es/debug`, never in the committed history. Commit runs into `evals/.history/` with `es record`, then track them with `es history`
-and `es compare`, or ask across runs with SQL: `es query lift`, or
+and `es compare`, or ask across runs with SQL: `es query lift`, `es query effort` (tool calls and
+agent time, variant against control), `es query factor_effects`, or
 `es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`.
+
+`es analyze` explains a run: one LLM call over a digest of those facts, with every claim's
+citations and every suggested command checked against ES's own CLI. It's cached in `.es/`;
+`--save` commits it next to the run, and `es analyze --context` hands the same digest to your own
+coding agent instead, with no key.
 
 ## Studio
 
@@ -126,7 +132,7 @@ es studio build --out site   # the same thing as a static site for GitHub Pages 
 ```
 
 The studio shows each run's commit, pass counts and drift. For compares it shows per-cell pass
-rates and lift, and for each attempt the transcript, diff, checks and judge input. `es studio`
+rates, lift and effort, and a run's saved analyses in its Analysis tab, and for each attempt the transcript, diff, checks and judge input. `es studio`
 adds a Debug tab for attempts with local debug data.
 
 ## Learn more
