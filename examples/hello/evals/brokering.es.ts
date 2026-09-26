@@ -5,7 +5,11 @@ import { evaluate, expect } from 'evalsuite'
 // completed turn proves the agent authenticated through the gateway; the checks below prove the
 // key isn't in the sandbox, whatever the agent chooses to print.
 // The search uses each key's last 12 characters, so no full key ever enters the container.
-const tails = [process.env.CURSOR_API_KEY, process.env.ANTHROPIC_API_KEY]
+const tails = [
+  process.env.CURSOR_API_KEY,
+  process.env.ANTHROPIC_API_KEY,
+  process.env.GEMINI_API_KEY,
+]
   .filter((key): key is string => Boolean(key))
   .map((key) => key.slice(-12))
 
@@ -15,7 +19,7 @@ evaluate('the agent authenticates without seeing its API key', { tags: ['smoke']
   for (const tail of tails) expect(turn.text).not.toContain(tail)
 
   const environ = await t.exec('env; cat /proc/[0-9]*/environ | tr "\\0" "\\n"')
-  expect(environ.stdout).toMatch(/^(CURSOR|ANTHROPIC)_API_KEY=aisdkhc_[\w-]{43}$/m)
+  expect(environ.stdout).toMatch(/^(CURSOR|ANTHROPIC|GEMINI)_API_KEY=aisdkhc_[\w-]{43}$/m)
   for (const tail of tails) expect(environ.stdout).not.toContain(tail)
 
   const patterns = tails.map((tail) => `-e '${tail}'`).join(' ')

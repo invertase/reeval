@@ -190,7 +190,9 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     const durationMs = t?.end !== undefined ? t.end - start : end.ms - call.ms
     const input = record(call.part.input)
     const name = toolName(call.part)
-    const output = failed ? errorText(end.part.error) : end.part.output
+    const raw = failed ? errorText(end.part.error) : end.part.output
+    // Antigravity runs commands in a PTY, so their output has CRLF line endings.
+    const output = name === 'bash' && typeof raw === 'string' ? raw.replace(/\r\n/g, '\n') : raw
     const base = { ...stamp(call.ms), durationMs }
     if ((name === 'edit' || name === 'write' || name === 'delete') && !failed) {
       for (const edit of fileEdits(id, output, name === 'delete', input)) {

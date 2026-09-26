@@ -74,6 +74,19 @@ export function claudeMcpServers(
   )
 }
 
+/** The Antigravity CLI's `mcp_config.json` shape: remote servers take `serverUrl`, not `url`. */
+export function antigravityMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) =>
+      s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: s.env }]
+        : [name, { serverUrl: s.url, headers: s.headers }],
+    ),
+  )
+}
+
 /** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
   cursor: {
@@ -85,6 +98,13 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'CLAUDE.md',
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
+  },
+  // CLI 1.2.11 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
+  // path its docs give.
+  antigravity: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.agents/skills',
+    harnessSkillDir: '.gemini/config/skills',
   },
 }
 
@@ -140,6 +160,28 @@ export const AGENTS: Record<AgentKind, Agent> = {
           // and flags that can't change between runs.
           CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         },
+      }),
+  },
+  antigravity: {
+    ...LAYOUTS.antigravity,
+    name: 'Antigravity',
+    factory: 'antigravity',
+    // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
+    credential: 'GEMINI_API_KEY',
+    // The only request CLI 1.2.11 sends the key on (its main model, and a lite one for titles).
+    endpoints: [
+      {
+        host: 'generativelanguage.googleapis.com',
+        path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
+        method: ['POST'],
+      },
+    ],
+    mcpServers: antigravityMcpServers,
+    adapter: async (options) =>
+      (await import('@evalsuite/harness-antigravity')).createAntigravity({
+        ...options,
+        // ES's Docker sandbox always brokers; a sandbox that can't must not get the key.
+        requireCredentialBrokering: true,
       }),
   },
 }

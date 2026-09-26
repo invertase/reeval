@@ -51,6 +51,11 @@ const BOOTSTRAPS: Record<
     cli: 'claude',
     adapter: async () => (await import('@ai-sdk/harness-claude-code')).createClaudeCode(),
   },
+  antigravity: {
+    name: 'Antigravity',
+    cli: 'agy',
+    adapter: async () => (await import('@evalsuite/harness-antigravity')).createAntigravity(),
+  },
 }
 
 /**

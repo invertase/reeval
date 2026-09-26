@@ -160,10 +160,10 @@ export type FakeHarnessDescriptor = {
   maxConcurrent?: number
   /**
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
-   * `.claude/skills` for `claude-code`). Defaults to the fake's own (`AGENTS.md`, `.agents/skills`)
-   * in Cursor's image.
+   * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`). Defaults to
+   * the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code'
+  layout?: 'cursor' | 'claude-code' | 'antigravity'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -194,8 +194,21 @@ export type ClaudeCodeHarnessDescriptor = {
   /** The most Claude Code attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
 }
+/** The Antigravity CLI through `@evalsuite/harness-antigravity`, made by `antigravity()`. */
+export type AntigravityHarnessDescriptor = {
+  kind: 'antigravity'
+  /** A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`. */
+  model: string
+  /** Cell id; defaults to `antigravity:<model>`. */
+  id?: string
+  /** The most Antigravity attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
-export type AgentHarnessDescriptor = CursorHarnessDescriptor | ClaudeCodeHarnessDescriptor
+export type AgentHarnessDescriptor =
+  | CursorHarnessDescriptor
+  | ClaudeCodeHarnessDescriptor
+  | AntigravityHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {

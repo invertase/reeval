@@ -186,7 +186,11 @@ export const inventory: InventoryFeature[] = [
     id: 'skill.harness',
     area: 'Environments',
     name: '`skill.local`, placed by the harness',
-    fixtures: ['skills/harness-placement', 'harness/claude-code-harness-skills'],
+    fixtures: [
+      'skills/harness-placement',
+      'harness/claude-code-harness-skills',
+      'harness/antigravity-home-skills',
+    ],
   },
   {
     id: 'skill.workspace',
@@ -197,6 +201,7 @@ export const inventory: InventoryFeature[] = [
       'skills/workspace-content',
       'harness/cursor-workspace-skills',
       'harness/claude-code-workspace-skills',
+      'harness/antigravity-workspace-skills',
     ],
   },
   {
@@ -281,11 +286,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor and Antigravity, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
       'harness/claude-code-rules',
+      'harness/antigravity-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -410,7 +416,7 @@ export const inventory: InventoryFeature[] = [
     id: 'docker.dockerfile',
     area: 'Sandbox',
     name: '`docker({ dockerfile })` and `ES_BASE`',
-    fixtures: ['harness/claude-code-dockerfile'],
+    fixtures: ['harness/claude-code-dockerfile', 'harness/antigravity-dockerfile'],
     plan: ['images/install-from-dockerfile'],
     tests: [
       docker('dockerfile: FROM the ES_BASE arg'),
@@ -499,6 +505,22 @@ export const inventory: InventoryFeature[] = [
     ],
     plan: ['harnesses/claude-code'],
     tests: [harness('reads rules from CLAUDE.md and repo skills from .claude/skills')],
+  },
+  {
+    id: 'harness.antigravity',
+    area: 'Harnesses',
+    name: '`antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key',
+    fixtures: [
+      'harness/antigravity-rules',
+      'harness/antigravity-workspace-skills',
+      'harness/antigravity-home-skills',
+      'harness/antigravity-dockerfile',
+    ],
+    plan: ['antigravity/antigravity'],
+    tests: [
+      harness('reads rules from AGENTS.md, repo skills from .agents/skills'),
+      harness("the key is swapped in on Antigravity's model endpoint only"),
+    ],
   },
   {
     id: 'harness.fake-script',

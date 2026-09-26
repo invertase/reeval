@@ -46,13 +46,13 @@
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/vendor-sandbox-docker.mjs && node scripts/copy-studio-app.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/vendor.mjs && node scripts/copy-studio-app.mjs",
     "features:matrix": "node --experimental-strip-types --no-warnings --import ./test/support/tables-only.mjs test/support/feature-matrix.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",
-    "test:docker": "ES_FIXTURE_TIERS=docker ES_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts",
+    "test:docker": "ES_FIXTURE_TIERS=docker ES_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts test/docker-antigravity.test.ts",
     "test:real": "ES_FIXTURE_TIERS=real ES_TEST_REAL=1 node --test --experimental-strip-types --no-warnings test/features.test.ts"
   },
   "dependencies": {
@@ -60,6 +60,7 @@
     "@ai-sdk/harness": "1.0.124",
     "@ai-sdk/harness-claude-code": "1.0.128",
     "@ai-sdk/harness-cursor": "1.0.37",
+    "@ai-sdk/provider-utils": "5.0.47",
     "@ai-sdk/typesafe-ai": "3.0.6",
     "@hono/node-server": "2.1.1",
     "ai": "7.0.114",
@@ -72,6 +73,7 @@
     "zod": "4.6.5"
   },
   "devDependencies": {
+    "@evalsuite/harness-antigravity": "workspace:0.1.0",
     "@evalsuite/sandbox-docker": "workspace:*",
     "studio-web": "workspace:*"
   }

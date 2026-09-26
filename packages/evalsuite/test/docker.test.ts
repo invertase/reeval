@@ -35,7 +35,10 @@ export default defineConfig({
 test('the pinned harness versions match the installed adapters', () => {
   const pkg = JSON.parse(readFileSync(`${pkgRoot}/package.json`, 'utf8'))
   for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
-    assert.equal(pkg.dependencies[name], version, name)
+    // This repo's own adapters are vendored into dist, so they're pinned as dev dependencies.
+    if (name.startsWith('@evalsuite/')) {
+      assert.equal(pkg.devDependencies[name], `workspace:${version}`, name)
+    } else assert.equal(pkg.dependencies[name], version, name)
   }
 })
 

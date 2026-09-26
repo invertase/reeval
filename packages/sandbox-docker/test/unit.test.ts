@@ -227,12 +227,19 @@ describe('network policy', () => {
   test("each harness's default allowlist has its own hosts and not the others'", () => {
     const cursor = defaultAllowedHosts('cursor')
     const claude = defaultAllowedHosts('claude-code')
+    const antigravity = defaultAllowedHosts('antigravity')
+    assert.ok(hostAllowed(antigravity, 'generativelanguage.googleapis.com'))
+    assert.equal(hostAllowed(antigravity, 'cloudcode-pa.googleapis.com'), false)
+    assert.equal(hostAllowed(antigravity, 'api.anthropic.com'), false)
+    assert.equal(hostAllowed(cursor, 'generativelanguage.googleapis.com'), false)
     assert.ok(hostAllowed(cursor, 'api2.cursor.sh'))
     assert.ok(hostAllowed(claude, 'api.anthropic.com'))
     assert.equal(hostAllowed(cursor, 'api.anthropic.com'), false)
     assert.equal(hostAllowed(claude, 'api2.cursor.sh'), false)
     assert.equal(hostAllowed(claude, 'anthropic.com.evil.example'), false)
-    for (const hosts of [cursor, claude]) assert.ok(hostAllowed(hosts, 'registry.npmjs.org'))
+    for (const hosts of [cursor, claude, antigravity]) {
+      assert.ok(hostAllowed(hosts, 'registry.npmjs.org'))
+    }
   })
 
   test('allow-all allows anything but loopback and link-local', async () => {
@@ -535,7 +542,8 @@ describe('package boundary', () => {
     assert.ok(pkg.files.includes('docker'))
     assert.match(readFileSync(join(root, 'docker/Dockerfile'), 'utf8'), /^FROM node:/m)
     for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
-      assert.equal(pkg.dependencies[name], version, name)
+      const expected = name.startsWith('@evalsuite/') ? `workspace:${version}` : version
+      assert.equal(pkg.dependencies[name], expected, name)
     }
   })
 
@@ -545,6 +553,10 @@ describe('package boundary', () => {
     assert.equal(imageFor('claude-code'), `evalsuite-sandbox:claude-code-${claude.version}`)
     assert.equal(DEFAULT_IMAGE, imageFor('cursor'))
     assert.equal(harnessLabel('claude-code'), `@ai-sdk/harness-claude-code@${claude.version}`)
+    assert.equal(
+      imageFor('antigravity'),
+      `evalsuite-sandbox:antigravity-${HARNESS_PACKAGES.antigravity.version}`,
+    )
   })
 })
 

@@ -540,9 +540,14 @@ describe('common mistakes', () => {
       /claudeCode\(\) needs a model, e\.g\. claudeCode\(\{ model: 'claude-sonnet-5' \}\)/,
     ],
     [
+      'Antigravity without a model',
+      `evaluate('e', { harness: (await import('evalsuite/harness')).antigravity({} as never) }, async () => {})`,
+      /antigravity\(\) needs a model, e\.g\. antigravity\(\{ model: 'gemini-3\.8-flash-medium' \}\)/,
+    ],
+    [
       'a fake agent layout ES does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity' \(got "codex"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',
