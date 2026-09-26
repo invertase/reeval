@@ -316,7 +316,7 @@ export type EvalHistoryPoint = {
   outcome: Outcome
   passRate: number | null
   cells: HistoryCell[]
-  /** The fingerprint differs from the previous run that had this eval. */
+  /** A cell's fingerprint differs from the last run that had that cell. */
   changed: boolean
 }
 
@@ -324,7 +324,7 @@ export type EvalHistoryPoint = {
 export function evalHistory(entries: HistoryEntry[], slug: string): EvalHistoryPoint[] {
   const oldest = [...entries].sort((a, b) => (a.runId < b.runId ? -1 : 1))
   const points: EvalHistoryPoint[] = []
-  let fingerprint: string | undefined
+  const seen = new Map<string, string>()
   for (const run of oldest) {
     const e = run.evals.find((x) => x.slug === slug)
     if (!e) continue
@@ -333,9 +333,8 @@ export function evalHistory(entries: HistoryEntry[], slug: string): EvalHistoryP
       outcome: e.outcome,
       passRate: e.passRate,
       cells: e.cells,
-      changed: fingerprint !== undefined && fingerprint !== e.fingerprint,
+      changed: cellsChanged(seen, e.id, e.cells),
     })
-    fingerprint = e.fingerprint
   }
   return points
 }

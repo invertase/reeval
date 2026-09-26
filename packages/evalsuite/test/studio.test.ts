@@ -260,18 +260,25 @@ describe('view-models over a real history', () => {
         evals: [
           {
             id: 'evals/scaffold.es.ts › scaffolds',
+            slug: 'scaffolds',
+            outcome: 'pass',
             fingerprint: cells.map((c) => c.fingerprint).join(),
             cells,
           },
         ],
       }) as unknown as HistoryEntry
-    const rows = runRows([
+    const runs = [
       run(1, [...cursor('sha256:c1'), ...agy]),
       run(2, agy.slice(0, 1)),
       run(3, [...cursor('sha256:c2'), ...agy]),
       run(4, agy.slice(0, 1)),
       run(5, [...cursor('sha256:c2'), ...agy]),
-    ]).reverse()
+    ]
+    assert.deepEqual(
+      evalHistory(runs, 'scaffolds').map((p) => p.changed),
+      [false, false, true, false, false],
+    )
+    const rows = runRows(runs).reverse()
     assert.deepEqual(
       rows.map((r) => [r.drift.map((c) => `${c.label}: ${c.base} → ${c.head}`), r.changedEvals]),
       [
@@ -308,8 +315,9 @@ describe('view-models over a real history', () => {
       [
         ['pass', false],
         ['fail', false],
-        ['pass', true],
-        ['pass', true],
+        // Adding a variant cell, then running without it again, changes no cell they share.
+        ['pass', false],
+        ['pass', false],
       ],
     )
   })
