@@ -174,7 +174,7 @@ jobs:
 
   # Installs the tarball with Node 22's npm 10.9 and with npm 11. npm before 11.6 crashes
   # ("reading 'edgesOut'", npm/cli#8261) when vitest's peer set pulls in a newer vitest than
-  # the one pinned, so this leg fails if the pin falls behind vitest's latest.
+  # the one the ~5.0.x range resolves to, so this leg fails once vitest ships a new minor.
   pack:
     name: packed install (npm ${{ matrix.npm }})
     runs-on: ubuntu-24.04
