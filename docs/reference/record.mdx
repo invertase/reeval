@@ -1,0 +1,628 @@
+---
+title: The run record
+description: Every field of a run's JSON record, and the history folder layout.
+---
+
+Each run is one JSON file, `<runId>.json`, plus optional artifacts in `<runId>/`. The record is immutable once written. `es show <run> --json` prints it.
+
+```bash
+npx es show latest --json | jq '.evals[] | select(.outcome != "pass") | .id'
+```
+
+## Layout
+
+```text
+evals/.history/                            commit this
+  <runId>.json                             the record
+  <runId>/summary.md                       the run as Markdown
+  <runId>/worktree.patch                   uncommitted changes, when the run was dirty
+  <runId>/<eval-slug>/<cell-slug>/<n>/     one directory per attempt
+    transcript.jsonl                       timed agent events (see Transcripts)
+    diff.patch                             the agent's changes, dependency noise dropped
+    judge-input.json                       what each judge call saw
+    setup.log                              each environment setup step's output
+    checks/<n>.log                         each t.exec: command, exit code, stdout, stderr
+.es/                                       scratch: gitignore it
+  runs/<runId>.json + <runId>/             every es run, same shape
+  debug/<runId>/…                          local debug data, never recorded
+  history.db                               es query's projection
+```
+
+The record is `kind: "es-run"`, `schemaVersion: 1`. While ES is pre-release the schema changes in place, and an older record may not parse. Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
+
+## Reading one
+
+Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass rates, roles and lift, then each failing attempt's `error` and `judgements`. Open the files its `files` points to.
+
+```json title="evals/.history/<runId>.json (trimmed)"
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260926T170558Z_bd6205e_ada-lovelace_sycz",
+  "status": "complete",
+  "summary": { "evals": 1, "attempts": 4, "pass": 2, "fail": 2, "notGated": 2, "infraError": 0, "skipped": 0 },
+  "evals": [{ "id": "evals/skill.es.ts › house greeting › greets in the house style", "outcome": "pass", "…": "…" }]
+}
+```
+
+## Fields
+
+The type definitions are in `packages/evalsuite/src/history/types.ts`; the environment, egress and image records are in `src/types.ts`. This section is generated from them.
+
+### Value types
+
+{/* generated:record-values */}
+| Type | Values |
+|---|---|
+| `Outcome` | `'pass'`, `'fail'`, `'infra_error'`, `'skipped'` |
+| `ErrorKind` | `'assertion'`, `'timeout'`, `'aborted'`, `'infra'`, `'judge'` |
+| `TurnStatus` | `'completed'`, `'aborted'`, `'error'` |
+| `ArtifactLevel` | `'all'`, `'failures'`, `'none'` |
+| `RecordMode` | `'manual'`, `'ci'`, `'always'` |
+{/* /generated:record-values */}
+
+`runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
+
+{/* generated:record-types */}
+### RunRecord
+
+<Property name="kind" type="'es-run'"></Property>
+
+<Property name="schemaVersion" type="typeof SCHEMA_VERSION"></Property>
+
+<Property name="runId" type="string">
+  Also the file name: `<UTC start>_<short sha>_<author or ci>`.
+</Property>
+
+<Property name="status" type="'complete' | 'interrupted' | 'budget'">
+  `budget` when `budget.duration` stopped new attempts from starting.
+</Property>
+
+<Property name="startedAt" type="string"></Property>
+
+<Property name="endedAt" type="string"></Property>
+
+<Property name="durationMs" type="number"></Property>
+
+<Property name="author" type="string"></Property>
+
+<Property name="git" type="GitInfo | null"></Property>
+
+<Property name="runner" type="RunnerInfo"></Property>
+
+<Property name="dependencies" type="{lockfiles: Array<{path: string; sha256: string}>}"></Property>
+
+<Property name="stack" type="Stack"></Property>
+
+<Property name="environments" type="EnvironmentRecord[]">
+  Each environment the run applied, fingerprinted; secret values are never included.
+</Property>
+
+<Property name="profile" type="{name: string; reason: string; defaults: {harness?: string[]; environment?: string; sandbox?: string; runs?: number; timeout?: string | number; env?: string[]}; limit: {runs?: number; compare?: false | {maxVariants: number}; harness?: string[]}} | null">
+  The profile the run was sized with, and why it was chosen.
+</Property>
+
+<Property name="plan" type="{evals: number; cells: number; attempts: number; estimateMs: number}">
+  What the run planned before it started.
+</Property>
+
+<Property name="budget" type="{attempts?: number; duration?: string | number} | null"></Property>
+
+<Property name="config" type="{sandbox: string; environment: string | null; runs: number; judgeModel: string | null; threshold: number; timeoutMs: number; concurrency: number; configHash: string}"></Property>
+
+<Property name="cost" type="Cost"></Property>
+
+<Property name="artifacts" type="ArtifactLevel">
+  Which artifacts sit next to this record. Refs to files that weren't kept are removed.
+</Property>
+
+<Property name="redaction" type="{version: 1}"></Property>
+
+<Property name="summary" type="RunSummary"></Property>
+
+<Property name="evals" type="EvalEntry[]"></Property>
+
+### GitInfo
+
+<Property name="sha" type="string">
+  The commit the run executed at: HEAD when `es run` started. The later commit that adds the history file is a different, descendant commit.
+</Property>
+
+<Property name="branch" type="string | null"></Property>
+
+<Property name="dirty" type="boolean">
+  Uncommitted changes, outside `.es/` and the history folder, when the run started.
+</Property>
+
+<Property name="diffHash" type="string | null">
+  sha256 of the uncommitted changes (tracked and untracked, as a binary patch), when dirty.
+</Property>
+
+<Property name="worktreePatch" type="FileRef | null">
+  Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce.
+</Property>
+
+<Property name="worktreePatchNote" type="string | null">
+  Why a dirty run has no `worktree.patch`, e.g. too large or artifacts: 'none'.
+</Property>
+
+<Property name="commitTime" type="string"></Property>
+
+<Property name="shallow" type="boolean"></Property>
+
+<Property name="remote" type="string | null">
+  The `origin` URL with any credentials removed.
+</Property>
+
+### Stack
+
+What ran and graded the agents: the machine, images, harnesses and judge.
+
+<Property name="es" type="string"></Property>
+
+<Property name="node" type="string"></Property>
+
+<Property name="os" type="string"></Property>
+
+<Property name="arch" type="string"></Property>
+
+<Property name="images" type="Array<AttemptImage &amp; {repoDigests: string[]}>">
+  Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed.
+</Property>
+
+<Property name="packages" type="Record<string, string>">
+  Exact versions of the packages that run and grade the agent.
+</Property>
+
+<Property name="harnesses" type="Array<{id: string; kind: string; model: string | null}>"></Property>
+
+<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}"></Property>
+
+<Property name="context" type="ContextFile[]">
+  Union of every attempt's context files.
+</Property>
+
+<Property name="fingerprintScope" type="string[]">
+  What eval fingerprints hash; fingerprints from different scopes aren't comparable.
+</Property>
+
+### RunSummary
+
+Counts attempts, except `evals`.
+
+<Property name="evals" type="number"></Property>
+
+<Property name="attempts" type="number"></Property>
+
+<Property name="pass" type="number"></Property>
+
+<Property name="fail" type="number">
+  Every failed attempt, including `notGated` ones.
+</Property>
+
+<Property name="notGated" type="number">
+  Failed attempts in ungated cells (controls, by default), which don't fail the run.
+</Property>
+
+<Property name="infraError" type="number"></Property>
+
+<Property name="skipped" type="number"></Property>
+
+### Cost
+
+Tokens and USD, null when the harness or judge doesn't report them (Cursor reports none).
+
+<Property name="usd" type="number | null"></Property>
+
+<Property name="inputTokens" type="number | null"></Property>
+
+<Property name="outputTokens" type="number | null"></Property>
+
+<Property name="source" type="'reported' | 'unreported'"></Property>
+
+### EvalEntry
+
+<Property name="id" type="string">
+  `file › group › … › name`, as shown.
+</Property>
+
+<Property name="key" type="string">
+  What the eval is matched on across runs; its `id` for now.
+</Property>
+
+<Property name="slug" type="string">
+  Directory name inside the artifact directory, from `key`.
+</Property>
+
+<Property name="file" type="string"></Property>
+
+<Property name="group" type="string[]"></Property>
+
+<Property name="name" type="string"></Property>
+
+<Property name="fingerprint" type="string">
+  Results are comparable only when fingerprints match.
+</Property>
+
+<Property name="sources" type="Array<{path: string; sha256: string}>">
+  The eval file and every local file it imports, directly or not, by content hash.
+</Property>
+
+<Property name="tags" type="string[]"></Property>
+
+<Property name="outcome" type="Outcome">
+  Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.
+</Property>
+
+<Property name="passRate" type="number | null">
+  pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded.
+</Property>
+
+<Property name="cells" type="CellRecord[]"></Property>
+
+<Property name="attempts" type="AttemptRecord[]"></Property>
+
+### CellRecord
+
+One harness and environment of an eval, and how its attempts went.
+
+Also has every field of `Cell`.
+
+<Property name="fingerprint" type="string">
+  `sha256` of `fingerprintParts`; results are comparable only when it matches.
+</Property>
+
+<Property name="fingerprintParts" type="FingerprintParts"></Property>
+
+<Property name="environmentDigest" type="string | null">
+  The environment's digest: the join key into `RunRecord.environments`; null for none.
+</Property>
+
+<Property name="harnessKind" type="string"></Property>
+
+<Property name="model" type="string | null">
+  The configured harness model, when it has one.
+</Property>
+
+<Property name="gate" type="CellGate">
+  How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.
+</Property>
+
+<Property name="overrides" type="string[]">
+  Environment keys the variant replaced on the control's (or a child on its parent's).
+</Property>
+
+<Property name="runs" type="number"></Property>
+
+<Property name="pass" type="number"></Property>
+
+<Property name="fail" type="number"></Property>
+
+<Property name="infraError" type="number"></Property>
+
+<Property name="skipped" type="number"></Property>
+
+<Property name="passRate" type="number | null"></Property>
+
+<Property name="outcome" type="Outcome">
+  By `gate` (`'none'` reports the worst outcome); a variant below its `minLift` fails too.
+</Property>
+
+<Property name="lift" type="Lift" optional></Property>
+
+### Lift
+
+A variant cell's pass rate against the control's, on the same harness and sandbox.
+
+<Property name="vs" type="string">
+  The control cell's key.
+</Property>
+
+<Property name="control" type="{pass: number; counted: number}">
+  Passes out of counted attempts (passes and fails) on each side.
+</Property>
+
+<Property name="variant" type="{pass: number; counted: number}"></Property>
+
+<Property name="points" type="number">
+  Variant pass rate minus control pass rate, from -1 to 1.
+</Property>
+
+<Property name="interval" type="{lo: number; hi: number; level: 0.95; method: 'newcombe-wilson'}">
+  95% interval on the difference, by Newcombe's hybrid score method from two Wilson intervals.
+</Property>
+
+<Property name="withinNoise" type="boolean">
+  The interval spans 0: the attempts can't tell the variant from the control.
+</Property>
+
+<Property name="minLift" type="number" optional>
+  Set when the compare has a `minLift`; the cell fails when `interval.lo` is below it.
+</Property>
+
+### FingerprintParts
+
+Each input of a cell fingerprint, hashed on its own, so a change can be named.
+
+<Property name="sources" type="string">
+  Over `EvalEntry.sources`.
+</Property>
+
+<Property name="harness" type="string">
+  Over the harness descriptor, less concurrency caps.
+</Property>
+
+<Property name="environment" type="string | null"></Property>
+
+<Property name="image" type="string | null"></Property>
+
+<Property name="agentCli" type="string | null"></Property>
+
+<Property name="judge" type="string">
+  Over the judge's model, threshold and version.
+</Property>
+
+<Property name="context" type="string">
+  Over the attempt's context files.
+</Property>
+
+### AttemptRecord
+
+<Property name="key" type="string">
+  `<eval key> # <cell key>#<n>`: unique in the run.
+</Property>
+
+<Property name="id" type="string">
+  `<cell key>#<n>`: unique in its eval.
+</Property>
+
+<Property name="cell" type="string">
+  The cell's key; see `EvalEntry.cells`.
+</Property>
+
+<Property name="n" type="number">
+  Run number within the cell, from 1.
+</Property>
+
+<Property name="seq" type="number | null">
+  Start order across the run, from 1; null for attempts that never started.
+</Property>
+
+<Property name="startedAt" type="string | null"></Property>
+
+<Property name="imageId" type="string | null">
+  The image the container started from, in `stack.images`; null for the fake sandbox.
+</Property>
+
+<Property name="env" type="{vars: string[]; secrets: string[]; brokered: string[]}">
+  Names of the variables and secrets set in the sandbox, and the brokered ones; never values.
+</Property>
+
+<Property name="context" type="ContextFile[]">
+  Skills, rules and MCP config visible to the agent in its sandbox, by content hash.
+</Property>
+
+<Property name="egress" type="EgressRecord | null">
+  The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran.
+</Property>
+
+<Property name="outcome" type="Outcome"></Property>
+
+<Property name="error" type="{kind: ErrorKind; message: string} | null"></Property>
+
+<Property name="durationMs" type="number"></Property>
+
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string}>">
+  `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
+</Property>
+
+<Property name="timings" type="PhaseTimings"></Property>
+
+<Property name="activity" type="{tools: number; fileEdits: number; webSearches: number; webFetches: number; reasoningMs: number}">
+  Counts from the transcript, so a run's shape is visible without reading it.
+</Property>
+
+<Property name="judgements" type="JudgementRecord[]"></Property>
+
+<Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef}>"></Property>
+
+<Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">
+  Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`.
+</Property>
+
+<Property name="files" type="AttemptFiles"></Property>
+
+### AttemptFiles
+
+<Property name="setupLog" type="FileRef" optional>
+  Each environment setup step's command, exit code, duration and output.
+</Property>
+
+<Property name="transcript" type="FileRef" optional></Property>
+
+<Property name="rawTranscript" type="FileRef" optional>
+  Unnormalised harness stream parts, only with `ES_RAW_TRANSCRIPT=1`.
+</Property>
+
+<Property name="diff" type="FileRef" optional></Property>
+
+<Property name="judgeInput" type="FileRef" optional></Property>
+
+### JudgementRecord
+
+<Property name="question" type="string"></Property>
+
+<Property name="verdict" type="'pass' | 'fail'"></Property>
+
+<Property name="score" type="number"></Property>
+
+<Property name="threshold" type="number"></Property>
+
+<Property name="model" type="string"></Property>
+
+<Property name="resolvedModel" type="string" optional>
+  The model id the provider says served the call, when it reports one.
+</Property>
+
+<Property name="key" type="string">
+  `<index>:<sha256(question) prefix>`: the same question at the same place in the eval, so a verdict can be followed across runs (and an edited question starts a new series).
+</Property>
+
+<Property name="retries" type="JudgeRetry[]" optional>
+  Transient provider errors retried before this verdict, with the backoff before each retry.
+</Property>
+
+### JudgeRetry
+
+One failed judge try that was retried, and the backoff before the next.
+
+<Property name="error" type="string"></Property>
+
+<Property name="delayMs" type="number"></Property>
+
+### FileRef
+
+`path` is relative to the run's artifact directory; `sha256` is of the bytes on disk.
+
+<Property name="path" type="string"></Property>
+
+<Property name="sha256" type="string"></Property>
+
+<Property name="bytes" type="number"></Property>
+
+### ContextFile
+
+<Property name="path" type="string"></Property>
+
+<Property name="sha256" type="string"></Property>
+
+### Cell
+
+One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With `compare`, the control runs the inherited environment and each variant runs it extended.
+
+<Property name="key" type="string"></Property>
+
+<Property name="harness" type="string"></Property>
+
+<Property name="environment" type="string"></Property>
+
+<Property name="sandbox" type="string"></Property>
+
+<Property name="role" type="CellRole"></Property>
+
+<Property name="variant" type="string" optional>
+  The variant's name, for variant cells.
+</Property>
+
+### EnvironmentRecord
+
+An environment as it was applied, without secret values.
+
+<Property name="name" type="string"></Property>
+
+<Property name="parent" type="string | null">
+  The environment this one extends (for a variant cell, the control), else null.
+</Property>
+
+<Property name="overrides" type="string[]">
+  Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`.
+</Property>
+
+<Property name="digest" type="string">
+  Covers every field but the rules file's path; secret names are included, values never are. The image is the sandbox's.
+</Property>
+
+<Property name="setup" type="string[]"></Property>
+
+<Property name="skills" type="Array<{name: string; source: string; commit: string | null; sha256: string; placement: SkillPlacement; excluded: string[]}>"></Property>
+
+<Property name="mcp" type="string[]"></Property>
+
+<Property name="files" type="Array<{path: string; sha256: string}>"></Property>
+
+<Property name="vars" type="string[]"></Property>
+
+<Property name="secrets" type="string[]"></Property>
+
+<Property name="brokered" type="string[]">
+  Secrets the sandbox only had placeholders for, swapped in by the egress gateway.
+</Property>
+
+<Property name="unset" type="string[]">
+  Optional secrets whose host variable was unset, so they weren't injected.
+</Property>
+
+<Property name="egress" type="EgressPolicy">
+  The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`.
+</Property>
+
+### EgressRecord
+
+An attempt's network traffic. `allowed` is every host a restricted policy let through, its own and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.
+
+<Property name="policy" type="EgressPolicy"></Property>
+
+<Property name="allowed" type="string[] | null"></Property>
+
+<Property name="recorded" type="boolean"></Property>
+
+<Property name="contacted" type="Array<{host: string; port: number; connections: number; sent: number; received: number}>"></Property>
+
+<Property name="blocked" type="Array<{host: string; port: number; connections: number; reason: string}>"></Property>
+
+<Property name="expectedBlocked" type="Array<{host: string; port: number; connections: number; reason: string}>"></Property>
+
+### AttemptImage
+
+The image an attempt's container started from, and how ES made it.
+
+<Property name="ref" type="string"></Property>
+
+<Property name="id" type="string">
+  Content-addressed image id (`sha256:…`).
+</Property>
+
+<Property name="agentCli" type="string | null"></Property>
+
+<Property name="base" type="string">
+  The harness image `install` was baked onto: `ref` itself without `install`.
+</Property>
+
+<Property name="install" type="string[]">
+  The `docker({ install })` commands, in order.
+</Property>
+
+<Property name="dockerfile" type="{path: string; sha256: string} | null">
+  `docker({ dockerfile })`: the path from the project root and the build context's hash.
+</Property>
+
+### PhaseTimings
+
+Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes.
+
+<Property name="setupMs" type="number"></Property>
+
+<Property name="agentMs" type="number"></Property>
+
+<Property name="diffMs" type="number"></Property>
+
+<Property name="checksMs" type="number"></Property>
+
+<Property name="judgeMs" type="number"></Property>
+
+### FileChange
+
+<Property name="path" type="string"></Property>
+
+<Property name="status" type="'added' | 'modified' | 'deleted'"></Property>
+{/* /generated:record-types */}
+
+## What a record can't pin down
+
+Each record lists these: sampled agent output, provider-side model updates, network-dependent results such as web search and package registries, and locally built images.
+
+## Related
+
+- [es show, compare](/reference/cli/history)
+- [Transcripts](/reference/transcript)
+- [Fingerprints and drift](/concepts/fingerprints)

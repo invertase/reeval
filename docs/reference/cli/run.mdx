@@ -1,0 +1,99 @@
+---
+title: es run
+description: Plan and run evals, with every flag, filter rule and output option.
+---
+
+`es run` plans the evals that match `include` and your filters, prints the plan, runs every attempt and prints a summary.
+
+```bash
+npx es run hello --runs 2 --ui plain
+```
+
+## Help
+
+{/* generated:cli-help:run */}
+```text
+es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+  --profile <name>        Size the run with a profile from es.config.ts (also ES_PROFILE;
+                          default: defaultProfile.ci in CI, else defaultProfile.local)
+  --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0;
+                          with --json, as one JSON document (every cell, and what's excluded)
+  --force                 Run even when the plan is over budget.attempts
+  --runs <n>              Attempts per cell, overriding the config, groups and evals
+  --concurrency <n>       Attempts running at once across evals and cells (default 8, at
+                          most one per CPU and GB of Docker memory; also ES_CONCURRENCY)
+  --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
+  --record                Also record the run into the history folder (see config.record)
+  --ui <mode>             live, plain or agent (default: agent under a coding agent, plain
+                          in CI or when piped, else live; live prints plain for now)
+  --log-order <order>     stream (every line as it happens) or grouped (each attempt as one
+                          block when it ends); default grouped in CI, else stream
+  --log-prefix <prefix>   task or none: the [eval#n harness] prefix on detail lines
+                          (default task, none inside GitHub Actions groups)
+  --output-logs <level>   full, errors-only or none: whose detail lines print (default full)
+  -v, --verbose           Print each attempt's phase trace as it happens: plan, image,
+                          container, environment, brokering, turns and tool calls, checks,
+                          judge calls, gateway requests and teardown
+  -vv, --trace            Also raw payloads, docker commands, headers and DNS decisions, and
+                          keep every attempt's trace.ndjson (else only failing attempts')
+                          Either way each attempt's debug.log is in .es/debug/<run>/ (local only)
+```
+{/* /generated:cli-help:run */}
+
+## Filters
+
+```bash
+npx es run evals/hello.es.ts            # a file
+npx es run "greet module"               # evals by group or name
+npx es run with-house-greeting          # cells by key
+npx es run skill antigravity            # the Antigravity cells of skill.es.ts
+```
+
+- A filter part that names an eval file picks files. Every other part picks evals by name or cell key, as a case-sensitive substring of the eval id or the cell key (`cursor:composer-2.5/with-house-greeting/docker`).
+- Parts of one kind add up. The two kinds narrow each other, and the plan's rows and totals count only the cells that are left.
+- A part that matches nothing exits 2 and names it.
+- `--tag slow` keeps evals tagged `slow`, `--tag '!slow'` drops them. Repeated `--tag`s must all hold. A profile's `tags` work the same way.
+
+## The plan line
+
+Every run starts with it, before anything runs:
+
+```text
+plan  1 eval · 2 cells · 4 attempts · ~1m 08s serial (~17s at concurrency 4)
+```
+
+The estimate is the median of each eval's recent attempts on that harness (the last 30 runs, recorded and scratch), else the harness's median, else 3 minutes an attempt. With a profile and a budget it also says which profile, why, and whether the plan fits:
+
+```text
+plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
+```
+
+`--dry-run` adds a row per eval and stops. `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document. Neither needs credentials or Docker.
+
+## Before any attempt starts
+
+`es run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running and the images exist. Each failure exits 2 without writing a run.
+
+`es run` loads `.env.local`, then `.env`, from the current directory. Variables already set in your shell win.
+
+## Output flags
+
+| Flag | Values | Default |
+|---|---|---|
+| `--ui` | `live`, `plain`, `agent` | `agent` under a coding agent, `plain` in CI or when piped, else `live` (which prints plain for now) |
+| `--log-order` | `stream`, `grouped` | `grouped` in CI, else `stream` |
+| `--log-prefix` | `task`, `none` | `task`, `none` inside GitHub Actions groups |
+| `--output-logs` | `full`, `errors-only`, `none` | `full` |
+| `-v`, `-vv` | | Off. See [Debug data](/reference/debug-data) |
+
+Each has an environment variable: `ES_UI`, `ES_LOG_ORDER`, `ES_LOG_PREFIX`, `ES_OUTPUT_LOGS`. See [Output modes](/concepts/output).
+
+## What it writes
+
+Every run, including one where nothing passed, writes a scratch run to `.es/runs/<runId>.json` and its artifacts to `.es/runs/<runId>/`. `--record`, or `record: 'ci'` with `CI` set, or `record: 'always'`, also copies it into the history folder. Each attempt's local debug data goes to `.es/debug/`.
+
+## Related
+
+- [Sizing runs](/guide/profiles): profiles, `--dry-run` and budgets
+- [The matrix](/concepts/matrix): how evals become cells and attempts
+- [es record](/reference/cli/record)

@@ -1,0 +1,52 @@
+---
+title: es record
+description: Copy scratch runs into the history folder you commit.
+---
+
+`es record` copies runs from `.es/runs/` into the history folder, so you can commit them.
+
+```bash
+npx es record              # the latest run
+git add evals/.history && git commit -m "Record eval run"
+```
+
+## Help
+
+{/* generated:cli-help:record */}
+```text
+es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
+                          --artifacts all|failures|none --allow-incomplete --skip-secret-scan
+```
+{/* /generated:cli-help:record */}
+
+## Behaviour
+
+- **Default run:** `latest`. Pass one or more [run references](/reference/cli#run-references) to record others.
+- **Where:** the config's `history.dir`, by default `.history/` next to your evals (`evals/.history/` for the default `include`).
+- **Idempotent:** recording a run that's already recorded does nothing.
+- **Refusals** (exit 2): an interrupted run, unless `--allow-incomplete`; and any file that still looks like a secret after redaction, `worktree.patch` included, unless `--skip-secret-scan`.
+- **Artifacts:** `--artifacts` overrides the config's `history.artifacts` for this copy: `all` (every attempt's files), `failures` (only failing attempts') or `none` (the record only).
+
+A real record, after a run:
+
+```text
+recorded evals/.history/20260926T170537Z_bd6205e_ada-lovelace_b50g.json + 9 artifact files in evals/.history/20260926T170537Z_bd6205e_ada-lovelace_b50g/ (50.3 KB). Commit it with git.
+```
+
+## Recording automatically
+
+`record` in `es.config.ts` (or a profile) picks when `es run` records by itself:
+
+| Value | Records |
+|---|---|
+| `'ci'` (default) | When `CI` is set |
+| `'always'` | Every run |
+| `'manual'` | Only with `es run --record` or `es record` |
+
+ES never commits or pushes. Records are immutable once written, and file names sort by time, so branches that record runs merge without conflicts.
+
+## Related
+
+- [History](/guide/history)
+- [The run record](/reference/record)
+- [es history, show, compare](/reference/cli/history)

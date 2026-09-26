@@ -1,0 +1,74 @@
+---
+title: es studio
+description: Serve the web studio locally, or build it as a static site.
+---
+
+`es studio` serves a web viewer for the history folder on `127.0.0.1`. `es studio build` writes the same app as a static site.
+
+```bash
+npx es studio --open
+npx es studio build --out site
+```
+
+## es studio
+
+{/* generated:cli-help:studio */}
+```text
+es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
+  --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
+  --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
+  --no-token              Skip the session token (for scripts; anyone local can then read it)
+```
+{/* /generated:cli-help:studio */}
+
+```text
+es studio · capproj · evals/.history/
+  http://127.0.0.1:4990/?token=rfVpcxyZJwV_WuDphUQ0liywC1l2ck1gwDVbjX0YMMs
+Ctrl-C to stop.
+```
+
+- **Port:** 4984, or the next free port. It runs until Ctrl-C.
+- **Live:** it watches the history folder and `.es/runs/`. New runs appear within about a second. Unrecorded runs show a `scratch` badge unless you pass `--no-scratch`.
+- **Debug tab:** attempts with local debug data in `.es/debug` get a Debug tab (phase timeline, gateway requests, `trace.ndjson` when kept).
+- **Security:** the printed URL carries a random per-session token. Opening it sets an httpOnly, SameSite=Strict cookie and strips the token. Without it every route answers 401. The server checks `Host` and `Origin`, sends no CORS headers, answers GET and HEAD only, maps URLs to files through an allowlist and a realpath check, and serves artifacts as `text/plain` with `nosniff` and a sandboxing CSP.
+
+<Warning>
+  `--no-token` and a non-local `--host` let any process (or host) that can reach the port read your history. ES prints a warning for each.
+</Warning>
+
+## es studio build
+
+{/* generated:cli-help:studio-build */}
+```text
+es studio build           Write the studio as a static site for Pages, Netlify or any host
+  --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
+  --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
+```
+{/* /generated:cli-help:studio-build */}
+
+```text
+built ../capsite/: 2 runs, 81 files, 887 KB (records, transcripts, diffs, logs and judge inputs)
+Serve it from any static host. Anyone who can open it can read every included file.
+```
+
+- **Layout:** `index.html`, `assets/`, `studio.json` and `data/`, with relative paths and hash routing, so it works at `/`, a subpath or a GitHub Pages project path with no rewrites.
+- **Contents:** records plus transcripts, diffs, check logs, judge inputs and `worktree.patch` by default. `--no-artifacts` keeps records only. `--scratch` adds unrecorded runs. Debug data and symlinks are never included.
+- **Refuses** an `--out` folder that isn't empty and isn't a previous build.
+
+## File layout
+
+The server and the static build serve the same paths:
+
+```text
+studio.json                               { mode: live|static, es, project, generatedAt, features }
+data/index/manifest.json                  { shards: [{ id: "2026-09", runs }], latest, evals }
+data/index/<YYYY-MM>.json                 run headers started that UTC month, newest first
+data/runs/<runId>.json                    the record, byte for byte
+data/runs/<runId>/<artifact path>         summary.md, worktree.patch, <eval>/<cell>/<n>/…
+api/events                                live mode only: SSE history.changed
+```
+
+## Related
+
+- [The studio](/guide/studio)
+- [Nightly matrix and Pages](/recipes/nightly-pages)
