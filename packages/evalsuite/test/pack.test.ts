@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, posix } from 'node:path'
 import { test } from 'node:test'
 import { VERSION } from '@evalsuite/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@evalsuite/harness-cursor-sdk'
@@ -80,20 +80,24 @@ evaluate('hello', async (t) => {
   // Adapters the package bundles can't be resolved by name, but the run still records them.
   assert.equal(readRun(app).run.stack.packages['@evalsuite/harness-antigravity'], VERSION)
 
-  // Nothing that ships imports an @evalsuite/* package, and every library chunk loads with the
-  // installed package's dependencies alone (cli, setup and worker-signals run on import).
-  const installed = join(app, 'node_modules', pkg)
-  const shipped = readdirSync(join(installed, 'dist'), { recursive: true, encoding: 'utf8' })
+  // Nothing that ships imports an @evalsuite/* package, and every chunk loads with the installed
+  // package's dependencies alone. cli, setup and worker-signals run on import, and so do the
+  // chunks only the CLI reaches, which import cli.js.
+  const dist = join(app, 'node_modules', pkg, 'dist')
+  const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' })
   const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f) && !f.startsWith('studio-app/'))
+  const source = (file: string) => readFileSync(join(dist, file), 'utf8')
   for (const file of code)
-    assert.doesNotMatch(
-      readFileSync(join(installed, 'dist', file), 'utf8'),
-      /(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//,
-      file,
+    assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//, file)
+  const imports = (file: string) =>
+    [...source(file).matchAll(/\bfrom\s*"(\.\.?\/[^"]+)"/g)].map((m) =>
+      posix.join(posix.dirname(file), m[1] as string),
     )
-  const chunks = code.filter(
-    (f) => f.endsWith('.js') && !['cli.js', 'setup.js', 'worker-signals.js'].includes(f),
-  )
+  const runsOnImport = (file: string, seen = new Set<string>()): boolean =>
+    ['cli.js', 'setup.js', 'worker-signals.js'].includes(file) ||
+    imports(file).some((f) => !seen.has(f) && seen.add(f) && runsOnImport(f, seen))
+  const chunks = code.filter((f) => f.endsWith('.js') && !runsOnImport(f))
+  assert.ok(chunks.includes('index.js') && chunks.length > 10, chunks.join(', '))
   const loaded = sh(process.execPath, app, [
     '--input-type=module',
     '-e',
