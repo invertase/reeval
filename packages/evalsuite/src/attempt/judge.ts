@@ -30,6 +30,18 @@ function judgeState(turn: Turn, output: JSONValue = turn.text): JudgeState {
  */
 export function judgeCaller(a: Attempt): EvalContext['judge'] {
   return async (question, { on, ...call } = {}) => {
+    if (typeof question !== 'string' || !question.trim()) {
+      throw new Error(
+        `t.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
+      )
+    }
+    const { threshold } = call
+    if (
+      threshold !== undefined &&
+      !(typeof threshold === 'number' && threshold >= 0 && threshold <= 1)
+    ) {
+      throw new Error(`t.judge() threshold must be between 0 and 1 (got ${String(threshold)})`)
+    }
     const subject = isTurn(on) ? on : a.turns.at(-1)
     if (!subject) throw new Error('t.judge() has no turn to grade: call t.send() first')
     const options = { ...a.spec.judge, ...call }

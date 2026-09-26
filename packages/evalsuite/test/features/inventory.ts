@@ -756,6 +756,9 @@ export const inventory: InventoryFeature[] = [
     tests: [
       engine('judge options cascade from config to group, eval and call'),
       engine('a failing judge fails the eval as a judge error'),
+      engine(
+        't.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
+      ),
       unit('judge calls retry transient provider errors'),
     ],
   },
