@@ -104,6 +104,8 @@ group(name, fn, options)
 
 `evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (case %#)', …)` declares `adds 1 and 2 (case 0)` and `adds 3 and 4 (case 1)`. A `$key` the case doesn't have stays as written.
 
+Two cases that end up with the same name stop the run with exit 2 (`evaluate("adds 1") is declared twice in this file. …`), as do two `evaluate` calls with the same name in the same group and file. Each eval's attempts belong to its id, so they'd otherwise merge.
+
 ## Eval ids
 
 An eval's id is its file path (relative to the config's directory), its groups and its name, joined with ` › `:

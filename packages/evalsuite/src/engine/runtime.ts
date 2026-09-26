@@ -2,7 +2,15 @@
 // code allowed to import `vitest`.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { existsSync, readFileSync } from 'node:fs'
-import { afterAll, describe, inject, recordArtifact, test, expect as vitestExpect } from 'vitest'
+import {
+  afterAll,
+  describe,
+  inject,
+  recordArtifact,
+  TestRunner,
+  test,
+  expect as vitestExpect,
+} from 'vitest'
 import { acquire, type Lease, useScheduler } from '../scheduler/client.ts'
 import type { Limits, Rank } from '../scheduler/core.ts'
 import type { SchedulerAddress } from '../scheduler/protocol.ts'
@@ -40,9 +48,66 @@ declare module 'vitest' {
 // Vitest's global `expect` records async assertions on whichever test started last.
 const currentExpect = new AsyncLocalStorage<typeof vitestExpect>()
 
+/** An async assertion (`toHaveFile`, `toSucceed`, `.resolves`…) and whether the eval awaited it. */
+type Pending = { assertion: string; settled: Promise<unknown>; observed: boolean }
+const currentPending = new AsyncLocalStorage<Pending[]>()
+
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as Promise<unknown>).then === 'function'
+
+/**
+ * Wraps an assertion chain so each promise one of its matchers returns is tracked: an eval that
+ * doesn't await it would otherwise pass and tear its sandbox down while the check still runs.
+ */
+function tracked<T extends object>(assertion: T, pending: Pending[], path: string): T {
+  return new Proxy(assertion, {
+    get(target, property) {
+      const value = Reflect.get(target, property)
+      const name = `${path}.${String(property)}`
+      if (typeof value === 'function') {
+        return (...args: unknown[]) => {
+          const result = Reflect.apply(value, target, args)
+          if (!isThenable(result)) return result
+          const entry: Pending = {
+            assertion: `${name}()`,
+            settled: Promise.resolve(result).then(
+              () => undefined,
+              (error: unknown) => error ?? new Error(`${name}() failed`),
+            ),
+            observed: false,
+          }
+          pending.push(entry)
+          const observe = <R>(fn: (p: Promise<unknown>) => R) => {
+            entry.observed = true
+            return fn(Promise.resolve(result))
+          }
+          return {
+            // biome-ignore lint/suspicious/noThenProperty: a thenable that knows it was awaited
+            then: (onFulfilled?: never, onRejected?: never) =>
+              observe((p) => p.then(onFulfilled, onRejected)),
+            catch: (onRejected?: never) => observe((p) => p.catch(onRejected)),
+            finally: (onFinally?: never) => observe((p) => p.finally(onFinally)),
+            [Symbol.toStringTag]: 'Promise',
+          }
+        }
+      }
+      return typeof value === 'object' && value !== null && !isThenable(value)
+        ? tracked(value, pending, name)
+        : value
+    },
+  })
+}
+
 export const expect: typeof vitestExpect = new Proxy(vitestExpect, {
-  apply: (target, thisArg, args) =>
-    Reflect.apply(currentExpect.getStore() ?? target, thisArg, args),
+  apply: (target, thisArg, args) => {
+    const assertion = Reflect.apply(currentExpect.getStore() ?? target, thisArg, args)
+    const pending = currentPending.getStore()
+    return pending && typeof assertion === 'object' && assertion !== null
+      ? tracked(assertion, pending, 'expect(…)')
+      : assertion
+  },
   get: (target, property) => {
     const bound = currentExpect.getStore() ?? target
     const value = Reflect.get(bound, property)
@@ -61,6 +126,11 @@ export type TestHandle = {
   progress(progress: Progress): void
   /** Streams a debug line to the main process (for `-v`). Never throws. */
   debug(line: DebugLine): void
+  /**
+   * Waits for the async assertions the eval started but didn't await, and returns the error that
+   * fails the attempt: the first one's failure, or that it wasn't awaited.
+   */
+  unawaited(): Promise<Error | undefined>
 }
 
 export type TestMode = 'run' | 'skip' | 'only' | 'todo'
@@ -113,20 +183,24 @@ export function registerTest(
     const startedAt = Date.now()
     recordArtifact(ctx.task, { type: 'es:start', at: startedAt }).catch(() => {})
     const timeout = new AbortController()
+    const pending: Pending[] = []
     const running = currentExpect.run(ctx.expect, () =>
-      body({
-        file: ctx.task.file.filepath,
-        signal: AbortSignal.any([ctx.signal, timeout.signal]),
-        setMeta: (meta) => {
-          ctx.task.meta.es = meta
-        },
-        progress: (progress) => {
-          recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})
-        },
-        debug: (line) => {
-          recordArtifact(ctx.task, { type: 'es:debug', line }).catch(() => {})
-        },
-      }),
+      currentPending.run(pending, () =>
+        body({
+          file: ctx.task.file.filepath,
+          signal: AbortSignal.any([ctx.signal, timeout.signal]),
+          setMeta: (meta) => {
+            ctx.task.meta.es = meta
+          },
+          progress: (progress) => {
+            recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})
+          },
+          debug: (line) => {
+            recordArtifact(ctx.task, { type: 'es:debug', line }).catch(() => {})
+          },
+          unawaited: () => unawaitedError(pending),
+        }),
+      ),
     )
     inFlight.add(running)
     const settle = () => {
@@ -140,6 +214,26 @@ export function registerTest(
       ctx.task.meta.esRunMs = Date.now() - startedAt
     }
   })
+}
+
+async function unawaitedError(pending: Pending[]): Promise<Error | undefined> {
+  const missed = pending.filter((p) => !p.observed)
+  if (missed.length === 0) return undefined
+  for (const p of missed) p.observed = true
+  const outcomes = await Promise.all(missed.map((p) => p.settled))
+  const i = Math.max(
+    0,
+    outcomes.findIndex((o) => o !== undefined),
+  )
+  const hint = `${missed[i]?.assertion} wasn't awaited. Its check is async: write \`await ${missed[i]?.assertion}\`.`
+  const failure = outcomes[i]
+  if (failure instanceof Error) {
+    failure.message = `${failure.message}\n\n${hint}`
+    return failure
+  }
+  const error = new Error(hint)
+  error.name = 'AssertionError'
+  return error
 }
 
 /** Fails after `ms`, aborting the body; the body keeps its lease until it has cleaned up. */
@@ -172,6 +266,15 @@ export function registerGroup(name: string, mode: TestMode, body: () => void): v
 }
 
 export const getRunContext = (): RunContext => inject('es:run')
+
+/** The eval file being collected, while its evals are declared. */
+export function collectingFile(): string | undefined {
+  try {
+    return TestRunner.getCurrentSuite()?.file?.filepath
+  } catch {
+    return undefined
+  }
+}
 
 type MatcherResult = { pass: boolean; message: () => string }
 export type Matchers = Record<
