@@ -6,8 +6,9 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl git procps \
   && rm -rf /var/lib/apt/lists/*
 
-# npm 10.9 (node:22's) crashes installing a local tarball ("reading 'edgesOut'"); keep in step
-# with NPM_VERSION in src/build-image.ts. The harness bridge installs its dependencies with pnpm.
+# npm before 11.6 (node:22 ships 10.9) can crash resolving circular peer sets ("reading
+# 'edgesOut'", npm/cli#8261), so evals' installs get a fixed npm. Keep in step with NPM_VERSION
+# in src/build-image.ts. The harness bridge installs its dependencies with pnpm.
 RUN npm install --global npm@11.20.0 && npm install --global pnpm@10.33.3
 
 RUN mkdir -p /es/workspace
