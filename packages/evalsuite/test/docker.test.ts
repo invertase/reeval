@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, imageFor, LABEL } from '@evalsuite/sandbox-docker'
-import { pkgRoot, project, readRun, runCli } from './helpers.ts'
+import type { RunRecord } from '../src/history/types.ts'
+import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const dockerReady = (() => {
   try {
@@ -510,6 +511,90 @@ evaluate('hi', { environment: keys }, async (t) => { await t.sandbox() })
       assert.notEqual(grep('GEMINI_API_KEY'), '', 'twin: the search finds the name')
     },
   )
+
+  test(
+    "the CLI's own runtime state leaves runs comparable; a changed skill doesn't",
+    docker,
+    async () => {
+      // What the Cursor CLI does every session, in ~ and in its adapter's home.
+      const churn = `for h in ~ ~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home; do mkdir -p $h/.cursor/skills-cursor && date +%s%N > $h/.cursor/cli-config.json && date +%s%N > $h/.cursor/skills-cursor/.sync-manifest.json; done`
+      const p = await project('docker-context', {
+        'es.config.ts': config(`{ script: [[{ exec: '${churn}' }, { reply: 'done' }]] }`),
+        'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+const house = defineEnvironment('house', ({ skill }) => ({
+  skills: [skill.inline({ name: 'house', description: 'House style', content: process.env.ES_TEST_SKILL ?? 'v1' })],
+}))
+evaluate('context', { environment: house }, async (t) => { await t.send('go') })
+`,
+      })
+      const run = async (env: NodeJS.ProcessEnv = {}) => {
+        const r = await runCli(p.dir, ['run'], { ...slow, env })
+        assert.equal(r.code, 0, r.stdout + r.stderr)
+        return readRun(p.dir).run
+      }
+      const compareRows = async (base: string, head: string) => {
+        const r = await runCli(p.dir, ['compare', base, head, '--json'])
+        assert.equal(r.code, 0, r.stderr)
+        return (JSON.parse(r.stdout) as { rows: Array<{ status: string; changes?: string[] }> })
+          .rows
+      }
+      const hashes = (r: RunRecord, file: string) =>
+        (r.evals[0]?.attempts[0]?.context ?? []).filter((c) => c.path.endsWith(file))
+
+      const first = await run()
+      const second = await run()
+      for (const file of [
+        '/.cursor/cli-config.json',
+        '/.cursor/skills-cursor/.sync-manifest.json',
+      ]) {
+        const [a, b] = [hashes(first, file), hashes(second, file)]
+        assert.equal(a.length, 2, `${file} in ~ and the adapter home: ${JSON.stringify(a)}`)
+        assert.notDeepEqual(a, b, `${file} changed between the runs`)
+      }
+      assert.equal(first.evals[0]?.fingerprint, second.evals[0]?.fingerprint)
+      assert.deepEqual(
+        (await compareRows(first.runId, second.runId)).map((r) => r.status),
+        ['same'],
+      )
+
+      // Twin: the skill the agent reads changes.
+      const third = await run({ ES_TEST_SKILL: 'v2' })
+      const [row] = await compareRows(second.runId, third.runId)
+      assert.equal(row?.status, 'drift')
+      assert.ok(row?.changes?.includes('agent context changed'), JSON.stringify(row))
+    },
+  )
+
+  test("npm installs the packed ES tarball in ES's image", {
+    ...docker,
+    timeout: 480_000,
+  }, async () => {
+    const out = tempDir('docker-pack')
+    const packed = spawnSync('pnpm', ['pack', '--pack-destination', out], {
+      cwd: pkgRoot,
+      encoding: 'utf8',
+    })
+    assert.equal(packed.status, 0, packed.stdout + packed.stderr)
+    const tarball = readdirSync(out).find((f) => f.endsWith('.tgz'))
+    assert.ok(tarball, readdirSync(out).join(', '))
+    const { version } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
+    const p = await project('docker-npm-tarball', {
+      'es.config.ts': config('{}'),
+      'evals/d.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const es = defineEnvironment('es-tarball', ({ file }) => ({
+  files: { 'es.tgz': file(${JSON.stringify(join(out, tarball))}) },
+}))
+evaluate('installs', { environment: es, timeout: '6m' }, async (t) => {
+  await t.sandbox()
+  await expect(t.exec('npm install --no-audit --no-fund ./es.tgz')).toSucceed()
+  expect((await t.exec('npx --no-install es --version')).stdout.trim()).toBe('${version}')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], { timeoutMs: 450_000 })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(liveContainers(readRun(p.dir).run.runId), '')
+  })
 
   test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',

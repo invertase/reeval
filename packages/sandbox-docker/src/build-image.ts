@@ -18,6 +18,8 @@ import { shellQuote as q } from './process.ts'
 import { createDockerSession } from './session.ts'
 
 const PNPM_VERSION = '10.33.3'
+/** node:22's npm 10.9 crashes installing a local tarball; the same as docker/Dockerfile's. */
+const NPM_VERSION = '11.20.0'
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')
 
@@ -72,6 +74,7 @@ COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \\
   && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \\
+  && npm install --global npm@${NPM_VERSION} \\
   && npm install --global pnpm@${PNPM_VERSION} \\
   && mkdir -p ${SANDBOX_ROOT}/${WORKSPACE_DIR}
 WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}

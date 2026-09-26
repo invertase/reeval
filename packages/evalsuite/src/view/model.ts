@@ -108,7 +108,31 @@ export const formatCost = (usd: number | null) =>
 
 export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : 'no git')
 
+/**
+ * An attempt's effort, counted as the CLI's turn lines count it: tool calls, then file edits.
+ * Edit calls become one file edit per file they change, so they're counted apart, never summed.
+ */
+export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}`
+}
+
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A run's outcome, as `es run`'s exit code has it: a failed gated cell (or a budget stop) fails
+ * the run, while failures in ungated cells (controls, by default) don't.
+ */
+export function runOutcome(run: {
+  status: RunRecord['status']
+  evals: ReadonlyArray<{ outcome: Outcome }>
+}): Outcome {
+  if (run.status === 'interrupted') return 'skipped'
+  const outcomes = run.evals.map((e) => e.outcome)
+  if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
+  if (outcomes.includes('infra_error')) return 'infra_error'
+  return 'pass'
+}
 
 export type RunRow = {
   entry: HistoryEntry

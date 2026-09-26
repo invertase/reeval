@@ -8,6 +8,7 @@ import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
+  activityLabel,
   artifactPath,
   buildIndex,
   cellRows,
@@ -18,6 +19,7 @@ import {
   parseDataPath,
   parseTranscript,
   recordPath,
+  runOutcome,
   runRows,
   shardPath,
   splitPatch,
@@ -109,6 +111,68 @@ before(async () => {
     const folder = h.recorded ? source.historyDir : join(dir, '.es/runs')
     records.set(h.runId, JSON.parse(readFileSync(join(folder, `${h.runId}.json`), 'utf8')))
   }
+})
+
+describe('run outcome and activity, as the CLI has them', () => {
+  const skilled = `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  skills: [skill.inline({ name: 'ok', description: 'Writes ok.txt', content: 'Write ok.txt.' })],
+}))
+const compare = process.env.ES_TEST_GATE_ALL ? { variants: [skilled], gate: 'all' as const } : [skilled]
+evaluate('writes ok', { compare }, async (t) => {
+  await t.send('write ok.txt')
+  await expect(t.exec('test -f ok.txt')).toSucceed()
+})
+`
+
+  test("a run whose only failures are ungated is passed, as es run's exit 0 says", async () => {
+    const p = await project('studio-ungated', {
+      'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'evals/ok.es.ts': skilled,
+    })
+    const ungated = await runCli(p.dir, ['run'])
+    assert.equal(ungated.code, 0, ungated.stdout + ungated.stderr)
+    const [header] = await listHeaders({
+      root: p.dir,
+      historyDir: join(p.dir, 'evals/.history'),
+      scratch: true,
+    })
+    assert.ok(header)
+    assert.deepEqual([header.summary.fail, header.summary.notGated], [1, 1])
+    assert.equal(runOutcome(header), 'pass')
+
+    // Twin: the same failure in a gated control fails the run, and es run exits 1.
+    const gated = await runCli(p.dir, ['run'], { env: { ES_TEST_GATE_ALL: '1' } })
+    assert.equal(gated.code, 1, gated.stdout + gated.stderr)
+    const latest = (
+      await listHeaders({ root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true })
+    ).at(-1)
+    assert.ok(latest && latest.runId !== header.runId)
+    assert.equal(runOutcome(latest), 'fail')
+  })
+
+  test('the outcome follows the status too', () => {
+    const pass = [{ outcome: 'pass' as const }]
+    assert.equal(runOutcome({ status: 'complete', evals: pass }), 'pass')
+    assert.equal(runOutcome({ status: 'budget', evals: pass }), 'fail')
+    assert.equal(runOutcome({ status: 'interrupted', evals: pass }), 'skipped')
+    assert.equal(
+      runOutcome({ status: 'complete', evals: [...pass, { outcome: 'infra_error' }] }),
+      'infra_error',
+    )
+  })
+
+  test('tool calls and file edits are counted apart, on every page', () => {
+    assert.equal(activityLabel({ tools: 21, fileEdits: 2 }), '21 tool calls · 2 file edits')
+    assert.equal(activityLabel({ tools: 1, fileEdits: 0 }), '1 tool call · 0 file edits')
+    const pages = ['pages/run.tsx', 'pages/attempt/index.tsx'].map((f) =>
+      readFileSync(join(pkgRoot, '../studio-web/src', f), 'utf8'),
+    )
+    for (const page of pages) {
+      assert.match(page, /activityLabel\((a|attempt)\.activity\)/)
+      assert.doesNotMatch(page, /'tool call'/, 'no page counts tool calls its own way')
+    }
+  })
 })
 
 describe('view-models over a real history', () => {

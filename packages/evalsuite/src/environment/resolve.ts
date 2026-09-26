@@ -57,8 +57,8 @@ export type ResolvedEnvironment = {
   /** Written into the harness's repo skill directory. */
   workspaceSkills: HarnessSkill[]
   mcp: Record<string, ResolvedMcpServer>
-  /** Workspace-relative, or `~/` for the home directory. */
-  files: Array<{ path: string; content: string }>
+  /** Workspace-relative, or `~/` for the home directory. A host `file()` is its bytes. */
+  files: Array<{ path: string; content: string | Uint8Array }>
   /** The container's variables, secret values included. Never write this anywhere. */
   vars: Record<string, string>
   /** `to: 'checks'` secrets: only for `t.exec` and setup steps. */
@@ -374,9 +374,9 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
 
 const skillHash = (s: HarnessSkill) => sha256(JSON.stringify(s))
 
-const readHostFile = (f: HostFile, where: string) => {
+const readHostFile = (f: HostFile, where: string): Uint8Array => {
   if (!existsSync(f.path)) throw new InfraError(`${f.path} for ${where} doesn't exist`)
-  return readFileSync(f.path, 'utf8')
+  return readFileSync(f.path)
 }
 
 /**
@@ -498,12 +498,16 @@ export async function resolveEnvironment(
     }
   }
 
-  const fileList = [...files].map(([path, v]) => ({
+  const fileList: ResolvedEnvironment['files'] = [...files].map(([path, v]) => ({
     path,
     content: isHostFile(v) ? readHostFile(v, envWhere) : v,
   }))
   const rulesContent =
-    rules === undefined ? undefined : isHostFile(rules) ? readHostFile(rules, envWhere) : rules
+    rules === undefined
+      ? undefined
+      : isHostFile(rules)
+        ? Buffer.from(readHostFile(rules, envWhere)).toString('utf8')
+        : rules
   const skillList = [...skills.values()]
   const skillRecords = skillList.map(({ skill, placement, source, commit, excluded }) => ({
     name: skill.name,

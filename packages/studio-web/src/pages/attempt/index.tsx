@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
-import { type AttemptRecord, findAttempt, findEval, formatDuration } from 'evalsuite/view'
+import {
+  type AttemptRecord,
+  activityLabel,
+  findAttempt,
+  findEval,
+  formatDuration,
+} from 'evalsuite/view'
 import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
 import { Artifact } from '@/components/artifact'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
@@ -136,8 +142,7 @@ export function AttemptPage() {
           <p className="mt-2 text-sm text-muted-foreground">
             <span className="font-mono text-xs">{attempt.id}</span> ·{' '}
             {formatDuration(attempt.durationMs)} · {plural(attempt.turns.length, 'turn')} ·{' '}
-            {plural(attempt.activity.tools, 'tool call')} ·{' '}
-            {plural(attempt.activity.fileEdits, 'file edit')}
+            {activityLabel(attempt.activity)}
             {attempt.activity.reasoningMs
               ? ` · ${formatDuration(attempt.activity.reasoningMs)} reasoning`
               : ''}

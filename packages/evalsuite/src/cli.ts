@@ -27,6 +27,7 @@ import { preflight, type SandboxVersions } from './preflight.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
+import { runOutcome } from './view/model.ts'
 
 const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1, query: 1 }
 
@@ -311,11 +312,10 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
   }
 
   if (interrupted || engineRun.cancelled) return EXIT.interrupted
-  const outcomes = record.evals.map((e) => e.outcome)
-  if (outcomes.includes('fail') || engineRun.unhandledErrors.length > 0) return EXIT.failed
-  if (record.status === 'budget') return EXIT.failed
-  if (outcomes.includes('infra_error')) return EXIT.infra
-  return EXIT.ok
+  if (engineRun.unhandledErrors.length > 0) return EXIT.failed
+  // The studio shows the same outcome for the run.
+  const outcome = runOutcome(record)
+  return outcome === 'fail' ? EXIT.failed : outcome === 'infra_error' ? EXIT.infra : EXIT.ok
 }
 
 /** Everything that can fail before the evals are collected: output mode, config, profile, flags. */

@@ -11,7 +11,8 @@ export interface Sandbox {
   /** `cwd` is relative to the workspace; `env` adds variables for this command only. */
   exec(command: string, opts?: ExecOptions): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
-  writeFile(path: string, content: string): Promise<void>
+  /** Strings are written as UTF-8; bytes as they are. */
+  writeFile(path: string, content: string | Uint8Array): Promise<void>
   /** With the Docker egress gateway: the brokered secrets it swaps in from now on. */
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
   /** When the sandbox records egress: the hosts contacted and refused so far. */

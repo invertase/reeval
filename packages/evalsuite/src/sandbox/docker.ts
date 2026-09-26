@@ -93,7 +93,10 @@ export async function createDockerSandbox(
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),
     }),
-    writeFile: async (path, content) => network.writeTextFile({ path: resolve(path), content }),
+    writeFile: async (path, content) =>
+      typeof content === 'string'
+        ? network.writeTextFile({ path: resolve(path), content })
+        : network.writeBinaryFile({ path: resolve(path), content }),
     destroy: async () => {
       await Promise.resolve(network.destroy()).catch(() => {})
     },

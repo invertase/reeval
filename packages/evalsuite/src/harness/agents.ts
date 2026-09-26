@@ -108,6 +108,17 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   },
 }
 
+/**
+ * Files under `~/` (and under the adapter's own home) that the agent's CLI rewrites every session
+ * with its own state. They aren't context the environment gave the agent, so they're recorded but
+ * left out of the context fingerprint, or no two runs would be comparable.
+ */
+export const RUNTIME_STATE: Record<BakedHarness, readonly string[]> = {
+  cursor: ['.cursor/cli-config.json', '.cursor/skills-cursor/.sync-manifest.json'],
+  'claude-code': [],
+  antigravity: [],
+}
+
 /** Every real agent ES can drive, by harness kind. */
 export const AGENTS: Record<AgentKind, Agent> = {
   cursor: {
@@ -204,6 +215,13 @@ const FAKE_LAYOUT: Layout = {
 export function layoutOf(descriptor: HarnessDescriptor): Layout {
   if (descriptor.kind !== 'fake') return LAYOUTS[descriptor.kind]
   return descriptor.layout ? LAYOUTS[descriptor.layout] : FAKE_LAYOUT
+}
+
+/** The CLI runtime state in the harness's image; a fake one runs in Cursor's unless `layout` says. */
+export function runtimeStateOf(descriptor: HarnessDescriptor): readonly string[] {
+  return RUNTIME_STATE[
+    descriptor.kind === 'fake' ? (descriptor.layout ?? 'cursor') : descriptor.kind
+  ]
 }
 
 /** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */

@@ -309,6 +309,12 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['env/files-home'],
   },
   {
+    id: 'files.binary',
+    area: 'Environments',
+    name: '`files` from `file()` are copied as bytes',
+    fixtures: ['env/files-binary'],
+  },
+  {
     id: 'env.vars',
     area: 'Environments',
     name: '`env` variables, `secret.fromEnv` and `optional`',
@@ -390,6 +396,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       docker('runs checks in the container, diffs, and removes it'),
       docker('a timeout removes the container'),
+      docker("npm installs the packed ES tarball in ES's image"),
     ],
   },
   {
@@ -585,6 +592,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
       'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
+      docker("the CLI's own runtime state leaves runs comparable"),
     ],
   },
   {
@@ -606,6 +614,8 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'evalsuite/test/studio.test.ts › serves the app with a strict CSP',
       'evalsuite/test/studio.test.ts › writes a static site',
+      'evalsuite/test/studio.test.ts › a run whose only failures are ungated is passed',
+      'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
     ],
   },
 

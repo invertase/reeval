@@ -6,6 +6,7 @@ import {
   formatPercent,
   type HistoryEntry,
   type RunRow,
+  runOutcome,
   runRows,
   shortSha,
 } from 'evalsuite/view'
@@ -29,15 +30,6 @@ import { formatDate, plural, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const route = getRouteApi('/')
-
-export const runOutcome = (e: HistoryEntry) =>
-  e.status === 'interrupted'
-    ? 'skipped'
-    : e.summary.fail > 0
-      ? 'fail'
-      : e.summary.infraError > 0
-        ? 'infra_error'
-        : 'pass'
 
 function Who({ entry }: { entry: HistoryEntry }) {
   if (entry.ci) {
