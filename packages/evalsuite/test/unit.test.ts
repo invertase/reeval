@@ -123,16 +123,27 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
 
 test("the fake agent's MCP step waits for a slow server's reply, and reports a crash", async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
-  // Answers the call after 1.5s, and exits as soon as stdin closes, as SDK stdio servers do.
+  // Event-driven, not timed: the server marks that the call arrived, then answers only once the
+  // test opens the gate, and only if its stdin is still open (it exits when stdin closes, as SDK
+  // stdio servers do). A client that stopped waiting gets no reply, however slow the machine is.
   await box.writeFile(
     '~/slow.mjs',
-    `process.stdin.on('end', () => process.exit(0))
-process.stdin.on('data', (d) => {
-  for (const m of String(d).split('\\n').filter(Boolean).map((l) => JSON.parse(l))) {
-    if (m.method !== 'tools/call') continue
+    `import { existsSync, writeFileSync } from 'node:fs'
+import { createInterface } from 'node:readline'
+const home = process.env.HOME
+let open = true
+process.stdin.on('end', () => { open = false; process.exit(0) })
+createInterface({ input: process.stdin }).on('line', (line) => {
+  const m = JSON.parse(line)
+  if (m.method !== 'tools/call') return
+  writeFileSync(home + '/called', '')
+  const gate = setInterval(() => {
+    if (!existsSync(home + '/gate')) return
+    clearInterval(gate)
+    if (!open) return
     const result = { content: [{ type: 'text', text: 'STAMP-7Q' }] }
-    setTimeout(() => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }) + '\\n'), 1500)
-  }
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }) + '\\n')
+  }, 20)
 })
 `,
   )
@@ -141,16 +152,23 @@ process.stdin.on('data', (d) => {
       kind: 'fake',
       script: [[{ mcp: 'stamp/house_stamp' }, { reply: 'done' }]],
     })
-    const session = await harness.start(box, AbortSignal.timeout(30_000), {
+    const session = await harness.start(box, AbortSignal.timeout(60_000), {
       skills: [],
       workspaceSkills: [],
       mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
     })
-    const turn = await session.send('stamp', AbortSignal.timeout(30_000))
+    const turn = await session.send('stamp', AbortSignal.timeout(60_000))
     return turn.transcript.find((e) => e.type === 'tool')
   }
+  /** Opens the gate once the call has reached the server, while the client is still waiting. */
+  const openGate = async () => {
+    for (let i = 0; i < 2400 && (await box.readFile('~/called')) === null; i++)
+      await new Promise((r) => setTimeout(r, 25))
+    assert.notEqual(await box.readFile('~/called'), null, 'the call never reached the server')
+    await box.writeFile('~/gate', '')
+  }
   try {
-    const slow = await call(['-c', 'exec node "$HOME/slow.mjs"'])
+    const [slow] = await Promise.all([call(['-c', 'exec node "$HOME/slow.mjs"']), openGate()])
     assert.deepEqual(slow && [slow.tool, slow.output, slow.ok], [
       'mcp__stamp__house_stamp',
       'STAMP-7Q',

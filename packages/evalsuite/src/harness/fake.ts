@@ -201,11 +201,16 @@ async function callMcpTool(
   const command = [server.command, ...server.args].map(q).join(' ')
   // stdin stays open until the call's reply is out (or the server exits, or 30s pass): a server
   // may drop requests it hasn't answered when stdin closes.
+  // A server may exit before reading (a crash): its requests then hit a pipe with no reader, so
+  // the client ignores SIGPIPE and drops the write's error, and still reports the server's stderr.
+  // `out` and `err` exist before the server starts, so the wait loop never reads a missing file.
   const script = [
-    'd=$(mktemp -d) && mkfifo "$d/in" || exit 1',
+    'd=$(mktemp -d) && mkfifo "$d/in" && : > "$d/out" && : > "$d/err" || exit 1',
     `${command} < "$d/in" > "$d/out" 2> "$d/err" & pid=$!`,
+    // After the server starts, so it keeps its own SIGPIPE handling.
+    "trap '' PIPE",
     'exec 3> "$d/in"',
-    `printf '%s\\n' ${messages.join(' ')} >&3`,
+    `printf '%s\\n' ${messages.join(' ')} >&3 2>/dev/null`,
     'i=0',
     `while [ $i -lt 300 ] && kill -0 $pid 2>/dev/null && ! grep -Eq '"id": ?2[,}]' "$d/out"; do sleep 0.1; i=$((i + 1)); done`,
     'exec 3>&-',
