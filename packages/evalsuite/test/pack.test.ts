@@ -25,6 +25,7 @@ test('the packed package installs into a clean project and runs es', {
   const tarball = readdirSync(dir).find((f) => f.endsWith('.tgz')) as string
   assert.ok(tarball, readdirSync(dir).join(', '))
   const listing = sh('tar', dir, ['tzf', tarball]).stdout
+  assert.match(listing, /^package\/LICENSE$/m)
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.match(listing, /^package\/dist\/setup\.js$/m)
   assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
@@ -38,6 +39,7 @@ test('the packed package installs into a clean project and runs es', {
   // points at the workspace.
   const manifest = JSON.parse(listingPackage(dir, tarball))
   const pkg = manifest.name as string
+  assert.equal(manifest.license, 'Apache-2.0')
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
   assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@evalsuite/')))
 

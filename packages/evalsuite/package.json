@@ -2,11 +2,16 @@
   "name": "@invertase/foobar",
   "version": "0.0.1",
   "description": "ES (Eval Suite): an eval runner for coding agents",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/invertase/evalsuite.git",
     "directory": "packages/evalsuite"
+  },
+  "homepage": "https://github.com/invertase/evalsuite/tree/main/packages/evalsuite#readme",
+  "bugs": {
+    "url": "https://github.com/invertase/evalsuite/issues"
   },
   "type": "module",
   "engines": {

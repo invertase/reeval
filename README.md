@@ -143,3 +143,8 @@ adds a Debug tab for attempts with local debug data.
 covers config and options, environments, profiles and budgets, the Docker sandbox
 (`docker({ install, dockerfile })`), secrets, judges, CLI flags and exit codes, output,
 concurrency, and the history and record format. It also covers developing this repo.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](./LICENSE). Copyright 2026 Invertase Limited.
+Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).
