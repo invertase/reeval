@@ -605,6 +605,21 @@ describe('common mistakes', () => {
       /egress\.allow in evaluate\("e"\): hosts are host names without a port: use 'api\.example\.com' \(got 'api\.example\.com:443'\)/,
     ],
     [
+      'a wildcard over a whole top-level domain',
+      `evaluate('e', { egress: { allow: ['*.com'] } }, async () => {})`,
+      /egress\.allow in evaluate\("e"\): '\*\.com' would allow every host under \.com; name the domain, e\.g\. '\*\.example\.com'\./,
+    ],
+    [
+      'a wildcard over IP addresses',
+      `evaluate('e', { egress: { allow: ['*.0.0.1'] } }, async () => {})`,
+      /egress\.allow in evaluate\("e"\): '\*\.0\.0\.1' isn't a host name or an IPv4 address, and a \*\. pattern never matches an address\./,
+    ],
+    [
+      'a short-form IPv4 address in an egress allowlist',
+      `evaluate('e', { egress: { allow: ['10.1'] } }, async () => {})`,
+      /egress\.allow in evaluate\("e"\): '10\.1' isn't a host name or an IPv4 address/,
+    ],
+    [
       'the network policy under another name',
       `evaluate('e', { network: 'deny-all' } as never, async () => {})`,
       /Unknown option "network" in evaluate\("e"\)\. Did you mean "egress"\?/,

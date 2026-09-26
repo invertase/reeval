@@ -1,3 +1,4 @@
+import { isIP } from 'node:net'
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SECRET_NAME } from './redact.ts'
@@ -93,7 +94,16 @@ const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
 
 /** Why `host` isn't a host name or `*.` pattern, or undefined when it is one. */
 function badHost(host: unknown): string | undefined {
-  if (typeof host === 'string' && HOST.test(host)) return undefined
+  if (typeof host === 'string' && HOST.test(host)) {
+    const name = host.replace(/^\*\./, '')
+    if (/(?:^|\.)\d+$/.test(name) && (name !== host || isIP(name) !== 4)) {
+      return `'${host}' isn't a host name or an IPv4 address, and a *. pattern never matches an address.`
+    }
+    if (name !== host && !name.includes('.')) {
+      return `'${host}' would allow every host under .${name}; name the domain, e.g. '*.example.${name}'.`
+    }
+    return undefined
+  }
   if (typeof host === 'string' && /^[a-z]+:\/\//i.test(host)) {
     return `hosts are host names, not URLs: use '${new URL(host).hostname}' (got '${host}')`
   }
