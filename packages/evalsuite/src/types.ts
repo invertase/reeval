@@ -217,8 +217,8 @@ export type CursorHarnessDescriptor = {
   /** A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`. */
   model: string
   /**
-   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the model's first allowed value,
-   * so pass the ones that change cost (`fast`) explicitly.
+   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's
+   * model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.
    */
   params?: Record<string, string>
   /** Cell id; defaults to `cursor:<model>`. */

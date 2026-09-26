@@ -10,7 +10,7 @@ const model = process.env.ES_CONTRACT_MODEL ?? ''
 const harness = () => {
   switch (process.env.ES_CONTRACT_HARNESS) {
     case 'cursor':
-      // fast=false: the cheaper variant; an unset parameter takes the model's first allowed value.
+      // fast=false: the cheaper variant; an unset parameter takes the catalog's default (fast=true).
       return cursor({ model, params: { fast: 'false' } })
     case 'antigravity':
       return antigravity({ model })

@@ -64,8 +64,9 @@ export type CursorSdkHarnessSettings = {
    */
   readonly requireCredentialBrokering?: boolean
   /**
-   * Model parameters, e.g. `{ fast: 'false' }` for `composer-2.5`. Unset parameters take the
-   * model's first allowed value, which isn't always its default variant: pass them explicitly.
+   * Model parameters, e.g. `{ fast: 'false' }` for `composer-2.5`. Parameters left unset take the
+   * catalog's default variant (`isDefault`; `composer-2.5` is `fast=true`), which the adapter
+   * passes explicitly, so the turn asks for exactly what it records.
    */
   readonly modelParams?: Readonly<Record<string, string>>
   /**
@@ -271,17 +272,7 @@ async function startSession(
         abortSignal: turn.abortSignal,
       })
       const model: CursorSdkModel | undefined = turn.model
-        ? {
-            id: turn.model,
-            ...(settings.modelParams && Object.keys(settings.modelParams).length > 0
-              ? {
-                  params: Object.entries(settings.modelParams).map(([id, value]) => ({
-                    id,
-                    value,
-                  })),
-                }
-              : {}),
-          }
+        ? withParams(turn.model, settings.modelParams, catalog)
         : undefined
       const turnFile = posix.join(sessionDir, `turn-${n}.json`)
       await sandbox.writeTextFile({
@@ -376,4 +367,28 @@ async function startSession(
     },
     doDestroy: stop,
   }
+}
+
+/**
+ * The model with every parameter set: the ones given, then the rest from the catalog's default
+ * variant (the SDK's own choice for an unset parameter), so nothing is left for the SDK to pick.
+ */
+export function withParams(
+  id: string,
+  given: Readonly<Record<string, string>> | undefined,
+  catalog: readonly CursorSdkModelEntry[] | undefined,
+): CursorSdkModel {
+  const entry = catalog?.find((m) => m.id === id || m.aliases?.includes(id))
+  const variants = Array.isArray(entry?.variants)
+    ? (entry.variants as Array<{
+        params?: Array<{ id: string; value: string }>
+        isDefault?: boolean
+      }>)
+    : []
+  const fallback = (variants.find((v) => v.isDefault) ?? variants[0])?.params ?? []
+  const params = [
+    ...Object.entries(given ?? {}).map(([pid, value]) => ({ id: pid, value })),
+    ...fallback.filter((p) => !given || !(p.id in given)),
+  ]
+  return params.length ? { id, params } : { id }
 }
