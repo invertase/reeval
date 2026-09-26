@@ -1,8 +1,8 @@
 // Every harness the real-agent suites (contract.test.ts, e2e-real.test.ts) run, one row each.
 // Adding a harness to them means adding a row here, and a case to the contract's es.config.ts.
-
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { type BakedHarness, imageFor } from '@evalsuite/sandbox-docker'
 
 export type HarnessRow = {
@@ -145,4 +145,28 @@ export function scanTargets(value: string): string {
       sha256: createHash('sha256').update(bytes).digest('hex'),
     })),
   )
+}
+
+/**
+ * The hard cap on real attempts across every suite of one CI job: each real row reserves what it
+ * may start in `ES_REAL_LEDGER` (a file, one number per line) before it runs, and fails without
+ * starting anything when that would take the job over `ES_REAL_ATTEMPT_BUDGET`. Unset, no cap
+ * (local runs); each es run's own `budget.attempts` still holds.
+ */
+export function reserveAttempts(row: HarnessRow, attempts: number, what: string): void {
+  const budget = Number(process.env.ES_REAL_ATTEMPT_BUDGET)
+  const ledger = process.env.ES_REAL_LEDGER
+  if (!row.key || !budget || !ledger) return
+  const spent = existsSync(ledger)
+    ? readFileSync(ledger, 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .reduce((sum, line) => sum + Number(line.split(' ')[0]), 0)
+    : 0
+  if (spent + attempts > budget) {
+    throw new Error(
+      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise ES_REAL_ATTEMPT_BUDGET in real.yml if the suite grew on purpose`,
+    )
+  }
+  appendFileSync(ledger, `${attempts} ${what} ${row.id}\n`)
 }

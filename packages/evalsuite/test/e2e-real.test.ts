@@ -10,7 +10,7 @@ import { describe, test } from 'node:test'
 import { type CliRun, readRun, recordedRuns, runCli } from './helpers.ts'
 import { containersLeft } from './support/containers.ts'
 import { fixture } from './support/fixture.ts'
-import { harnesses, rowEnv, skipRow } from './support/harnesses.ts'
+import { harnesses, reserveAttempts, rowEnv, skipRow } from './support/harnesses.ts'
 
 const HISTORY = 'evals/.history'
 const VIEWS = ['lift', 'flaky_cells', 'drift', 'failing_attempts', 'eval_trend', 'verdict_flips']
@@ -44,6 +44,7 @@ for (const row of harnesses) {
     test('es run --record -v: passes, prints the phase trace, writes .es/debug', {
       timeout: 600_000,
     }, async () => {
+      reserveAttempts(row, 2, 'e2e')
       const p = await fixture('e2e')
       dir = p.dir
       git(dir, 'init', '-q', '-b', 'main')

@@ -18,6 +18,7 @@ import {
   type HarnessRow,
   harnesses,
   keyOf,
+  reserveAttempts,
   rowEnv,
   scanTargets,
   skipRow,
@@ -91,6 +92,9 @@ const withTurns = (run: RunRecord) =>
 type TurnRecord = AttemptRecord['turns'][number] & {
   usage?: { input: number; output: number; cacheRead: number } | null
 }
+
+/** What one contract run starts: es.config.ts's budget.attempts, which es run enforces too. */
+const CONTRACT_ATTEMPTS = 12
 
 const behaviours: Behaviour[] = [
   {
@@ -269,6 +273,7 @@ for (const row of harnesses) {
     let ran: Ran | undefined
     before(
       async () => {
+        reserveAttempts(row, CONTRACT_ATTEMPTS, 'contract')
         const p = await fixture('contract')
         const cli = await runCli(p.dir, ['run', '--concurrency', row.key ? '2' : '4'], {
           env: {
@@ -291,7 +296,7 @@ for (const row of harnesses) {
     test('the run: every eval ran once, only the canaries failed (exit 1)', () => {
       assert.ok(ran)
       const out = `${ran.cli.stdout}\n${ran.cli.stderr}`
-      assert.equal(ran.run.evals.length, 12, out)
+      assert.equal(ran.run.evals.length, CONTRACT_ATTEMPTS, out)
       assert.equal(ran.cli.code, 1, out)
     })
     for (const b of behaviours) {

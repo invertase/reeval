@@ -64,12 +64,12 @@ jobs:
       # Coverage on one leg is enough: both run the same code.
       - if: matrix.node == ''
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - name: evalsuite (every test file but the fixture, Docker, studio and pack ones)
+      - name: evalsuite (every test file but the fixture, Docker, studio, pack and real-agent ones)
         working-directory: packages/evalsuite
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
-            test/!(features|docker|docker-antigravity|studio|pack).test.ts
+            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real).test.ts
       # Its real-container tests skip here: there's no sandbox image. The docker job runs them.
       - name: sandbox-docker (without containers)
         run: pnpm --filter @evalsuite/sandbox-docker test
@@ -116,7 +116,8 @@ jobs:
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
       - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      # evalsuite: the fixtures' Docker tier, test/docker.test.ts and the Docker sandbox contract.
+      # evalsuite: the fixtures' Docker tier, test/docker.test.ts, the Docker sandbox contract, and
+      # the harness contract and e2e CLI suites on their key-free fake row (real rows run in real.yml).
       # sandbox-docker: its whole suite, real containers included. All fail rather than skip
       # without Docker.
       - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == '@invertase/foobar' && 'test:docker test/sandbox-contract.test.ts' || 'test' }}
