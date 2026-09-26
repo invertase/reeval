@@ -70,8 +70,9 @@ export const OPENCODE_ENDPOINTS = [
 
 /**
  * OpenCode (`opencode acp`) as an AI SDK harness, on Google models with a Gemini API key: a
- * model is a Gemini id such as `gemini-3.8-flash`, run as OpenCode's `google/gemini-3.8-flash`. `@ai-sdk/harness-opencode` brokers only Anthropic, OpenAI and a few other
- * providers' keys, so this is ES's own thin config over `@ai-sdk/harness-acp`.
+ * model is a Gemini id such as `gemini-3.8-flash`, run as OpenCode's `google/gemini-3.8-flash`.
+ * `@ai-sdk/harness-opencode` brokers only Anthropic, OpenAI and a few other providers' keys, so
+ * this is ES's own thin config over `@ai-sdk/harness-acp`.
  *
  * OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's, so turns
  * report no usage here rather than an undercount (see {@link OpenCodeStreamTranslator}).
@@ -140,7 +141,10 @@ type Emit = (part: { type: string; [key: string]: unknown }) => void
 export const googleModel = (model: string) =>
   model.startsWith('google/') ? model : `google/${model}`
 
-/** The session, with each turn's model on the `google` provider, and its parts through a fresh {@link OpenCodeStreamTranslator}. */
+/**
+ * The session, with each turn's model on the `google` provider, and its parts through a fresh
+ * {@link OpenCodeStreamTranslator}.
+ */
 function translated(session: Session, mcpServers: readonly string[]): Session {
   const turn = (run: (options: never) => unknown) => (options: { emit: Emit; model?: string }) => {
     const translator = new OpenCodeStreamTranslator({ mcpServers })
