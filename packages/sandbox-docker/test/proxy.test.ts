@@ -102,8 +102,11 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
     const accept = createHash('sha1')
       .update(`${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
       .digest('base64')
+    const echoed = req.headers.authorization
+      ? `x-echo-authorization: ${req.headers.authorization}\r\n`
+      : ''
     socket.write(
-      `HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-accept: ${accept}\r\n\r\n`,
+      `HTTP/1.1 101 Switching Protocols\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-accept: ${accept}\r\n${echoed}\r\n`,
     )
     socket.pipe(socket)
   })
@@ -880,6 +883,36 @@ describe('brokered secrets through the proxy', () => {
       assert.equal(echoOf(r).headers['accept-encoding'], undefined, 'responses come uncompressed')
       // Twin: the upstream really got the value, so the check above could fail.
       assert.match(reachedUpstream(), new RegExp(SECRET))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a websocket upgrade from a brokered host has the value put back as the placeholder', async () => {
+    const gw = await startProxy()
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      seen.length = 0
+      const tunnel = await connect(gw, HOST, h1.port)
+      assert.ok(tunnel.ok)
+      const secure = tls.connect({ socket: tunnel.socket, servername: HOST, ca: gw.ca.cert })
+      await new Promise((r) => secure.once('secureConnect', r))
+      secure.write(
+        `GET /ws HTTP/1.1\r\nhost: ${HOST}\r\nupgrade: websocket\r\nconnection: Upgrade\r\nsec-websocket-key: dGhlIHNhbXBsZSBub25jZQ==\r\nsec-websocket-version: 13\r\nauthorization: Bearer ${HOLDER}\r\n\r\n`,
+      )
+      let text = ''
+      await new Promise<void>((resolve) => {
+        secure.on('data', (d) => {
+          text += d
+          if (text.includes('\r\n\r\n')) resolve()
+        })
+      })
+      secure.destroy()
+      assert.match(text, /^HTTP\/1.1 101/)
+      assert.doesNotMatch(text, new RegExp(SECRET), 'the upgrade response headers are scrubbed')
+      assert.match(text, new RegExp(`x-echo-authorization: Bearer ${HOLDER}`))
+      // Twin: the upstream really got the value, so the check above could fail.
+      assert.equal(seen[0]?.headers.authorization, `Bearer ${SECRET}`)
     } finally {
       gw.close()
     }

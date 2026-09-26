@@ -107,10 +107,14 @@ export function unsubstituted(
   return out
 }
 
+/** A response header value with every real value on the host put back as its placeholder. */
+export const scrubValue = (subs: readonly Substitution[], value: string) =>
+  subs.reduce((out, s) => replaceIn(out, s.value, s.placeholder), value)
+
 /** Response headers with every real value on the host put back as its placeholder. */
 export function scrubHeaders(subs: readonly Substitution[], headers: Headers): Headers {
   if (subs.length === 0) return headers
-  const one = (v: string) => subs.reduce((out, s) => replaceIn(out, s.value, s.placeholder), v)
+  const one = (v: string) => scrubValue(subs, v)
   return Object.fromEntries(
     Object.entries(headers).map(([k, v]) => [
       k,
