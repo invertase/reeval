@@ -87,14 +87,32 @@ const normalise = (host: string) =>
     .replace(/\.$/, '')
     .replace(/^\[|\]$/g, '')
 
-/** `*.example.com` matches any subdomain of example.com, not example.com itself. */
-export function hostAllowed(patterns: readonly string[], host: string): boolean {
+/**
+ * Private, carrier-grade NAT and unique-local ranges: a name matched only by a `*.` pattern
+ * mustn't resolve into them, or anyone who can add a DNS record under the pattern's domain
+ * reaches the worker's LAN.
+ */
+const PRIVATE = blockList([
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  'fc00::/7',
+])
+
+/** How `host` matches: listed as it is, only by a `*.` pattern (never an IP address), or not. */
+function hostMatch(patterns: readonly string[], host: string): 'exact' | 'wildcard' | undefined {
   const h = normalise(host)
-  return patterns.some((pattern) => {
-    const p = normalise(pattern)
-    return p.startsWith('*.') ? h.endsWith(p.slice(1)) : h === p
-  })
+  const ps = patterns.map(normalise)
+  if (ps.includes(h)) return 'exact'
+  // No top-level domain is numeric: such a host is an IP address, maybe in a short form like 10.1.
+  if (isIP(h) || /(?:^|\.)\d+$/.test(h)) return undefined
+  return ps.some((p) => p.startsWith('*.') && h.endsWith(p.slice(1))) ? 'wildcard' : undefined
 }
+
+/** `*.example.com` matches any subdomain of example.com, not example.com itself or an IP. */
+export const hostAllowed = (patterns: readonly string[], host: string) =>
+  hostMatch(patterns, host) !== undefined
 
 const defaultLookup: Lookup = async (host) =>
   (await dnsLookup(host, { all: true, verbatim: true })).map((a) => a.address)
@@ -118,7 +136,7 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
       return { allowed: false, status: 403, reason: 'the policy denies all egress' }
     }
     // Refused before any DNS lookup, so an unlisted host is never resolved on the agent's behalf.
-    const listed = hostAllowed(custom?.allowedHosts ?? [], host)
+    const listed = hostMatch(custom?.allowedHosts ?? [], host)
     if (custom && !listed && !custom.allowedCIDRs?.length) {
       return { allowed: false, status: 403, reason: `${host} isn't in the allowlist` }
     }
@@ -140,6 +158,13 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     if (!custom) return { allowed: true, address: first }
     if (addresses.some((a) => inList(deniedCidrs, a))) {
       return { allowed: false, status: 403, reason: `${host} is in a denied range` }
+    }
+    if (listed === 'wildcard' && addresses.some((a) => inList(PRIVATE, a))) {
+      return {
+        allowed: false,
+        status: 403,
+        reason: `${host} resolves to a private address, which a *. pattern doesn't allow; list the host itself`,
+      }
     }
     if (listed) return { allowed: true, address: first }
     if (custom.allowedCIDRs?.length && addresses.every((a) => inList(allowedCidrs, a))) {
