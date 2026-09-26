@@ -1,0 +1,202 @@
+[
+  {
+    "type": "user",
+    "uuid": "agent-e9098986-01b4-4d58-beb4-5725e206d3b6:0",
+    "agent_id": "agent-e9098986-01b4-4d58-beb4-5725e206d3b6",
+    "message": {
+      "agentConversationTurn": {
+        "userMessage": {
+          "text": "Using your built-in web tools only (no shell): web-search for \"RFC 2606\", then web-fetch https://httpbin.org/ip. Reply with the origin value.",
+          "messageId": "",
+          "selectedContext": {
+            "selectedImages": [],
+            "extraContext": [],
+            "files": [],
+            "codeSelections": [],
+            "terminals": [],
+            "terminalSelections": [],
+            "folders": [],
+            "externalLinks": [],
+            "cursorRules": [],
+            "cursorCommands": [],
+            "documentations": [],
+            "uiElements": [],
+            "consoleLogs": [],
+            "extraContextEntries": [],
+            "gitCommits": [],
+            "pastChats": [],
+            "gitPrDiffSelections": [],
+            "selectedPullRequests": [],
+            "selectedSubagents": [],
+            "selectedVideos": [],
+            "selectedBrowsers": [],
+            "selectedDocuments": [],
+            "selectedSkills": []
+          },
+          "mode": "AGENT_MODE_UNSPECIFIED",
+          "conversationStateBlobId": "uWQzMBw2vSkSyEkmeblA+nFc+S+v5+zz9RLGM0BaOKQ=",
+          "hookAdditionalContexts": [],
+          "startedAtMs": "1790443943022",
+          "completedAtMs": "1790443943022"
+        },
+        "steps": [
+          {
+            "thinkingMessage": {
+              "text": "I will search for RFC 2606 and fetch httpbin.org/ip to extract the origin value.\n\nI'll use GetDynamicTools to locate WebSearch and WebFetch, then call them via CallDynamicTool.",
+              "durationMs": 3,
+              "startedAtMs": "1790443944414",
+              "completedAtMs": "1790443944417"
+            }
+          },
+          {
+            "assistantMessage": {
+              "text": "Discovering built-in WebSearch and WebFetch tool schemas, then running the search and fetch.\n\n\n",
+              "startedAtMs": "1790443944418",
+              "completedAtMs": "1790443944426"
+            }
+          },
+          {
+            "toolCall": {
+              "getMcpToolsToolCall": {
+                "args": {
+                  "server": "cursor",
+                  "pattern": "Web",
+                  "toolCallId": "tool_c69108f9-f18a-4403-91c9-acb1dfccfc3"
+                },
+                "result": {
+                  "success": {
+                    "content": "{\n  \"mode\": \"search\",\n  \"pattern\": \"Web\",\n  \"matches\": [\n    {\n      \"namespace\": \"cursor\",\n      \"tool\": \"WebFetch\",\n      \"description\": \"Fetch content from a specified URL and return its contents in a readable markdown format. Use this tool when you need to retrieve and analyze web content.\"\n    },\n    {\n      \"namespace\": \"cursor\",\n      \"tool\": \"WebSearch\",\n      \"description\": \"Search web for real-time info on any topic; use for up-to-date facts not in training data, like current events or tech updates. Results include snippets and URLs.\"\n    }\n  ]\n}"
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_c69108f9-f18a-4403-91c9-acb1dfccfc3",
+              "startedAtMs": "1790443944424",
+              "completedAtMs": "1790443944431"
+            }
+          },
+          {
+            "thinkingMessage": {
+              "text": "I need to check the schemas for WebSearch and WebFetch before proceeding.",
+              "durationMs": 1,
+              "startedAtMs": "1790443945351",
+              "completedAtMs": "1790443945352"
+            }
+          },
+          {
+            "toolCall": {
+              "getMcpToolsToolCall": {
+                "args": {
+                  "server": "cursor",
+                  "toolName": "WebSearch",
+                  "toolCallId": "tool_9a82ff1a-aee5-41aa-832a-d187c807f46"
+                },
+                "result": {
+                  "success": {
+                    "content": "{\n  \"tool\": \"WebSearch\",\n  \"description\": \"Search web for real-time info on any topic; use for up-to-date facts not in training data, like current events or tech updates. Results include snippets and URLs.\",\n  \"inputSchema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"search_term\": {\n        \"type\": \"string\",\n        \"description\": \"The search term to look up on the web. Be specific and include relevant keywords for better results. For technical queries, include version numbers or dates if relevant.\"\n      },\n      \"explanation\": {\n        \"type\": \"string\",\n        \"description\": \"One sentence explanation as to why this tool is being used, and how it contributes to the goal.\"\n      }\n    },\n    \"required\": [\n      \"search_term\"\n    ]\n  }\n}"
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_9a82ff1a-aee5-41aa-832a-d187c807f46",
+              "startedAtMs": "1790443945353",
+              "completedAtMs": "1790443945358"
+            }
+          },
+          {
+            "toolCall": {
+              "getMcpToolsToolCall": {
+                "args": {
+                  "server": "cursor",
+                  "toolName": "WebFetch",
+                  "toolCallId": "tool_3a84a000-aca3-4c56-be05-795b8aedbf4"
+                },
+                "result": {
+                  "success": {
+                    "content": "{\n  \"tool\": \"WebFetch\",\n  \"description\": \"Fetch content from a specified URL and return its contents in a readable markdown format. Use this tool when you need to retrieve and analyze web content.\",\n  \"inputSchema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"url\": {\n        \"type\": \"string\",\n        \"description\": \"The URL to fetch. The content will be converted to a readable markdown format.\"\n      },\n      \"requestSmartModeApproval\": {\n        \"type\": \"boolean\",\n        \"description\": \"Set to true when immediately retrying the exact same fetch after Auto-review blocks it and you decide the user should approve it through the native approval card.\"\n      },\n      \"smartModeBlockReason\": {\n        \"type\": \"string\",\n        \"description\": \"Provide the exact block reason returned by Auto-review in the prior rejection. Required when requestSmartModeApproval is true so the approval card shows the original classifier reason without re-running the classifier.\"\n      }\n    },\n    \"required\": [\n      \"url\"\n    ]\n  }\n}"
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_3a84a000-aca3-4c56-be05-795b8aedbf4",
+              "startedAtMs": "1790443945359",
+              "completedAtMs": "1790443945364"
+            }
+          },
+          {
+            "thinkingMessage": {
+              "text": "Running both web searches in parallel.",
+              "durationMs": 1,
+              "startedAtMs": "1790443945966",
+              "completedAtMs": "1790443945967"
+            }
+          },
+          {
+            "toolCall": {
+              "webFetchToolCall": {
+                "args": {
+                  "url": "https://httpbin.org/ip",
+                  "toolCallId": "tool_54a660b0-9172-4a09-9be6-4f09e168028"
+                },
+                "result": {
+                  "success": {
+                    "url": "https://httpbin.org/ip",
+                    "markdown": "{\n \"origin\": \"142.111.150.44\"\n}\n"
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_54a660b0-9172-4a09-9be6-4f09e168028",
+              "startedAtMs": "1790443945979",
+              "completedAtMs": "1790443946707"
+            }
+          },
+          {
+            "toolCall": {
+              "webSearchToolCall": {
+                "args": {
+                  "searchTerm": "RFC 2606",
+                  "toolCallId": "tool_3b2a75b7-2659-461e-aa02-3a0c467cf94"
+                },
+                "result": {
+                  "success": {
+                    "references": [
+                      {
+                        "title": "Web search results",
+                        "url": "",
+                        "chunk": "Links:\n1. [RFC 2606: Reserved Top Level DNS Names | RFC Editor](https://www.rfc-editor.org/info/rfc2606)\n2. [](https://www.rfc-editor.org/rfc/rfc6761.html)\n3. [IANA-managed Reserved Domains](https://www.iana.org/domains/reserved)\n4. [](https://www.rfc-editor.org/rfc/rfc2606.html)\n5. [History for rfc2606](https://datatracker.ietf.org/doc/rfc2606/history/)\n\nSynthesis:\nRFC 2606 (BCP 32) reserves four top-level domains:.test for DNS testing,.example for documentation,.invalid for deliberately invalid names, and.localhost for loopback use. It also reserves example.com, example.net, and example.org for documentation [1]. RFC 6761 defines their special-use behavior: example domains resolve normally, while.test,.invalid, and.localhost receive special handling [2]. Use these names instead of real domains in examples and tests. [3]\n\nHighlights:\n<result id=\"1\">\n<title>RFC 2606: Reserved Top Level DNS Names | RFC Editor</title>\n<url>https://www.rfc-editor.org/info/rfc2606</url>\n<content># RFC 2606: BCP 32: Reserved Top Level DNS Names\n...\nAbstract\n\n   To reduce the likelihood of conflict and confusion, a few top level\n   domain names are reserved for use in private testing, as examples in\n   documentation, and the like.  In addition, a few second level domain\n   names reserved for use as examples are documented.\n...\n2. TLDs for Testing, & Documentation Examples\n\n   There is a need for top level domain (TLD) names that can be used for\n   creating names which, without fear of conflicts with current or\n   future actual TLD names in the global DNS, can be used for private\n   testing of existing DNS related code, examples in documentation, DNS\n   related experimentation, invalid DNS names, or other similar uses.\n...\nTo safely satisfy these needs, four domain names are reserved as\n   listed and described below.\n...\nbe invalid and which it is obvious at a\n      glance are invalid.\n\n      The \".localhost\" TLD has\n...\n3. Reserved Example Second Level Domain Names\n\n   The Internet Assigned Numbers Authority (IANA) also currently has the\n   following second level domain names reserved which can be used as\n   examples.\n...\n4. IANA Considerations\n\n   IANA has agreed to the four top level domain name reservations\n   specified in this document and will reserve them for the uses\n   indicated.\n...\nConfusion and conflict can be caused by the use of a current or\n   future top level domain name in experimentation or testing, as an\n   example in documentation, to indicate invalid names, or as a synonym\n   for the loop back address.  Test and experimental software can escape\n   and end up being run against the global operational DNS.  Even\n   examples used \"only\" in documentation can end up being coded and\n   released or cause conflicts due to later real use and the possible\n   acquisition of intellectual property rights in such \"example\" names.\n\n   The reservation of several top level domain names for these purposes\n   will minimize such confusion and conflict.</content>\n</result>\n\n<result id=\"2\">\n<title></title>\n<url>https://www.rfc-editor.org/rfc/rfc6761.html</url>\n<content>Updates: 1918, 2606                                           Apple Inc.\nCategory: Standards Track                                  February\n...\nAnalogous to Special-Use IPv4 Addresses [RFC5735], the Domain Name\n   System (DNS) [RFC1034][RFC1035] has its own concept of reserved\n   names, such as \"example.com.\", \"example.net.\", and \"example.org.\", or\n   any name falling under the top-level pseudo-domain \"invalid.\"\n   [RFC2606].  However, \"Reserved Top Level DNS Names\" [RFC2606] does\n   not state whether implementations are expected to treat such names\n   differently, and if so, in what way.\n\n   This document specifies under what circumstances special treatment is\n   appropriate, and in what ways.\n...\n6.  Initial Registry\n\n   The initial IANA \"Special-Use Domain Names\" registry shall contain\n   entries for the private-address [RFC1918] reverse-mapping domains and\n   for the existing Reserved Top Level DNS Names [RFC2606].\n...\nIANA Considerations\n\n   IANA has created a new registry of Special-Use Domain Names,\n   initially populated with the private-address reverse-mapping domains\n   and the Reserved Top Level DNS Names outlined above in Section 6.\n\n   When IANA receives a request to record a new \"Special-Use Domain\n   Name\", it should verify, in consultation with the IESG, that the IETF\n   \"Standards Action\" or \"IESG Approval\" document [RFC5226] includes the\n   required \"Domain Name Reservation Considerations\" section stating how\n   the special meaning of this name affects the behavior of hardware,\n   software, and humans in the seven categories.  If IANA and the IESG\n   determine that special handling of this \"Special-Use Domain Name\" is\n   appropriate, IANA should record the Special-Use Domain Name, and a\n   reference to the specification that documents it, in\n...\n., Karren\n...\nFebruary 19 ... .\n\n   [RFC2606]  Eastlake, D. and A. Panitz, \"Reserved Top Level DNS\n              Names\", BCP 32, RFC 2606, June 1999.</content>\n</result>\n\n<result id=\"3\">\n<title>IANA-managed Reserved Domains</title>\n<url>https://www.iana.org/domains/reserved</url>\n<content>As described in RFC 2606 and RFC 6761, a number of domains such as example.com and example.org are maintained for documentation purposes. These domains may be used as illustrative examples in documents without prior coordination with us. They are not available for registration or transfer.\n...\nWe act as both the registrant and registrar for a select number of domains which have been reserved under policy grounds. These exclusions are typically indicated in either technical standards (RFC documents), or contractual limitations.\n\nDomains which are described as registered to IANA or ICANN on policy grounds are not available for registration or transfer, with the exception of country-name.info domains. These domains are available for release by the ICANN Governmental Advisory Committee Secretariat.</content>\n</result>\n\n<result id=\"4\">\n<title></title>\n<url>https://www.rfc-editor.org/rfc/rfc2606.html</url>\n<content>Reserved Top Level DNS Names\n...\nAbstract\n\n   To reduce the likelihood of conflict and confusion, a few top level\n   domain names are reserved for use in private testing, as examples in\n   documentation, and the like.  In addition, a few second level domain\n   names reserved for use as examples are documented.\n...\n2. TLDs for Testing, & Documentation Examples\n\n   There is a need for top level domain (TLD) names that can be used for\n   creating names which, without fear of conflicts with current or\n   future actual TLD names in the global DNS, can be used for private\n   testing of existing DNS related code, examples in documentation, DNS\n   related experimentation, invalid DNS names, or other similar uses.\n...\nTo safely satisfy these needs, four domain names are reserved as\n   listed and described below.\n...\n\".example\" is recommended for use in documentation or as examples.\n...\n3. Reserved Example Second Level Domain Names\n\n   The Internet Assigned Numbers Authority (IANA) also currently has the\n   following second level domain names reserved which can be used as\n   examples.\n...\n4. IANA Considerations\n\n   IANA has agreed to the four top level domain name reservations\n   specified in this document and will reserve them for the uses\n   indicated.\n...\nConfusion and conflict can be caused by the use of a current or\n   future top level domain name in experimentation or testing, as an\n   example in documentation, to indicate invalid names, or as a synonym\n   for the loop back address.  Test and experimental software can escape\n   and end up being run against the global operational DNS.  Even\n   examples used \"only\" in documentation can end up being coded and\n   released or cause conflicts due to later real use and the possible\n   acquisition of intellectual property rights in such \"example\" names.\n\n   The reservation of several top level domain names for these purposes\n   will minimize such confusion and conflict.</content>\n</result>\n\n<result id=\"5\">\n<title>History for rfc2606</title>\n<url>https://datatracker.ietf.org/doc/rfc2606/history/</url>\n<content># Reserved Top Level DNS Names RFC 2606 also known as BCP 32\n...\nRFC 2606 (1999-06-01) draft-ietf-dnsind-test-tlds-13 (1999-02-25) draft-ietf-dnsind-test-tlds-12 (1998-11-20) draft-ietf-dnsind-test-tlds-11 (1998-08-14) draft-ietf-dnsind-test-tlds-10 (1998-06-27) draft-ietf-dnsind-test-tlds-09 (1998-05-12) draft-ietf-dnsind-test-tlds-08 (1998-04-07) draft-ietf-dnsind-test-tlds-07 (1998-01-28) draft-ietf-dnsind-test-tlds-06 (1997-12-22) draft-ietf-dnsind-test-tlds-05 (1997-11-18) draft-ietf-dnsind-test-tlds-04 (1997-10-31) draft-ietf-dnsind-test-tlds-03 (1997-10-15) draft-ietf-dnsind-test-tlds-02 (1997-09-12) draft-ietf-dnsind-test-tlds-01 (1997-08-02) draft-ietf-dnsind-test-tlds-00 (1997-07-15)\n...\n999 ... -11 (1998-08-14) draft-ietf-dnsind-test-tlds-1 ... (1998-06-27 ... draft-ietf-dnsind-test-tlds-09 ... -test-tlds-05 (1997-11-18) draft-ietf-dnsind-test-tlds-04 (1997-10-31) draft-ietf-dnsind-test-tlds-03 (1997-10-15) draft-ietf-dnsind-test-tlds-02 (1997-09-12) draft-ietf-dnsind-test-tlds-01 (1997-08 ... 02) draft-ietf-dnsind-test-tlds-00 (1997-07-15\n...\n- RFC 2606\n- draft-ietf-dnsind-test-tlds\n...\n| Date | By | Action |\n| --- | --- | ---\n...\n| (System) | Changed metadata: changed keywords to '['domain', 'name', 'system', 'private']' from '[]' |\n| (System) | Metadata update from RFC Editor |\n| (System) | Changed author \"A. Panitz\": changed name from \" ... \" to \"A. Panitz\", cleared country (was \"Newark, ... 19711 USA\"), changed order from \"1\" to \"2\" |\n| (System) |\n| (System) | Metadata update from RFC Editor |\n| (System) | Received changes through RFC Editor sync (added Errata tag) |\n| (System) | Imported membership of rfc2606 in bcp32 via sync to the rfc-index |\n| (System) | No history of BCP32 is currently available in the datatracker before this point |\n| (System) | Received changes through RFC Editor sync (removed Errata tag (all errata rejected)) |\n| (System) | Received changes through RFC Editor sync (added Errata tag) |\n| (System) | RFC published |</content>\n</result>"
+                      },
+                      {
+                        "title": "",
+                        "url": "https://www.rfc-editor.org/rfc/rfc6761.html",
+                        "chunk": "Full page text written to file: /home/ubuntu/.cursor/projects/tmp-csdk-msg-i4jVW1/agent-tools/50701b30-fba8-4794-a7bf-bff3a9cabdb8.txt\nSize: 28.2 KB, 654 lines\nUse shell / grep / read_file on this path to inspect the page; no follow-up fetch is needed."
+                      }
+                    ]
+                  }
+                }
+              },
+              "hookAdditionalContexts": [],
+              "toolCallId": "tool_3b2a75b7-2659-461e-aa02-3a0c467cf94",
+              "startedAtMs": "1790443945973",
+              "completedAtMs": "1790443950994"
+            }
+          },
+          {
+            "thinkingMessage": {
+              "text": "I will reply with the origin value from the httpbin fetch.\n\nThe origin value is 142.111.150.44.",
+              "durationMs": 1,
+              "startedAtMs": "1790443952360",
+              "completedAtMs": "1790443952361"
+            }
+          },
+          {
+            "assistantMessage": {
+              "text": "**origin:** `142.111.150.44`",
+              "startedAtMs": "1790443952363"
+            }
+          }
+        ]
+      }
+    }
+  }
+]

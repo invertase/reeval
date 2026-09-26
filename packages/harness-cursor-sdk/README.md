@@ -62,10 +62,13 @@ this adapter passes them on as `finish-step` and `finish` usage.
   `mcpServers` go inline, in the SDK's `McpServerConfig` shape, on every turn.
 - **Web tools.** SDK 1.0.32 reports no `tool_call` events for its web search and fetch. Cursor's
   backend sends `webSearchToolCall` and `webFetchToolCall` updates, but the SDK's converter maps
-  them (and `fetchToolCall`) to null, so they reach neither `run.stream()` nor `onDelta` /
-  `onStep`, and no hook fires for them. They run on Cursor's servers, not in the sandbox.
-  `CURSOR_SDK_UNREPORTED_TOOLS` lists them; empty it on a bump that reports them. `webSearch`
-  and `webFetch` are mapped already, as `test/fixtures/web-tools.ndjson` checks.
+  them to null, so they reach neither `run.stream()` nor `onDelta` / `onStep`, and no hook fires
+  for them. They run on Cursor's servers, not in the sandbox. The stored conversation keeps them,
+  so after each turn the runner reads `Agent.messages.list()` and reports the calls the stream
+  didn't as `tool_call` events (marked `recovered`, with the backend's `started_at_ms` /
+  `completed_at_ms`), before the result. The turn's `finish-step` waits for the result line, since
+  HarnessAgent refuses content after it. When it can't recover them, the turn's
+  `harnessMetadata.cursorSdk.unreportedTools` lists the tools (`CURSOR_SDK_RECOVERED_TOOLS`).
 - **Permissions.** The SDK's local agent runs every tool without asking. `sdkSandbox: true` turns
   on its own shell sandbox (bubblewrap), which a container sandbox doesn't need.
 

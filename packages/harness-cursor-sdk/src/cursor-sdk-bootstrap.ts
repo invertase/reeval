@@ -4,15 +4,48 @@ import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 export const CURSOR_SDK_VERSION = '1.0.32'
 
 /**
- * Built-in tools the agent can use at {@link CURSOR_SDK_VERSION} without any `tool_call` in the
- * stream. Cursor's backend sends their calls, but the SDK's interaction-update converter maps
- * `webSearchToolCall`, `webFetchToolCall` and `fetchToolCall` to null and drops them, so they
- * never reach `run.stream()`, `onDelta` or `onStep`. A bump that reports them empties this.
+ * Built-in tools whose calls never reach the stream at {@link CURSOR_SDK_VERSION}: Cursor's
+ * backend sends them, but the SDK's interaction-update converter maps `webSearchToolCall` and
+ * `webFetchToolCall` to null, so neither `run.stream()` nor `onDelta` / `onStep` sees them. The
+ * agent's stored conversation (`Agent.messages.list`) keeps them, with args, results and times,
+ * so the runner reports them from there after each turn, as `tool_call` events marked
+ * `recovered`. When it can't, the turn's `harnessMetadata.cursorSdk.unreportedTools` lists them.
  */
-export const CURSOR_SDK_UNREPORTED_TOOLS: readonly ('webSearch' | 'webFetch')[] = [
-  'webSearch',
-  'webFetch',
-]
+export const CURSOR_SDK_RECOVERED_TOOLS = {
+  webSearchToolCall: 'webSearch',
+  webFetchToolCall: 'webFetch',
+} as const
+
+/** A web call in the stored conversation: `at` holds its `startedAtMs` and `completedAtMs`. */
+export type StoredWebCall = {
+  name: string
+  id: string
+  at: { startedAtMs?: unknown; completedAtMs?: unknown }
+  call: { args?: Record<string, unknown>; result?: { success?: unknown; error?: unknown } }
+}
+
+/**
+ * The web calls in `Agent.messages.list()`'s messages (as JSON), wherever they're nested: each is
+ * a `ToolCall` whose oneof key is in `recovered`. The runner embeds this function's source.
+ */
+export function storedWebCalls(
+  value: unknown,
+  recovered: Record<string, string> = CURSOR_SDK_RECOVERED_TOOLS,
+  found: StoredWebCall[] = [],
+): StoredWebCall[] {
+  if (Array.isArray(value)) {
+    for (const v of value) storedWebCalls(v, recovered, found)
+  } else if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>
+    for (const [key, name] of Object.entries(recovered)) {
+      if (o[key] && typeof o.toolCallId === 'string') {
+        found.push({ name, id: o.toolCallId, at: o, call: o[key] as StoredWebCall['call'] })
+      }
+    }
+    for (const v of Object.values(o)) storedWebCalls(v, recovered, found)
+  }
+  return found
+}
 
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CURSOR_SDK_BOOTSTRAP_DIR = '.harness-bootstrap/cursor-sdk'
@@ -60,8 +93,16 @@ const { Agent, Cursor, JsonlLocalAgentStore } = sdk
 // goes through the proxy like every other request.
 Cursor.configure({ local: { useHttp1ForAgent: true } })
 
+const RECOVERED = ${JSON.stringify(CURSOR_SDK_RECOVERED_TOOLS)}
+const storedWebCalls = ${storedWebCalls.toString()}
+const epochMs = (v) => (v === undefined || v === null || Number.isNaN(Number(v)) ? undefined : Number(v))
+// As JSON: in memory they're protobuf messages, whose oneofs are { case, value }.
+const listMessages = async (turn) =>
+  JSON.parse(JSON.stringify(await Agent.messages.list(agent.agentId, { cwd: turn.cwd, store })))
+
 let agent
 let run
+let store
 let stopping = false
 const stop = () => {
   stopping = true
@@ -78,12 +119,13 @@ for (; !stopping; n++) {
   const started = Date.now()
   try {
     if (!agent) {
+      store = new JsonlLocalAgentStore(turn.storeDir)
       const options = {
         apiKey: process.env.CURSOR_API_KEY,
         ...(turn.model ? { model: turn.model } : {}),
         local: {
           cwd: turn.cwd,
-          store: new JsonlLocalAgentStore(turn.storeDir),
+          store,
           settingSources: turn.settingSources,
           ...(turn.sandbox ? { sandboxOptions: { enabled: true } } : {}),
         },
@@ -92,9 +134,42 @@ for (; !stopping; n++) {
       agent = turn.agentId ? await Agent.resume(turn.agentId, options) : await Agent.create(options)
     }
     out({ type: 'init', turn: n, agentId: agent.agentId, model: agent.model, sdkVersion: turn.sdkVersion })
+    // Stored messages are updated in place, so earlier turns' calls are told apart by id.
+    const before = await listMessages(turn).then(
+      (m) => new Set(storedWebCalls(m, RECOVERED).map((c) => c.id)),
+      () => undefined,
+    )
     run = await agent.send(prompt)
-    for await (const event of run.stream()) out({ type: 'event', event })
+    const streamed = new Set()
+    for await (const event of run.stream()) {
+      if (event.type === 'tool_call') streamed.add(event.call_id)
+      out({ type: 'event', event })
+    }
     const result = await run.wait()
+    try {
+      if (before === undefined) throw new Error('the stored conversation could not be read before the turn')
+      const calls = storedWebCalls(await listMessages(turn), RECOVERED)
+      for (const c of calls.filter((c) => !before.has(c.id) && !streamed.has(c.id))) {
+        const { toolCallId, ...args } = c.call.args ?? {}
+        const base = { type: 'tool_call', agent_id: agent.agentId, run_id: result.id, call_id: c.id, name: c.name, args }
+        out({ type: 'event', recovered: 'Agent.messages.list', event: { ...base, status: 'running', started_at_ms: epochMs(c.at.startedAtMs) } })
+        const r = c.call.result
+        const failed = !r?.success
+        out({
+          type: 'event',
+          recovered: 'Agent.messages.list',
+          event: {
+            ...base,
+            status: failed ? 'error' : 'completed',
+            result: failed ? { status: 'error', error: r?.error ?? r ?? 'no result' } : { status: 'success', value: r.success },
+            started_at_ms: epochMs(c.at.startedAtMs),
+            completed_at_ms: epochMs(c.at.completedAtMs),
+          },
+        })
+      }
+    } catch (error) {
+      out({ type: 'unreported', turn: n, tools: Object.values(RECOVERED), message: String(error?.message ?? error) })
+    }
     out({
       type: 'result',
       turn: n,

@@ -21,12 +21,14 @@ export {
 export {
   CURSOR_SDK_BOOTSTRAP_DIR,
   CURSOR_SDK_MIN_NODE,
+  CURSOR_SDK_RECOVERED_TOOLS,
   CURSOR_SDK_RUNNER,
   CURSOR_SDK_RUNNER_PATH,
-  CURSOR_SDK_UNREPORTED_TOOLS,
   CURSOR_SDK_VERSION,
   cursorSdkInstallScript,
   getCursorSdkBootstrap,
+  type StoredWebCall,
+  storedWebCalls,
 } from './cursor-sdk-bootstrap.ts'
 export {
   CURSOR_SDK_HARNESS_ID,
