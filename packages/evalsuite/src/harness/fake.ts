@@ -1,4 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises'
+import { shellQuote as q } from '@evalsuite/sandbox-docker/process'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
@@ -146,8 +147,6 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
     }
   },
 })
-
-const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 
 /**
  * Starts a stdio MCP server in the sandbox, as an agent would, and calls one tool with no

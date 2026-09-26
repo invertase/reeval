@@ -16,6 +16,9 @@ export type RunOptions = {
 
 export type RunResult<Stdout = string> = { exitCode: number; stdout: Stdout; stderr: string }
 
+/** `s` as one single-quoted POSIX shell word. */
+export const shellQuote = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
+
 /** Spawns a process without a shell and collects its output. */
 export function run(
   cmd: string,

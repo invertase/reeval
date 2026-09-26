@@ -14,6 +14,7 @@ import {
   WORKSPACE_DIR,
 } from './image.ts'
 
+import { shellQuote as q } from './process.ts'
 import { createDockerSession } from './session.ts'
 
 const PNPM_VERSION = '10.33.3'
@@ -148,8 +149,6 @@ export type InstallStep = { run: string; timeoutMs?: number }
  */
 export const installLayerTag = (parent: { id: string }, steps: InstallStep[]) =>
   `evalsuite-install:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
-
-const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 
 /** The commands as one bash script: in order, from `/`, stopping at the first that fails. */
 export function installScript(steps: InstallStep[]): string {
