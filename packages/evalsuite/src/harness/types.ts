@@ -1,6 +1,6 @@
 import type { HarnessSkill, ResolvedMcpServer } from '../environment/resolve.ts'
 import type { Sandbox } from '../sandbox/types.ts'
-import type { TranscriptEvent, TurnStatus } from '../types.ts'
+import type { TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 
 export type HarnessResult = {
   /** The agent's final message for the turn. */
@@ -9,6 +9,10 @@ export type HarnessResult = {
   startedAt: string
   durationMs: number
   transcript: TranscriptEvent[]
+  /** Tokens the turn used, when the harness reports them. */
+  usage: TokenUsage | null
+  /** The model the harness says served the turn; null when it reports none. */
+  model: string | null
   /** Every stream part as the harness sent it, only when `ES_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
 }

@@ -7,7 +7,7 @@ import { describe, test } from 'node:test'
 import type { Substitution } from '@evalsuite/sandbox-docker'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered, unbrokeredSecrets } from '../src/environment.ts'
-import { acpMcpServers } from '../src/harness/agents.ts'
+import { cursorMcpServers } from '../src/harness/agents.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { unbrokered } from '../src/options.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
@@ -139,9 +139,9 @@ describe('resolving brokered secrets', () => {
     assert.match(server.headers['x-api-key'] ?? '', PLACEHOLDER)
     assert.match(server.headers.authorization ?? '', /^Bearer es_secret_[0-9A-Za-z]{32}$/)
     // What the Cursor adapter forwards to the agent: the placeholders, never the values.
-    const acp = JSON.stringify(acpMcpServers(r.mcp))
-    assert.ok(acp.includes(server.headers['x-api-key'] ?? '?'))
-    assert.equal(acp.includes(VALUE) || acp.includes(OTHER), false)
+    const forwarded = JSON.stringify(cursorMcpServers(r.mcp))
+    assert.ok(forwarded.includes(server.headers['x-api-key'] ?? '?'))
+    assert.equal(forwarded.includes(VALUE) || forwarded.includes(OTHER), false)
     assert.deepEqual(
       r.substitutions.map((s) => [s.name, s.value, s.hosts]),
       [

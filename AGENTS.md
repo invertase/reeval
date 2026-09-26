@@ -54,7 +54,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
-| `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`), Claude Code (`@ai-sdk/harness-claude-code`) and Antigravity (`@evalsuite/harness-antigravity`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
+| `packages/evalsuite/src/harness` | The Cursor (`@evalsuite/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`) and Antigravity (`@evalsuite/harness-antigravity`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/debug` | Local debug data: each attempt's trace on the worker (`attempt.ts`: debug.log, requests, the capped trace buffer, reached through async context), docker commands into it (`docker.ts`), and `.es/debug`'s layout, retention and `es clean` (`files.ts`) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models, effort (`effort.ts`) and the analysis document (`analysis.ts`) |
@@ -65,6 +65,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
 | `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/harness-antigravity`) like `sandbox-docker` |
+| `packages/harness-cursor-sdk` | `@evalsuite/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Vendored into `@invertase/foobar` like `harness-antigravity` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/sandbox-docker`), so the published package needs no second package |
 | `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts` and `es.antigravity.config.ts` (the coding evals under Claude Code and Antigravity), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
 
@@ -188,7 +189,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into ES's image for it,
-   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-1.0.37`, `claude-code-1.0.128`,
+   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128`,
    `antigravity-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
@@ -237,7 +238,7 @@ judge's keys; a brokered secret that goes in a header fails its attempt the same
 | `@invertase/foobar/judge` | `fakeJudge()`, `RECOMMENDED_JUDGE_MODEL`, `DEFAULT_THRESHOLD` and the judge types |
 | `@invertase/foobar/view` | Browser-safe run headers, the studio's file layout and view-models |
 
-- **Harnesses:** `cursor({ model? })` (needs `CURSOR_API_KEY`), `claudeCode({ model })` (needs
+- **Harnesses:** `cursor({ model, params? })` (needs `CURSOR_API_KEY`; Cursor's agent through the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript), in the sandbox; `model` is required, and `params` sets model parameters such as `{ fast: 'false' }`, which change the price: an unset one takes the model's first allowed value, not the catalog's default variant), `claudeCode({ model })` (needs
   `ANTHROPIC_API_KEY`; `model` is any id or alias the `claude` CLI takes, and it's required),
   `antigravity({ model })` (needs `GEMINI_API_KEY`, a Gemini API key; `model` is a slug `agy models`
   lists for one, such as `gemini-3.8-flash-medium`, and it's required) and
@@ -436,8 +437,9 @@ defaultProfile: { ci: 'pr' },
 - **`budget.attempts`** is checked against the plan before anything starts: over it, `es run`
   exits 2 and says what to narrow (`--force` runs it anyway). **`budget.duration`** counts from
   the first attempt: once it's reached, running attempts finish, queued ones are skipped, and
-  the run is recorded with `status: 'budget'` (exit 1). There's no cost budget: Cursor reports
-  no usage, so `budget.usd` is an error.
+  the run is recorded with `status: 'budget'` (exit 1). There's no cost or token budget yet,
+  so `budget.usd` is an error. ES records the tokens a harness reports (`cursor()` and
+  `antigravity()` do) per turn, per attempt and for the run, but prices no models.
 
 ```text
 $ CI=1 es run --dry-run          # examples/hello, real config
@@ -568,7 +570,7 @@ harness's brokered endpoints:
 
 | Harness | Endpoints that get the key |
 |---|---|
-| Cursor | `POST /auth/exchange_user_api_key` |
+| Cursor | `POST /auth/exchange_user_api_key` (its session tokens are swapped back on `cursor.sh` hosts; see below) |
 | Claude Code | `POST /v1/messages`, `POST /v1/messages/count_tokens`, `GET /api/claude_code/settings`, `GET /api/claude_code/policy_limits` |
 | Antigravity | `POST generativelanguage.googleapis.com/v1beta/models/<model>:streamGenerateContent` (its model, and a lite one for titles) |
 
@@ -588,12 +590,14 @@ needs. `es run -v` prints a line per request through the gateway (see
 [Debugging a run](#debugging-a-run)); `ES_DEBUG=1` also logs each connection and decrypted
 request to stderr (never header values).
 
-The session tokens the Cursor CLI gets for its key don't enter the container either. The gateway
-reads the exchange's response and hands the CLI placeholders for `accessToken` and
-`refreshToken`: each keeps the real JWT's header and claims, so the CLI still sees the real
+The session tokens the Cursor SDK gets for its key don't enter the container either. The gateway
+reads the exchange's response and hands the SDK placeholders for `accessToken` and
+`refreshToken`: each keeps the real JWT's header and claims, so the SDK still sees the real
 `exp`, with `es_secret_…` for a signature. The real tokens are swapped back in, in headers only,
-on requests to `cursor.sh` and its subdomains, including the agent's long-lived HTTP/2
-`AgentService/Run` stream. The CLI doesn't check the signature (checked on real Cursor). Token
+on requests to `cursor.sh` and its subdomains, including the agent's long-lived
+`BidiService/BidiAppend` stream. The SDK doesn't check the signature (checked on real Cursor).
+The adapter's runner sends that stream over HTTP/1.1, because over HTTP/2 the SDK connects
+directly and ignores the proxy. Token
 responses are scrubbed in headers only, since scrubbing a body holds back bytes and would stall
 those streams; an exchange response the gateway can't read (compressed, over 1 MB, not JSON) is a
 502, so real tokens never go through.
@@ -627,8 +631,8 @@ evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (
   (an `extend` child's replaces its parent's, listed in `overrides`), groups, then the eval. A
   `compare` variant's own policy applies to its cell.
 - **Automatic hosts:** a restricted policy also allows what the attempt itself needs: the
-  harness's API (`api2.cursor.sh`, `*.cursor.sh`, `cursor.com`, `*.cursor.com` for Cursor;
-  `api.anthropic.com`, `*.anthropic.com` for Claude Code; a fake agent's `layout`'s), every
+  harness's API (`api2.cursor.sh`, `*.cursor.sh` for Cursor, whose model catalog the adapter
+  fetches from `api.cursor.com` on the host; `api.anthropic.com`, `*.anthropic.com` for Claude Code; a fake agent's `layout`'s), every
   brokered secret's `hosts`, and each MCP `http`/`sse` server's host. So `'deny-all'` is "nothing
   but what the harness, its secrets and its MCP servers need", and an agent still works under it.
 - **Refused, not failed:** a request to any other host gets a `403` from the gateway (`blocked
@@ -652,7 +656,7 @@ evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (
   gateway can't start in (no `node`) runs under `allow-all` unrecorded when nothing is brokered,
   and is an infra error under a restricted policy.
 - **Plan:** each eval's restricted policies are in its notes, with their automatic hosts
-  (`egress: deny-all + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com`), and each
+  (`egress: deny-all + auto: api2.cursor.sh, *.cursor.sh`), and each
   cell of `--dry-run --json` has `egress: { policy, auto }`.
 - **Fingerprint:** a restricted policy is part of the environment digest (host order doesn't
   matter); `allow-all` leaves the digest as it was without the option.
@@ -808,7 +812,8 @@ effort under it: median tool calls and agent time against the control's, and the
 verdict, e.g. `effort: tools 5 vs 43 (×0.11), agent 21s vs 46s (×0.47): too few attempts to test`); then the failing attempts grouped
 by kind (judge verdicts, assertions with Vitest's diff and code frame, timeouts, the tail of
 infra errors, cancelled), each with its artifact directory; then totals and the results path.
-Cost appears when the harness reports it (Cursor doesn't). The [README](./README.md#run-it) has
+Token totals (`Tokens  127k in (98k cached) · 776 out`) appear when the harness reports them
+(`cursor()` and `antigravity()` do); ES prices no models, so there's no USD. The [README](./README.md#run-it) has
 a full plain-mode run.
 
 | Variable | Same as |
@@ -834,8 +839,8 @@ Times are UTC, like the records.
 ```text
 [brokers#1 fake]  13:09:52 plan      egress allow example.com (es.config.ts or its default)
 [brokers#1 fake]  13:09:52 broker    API_KEY is a placeholder in the sandbox · swapped in on HTTPS to example.com in the header · for the agent and checks
-[brokers#1 fake]  13:09:52 image     cache hit evalsuite-sandbox:cursor-1.0.37 (ES's image for cursor; es image build rebuilds it)
-[brokers#1 fake]  13:09:54 container created f299e736cf29 from evalsuite-sandbox:cursor-1.0.37 in 1113ms
+[brokers#1 fake]  13:09:52 image     cache hit evalsuite-sandbox:cursor-0.1.0 (ES's image for cursor; es image build rebuilds it)
+[brokers#1 fake]  13:09:54 container created f299e736cf29 from evalsuite-sandbox:cursor-0.1.0 in 1113ms
 [brokers#1 fake]  13:09:54 container network policy allow example.com · detached from every Docker network, the gateway is its only way out
 [brokers#1 fake]  13:09:54 harness   tool shell called: $ curl … https://example.com/ …
 [brokers#1 fake]  13:09:54 gateway   GET https://example.com/ → 200 · allowed · ↑0 B ↓559 B · 20ms · substituted API_KEY
@@ -1090,10 +1095,18 @@ the turn started), and events have `durationMs`:
 
 Types: `prompt`, `reasoning`, `text`, `tool` (a call merged with its result), `file-edit`
 (`create | modify | delete` with line counts), `web-search`, `web-fetch`, `error` and
-`turn-end`. Cursor reports only the query or URL for web tools, not result URLs, titles or
-content. An MCP tool call is named `mcp__<server>__<tool>` on both harnesses. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
+`turn-end`. Cursor reports file edits relative to the workspace, with line counts. Its SDK
+(1.0.32) doesn't report web search or fetch calls at all (the agent still makes them, through
+Cursor's backend), so Cursor transcripts have no web events. An MCP tool call is named
+`mcp__<server>__<tool>` on every harness. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
 `transcript.raw.jsonl`. The record adds per-turn durations, per-phase timings (setup, agent,
 diff, checks, judge) and activity counts, and `summary.md` quotes each eval's last message.
+Where the harness reports them, each turn also has `usage` (`input` uncached, `cacheRead`,
+`cacheWrite`, `output`, `reasoning`) and `model`, the model the harness says served it (Cursor's
+with its parameters, e.g. `composer-2.5[fast=false]`); each attempt has its turns' `usage`
+summed, and the run's `cost` has the total (`inputTokens` counts cache reads and writes; `usd`
+stays null). The `attempts` table in `es query` has them as `input_tokens`, `output_tokens`,
+`cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`.
 
 ### Studio
 
@@ -1157,10 +1170,8 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   model, the model ids the provider reported, and a judge version; the skills, rules and MCP
   config the agent could see in its sandbox, by content hash (taken once after the first turn, or
   at teardown with no turn, since adapters write harness skills when a turn starts; it includes
-  each adapter's own home, `~/.ai-sdk-harness/.harness-bootstrap/<agent>/implementation/home`).
-  Files the agent's CLI rewrites every session (Cursor's `~/.cursor/cli-config.json` and
-  `~/.cursor/skills-cursor/.sync-manifest.json`, listed per harness in `RUNTIME_STATE` in
-  `harness/agents.ts`) are listed but left out of the context fingerprint; ES and Node versions.
+  each adapter's own home, `~/.ai-sdk-harness/.harness-bootstrap/<agent>/implementation/home`);
+  ES and Node versions.
 - **What it can't pin down,** listed per record: sampled agent output, provider-side model
   updates, network-dependent results such as web search and package registries, and locally
   built images.

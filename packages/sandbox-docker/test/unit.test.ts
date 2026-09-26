@@ -33,7 +33,7 @@ const root = fileURLToPath(new URL('..', import.meta.url))
 const PLACEHOLDER = `aisdkhc_${'A'.repeat(43)}`
 const REAL = 'crsr_real_key_for_tests_0123456789'
 
-/** The rule `@ai-sdk/harness-cursor` asks for. */
+/** The rule the Cursor adapter asks for. */
 const cursorRule: RequestTransformation = {
   match: {
     host: 'api2.cursor.sh',

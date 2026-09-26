@@ -51,6 +51,18 @@ export type Diff = { patch: string; files: FileChange[] }
 
 export type TurnStatus = 'completed' | 'aborted' | 'error'
 
+/**
+ * The tokens one turn used, as its harness reported them. `input` excludes cache reads and
+ * writes (so the prompt was `input + cacheRead + cacheWrite`); `reasoning` is part of `output`.
+ */
+export type TokenUsage = {
+  input: number
+  output: number
+  cacheRead: number
+  cacheWrite: number
+  reasoning: number | null
+}
+
 /** One agent turn. Immutable once `t.send()` resolves. */
 export type Turn = {
   prompt: string
@@ -60,6 +72,13 @@ export type Turn = {
   startedAt: string
   durationMs: number
   transcript: TranscriptEvent[]
+  /** Tokens the turn used; null when the harness reports none. */
+  usage: TokenUsage | null
+  /**
+   * The model the harness says served the turn, e.g. `composer-2.5[fast=false]`; null when it
+   * reports none. It can differ from the requested one (an alias, or parameters it filled in).
+   */
+  model: string | null
   /** Workspace changes since the eval started, as of the end of this turn. */
   diff: Diff
   /** Runs in the eval's sandbox. Same as `t.exec`. */
@@ -176,9 +195,19 @@ export type FakeScriptStep =
   | { write: Record<string, string> }
   | { reply: string }
   | { mcp: string }
+/**
+ * Cursor's agent through the Cursor TypeScript SDK's local runtime
+ * (`@evalsuite/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.
+ */
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
-  model?: string
+  /** A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`. */
+  model: string
+  /**
+   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the model's first allowed value,
+   * so pass the ones that change cost (`fast`) explicitly.
+   */
+  params?: Record<string, string>
   /** Cell id; defaults to `cursor:<model>`. */
   id?: string
   /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
@@ -626,7 +655,7 @@ export type ErrorKind = 'assertion' | 'timeout' | 'aborted' | 'infra' | 'judge'
 
 export type TurnRecord = Pick<
   Turn,
-  'prompt' | 'text' | 'status' | 'transcript' | 'startedAt' | 'durationMs'
+  'prompt' | 'text' | 'status' | 'transcript' | 'startedAt' | 'durationMs' | 'usage' | 'model'
 > & { raw?: unknown[] }
 
 /** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */

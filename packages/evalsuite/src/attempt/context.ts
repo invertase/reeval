@@ -1,6 +1,5 @@
-import { RUNTIME_STATE, runtimeStateOf } from '../harness/agents.ts'
 import type { Sandbox } from '../sandbox/index.ts'
-import type { EvalRecord, HarnessDescriptor } from '../types.ts'
+import type { EvalRecord } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 /** Under the home directory, and under each adapter's own home, which an installed CLI runs with. */
@@ -23,7 +22,6 @@ const HOME_CONTEXT_PATHS = [
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
-const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implementation\/home\//
 
 /**
  * Skills, rules and MCP config the agent could load, with content hashes (never contents).
@@ -78,26 +76,20 @@ export function contextTaker(a: Attempt) {
   }
 }
 
-const ALL_RUNTIME_STATE = new Set(Object.values(RUNTIME_STATE).flat())
+const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implementation\/home\//
+
+/**
+ * Files the Cursor CLI (the ACP harness `cursor()` used before the Cursor SDK) rewrote every
+ * session, under `~/` or its adapter's home. Records from then still list them; no current
+ * harness writes session state into the paths ES records.
+ */
+const RETIRED_RUNTIME_STATE = new Set([
+  '.cursor/cli-config.json',
+  '.cursor/skills-cursor/.sync-manifest.json',
+])
 
 /** A context path that is some agent CLI's own runtime state, whichever harness recorded it. */
 export function isRuntimeState(path: string): boolean {
   if (!path.startsWith('~/')) return false
-  return ALL_RUNTIME_STATE.has(path.replace(ADAPTER_HOME, '~/').slice(2))
-}
-
-/**
- * The context files that count towards the fingerprint: all of them but the CLI's own runtime
- * state (under `~/` or the adapter's home), which it rewrites every session.
- */
-export function fingerprintedContext(
-  context: NonNullable<EvalRecord['context']>,
-  harness: HarnessDescriptor | undefined,
-): NonNullable<EvalRecord['context']> {
-  const state = new Set(harness ? runtimeStateOf(harness) : [])
-  if (state.size === 0) return context
-  return context.filter((c) => {
-    const home = c.path.startsWith('~/') ? c.path.replace(ADAPTER_HOME, '~/').slice(2) : null
-    return home === null || !state.has(home)
-  })
+  return RETIRED_RUNTIME_STATE.has(path.replace(ADAPTER_HOME, '~/').slice(2))
 }

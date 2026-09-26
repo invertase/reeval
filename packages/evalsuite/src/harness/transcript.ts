@@ -35,11 +35,6 @@ function lineDelta(before: string, after: string): { added: number; removed: num
   return { added, removed }
 }
 
-// Cursor sends new files as `oldText: "-- /dev/null"` and prefixes the content with a mangled
-// `++ b//<abs path>` header line.
-const NEW_FILE = /^-- \/dev\/null$/
-const MANGLED_HEADER = /^\+\+ b\/[^\n]*\n?/
-
 /** Cursor's edit tools take `path`; Claude Code's take `file_path`. */
 const editPath = (input: Record<string, unknown>) => str(input.path) || str(input.file_path)
 
@@ -116,40 +111,36 @@ function fileEdits(
       },
     ]
   }
-  const claude = record(output)
-  if (typeof claude.filePath === 'string') return [claudeEdit(toolCallId, claude)]
-  const entries = Array.isArray(output) ? output.map(record) : []
-  if (entries.length === 0) {
+  const result = record(output)
+  if (typeof result.filePath === 'string') return [claudeEdit(toolCallId, result)]
+  // Cursor reports counts and a unified diff, whose old side is /dev/null for a new file.
+  if (typeof result.linesAdded === 'number') {
     return [
       {
         type: 'file-edit',
         toolCallId,
         path: editPath(input),
-        kind: 'modify',
-        added: null,
-        removed: null,
+        kind: str(result.diffString).startsWith('--- /dev/null') ? 'create' : 'modify',
+        added: result.linesAdded,
+        removed: typeof result.linesRemoved === 'number' ? result.linesRemoved : null,
       },
     ]
   }
-  return entries.map((entry) => {
-    const oldText = entry.oldText
-    const created = oldText === null || oldText === undefined || NEW_FILE.test(str(oldText))
-    const newText = created ? str(entry.newText).replace(MANGLED_HEADER, '') : str(entry.newText)
-    const { added, removed } = lineDelta(created ? '' : str(oldText), newText)
-    return {
-      type: 'file-edit' as const,
+  return [
+    {
+      type: 'file-edit',
       toolCallId,
-      path: str(entry.path) || editPath(input),
-      kind: created ? ('create' as const) : ('modify' as const),
-      added,
-      removed,
-    }
-  })
+      path: editPath(input),
+      kind: 'modify',
+      added: null,
+      removed: null,
+    },
+  ]
 }
 
 /**
- * The tool's name. ACP reports an MCP call under a per-call id, with the server and tool in its
- * input; those are named `mcp__<server>__<tool>`, as Claude Code names its own.
+ * The tool's name. Cursor reports an MCP call as `mcp`, with the server and tool in its input;
+ * those are named `mcp__<server>__<tool>`, as Claude Code names its own.
  */
 function toolName(part: StampedPart['part']): string {
   const input = record(part.input)
@@ -162,20 +153,21 @@ function toolName(part: StampedPart['part']): string {
 /**
  * Turns an AI SDK harness stream into ES transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
- * query or URL, and the harness's duplicate `fileChange` events dropped. Tool durations come
- * from the ACP `tool_call` / `tool_call_update` events, because tool results are only flushed
- * at the end of a step.
+ * query or URL, and the harness's duplicate `fileChange` events dropped. Cursor's tool durations
+ * come from its runner's own `tool_call` events, because tool results are only flushed at the
+ * end of a step.
  */
 export function normaliseStream(parts: StampedPart[], startedAt: number): TranscriptEvent[] {
   const timing = new Map<string, Timing>()
   for (const { ms, part } of parts) {
     if (part.type !== 'raw') continue
     const raw = record(part.rawValue)
-    const id = str(raw.toolCallId)
+    const event = raw.type === 'event' ? record(raw.event) : {}
+    const id = event.type === 'tool_call' ? str(event.call_id) : ''
     if (!id) continue
     const t = timing.get(id) ?? {}
-    if (raw.sessionUpdate === 'tool_call' && t.start === undefined) t.start = ms
-    if (raw.status === 'completed' || raw.status === 'failed') t.end = ms
+    if (event.status === 'running' && t.start === undefined) t.start = ms
+    if (event.status === 'completed' || event.status === 'error') t.end = ms
     timing.set(id, t)
   }
 

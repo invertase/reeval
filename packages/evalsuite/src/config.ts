@@ -5,8 +5,7 @@ import { createJiti } from 'jiti'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { AGENTS, isAgentKind } from './harness/agents.ts'
-import { cursor } from './harness.ts'
+import { AGENTS, DEFAULT_HARNESS, HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkOptions } from './options.ts'
 import { docker } from './sandbox.ts'
@@ -144,7 +143,7 @@ export function checkBudget(budget: unknown, where: string): Budget {
   }
   if ('usd' in budget || 'tokens' in budget) {
     throw new UsageError(
-      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported: no harness ES runs reports cost or tokens yet (Cursor reports no usage). Cap the run with attempts or duration.`,
+      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.`,
     )
   }
   unknownKey(budget, ['attempts', 'duration'], where)
@@ -266,10 +265,10 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     throw new UsageError(`config.history.artifacts must be one of ${ARTIFACTS.join(', ')}`)
   }
   const historyDir = resolve(root, user.history?.dir ?? join(evalRoot(include), '.history'))
-  const harness = user.harness === undefined ? [cursor()] : [user.harness].flat()
+  const harness = user.harness === undefined ? [DEFAULT_HARNESS] : [user.harness].flat()
   if (harness.length === 0) {
     throw new UsageError(
-      'harness is an empty list in es.config.ts. Give at least one, e.g. harness: cursor()',
+      `harness is an empty list in es.config.ts. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
     )
   }
   const profiles: Record<string, Profile> = {}

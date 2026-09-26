@@ -209,6 +209,13 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
     `${c.dim('Duration')}  ${formatDuration(record.durationMs)}`,
   )
   if (record.cost.usd !== null) lines.push(`    ${c.dim('Cost')}  $${record.cost.usd.toFixed(2)}`)
+  if (typeof record.cost.inputTokens === 'number' && typeof record.cost.outputTokens === 'number') {
+    const k = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : String(n))
+    const cached = record.cost.usage?.cacheRead ?? 0
+    lines.push(
+      `  ${c.dim('Tokens')}  ${k(record.cost.inputTokens)} in${cached ? ` (${k(cached)} cached)` : ''} · ${k(record.cost.outputTokens)} out`,
+    )
+  }
   lines.push(` ${c.dim('Results')}  ${e.summaryPath}`)
   return lines
 }

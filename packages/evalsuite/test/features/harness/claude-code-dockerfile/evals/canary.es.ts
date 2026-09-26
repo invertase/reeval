@@ -1,11 +1,11 @@
 import { evaluate, expect } from 'evalsuite'
 import { plain } from './env.ts'
 
-// Must fail: it isn't built on Cursor's image, so Cursor's agent CLI isn't there.
+// Must fail: it isn't built on Cursor's image, so the Cursor SDK isn't there.
 evaluate('canary', { environment: plain }, async (t) => {
   await t.sandbox()
   const found = await t.exec(
-    'find "$HOME/.ai-sdk-harness" -name agent \\( -type f -o -type l \\) -perm -u+x | head -1',
+    'ls -d "$HOME"/.ai-sdk-harness/.harness-bootstrap/cursor-sdk/node_modules/@cursor/sdk 2>/dev/null',
   )
-  expect(found.stdout.trim()).toMatch(/\/agent$/)
+  expect(found.stdout.trim()).toMatch(/\/@cursor\/sdk$/)
 })

@@ -4,7 +4,6 @@ import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, imageFor, LABEL } from '@evalsuite/sandbox-docker'
-import type { RunRecord } from '../src/history/types.ts'
 import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const dockerReady = (() => {
@@ -87,15 +86,11 @@ evaluate('docker', async (t) => {
     const { run, evals } = readRun(p.dir)
     assert.equal(run.stack.images[0]?.ref, DEFAULT_IMAGE)
     assert.match(run.stack.images[0]?.id ?? '', /^sha256:[0-9a-f]{64}$/)
-    assert.match(run.stack.images[0]?.agentCli ?? '', /\d/)
+    assert.match(run.stack.images[0]?.agentCli ?? '', /^@cursor\/sdk \d+\.\d+\.\d+$/)
     const shown = await runCli(p.dir, ['show', 'latest'])
     assert.match(
       shown.stdout,
       /! Image .+ isn't pushed, so an exact rerun needs this machine's image/,
-    )
-    assert.ok(
-      run.stack.context.some((c) => c.path === '~/.cursor/cli-config.json'),
-      JSON.stringify(run.stack.context),
     )
     const log = evals[0]?.read(evals[0].trial.checks[0]?.log.path ?? '') ?? ''
     assert.match(log, /--- stdout\nHello, Ada!\n/)
@@ -428,7 +423,7 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
 import { defineConfig } from 'evalsuite'
 import { cursor } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
-export default defineConfig({ harness: cursor(), sandbox: ${sandbox}, timeout: '60s' })
+export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), sandbox: ${sandbox}, timeout: '60s' })
 `
       const eval_ = `import { evaluate } from 'evalsuite'
 evaluate('hi', async (t) => { await t.send('hi') })
@@ -513,13 +508,11 @@ evaluate('hi', { environment: keys }, async (t) => { await t.sandbox() })
   )
 
   test(
-    "the CLI's own runtime state leaves runs comparable; a changed skill doesn't",
+    "two runs with the same agent context are comparable; a changed skill isn't",
     docker,
     async () => {
-      // What the Cursor CLI does every session, in ~ and in its adapter's home.
-      const churn = `for h in ~ ~/.ai-sdk-harness/.harness-bootstrap/cursor/implementation/home; do mkdir -p $h/.cursor/skills-cursor && date +%s%N > $h/.cursor/cli-config.json && date +%s%N > $h/.cursor/skills-cursor/.sync-manifest.json; done`
       const p = await project('docker-context', {
-        'es.config.ts': config(`{ script: [[{ exec: '${churn}' }, { reply: 'done' }]] }`),
+        'es.config.ts': config(`{ script: [[{ reply: 'done' }]] }`),
         'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
 const house = defineEnvironment('house', ({ skill }) => ({
   skills: [skill.inline({ name: 'house', description: 'House style', content: process.env.ES_TEST_SKILL ?? 'v1' })],
@@ -538,19 +531,13 @@ evaluate('context', { environment: house }, async (t) => { await t.send('go') })
         return (JSON.parse(r.stdout) as { rows: Array<{ status: string; changes?: string[] }> })
           .rows
       }
-      const hashes = (r: RunRecord, file: string) =>
-        (r.evals[0]?.attempts[0]?.context ?? []).filter((c) => c.path.endsWith(file))
 
       const first = await run()
       const second = await run()
-      for (const file of [
-        '/.cursor/cli-config.json',
-        '/.cursor/skills-cursor/.sync-manifest.json',
-      ]) {
-        const [a, b] = [hashes(first, file), hashes(second, file)]
-        assert.equal(a.length, 2, `${file} in ~ and the adapter home: ${JSON.stringify(a)}`)
-        assert.notDeepEqual(a, b, `${file} changed between the runs`)
-      }
+      assert.ok(
+        first.evals[0]?.attempts[0]?.context?.some((c) => c.path.endsWith('/house/SKILL.md')),
+        JSON.stringify(first.evals[0]?.attempts[0]?.context),
+      )
       assert.equal(first.evals[0]?.fingerprint, second.evals[0]?.fingerprint)
       assert.deepEqual(
         (await compareRows(first.runId, second.runId)).map((r) => r.status),

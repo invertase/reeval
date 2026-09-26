@@ -15,7 +15,7 @@ import { readRecord, recordNames, scratchDir } from './files.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 1
+const DB_VERSION = 2
 /** The mtime of this module, like the header cache: a rebuilt ES re-derives every row. */
 const BUILD = statSync(fileURLToPath(import.meta.url)).mtimeMs
 
@@ -81,7 +81,8 @@ CREATE TABLE attempts (
   id TEXT, n INTEGER, seq INTEGER, started_at TEXT, outcome TEXT, error_kind TEXT,
   error_message TEXT, duration_ms INTEGER, image_id TEXT, turns INTEGER, tools INTEGER,
   file_edits INTEGER, setup_ms INTEGER, agent_ms INTEGER, checks_ms INTEGER, judge_ms INTEGER,
-  last_text TEXT,
+  last_text TEXT, input_tokens INTEGER, output_tokens INTEGER, cache_read_tokens INTEGER,
+  cache_write_tokens INTEGER, reasoning_tokens INTEGER, served_model TEXT,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
@@ -389,7 +390,7 @@ function insertRun(
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(21).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(27).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -411,6 +412,12 @@ function insertRun(
         a.timings.checksMs,
         a.timings.judgeMs,
         a.turns.at(-1)?.text.slice(0, LAST_TEXT_LIMIT) ?? null,
+        a.usage?.input ?? null,
+        a.usage?.output ?? null,
+        a.usage?.cacheRead ?? null,
+        a.usage?.cacheWrite ?? null,
+        a.usage?.reasoning ?? null,
+        a.turns.findLast((t) => t.model)?.model ?? null,
       )
       for (const c of a.context) {
         run(

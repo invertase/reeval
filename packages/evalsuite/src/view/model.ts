@@ -116,6 +116,16 @@ export const formatPercent = (rate: number | null) =>
 export const formatCost = (usd: number | null) =>
   usd === null ? '–' : usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`
 
+/** Harness-reported tokens as `127k in · 776 out`; null when no harness reported any. */
+export function formatTokens(cost: {
+  inputTokens: number | null
+  outputTokens: number | null
+}): string | null {
+  if (cost.inputTokens === null || cost.outputTokens === null) return null
+  const k = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : String(n))
+  return `${k(cost.inputTokens)} in · ${k(cost.outputTokens)} out`
+}
+
 export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : 'no git')
 
 /**

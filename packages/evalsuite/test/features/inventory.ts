@@ -45,6 +45,8 @@ const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `evalsuite/test/analysis.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
+const cursorAdapter = (file: string, name: string) =>
+  `harness-cursor-sdk/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -272,7 +274,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'mcp.http',
     area: 'Environments',
-    name: '`mcp.http` and the ACP server shape',
+    name: '`mcp.http`',
     tests: [secrets('MCP header secrets are brokered to the server')],
   },
   {
@@ -506,6 +508,7 @@ export const inventory: InventoryFeature[] = [
       'skills/harness-placement',
       'mcp/stdio-reaches-harness',
       'harness/cursor-rules-reach-agent',
+      'harness/cursor-reports-usage',
       'secrets/cursor-session-tokens',
     ],
   },
@@ -538,6 +541,26 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.cursor',
+    area: 'Harnesses',
+    name: '`cursor()`: Cursor through its TypeScript SDK, one runner per session',
+    fixtures: ['harness/cursor-rules', 'harness/cursor-workspace-skills'],
+    plan: ['cursor/cursor'],
+    tests: [
+      harness('is plain data with its own cell id, and needs a model'),
+      harness("gets MCP servers in the SDK's McpServerConfig shape"),
+      cursorAdapter('harness', 'one runner serves every turn'),
+      cursorAdapter('harness', 'after the runner exits, the next turn starts one'),
+    ],
+  },
+  {
+    id: 'harness.usage',
+    area: 'Harnesses',
+    name: 'Token usage and the served model, per turn and totalled, from any harness',
+    fixtures: ['harness/cursor-reports-usage'],
+    tests: [harness('token usage and the served model, from any harness')],
+  },
+  {
     id: 'harness.fake-script',
     area: 'Harnesses',
     name: '`fakeHarness({ script })` and `layout`',
@@ -549,7 +572,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: 'Transcripts, normalised per harness',
     tests: [
-      unit('a real Cursor stream normalises to one event per action'),
+      harness('a real turn normalises: relative edits, mcp__ names, timed tools'),
       harness('its Edit and Write tools are file edits'),
     ],
   },
@@ -601,7 +624,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
       'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
-      docker("the CLI's own runtime state leaves runs comparable"),
+      docker('two runs with the same agent context are comparable'),
     ],
   },
   {

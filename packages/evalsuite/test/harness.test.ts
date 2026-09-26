@@ -1,27 +1,41 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import type {
+  HarnessV1,
   HarnessV1NetworkSandboxSession,
   HarnessV1RequestTransformation,
+  HarnessV1StreamPart,
 } from '@ai-sdk/harness'
+import { HarnessAgent } from '@ai-sdk/harness/agent'
 import {
   ANTIGRAVITY_HOME_SKILLS_DIR,
   ANTIGRAVITY_WORKSPACE_RULES_FILE,
   ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
   antigravityEndpoints,
+  toUsage as antigravityUsage,
 } from '@evalsuite/harness-antigravity'
+import {
+  CURSOR_SDK_HOME_SKILLS_DIR,
+  CURSOR_SDK_WORKSPACE_RULES_FILE,
+  CURSOR_SDK_WORKSPACE_SKILLS_DIR,
+  CursorSdkStreamTranslator,
+  cursorSdkEndpoints,
+  toUsage as cursorUsage,
+} from '@evalsuite/harness-cursor-sdk'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered } from '../src/environment.ts'
+import { observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
-  acpMcpServers,
   agentAuth,
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
+  cursorMcpServers,
   LAYOUTS,
   layoutOf,
 } from '../src/harness/agents.ts'
@@ -51,7 +65,7 @@ describe('the Claude Code harness', () => {
 
   test('is accepted by the config and tells the CLI which key it needs', () => {
     const config = resolveConfig(
-      { harness: [cursor(), claudeCode({ model: 'claude-opus-5-5' })] },
+      { harness: [cursor({ model: 'composer-2.5' }), claudeCode({ model: 'claude-opus-5-5' })] },
       '/p',
     )
     assert.deepEqual(
@@ -72,7 +86,7 @@ describe('the Claude Code harness', () => {
 
   test('names agent and judge keys with a line break in them, never other variables', () => {
     const config = resolveConfig(
-      { harness: [cursor()], judge: { model: 'google/gemini-3.8-flash' } },
+      { harness: [cursor({ model: 'composer-2.5' })], judge: { model: 'google/gemini-3.8-flash' } },
       '/p',
     )
     const wrapped = 'AQ.abc\n   │ def'
@@ -97,18 +111,22 @@ describe('the Claude Code harness', () => {
       workspaceSkillDir: '.claude/skills',
       harnessSkillDir: '.claude/skills',
     })
-    assert.equal(layoutOf(cursor()).rulesFile, 'AGENTS.md')
-    assert.equal(workspaceSkillDir(cursor()), '.cursor/skills')
+    assert.equal(layoutOf(cursor({ model: 'composer-2.5' })).rulesFile, 'AGENTS.md')
+    assert.equal(workspaceSkillDir(cursor({ model: 'composer-2.5' })), '.cursor/skills')
     assert.equal(workspaceSkillDir(fakeHarness()), '.agents/skills')
     assert.equal(imageHarness(h), 'claude-code')
-    assert.equal(imageHarness(cursor()), 'cursor')
+    assert.equal(imageHarness(cursor({ model: 'composer-2.5' })), 'cursor')
     assert.equal(imageHarness(fakeHarness()), 'cursor')
   })
 
   test("a fake agent with a layout is placed exactly like that agent, in that agent's image", () => {
     // The fixtures under test/features/harness/ run the fake agent with a layout, so this is
     // what makes them evidence for the real harnesses.
-    for (const real of [claudeCode({ model: 'opus' }), cursor(), antigravity({ model: 'm' })]) {
+    for (const real of [
+      claudeCode({ model: 'opus' }),
+      cursor({ model: 'composer-2.5' }),
+      antigravity({ model: 'm' }),
+    ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
       assert.equal(imageHarness(fake), imageHarness(real), real.kind)
@@ -229,6 +247,103 @@ describe('the Antigravity harness', () => {
   })
 })
 
+describe('the Cursor harness', () => {
+  test('is plain data with its own cell id, and needs a model', () => {
+    const h = cursor({ model: 'composer-2.5', params: { fast: 'false' } })
+    assert.deepEqual(h, { kind: 'cursor', model: 'composer-2.5', params: { fast: 'false' } })
+    assert.deepEqual(JSON.parse(JSON.stringify(h)), h)
+    assert.equal(harnessId(h), 'cursor:composer-2.5')
+    assert.throws(
+      () => cursor({} as never),
+      /cursor\(\) needs a model, e\.g\. cursor\(\{ model: 'composer-2\.5' \}\)/,
+    )
+    assert.throws(
+      () => cursor({ model: 'm', params: { fast: false } as never }),
+      /cursor\(\{ params \}\) maps parameter ids to string values/,
+    )
+  })
+
+  test('is accepted by the config and needs CURSOR_API_KEY', () => {
+    const config = resolveConfig({ harness: [cursor({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, {}), ['CURSOR_API_KEY'])
+    assert.deepEqual(missingCredentials(config, { CURSOR_API_KEY: 'x' }), [])
+  })
+
+  test("is the default harness, on Cursor's own model", () => {
+    assert.deepEqual(resolveConfig({}, '/p').harness, [cursor({ model: 'composer-2.5' })])
+  })
+
+  test("reads AGENTS.md, .cursor/skills and ~/.agents/skills; the catalog matches the adapter's", () => {
+    const h = cursor({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: CURSOR_SDK_WORKSPACE_RULES_FILE,
+      workspaceSkillDir: CURSOR_SDK_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: CURSOR_SDK_HOME_SKILLS_DIR,
+    })
+    assert.equal(imageHarness(h), 'cursor')
+    assert.deepEqual(AGENTS.cursor.endpoints, cursorSdkEndpoints())
+  })
+
+  test("gets MCP servers in the SDK's McpServerConfig shape", () => {
+    assert.deepEqual(
+      cursorMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      }),
+      {
+        files: { type: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        docs: { type: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      },
+    )
+  })
+
+  test('a real turn normalises: relative edits, mcp__ names, timed tools', () => {
+    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    const ndjson = readFileSync(
+      new URL('../../harness-cursor-sdk/test/fixtures/tools-mcp-skills.ndjson', import.meta.url),
+      'utf8',
+    )
+    // As HarnessAgent hands them on: tool inputs parsed, tool results as `output`.
+    const parts = ndjson.split('\n').flatMap((line, i) =>
+      t.push(line).map((part) => ({
+        ms: i * 10,
+        part:
+          part.type === 'tool-call'
+            ? { ...part, input: JSON.parse(part.input) }
+            : part.type === 'tool-result'
+              ? { ...part, output: part.result }
+              : part,
+      })),
+    )
+    const events = normaliseStream(parts as never, Date.parse('2026-09-26T12:00:00.000Z'))
+    const shape = events
+      .filter((e) => e.type !== 'reasoning' && e.type !== 'text')
+      .map((e) =>
+        e.type === 'file-edit'
+          ? `edit:${e.kind}:${e.path}:+${e.added}-${e.removed}`
+          : e.type === 'tool'
+            ? `tool:${e.tool}`
+            : e.type,
+      )
+    assert.deepEqual(shape, [
+      'tool:bash',
+      'tool:grep',
+      'tool:read',
+      'tool:read',
+      'tool:glob',
+      'edit:create:notes.txt:+1-0',
+      'tool:mcp__codes__get_code',
+      'edit:modify:notes.txt:+1-1',
+      'edit:delete:old.txt:+0-null',
+    ])
+    const bash = events.find((e) => e.type === 'tool' && e.tool === 'bash')
+    assert.equal(bash?.type === 'tool' && bash.output, 'hi-from-shell\n')
+    assert.ok(
+      events.every((e) => !('durationMs' in e) || e.durationMs === null || e.durationMs >= 0),
+    )
+  })
+})
+
 /** A sandbox session that records the adapter's request transformations, then stops the start. */
 function recordingSession(): {
   session: HarnessV1NetworkSandboxSession
@@ -285,7 +400,10 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>) {
   Object.assign(process.env, env)
   try {
     const agent = AGENTS[kind]
-    const adapter = await agent.adapter({ auth: agentAuth(agent) })
+    const adapter = await agent.adapter({
+      auth: agentAuth(agent),
+      descriptor: { kind, model: 'm' } as never,
+    })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -353,7 +471,7 @@ describe('credential brokering per agent', () => {
   test("Cursor's adapter rule is on its one endpoint, whatever else the host has", async () => {
     const rules = await adapterRules('cursor', { ...everything, CURSOR_API_KEY: 'crsr_real' })
     assert.equal(rules.length, 1)
-    const { endpoints } = brokeringFor(cursor()) ?? { endpoints: [] }
+    const { endpoints } = brokeringFor(cursor({ model: 'composer-2.5' })) ?? { endpoints: [] }
     const auth = String(rules[0]?.match.headers?.[0]?.value?.exact ?? '')
     const exchange = applyTransformations(
       rules,
@@ -369,7 +487,7 @@ describe('credential brokering per agent', () => {
   })
 
   test("Cursor's session tokens are tokenised at its exchange and swapped back on its hosts only", () => {
-    const tokens = brokeringFor(cursor())?.tokens
+    const tokens = brokeringFor(cursor({ model: 'composer-2.5' }))?.tokens
     assert.equal(tokens?.name, 'CURSOR_API_KEY')
     assert.deepEqual(tokens?.fields, ['accessToken', 'refreshToken'])
     assert.ok(
@@ -643,66 +761,6 @@ describe('Claude Code transcripts', () => {
   })
 })
 
-describe('the Cursor harness', () => {
-  test('gets MCP servers in the ACP session/new shape: env and headers as name/value pairs', () => {
-    assert.deepEqual(
-      acpMcpServers({
-        files: {
-          transport: 'stdio',
-          command: 'node',
-          args: ['mcp.mjs'],
-          env: { ROOT: '/es', N: '1' },
-        },
-        docs: {
-          transport: 'http',
-          url: 'https://docs.example/mcp',
-          headers: { Authorization: 'Bearer t' },
-        },
-        feed: { transport: 'sse', url: 'https://feed.example/sse', headers: {} },
-      }),
-      {
-        files: {
-          command: 'node',
-          args: ['mcp.mjs'],
-          env: [
-            { name: 'ROOT', value: '/es' },
-            { name: 'N', value: '1' },
-          ],
-        },
-        docs: {
-          type: 'http',
-          url: 'https://docs.example/mcp',
-          headers: [{ name: 'Authorization', value: 'Bearer t' }],
-        },
-        feed: { type: 'sse', url: 'https://feed.example/sse', headers: [] },
-      },
-    )
-  })
-
-  test('with no MCP servers, the ACP shape is empty', () => {
-    assert.deepEqual(acpMcpServers({}), {})
-  })
-
-  test('an MCP tool call is named mcp__<server>__<tool>, not by its per-call id', () => {
-    const [event] = normaliseStream(
-      [
-        {
-          ms: 10,
-          part: {
-            type: 'tool-call',
-            toolCallId: 'tool_9a',
-            toolName: 'acp_tool_tool_9a',
-            input: { providerIdentifier: 'stamp', toolName: 'house_stamp', args: {} },
-          },
-        },
-        { ms: 20, part: { type: 'tool-result', toolCallId: 'tool_9a', output: { success: true } } },
-      ],
-      0,
-    )
-    assert.equal(event?.type === 'tool' && event.tool, 'mcp__stamp__house_stamp')
-  })
-})
-
 describe('Antigravity transcripts', () => {
   const call = (id: string, toolName: string, input: unknown) => ({
     ms: 10,
@@ -755,5 +813,102 @@ describe('Antigravity transcripts', () => {
         ['tool', 'read', 'stat /nope.txt: no such file', false],
       ],
     )
+  })
+})
+
+/** A harness that emits `parts` for every turn, through a real HarnessAgent, as ES drives it. */
+async function turnThrough(parts: HarnessV1StreamPart[]) {
+  let served: string | undefined
+  const adapter: HarnessV1 = {
+    specificationVersion: 'harness-v1',
+    harnessId: 'scripted',
+    builtinTools: {},
+    doStart: async ({ sessionId }) => ({
+      sessionId,
+      isResume: false,
+      doPromptTurn: async (turn) => {
+        for (const part of parts) turn.emit(part)
+        return { submitToolResult: async () => {}, done: Promise.resolve() }
+      },
+      doCompact: async () => {},
+      doContinueTurn: async () => ({ submitToolResult: async () => {}, done: Promise.resolve() }),
+      doSuspendTurn: async () => ({}) as never,
+      doDetach: async () => ({}) as never,
+      doStop: async () => ({}) as never,
+      doDestroy: async () => {},
+    }),
+  } as HarnessV1
+  const agent = new HarnessAgent({
+    harness: observed(adapter, (part) => {
+      if (part.type === 'stream-start' && part.modelId) served = part.modelId
+    }),
+    model: 'requested-model',
+    permissionMode: 'allow-all',
+  })
+  const sandboxSession = {
+    description: 'none',
+    defaultWorkingDirectory: '/es',
+    run: async () => ({ exitCode: 0, stdout: '/root', stderr: '' }),
+    restricted: () => sandboxSession,
+  }
+  const session = await agent.createSession({ sandboxSession: sandboxSession as never })
+  const result = await agent.stream({ session, prompt: 'go' })
+  for await (const _ of result.fullStream);
+  return { usage: tokenUsage(await result.totalUsage), served }
+}
+
+const finishWith = (usage: unknown, modelId?: string): HarnessV1StreamPart[] => [
+  { type: 'stream-start', ...(modelId ? { modelId } : {}) },
+  { type: 'text-start', id: 't' },
+  { type: 'text-delta', id: 't', delta: 'ok' },
+  { type: 'text-end', id: 't' },
+  { type: 'finish-step', finishReason: { unified: 'stop', raw: 'stop' }, usage: usage as never },
+  { type: 'finish', finishReason: { unified: 'stop', raw: 'stop' }, totalUsage: usage as never },
+]
+
+describe('token usage and the served model, from any harness', () => {
+  test('Antigravity: cache reads larger than input stay positive, and the model is kept', async () => {
+    // A real gemini-3.8-flash turn's counts.
+    const agy = antigravityUsage({
+      input_tokens: 70161,
+      output_tokens: 412,
+      thinking_tokens: 30,
+      cache_read_tokens: 143477,
+    })
+    const { usage, served } = await turnThrough(finishWith(agy, 'gemini-3.8-flash-low'))
+    assert.deepEqual(usage, {
+      input: 70161,
+      output: 412,
+      cacheRead: 143477,
+      cacheWrite: 0,
+      reasoning: 30,
+    })
+    assert.equal(served, 'gemini-3.8-flash-low')
+  })
+
+  test('Cursor: uncached input, cache reads and writes as the SDK splits them', async () => {
+    const sdk = cursorUsage({
+      inputTokens: 15564,
+      outputTokens: 117,
+      cacheReadTokens: 10464,
+      cacheWriteTokens: 12,
+      totalTokens: 26157,
+    })
+    const { usage, served } = await turnThrough(finishWith(sdk, 'composer-2.5[fast=false]'))
+    assert.deepEqual(usage, {
+      input: 15564,
+      output: 117,
+      cacheRead: 10464,
+      cacheWrite: 12,
+      reasoning: null,
+    })
+    assert.equal(served, 'composer-2.5[fast=false]')
+  })
+
+  test('a harness that reports neither records null for both', async () => {
+    const none = cursorUsage(undefined)
+    const { usage, served } = await turnThrough(finishWith(none))
+    assert.equal(usage, null)
+    assert.equal(served, undefined)
   })
 })

@@ -50,25 +50,19 @@ export type Agent = Layout & {
   adapter: (options: {
     mcpServers?: Record<string, unknown>
     auth: Record<string, string>
+    descriptor: AgentHarnessDescriptor
   }) => Promise<HarnessAgentAdapter>
 }
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
 export type ExpectedBlocked = { hosts: readonly string[]; why: string }
 
-const pairs = (values: Record<string, unknown> = {}) =>
-  Object.entries(values).map(([name, value]) => ({ name, value: String(value) }))
-
-/** The ACP `session/new` shape. */
-export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
-        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
-    ),
-  )
-}
+/** Cursor's key exchange: the only request the Cursor SDK sends the API key on. */
+const CURSOR_EXCHANGE = {
+  host: 'api2.cursor.sh',
+  path: { exact: '/auth/exchange_user_api_key' },
+  method: ['POST'],
+} as const satisfies EndpointMatch
 
 /** The `.mcp.json` shape. */
 export function claudeMcpServers(
@@ -96,8 +90,23 @@ export function antigravityMcpServers(
   )
 }
 
+/** The Cursor SDK's `McpServerConfig` shape. */
+export function cursorMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) =>
+      s.transport === 'stdio'
+        ? [name, { type: 'stdio', command: s.command, args: s.args, env: s.env }]
+        : [name, { type: s.transport, url: s.url, headers: s.headers }],
+    ),
+  )
+}
+
 /** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
+  // The SDK loads AGENTS.md and .cursor/skills from the workspace (settingSources `project`) and
+  // ~/.agents/skills from home (`user`), as the Cursor CLI does.
   cursor: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.cursor/skills',
@@ -117,17 +126,6 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   },
 }
 
-/**
- * Files under `~/` (and under the adapter's own home) that the agent's CLI rewrites every session
- * with its own state. They aren't context the environment gave the agent, so they're recorded but
- * left out of the context fingerprint, or no two runs would be comparable.
- */
-export const RUNTIME_STATE: Record<BakedHarness, readonly string[]> = {
-  cursor: ['.cursor/cli-config.json', '.cursor/skills-cursor/.sync-manifest.json'],
-  'claude-code': [],
-  antigravity: [],
-}
-
 /** Every real agent ES can drive, by harness kind. */
 export const AGENTS: Record<AgentKind, Agent> = {
   cursor: {
@@ -135,22 +133,24 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Cursor',
     factory: 'cursor',
     credential: 'CURSOR_API_KEY',
-    endpoints: [
-      { host: 'api2.cursor.sh', path: { exact: '/auth/exchange_user_api_key' }, method: ['POST'] },
-    ],
-    // The CLI stores these in auth.json and sends the access token to api2 and the agent hosts
-    // (agentn.*.cursor.sh, over long-lived HTTP/2 streams). It doesn't check their signatures.
+    // The SDK trades the key for session tokens at the same endpoint as the CLI, and sends the
+    // tokens to api2.cursor.sh only (its agent stream included, over HTTP/1.1 through the proxy).
+    endpoints: [CURSOR_EXCHANGE],
     tokens: {
-      endpoint: {
-        host: 'api2.cursor.sh',
-        path: { exact: '/auth/exchange_user_api_key' },
-        method: ['POST'],
-      },
+      endpoint: CURSOR_EXCHANGE,
       fields: ['accessToken', 'refreshToken'],
       hosts: ['cursor.sh', '*.cursor.sh'],
     },
-    mcpServers: acpMcpServers,
-    adapter: async (options) => (await import('@ai-sdk/harness-cursor')).createCursor(options),
+    mcpServers: cursorMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
+      (await import('@evalsuite/harness-cursor-sdk')).createCursorSdk({
+        auth,
+        ...(mcpServers ? { mcpServers } : {}),
+        ...(descriptor.kind === 'cursor' && descriptor.params
+          ? { modelParams: descriptor.params }
+          : {}),
+        requireCredentialBrokering: true,
+      }),
   },
   'claude-code': {
     ...LAYOUTS['claude-code'],
@@ -170,9 +170,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
       },
     ],
     mcpServers: claudeMcpServers,
-    adapter: async (options) =>
+    adapter: async ({ auth, mcpServers }) =>
       (await import('@ai-sdk/harness-claude-code')).createClaudeCode({
-        ...options,
+        auth,
+        ...(mcpServers ? { mcpServers } : {}),
         env: {
           // The CLI refuses to skip permissions as root unless told it's in a sandbox.
           IS_SANDBOX: '1',
@@ -203,14 +204,20 @@ export const AGENTS: Record<AgentKind, Agent> = {
       why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
     },
     mcpServers: antigravityMcpServers,
-    adapter: async (options) =>
+    adapter: async ({ auth, mcpServers }) =>
       (await import('@evalsuite/harness-antigravity')).createAntigravity({
-        ...options,
+        auth,
+        ...(mcpServers ? { mcpServers } : {}),
         // ES's Docker sandbox always brokers; a sandbox that can't must not get the key.
         requireCredentialBrokering: true,
       }),
   },
 }
+
+/** The harness of a config that names none: Cursor, on Cursor's own model. */
+export const DEFAULT_HARNESS: AgentHarnessDescriptor = { kind: 'cursor', model: 'composer-2.5' }
+/** A harness to name in messages that ask for one. */
+export const HARNESS_EXAMPLE = "cursor({ model: 'composer-2.5' })"
 
 export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
@@ -236,13 +243,6 @@ export function layoutOf(descriptor: HarnessDescriptor): Layout {
 export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlocked | undefined {
   const kind = descriptor.kind === 'fake' ? descriptor.layout : descriptor.kind
   return kind ? AGENTS[kind].expectedBlocked : undefined
-}
-
-/** The CLI runtime state in the harness's image; a fake one runs in Cursor's unless `layout` says. */
-export function runtimeStateOf(descriptor: HarnessDescriptor): readonly string[] {
-  return RUNTIME_STATE[
-    descriptor.kind === 'fake' ? (descriptor.layout ?? 'cursor') : descriptor.kind
-  ]
 }
 
 /** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */

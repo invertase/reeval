@@ -8,6 +8,7 @@ import type {
   FileChange,
   Outcome,
   PhaseTimings,
+  TokenUsage,
   TurnStatus,
 } from '../types.ts'
 import type { CellEffort } from '../view/effort.ts'
@@ -115,7 +116,13 @@ export type AttemptRecord = {
     startedAt: string
     durationMs: number
     text: string
+    /** Tokens the turn used; null when the harness reports none. */
+    usage: TokenUsage | null
+    /** The model the harness says served the turn; null when it reports none. */
+    model: string | null
   }>
+  /** Tokens across the attempt's turns; null when the harness reported none. */
+  usage: TokenUsage | null
   timings: PhaseTimings
   /** Counts from the transcript, so a run's shape is visible without reading it. */
   activity: {
@@ -229,10 +236,14 @@ export type RunSummary = {
 }
 
 /** Tokens and USD, null when the harness or judge doesn't report them (Cursor reports none). */
+/** What the run used. ES prices nothing, so `usd` stays null; tokens are the harnesses' own counts. */
 export type Cost = {
   usd: number | null
+  /** Prompt tokens, cache reads and writes included. */
   inputTokens: number | null
   outputTokens: number | null
+  /** The same totals split as each turn reports them. */
+  usage: TokenUsage | null
   source: 'reported' | 'unreported'
 }
 
