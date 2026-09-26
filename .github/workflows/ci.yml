@@ -111,9 +111,10 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
-      # evalsuite: the fixtures' Docker tier and test/docker.test.ts. sandbox-docker: its whole
-      # suite, real containers included. Both fail rather than skip without Docker.
-      - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == '@invertase/foobar' && 'test:docker' || 'test' }}
+      # evalsuite: the fixtures' Docker tier, test/docker.test.ts and the Docker sandbox contract.
+      # sandbox-docker: its whole suite, real containers included. All fail rather than skip
+      # without Docker.
+      - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == '@invertase/foobar' && 'test:docker test/sandbox-contract.test.ts' || 'test' }}
 
   studio:
     name: studio
