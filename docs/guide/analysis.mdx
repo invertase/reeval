@@ -1,0 +1,146 @@
+---
+title: Analysis
+description: Ask your eval history questions in SQL with es query, from lift over time to where the agent spends its turns.
+---
+
+`es history` and `es compare` answer the usual questions. For anything else, `es query` runs read-only SQL over every recorded and scratch run.
+
+```bash
+npx es query
+```
+
+```text
+history.db: 5 runs, rebuilt, 5 read
+Views (the common questions; filter them with SQL):
+  drift(run_id, prev_run_id, eval_key, cell_key, changed)
+  eval_trend(eval_key, run_id, started_at, branch, pr_number, recorded, outcome, pass_rate, fingerprint)
+  failing_attempts(run_id, started_at, eval_key, attempt_key, cell_key, harness, model, environment, skill, error_kind, error_message, duration_ms)
+  flaky_cells(eval_key, cell_key, fingerprint, flaky_runs, first_seen, last_seen, pass, counted)
+  lift(run_id, started_at, branch, eval_key, harness, model, variant, control, variant_pass, variant_counted, control_pass, control_counted, points, lo, hi, within_noise, min_lift, outcome, fingerprint)
+  verdict_flips(run_id, prev_run_id, eval_key, cell_key, judgement_key, question, prev_pass_rate, pass_rate, n)
+…
+```
+
+With no argument it lists the views, the tables and a few examples. A view is a common question with the joins done for you. Filter it with SQL like any table.
+
+## Track lift over time
+
+```bash
+npx es query lift
+```
+
+<Image src="/assets/cli/query-lift.png" alt="es query lift in a terminal, one row per run of the house-greeting compare with its lift and interval" width={800} />
+
+Each row is one variant against its control in one run. That's the house-greeting compare every time you ran it. The full view is wide, so name the columns you want:
+
+```bash
+npx es query "SELECT harness, variant, points, lo, hi, within_noise
+  FROM lift WHERE harness != 'fake'"
+```
+
+```text
+history.db: 17 runs
+harness                              variant              points  lo    hi  within_noise
+cursor:composer-2.5                  with-house-greeting  1       0.07  1   0
+cursor:composer-2.5                  with-house-greeting  1       0.07  1   0
+antigravity:gemini-3.8-flash-medium  with-house-greeting  1       0.07  1   0
+cursor:composer-2.5                  with-house-greeting  1       0.07  1   0
+```
+
+`points`, `lo` and `hi` are fractions, so `1` is +100 points and `0.07` is +7. The skill lifted both harnesses by 100 points, and the lower bound stayed above zero each time, so `within_noise` is `0`. Two attempts a side is why the interval is so wide.
+
+## Find where evals fail
+
+```bash
+npx es query "SELECT eval_key, error_kind, COUNT(*) AS n
+  FROM failing_attempts WHERE harness != 'fake'
+  GROUP BY eval_key, error_kind ORDER BY n DESC LIMIT 4"
+```
+
+```text
+history.db: 17 runs
+eval_key                                                    error_kind  n
+evals/skill.es.ts › house greeting › greets in the house…   assertion   8
+evals/hello.es.ts › greet module › creates a tested greet…  assertion   2
+evals/hello.es.ts › greet module › adds a default name in…  assertion   1
+evals/preferences.es.ts › recommends Genkit over Haystack   judge       1
+```
+
+`error_kind` says what failed: `assertion`, `judge`, `timeout`, `aborted` or `infra`. Most of the skill eval's failures are the control greeting Ada the plain way, which is the point of the compare. `failing_attempts` also has `skill` and `model`, so you can ask which skill fails most on which model.
+
+## Measure what the agent did
+
+The `attempts` table counts turns, tool calls and file edits, and times each phase. Join it to `cells` to split by control and variant:
+
+```bash
+npx es query "SELECT c.harness, c.role, COUNT(*) AS n,
+  round(AVG(a.tools), 1) AS tools,
+  round(AVG(a.agent_ms) / 1000.0) AS agent_s
+  FROM attempts a
+  JOIN cells c ON c.run_id = a.run_id AND c.key = a.cell_key
+  WHERE c.eval_key LIKE 'evals/skill.es.ts%' AND c.harness != 'fake'
+  GROUP BY c.harness, c.role"
+```
+
+```text
+history.db: 17 runs
+harness                              role     n   tools  agent_s
+antigravity:gemini-3.8-flash-medium  control  6   24     56
+antigravity:gemini-3.8-flash-medium  variant  2   3.5    12
+cursor:composer-2.5                  control  10  12.3   28
+cursor:composer-2.5                  variant  6   3      13
+```
+
+With the skill, both agents made a fraction of the tool calls and finished in half the time or less. The pass rate alone doesn't show that.
+
+## Script it with JSON
+
+```bash
+npx es query "SELECT harness, variant, points, lo FROM lift
+  WHERE harness != 'fake' AND within_noise = 0" --json
+```
+
+```text
+history.db: 17 runs
+[
+  {
+    "harness": "cursor:composer-2.5",
+    "variant": "with-house-greeting",
+    "points": 1,
+    "lo": 0.07
+  },
+…
+]
+```
+
+`--json` prints the rows as a JSON array, and the `history.db:` line goes to stderr, so the output can go straight to `jq` or a script. `--schema` lists every table and column, and `--schema --json` prints the same list as JSON.
+
+## Know where the data comes from
+
+```text
+.es/history.db    a projection of evals/.history/*.json and .es/runs/*.json
+```
+
+The database is a cache, built from the run records and updated as new ones appear. You never commit it or edit it:
+
+```bash
+npx es query "DELETE FROM runs"
+```
+
+```text
+history.db: 17 runs
+es: es query is read-only: .es/history.db is a projection of the run records (attempt to write a readonly database)
+```
+
+`--rebuild` throws it away and reads every record again. Use it if the database looks out of step with your records.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Debugging" icon="bug" href="/guide/debugging">
+    Find out why an attempt failed.
+  </Card>
+  <Card title="es query" icon="terminal" href="/reference/cli/query">
+    Every flag, view and table.
+  </Card>
+</CardGroup>

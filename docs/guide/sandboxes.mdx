@@ -1,0 +1,153 @@
+---
+title: Sandboxes and toolchains
+description: Run the agent on Python, your own Dockerfile or ES's image with extra tools, using docker().
+---
+
+Every attempt runs in a fresh Docker container. `docker()` with no options uses ES's image: Node 22, git and the harness's CLI. When the task needs another toolchain, give the sandbox another base.
+
+```ts
+import { docker } from '{{ pkg }}/sandbox'
+
+docker()                                        // ES's image
+docker({ from: 'python:3.12-slim' })            // ES adds Node, git, the CLI
+docker({ install: ['npm i -g firebase-tools@14'] }) // extra tools
+docker({ dockerfile: './sandbox/Dockerfile' })  // your own, from this file
+docker({ image: 'ghcr.io/acme/agent:1' })         // already has the CLI
+```
+
+A sandbox has one base (`image`, `from` or `dockerfile`), and optionally `install` commands on top. What's baked into the image belongs to the sandbox. What each attempt adds, such as files, secrets and setup steps, belongs to the [environment](/guide/environments).
+
+## Start from a toolchain image
+
+```ts title="evals/python.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+evaluate(
+  'writes and tests fizzbuzz in python',
+  { sandbox: docker({ from: 'python:3.12-slim', id: 'python' }) },
+  async (t) => {
+    await t.send(
+      'Write fizzbuzz.py with a function fizzbuzz(n) returning the usual ' +
+        'FizzBuzz string for n, and test_fizzbuzz.py with unittest tests ' +
+        'for 3, 5, 15 and 7. Standard library only.',
+    )
+    await expect(t.exec('python3 --version')).toSucceed()
+    await expect(t.exec('python3 -m unittest -q')).toSucceed()
+  },
+)
+```
+
+`from` takes any Debian or Ubuntu based image. ES bakes Node, pnpm, git and the harness's CLI on top the first time, and caches the result. `id: 'python'` names the sandbox in the cell key.
+
+## Add tools with install
+
+```ts title="evals/jq.es.ts"
+const withJq = docker({
+  install: [
+    'apt-get update && apt-get install -y --no-install-recommends jq ' +
+      '&& rm -rf /var/lib/apt/lists/*',
+  ],
+})
+
+evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
+  // …
+  await expect(t.exec('jq --version')).toSucceed()
+  await expect(t.exec('./count.sh')).toSucceed()
+})
+```
+
+`install` runs its commands in order, as root, in one build container. ES caches the result as one image, keyed on the base image and the exact list, so any edit builds anew. Install commands never see secrets or the workspace; anything that needs them is an environment `setup` step.
+
+## Bring a Dockerfile
+
+```dockerfile title="docker/sqlite/Dockerfile"
+ARG ES_BASE
+FROM ${ES_BASE}
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends sqlite3 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY seed.sql /opt/seed.sql
+```
+
+```ts title="evals/sqlite.es.ts"
+evaluate(
+  'queries a seeded SQLite database',
+  { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },
+  async (t) => {
+    // …
+    const report = await t.exec('sqlite3 app.db < report.sql')
+    await expect(report).toSucceed()
+    expect(report.stdout).toBe('Ada\nGrace\nLinus\n')
+  },
+)
+```
+
+ES builds the Dockerfile from its directory with `docker build`, and passes `ES_BASE`: its own image for the harness. `FROM ${ES_BASE}` layers on it, so the result already has the harness and is used as is. From any other Debian or Ubuntu base, ES adds the harness on top, as it does for `from`.
+
+<Warning>
+  Keep `root` as the user and leave `/es` alone in your Dockerfile. `install` doesn't combine with `dockerfile`: write the commands as `RUN` lines.
+</Warning>
+
+## Build the images
+
+```bash
+npx es image build --dry-run
+```
+
+```text
+images  4 sandbox images (nothing built: --dry-run)
+docker · 15 evals
+  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+docker + install · 1 eval
+  base               evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
+python · 1 eval
+  from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+docker:sqlite · 1 eval
+  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-2b50887268f17930  (docker build (layer cache), tagged by content hash)
+  harness                              evalsuite-dockerfile:sqlite-2b50887268f17930  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)
+```
+
+`es image build` builds every image the planned evals need, per harness. Without it, `es run` builds `from`, `dockerfile` and `install` images on first use, once, while other attempts wait. Filters, `--tag` and `--profile` apply, as for `es run`.
+
+## Run them
+
+```bash
+npx es run python sqlite jq --log-order grouped
+```
+
+```text
+plan  3 evals · 3 cells · 3 attempts · ~51s serial (~17s at concurrency 4)
+…
+[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  15s
+[writes#1 cursor]  +0:00 sandbox ready 2s
+[writes#1 cursor]  +0:01 turn 1 done 11s · 2 tool calls, 2 file edits
+[writes#1 cursor]  +0:13 $ python3 --version  exit 0 50ms
+[writes#1 cursor]  +0:13 $ python3 -m unittest -q  exit 0 74ms
+
+Summary
+ evals/jq.es.ts
+   ✓ summarises a JSON file with jq           13s  1 turn
+ evals/python.es.ts
+   ✓ writes and tests fizzbuzz in python      15s  1 turn
+ evals/sqlite.es.ts
+   ✓ queries a seeded SQLite database         14s  1 turn
+```
+
+## One sandbox per eval
+
+An eval has one sandbox, and every attempt gets a fresh container from its image. Comparing toolchains means different checks (`python3 -m unittest` against `node --test`), so write a separate eval for each. The sandbox is still part of each cell's key, such as `cursor:composer-2.5/-/python`.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Secrets and egress" icon="lock" href="/guide/secrets-and-egress">
+    Keep keys out of the sandbox and control where it connects.
+  </Card>
+  <Card title="Python, Flutter and more" icon="box" href="/recipes/toolchains">
+    Complete toolchain setups to copy.
+  </Card>
+</CardGroup>

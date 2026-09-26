@@ -1,0 +1,122 @@
+---
+title: Sizing runs
+description: Size runs with pr and nightly profiles, check the plan with --dry-run, and cap runs with budgets.
+---
+
+A PR run should be quick and cheap, and a nightly run thorough. Profiles size a run without touching the eval files:
+
+```ts title="es.config.ts"
+export default defineConfig({
+  // …
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    pr: {
+      limit: { runs: 1, compare: false, harness: ['cursor:composer-2.5'] },
+      budget: { attempts: 20 },
+    },
+    nightly: {
+      defaults: { runs: 3 },
+      record: 'always',
+      budget: { attempts: 80, duration: '2h' },
+    },
+  },
+})
+```
+
+This is `examples/hello`'s config. `pr` runs every cell once, drops compare variants and keeps only Cursor. `nightly` runs each eval three times, unless the eval says otherwise.
+
+## Choose a profile
+
+```bash
+npx es run --profile nightly
+ES_PROFILE=nightly npx es run
+CI=1 npx es run               # defaultProfile.ci: pr
+```
+
+`--profile` wins, then `ES_PROFILE`, then `defaultProfile.ci` when `CI` is set (or `defaultProfile.local` when it isn't). With none of those, no profile applies. The plan line says which profile ran and why, and the record keeps it.
+
+## Defaults fill in, limits narrow
+
+| Key | Sits | Does |
+|---|---|---|
+| `defaults` | Under groups and evals | Fills in what an eval doesn't set: `runs`, `harness`, `judge`, `egress`, … |
+| `limit.runs` | Over every eval | Caps runs per cell |
+| `limit.compare` | Over every eval | `false` runs the control only; `{ maxVariants: n }` keeps the first n |
+| `limit.harness` | Over every eval | Keeps only these harness ids; an eval left with none is skipped |
+
+An eval that sets `runs: 5` still runs five times under `nightly`, because defaults sit under it. Under `pr` it runs once, because a limit sits over it. `--runs` on the command line beats both. A profile can also set a default `judge`, when to `record`, and `tags` filters like `--tag`.
+
+## Pin what a profile can't change
+
+```ts title="evals/skill.es.ts"
+group(
+  'house greeting',
+  { compare: [withHouseGreeting], pin: ['compare'] },
+  () => { /* … */ },
+)
+```
+
+Without its variant, the house-greeting eval means nothing, so it pins `compare`. `pin` takes `harness`, `runs` and `compare`, the keys a `limit` narrows.
+
+## Check the plan first
+
+```bash
+CI=1 npx es run --dry-run
+```
+
+```text
+plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
+eval                                                              harnesses  variants  runs  attempts  notes
+evals/brokering.es.ts › the agent authenticates without seeing…   1          —         1     1
+…
+evals/hello.es.ts › greet module › creates a tested greet module  1          —         1     1
+evals/hello.es.ts › greet module › adds a default name in a…      1          —         1     1
+…
+evals/skill.es.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
+evals/sqlite.es.ts › queries a seeded SQLite database             1          —         1     1
+```
+
+`--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed. The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history.
+
+```bash
+npx es run --dry-run --profile nightly
+```
+
+```text
+plan  profile nightly (--profile) · 18 evals · 19 cells · 57 attempts · ~171m 00s serial (~42m 45s at concurrency 4) · budget 80 attempts ✓, 2h
+…
+evals/skill.es.ts › house greeting › greets in the house style    1          1         3     6
+evals/sqlite.es.ts › queries a seeded SQLite database             1          —         3     3
+hint: 18 evals run more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
+```
+
+`--dry-run --json` prints the same plan as one JSON document, with every cell.
+
+## Cap a run with a budget
+
+```bash
+npx es run --config es.fake.config.ts --profile smoke --runs 20
+```
+
+```text
+plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~15s serial (~4s at concurrency 4) · budget 12 attempts ✗
+…
+es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
+```
+
+`budget.attempts` is checked against the plan before anything starts. Over it, `es run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run is recorded with status `budget` (exit 1).
+
+<Info>
+  There's no cost budget. Cursor doesn't report usage, so `budget.usd` is an error.
+</Info>
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="History" icon="database" href="/guide/history">
+    Record runs in git, then compare them.
+  </Card>
+  <Card title="Options and inheritance" icon="layer-group" href="/concepts/options">
+    How config, profiles, groups and evals combine.
+  </Card>
+</CardGroup>
