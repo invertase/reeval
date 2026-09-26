@@ -80,6 +80,7 @@ See [Profiles and budgets](/reference/profiles).
 | `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` | Set the host variable, or mark the secret `optional: true`. |
 | `warning: SENTRY_DSN is in the sandbox as its real value. …` | Add `hosts` to broker it, or accept the warning. `secrets: { unbrokered: 'error' }` makes it an error. |
 | `warning: the egress gateway refused POST https://…: it carries CURSOR_API_KEY's placeholder and isn't one of the endpoints ES brokers it for` | The harness CLI called an endpoint ES doesn't broker. Check for a CLI update and report it. |
+| `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local. …` | The harness's API refused its key (an HTTP 401, or Google's "API key not valid"). The named variable is the one to fix; the provider's own message follows. |
 | `No credentials for judge model "…". …` | Set the provider's key or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges). |
 
 ## Docker and images
