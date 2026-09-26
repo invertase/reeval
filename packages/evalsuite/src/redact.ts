@@ -79,7 +79,7 @@ export const MIN_FRAGMENT = 8
  */
 const tokenLike = (value: string) =>
   value.length >= 16 &&
-  !/\s/.test(value) &&
+  /^[\w.~+/=:-]+$/.test(value) &&
   !/^[/~.]/.test(value) &&
   !value.includes('://') &&
   /[A-Za-z]/.test(value) &&
@@ -87,6 +87,11 @@ const tokenLike = (value: string) =>
 
 /** Windows that could be an ordinary word or number (`password`, `20260926`) aren't masked alone. */
 const WORDISH = /^(?:[a-z]+|[A-Z]+|\d+)$/
+/**
+ * Windows with quotes, backslashes, commas, brackets or whitespace aren't masked alone: they can
+ * match the structure of serialised JSON (`","sha256":"`) and break the record around them.
+ */
+const STRUCTURAL = /["'\\,:{}[\]\s]/
 
 type Secrets = {
   /** Whole values and their encoded forms, longest first. */
@@ -116,7 +121,7 @@ function envSecrets(env: NodeJS.ProcessEnv): Secrets {
     if (!(declared.has(value) ? value.length >= 12 : tokenLike(value))) continue
     for (let i = 0; i + MIN_FRAGMENT <= value.length; i++) {
       const window = value.slice(i, i + MIN_FRAGMENT)
-      if (WORDISH.test(window)) continue
+      if (WORDISH.test(window) || STRUCTURAL.test(window)) continue
       windows.add(window)
       starts[pairHash(value, i)] = 1
     }

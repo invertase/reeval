@@ -396,6 +396,16 @@ describe('redacting fragments of a secret', () => {
     assert.equal(redactSecrets('ord-2026-res', env2), '[REDACTED]')
   })
 
+  test("never breaks a record's JSON: a JSON-valued variable and quoted windows aren't masked alone", () => {
+    const targets = JSON.stringify([{ form: 'raw', len: 36, sha256: 'ab12cd34ef56ab12' }])
+    const record = JSON.stringify({ context: [{ path: 'AGENTS.md', sha256: 'ab12cd34ef56ab12' }] })
+    const out = redactSecrets(record, { ES_CONTRACT_KEY_TARGETS: targets })
+    assert.deepEqual(JSON.parse(out), JSON.parse(record))
+    registerSecret('q"uoted-se,cret:9f3a')
+    const quoted = JSON.stringify({ a: 'uoted-se', b: 'd-se,cre', c: 'q"uoted-s' })
+    assert.doesNotThrow(() => JSON.parse(redactSecrets(quoted, {})))
+  })
+
   test('countSecrets counts a fragment, so a history or analysis write stops on it', () => {
     assert.equal(countSecrets(`tail ${key.slice(-12)}`, env), 1)
     assert.equal(countSecrets(`whole ${key} and tail ${key.slice(-12)}`, env), 2)
