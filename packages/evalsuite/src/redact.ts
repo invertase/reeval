@@ -69,30 +69,118 @@ const formsOf = (value: string) => {
   return forms
 }
 
-function envSecrets(env: NodeJS.ProcessEnv): string[] {
+/** A stretch of a secret at least this long is masked on its own, like the key's last 12 characters. */
+export const MIN_FRAGMENT = 8
+
+/**
+ * Whether a secret-named variable's value looks like a credential, so its fragments are masked
+ * too. Paths, URLs and prose (`SSH_KEY_PATH=/home/me/.ssh/id_rsa`) would otherwise mask every
+ * `/home/me` in the output. Declared secrets of 12 or more characters always count.
+ */
+const tokenLike = (value: string) =>
+  value.length >= 16 &&
+  /^[\w.~+/=:-]+$/.test(value) &&
+  !/^[/~.]/.test(value) &&
+  !value.includes('://') &&
+  /[A-Za-z]/.test(value) &&
+  /\d/.test(value)
+
+/** Windows that could be an ordinary word or number (`password`, `20260926`) aren't masked alone. */
+const WORDISH = /^(?:[a-z]+|[A-Z]+|\d+)$/
+/**
+ * Windows with quotes, backslashes, commas, brackets or whitespace aren't masked alone: they can
+ * match the structure of serialised JSON (`","sha256":"`) and break the record around them.
+ */
+const STRUCTURAL = /["'\\,:{}[\]\s]/
+
+type Secrets = {
+  /** Whole values and their encoded forms, longest first. */
+  forms: string[]
+  /** Every `MIN_FRAGMENT`-character window of the values whose fragments are masked. */
+  windows: Set<string>
+  /** Bit `i` is set when some window starts with the two characters that hash to `i`. */
+  starts: Uint8Array
+}
+
+const pairHash = (text: string, i: number) =>
+  ((text.charCodeAt(i) * 31) ^ text.charCodeAt(i + 1)) & 0xffff
+
+let cached: { key: string; secrets: Secrets } | undefined
+
+function envSecrets(env: NodeJS.ProcessEnv): Secrets {
   const named = Object.entries(env)
     .filter(([name, value]) => SECRET_NAME.test(name) && value && value.length >= 8)
     .map(([, value]) => value as string)
   const values = [...new Set([...named, ...declared])]
-  return [...new Set(values.flatMap(formsOf))].sort((a, b) => b.length - a.length)
+  const key = values.map((v) => `${declared.has(v) ? 'd' : 'n'}${v}`).join('\0')
+  if (cached?.key === key) return cached.secrets
+  const forms = [...new Set(values.flatMap(formsOf))].sort((a, b) => b.length - a.length)
+  const windows = new Set<string>()
+  const starts = new Uint8Array(0x10000)
+  for (const value of values) {
+    if (!(declared.has(value) ? value.length >= 12 : tokenLike(value))) continue
+    for (let i = 0; i + MIN_FRAGMENT <= value.length; i++) {
+      const window = value.slice(i, i + MIN_FRAGMENT)
+      if (WORDISH.test(window) || STRUCTURAL.test(window)) continue
+      windows.add(window)
+      starts[pairHash(value, i)] = 1
+    }
+  }
+  const secrets = { forms, windows, starts }
+  cached = { key, secrets }
+  return secrets
+}
+
+/** The `[start, end)` stretches of `text` made of some secret's fragments, merged. */
+function fragmentRanges(text: string, { windows, starts }: Secrets): Array<[number, number]> {
+  const ranges: Array<[number, number]> = []
+  if (windows.size === 0) return ranges
+  for (let i = 0; i + MIN_FRAGMENT <= text.length; i++) {
+    if (!starts[pairHash(text, i)] || !windows.has(text.slice(i, i + MIN_FRAGMENT))) continue
+    const last = ranges.at(-1)
+    if (last && i <= last[1]) last[1] = i + MIN_FRAGMENT
+    else ranges.push([i, i + MIN_FRAGMENT])
+  }
+  return ranges
+}
+
+function maskFragments(text: string, secrets: Secrets): string {
+  const ranges = fragmentRanges(text, secrets)
+  if (ranges.length === 0) return text
+  let out = ''
+  let at = 0
+  for (const [start, end] of ranges) {
+    out += `${text.slice(at, start)}[REDACTED]`
+    at = end
+  }
+  return out + text.slice(at)
 }
 
 /**
  * Masks the values of secret-looking environment variables and declared secrets, raw or
- * JSON-, URL- or base64-encoded, and well-known token shapes, anywhere in `text`.
+ * JSON-, URL- or base64-encoded, any stretch of `MIN_FRAGMENT` or more of their characters, and
+ * well-known token shapes, anywhere in `text`.
  */
 export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
+  const secrets = envSecrets(env)
   let out = text
-  for (const secret of envSecrets(env)) out = out.replaceAll(secret, '[REDACTED]')
+  for (const secret of secrets.forms) out = out.replaceAll(secret, '[REDACTED]')
+  out = maskFragments(out, secrets)
   for (const pattern of TOKEN_PATTERNS) out = out.replace(pattern, '[REDACTED]')
   return out
 }
 
 /** Counts what `redactSecrets` would mask. Used as a last check before anything leaves the machine. */
 export function countSecrets(text: string, env: NodeJS.ProcessEnv = process.env): number {
+  const secrets = envSecrets(env)
   let count = 0
-  for (const secret of envSecrets(env)) count += text.split(secret).length - 1
-  for (const pattern of TOKEN_PATTERNS) count += text.match(pattern)?.length ?? 0
+  let rest = text
+  for (const secret of secrets.forms) {
+    count += rest.split(secret).length - 1
+    rest = rest.replaceAll(secret, '\0')
+  }
+  count += fragmentRanges(rest, secrets).length
+  for (const pattern of TOKEN_PATTERNS) count += rest.match(pattern)?.length ?? 0
   return count
 }
 

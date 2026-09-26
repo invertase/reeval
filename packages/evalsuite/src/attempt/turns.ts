@@ -1,6 +1,7 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { diffSinceSnapshot } from '../diff.ts'
 import type { HarnessSession } from '../harness/types.ts'
+import { redactSecrets } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { Diff, ExecResult, Turn } from '../types.ts'
@@ -53,6 +54,7 @@ export function turnSender(
     await takeContext(box, a.signal)
     const count = (...types: string[]) =>
       result.transcript.filter((e) => types.includes(e.type)).length
+    const failure = result.transcript.find((e) => e.type === 'error')
     a.report({
       kind: 'turn-end',
       turn: turnNumber,
@@ -60,8 +62,10 @@ export function turnSender(
       ms: result.durationMs,
       tools: count('tool', 'web-search', 'web-fetch'),
       fileEdits: count('file-edit'),
+      ...(failure?.type === 'error'
+        ? { error: redactSecrets(clip(failure.message.trim(), 300)) }
+        : {}),
     })
-    const failure = result.transcript.find((e) => e.type === 'error')
     const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
     debugLog(
       'harness',

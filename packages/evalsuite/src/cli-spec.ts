@@ -140,22 +140,71 @@ export function shellWords(line: string): string[] | null {
 
 const RUNNERS = [['npx'], ['pnpm', 'exec'], ['pnpm'], ['npm', 'exec', '--'], ['yarn']]
 
+/** An eval as `es run` selects it: by file path, by name (with its groups) or cell, and by tag. */
+export type SelectableEval = { file: string; name: string; tags: string[]; cells: string[] }
+
 /**
  * Why `line` isn't a valid ES command line, or null when it is. It may chain `es` commands with
  * `&&` or `;` and start with `npx` or `pnpm`; `es query <name>` must name a view or table in
- * `tables`, when given.
+ * `tables`, when given; `es run` and `es image build` must select at least one of `evals`, when
+ * given, with their filters and `--tag`s.
  */
-export function checkCommand(line: string, tables?: readonly string[]): string | null {
+export function checkCommand(
+  line: string,
+  tables?: readonly string[],
+  evals?: readonly SelectableEval[],
+): string | null {
   const segments = line.split(/\s*(?:&&|;)\s*/).filter((s) => s.trim())
   if (segments.length === 0) return 'empty command'
   for (const segment of segments) {
-    const problem = checkOne(segment, tables)
+    const problem = checkOne(segment, tables, evals)
     if (problem) return problem
   }
   return null
 }
 
-function checkOne(segment: string, tables?: readonly string[]): string | null {
+/**
+ * Why `filters` and `tags` select nothing among `evals`, or null. As `es run` does: a filter that
+ * names an eval file picks files, any other picks evals by name or cell, and the two narrow each
+ * other; every `--tag` must hold (`!tag` excludes).
+ */
+export function selectionProblem(
+  name: string,
+  evals: readonly SelectableEval[],
+  filters: string[],
+  tags: string[],
+): string | null {
+  const known = [...new Set(evals.flatMap((e) => e.tags))].sort()
+  for (const tag of tags) {
+    const bare = tag.replace(/^!/, '')
+    if (!known.includes(bare)) {
+      return `${name} --tag ${tag}: no eval in the run has the tag ${bare} (tags: ${known.join(', ') || 'none'})`
+    }
+  }
+  const byName = (e: SelectableEval, f: string) =>
+    e.name.includes(f) || e.cells.some((c) => c.includes(f))
+  const paths = filters.filter((f) => evals.some((e) => e.file.includes(f.replace(/^\.\//, ''))))
+  const names = filters.filter((f) => !paths.includes(f))
+  const unknown = names.filter((f) => !evals.some((e) => byName(e, f)))
+  if (unknown.length) {
+    return `${name}: filter ${unknown.map((f) => `"${f}"`).join(', ')} matches no eval file, eval name or cell in the run`
+  }
+  const selected = evals.filter(
+    (e) =>
+      tags.every((t) => (t.startsWith('!') ? !e.tags.includes(t.slice(1)) : e.tags.includes(t))) &&
+      (!paths.length || paths.some((f) => e.file.includes(f.replace(/^\.\//, '')))) &&
+      (!names.length || names.some((f) => byName(e, f))),
+  )
+  return selected.length
+    ? null
+    : `${name} ${[...filters, ...tags.map((t) => `--tag ${t}`)].join(' ')} selects no eval in the run`
+}
+
+function checkOne(
+  segment: string,
+  tables?: readonly string[],
+  evals?: readonly SelectableEval[],
+): string | null {
   if (/[|<>`$]/.test(segment.replace(/"[^"]*"|'[^']*'/g, ''))) {
     return `"${segment}" pipes or substitutes; verify commands are plain es commands`
   }
@@ -189,6 +238,7 @@ function checkOne(segment: string, tables?: readonly string[]): string | null {
   }
   const allowed = new Set<string>([...target.flags, ...GLOBAL])
   const positionals: string[] = []
+  const tags: string[] = []
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] as string
     if (arg === '--') {
@@ -209,7 +259,8 @@ function checkOne(segment: string, tables?: readonly string[]): string | null {
         const value = args[i + 1]
         if (value === undefined || value.startsWith('--')) return `--${flag} needs a value`
         i++
-      }
+        if (flag === 'tag') tags.push(value)
+      } else if (flag === 'tag' && eq !== -1) tags.push(arg.slice(eq + 1))
       if (type === 'boolean' && eq !== -1) return `--${flag} takes no value`
       continue
     }
@@ -217,6 +268,10 @@ function checkOne(segment: string, tables?: readonly string[]): string | null {
   }
   if (positionals.length > target.positionals) {
     return `${name} takes at most ${target.positionals} argument${target.positionals === 1 ? '' : 's'} (got ${positionals.join(' ')})`
+  }
+  if (evals && (name === 'es run' || name === 'es image build')) {
+    const problem = selectionProblem(name, evals, positionals, tags)
+    if (problem) return problem
   }
   if (command === 'query' && tables && positionals.length === 1) {
     const text = positionals[0] as string

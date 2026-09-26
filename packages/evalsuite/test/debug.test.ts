@@ -281,6 +281,48 @@ evaluate('leaks', async (t) => {
     assert.match(outputs['debug.log'], /check +\$ echo "\$LEAKY"; .* → exit 0/)
   })
 
+  test("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript", async () => {
+    const KEY = 'crsr_debug_7f3Kq9ZpL2mXw8Rt4VbN6yHc'
+    const tail = KEY.slice(-12)
+    // What a leak check that searches the sandbox for the key's tail would run and print.
+    const search = `echo searching for ${tail}; grep -rlsF -e '${tail}' . || true`
+    const p = await project('debug-redact-tail', {
+      'es.config.ts': fakeConfig({
+        harness: `{ script: [[{ exec: ${JSON.stringify(search)} }]] }`,
+      }),
+      'evals/b.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('searches for the tail', async (t) => {
+  await t.send('search')
+  const tail = (process.env.ES_DEBUG_PROVIDER_API_KEY ?? '').slice(-12)
+  const r = await t.exec(\`echo searching for \${tail}; grep -rlsF -e '\${tail}' . || true\`)
+  expect(r.exitCode).toBe(0)
+})
+`,
+    })
+    const env = { ES_DEBUG_PROVIDER_API_KEY: KEY }
+    for (const flag of ['-v', '-vv']) {
+      const r = await runCli(p.dir, ['run', flag, '--trace'], { env })
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const dir = attemptDir(p.dir, 'searches')
+      const { run } = readRun(p.dir)
+      const outputs = {
+        screen: r.stdout + r.stderr,
+        'debug.log': read(join(dir, 'debug.log')),
+        'trace.ndjson': read(join(dir, 'trace.ndjson')),
+        'the record and transcript': JSON.stringify(run),
+      }
+      for (const [where, text] of Object.entries(outputs)) {
+        for (const n of [8, 10, 12]) {
+          const fragment = KEY.slice(-n)
+          assert.equal(text.includes(fragment), false, `${flag}: ${where} has the key's last ${n}`)
+        }
+      }
+      // The canary: the masked command is there, so the check would see the tail if it leaked.
+      assert.match(outputs['debug.log'], /check +\$ echo searching for \[REDACTED\]; grep/)
+      assert.match(outputs['the record and transcript'], /searching for \[REDACTED\]/)
+    }
+  })
+
   test('keeps the newest debug.keep runs, and es clean clears them', async () => {
     const p = await project('debug-keep', {
       'es.config.ts': fakeConfig({ extra: 'debug: { keep: 2 },' }),

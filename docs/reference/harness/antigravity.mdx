@@ -69,7 +69,7 @@ Under a restricted egress policy the gateway refuses them, records them under th
 
 ## Tokens
 
-Each turn records the tokens the CLI reports and the model that served it. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; ES prices no models, so `usd` stays `null`. The CLI's `input_tokens` leaves out cache reads, as ES's `input` does, so a turn served mostly from the cache records more `cacheRead` than `input`; the prompt was `input + cacheRead`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+Each turn records the tokens the CLI reports and the model that served it. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; ES prices no models, so there's no USD. The CLI's `input_tokens` leaves out cache reads, as ES's `input` does, so a turn served mostly from the cache records more `cacheRead` than `input`; the prompt was `input + cacheRead`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
 ## Prompt size
 

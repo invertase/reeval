@@ -92,6 +92,8 @@ jobs:
         run: pnpm --filter @evalsuite/harness-antigravity test
       - name: harness-cursor-sdk
         run: pnpm --filter @evalsuite/harness-cursor-sdk test
+      - name: harness-opencode
+        run: pnpm --filter @evalsuite/harness-opencode test
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: unit }

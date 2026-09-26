@@ -24,7 +24,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
         : null,
     harnesses: record.stack.harnesses.map((h) => h.id),
     summary: record.summary,
-    costUsd: record.cost.usd,
+    usage: record.cost.usage,
     stack: {
       imageIds: record.stack.images.map((i) => i.id),
       agentClis: [...new Set(record.stack.images.flatMap((i) => (i.agentCli ? [i.agentCli] : [])))],

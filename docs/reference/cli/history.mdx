@@ -64,7 +64,8 @@ es compare [base] [head]  Diff two runs; base defaults to head's nearest recorde
 - **Not comparable** means a fingerprint part or the grader changed, and ES says which: `not comparable: evals/helpers.ts changed`.
 - **Filtered runs:** when base and head ran different cells of an eval, the eval is classified on the cells both ran, and the rest are listed (`same · cells removed: …`). With no cell in common, it's not comparable.
 - `--md` prints a `### ES: head vs base` heading and a table for a PR comment. `--json` returns `{ base, head, changes, rows }`.
-- `--fail-on-regression` exits 1 when any eval regressed. Without it, `es compare` exits 0.
+- **No earlier recorded run:** every eval is `new`, with `No earlier recorded run to compare <run> with: every eval is new.`, and `--json` has `base: null`. That's not an error.
+- `--fail-on-regression` exits 1 when any eval regressed, or when a `new` eval fails, since no earlier run vouches for it. A failing eval that's `changed (not comparable)` doesn't count. Without the flag, `es compare` exits 0.
 
 ```text
 base 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d) → head 20260926T173927Z_7e5376d_ada-lovelace_j03w (7e5376d, not recorded)

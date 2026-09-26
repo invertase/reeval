@@ -58,7 +58,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
               ]
             : []),
         ]
-        const done = (text: string, status: 'completed' | 'aborted') => ({
+        const done = (text: string, status: 'completed' | 'aborted' | 'error') => ({
           text,
           status,
           startedAt: new Date(startedAt).toISOString(),
@@ -142,6 +142,10 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
               ok: r.ok,
               durationMs: Date.now() - startedAt - time.atMs,
             })
+          } else if ('error' in step) {
+            debugLog('harness', `turn failed: ${step.error}`)
+            transcript.push({ ...at(), type: 'error', message: step.error })
+            return done('', 'error')
           } else scripted = step.reply
         }
         if (descriptor.delayMs) {
