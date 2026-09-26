@@ -118,7 +118,8 @@ jobs:
       - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == '@invertase/foobar' && 'test:docker test/sandbox-contract.test.ts' || 'test' }}
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
-        with: { name: docker-${{ strategy.job-index }} }
+        with:
+          name: docker-${{ strategy.job-index }}
 
   studio:
     name: studio
