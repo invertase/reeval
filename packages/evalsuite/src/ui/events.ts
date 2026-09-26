@@ -34,6 +34,8 @@ export type ProgressUpdate =
       ms: number
       tools: number
       fileEdits: number
+      /** The turn's first error event, e.g. the provider's billing or auth error. */
+      error?: string
     }
   | { kind: 'check-start'; command: string }
   | { kind: 'check-end'; command: string; exitCode: number; ms: number }

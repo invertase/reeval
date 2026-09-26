@@ -90,6 +90,7 @@ Each step is an object with exactly one key:
 | `{ write: { 'a.js': '…' } }` | Writes the files | `file-edit` events |
 | `{ reply: 'Done.' }` | Sets the turn's final message, instead of `text` | The final `text` event |
 | `{ mcp: 'docs/search' }` | Starts the environment's stdio MCP server `docs` in the sandbox and calls its `search` tool with no arguments | A `tool` event named `mcp__docs__search` |
+| `{ error: 'Credit balance is too low' }` | Ends the turn there with `status: 'error'`, as a provider error would; later steps and `files` are skipped | An `error` event |
 
 An `mcp` step needs a stdio server of that name in the environment; anything else is an infra error for the attempt.
 
@@ -115,7 +116,7 @@ Harness-placed skills are written under `~/`, where the layout's adapter would p
 | Mistake | Message |
 |---|---|
 | `script` not a list of lists | `fakeHarness({ script }) takes one list of steps per turn, e.g. script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]] (got …)` |
-| A bad step | `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string } or { mcp: '<server>/<tool>' } (got …)` |
+| A bad step | `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got …)` |
 | A bad layout | `fakeHarness({ layout }) is one of 'cursor', 'claude-code', 'antigravity', 'opencode' (got …)` |
 | An unknown MCP server | `The fake agent's script calls MCP server "docs", which the environment doesn't have (it has none)` |
 | A remote MCP server | `The fake agent calls stdio MCP servers only; "docs" is http` |

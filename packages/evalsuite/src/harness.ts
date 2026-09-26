@@ -78,7 +78,7 @@ export const opencode = (
 
 const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode']
 
-const STEP_KEYS = ['exec', 'write', 'reply', 'mcp']
+const STEP_KEYS = ['exec', 'write', 'reply', 'mcp', 'error']
 
 function checkScript(script: unknown): void {
   const example = "script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]]"
@@ -104,7 +104,7 @@ function checkScript(script: unknown): void {
           : typeof value === 'string')
     if (!valid) {
       throw new UsageError(
-        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string } or { mcp: '<server>/<tool>' } (got ${JSON.stringify(step)})`,
+        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got ${JSON.stringify(step)})`,
       )
     }
   }

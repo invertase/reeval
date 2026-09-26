@@ -578,6 +578,24 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.match(r.stdout, /boom/)
   })
 
+  test("a turn's error message shows in the summary, agent output and summary.md without -v", async () => {
+    const billing = 'Credit balance is too low to access the Anthropic API'
+    const p = await project('turn-error', {
+      'es.config.ts': fakeConfig({ harness: `{ script: [[{ error: '${billing}' }]] }` }),
+      'evals/agent.es.ts': agentEval(`expect(turn.status).toBe('completed')`),
+    })
+    const plain = await runCli(p.dir)
+    assert.equal(plain.code, 1, plain.stdout + plain.stderr)
+    const summary = plain.stdout.slice(plain.stdout.indexOf('\nSummary'))
+    assert.match(summary, new RegExp(`\\n {3}turn 1 error: ${billing}\\n`))
+    assert.match(plain.stdout, new RegExp(`turn 1 error: ${billing} \\d+ms · 0 tool calls`))
+    const { run, read } = readRun(p.dir)
+    assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.error, billing)
+    assert.match(read('summary.md'), new RegExp(`- Error: ${billing}`))
+    const agent = await runCli(p.dir, ['run'], { env: { ES_UI: 'agent' } })
+    assert.match(agent.stdout, new RegExp(`\\n {2}turn 1 error: ${billing}\\n`))
+  })
+
   test('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown', async () => {
     const p = await project('unawaited', {
       'es.config.ts': fakeConfig(),
