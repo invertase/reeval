@@ -10,6 +10,13 @@ const NO_USAGE = {
   outputTokens: { total: undefined, text: undefined, reasoning: undefined },
 }
 
+/**
+ * How Goose words a failed model call (a refused key, a 5xx) when it reports it as the turn's
+ * message and ends the turn normally, in its own template rather than the model's words.
+ */
+const GOOSE_ERROR =
+  /^Ran into this error: ([\s\S]*?)\.?\n\nPlease retry if you think this is a transient or recoverable error\.$/
+
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 
@@ -21,9 +28,14 @@ const record = (value: unknown): Record<string, unknown> =>
  *   `mcp__stamp__house_stamp`, Goose's own by its name (`tree`, `extensionmanager__…`).
  * - The `finish` part's usage is dropped: Goose's ACP `PromptResponse.usage` is its last model
  *   call's, not the turn's, and an undercount is worse than none.
+ * - A failed model call, which Goose sends as a message in its error template, is an `error`
+ *   part instead of the turn's text, so the turn fails rather than completing.
  */
 export class GooseStreamTranslator {
   private readonly names = new Map<string, string>()
+  /** Messages in Goose's error template, by id, with the error they report. */
+  private readonly failures = new Map<string, string>()
+  private readonly reported = new Set<string>()
   private readonly servers: ReadonlySet<string>
 
   constructor(options: { mcpServers?: readonly string[] } = {}) {
@@ -33,6 +45,14 @@ export class GooseStreamTranslator {
   push(part: Part): Part {
     if (part.type === 'raw') {
       const update = record(part.rawValue)
+      const content = record(update.content)
+      const failure =
+        update.sessionUpdate === 'agent_message_chunk' &&
+        typeof update.messageId === 'string' &&
+        typeof content.text === 'string'
+          ? GOOSE_ERROR.exec(content.text)
+          : null
+      if (failure) this.failures.set(update.messageId as string, failure[1] as string)
       const call = record(record(record(update._meta).goose).toolCall)
       if (
         update.sessionUpdate === 'tool_call' &&
@@ -52,6 +72,17 @@ export class GooseStreamTranslator {
       return part
     }
     if (part.type === 'finish') return { ...part, totalUsage: NO_USAGE }
+    const failure = typeof part.id === 'string' ? this.failures.get(part.id) : undefined
+    if (failure !== undefined) {
+      if (part.type === 'text-delta' && !this.reported.has(part.id as string)) {
+        this.reported.add(part.id as string)
+        return { type: 'error', error: new Error(`Goose's model call failed: ${failure}`) }
+      }
+      if (part.type === 'text-delta') return { type: 'raw', rawValue: { replaced: part } }
+      if (part.type === 'text-start' || part.type === 'text-end') {
+        return { type: 'raw', rawValue: { replaced: part } }
+      }
+    }
     if (
       (part.type === 'tool-call' || part.type === 'tool-result' || part.type === 'tool-error') &&
       typeof part.toolName === 'string' &&
