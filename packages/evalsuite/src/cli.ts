@@ -289,6 +289,10 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
     throw error
   }
   const { engineRun, plan, sandboxVersions, budgetReached } = executed
+  if ((interrupted || engineRun.cancelled) && plan?.sandboxes.some((s) => s.kind === 'docker')) {
+    const { removeRunContainers } = await import('./sandbox/docker.ts')
+    await removeRunContainers(ctx.runId)
+  }
   if (engineRun.stopped || !plan) {
     renderer.close()
     return EXIT.ok
@@ -616,8 +620,9 @@ async function executeRun(
         if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
         renderer.onEvent(e)
       },
+      // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
       onCancellable: (cancel) => {
-        process.on('SIGINT', () => {
+        const onSignal = () => {
           if (interrupted) {
             renderer.close()
             process.exit(EXIT.interrupted)
@@ -630,7 +635,9 @@ async function executeRun(
             text: 'Cancelling: stopping agents and destroying sandboxes (Ctrl-C again to force)',
           })
           cancel()
-        })
+        }
+        process.on('SIGINT', onSignal)
+        process.on('SIGTERM', onSignal)
       },
     })
   } finally {

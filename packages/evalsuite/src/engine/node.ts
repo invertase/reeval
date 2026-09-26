@@ -349,7 +349,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   let namePattern: RegExp | undefined
   const nameFilters: string[] = []
   const matchesName = (e: EngineEval) => !namePattern || namePattern.test(nameText(e))
-  const sigintListeners = new Set(process.listeners('SIGINT'))
+  const signals = ['SIGINT', 'SIGTERM'] as const
+  const ownListeners = new Set(signals.flatMap((signal) => process.listeners(signal)))
   const { concurrency } = options.run
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each; one
   // worker per file in flight lets the scheduler balance across files.
@@ -389,9 +390,11 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       { customLogger: silentLogger, logLevel: 'silent', cacheDir: 'node_modules/.cache/es' },
       { stdout, stderr },
     )
-    // Vitest's logger exits the process on SIGINT; the CLI owns Ctrl-C instead.
-    for (const listener of process.listeners('SIGINT')) {
-      if (!sigintListeners.has(listener)) process.off('SIGINT', listener)
+    // Vitest's logger exits the process on SIGINT and SIGTERM; the CLI owns both instead.
+    for (const signal of signals) {
+      for (const listener of process.listeners(signal)) {
+        if (!ownListeners.has(listener)) process.off(signal, listener)
+      }
     }
     vitest.provide('es:run', options.run)
 
