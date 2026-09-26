@@ -376,6 +376,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       unit('redactSecrets masks secret-looking env values'),
       secrets('redacting encoded forms'),
+      secrets('redacting fragments of a secret'),
     ],
   },
   {
@@ -856,6 +857,7 @@ export const inventory: InventoryFeature[] = [
     name: 'Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included',
     tests: [
       debug('redaction holds on screen, in debug.log and in trace.ndjson, encoded forms included'),
+      debug("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript"),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
     ],
   },
