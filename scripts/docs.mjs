@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 // Keeps the docs.page site (docs.json, docs/) in step with the code.
 //
-//   node scripts/docs.mjs           rewrite every generated block in docs/
-//   node scripts/docs.mjs --check   fail if a block is stale or the reference misses something
-//   node scripts/docs.mjs --print   list the blocks; --print <name> prints one
+//   pnpm docs              rewrite every generated block in docs/
+//   pnpm docs:check        fail if a block is stale or the reference misses something
+//   pnpm docs --print      list the blocks; --print <name> prints one
 //
 // Generated blocks sit between `[//]: # (generated:<name>)` and `[//]: # (/generated:<name>)` in
 // the .mdx files; everything outside them is hand-written. The CLI help and the query schema
-// come from the built CLI, so run `pnpm build` first.
+// come from the built CLI, so run `pnpm build` first. The flags come from src/cli-spec.ts, which
+// is why the scripts run node with --experimental-strip-types.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -77,7 +78,7 @@ function exitCodes() {
 
 /** Every command's flags, from the spec `es` parses its own arguments from. */
 async function cliCommands() {
-  const spec = join(root, 'packages/evalsuite/dist/cli-spec.js')
+  const spec = join(src, 'cli-spec.ts')
   if (!existsSync(spec)) return null
   const { COMMANDS } = await import(spec)
   const out = new Map()
@@ -391,7 +392,7 @@ const mentions = (text, token) => text.includes(token)
 const commands = await cliCommands()
 const sections = helpSections(help)
 const GLOBAL_FLAGS = ['config', 'help', 'version']
-if (!commands) problems.push('packages/evalsuite/dist/cli-spec.js is missing: rebuild')
+if (!commands) problems.push('packages/evalsuite/src/cli-spec.ts is missing')
 for (const [name, flags] of commands ?? []) {
   const section = sections.get(name)
   if (!section) {

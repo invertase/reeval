@@ -3,8 +3,9 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
+import { join, sep } from 'node:path'
 import { Writable } from 'node:stream'
-import { fileURLToPath } from 'node:url'
+import { pathToFileURL } from 'node:url'
 import { configDefaults } from 'vitest/config'
 import {
   createVitest,
@@ -16,6 +17,7 @@ import {
 import { inCI } from '../env.ts'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
+import { DIST_DIR, PACKAGE_DIR } from '../root.ts'
 import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
 import type { AttemptMeta, RunContext } from '../types.ts'
 import type { EsEvent, EvalResult } from '../ui/events.ts'
@@ -70,11 +72,11 @@ export type EngineOptions = {
 const require = createRequire(import.meta.url)
 export const vitestVersion: string = require('vitest/package.json').version
 export const engineVersions = { vitest: vitestVersion }
-const packageName: string = require('../../package.json').name
+const packageName: string = require(join(PACKAGE_DIR, 'package.json')).name
 
-const esDistDir = fileURLToPath(new URL('../../dist/', import.meta.url))
+const esDistDir = `${DIST_DIR}${sep}`
 // ES's own frames (src/ via source maps, or dist/) are noise in an eval's stack trace.
-const esDirs = [fileURLToPath(new URL('../../src/', import.meta.url)), esDistDir]
+const esDirs = [join(PACKAGE_DIR, 'src', sep), esDistDir]
 // Workers load ES's built modules natively, as they do from node_modules once ES is installed.
 // From a workspace checkout Vitest would otherwise transform them under their own file URLs,
 // which V8 coverage can't map back to the files.
@@ -364,8 +366,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         ],
         watch: false,
         reporters: [reporter],
-        setupFiles: [fileURLToPath(new URL('../setup.js', import.meta.url))],
-        execArgv: ['--import', new URL('./worker-signals.js', import.meta.url).href],
+        setupFiles: [join(DIST_DIR, 'setup.js')],
+        execArgv: ['--import', pathToFileURL(join(DIST_DIR, 'worker-signals.js')).href],
         testTimeout: config.timeoutMs,
         hookTimeout: config.timeoutMs,
         pool: 'forks',

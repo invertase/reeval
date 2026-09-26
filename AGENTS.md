@@ -68,12 +68,12 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents) and `replay/` (captured real streams and each CLI's known stream format) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
-| `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/harness-antigravity`) like `sandbox-docker` |
-| `packages/harness-cursor-sdk` | `@evalsuite/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Vendored into `@invertase/foobar` like `harness-antigravity` |
-| `packages/harness-opencode` | `@evalsuite/harness-opencode`: OpenCode on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` can't broker a Google key). It names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and drops the turn's usage, which OpenCode's ACP server reports for its last model call only. The image bakes the plugin runtime OpenCode would otherwise fetch from npm on every start. Vendored into `@invertase/foobar` like `harness-antigravity` |
-| `packages/harness-goose` | `@evalsuite/harness-goose`: Goose on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `goose acp` in the sandbox. Its bootstrap downloads the pinned release and checks its sha256, and gives Goose a private home. MCP servers go in Goose's `config.yaml` as enabled extensions (servers from ACP `session/new` start disabled). It names the tool calls `harness-acp` can't from Goose's `_meta.goose.toolCall`, and drops the turn's usage, which Goose's ACP server reports for its last model call only. Vendored into `@invertase/foobar` like `harness-antigravity` |
-| `packages/harness-pi` | `@evalsuite/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in ES's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused. Vendored into `@invertase/foobar` like `harness-antigravity`, with its `assets` |
-| `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/sandbox-docker`), so the published package needs no second package |
+| `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`; private, and bundled into `@invertase/foobar` like `sandbox-docker` |
+| `packages/harness-cursor-sdk` | `@evalsuite/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
+| `packages/harness-opencode` | `@evalsuite/harness-opencode`: OpenCode on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` can't broker a Google key). It names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and drops the turn's usage, which OpenCode's ACP server reports for its last model call only. The image bakes the plugin runtime OpenCode would otherwise fetch from npm on every start. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
+| `packages/harness-goose` | `@evalsuite/harness-goose`: Goose on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `goose acp` in the sandbox. Its bootstrap downloads the pinned release and checks its sha256, and gives Goose a private home. MCP servers go in Goose's `config.yaml` as enabled extensions (servers from ACP `session/new` start disabled). It names the tool calls `harness-acp` can't from Goose's `_meta.goose.toolCall`, and drops the turn's usage, which Goose's ACP server reports for its last model call only. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
+| `packages/harness-pi` | `@evalsuite/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in ES's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused. Private, and bundled into `@invertase/foobar` like `harness-antigravity`, with its `assets/` beside `dist/` |
+| `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`. It's private: the build bundles it into `@invertase/foobar` and ships `docker/` beside `dist/` there, so the published package needs no second package |
 | `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts`, `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` and `es.pi.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose and pi), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
 
 ## Development
@@ -82,13 +82,24 @@ You need Node 22.13 or later, pnpm 10 and, for the Docker tests and real runs, a
 
 ```bash
 pnpm install
-pnpm build       # build the studio app, then compile the packages (and copy the app in)
+pnpm build       # build the studio app, compile the @evalsuite/* packages, then bundle @invertase/foobar
 pnpm test        # build, then run every package's tests: engine, wrapper, studio, sandbox, Docker and browser
 pnpm coverage    # the same tests with code coverage from every process they start (below)
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
 ```
+
+**The build.** [tsdown](https://tsdown.dev) bundles `@invertase/foobar`
+(`packages/evalsuite/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
+`@evalsuite/*` packages are private: it inlines every one that `@invertase/foobar` lists in
+`devDependencies`, from its `src/`, so a new one needs only that entry. The published code may
+import only the package's `dependencies`, so an inlined package's runtime dependencies must be
+among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
+files (`dist/setup.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
+module's `import.meta.url`; the build fails if a chunk below `dist/`'s top level uses it.
+`sandbox-docker`'s build context ships at `docker/`, beside `dist/` as in `sandbox-docker`, so
+its `../docker` resolves in both.
 
 In `packages/evalsuite`, the tests run `dist/cli.js`, so rebuild after changing `src/`:
 
@@ -186,7 +197,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
   (in `packages/evalsuite/package.json`, the root `package.json` and
   `.release-please-manifest.json`) and `CHANGELOG.md`. Merging it tags `vX.Y.Z` and creates the
   GitHub release. `release.yml` then runs all of `ci.yml` on that commit and, if it passes,
-  publishes the tarball that its `packed install` job packed (with `sandbox-docker` vendored in),
+  publishes the tarball that its `packed install` job packed (with the `@evalsuite/*` packages bundled in),
   in the `npm` environment with npm trusted publishing (OIDC, no token). If a flake fails it,
   re-run the failed jobs. Provenance is automatic once the repository is public. Don't publish
   by hand, and don't edit versions or `CHANGELOG.md`.

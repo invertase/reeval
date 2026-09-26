@@ -44,14 +44,15 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "docker"
   ],
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/vendor.mjs && node scripts/copy-studio-app.mjs",
+    "build": "tsdown --config-loader native",
     "features:matrix": "node --experimental-strip-types --no-warnings --import ./test/support/tables-only.mjs test/support/feature-matrix.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/*.test.ts",
@@ -86,6 +87,7 @@
     "@evalsuite/harness-opencode": "workspace:0.1.0",
     "@evalsuite/harness-pi": "workspace:0.1.0",
     "@evalsuite/sandbox-docker": "workspace:*",
-    "studio-web": "workspace:*"
+    "studio-web": "workspace:*",
+    "tsdown": "0.23.0"
   }
 }

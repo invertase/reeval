@@ -1,7 +1,8 @@
 // Code coverage across every process the tests start. NODE_V8_COVERAGE is inherited, so the test
 // runner, each spawned `es` CLI, its Vitest workers and the egress gateway (in the CLI and the
 // workers) all write V8 coverage into one directory, and c8 merges it, mapping dist/ back to src/
-// through the build's source maps. Report-only: there's no threshold.
+// through the build's source maps. The bundled @invertase/foobar maps its inlined @evalsuite/*
+// code back to each package's own src/. Report-only: there's no threshold.
 //
 //   node scripts/coverage.mjs run [cmd...]   cmd (default: every package's tests) with coverage on, then report
 //   node scripts/coverage.mjs prune <dir>    shrink a raw directory to one file of this repo's code
@@ -19,6 +20,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs'
+import { stripTypeScriptTypes } from 'node:module'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { mergeProcessCovs } from '@bcoe/v8-coverage'
@@ -29,10 +31,9 @@ const raw = join(out, 'raw')
 const reports = join(out, 'report')
 const repo = pathToFileURL(join(root, 'packages')).href
 /** The packages whose src/ is reported; studio-web's app runs in a browser, which isn't measured. */
-const PACKAGES = ['evalsuite', 'sandbox-docker']
-/** The build copies sandbox-docker's dist here without its maps; the files are identical. */
-const vendored = `${repo}/evalsuite/dist/vendor/sandbox-docker/dist/`
-const sandboxDist = `${repo}/sandbox-docker/dist/`
+const PACKAGES = readdirSync(join(root, 'packages')).filter(
+  (p) => p !== 'studio-web' && existsSync(join(root, 'packages', p, 'src')),
+)
 /** Where the executed code comes from: built dist/ (mapped to src/) and src/ run directly by tests. */
 const ours = new RegExp(`^${repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/(dist|src)/`)
 
@@ -60,9 +61,8 @@ function run(cmd) {
 }
 
 /**
- * Keeps only this repo's packages (not node_modules, tests or temp projects), points vendored
- * sandbox-docker code at its own dist/ (which has maps), and merges every process into one
- * file. Hundreds of raw files of a few MB each become one of a few MB.
+ * Keeps only this repo's packages (not node_modules, tests or temp projects) and merges every
+ * process into one file. Hundreds of raw files of a few MB each become one of a few MB.
  */
 function prune(dir) {
   const processes = []
@@ -78,11 +78,7 @@ function prune(dir) {
     } finally {
       rmSync(file)
     }
-    const remap = (url) =>
-      url.startsWith(vendored) ? sandboxDist + url.slice(vendored.length) : url
-    const result = data.result
-      .filter((s) => ours.test(s.url) && !s.url.includes('/node_modules/'))
-      .map((s) => ({ ...s, url: remap(s.url) }))
+    const result = data.result.filter((s) => ours.test(s.url) && !s.url.includes('/node_modules/'))
     if (result.length === 0) continue
     processes.push({ result })
     for (const [url, map] of Object.entries(data['source-map-cache'] ?? {}))
@@ -138,12 +134,11 @@ function typeOnly() {
     const src = join(root, 'packages', pkg, 'src')
     for (const name of readdirSync(src, { recursive: true })) {
       if (!name.endsWith('.ts') || name.endsWith('.d.ts')) continue
-      const built = join(root, 'packages', pkg, 'dist', name.replace(/\.ts$/, '.js'))
-      if (!existsSync(built)) continue
-      const code = readFileSync(built, 'utf8')
-        .replace(/\/\/# sourceMappingURL=.*$/m, '')
+      const code = stripTypeScriptTypes(readFileSync(join(src, name), 'utf8'))
+        .replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '')
+        .replace(/export\s*\{\s*\};?/g, '')
         .trim()
-      if (code === 'export {};') files.push(`packages/${pkg}/src/${name}`)
+      if (code === '') files.push(`packages/${pkg}/src/${name}`)
     }
   }
   return files

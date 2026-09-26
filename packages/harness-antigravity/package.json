@@ -1,6 +1,7 @@
 {
   "name": "@evalsuite/harness-antigravity",
   "version": "0.1.0",
+  "private": true,
   "description": "An AI SDK harness adapter for the Google Antigravity CLI (agy), over its stream-json headless mode",
   "license": "Apache-2.0",
   "author": "Invertase <oss@invertase.io>",

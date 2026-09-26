@@ -7,3 +7,4 @@ dist/
 **/test/.tmp/
 .ignore/
 coverage/
+packages/evalsuite/docker/
