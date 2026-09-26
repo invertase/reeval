@@ -1,8 +1,9 @@
 // Bundles @invertase/foobar with tsdown. The workspace's @evalsuite/* packages are private and
 // inlined from their TypeScript sources, so the published package imports only its own
-// `dependencies`. What ships next to the code: sandbox-docker's `docker/` build context (at the
-// package root, beside `dist/`, where sandbox-docker's `../docker` finds it) and the prebuilt
-// studio app (`dist/studio-app`).
+// `dependencies`. What ships next to the code: each of those packages' other `files` (such as
+// sandbox-docker's `docker/` build context), at the package root beside `dist/`, where their
+// `../<dir>` from a module finds it in a chunk too, and the prebuilt studio app
+// (`dist/studio-app`).
 import { cpSync, existsSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative } from 'node:path'
@@ -14,19 +15,25 @@ const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
 
 /** `@evalsuite/<name>[/sub]` → its source file, from each workspace package's `exports`. */
 const sources = new Map()
+/** Each workspace package's shipped directories besides `dist/`, by name, → where they are. */
+const assets = new Map()
 for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('@evalsuite/'))) {
   const dir = dirname(realpathSync(require.resolve(`${name}/package.json`)))
-  const { exports } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
+  const { exports, files } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
   for (const [sub, target] of Object.entries(exports)) {
     if (typeof target === 'string') continue // ./package.json
     const file = join(dir, target.default.replace(/^\.\/dist\/(.*)\.js$/, 'src/$1.ts'))
     if (!existsSync(file)) throw new Error(`${name}: no source for ${sub} (${file})`)
     sources.set(join(name, sub), file)
   }
+  for (const asset of files.filter((f) => f !== 'dist')) {
+    if (assets.has(asset)) throw new Error(`${name} and another package both ship ${asset}/`)
+    if (!pkg.files.includes(asset)) throw new Error(`${name} ships ${asset}/: add it to files`)
+    assets.set(asset, join(dir, asset))
+  }
 }
 
 const dist = join(here, 'dist')
-const dockerContext = join(dirname(sources.get('@evalsuite/sandbox-docker')), '../docker')
 const studioApp = join(here, '../studio-web/dist')
 
 export default defineConfig({
@@ -72,8 +79,10 @@ export default defineConfig({
         if (file.includes('/') && code.includes('import.meta.url'))
           throw new Error(`dist/${file} uses import.meta.url outside dist/'s top level`)
       }
-      rmSync(join(here, 'docker'), { recursive: true, force: true })
-      cpSync(dockerContext, join(here, 'docker'), { recursive: true })
+      for (const [asset, from] of assets) {
+        rmSync(join(here, asset), { recursive: true, force: true })
+        cpSync(from, join(here, asset), { recursive: true })
+      }
       if (existsSync(join(studioApp, 'index.html')))
         cpSync(studioApp, join(dist, 'studio-app'), { recursive: true })
       else

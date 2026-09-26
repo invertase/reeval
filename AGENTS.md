@@ -98,8 +98,9 @@ import only the package's `dependencies`, so an inlined package's runtime depend
 among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
 files (`dist/setup.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
 module's `import.meta.url`; the build fails if a chunk below `dist/`'s top level uses it.
-`sandbox-docker`'s build context ships at `docker/`, beside `dist/` as in `sandbox-docker`, so
-its `../docker` resolves in both.
+An inlined package's other `files` (`sandbox-docker`'s `docker/` build context) ship at the
+root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
+its modules resolves in both; list each in `@invertase/foobar`'s `files` and `.gitignore`.
 
 In `packages/evalsuite`, the tests run `dist/cli.js`, so rebuild after changing `src/`:
 
