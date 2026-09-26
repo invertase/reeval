@@ -12,6 +12,7 @@ export type {
 } from '../history/types.ts'
 export type { Outcome, TranscriptEvent } from '../types.ts'
 export * from './compare.ts'
+export * from './debug.ts'
 export { runHeader } from './header.ts'
 export * from './model.ts'
 export * from './paths.ts'

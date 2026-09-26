@@ -1,6 +1,8 @@
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   artifactPath,
+  type DebugView,
+  debugApiPath,
   type HistoryEntry,
   type IndexManifest,
   manifestPath,
@@ -9,6 +11,7 @@ import {
   type StudioInfo,
   shardPath,
   studioPath,
+  traceApiPath,
 } from 'evalsuite/view'
 import { useEffect } from 'react'
 
@@ -69,6 +72,30 @@ export const artifactQuery = (runId: string, path: string | undefined) =>
     enabled: !!path,
     staleTime: Number.POSITIVE_INFINITY,
     retry: (count, error) => !(error instanceof NotFoundError) && count < 2,
+  })
+
+/** An attempt's local debug data; `null` when there is none (a 404), so the tab stays hidden. */
+export const debugQuery = (runId: string, attemptKey: string, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['debug', runId, attemptKey],
+    queryFn: async (): Promise<DebugView | null> => {
+      try {
+        return await fetchJson<DebugView>(debugApiPath(runId, attemptKey))
+      } catch (error) {
+        if (error instanceof NotFoundError) return null
+        throw error
+      }
+    },
+    enabled,
+    retry: false,
+  })
+
+export const traceQuery = (runId: string, attemptKey: string, enabled: boolean) =>
+  queryOptions({
+    queryKey: ['debug-trace', runId, attemptKey],
+    queryFn: () => fetchText(traceApiPath(runId, attemptKey)),
+    enabled,
+    staleTime: Number.POSITIVE_INFINITY,
   })
 
 export const useStudio = () => useQuery(studioQuery)
