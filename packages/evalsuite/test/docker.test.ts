@@ -842,6 +842,8 @@ export default defineConfig({
 evaluate('hi', async (t) => {
   const turn = await t.send('Reply with the word hi.')
   expect(turn.transcript.some((e) => e.type === 'error' && /401/.test(e.message ?? ''))).toBe(true)
+  // The failed call is one error event, not the stream's and the thrown error's both.
+  expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
   const environ = await t.exec('env; cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
   expect(environ.stdout).toMatch(/^ANTHROPIC_API_KEY=aisdkhc_[\\w-]{43}$/m)
   expect(environ.stdout).not.toContain('not_a_real_key')

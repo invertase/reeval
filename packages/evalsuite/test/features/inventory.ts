@@ -712,6 +712,7 @@ export const inventory: InventoryFeature[] = [
       "evalsuite/test/replay.test.ts › ES's normaliser still finds its signals",
       harness('a real turn normalises: relative edits, mcp__ names, timed tools'),
       harness('its Edit and Write tools are file edits'),
+      docker('Claude Code attempts broker the key on its endpoints'),
     ],
     real: ['contract › file edited and command run, both in the transcript'],
   },
