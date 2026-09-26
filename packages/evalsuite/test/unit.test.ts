@@ -365,7 +365,7 @@ const entry = (
     fingerprintScope: ['eval-source'],
     ...stack,
   },
-  evals: [{ id: 'e', fingerprint: 'fp', outcome }],
+  evals: [{ id: 'e', fingerprint: 'fp', outcome, cells: [] }],
 })
 
 test('compare classifies an eval on the cells both runs have, and lists the rest', () => {

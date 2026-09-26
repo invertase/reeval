@@ -157,7 +157,10 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
       ],
       ['PRAGMA query_only = OFF; DELETE FROM runs', /es query runs one statement at a time/],
       ['SELEC 1', /es query: near "SELEC": syntax error/],
-      ['nope', /no view or table named "nope"\. Views: drift, eval_trend, failing_attempts/],
+      [
+        'nope',
+        /no view or table named "nope"\. Views: drift, effort, eval_trend, factor_effects, failing_attempts/,
+      ],
     ]
     for (const [sql, message] of cases) {
       const r = await runCli(p.dir, ['query', sql])

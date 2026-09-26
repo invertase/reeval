@@ -147,6 +147,9 @@ export function validateAnalysis(
         },
       ]
     })
+  const whatHappened = claims('whatHappened', output.whatHappened)
+  const results = claims('results', output.results)
+  const why = claims('why', output.why)
   const anomalies: AnalysisAnomaly[] = output.anomalies.flatMap((a, i) => {
     const c = cited(`anomalies[${i}]`, a.cites)
     return c ? [{ text: a.text, kind: a.kind, cites: c.good }] : []
@@ -176,9 +179,9 @@ export function validateAnalysis(
   return {
     body: {
       tldr: output.tldr,
-      whatHappened: claims('whatHappened', output.whatHappened),
-      results: claims('results', output.results),
-      why: claims('why', output.why),
+      whatHappened,
+      results,
+      why,
       anomalies,
       actions,
       confidence: output.confidence,

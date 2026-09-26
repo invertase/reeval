@@ -1,0 +1,4 @@
+$ grep -q "Ahoy" skills/house-style/SKILL.md
+exit 0
+--- stdout
+--- stderr

@@ -1,0 +1,39 @@
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "gate": "none",
+          "runs": 2,
+          "brokered": [],
+          "egress": {
+            "policy": "allow-all",
+            "auto": []
+          }
+        },
+        {
+          "key": "fake/house-style/fake",
+          "harness": "fake",
+          "environment": "house-style",
+          "sandbox": "fake",
+          "role": "variant",
+          "variant": "house-style",
+          "gate": "all",
+          "runs": 2,
+          "brokered": [],
+          "egress": {
+            "policy": "allow-all",
+            "auto": []
+          }
+        }
+      ]
+    }
+  ],
+  "excluded": [],
+  "images": []
+}
+--- stderr
+(node:1630) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1648) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
