@@ -60,8 +60,8 @@ npx es run --dry-run
 ```text
 plan  2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
 eval                                               harnesses  variants  runs  attempts  notes
-evals/installs.es.ts › adds zod validation         1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org, api.acme.dev + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com
-evals/offline.es.ts › writes a CSV parser offline  1          —         1     1         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com
+evals/installs.es.ts › adds zod validation         1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org, api.acme.dev + auto: api2.cursor.sh, *.cursor.sh
+evals/offline.es.ts › writes a CSV parser offline  1          —         1     1         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
 ```
 
 Each restricted eval lists its policy and the automatic hosts it adds.
@@ -70,11 +70,11 @@ Each restricted eval lists its policy and the automatic hosts it adds.
 
 `'deny-all'` means "nothing but what the attempt itself needs", so the agent still works:
 
-- **The harness's API:** `api2.cursor.sh`, `*.cursor.sh`, `cursor.com` and `*.cursor.com` for Cursor; `api.anthropic.com` and `*.anthropic.com` for Claude Code.
+- **The harness's API:** `api2.cursor.sh` and `*.cursor.sh` for Cursor, `api.anthropic.com` and `*.anthropic.com` for Claude Code, and `generativelanguage.googleapis.com` for Antigravity.
 - **Every brokered secret's `hosts`**, so a key the agent is meant to use keeps working.
 - **Each MCP `http` or `sse` server's host.**
 
-The agent's own web tools may not go through the sandbox at all. In the dogfood runs, Cursor's `webSearch` and `webFetch` calls went through Cursor's backend, so an egress policy doesn't stop them. If your eval must be fully offline, check the transcript for `web-search` and `web-fetch` events too.
+The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them, and Cursor transcripts don't show them either. For an eval that must be fully offline, don't rely on the policy to stop web search. On other harnesses, check the transcript for `web-search` and `web-fetch` events.
 
 ## Run it and see what was blocked
 
@@ -93,7 +93,8 @@ That host is Antigravity's feature-flag service, which its CLI contacts in every
 The record keeps every attempt's traffic under `egress`:
 
 ```bash
-npx es show latest --json | jq -c '.evals[].attempts[] | {key, blocked: .egress.blocked}'
+npx es show latest --json \
+  | jq -c '.evals[].attempts[] | {key, blocked: .egress.blocked}'
 ```
 
 | Field | What it holds |

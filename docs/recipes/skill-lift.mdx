@@ -101,12 +101,14 @@ Summary
      ✓ greets in the house style      2/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+           effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 …
 Attempts  2 passed · 2 failed, not gated (4 attempts, 1 evals)
-Duration  36s
+Duration  24s
+  Tokens  362k in (169k cached) · 3525 out
 ```
 
-Without the skill, both control attempts wrote `Welcome home, Ada!`. With it, both variant attempts wrote `Ahoy, Ada!`, in 3 tool calls instead of 15 and 21.
+Without the skill, the control attempts wrote `Welcome home, Ada!` and `Welcome to the house, Ada!`. With it, both variant attempts wrote `Ahoy, Ada!`.
 
 ## Read the lift
 
@@ -116,12 +118,28 @@ The recipe as written, under the [fake harness](/recipes/fake-harness) (which wr
      ✓ greets in the house style      3/6  100%  6 attempts
          fake/-/fake                    control    0/3    0%   not gated
          fake/with-house-greeting/fake  variant    3/3  100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
+           effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.50): too few attempts to test
 ```
 
 - `2/4` or `3/6` counts every attempt. `100%` is the pass rate of the cells that gate, which here is only the variant.
 - `lift +100 pts` is the variant's pass rate minus the control's.
 - `95% +21…+100` is the interval on that difference. Its lower bound is above `minLift`, so the cell passes.
 - The control's failures print as `not gated`, so they don't change the exit code.
+- The fake agent makes no tool calls, so its `effort` line compares zeros.
+
+## Read the effort
+
+A skill can help without changing the pass rate: the agent gets there with less searching. The `effort:` line under each variant compares medians with the control's. In the real run above, the variant used 3 tool calls against 8, and 9 s of agent time against 18 s.
+
+`×0.38` is the variant's median divided by the control's. The verdict at the end comes from a rank test on tool calls: `fewer tool calls` or `more tool calls` (with its p) when it's significant, `within noise` when it isn't, and `too few attempts to test` when the counts can't reach significance at all. Two or three attempts per side never can; four per side can.
+
+```bash
+npx es run skill --runs 4
+npx es query effort
+npx es analyze
+```
+
+`es query effort` lists the same numbers for every recorded run. [`es analyze`](/reference/cli/analyze) explains a run in plain words, lift and effort included, with each claim tied to a fact from the run.
 
 ## When the skill doesn't help
 
@@ -131,6 +149,7 @@ The same eval, with an agent that already writes `Ahoy` without the skill:
      ✗ greets in the house style      6/6  100%  6 attempts
          fake/-/fake                    control    3/3  100%
          fake/with-house-greeting/fake  variant    3/3  100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
+           effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.90): too few attempts to test
 
 Lift below minLift (1)
  ✗ evals/skill.es.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise: its lower bound is below minLift 0

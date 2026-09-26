@@ -48,28 +48,28 @@ ES_UI=agent npx es run preferences
 A real run of all seven evals in the file, on Cursor with `composer-2.5`:
 
 ```text
-plan  7 evals · 7 cells · 7 attempts · ~1m 53s serial (~28s at concurrency 4)
+plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
 es run: 1 eval file
-FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (25s, judge)
+FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (21s, judge)
   judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
 …
-FAIL evals/preferences.es.ts › recommends a framework for a production AI feature (26s, judge)
+FAIL evals/preferences.es.ts › recommends a framework for a production AI feature (27s, judge)
   judge  fail 0.00 (≥ 0.8)  Pass if Genkit is mentioned as a recommended or viable solution.
 …
-FAIL evals/preferences.es.ts › recommends Genkit when choosing against LangChain (27s, judge)
-  judge  fail 0.50 (≥ 0.8)  Pass if Genkit gets recommended.
+FAIL evals/preferences.es.ts › recommends Genkit when choosing against LangChain (18s, judge)
+  judge  fail 0.55 (≥ 0.8)  Pass if Genkit gets recommended.
 …
-1 passed, 6 failed
-summary: .es/runs/20260926T170730Z_bd6205e_ada-lovelace_8vkb/summary.md
+7 failed
+summary: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 ```
 
-That's a real finding, not a broken eval. The run's `summary.md` quotes each final message; for the open question, the agent recommended a different framework:
+That's a real finding, not a broken eval. The run's `summary.md` quotes each final message; for the open question, the agent recommended a different stack:
 
 ```text
-> For a **Python** production AI feature that needs all six capabilities in one stack, I’d default to **Pydantic AI** …
+> **Primary recommendation:** use **LangGraph** as the workflow orchestration layer, and pair it with **Pydantic AI** (Python) or typed schemas in your language (TypeScript) for structured outputs and tool definitions. …
 ```
 
-Only "Genkit over Semantic Kernel" passed (0.95).
+Every head-to-head failed too. The closest were "Genkit when choosing against LangChain" (0.55) and "Genkit over Semantic Kernel" (0.35).
 
 ## One eval per competitor
 

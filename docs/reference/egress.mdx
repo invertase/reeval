@@ -49,7 +49,7 @@ Under `'deny-all'` or an allowlist, ES adds the hosts the attempt can't work wit
 
 | Source | Hosts |
 |---|---|
-| `cursor()` | `api2.cursor.sh`, `*.cursor.sh`, `cursor.com`, `*.cursor.com` |
+| `cursor()` | `api2.cursor.sh`, `*.cursor.sh` |
 | `claudeCode()` | `api.anthropic.com`, `*.anthropic.com` |
 | `antigravity()` | `generativelanguage.googleapis.com` |
 | `fakeHarness({ layout })` | That agent's hosts |
@@ -84,11 +84,11 @@ Whatever the policy, the gateway refuses loopback and link-local addresses (`127
 A restricted policy shows in the plan's notes column, with the automatic hosts after `+ auto:`:
 
 ```text
-egress: deny-all + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com
+egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
 ```
 
 ```text
-brokered: API_KEY → api.example.com · egress: allow registry.npmjs.org + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com, api.example.com
+brokered: API_KEY → api.example.com · egress: allow registry.npmjs.org + auto: api2.cursor.sh, *.cursor.sh, api.example.com
 ```
 
 With `-v`, each attempt logs a `gateway` line per request, allowed or refused. See [Debugging](/guide/debugging).
@@ -98,7 +98,7 @@ With `-v`, each attempt logs a `gateway` line per request, allowed or refused. S
 Each attempt's record has an `egress` field. From a real Antigravity attempt under `'allow-all'`:
 
 ```text
-"egress": {"policy": "allow-all", "allowed": null, "recorded": true, "contacted": [{"host": "antigravity-unleash.goog", "port": 443, "connections": 2, "sent": 5441, "received": 84759}, {"host": "generativelanguage.googleapis.com", "port": 443, "connections": 1, "sent": 1093079, "received": 49609}, {"host": "play.googleapis.com", "port": 443, "connections": 1, "sent": 1443647, "received": 8944}], "blocked": [], "expectedBlocked": []}
+"egress": {"policy": "allow-all", "allowed": null, "recorded": true, "contacted": [{"host": "antigravity-unleash.goog", "port": 443, "connections": 2, "sent": 5440, "received": 84121}, {"host": "generativelanguage.googleapis.com", "port": 443, "connections": 1, "sent": 1394332, "received": 65707}, {"host": "play.googleapis.com", "port": 443, "connections": 2, "sent": 1630357, "received": 15318}], "blocked": [], "expectedBlocked": []}
 ```
 
 <Property name="policy" type="EgressPolicy">

@@ -62,15 +62,15 @@ Each harness has its own sandbox image. `es image build` builds the images the c
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker + install · 1 eval
-  base               evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
   install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
 python · 1 eval
-  from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
 docker:sqlite · 1 eval
-  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-2b50887268f17930  (docker build (layer cache), tagged by content hash)
-  harness                              evalsuite-dockerfile:sqlite-2b50887268f17930  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)
+  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
+  harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
 ```
 
 | Image | Tag | Rebuilt when |
@@ -80,7 +80,7 @@ docker:sqlite · 1 eval
 | `install` | `evalsuite-install:<hash of base id and commands>` | The base or a command changes |
 | `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile, its context (less `.dockerignore`) or `ES_BASE` changes |
 
-Adapter versions: Cursor `1.0.37`, Claude Code `1.0.128`, Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
+Adapter versions: Cursor `0.1.0` (`@evalsuite/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128`, Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
 What ES adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, with the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.es/cache/images/<tag>.log`.
 
@@ -109,7 +109,7 @@ Before a run, ES checks every image the plan needs:
 | Situation | Message |
 |---|---|
 | Docker isn't running | `Docker is not running. Start Docker and try again.` |
-| ES's image isn't built | `Sandbox image evalsuite-sandbox:cursor-1.0.37 not found. Build it once with: es image build` |
+| ES's image isn't built | `Sandbox image evalsuite-sandbox:cursor-0.1.0 not found. Build it once with: es image build` |
 | An `image` that isn't there | `… docker({ image }) is used as is, so pull or build it first.` |
 | A non-Debian base | `ES needs a Debian or Ubuntu based image (glibc and apt-get)` |
 | A failing install step | `Building the install layer (N commands) failed: install i/N exited <code>: <command>`, then the build's last lines |

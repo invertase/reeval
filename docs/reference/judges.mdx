@@ -55,6 +55,8 @@ ES calls a provider's own package when its key is set, and the Vercel AI Gateway
 | `google/` | `GOOGLE_GENERATIVE_AI_API_KEY` | `@ai-sdk/google` |
 | Any other | None | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
 
+[es analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.13.0` can judge but can't write an analysis.
+
 The run checks the judge's key before it starts, with the harness's:
 
 ```text
@@ -74,6 +76,16 @@ judge: { model: fakeJudge({ score: 0.95 }) }
 ```
 
 A judge that returns `score` (default `1`) for every question, with no key and no call. Its model name is `fake`. `'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
+
+## fakeAnalysis
+
+```ts
+import { fakeAnalysis } from '{{ pkg }}/judge'
+
+analysis: { model: fakeAnalysis({ output: { … } }) }
+```
+
+The same idea for `es analyze`: it answers with `output`, or `output(digest)` when you pass a function, and ES parses and validates it as it would a real model's answer. Use it to test the analysis without a key. See [es analyze](/reference/cli/analyze).
 
 ## Errors
 

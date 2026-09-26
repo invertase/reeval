@@ -80,25 +80,25 @@ evaluate('runs the tests after a follow-up', async (t) => {
 ## Run it
 
 ```bash
-npx es run --config es.fake.config.ts
+npx es run --config es.fake.config.ts --log-order grouped
 ```
 
 ```text
-[runs#1 fake] ✓ evals/scripted.es.ts › runs the tests after a follow-up  124ms
-[runs#1 fake]  +0:00 sandbox ready 17ms
+[runs#1 fake] ✓ evals/scripted.es.ts › runs the tests after a follow-up  131ms
+[runs#1 fake]  +0:00 sandbox ready 18ms
 [runs#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 3 file edits
-[runs#1 fake]  +0:00 turn 2 done 74ms · 1 tool call, 3 file edits
+[runs#1 fake]  +0:00 turn 2 done 76ms · 1 tool call, 3 file edits
 …
 Summary
  evals/hello.es.ts
    greet module
-     ✓ creates a tested greet module              120ms  judge 0.95  1 turn
-     ✓ adds a default name in a follow-up turn    145ms  judge 0.95  2 turns
+     ✓ creates a tested greet module              134ms  judge 0.95  1 turn
+     ✓ adds a default name in a follow-up turn    153ms  judge 0.95  2 turns
  evals/scripted.es.ts
-   ✓ runs the tests after a follow-up             124ms  2 turns
+   ✓ runs the tests after a follow-up             131ms  2 turns
 
    Evals  3 passed (3)
-Duration  839ms
+Duration  944ms
 ```
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`t.exec`, `toHaveFile`, `t.judge`) run for real against what it wrote.
@@ -110,14 +110,14 @@ ES_UI=agent npx es run --config es.fake.config.ts
 ```
 
 ```text
-plan  10 evals · 11 cells · 11 attempts · ~742ms serial (~186ms at concurrency 4)
+plan  10 evals · 11 cells · 11 attempts · ~678ms serial (~170ms at concurrency 4)
 es run: 3 eval files
 FAIL evals/skill.es.ts › house greeting › greets in the house style [control] (72ms, assertion, not gated)
   Error: expected command to succeed, exit code 1
 …
-  record: .es/runs/20260926T170502Z_bd6205e_ada-lovelace_c5gk/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
+  record: .es/runs/20260926T173927Z_7e5376d_ada-lovelace_j03w/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
 10 passed, 1 failed, not gated (11 attempts, 10 evals)
-summary: .es/runs/20260926T170502Z_bd6205e_ada-lovelace_c5gk/summary.md
+summary: .es/runs/20260926T173927Z_7e5376d_ada-lovelace_j03w/summary.md
 ```
 
 <Warning>
@@ -163,7 +163,7 @@ Infra errors (1)
    the agent CLI crashed on start
 …
    Evals  1 infra error (1)
-Duration  703ms
+Duration  727ms
 ```
 
 The run exits 3, so you can check how your CI treats an infrastructure error before a real one happens.

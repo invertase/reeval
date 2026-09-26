@@ -6,7 +6,7 @@ description: A real suite that asked whether a skill helps a coding agent use ES
 **Question:** can a coding agent use ES itself, and does a skill about ES help? No model has seen ES before, so a skill about it is a real variable.
 
 <Info>
-  These runs used ES from before PR #8 and PR #10. Two things in them are fixed on main: Cursor's per-session files made every run "not comparable" (the context fingerprint now leaves them out), and the studio marked a run with only an ungated failure as Failed. The numbers below are unaffected.
+  These runs used ES from before PR #8, #10 and #12. Since then, Cursor's per-session files no longer make every run "not comparable", the studio no longer marks a run with only an ungated failure as Failed, and ES computes effort itself. The numbers below are unaffected.
 </Info>
 
 ## The scenario
@@ -147,7 +147,7 @@ Over both runs, 35 of 36 attempts passed: control 11/12, `es-weak` 12/12, `es-go
 
 ## What actually differed: effort
 
-The skill's real effect was in the records' `activity` and `timings`, not in the pass rate:
+The skill's real effect was in effort, not in the pass rate. At the time it took a script over the records' `activity` and `timings`:
 
 | Eval | Cell | Median agent time | Median tool calls |
 |---|---|---|---|
@@ -169,7 +169,7 @@ The verdict carried no reason, so finding the false claims meant reading the fin
 ## Lessons
 
 - **Tasks the agent already solves saturate.** composer-2.5 solved all three tasks from the type definitions and ES's error messages. To separate variants, make the task harder or measure effort.
-- **Lift measures pass rate only.** The skill's 4× effect appears nowhere in `lift`. Query the records' activity and timings yourself.
+- **Lift measures pass rate only.** The skill's 4× effect appeared nowhere in `lift`. ES now prints an `effort:` line under each variant (median tool calls and agent time against the control's, with a rank test), and `es query effort` and [`es analyze`](/reference/cli/analyze) report it across runs.
 - **Name outcomes, not methods, in judge questions.** "Checks hello.txt with a deterministic assertion" survives; "uses `toHaveFile`" fails correct work.
 - **Two runs a cell is a smoke test.** Every interval here is more than 100 points wide.
 

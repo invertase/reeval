@@ -74,7 +74,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="harness" type="Harness | Harness[]">
-  The agents every eval runs on, unless a group or eval replaces them. Default `cursor()`, whose id is `cursor`. An empty list, or two harnesses with the same id, is an error. See [Options](/reference/options#harness).
+  The agents every eval runs on, unless a group or eval replaces them. Default `cursor({ model: 'composer-2.5' })`, whose id is `cursor:composer-2.5`. An empty list, or two harnesses with the same id, is an error. See [Options](/reference/options#harness).
 </Property>
 
 <Property name="sandbox" type="Sandbox">

@@ -88,6 +88,14 @@ A fake run printing `t.attempt` shows:
   What the agent did this turn: text, reasoning, file edits, tool calls, web searches and fetches, and errors. See [Transcripts](/reference/transcript).
 </Property>
 
+<Property name="usage" type="{ input, output, cacheRead, cacheWrite, reasoning } | null">
+  Tokens the turn used, when the harness reports them (`cursor()` and `antigravity()` do); otherwise `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+</Property>
+
+<Property name="model" type="string | null">
+  The model the harness says served the turn, such as `composer-2.5[fast=true]`, or `null`.
+</Property>
+
 <Property name="diff" type="{ patch: string, files: { path, status }[] }">
   Workspace changes since the eval started, as of the end of this turn. `status` is `added`, `modified` or `deleted`. Files, rules and setup from the environment aren't part of it.
 </Property>

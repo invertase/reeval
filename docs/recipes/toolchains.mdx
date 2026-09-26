@@ -107,15 +107,15 @@ npx es image build --dry-run
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker + install · 1 eval
-  base               evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
   install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
 python · 1 eval
-  from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
 docker:sqlite · 1 eval
-  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-2b50887268f17930  (docker build (layer cache), tagged by content hash)
-  harness                              evalsuite-dockerfile:sqlite-2b50887268f17930  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)
+  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
+  harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
 ```
 
 ```bash
@@ -126,25 +126,26 @@ npx es run python sqlite jq
 A real run on Cursor:
 
 ```text
-plan  3 evals · 3 cells · 3 attempts · ~51s serial (~17s at concurrency 4)
+plan  3 evals · 3 cells · 3 attempts · ~35s serial (~12s at concurrency 4)
 es 0.0.1 · 3 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 …
-[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  15s
+[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  10s
 [writes#1 cursor]  +0:00 sandbox ready 2s
-[writes#1 cursor]  +0:01 turn 1 done 11s · 2 tool calls, 2 file edits
-[writes#1 cursor]  +0:13 $ python3 --version  exit 0 50ms
-[writes#1 cursor]  +0:13 $ python3 -m unittest -q  exit 0 74ms
-
+[writes#1 cursor]  +0:01 turn 1 done 7s · 1 tool call, 2 file edits
+[writes#1 cursor]  +0:09 $ python3 --version  exit 0 149ms
+[writes#1 cursor]  +0:09 $ python3 -m unittest -q  exit 0 119ms
+…
 Summary
  evals/jq.es.ts
-   ✓ summarises a JSON file with jq           13s  1 turn
+   ✓ summarises a JSON file with jq           10s  1 turn
  evals/python.es.ts
-   ✓ writes and tests fizzbuzz in python      15s  1 turn
+   ✓ writes and tests fizzbuzz in python      10s  1 turn
  evals/sqlite.es.ts
-   ✓ queries a seeded SQLite database         14s  1 turn
+   ✓ queries a seeded SQLite database         13s  1 turn
 
    Evals  3 passed (3)
-Duration  16s
+Duration  14s
+  Tokens  174k in (85k cached) · 1651 out
 ```
 
 Without `es image build`, `es run` builds `from`, `dockerfile` and `install` images on first use, one at a time, and the other attempts wait for them.
@@ -178,7 +179,7 @@ evaluate(
 ```text
 images  1 sandbox image (nothing built: --dry-run)
 flutter · 1 eval
-  from ghcr.io/cirruslabs/flutter:3.38.10  evalsuite-sandbox:cursor-1.0.37-ghcr-io-cirruslabs-flutter-3-38-10-ef09bba3  (rebuild: Node, git and the harness bootstrap on top)
+  from ghcr.io/cirruslabs/flutter:3.38.10  evalsuite-sandbox:cursor-0.1.0-ghcr-io-cirruslabs-flutter-3-38-10-ef09bba3  (rebuild: Node, git and the harness bootstrap on top)
 ```
 
 - Pin the tag. A moving tag (`stable`) changes the toolchain between runs.

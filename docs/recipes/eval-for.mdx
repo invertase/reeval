@@ -57,9 +57,9 @@ npx es run strings --config es.fake.config.ts
 ```text
 Summary
  evals/strings.es.ts
-   ✓ writes slugify       90ms  1 turn
-   ✓ writes camelCase     82ms  1 turn
-   ✓ writes titleCase     80ms  1 turn
+   ✓ writes slugify       85ms  1 turn
+   ✓ writes camelCase     69ms  1 turn
+   ✓ writes titleCase     73ms  1 turn
 
    Evals  3 passed (3)
 ```
@@ -124,8 +124,9 @@ evaluate.for(cases)('exports $fn', async (t, c) => {
 
 ```text
  evals/percase.es.ts
-   ✓ exports slugify           82ms  1 turn
-   ✓ exports camelCase         73ms  judge 0.95  1 turn
+   ✓ exports slugify           76ms  1 turn
+   ✓ exports camelCase         83ms  judge 0.95  1 turn
+…
 ```
 
 ## Options per case
@@ -145,7 +146,7 @@ npx es run --tag pnpm --dry-run
 ```
 
 ```text
-plan  1 eval · 1 cell · 1 attempt · ~52ms serial
+plan  1 eval · 1 cell · 1 attempt · ~3m 00s serial
 eval                                         harnesses  variants  runs  attempts  notes
 evals/percase.es.ts › adds lodash with pnpm  1          —         1     1
 ```

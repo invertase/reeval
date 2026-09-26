@@ -194,7 +194,7 @@ plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~6m 00
 ```text
 images  2 sandbox images (nothing built: --dry-run)
 docker · 2 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker · claude-code · 2 evals
   base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)
 ```
@@ -204,7 +204,7 @@ docker · claude-code · 2 evals
 At the end of a complete run, ES copies it into the history folder and says so. This line is from a real Cursor run in CI:
 
 ```text
-recorded evals/.history/20260926T170711Z_bd6205e_ci_rx1r.json + 9 artifact files in evals/.history/20260926T170711Z_bd6205e_ci_rx1r/ (50.1 KB). Commit it with git.
+recorded evals/.history/20260926T174109Z_b010670_ci_8f60.json + 9 artifact files in evals/.history/20260926T174109Z_b010670_ci_8f60/ (30.2 KB). Commit it with git.
 ```
 
 A run that fails evals is still complete, so it's recorded, and `publish` still runs because of `!cancelled()`. A run that hits `budget.duration` ends with status `budget` and isn't recorded (`es record --allow-incomplete` records it by hand), so the publish job finds nothing new to commit.
@@ -218,7 +218,7 @@ npx es studio build --out studio-dist
 ```
 
 ```text
-built ../capsite/: 2 runs, 81 files, 887 KB (records, transcripts, diffs, logs and judge inputs)
+built ../capsite/: 2 runs, 83 files, 913 KB (records, transcripts, diffs, logs and judge inputs)
 Serve it from any static host. Anyone who can open it can read every included file.
 ```
 

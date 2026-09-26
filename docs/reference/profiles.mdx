@@ -126,7 +126,7 @@ plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · … �
 es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```
 
-`usd` and `tokens` are refused: no harness ES runs reports cost or tokens yet.
+`usd` and `tokens` are refused. ES records the tokens that `cursor()` and `antigravity()` report, per turn, per attempt and for the run, but it prices no models and enforces no token budget.
 
 ## Errors
 
@@ -140,7 +140,7 @@ es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow
 | A bad `limit.compare` | `profiles.pr.limit.compare must be false or { maxVariants: n }` |
 | A bad `limit.runs` | `profiles.pr.limit.runs must be a whole number of at least 1` |
 | Tags that aren't strings | `profiles.pr.tags must be a list of tag filters` |
-| `budget.usd` | `profiles.pr.budget.usd isn't supported: no harness ES runs reports cost or tokens yet (Cursor reports no usage). Cap the run with attempts or duration.` |
+| `budget.usd` | `profiles.pr.budget.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` |
 | A bad `budget.attempts` | `profiles.pr.budget.attempts must be a whole number of at least 1 (got 0)` |
 
 ## Related

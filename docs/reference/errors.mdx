@@ -44,7 +44,7 @@ Errors in an eval file are prefixed with the file (`es: evals/skill.es.ts: …`)
 |---|---|
 | `Unknown profile "nigthly". Profiles in es.config.ts: smoke, nightly.` | Check the name in `--profile` or `ES_PROFILE`. |
 | `this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)` | Narrow the run, raise `budget.attempts`, or pass `--force`. |
-| `profiles.pr.budget.usd isn't supported: …` | Cap with `attempts` or `duration`. |
+| `profiles.pr.budget.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` | Cap with `attempts` or `duration` (`budget.tokens` gets the same message). |
 
 See [Profiles and budgets](/reference/profiles).
 
@@ -75,7 +75,7 @@ See [Profiles and budgets](/reference/profiles).
 | Message | Fix |
 |---|---|
 | `Docker is not running. Start Docker and try again.` | Start Docker. |
-| `Sandbox image evalsuite-sandbox:cursor-1.0.37 not found. Build it once with: es image build` | Run `es image build`. |
+| `Sandbox image evalsuite-sandbox:cursor-0.1.0 not found. Build it once with: es image build` | Run `es image build`. |
 | `Sandbox image … not found. docker({ image }) is used as is, so pull or build it first.` | Pull or build your image, or use `from` or `dockerfile` so ES builds it. |
 | `ES needs a Debian or Ubuntu based image (glibc and apt-get)` | Use a Debian or Ubuntu base for `from` or `dockerfile`. |
 | `Building the install layer (N commands) failed: …` | Fix the failing `install` command; the build log is in `.es/cache/images/`. |

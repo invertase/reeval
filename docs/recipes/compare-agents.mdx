@@ -1,9 +1,9 @@
 ---
 title: Compare agents
-description: Run one suite on Cursor, Claude Code and Antigravity at once and read the results per agent.
+description: Run one suite on Cursor and Antigravity at once and read pass rate, lift and effort per agent.
 ---
 
-**Goal:** see how different coding agents do on the same evals, side by side.
+**Goal:** see how different coding agents do on the same evals, side by side, including whether a skill helps each of them.
 
 A [harness](/guide/harnesses) list makes each agent its own [cell](/concepts/matrix). The evals don't change: every agent gets the same prompt, a fresh sandbox of its own and the same checks.
 
@@ -12,67 +12,71 @@ A [harness](/guide/harnesses) list makes each agent its own [cell](/concepts/mat
 ```ts title="evals/harnesses.ts"
 import { antigravity, claudeCode, cursor } from '{{ pkg }}/harness'
 
-export const composer = cursor({ model: 'composer-2.5' })
+export const composer = cursor({
+  model: 'composer-2.5',
+  params: { fast: 'true' },
+})
 export const claude = claudeCode({ model: 'claude-sonnet-5' })
 export const agy = antigravity({ model: 'gemini-3.8-flash-medium' })
 ```
 
-```ts title="es.config.ts"
+```ts title="es.agents.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
-import { agy, claude, composer } from './evals/harnesses.ts'
+import { agy, composer } from './evals/harnesses.ts'
 
 export default defineConfig({
-  harness: [composer, claude, agy],
+  include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+  harness: [composer, agy],
   sandbox: docker(),
-  judge: { model: 'google/gemini-3.8-flash' },
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   gate: { passRate: 0.5 },
-  runs: 2,
+  timeout: '15m',
 })
 ```
 
-The eval is `examples/hello/evals/hello.es.ts`, unchanged. Each harness has an id, a key and an image of its own:
+The evals are `examples/hello`'s `hello.es.ts` and `skill.es.ts`, unchanged. The second is the house-greeting skill compare from [Prove a skill helps](/recipes/skill-lift), so each agent gets a control and a variant.
+
+Every harness needs a `model`. `params` sets Cursor's model parameters; `fast: 'true'` shows up in the record as the served model `composer-2.5[fast=true]`. Each harness has an id, a key and an image of its own:
 
 | Harness | Id (in cell keys and filters) | Key in `.env.local` | Sandbox image |
 |---|---|---|---|
-| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `evalsuite-sandbox:cursor-1.0.37` |
+| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `evalsuite-sandbox:cursor-0.1.0` |
 | `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `evalsuite-sandbox:claude-code-1.0.128` |
 | `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `evalsuite-sandbox:antigravity-0.1.0` |
 
-`claudeCode()` and `antigravity()` need a `model`. Each key stays on the host and is swapped in by the egress gateway only on that agent's API endpoints (see [Credential brokering](/concepts/credential-brokering)).
+Each key stays on the host and is swapped in by the egress gateway only on that agent's API endpoints (see [Credential brokering](/concepts/credential-brokering)).
 
 ## Build the images and check the plan
 
 ```bash
-npx es image build --dry-run
+npx es image build --dry-run --config es.agents.config.ts
 ```
 
 ```text
-images  3 sandbox images (nothing built: --dry-run)
+images  2 sandbox images (nothing built: --dry-run)
 docker · 2 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
-docker · claude-code · 2 evals
-  base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker · antigravity · 2 evals
   base  evalsuite-sandbox:antigravity-0.1.0  (rebuild: the harness bootstrap)
 ```
 
 ```bash
-npx es image build
-npx es run --dry-run
+npx es run --dry-run --config es.agents.config.ts --runs 2
 ```
 
 ```text
-plan  2 evals · 6 cells · 12 attempts · ~36m 00s serial (~9m 00s at concurrency 4)
+plan  3 evals · 8 cells · 16 attempts · ~12m 31s serial (~3m 08s at concurrency 4)
 eval                                                              harnesses  variants  runs  attempts  notes
-evals/hello.es.ts › greet module › creates a tested greet module  3          —         2     6
-evals/hello.es.ts › greet module › adds a default name in a…      3          —         2     6
+evals/hello.es.ts › greet module › creates a tested greet module  2          —         2     4
+evals/hello.es.ts › greet module › adds a default name in a…      2          —         2     4
+evals/skill.es.ts › house greeting › greets in the house style    2          1         2     8
 ```
 
 A filter that names a harness runs only its cells, and ES asks only for that harness's key:
 
 ```bash
-npx es run antigravity
+npx es run antigravity --config es.agents.config.ts --runs 2
 ```
 
 ```text
@@ -80,77 +84,84 @@ plan  2 evals · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrenc
 es: Missing credentials: GEMINI_API_KEY. Set them in the environment or .env.local.
 ```
 
-## Real runs, one agent at a time
-
-These captures ran `examples/hello` with one harness each. Cursor passed both evals:
-
-```text
-[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  15s
-[creates#1 cursor]  +0:00 sandbox ready 2s
-[creates#1 cursor]  +0:01 turn 1 done 10s · 2 tool calls, 2 file edits
-[creates#1 cursor]  +0:12 $ node --test  exit 0 156ms
-[creates#1 cursor]  +0:12 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
-…
-   Evals  2 passed (2)
-Duration  20s
-```
-
-The Claude Code run shows what an agent-side failure looks like. Its turns ended in `error` after a second, with no tool calls:
-
-```text
-[creates#1 claude-code] ✗ evals/hello.es.ts › greet module › creates a tested greet module  3s
-[creates#1 claude-code]  +0:00 sandbox ready 2s
-[creates#1 claude-code]  +0:01 turn 1 error 1s · 0 tool calls, 0 file edits
-[creates#1 claude-code]  Error: expected file greet.js to exist
-…
-   Evals  2 failed (2)
-```
-
-The attempt's transcript says why: `{"type":"error","message":"Credit balance is too low"}`. The key was valid and brokered (the `-v` trace shows `POST https://api.anthropic.com/v1/messages → 400`), but the account had no credit. Check `transcript.jsonl` or `es run -v` when a turn errors this fast.
-
-## Read the per-cell table
-
-With several harnesses and a `compare`, the summary has one row per harness and cell. This is from a real 36-attempt run of the [dogfood suite](/recipes/case-study-dogfood) on Cursor and Antigravity (two skills, `runs: 2`):
-
-```text
-     ✗ plans a skill compare                     8/12   75%  12 attempts
-         cursor:composer-2.5/-/es-tarball                     control    2/2  100%
-         cursor:composer-2.5/es-weak/es-tarball               variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
-         cursor:composer-2.5/es-good/es-tarball               variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
-         antigravity:gemini-3.8-flash-low/-/es-tarball        control    0/2    0%   not gated
-         antigravity:gemini-3.8-flash-low/es-weak/es-tarball  variant    0/2    0%   lift +0 pts (95% −66…+66, 0/2 vs 0/2), within noise   gate passRate 0.5
-         antigravity:gemini-3.8-flash-low/es-good/es-tarball  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
-```
-
-- Lift is always against the control **on the same harness**. Cursor's control already passed, so its lift is +0; Antigravity's didn't, so the good skill shows +100.
-- The eval fails because one gated cell (`antigravity … es-weak`, 0/2) is below its gate.
-- Cell keys are `<harness>/<environment>/<sandbox>`, so `es run antigravity` or `es query … WHERE harness LIKE 'antigravity%'` picks one agent.
-
-For a total per agent in one run, ask the history:
+## Run both agents
 
 ```bash
-npx es query "SELECT c.harness, SUM(c.pass)||'/'||SUM(c.pass+c.fail+c.infra_error) AS passed, round(100.0*SUM(c.pass)/SUM(c.pass+c.fail+c.infra_error)) AS pct FROM cells c WHERE run_id='20260926T140020Z_931dae5_cursor-agent_3sth' GROUP BY c.harness"
+npx es run --config es.agents.config.ts --runs 2
+```
+
+A real run on Cursor and Antigravity:
+
+```text
+Summary
+ evals/hello.es.ts
+   greet module
+     ✓ creates a tested greet module                4/4  100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
+…
+ evals/skill.es.ts
+   house greeting
+     ✓ greets in the house style                    4/8  100%  8 attempts
+         cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
+         antigravity:gemini-3.8-flash-medium/-/docker                    control    0/2    0%   not gated
+         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
+…
+Attempts  12 passed · 4 failed, not gated (16 attempts, 3 evals)
+Duration  2m 39s
+  Tokens  5149k in (2946k cached) · 64k out
+```
+
+What it says:
+
+- **Both agents pass `hello.es.ts`**, so that eval can't tell them apart.
+- **The skill lifts both by +100 points.** Without it, Cursor's controls wrote `Welcome home, Ada!` and Antigravity's `Hello, Ada!`.
+- **Effort differs more than pass rate.** With the skill, Cursor went from 11.5 tool calls to 3 and Antigravity from 24.5 to 3.5. Antigravity's control spent a minute per attempt, against Cursor's 22 s.
+- **The effort verdict is `too few attempts to test`:** two attempts per side can't reach significance. Use `--runs 4` or more when effort is what you're measuring.
+- **Lift is against the control on the same harness.** Cell keys are `<harness>/<environment>/<sandbox>`.
+
+<Info>
+  A harness is an agent and a model together. Cursor with composer against Antigravity with Gemini can't tell you whether the agent or the model made the difference; compare two models on one harness for that.
+</Info>
+
+## Ask across runs
+
+`es query factor_effects` sets one factor against another, within a run (`controlled`) and pooled over comparable runs (`pooled`). From the same history:
+
+```bash
+npx es query "SELECT eval_key, factor, tier, points, lo, hi,
+  pass_verdict, effort_verdict FROM factor_effects"
 ```
 
 ```text
-harness                           passed  pct
-antigravity:gemini-3.8-flash-low  14/18   78
-cursor:composer-2.5               18/18   100
+eval_key                                                    factor       tier        points  lo      hi     pass_verdict  effort_verdict
+…
+evals/skill.es.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
+·                                                           harness      pooled      0       -0.436  0.436  noise         insufficient
 ```
 
-Antigravity's four failures were all judge verdicts on one eval: without the good skill, it checked the greeting with another LLM judge where the question asked for a deterministic assertion.
+Pooled over comparable runs, the skill has an effect on both pass rate and tool calls, and the choice of agent has none that the data can show. [`es analyze`](/reference/cli/analyze) reads the same facts and explains them:
 
-<Info>
-  A harness is an agent CLI and a model together. Cursor with composer against Antigravity with Gemini can't tell you whether the CLI or the model made the difference; compare two models on one harness for that.
-</Info>
+```text
+  - Across all evals, comparing the antigravity harness against cursor yielded a pooled pass-rate lift of +0 pts (95% CI −44…+44, verdict: noise) and effort verdict: insufficient (tools p = 0.3333 across 3 strata). [F12]
+…
+     verify: es run --runs 6 --tag skill
+```
+
+The token line comes from the harnesses' own reports; `es query` has them per attempt in `input_tokens`, `cache_read_tokens`, `output_tokens` and `served_model`. ES prices no models.
+
+There's no Claude Code run on this page: the Anthropic account behind these captures had no credit, so its turns ended in `error` (`Credit balance is too low` in the transcript).
 
 ## Variations
 
-- **Two models on one harness:** `harness: [cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2', id: 'fast' })]`. Give same-kind harnesses distinct ids.
+- **Two settings of one model:** `cursor({ model: 'composer-2.5', params: { fast: 'false' }, id: 'cursor:composer-2.5-slow' })` next to the fast one. Give same-kind harnesses distinct ids.
 - **Add an agent to one group:** `{ harness: (inherited) => [...inherited, claude] }` extends the list instead of replacing it.
-- **One config per agent:** `examples/hello` keeps `es.claude.config.ts` and `es.antigravity.config.ts` and runs `es run --config es.claude.config.ts`. Separate configs make separate runs, so use a harness list when you want one table.
-- **Keep PRs cheap:** a `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly.
-- **Rate limits:** `claudeCode({ model, maxConcurrent: 2 })` caps that agent's attempts at once.
+- **Keep PRs cheap:** a `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly (see [Nightly matrix and Pages](/recipes/nightly-pages)).
+- **Rate limits:** `antigravity({ model, maxConcurrent: 2 })` caps that agent's attempts at once.
+- **A bigger suite:** the [dogfood case study](/recipes/case-study-dogfood) ran two skills on three harder evals.
 
 ## Next
 
@@ -158,7 +169,7 @@ Antigravity's four failures were all judge verdicts on one eval: without the goo
   <Card title="Harnesses" icon="terminal" href="/guide/harnesses">
     Each agent's options, rules and skill locations.
   </Card>
-  <Card title="The matrix" icon="layer-group" href="/concepts/matrix">
-    How harnesses, variants and runs multiply into attempts.
+  <Card title="Analysis" icon="chart-line" href="/guide/analysis">
+    Lift, effort and factor effects across runs.
   </Card>
 </CardGroup>
