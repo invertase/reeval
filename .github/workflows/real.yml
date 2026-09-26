@@ -47,15 +47,16 @@ jobs:
         env:
           HAS_CURSOR: ${{ secrets.CURSOR_API_KEY != '' }}
           HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
+          HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
         run: |
           [ "$HAS_CURSOR" = true ] || echo "::notice::No CURSOR_API_KEY repository secret: the Cursor rows are skipped"
           [ "$HAS_GEMINI" = true ] || echo "::notice::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows are skipped"
-          echo "::notice::No ANTHROPIC_API_KEY for this project: the Claude Code rows are skipped"
-          if [ "$HAS_CURSOR" = true ] || [ "$HAS_GEMINI" = true ]; then
+          [ "$HAS_ANTHROPIC" = true ] || echo "::notice::No ANTHROPIC_API_KEY repository secret: the Claude Code rows are skipped"
+          if [ "$HAS_CURSOR" = true ] || [ "$HAS_GEMINI" = true ] || [ "$HAS_ANTHROPIC" = true ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::The real tier is skipped: neither CURSOR_API_KEY nor GOOGLE_GENERATIVE_AI_API_KEY is a repository secret"
+            echo "::notice::The real tier is skipped: none of CURSOR_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY and ANTHROPIC_API_KEY is a repository secret"
           fi
 
   pinned:
