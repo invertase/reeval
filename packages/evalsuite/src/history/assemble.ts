@@ -20,6 +20,7 @@ import type {
   HarnessDescriptor,
   Outcome,
   RunContext,
+  WebEventType,
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
 import { type Source, traceSources } from './sources.ts'
@@ -216,6 +217,10 @@ function rawLines(record: EvalRecord): string | null {
 function activity(record: EvalRecord): AttemptRecord['activity'] {
   const events = record.turns.flatMap((t) => t.transcript)
   const count = (type: string) => events.filter((e) => e.type === type).length
+  const web = (type: WebEventType) => {
+    const n = count(type)
+    return n === 0 && record.turns.some((t) => t.unreported?.includes(type)) ? null : n
+  }
   const reasoningMs = events.reduce(
     (n, e) => n + (e.type === 'reasoning' ? (e.durationMs ?? 0) : 0),
     0,
@@ -223,8 +228,8 @@ function activity(record: EvalRecord): AttemptRecord['activity'] {
   return {
     tools: count('tool'),
     fileEdits: count('file-edit'),
-    webSearches: count('web-search'),
-    webFetches: count('web-fetch'),
+    webSearches: web('web-search'),
+    webFetches: web('web-fetch'),
     reasoningMs,
   }
 }
@@ -473,6 +478,7 @@ function attemptEvidence(
       durationMs: t.durationMs,
       usage: t.usage ?? null,
       model: t.model ?? null,
+      unreported: t.unreported ?? [],
       text:
         t.text.length > TURN_TEXT_LIMIT
           ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`

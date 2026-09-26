@@ -346,6 +346,9 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     const t = e.trial.timings
     assert.ok(t.setupMs >= 0 && t.agentMs >= 0 && t.checksMs >= 0 && t.judgeMs >= 0)
     assert.equal(e.trial.activity.fileEdits, 2)
+    // The fake agent reports everything it does, so no web events is a real count of 0.
+    assert.deepEqual(e.trial.turns[0]?.unreported, [])
+    assert.equal(e.trial.activity.webFetches, 0)
     assert.equal(typeof e.trial.checks[0]?.durationMs, 'number')
     assert.deepEqual(e.trial.changedFiles.map((f) => f.path).sort(), ['big.txt', 'hello.txt'])
     assert.deepEqual(

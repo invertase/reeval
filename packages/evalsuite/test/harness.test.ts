@@ -16,7 +16,9 @@ import {
   toUsage as antigravityUsage,
 } from '@evalsuite/harness-antigravity'
 import {
+  CURSOR_SDK_BUILTIN_TOOLS,
   CURSOR_SDK_HOME_SKILLS_DIR,
+  CURSOR_SDK_RECOVERED_TOOLS,
   CURSOR_SDK_WORKSPACE_RULES_FILE,
   CURSOR_SDK_WORKSPACE_SKILLS_DIR,
   CursorSdkStreamTranslator,
@@ -40,7 +42,7 @@ import {
   layoutOf,
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
-import { normaliseStream } from '../src/harness/transcript.ts'
+import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
 import { antigravity, claudeCode, cursor, fakeHarness } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
@@ -816,13 +818,19 @@ describe('Antigravity transcripts', () => {
   })
 })
 
-/** A harness that emits `parts` for every turn, through a real HarnessAgent, as ES drives it. */
-async function turnThrough(parts: HarnessV1StreamPart[]) {
+/**
+ * A harness that emits `parts` for every turn, through a real HarnessAgent, as ES drives it.
+ * `stream` is the agent's `fullStream`, stamped as ES stamps it for `normaliseStream`.
+ */
+async function turnThrough(
+  parts: HarnessV1StreamPart[],
+  builtinTools: HarnessV1['builtinTools'] = {},
+) {
   let served: string | undefined
   const adapter: HarnessV1 = {
     specificationVersion: 'harness-v1',
     harnessId: 'scripted',
-    builtinTools: {},
+    builtinTools,
     doStart: async ({ sessionId }) => ({
       sessionId,
       isResume: false,
@@ -853,9 +861,81 @@ async function turnThrough(parts: HarnessV1StreamPart[]) {
   }
   const session = await agent.createSession({ sandboxSession: sandboxSession as never })
   const result = await agent.stream({ session, prompt: 'go' })
-  for await (const _ of result.fullStream);
-  return { usage: tokenUsage(await result.totalUsage), served }
+  const stream: StampedPart[] = []
+  for await (const part of result.fullStream) {
+    stream.push({ ms: stream.length, part: part as StampedPart['part'] })
+  }
+  return { usage: tokenUsage(await result.totalUsage), served, stream }
 }
+
+describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normaliser', () => {
+  const WEB = new Set(['webSearch', 'webFetch'])
+  const fixture = (name: string) =>
+    readFileSync(new URL(`../../harness-cursor-sdk/test/fixtures/${name}`, import.meta.url), 'utf8')
+
+  /** The web calls each layer hands the next, from the first turn of a captured runner session. */
+  async function layers(name: string, startedAt: number) {
+    const [turn = ''] = fixture(name)
+      .trim()
+      .split(/\n(?=\{"type":"init")/)
+    const lines = turn.split('\n')
+    const sdk = lines
+      .map((l) => JSON.parse(l))
+      .filter((l) => l.type === 'event' && l.event.type === 'tool_call' && WEB.has(l.event.name))
+      .filter((l) => l.event.status === 'running')
+      .map((l) => l.event.name as string)
+    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    const parts = lines.flatMap((l) => t.push(l))
+    const webCalls = (ps: Array<{ type: string; toolName?: string }>) =>
+      ps.flatMap((p) => (p.type === 'tool-call' && WEB.has(p.toolName ?? '') ? [p.toolName] : []))
+    const adapter = webCalls(parts)
+    const { stream } = await turnThrough(parts, CURSOR_SDK_BUILTIN_TOOLS)
+    const agent = webCalls(stream.map((s) => s.part as { type: string; toolName?: string }))
+    const events = normaliseStream(stream, startedAt).filter(
+      (e) => e.type === 'web-search' || e.type === 'web-fetch',
+    )
+    return { sdk, adapter, agent, events }
+  }
+
+  test('web calls the runner recovers survive the adapter, HarnessAgent and the normaliser', async () => {
+    const startedAt = 1790444242000
+    const { sdk, adapter, agent, events } = await layers('web-recovered.ndjson', startedAt)
+    assert.deepEqual(sdk, ['webFetch', 'webSearch'])
+    assert.deepEqual(adapter, sdk, 'the adapter maps both to provider-executed builtins')
+    assert.deepEqual(agent, sdk, 'HarnessAgent passes provider-executed builtins on')
+    // Placed and timed by the backend's own clock, though reported after the turn.
+    assert.deepEqual(
+      events.map((e) =>
+        e.type === 'web-search'
+          ? [e.type, e.query, e.references, e.atMs, e.durationMs]
+          : [e.type, e.url, e.ok, e.atMs, e.durationMs],
+      ),
+      [
+        ['web-search', 'IANA example domain RFC 2606', 2, 461, 4042],
+        ['web-fetch', 'https://httpbin.org/ip', true, 467, 1242],
+      ],
+    )
+  })
+
+  test('SDK 1.0.32 loses them before our first layer: its stream alone has none anywhere', async () => {
+    const { sdk, adapter, agent, events } = await layers('web-1.0.32.ndjson', 0)
+    assert.deepEqual([sdk, adapter, agent, events], [[], [], [], []])
+  })
+
+  test("a Cursor turn is unreported for the web tools the runner couldn't recover", () => {
+    const unreported = AGENTS.cursor.unreported
+    assert.ok(unreported)
+    assert.deepEqual(
+      unreported({ cursorSdk: { unreportedTools: Object.values(CURSOR_SDK_RECOVERED_TOOLS) } }),
+      ['web-search', 'web-fetch'],
+    )
+    assert.deepEqual(unreported({ cursorSdk: { runId: 'run-1' } }), [])
+    assert.deepEqual(unreported(undefined), [])
+    for (const kind of ['claude-code', 'antigravity'] as const) {
+      assert.equal(AGENTS[kind].unreported, undefined)
+    }
+  })
+})
 
 const finishWith = (usage: unknown, modelId?: string): HarnessV1StreamPart[] => [
   { type: 'stream-start', ...(modelId ? { modelId } : {}) },

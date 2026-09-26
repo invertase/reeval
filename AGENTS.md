@@ -269,8 +269,11 @@ judge's keys; a brokered secret that goes in a header fails its attempt the same
   `{ verdict, score, threshold, question, model }`. Pass `{ on: turn }` to grade an earlier
   turn, or `{ on: value }` to grade any value.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
-  `await expect(t.exec(cmd)).toSucceed()` and `expect(verdict).toPass()`. All the usual
-  `expect` matchers work too.
+  `await expect(t.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`, and
+  `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (a substring or a RegExp). A turn
+  whose harness can't report web events lists them in `turn.unreported`, and the web matchers
+  throw `HarnessCapabilityError` on it, negated or not, rather than pass or fail on nothing.
+  All the usual `expect` matchers work too.
 
 ### Options, cells and runs
 
@@ -1096,8 +1099,14 @@ the turn started), and events have `durationMs`:
 Types: `prompt`, `reasoning`, `text`, `tool` (a call merged with its result), `file-edit`
 (`create | modify | delete` with line counts), `web-search`, `web-fetch`, `error` and
 `turn-end`. Cursor reports file edits relative to the workspace, with line counts. Its SDK
-(1.0.32) doesn't report web search or fetch calls at all (the agent still makes them, through
-Cursor's backend), so Cursor transcripts have no web events. An MCP tool call is named
+(1.0.32) leaves web search and fetch calls out of its stream: Cursor's backend sends them and
+runs them on its own servers (so the egress log doesn't see them either), and the SDK drops them.
+The adapter's runner recovers them after each turn from the agent's stored conversation
+(`Agent.messages.list`), with the backend's own start and end times, so they're normal
+`web-search` / `web-fetch` events. A turn it couldn't recover them for (the store unreadable, or
+the turn ended before its result) has `unreported: ['web-search', 'web-fetch']`, the record's
+`activity.webSearches` / `webFetches` are null rather than 0, and the web matchers refuse it.
+An MCP tool call is named
 `mcp__<server>__<tool>` on every harness. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
 `transcript.raw.jsonl`. The record adds per-turn durations, per-phase timings (setup, agent,
 diff, checks, judge) and activity counts, and `summary.md` quotes each eval's last message.

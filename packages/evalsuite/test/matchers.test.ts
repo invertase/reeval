@@ -94,3 +94,67 @@ describe('toPass', () => {
     assert.throws(() => matchers.toPass({}), /toPass\(\) expects a t\.judge\(\) verdict/)
   })
 })
+
+describe('toHaveFetched and toHaveSearched', () => {
+  const at = { ts: '2026-09-26T17:04:55.000Z', atMs: 0, durationMs: 950 }
+  const turn = (unreported: Array<'web-search' | 'web-fetch'> = []) => ({
+    unreported,
+    transcript: [
+      {
+        ...at,
+        type: 'web-fetch' as const,
+        toolCallId: 'f',
+        url: 'https://httpbin.org/ip',
+        ok: true,
+      },
+      {
+        ...at,
+        type: 'web-search' as const,
+        toolCallId: 's',
+        query: 'IANA example domain RFC 2606',
+        references: 2,
+      },
+    ],
+  })
+
+  test('pass on a matching event, by substring or pattern, or on any event with none given', () => {
+    assert.equal(matchers.toHaveFetched(turn(), 'httpbin.org').pass, true)
+    assert.equal(matchers.toHaveFetched(turn(), /\/ip$/).pass, true)
+    assert.equal(matchers.toHaveFetched(turn()).pass, true)
+    assert.equal(matchers.toHaveSearched(turn(), /RFC 2606/).pass, true)
+  })
+
+  test('fail naming what the turn did fetch or search', () => {
+    const r = matchers.toHaveFetched(turn(), 'example.com')
+    assert.equal(r.pass, false)
+    assert.equal(
+      r.message(),
+      'expected web fetches matching example.com, got ["https://httpbin.org/ip"]',
+    )
+    const none = matchers.toHaveSearched({ unreported: [], transcript: [] })
+    assert.equal(none.message(), 'expected web searches, got none')
+  })
+
+  test("refuse a turn whose harness doesn't report them, negated or not: never a silent pass", () => {
+    const cursor = { unreported: ['web-search', 'web-fetch'] as const, transcript: [] }
+    for (const check of [
+      () => matchers.toHaveFetched({ ...cursor, unreported: [...cursor.unreported] }, 'httpbin'),
+      () => matchers.toHaveSearched({ ...cursor, unreported: [...cursor.unreported] }),
+    ]) {
+      assert.throws(check, (e: Error) => {
+        assert.equal(e.name, 'HarnessCapabilityError')
+        assert.match(
+          e.message,
+          /doesn't report web (fetches|searches) \('web-(fetch|search)' is in turn\.unreported\)/,
+        )
+        return true
+      })
+    }
+    // Only the unreported type is refused.
+    assert.equal(matchers.toHaveSearched(turn(['web-fetch']), 'RFC').pass, true)
+  })
+
+  test('reject something that is not a turn', () => {
+    assert.throws(() => matchers.toHaveFetched({}), /toHaveFetched\(\) expects a turn/)
+  })
+})

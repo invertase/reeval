@@ -10,6 +10,7 @@ import type {
   PhaseTimings,
   TokenUsage,
   TurnStatus,
+  WebEventType,
 } from '../types.ts'
 import type { CellEffort } from '../view/effort.ts'
 
@@ -120,6 +121,8 @@ export type AttemptRecord = {
     usage: TokenUsage | null
     /** The model the harness says served the turn; null when it reports none. */
     model: string | null
+    /** Event types the harness can't report; see `Turn.unreported`. */
+    unreported: WebEventType[]
   }>
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
@@ -128,8 +131,9 @@ export type AttemptRecord = {
   activity: {
     tools: number
     fileEdits: number
-    webSearches: number
-    webFetches: number
+    /** Null when a turn with none couldn't report them (`unreported`), not a count of 0 that isn't one. */
+    webSearches: number | null
+    webFetches: number | null
     reasoningMs: number
   }
   judgements: JudgementRecord[]

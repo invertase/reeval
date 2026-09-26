@@ -1,5 +1,6 @@
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { JSONValue } from '@ai-sdk/provider'
+import { CURSOR_SDK_RECOVERED_TOOLS } from './cursor-sdk-bootstrap.ts'
 import { projectToolCall, projectToolResult } from './cursor-sdk-tools.ts'
 
 /**
@@ -32,6 +33,9 @@ export type CursorSdkMessage = {
   result?: unknown
   truncated?: { args?: boolean; result?: boolean }
   usage?: CursorSdkUsage
+  /** Epoch ms, on calls the runner recovered from the stored conversation after the turn. */
+  started_at_ms?: number
+  completed_at_ms?: number
 }
 
 export type CursorSdkResult = {
@@ -49,7 +53,9 @@ export type CursorSdkResult = {
 /** One line the in-sandbox runner prints. */
 export type CursorSdkRunnerLine =
   | { type: 'init'; turn?: number; agentId: string; model?: CursorSdkModel; sdkVersion?: string }
-  | { type: 'event'; event: CursorSdkMessage }
+  | { type: 'event'; event: CursorSdkMessage; recovered?: string }
+  /** The runner couldn't recover these tools' calls from the stored conversation this turn. */
+  | { type: 'unreported'; turn?: number; tools: string[]; message?: string }
   | ({ type: 'result' } & CursorSdkResult)
   | { type: 'error'; message: string; name?: string; code?: string; status?: number }
 
@@ -124,7 +130,13 @@ export class CursorSdkStreamTranslator {
   private openTools = new Map<string, { toolName: string; dynamic: boolean }>()
   /** Calls already reported, so a late duplicate `completed` doesn't open a second one. */
   private readonly seen = new Set<string>()
-  private stepUsage = false
+  /**
+   * The turn's `usage` event, held until its result line: the runner reports the calls it
+   * recovers after it, and HarnessAgent refuses content after a step's `finish-step`.
+   */
+  private stepUsage: CursorSdkUsage | undefined
+  /** Built-in tools this turn may have used with no `tool_call` reported. */
+  private unreportedTools: string[] = []
 
   private readonly workDir: string | undefined
 
@@ -172,6 +184,9 @@ export class CursorSdkStreamTranslator {
         this.start(parts)
         this.fail(parts, parsed.message, parsed.code ?? parsed.name ?? 'error')
         break
+      case 'unreported':
+        this.unreportedTools = [...new Set([...this.unreportedTools, ...(parsed.tools ?? [])])]
+        break
     }
     parts.push({ type: 'raw', rawValue: parsed })
     return parts
@@ -184,6 +199,7 @@ export class CursorSdkStreamTranslator {
     this.start(parts)
     this.closeTools(parts, options.aborted ? 'aborted' : 'interrupted')
     this.closeBlocks(parts)
+    this.closeStep(parts)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
       parts.push({
@@ -200,6 +216,7 @@ export class CursorSdkStreamTranslator {
         ? { unified: 'other', raw: 'aborted' }
         : { unified: 'error', raw: `exit ${options.exitCode}` },
       totalUsage: toUsage(undefined),
+      harnessMetadata: this.unrecovered(),
     })
     return parts
   }
@@ -308,12 +325,7 @@ export class CursorSdkStreamTranslator {
       }
       case 'usage': {
         this.closeBlocks(parts)
-        this.stepUsage = true
-        parts.push({
-          type: 'finish-step',
-          finishReason: { unified: 'stop', raw: 'turn-ended' },
-          usage: toUsage(e.usage),
-        })
+        this.stepUsage = e.usage ?? {}
         return
       }
     }
@@ -329,13 +341,7 @@ export class CursorSdkStreamTranslator {
       parts.push({ type: 'text-end', id: 'text-result' })
     }
     this.closeBlocks(parts)
-    if (!this.stepUsage && r.usage) {
-      parts.push({
-        type: 'finish-step',
-        finishReason: { unified: 'stop', raw: 'result' },
-        usage: toUsage(r.usage),
-      })
-    }
+    this.closeStep(parts, r.usage)
     const status = r.status ?? 'unknown'
     if (status !== 'finished' && status !== 'cancelled') {
       parts.push({
@@ -356,6 +362,7 @@ export class CursorSdkStreamTranslator {
           ...(r.model ? { model: r.model } : {}),
           ...(r.durationMs !== undefined ? { durationMs: r.durationMs } : {}),
           ...(r.usage ? { usage: { ...r.usage } } : {}),
+          ...(this.unreportedTools.length ? { unreportedTools: [...this.unreportedTools] } : {}),
         },
       },
     })
@@ -364,12 +371,31 @@ export class CursorSdkStreamTranslator {
   private fail(parts: HarnessV1StreamPart[], message: string, raw: string) {
     this.closeTools(parts, 'interrupted')
     this.closeBlocks(parts)
+    this.closeStep(parts)
     parts.push({ type: 'error', error: new Error(message) })
     this.finished = true
     parts.push({
       type: 'finish',
       finishReason: { unified: 'error', raw },
       totalUsage: toUsage(undefined),
+      harnessMetadata: this.unrecovered(),
     })
+  }
+
+  /** The turn's one step, with the `usage` event's counts, else the result's when it has them. */
+  private closeStep(parts: HarnessV1StreamPart[], resultUsage?: CursorSdkUsage) {
+    const usage = this.stepUsage ?? resultUsage
+    if (!usage) return
+    parts.push({
+      type: 'finish-step',
+      finishReason: { unified: 'stop', raw: this.stepUsage ? 'turn-ended' : 'result' },
+      usage: toUsage(usage),
+    })
+    this.stepUsage = undefined
+  }
+
+  /** A turn that ended before its result never had its web calls recovered. */
+  private unrecovered() {
+    return { cursorSdk: { unreportedTools: Object.values(CURSOR_SDK_RECOVERED_TOOLS) } }
   }
 }

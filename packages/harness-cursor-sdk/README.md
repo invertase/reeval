@@ -60,9 +60,15 @@ this adapter passes them on as `finish-step` and `finish` usage.
   SDK's `project` setting source. Harness-placed skills go to `~/.agents/skills/` (`user`).
   `instructions` are prepended to the prompt in the ACP adapters' `<session-guidance>` block.
   `mcpServers` go inline, in the SDK's `McpServerConfig` shape, on every turn.
-- **Web tools.** SDK 1.0.32 reports no `tool_call` events for its web search and fetch (checked
-  live: the agent fetched a fresh page, and the stream had no tool calls), so they never reach
-  the stream. `webSearch` and `webFetch` are mapped for when it does.
+- **Web tools.** SDK 1.0.32 reports no `tool_call` events for its web search and fetch. Cursor's
+  backend sends `webSearchToolCall` and `webFetchToolCall` updates, but the SDK's converter maps
+  them to null, so they reach neither `run.stream()` nor `onDelta` / `onStep`, and no hook fires
+  for them. They run on Cursor's servers, not in the sandbox. The stored conversation keeps them,
+  so after each turn the runner reads `Agent.messages.list()` and reports the calls the stream
+  didn't as `tool_call` events (marked `recovered`, with the backend's `started_at_ms` /
+  `completed_at_ms`), before the result. The turn's `finish-step` waits for the result line, since
+  HarnessAgent refuses content after it. When it can't recover them, the turn's
+  `harnessMetadata.cursorSdk.unreportedTools` lists the tools (`CURSOR_SDK_RECOVERED_TOOLS`).
 - **Permissions.** The SDK's local agent runs every tool without asking. `sdkSandbox: true` turns
   on its own shell sandbox (bubblewrap), which a container sandbox doesn't need.
 

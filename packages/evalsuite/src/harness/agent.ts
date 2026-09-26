@@ -106,6 +106,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
     async start(sandbox, signal, { skills, mcp }) {
       const auth = agentAuth(catalog)
       let servedModel: string | null = null
+      let finishMetadata: unknown
       const adapter = await catalog.adapter({
         auth,
         descriptor,
@@ -114,6 +115,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       const agent = new HarnessAgent({
         harness: observed(adapter as HarnessV1, (part) => {
           if (part.type === 'stream-start' && part.modelId) servedModel = part.modelId
+          if (part.type === 'finish') finishMetadata = part.harnessMetadata
         }),
         model: descriptor.model,
         permissionMode: 'allow-all',
@@ -138,6 +140,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           const startedAt = Date.now()
           const parts: StampedPart[] = []
           servedModel = null
+          finishMetadata = undefined
           let stepUsage: TokenUsage | null = null
           const finish = (
             text: string,
@@ -149,6 +152,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             status,
             usage,
             model: servedModel,
+            unreported: catalog.unreported?.(finishMetadata) ?? [],
             startedAt: new Date(startedAt).toISOString(),
             durationMs: Date.now() - startedAt,
             transcript: [...normaliseStream(parts, startedAt), ...extra],

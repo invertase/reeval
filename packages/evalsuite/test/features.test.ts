@@ -498,6 +498,17 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/cursor-web-fetch',
+    tiers: ['real'],
+    env: 'plain',
+    canary: /not to match \/Root=1-/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      assert.deepEqual(attempt?.turns[0]?.unreported, [])
+      assert.ok((attempt?.activity.webFetches ?? 0) >= 1, 'the fetch is in the record')
+    },
+  },
+  {
     dir: 'harness/claude-code-harness-skills',
     tiers: ['fake', 'docker'],
     image: 'claude-code',

@@ -2,7 +2,7 @@ import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { AgentHarnessDescriptor, HarnessDescriptor } from '../types.ts'
+import type { AgentHarnessDescriptor, HarnessDescriptor, WebEventType } from '../types.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
@@ -41,6 +41,12 @@ export type Agent = Layout & {
    * `-v` summarises them once instead of a line per request.
    */
   expectedBlocked?: ExpectedBlocked
+  /**
+   * Transcript events a turn may have had that its harness didn't report, from the turn's
+   * `finish` part's `harnessMetadata`. Each turn carries these as `unreported`, so web matchers
+   * refuse instead of passing silently.
+   */
+  unreported?: (harnessMetadata: unknown) => WebEventType[]
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -56,6 +62,15 @@ export type Agent = Layout & {
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
 export type ExpectedBlocked = { hosts: readonly string[]; why: string }
+
+const WEB_EVENTS: Record<string, WebEventType> = { webSearch: 'web-search', webFetch: 'web-fetch' }
+
+/** `harnessMetadata.cursorSdk.unreportedTools` as transcript event types. */
+export function cursorUnreported(harnessMetadata: unknown): WebEventType[] {
+  const meta = harnessMetadata as { cursorSdk?: { unreportedTools?: unknown } } | undefined
+  const tools = meta?.cursorSdk?.unreportedTools
+  return Array.isArray(tools) ? tools.flatMap((t) => (WEB_EVENTS[t] ? [WEB_EVENTS[t]] : [])) : []
+}
 
 /** Cursor's key exchange: the only request the Cursor SDK sends the API key on. */
 const CURSOR_EXCHANGE = {
@@ -141,6 +156,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
       fields: ['accessToken', 'refreshToken'],
       hosts: ['cursor.sh', '*.cursor.sh'],
     },
+    // SDK 1.0.32 drops web search and fetch calls from its stream (they run on Cursor's backend,
+    // so the egress log doesn't see them either). The runner recovers them from the stored
+    // conversation, and names the tools it couldn't recover for a turn.
+    unreported: cursorUnreported,
     mcpServers: cursorMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@evalsuite/harness-cursor-sdk')).createCursorSdk({

@@ -5,6 +5,7 @@ export { expect } from './engine/runtime.ts'
 export { DEFAULT_SKILL_EXCLUDE, defineEnvironment } from './environment.ts'
 export { evaluate, group } from './evaluate.ts'
 export type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './history/types.ts'
+export { HarnessCapabilityError } from './matchers.ts'
 export type {
   Budget,
   Cell,
@@ -43,4 +44,5 @@ export type {
   TranscriptEvent,
   Turn,
   Verdict,
+  WebEventType,
 } from './types.ts'

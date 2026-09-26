@@ -13,6 +13,12 @@ const translate = (ndjson: string, end?: Parameters<CursorSdkStreamTranslator['e
 }
 
 const line = (value: unknown) => JSON.stringify(value)
+/** A multi-turn runner capture, split at each turn's `init` line. */
+const turns = (ndjson: string) =>
+  ndjson
+    .trim()
+    .split(/\n(?=\{"type":"init")/)
+    .map((t) => `${t}\n`)
 const event = (e: Record<string, unknown>) => line({ type: 'event', event: e })
 
 describe('stream translation', () => {
@@ -71,6 +77,80 @@ describe('stream translation', () => {
     const meta = finish.harnessMetadata?.cursorSdk as Record<string, unknown>
     assert.equal(meta.runId, 'run-5f8111fe-50fa-4dfa-a8b6-7ccc7772fd86')
     assert.deepEqual(meta.model, { id: 'composer-2.5', params: [{ id: 'fast', value: 'false' }] })
+  })
+
+  test('a real web turn on SDK 1.0.32: the agent searched and fetched, the stream has no tool call', () => {
+    // Captured live: the backend sent webSearchToolCall and webFetchToolCall, and the SDK
+    // dropped both, so there is nothing here to translate and nothing is invented.
+    const ndjson = fixture('web-1.0.32.ndjson')
+    assert.ok(!ndjson.includes('"tool_call"'))
+    const { parts } = translate(ndjson)
+    assert.equal(parts.filter((p) => p.type === 'tool-call').length, 0)
+    const text = parts
+      .filter((p) => p.type === 'text-delta')
+      .map((p) => p.delta)
+      .join('')
+    assert.match(text, /104\.238\.50\.245/, "the fetched page's content reached the reply")
+  })
+
+  test("the runner's recovered web calls: provider-executed builtins, with results", () => {
+    // Live, two turns: the runner read each turn's web calls from the stored conversation.
+    const [first = '', second = ''] = turns(fixture('web-recovered.ndjson'))
+    const { parts } = translate(first)
+    const calls = parts.filter((p) => p.type === 'tool-call')
+    assert.deepEqual(
+      calls.map((c) => [c.toolName, c.providerExecuted, c.dynamic ?? false]),
+      [
+        ['webFetch', true, false],
+        ['webSearch', true, false],
+      ],
+    )
+    const [fetch, search] = calls.map((c) => JSON.parse(c.input))
+    assert.equal(fetch.url, 'https://httpbin.org/ip')
+    assert.equal(search.query, 'IANA example domain RFC 2606', 'the common webSearch field')
+    const results = new Map(
+      parts.flatMap((p) => (p.type === 'tool-result' ? [[p.toolCallId, p]] : [])),
+    )
+    const [fetchResult, searchResult] = calls.map(
+      (c) => results.get(c.toolCallId)?.result as Record<string, unknown>,
+    )
+    assert.match(String(fetchResult?.markdown), /104\.238\.50\.251/)
+    assert.equal((searchResult?.references as unknown[] | undefined)?.length, 2)
+    const finish = parts.at(-1)
+    assert.equal(
+      finish?.type === 'finish' && 'unreportedTools' in (finish.harnessMetadata?.cursorSdk ?? {}),
+      false,
+      'nothing unreported',
+    )
+
+    // The follow-up reports only its own fetch, not the first turn's again.
+    const next = translate(second).parts.filter((p) => p.type === 'tool-call')
+    assert.deepEqual(
+      next.map((c) => [c.toolName, JSON.parse(c.input).url]),
+      [['webFetch', 'https://httpbin.org/uuid']],
+    )
+  })
+
+  test('a turn whose web calls went unrecovered says so in its finish metadata', () => {
+    const unreported = (parts: HarnessV1StreamPart[]) => {
+      const finish = parts.at(-1)
+      return finish?.type === 'finish'
+        ? (finish.harnessMetadata?.cursorSdk as { unreportedTools?: string[] })?.unreportedTools
+        : undefined
+    }
+    const lost = translate(
+      [
+        line({ type: 'init', agentId: 'agent-1' }),
+        line({ type: 'unreported', tools: ['webSearch', 'webFetch'], message: 'store locked' }),
+        line({ type: 'result', status: 'finished', result: 'done' }),
+      ].join('\n'),
+    )
+    assert.deepEqual(unreported(lost.parts), ['webSearch', 'webFetch'])
+    // A turn that ended before its result never got to recover them.
+    const died = translate(line({ type: 'init', agentId: 'agent-1' }), { exitCode: 1 })
+    assert.deepEqual(unreported(died.parts), ['webSearch', 'webFetch'])
+    const failed = translate(line({ type: 'error', message: 'boom' }))
+    assert.deepEqual(unreported(failed.parts), ['webSearch', 'webFetch'])
   })
 
   test('a resumed turn keeps the agent id and reports its own usage', () => {

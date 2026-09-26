@@ -14,8 +14,10 @@ import {
   projectToolCall,
   projectToolResult,
   resolveCursorSdkCredentials,
+  storedWebCalls,
   VERSION,
 } from '../src/index.ts'
+import { fixture } from './support.ts'
 
 describe('auth', () => {
   test("'auto' uses only CURSOR_API_KEY from the host", () => {
@@ -83,6 +85,35 @@ describe('bootstrap', () => {
     assert.match(CURSOR_SDK_RUNNER, /useHttp1ForAgent: true/)
     assert.match(CURSOR_SDK_RUNNER, /process\.stdout\.write = process\.stderr\.write/)
     assert.match(CURSOR_SDK_RUNNER, /new JsonlLocalAgentStore\(turn\.storeDir\)/)
+  })
+
+  test('the runner recovers web calls from the stored conversation, which it can parse', () => {
+    assert.match(
+      CURSOR_SDK_RUNNER,
+      /Agent\.messages\.list\(agent\.agentId, \{ cwd: turn\.cwd, store \}\)/,
+    )
+    assert.match(CURSOR_SDK_RUNNER, /recovered: 'Agent\.messages\.list'/)
+    assert.match(CURSOR_SDK_RUNNER, /const storedWebCalls = function storedWebCalls\(/)
+    assert.doesNotThrow(
+      () => new Function(`return async () => {${CURSOR_SDK_RUNNER.replace(/^import .*$/gm, '')}}`),
+    )
+  })
+
+  test('storedWebCalls: a live stored conversation (as JSON) has the fetch and the search', () => {
+    const messages = JSON.parse(fixture('stored-messages.json'))
+    const calls = storedWebCalls(messages)
+    assert.deepEqual(
+      calls.map((c) => [c.name, c.call.args?.url ?? c.call.args?.searchTerm]),
+      [
+        ['webFetch', 'https://httpbin.org/ip'],
+        ['webSearch', 'RFC 2606'],
+      ],
+    )
+    for (const c of calls) {
+      assert.match(c.id, /^tool_/)
+      assert.ok(Number(c.at.completedAtMs) > Number(c.at.startedAtMs), 'the backend times it')
+      assert.ok(c.call.result?.success, 'with its result')
+    }
   })
 })
 
