@@ -86,13 +86,14 @@ Rules go to `CLAUDE.md` in the workspace. Skills go to `~/.claude/skills` by def
 | A non-Docker sandbox | `The Claude Code harness needs the Docker sandbox` |
 | The CLI doesn't start | `Claude Code harness failed to start: …` |
 
-A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails:
+A turn that the API rejects (no credit, for example) ends with `status: 'error'`, and the eval's next check fails. The turn line, the failure and `summary.md` show the API's message, without `-v`:
 
 ```text
-[creates#1 claude-code] ✗ evals/hello.es.ts › greet module › creates a tested greet module  3s
-[creates#1 claude-code]  +0:00 sandbox ready 2s
-[creates#1 claude-code]  +0:01 turn 1 error 1s · 0 tool calls, 0 file edits
-[creates#1 claude-code]  Error: expected file greet.js to exist
+[creates#1 claude-code]  +0:01 turn 1 error: Credit balance is too low to access the Anthropic API 1s · 0 tool calls, 0 file edits
+…
+ ✗ evals/hello.es.ts › greet module › creates a tested greet module
+   Error: expected file greet.js to exist
+   turn 1 error: Credit balance is too low to access the Anthropic API
 ```
 
 ## Related

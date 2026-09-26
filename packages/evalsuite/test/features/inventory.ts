@@ -604,7 +604,10 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: '`fakeHarness({ script })` and `layout`',
     fixtures: ['secrets/checks-hidden-from-agent', 'harness/cursor-rules'],
-    tests: [harness('a fake agent with a layout is placed exactly like that agent')],
+    tests: [
+      harness('a fake agent with a layout is placed exactly like that agent'),
+      engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
+    ],
   },
   {
     id: 'harness.transcripts',
@@ -803,6 +806,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/ui.test.ts › grouped: start lines stream',
       'evalsuite/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
       engine('agent mode prints failures only'),
+      engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
     ],
   },
   {

@@ -28,6 +28,9 @@ export function resultFor(entry: EvalEntry, attempt: AttemptRecord, results: Eva
     outcome: attempt.outcome === 'skipped' ? ('pass' as const) : attempt.outcome,
     errorKind,
     judgements: attempt.judgements.map((j) => ({ ...j })),
+    turnErrors: attempt.turns.flatMap((t, i) =>
+      t.error ? [`turn ${i + 1} error: ${t.error}`] : [],
+    ),
     recordPath: '',
   }
   if (found) return { ...found, meta: found.meta ? { ...found.meta, errorKind } : meta }

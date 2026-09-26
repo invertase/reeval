@@ -425,7 +425,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="durationMs" type="number"></Property>
 
-<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]}>">
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null}>">
   `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
 </Property>
 

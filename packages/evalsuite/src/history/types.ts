@@ -129,6 +129,8 @@ export type AttemptRecord = {
     model: string | null
     /** Event types the harness can't report; see `Turn.unreported`. */
     unreported: WebEventType[]
+    /** The turn's first error, such as a provider's billing or auth error, cut at 1 KB; else null. */
+    error: string | null
   }>
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null

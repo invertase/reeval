@@ -199,12 +199,14 @@ export type FakeHarnessDescriptor = {
  * the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp`
  * (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
  * would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`.
+ * `error` ends the turn there with status `error` and that message, as a provider error would.
  */
 export type FakeScriptStep =
   | { exec: string }
   | { write: Record<string, string> }
   | { reply: string }
   | { mcp: string }
+  | { error: string }
 /**
  * Cursor's agent through the Cursor TypeScript SDK's local runtime
  * (`@evalsuite/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.
@@ -854,6 +856,8 @@ export type EvalMeta = {
   outcome: EvalRecord['outcome']
   errorKind: ErrorKind | null
   judgements: Array<Pick<Verdict, 'verdict' | 'score' | 'threshold'> & { question: string }>
+  /** Each turn that ended in an error, as `turn 2 error: <message>`, so a failure shows why. */
+  turnErrors?: string[]
 }
 
 export type RunContext = {
