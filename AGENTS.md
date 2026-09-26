@@ -1013,6 +1013,9 @@ duration, drift), a run's eval tree with per-cell pass rates, roles and lift, on
 compare of two runs, and each attempt's transcript, diff, checks, judge input and state. It
 listens on `127.0.0.1:4984` (or the next free port) and prints a URL with a session token; new
 runs appear as they're recorded, and unrecorded runs from `.es/runs/` are labelled scratch.
+A run's `drift` badge compares each cell with the last run that had it (its fingerprint, image,
+agent CLI and environment), so a filtered run over fewer cells, and the full run after it, aren't
+drift. `es history`'s `¦` mark works the same way.
 
 `es studio build --out site` writes the same thing as a static folder (hash routing, relative
 paths) for GitHub Pages, Netlify, Cloudflare Pages or any static host. It includes transcripts

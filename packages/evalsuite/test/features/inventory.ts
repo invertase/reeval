@@ -622,6 +622,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/studio.test.ts › writes a static site',
       'evalsuite/test/studio.test.ts › a run whose only failures are ungated is passed',
       'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
+      studio('runs list: a run over a subset of cells is no drift, before or after it'),
     ],
   },
   {

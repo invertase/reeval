@@ -7,7 +7,13 @@ import type {
   RunRecord,
 } from '../history/types.ts'
 import type { Outcome, TranscriptEvent, TurnStatus } from '../types.ts'
-import { type CompareStatus, compare, type StackChange, stackChanges } from './compare.ts'
+import {
+  type CompareStatus,
+  cellsChanged,
+  compare,
+  type StackChange,
+  stackChanges,
+} from './compare.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 
 // ── Index ────────────────────────────────────────────────────────────────────────────────────
@@ -140,31 +146,41 @@ export type RunRow = {
   passed: number
   /** Attempts that reached a verdict or errored; skips excluded. */
   total: number
-  /** Stack changes against the previous complete run. */
+  /** Stack changes in the cells it shares with earlier runs, and in the judge since the previous complete run. */
   drift: StackChange[]
-  /** Evals whose fingerprint changed since the last run that had them. */
+  /** Evals with a cell whose fingerprint changed since the last run that had that cell. */
   changedEvals: number
 }
 
-/** Newest first. Drift is measured against the next older complete run. */
+/**
+ * Newest first. Drift is measured per cell, against the last run that had it: a run over fewer
+ * cells (a filtered run) is no drift, and neither is the full run after it. The judge's settings
+ * compare with the next older complete run.
+ */
 export function runRows(entries: HistoryEntry[]): RunRow[] {
   const oldest = [...entries].sort((a, b) => (a.runId < b.runId ? -1 : 1))
   const seen = new Map<string, string>()
+  const lastCells = new Map<string, Map<string, HistoryCell>>()
   let previous: HistoryEntry | null = null
   const rows: RunRow[] = []
   for (const entry of oldest) {
     const { pass, fail, infraError } = entry.summary
+    const base = previous && {
+      stack: previous.stack,
+      evals: [...lastCells].map(([id, cells]) => ({ id, cells: [...cells.values()] })),
+    }
     let changedEvals = 0
     for (const e of entry.evals) {
-      const fp = seen.get(e.id)
-      if (fp !== undefined && fp !== e.fingerprint) changedEvals++
-      seen.set(e.id, e.fingerprint)
+      if (cellsChanged(seen, e.id, e.cells)) changedEvals++
+      const cells = lastCells.get(e.id) ?? new Map<string, HistoryCell>()
+      for (const c of e.cells) cells.set(c.key, c)
+      lastCells.set(e.id, cells)
     }
     rows.push({
       entry,
       passed: pass,
       total: pass + fail + infraError,
-      drift: previous ? stackChanges(previous, entry) : [],
+      drift: base ? stackChanges(base, entry) : [],
       changedEvals,
     })
     if (entry.status === 'complete') previous = entry

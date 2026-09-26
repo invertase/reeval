@@ -103,7 +103,7 @@
 | `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 3 | — | — | — | — |
 | `es compare --fail-on-regression` **(gap)** | — | — | — | — | — |
 | `es query` | ✓ 1 | — | — | — | — |
-| `es studio` and `es studio build` | ✓ 4 | — | — | — | — |
+| `es studio` and `es studio build` | ✓ 5 | — | — | — | — |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.es/debug`, in `es studio` only | ✓ 4 | — | — | — | — |
 
 ## CLI and runner
