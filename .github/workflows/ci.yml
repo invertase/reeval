@@ -69,10 +69,12 @@ jobs:
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
-            test/!(features|docker|studio|pack).test.ts
+            test/!(features|docker|docker-antigravity|studio|pack).test.ts
       # Its real-container tests skip here: there's no sandbox image. The docker job runs them.
       - name: sandbox-docker (without containers)
         run: pnpm --filter @evalsuite/sandbox-docker test
+      - name: harness-antigravity
+        run: pnpm --filter @evalsuite/harness-antigravity test
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: unit }
