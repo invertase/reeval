@@ -51,9 +51,11 @@ export function resolveRun(entries: HistoryEntry[], ref = 'latest'): HistoryEntr
 }
 
 /**
- * The run to compare `head` against: a complete, earlier run on the nearest first-parent
- * ancestor of head's commit (`ancestry[0]` is head's own commit), newest first; otherwise the
- * previous complete run by time. Ancestry beats wall-clock time, which can be skewed.
+ * The run to compare `head` against: a complete, earlier run on the first commit of `ancestry` that
+ * has one, newest run first; otherwise the previous complete run by time. `ancestry` is `git
+ * rev-list <head's commit>`: head's own commit first, then every ancestor through all parents
+ * (merged branches too, not only first parents), newest commit first. Ancestry beats wall-clock
+ * time, which can be skewed.
  */
 export function pickBaseline(
   entries: HistoryEntry[],
@@ -235,6 +237,26 @@ export function formatCompare(
       ),
     ]),
   ].join('\n')
+}
+
+/** `es compare` when head has no earlier recorded run: every eval is new. */
+export function formatNoBaseline(head: HistoryEntry, rows: CompareRow[], md: boolean): string {
+  const failing = rows.filter((r) => r.head === 'fail').length
+  const note = `No earlier recorded run to compare ${head.runId} with: every eval is new${failing ? `, and ${failing} fail${failing === 1 ? 's' : ''}` : ''}.`
+  const mark = (o: Outcome | null) => (o ? OUTCOME_MARK[o] : '·')
+  if (md) {
+    return [
+      `### ES: ${head.runId}`,
+      '',
+      note,
+      '',
+      '| Eval | Head |',
+      '|---|---|',
+      ...rows.map((r) => `| ${r.id.replace(/\|/g, '\\|')} | ${mark(r.head)} |`),
+      '',
+    ].join('\n')
+  }
+  return [note, '', ...rows.map((r) => `  ${mark(r.head)}  new  ${r.id}`)].join('\n')
 }
 
 const liftShort = (l: NonNullable<HistoryCell['lift']> | undefined) =>

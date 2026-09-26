@@ -691,7 +691,9 @@ export const inventory: InventoryFeature[] = [
     id: 'compare.fail-on-regression',
     area: 'Records and studio',
     name: '`es compare --fail-on-regression`',
-    gap: 'No test passes the flag.',
+    tests: [
+      'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a regression and on a failing new eval',
+    ],
   },
   {
     id: 'query',
@@ -739,6 +741,7 @@ export const inventory: InventoryFeature[] = [
       analysis('the digest is facts with ids, evidence by rule'),
       analysis('claims with invented citations or quotes are dropped'),
       analysis('verify commands must parse as ES commands'),
+      analysis('es run and es image build verify commands must select an eval of the run'),
       analysis('the spec and es --help name the same commands and flags'),
       analysis('without a language model or its key, it exits 2'),
     ],

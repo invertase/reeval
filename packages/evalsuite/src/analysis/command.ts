@@ -229,7 +229,13 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
       promptOf(digest),
       config.analysis.maxOutputTokens,
     )
-    const { body, validation } = validateAnalysis(answer.output, digest, tables)
+    const evals = headRun.record.evals.map((e) => ({
+      file: e.file,
+      name: [...e.group, e.name].join(' '),
+      tags: e.tags,
+      cells: e.cells.map((c) => c.key),
+    }))
+    const { body, validation } = validateAnalysis(answer.output, digest, tables, evals)
     const cites = [
       ...body.whatHappened,
       ...body.results,
