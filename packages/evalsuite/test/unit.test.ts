@@ -627,6 +627,12 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   )
   assert.equal(pinned.resolved.runs, 2, '--runs beats pins')
   assert.equal(pinned.resolved.compare?.variants.length, 1)
+  const overridden = cascade(base, [{ options: {}, where: 'e' }], 'e', { profile, runs: 3 })
+  assert.equal(overridden.resolved.runs, 3)
+  assert.ok(
+    !overridden.notes.some((n) => n.startsWith('runs ')),
+    `--runs replaces the profile's limit, so no runs note: ${overridden.notes.join('; ')}`,
+  )
   const skipped = cascade(
     base,
     [{ options: { harness: { kind: 'fake', id: 'c' } }, where: 'e' }],
@@ -634,6 +640,21 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     { profile },
   )
   assert.equal(skipped.skip, 'no harness left: profile pr allows a')
+})
+
+test('effort under 10s reads in tenths, so a ratio matches its times', async () => {
+  const { formatSeconds } = await import('../src/view/effort.ts')
+  assert.deepEqual([0, 40, 200, 400, 1500, 9949, 9950, 46_000, 90_000].map(formatSeconds), [
+    '0s',
+    '0s',
+    '0.2s',
+    '0.4s',
+    '1.5s',
+    '9.9s',
+    '10s',
+    '46s',
+    '1m 30s',
+  ])
 })
 
 test('layered environments and overrides', async () => {

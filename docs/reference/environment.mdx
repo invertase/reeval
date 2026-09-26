@@ -67,7 +67,7 @@ It returns a frozen `Environment` with `name`, `layers` and an `extend` method.
 </Property>
 
 <Property name="setup" type="Array<string | { run: string, timeout?: string | number, cwd?: string }>" optional>
-  Shell commands run in every attempt, in order, after files and rules and before the agent starts. They see the environment's secrets, including those sent only `to: 'checks'`. Each step's `timeout` defaults to `'5m'`; `cwd` is the directory it runs in. Output goes to the attempt's `setup.log`. A failing step is an infra error, not a failed eval.
+  Shell commands run in every attempt, in order, after files and rules and before the agent starts. They see the environment's secrets, including those sent only `to: 'checks'`. Each step's `timeout` defaults to `'5m'`; `cwd` is the directory it runs in, relative to the workspace or absolute. A step object takes only `run`, `timeout` and `cwd`. Output goes to the attempt's `setup.log`. A failing step is an infra error, not a failed eval.
 </Property>
 
 <Property name="skills" type="SkillSource[]" optional>
@@ -132,7 +132,7 @@ An environment has no image of its own. What's baked into the image belongs to t
 es: evals/e.es.ts: "image" isn't an environment field (defineEnvironment("e")). What's baked into the image is the sandbox's: docker({ install: … }). An environment only runs setup steps, in every attempt, with its secrets.
 ```
 
-`install`, `dockerfile` and `from` get the same message. Near misses get a hint: `steps`, `exec` and `run` point to `setup`; `vars` and `secrets` to `env`; `network` and `networkPolicy` to `egress`; `skill` to `skills`; `file` to `files`; `agents` to `rules`; `use` to `extend`.
+`install`, `dockerfile` and `from` get the same message, naming their own key; `image` set to a string, such as `'node:22'`, names `docker({ from: … })`. Near misses get a hint: `steps`, `exec` and `run` point to `setup`; `vars` and `secrets` to `env`; `network` and `networkPolicy` to `egress`; `skill` to `skills`; `file` to `files`; `agents` to `rules`; `use` to `extend`.
 
 ## Errors
 

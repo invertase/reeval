@@ -57,7 +57,11 @@ function splitArgs<F extends (...args: never[]) => unknown>(
   }
   if (typeof a === 'function') return [(b as EvalOptions | undefined) ?? {}, a]
   if (typeof b === 'function') return [(a as EvalOptions | undefined) ?? {}, b]
-  throw new TypeError(`${what}("${name}") needs a function`)
+  throw new UsageError(
+    what === 'group'
+      ? `group("${name}") has no function. Pass the group's body, e.g. group("${name}", () => { … }).`
+      : `${what}("${name}") has no function. Pass the eval's body, e.g. ${what}("${name}", async (t) => { … }).`,
+  )
 }
 
 type GroupFn = {

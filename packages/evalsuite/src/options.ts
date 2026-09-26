@@ -241,15 +241,20 @@ function applyHarness(
       `harness is an empty list in ${where}. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
     )
   }
+  checkHarnesses(list, where)
+  return list
+}
+
+/** Each harness is one, with a valid `maxConcurrent`. */
+export function checkHarnesses(list: unknown[], where: string): void {
   for (const item of list) {
     if (!isHarness(item)) {
       throw new UsageError(
         `harness in ${where} must be like ${HARNESS_EXAMPLE} (got ${describe(item)})`,
       )
     }
-    checkMaxConcurrent(item.maxConcurrent, `harness in ${where}`)
+    checkMaxConcurrent((item as HarnessDescriptor).maxConcurrent, `harness in ${where}`)
   }
-  return list
 }
 
 function checkUnique(list: HarnessDescriptor[], where: string) {
@@ -404,7 +409,13 @@ export function cascade(
   if (profile && limit) {
     const tag = `profile ${profile.name}`
     const pinned = (key: PinnableKey) => out.pin.includes(key)
-    if (limit.runs !== undefined && !pinned('runs') && out.runs > limit.runs) {
+    // --runs replaces the runs outright, so the profile's limit doesn't apply.
+    if (
+      limit.runs !== undefined &&
+      options.runs === undefined &&
+      !pinned('runs') &&
+      out.runs > limit.runs
+    ) {
       notes.push(`runs ${out.runs} → ${limit.runs} (${tag})`)
       out.runs = limit.runs
     }
@@ -563,7 +574,9 @@ const brokerHint = (s: UnbrokeredSecret) =>
     : `add the hosts it's sent to, e.g. secret.fromEnv('${s.from}', { hosts: ['api.example.com'] })`
 
 export const unbrokeredWarning = (s: UnbrokeredSecret) =>
-  `${s.label} is in the sandbox as its real value. To give the agent only a placeholder, ${brokerHint(s)}.`
+  s.checksOnly
+    ? `${s.label} reaches the checks (t.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, ${brokerHint(s)}.`
+    : `${s.label} is in the sandbox as its real value. To give the agent only a placeholder, ${brokerHint(s)}.`
 
 export const unbrokeredError = (s: UnbrokeredSecret, where: string) =>
   `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in es.config.ts. To broker it, ${brokerHint(s)}.`
