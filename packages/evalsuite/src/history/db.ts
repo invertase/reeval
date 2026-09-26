@@ -11,7 +11,7 @@ import { isRuntimeState } from '../attempt/context.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
-import { readRecord, recordNames, scratchDir } from './files.ts'
+import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
@@ -601,7 +601,8 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
       let record: RunRecord
       try {
         record = await readRecord(path)
-      } catch {
+      } catch (error) {
+        warnUnreadable(path, error)
         continue
       }
       if (had) removeRun(db, runId)

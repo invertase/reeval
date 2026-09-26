@@ -109,6 +109,31 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
+  test('a history file that is not a readable record is named on stderr, not silently skipped', async () => {
+    const p = await gitProject('record-unreadable', { 'evals/agent.es.ts': agent() })
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const [good] = recordedRuns(p.dir)
+    // What a merge that went wrong, or a copy cut short, leaves behind.
+    const conflicted = `${HISTORY}/20260101T000000Z_deadbee_someone_aaaa.json`
+    const truncated = `${HISTORY}/20260101T000001Z_deadbee_someone_bbbb.json`
+    await writeFile(join(p.dir, conflicted), '<<<<<<< HEAD\n{"kind":"es-run"}\n=======\n')
+    await writeFile(join(p.dir, truncated), '{"kind":"es-run","runId":"2026')
+    for (const args of [['history'], ['history', '--json'], ['query', 'lift', '--rebuild']]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 0, `${args.join(' ')}: ${r.stderr}`)
+      for (const file of [conflicted, truncated]) {
+        const warning = `warning: skipped ${file}: not a readable ES run record`
+        assert.equal(
+          r.stderr.split(warning).length - 1,
+          1,
+          `${args.join(' ')} names ${file} once:\n${r.stderr}`,
+        )
+      }
+      // The canary: the readable run is still there.
+      if (args[1] === '--json') assert.equal(JSON.parse(r.stdout).runs[0].runId, good)
+    }
+  })
+
   test('artifact levels, and config.record modes', async () => {
     const p = await gitProject(
       'record-levels',

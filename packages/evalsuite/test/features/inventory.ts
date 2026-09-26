@@ -796,6 +796,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
       'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
+      'evalsuite/test/history.test.ts › a history file that is not a readable record is named on stderr',
       docker('two runs with the same agent context are comparable'),
     ],
     real: ['e2e › a second identical run', 'e2e › es history and es show'],
