@@ -1,0 +1,126 @@
+---
+title: Gates and lift
+description: Which cells can fail a run, how a cell passes, and how sure a lift is.
+---
+
+A `compare` eval answers "does this environment help?". Two settings decide what fails the run, and lift, with its interval, says how big the difference is and whether the attempts can tell.
+
+```ts title="evals/skill.es.ts"
+group('house greeting', {
+  compare: { variants: [withHouseGreeting], minLift: 0 },
+  gate: { passRate: 0.8 },
+  runs: 5,
+}, () => {
+  evaluate('greets in the house style', async (t) => {
+    await t.send('Create greet.js exporting greet(name) in our house style.')
+    await expect(t.exec(greetAda)).toSucceed()
+  })
+})
+```
+
+Run under the fake agent, which writes the house greeting only when it has the skill:
+
+```text
+Summary
+ evals/skill.es.ts
+   house greeting
+     ✓ greets in the house style     5/10  100%  10 attempts
+         fake/-/fake                    control    0/5    0%   not gated
+         fake/with-house-greeting/fake  variant    5/5  100%   lift +100 pts (95% +39…+100, 5/5 vs 0/5) (minLift 0)   gate passRate 0.8
+```
+
+## Choose which cells gate
+
+`compare.gate` picks which cells can fail the run. The control usually runs without the thing you're testing, so it's expected to do worse.
+
+| `compare.gate` | Variant cells | Control cell |
+|---|---|---|
+| `'variants'` (default) | Gate | Report only: failures print `(not gated)` |
+| `'all'` | Gate | Gate |
+| `'none'` | Report only | Report only |
+
+A cell that doesn't gate has `gate: 'none'` in the plan and the record. Without `compare`, the one cell always gates.
+
+## Choose how a cell passes
+
+The `gate` option (on the config, a profile's `defaults`, a group or an eval) decides when a gating cell passes.
+
+| `gate` | A cell passes when |
+|---|---|
+| `'all'` (default) | Every attempt passes |
+| `{ passRate: 0.8 }` | At least 80% of its passes and fails are passes |
+
+Infra errors and skipped attempts don't count either way. `'all'` gets harder to meet as `runs` grows, even for an agent that's no worse, so the plan prints a hint when an eval runs more than once with it.
+
+## Lift and its interval
+
+Lift is the variant's pass rate minus the control's on the same harness, in points. ES stores it on the variant cell with a 95% interval on the difference, computed with Newcombe's method from each side's Wilson score interval.
+
+```mermaid
+flowchart LR
+  C["control: 0/5 → 0%"] --> L["lift = 100% − 0% = +100 pts"]
+  V["variant: 5/5 → 100%"] --> L
+  L --> I["95% interval +39…+100"]
+```
+
+When the interval spans 0, the summary adds `within noise`: at this many attempts, the variant and the control can't be told apart. The Wilson interval stays sensible at 0/n and n/n, which is where small evals usually land.
+
+## Why two runs is usually noise
+
+The interval is wide when attempts are few. These are ES's own intervals for common results:
+
+| Variant | Control | Lift | 95% interval | Within noise |
+|---|---|---|---|---|
+| 1/1 | 0/1 | +100 | −12…+100 | yes |
+| 2/2 | 2/2 | +0 | −66…+66 | yes |
+| 2/2 | 1/2 | +50 | −27…+91 | yes |
+| 2/2 | 0/2 | +100 | +7…+100 | no |
+| 5/5 | 3/5 | +40 | −12…+77 | yes |
+| 5/5 | 0/5 | +100 | +39…+100 | no |
+| 10/10 | 5/10 | +50 | +12…+76 | no |
+| 20/20 | 10/20 | +50 | +24…+70 | no |
+
+At two runs per cell only an all-or-nothing difference clears noise. ES's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
+
+```text
+     ✓ fixes a broken config and explains it      5/6  100%  6 attempts
+         cursor:composer-2.5/broken-project/es-tarball  control    1/2   50%   not gated
+         cursor:composer-2.5/es-weak/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/es-good/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+```
+
+One control attempt failed, so both skills show +50 pts, and neither is distinguishable from +0. The good skill's real effect showed up elsewhere: a median of 10 tool calls against the control's 40. Pass-rate lift only measures pass rate.
+
+<Info>
+  Use `es query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
+</Info>
+
+## Gate on the lower bound with minLift
+
+`minLift` (points from -1 to 1) fails a variant cell whose interval's **lower bound** is below it, so it asks for confidence, not a lucky point estimate. `minLift: 0` means "confidently no worse than the control". With `minLift: 0.5` at `runs: 2`, a perfect +100 still fails:
+
+```text
+         fake/with-house-greeting/fake  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2) (minLift 50) ✗   gate passRate 0.8
+…
+Lift below minLift (1)
+ ✗ evals/skill.es.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50
+```
+
+A variant below its `minLift` fails the run with exit 1. To pass it, add runs until the interval narrows, not until the point estimate looks good.
+
+## See it in the studio
+
+The run page shows each cell's role, pass rate and lift with its interval.
+
+<Image src="/assets/studio/run-cells-lift.png" alt="ES studio run page with a cells table: the control at 0%, the variant at 100% and its lift" width={800} />
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Judges" icon="flask" href="/concepts/judges">
+    How a judge verdict becomes a pass or a fail.
+  </Card>
+  <Card title="Prove a skill helps" icon="chart-line" href="/recipes/skill-lift">
+    A complete compare eval with a pass-rate gate and `minLift`.
+  </Card>
+</CardGroup>
