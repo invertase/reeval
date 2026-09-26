@@ -10,6 +10,6 @@ evals/cascade.es.ts › a variant runs under its own policy                 fake
 evals/cascade.es.ts › a fake agent with a layout gets that agent's hosts  fake/closed/docker    control         gated    ×1  egress "deny-all" + api.anthropic.com, *.anthropic.com
 excluded: —
 image docker · 7 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 image docker · claude-code · 1 evals
   base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)

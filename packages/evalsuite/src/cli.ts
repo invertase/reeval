@@ -217,9 +217,10 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
   const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
   const { docker } = await import('./sandbox.ts')
   let root = process.cwd()
-  const { cursor } = await import('./harness.ts')
+  const { fakeHarness } = await import('./harness.ts')
+  // The fake harness runs in Cursor's image, so without a config this builds ES's default image.
   let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
-    { id: '', harness: cursor(), sandbox: docker() },
+    { id: '', harness: fakeHarness(), sandbox: docker() },
   ]
   if (existsSync(resolve(flags.config))) {
     const setup = await prepareRun({ ...flags, 'dry-run': true })

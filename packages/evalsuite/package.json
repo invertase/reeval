@@ -59,7 +59,6 @@
     "@ai-sdk/google": "4.0.79",
     "@ai-sdk/harness": "1.0.124",
     "@ai-sdk/harness-claude-code": "1.0.128",
-    "@ai-sdk/harness-cursor": "1.0.37",
     "@ai-sdk/provider-utils": "5.0.47",
     "@ai-sdk/typesafe-ai": "3.0.6",
     "@hono/node-server": "2.1.1",
@@ -74,6 +73,7 @@
   },
   "devDependencies": {
     "@evalsuite/harness-antigravity": "workspace:0.1.0",
+    "@evalsuite/harness-cursor-sdk": "workspace:0.1.0",
     "@evalsuite/sandbox-docker": "workspace:*",
     "studio-web": "workspace:*"
   }

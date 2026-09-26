@@ -22,7 +22,9 @@ export const DOCKER_EGRESS: EgressCapabilities = { enforce: 'allowlist', record:
 
 /** The hosts each harness's CLI talks to at runtime. */
 export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
-  cursor: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
+  // The agent backend only: the adapter fetches the model catalog on the host, so the sandbox
+  // never needs api.cursor.com.
+  cursor: ['api2.cursor.sh', '*.cursor.sh'],
   'claude-code': ['api.anthropic.com', '*.anthropic.com'],
   // The Gemini API only: with a Gemini API key the CLI needs no Google sign-in hosts, and its
   // auto-updater is off.

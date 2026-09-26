@@ -7,13 +7,27 @@ import type {
   FakeHarnessDescriptor,
 } from './types.ts'
 
-/** The Cursor agent CLI. `id` names the cell; it defaults to `cursor:<model>`. */
-export const cursor = (
-  options: Omit<CursorHarnessDescriptor, 'kind'> = {},
-): CursorHarnessDescriptor => ({
-  kind: 'cursor',
-  ...options,
-})
+/**
+ * Cursor's agent through the Cursor TypeScript SDK, in the sandbox. `model` is required (the SDK
+ * has no default for local agents); `params` sets model parameters such as `{ fast: 'false' }`.
+ * `id` names the cell; it defaults to `cursor:<model>`.
+ */
+export const cursor = (options: Omit<CursorHarnessDescriptor, 'kind'>): CursorHarnessDescriptor => {
+  if (typeof options?.model !== 'string' || !options.model) {
+    throw new UsageError("cursor() needs a model, e.g. cursor({ model: 'composer-2.5' })")
+  }
+  if (
+    options.params !== undefined &&
+    (typeof options.params !== 'object' ||
+      options.params === null ||
+      !Object.values(options.params).every((v) => typeof v === 'string'))
+  ) {
+    throw new UsageError(
+      `cursor({ params }) maps parameter ids to string values, e.g. { fast: 'false' } (got ${JSON.stringify(options.params)})`,
+    )
+  }
+  return { kind: 'cursor', ...options }
+}
 
 /**
  * The Claude Code CLI. `model` is required, since the CLI's default changes under you. `id`

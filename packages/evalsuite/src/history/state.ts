@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { VERSION as ANTIGRAVITY_VERSION } from '@evalsuite/harness-antigravity'
+import { VERSION as CURSOR_SDK_VERSION } from '@evalsuite/harness-cursor-sdk'
 import { git } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
@@ -80,7 +81,6 @@ const require = createRequire(import.meta.url)
 const PACKAGES = [
   'ai',
   '@ai-sdk/harness',
-  '@ai-sdk/harness-cursor',
   '@ai-sdk/harness-claude-code',
   '@ai-sdk/google',
   '@ai-sdk/typesafe-ai',
@@ -91,6 +91,7 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
   const out: Record<string, string> = {
     ...engine,
     '@evalsuite/harness-antigravity': ANTIGRAVITY_VERSION,
+    '@evalsuite/harness-cursor-sdk': CURSOR_SDK_VERSION,
   }
   for (const name of PACKAGES) {
     try {

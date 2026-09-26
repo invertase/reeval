@@ -27,8 +27,8 @@
   "dependencies": {
     "@ai-sdk/harness": "1.0.124",
     "@ai-sdk/harness-claude-code": "1.0.128",
-    "@ai-sdk/harness-cursor": "1.0.37",
     "@evalsuite/harness-antigravity": "workspace:0.1.0",
+    "@evalsuite/harness-cursor-sdk": "workspace:0.1.0",
     "ws": "8.21.0",
     "zod": "4.6.5"
   }

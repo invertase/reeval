@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fingerprintedContext } from '../attempt/context.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
@@ -22,6 +21,7 @@ import type {
   Outcome,
   RunContext,
 } from '../types.ts'
+import { promptTokens, sumUsage } from '../usage.ts'
 import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
@@ -29,6 +29,7 @@ import {
   type AttemptRecord,
   type CellRecord,
   type ContextFile,
+  type Cost,
   type EvalEntry,
   type FileRef,
   type FingerprintParts,
@@ -43,6 +44,22 @@ import {
 
 /** Final messages are cut at this size in the record; `transcript.jsonl` keeps them whole. */
 const TURN_TEXT_LIMIT = 8 * 1024
+
+/** Tokens across every turn that reported them; USD stays null, since ES prices no models. */
+function costOf(attempts: AttemptRecord[]): Cost {
+  const usage = sumUsage(attempts.map((a) => a.usage))
+  if (!usage) {
+    return { usd: null, inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
+  }
+  return {
+    usd: null,
+    inputTokens: promptTokens(usage),
+    outputTokens: usage.output,
+    usage,
+    source: 'reported',
+  }
+}
+
 /** A single tool output, check stream or file diff bigger than this keeps its head and tail. */
 export const OUTPUT_CAP = 128 * 1024
 const HEAD = 96 * 1024
@@ -392,7 +409,7 @@ async function addAttempt(
       image: record?.image?.id ?? null,
       agentCli: record?.image?.agentCli ?? null,
       judge,
-      context: sha256(JSON.stringify(fingerprintedContext(context, e.attempt?.harness))),
+      context: sha256(JSON.stringify(context)),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)
@@ -422,7 +439,7 @@ function attemptEvidence(
   out: Artifacts,
 ): Pick<
   AttemptRecord,
-  'turns' | 'timings' | 'activity' | 'judgements' | 'checks' | 'changedFiles' | 'files'
+  'turns' | 'usage' | 'timings' | 'activity' | 'judgements' | 'checks' | 'changedFiles' | 'files'
 > {
   const files: AttemptFiles = {}
   if (record?.setup?.length) {
@@ -454,11 +471,14 @@ function attemptEvidence(
       status: t.status,
       startedAt: t.startedAt,
       durationMs: t.durationMs,
+      usage: t.usage ?? null,
+      model: t.model ?? null,
       text:
         t.text.length > TURN_TEXT_LIMIT
           ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
           : t.text,
     })),
+    usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
     timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     activity: record
       ? activity(record)
@@ -696,7 +716,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       concurrency: input.ctx.concurrency,
       configHash,
     },
-    cost: { usd: null, inputTokens: null, outputTokens: null, source: 'unreported' },
+    cost: costOf(attempts),
     artifacts: 'all',
     redaction: { version: 1 },
     summary: {

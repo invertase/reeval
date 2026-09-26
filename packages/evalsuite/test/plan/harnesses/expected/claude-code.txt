@@ -7,12 +7,12 @@ evals/h.es.ts › both harnesses on a dockerfile  cursor:composer-2.5/-/docker:t
 evals/h.es.ts › claude on a toolchain base      claude-code:claude-sonnet-5/-/docker:python:3.12-slim  control  gated  ×1
 excluded: —
 image docker · 1 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 image docker · claude-code · 2 evals
   base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)
 image docker:tools · 1 evals
-  dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-71ba9e6ae13c1028  (docker build (layer cache), tagged by content hash)
-  harness                             evalsuite-dockerfile:tools-71ba9e6ae13c1028  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)
+  dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-ae1c85729bb2fe02  (docker build (layer cache), tagged by content hash)
+  harness                             evalsuite-dockerfile:tools-ae1c85729bb2fe02  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
 image docker:tools · claude-code · 1 evals
   dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-bd46c5b8f1891f13  (docker build (layer cache), tagged by content hash)
   harness                             evalsuite-dockerfile:tools-bd46c5b8f1891f13  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:claude-code-1.0.128)

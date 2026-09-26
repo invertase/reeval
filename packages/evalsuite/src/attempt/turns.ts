@@ -29,6 +29,8 @@ export function turnSender(
       text: '',
       status: 'error' as const,
       transcript: [],
+      usage: null,
+      model: null,
       startedAt: new Date().toISOString(),
       durationMs: 0,
     }

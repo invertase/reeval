@@ -117,7 +117,9 @@ container, setup, brokering, each tool call, checks, judge calls, every gateway 
 kept locally in `.es/debug`, never in the committed history. Commit runs into `evals/.history/` with `es record`, then track them with `es history`
 and `es compare`, or ask across runs with SQL: `es query lift`, `es query effort` (tool calls and
 agent time, variant against control), `es query factor_effects`, or
-`es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`.
+`es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`. Where the harness
+reports them (Cursor and Antigravity do), the record keeps each turn's tokens and the model that
+served it, and totals them per attempt and per run.
 
 `es analyze` explains a run: one LLM call over a digest of those facts, with every claim's
 citations and every suggested command checked against ES's own CLI. It's cached in `.es/`;

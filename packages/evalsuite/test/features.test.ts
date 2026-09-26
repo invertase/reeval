@@ -394,12 +394,7 @@ export const features: Feature[] = [
     record: ({ run, tier }) => {
       const egress = landed(run)?.egress
       assert.equal(egress?.policy, 'deny-all')
-      assert.deepEqual(egress?.allowed, [
-        'api2.cursor.sh',
-        '*.cursor.sh',
-        'cursor.com',
-        '*.cursor.com',
-      ])
+      assert.deepEqual(egress?.allowed, ['api2.cursor.sh', '*.cursor.sh'])
       assert.ok(
         egress?.contacted.some((h) => h.host === 'api2.cursor.sh'),
         JSON.stringify(egress),
@@ -479,6 +474,30 @@ export const features: Feature[] = [
     canary: /to contain 'MARMALADE'/,
   },
   {
+    dir: 'harness/cursor-reports-usage',
+    tiers: ['real'],
+    env: 'plain',
+    canary: /expected \{ input: \d+.* to be null/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      const turns = attempt?.turns ?? []
+      assert.equal(turns.length, 2)
+      for (const t of turns) {
+        assert.ok(t.usage && t.usage.input + t.usage.cacheRead > 1000, 'the system prompt counts')
+        // The model the SDK resolved, with the parameters it filled in.
+        assert.match(t.model ?? '', new RegExp(`^${realModel.replace(/\./g, '\\.')}\\[.*=`))
+      }
+      assert.equal(
+        attempt?.usage?.output,
+        turns.reduce((n, t) => n + (t.usage?.output ?? 0), 0),
+        "the attempt's total is its turns'",
+      )
+      assert.equal(run.cost.source, 'reported')
+      assert.ok((run.cost.inputTokens ?? 0) > 0 && (run.cost.outputTokens ?? 0) > 0)
+      assert.equal(run.cost.usd, null, 'ES prices no models')
+    },
+  },
+  {
     dir: 'harness/claude-code-harness-skills',
     tiers: ['fake', 'docker'],
     image: 'claude-code',
@@ -531,7 +550,7 @@ export const features: Feature[] = [
     tiers: ['docker'],
     image: 'claude-code',
     env: 'plain',
-    canary: /expected '' to match \/\\\/agent\$\//,
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
       assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
@@ -543,7 +562,7 @@ export const features: Feature[] = [
     tiers: ['docker'],
     image: 'antigravity',
     env: 'plain',
-    canary: /expected '' to match \/\\\/agent\$\//,
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
       // Not baked again: the Dockerfile's base carries Antigravity's harness label.

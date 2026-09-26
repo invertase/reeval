@@ -14,7 +14,7 @@ import {
   unbrokeredSecrets,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { isAgentKind } from './harness/agents.ts'
+import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import type {
   Cell,
   CellGate,
@@ -238,12 +238,14 @@ function applyHarness(
   const list = Array.isArray(next) ? next : [next]
   if (list.length === 0) {
     throw new UsageError(
-      `harness is an empty list in ${where}. Give at least one, e.g. harness: cursor()`,
+      `harness is an empty list in ${where}. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
     )
   }
   for (const item of list) {
     if (!isHarness(item)) {
-      throw new UsageError(`harness in ${where} must be like cursor() (got ${describe(item)})`)
+      throw new UsageError(
+        `harness in ${where} must be like ${HARNESS_EXAMPLE} (got ${describe(item)})`,
+      )
     }
     checkMaxConcurrent(item.maxConcurrent, `harness in ${where}`)
   }
