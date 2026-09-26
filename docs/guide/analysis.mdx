@@ -1,111 +1,136 @@
 ---
 title: Analysis
-description: Ask your eval history questions in SQL with es query, from lift over time to where the agent spends its turns.
+description: Ask your eval history questions in SQL with es query, and get a checked, plain-words reading of a run with es analyze.
 ---
 
-`es history` and `es compare` answer the usual questions. For anything else, `es query` runs read-only SQL over every recorded and scratch run.
+ES gives you two ways to dig into results. `es query` runs read-only SQL over every recorded and scratch run, and its answers are computed by fixed rules. `es analyze` makes one LLM call over those same facts and explains the run in plain words, with every claim checked.
 
 ```bash
 npx es query
 ```
 
 ```text
-history.db: 5 runs, rebuilt, 5 read
+history.db: 9 runs
 Views (the common questions; filter them with SQL):
-  drift(run_id, prev_run_id, eval_key, cell_key, changed)
+  drift(run_id, prev_run_id, eval_key, cell_key, changed, changed_paths, noise, real_changed)
+  effort(run_id, eval_key, cell_key, role, variant, harness, environment, n, tools_median, …)
   eval_trend(eval_key, run_id, started_at, branch, pr_number, recorded, outcome, pass_rate, fingerprint)
-  failing_attempts(run_id, started_at, eval_key, attempt_key, cell_key, harness, model, environment, skill, error_kind, error_message, duration_ms)
-  flaky_cells(eval_key, cell_key, fingerprint, flaky_runs, first_seen, last_seen, pass, counted)
-  lift(run_id, started_at, branch, eval_key, harness, model, variant, control, variant_pass, variant_counted, control_pass, control_counted, points, lo, hi, within_noise, min_lift, outcome, fingerprint)
+  factor_effects(factor, level, baseline, context, tier, run_id, eval_key, strata, runs, …)
+  failing_attempts(run_id, started_at, eval_key, attempt_key, cell_key, harness, model, …)
+  flaky_cells(eval_key, cell_key, fingerprint, runs, flaky_runs, first_seen, last_seen, …)
+  lift(run_id, started_at, branch, eval_key, harness, model, variant, control, …)
+  skill_reads(run_id, eval_key, cell_key, attempt_key, attempt_id, variant, skill, placement, read_line, reads)
   verdict_flips(run_id, prev_run_id, eval_key, cell_key, judgement_key, question, prev_pass_rate, pass_rate, n)
 …
 ```
 
-With no argument it lists the views, the tables and a few examples. A view is a common question with the joins done for you. Filter it with SQL like any table.
+With no argument, `es query` lists the views, the tables and a few examples. A view is a common question with the joins done for you. Filter it with SQL like any table. The history here is the runs from the earlier pages, including the two house-greeting compares.
 
 ## Track lift over time
 
 ```bash
-npx es query lift
+npx es query "SELECT eval_key, harness, variant, variant_pass,
+  variant_counted, control_pass, control_counted, points, lo, hi,
+  within_noise FROM lift"
 ```
+
+```text
+history.db: 9 runs
+eval_key                                                   harness                              variant              variant_pass  variant_counted  control_pass  control_counted  points  lo    hi  within_noise
+evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
+evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
+evals/skill.es.ts › house greeting › greets in the house…  antigravity:gemini-3.8-flash-medium  with-house-greeting  2             2                0             2                1       0.07  1   0
+```
+
+Each row is one variant against its control in one run. `points`, `lo` and `hi` are fractions, so `1` is +100 points and `0.07` is +7. `es query lift` prints the whole view:
 
 <Image src="/assets/cli/query-lift.png" alt="es query lift in a terminal, one row per run of the house-greeting compare with its lift and interval" width={800} />
 
-Each row is one variant against its control in one run. That's the house-greeting compare every time you ran it. The full view is wide, so name the columns you want:
+## Measure effort
 
 ```bash
-npx es query "SELECT harness, variant, points, lo, hi, within_noise
-  FROM lift WHERE harness != 'fake'"
+npx es query "SELECT eval_key, cell_key, n, tools_median,
+  control_tools_median, tools_ratio, tools_p, verdict
+  FROM effort WHERE role = 'variant'"
 ```
 
 ```text
-history.db: 17 runs
-harness                              variant              points  lo    hi  within_noise
-cursor:composer-2.5                  with-house-greeting  1       0.07  1   0
-cursor:composer-2.5                  with-house-greeting  1       0.07  1   0
-antigravity:gemini-3.8-flash-medium  with-house-greeting  1       0.07  1   0
-cursor:composer-2.5                  with-house-greeting  1       0.07  1   0
+history.db: 9 runs
+eval_key                                                   cell_key                                                      n  tools_median  control_tools_median  tools_ratio  tools_p  verdict
+evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5/with-house-greeting/docker                2  3             8                     0.375        0.3333   insufficient
+evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5/with-house-greeting/docker                2  3             11.5                  0.2609       0.3333   insufficient
+evals/skill.es.ts › house greeting › greets in the house…  antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  2  3.5           24.5                  0.1429       0.3333   insufficient
 ```
 
-`points`, `lo` and `hi` are fractions, so `1` is +100 points and `0.07` is +7. The skill lifted both harnesses by 100 points, and the lower bound stayed above zero each time, so `within_noise` is `0`. Two attempts a side is why the interval is so wide.
+`effort` is the summary's effort line as data: median tool calls and agent time for each cell, and for a variant, its control's. `tools_p` is an exact rank test. With two attempts a side it can never drop below 0.05, so every row is `insufficient`, however large the gap.
 
-## Find where evals fail
+## Pool runs to separate the factors
 
 ```bash
-npx es query "SELECT eval_key, error_kind, COUNT(*) AS n
-  FROM failing_attempts WHERE harness != 'fake'
-  GROUP BY eval_key, error_kind ORDER BY n DESC LIMIT 4"
+npx es query "SELECT factor, level, tier, runs, points, lo, pass_verdict,
+  tools_p, effort_verdict FROM factor_effects
+  WHERE factor = 'environment'"
 ```
 
 ```text
-history.db: 17 runs
-eval_key                                                    error_kind  n
-evals/skill.es.ts › house greeting › greets in the house…   assertion   8
-evals/hello.es.ts › greet module › creates a tested greet…  assertion   2
-evals/hello.es.ts › greet module › adds a default name in…  assertion   1
-evals/preferences.es.ts › recommends Genkit over Haystack   judge       1
+history.db: 9 runs
+factor       level                tier        runs  points  lo     pass_verdict  tools_p  effort_verdict
+environment  with-house-greeting  controlled  1     1       0.07   effect        0.3333   insufficient
+environment  with-house-greeting  controlled  1     1       0.07   effect        0.3333   insufficient
+environment  with-house-greeting  controlled  1     1       0.07   effect        0.3333   insufficient
+environment  with-house-greeting  pooled      2     1       0.307  effect        0.0286   fewer
 ```
 
-`error_kind` says what failed: `assertion`, `judge`, `timeout`, `aborted` or `infra`. Most of the skill eval's failures are the control greeting Ada the plain way, which is the point of the compare. `failing_attempts` also has `skill` and `model`, so you can ask which skill fails most on which model.
+`factor_effects` asks what one factor (the environment, the harness or the model) changes, and says how good the evidence is. `controlled` compares two cells in one run. `pooled` combines the same comparison over comparable runs. Pooling Cursor's two compares gives four attempts a side, enough to call the skill's saving `fewer` tool calls.
 
-## Measure what the agent did
-
-The `attempts` table counts turns, tool calls and file edits, and times each phase. Join it to `cells` to split by control and variant:
+## Check that the agent read the skill
 
 ```bash
-npx es query "SELECT c.harness, c.role, COUNT(*) AS n,
-  round(AVG(a.tools), 1) AS tools,
-  round(AVG(a.agent_ms) / 1000.0) AS agent_s
+npx es query "SELECT cell_key, skill, read_line, reads FROM skill_reads"
+```
+
+```text
+history.db: 9 runs
+cell_key                                                      skill           read_line  reads
+cursor:composer-2.5/with-house-greeting/docker                house-greeting  4          1
+…
+antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  house-greeting  2          1
+```
+
+`skill_reads` has one row per attempt and skill its environment placed. `read_line` is the line in `transcript.jsonl` of the first tool call on the skill's folder, and it's null, with `reads` at 0, when the agent never opened it. A variant that passes without reading its skill didn't pass because of it.
+
+## Count tokens
+
+```bash
+npx es query "SELECT c.role, a.served_model, COUNT(*) AS n,
+  round(AVG(a.input_tokens)) AS input, round(AVG(a.output_tokens)) AS output
   FROM attempts a
-  JOIN cells c ON c.run_id = a.run_id AND c.key = a.cell_key
-  WHERE c.eval_key LIKE 'evals/skill.es.ts%' AND c.harness != 'fake'
-  GROUP BY c.harness, c.role"
+  JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key
+    AND c.key = a.cell_key
+  WHERE c.eval_key LIKE 'evals/skill.es.ts%' AND c.harness_kind = 'cursor'
+  GROUP BY c.role, a.served_model"
 ```
 
 ```text
-history.db: 17 runs
-harness                              role     n   tools  agent_s
-antigravity:gemini-3.8-flash-medium  control  6   24     56
-antigravity:gemini-3.8-flash-medium  variant  2   3.5    12
-cursor:composer-2.5                  control  10  12.3   28
-cursor:composer-2.5                  variant  6   3      13
+history.db: 9 runs
+role     served_model             n  input  output
+control  composer-2.5[fast=true]  4  92569  1458
+variant  composer-2.5[fast=true]  4  33045  494
 ```
 
-With the skill, both agents made a fraction of the tool calls and finished in half the time or less. The pass rate alone doesn't show that.
+The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`. A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well.
 
-## Script it with JSON
+## Script it and rebuild it
 
 ```bash
-npx es query "SELECT harness, variant, points, lo FROM lift
-  WHERE harness != 'fake' AND within_noise = 0" --json
+npx es query "SELECT harness, points, lo FROM lift
+  WHERE within_noise = 0" --json
 ```
 
 ```text
-history.db: 17 runs
 [
   {
     "harness": "cursor:composer-2.5",
-    "variant": "with-house-greeting",
     "points": 1,
     "lo": 0.07
   },
@@ -113,26 +138,74 @@ history.db: 17 runs
 ]
 ```
 
-`--json` prints the rows as a JSON array, and the `history.db:` line goes to stderr, so the output can go straight to `jq` or a script. `--schema` lists every table and column, and `--schema --json` prints the same list as JSON.
+`--json` prints the rows as JSON, and the `history.db:` line goes to stderr, so the output pipes cleanly into `jq` or a script. `--schema` lists every table and column.
 
-## Know where the data comes from
-
-```text
-.es/history.db    a projection of evals/.history/*.json and .es/runs/*.json
-```
-
-The database is a cache, built from the run records and updated as new ones appear. You never commit it or edit it:
-
-```bash
-npx es query "DELETE FROM runs"
-```
+The database, `.es/history.db`, is a cache built from the run records and brought up to date on every query. It's read-only:
 
 ```text
-history.db: 17 runs
 es: es query is read-only: .es/history.db is a projection of the run records (attempt to write a readonly database)
 ```
 
-`--rebuild` throws it away and reads every record again. Use it if the database looks out of step with your records.
+`--rebuild` throws it away and reads every record again.
+
+## Explain a run with es analyze
+
+```bash
+npx es analyze --config es.agents.config.ts --save
+```
+
+```text
+analysing 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg with google/gemini-3.8-flash…
+…
+Results
+  - For eval 'skill', the house-greeting skill produced a controlled pass-rate lift of +100 pts (95% CI +7…+100, verdict: effect) in both cursor:with-house-greeting and antigravity:with-house-greeting relative to their respective control cells. [F5…
+…
+  - Within run r2 alone, effort reductions on eval 'skill' (cursor: 3 vs 11.5 tool calls; antigravity: 3.5 vs 24.5 tool calls; p = 0.3333 for both) had a verdict of insufficient because 2 vs 2 attempts cannot reach statistical significance. [F10]
+…
+Suggested actions
+  1. Increase attempt count on skill eval to reach statistical power for effort (eval · impact medium · effort low) [F10] [F11]
+     target: evals/skill.es.ts. Run more attempts per cell (at least 6 per cell) so exact Mann-Whitney effort tests can achieve p < 0.05 significance rather than returning insufficient.
+     expect: Effort differences (fewer tool calls and agent seconds) reach statistical significance instead of insufficient.
+     verify: es run --runs 6 --tag skill
+…
+gemini-3.8-flash · analysis-v1 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
+```
+
+`es analyze` explains the latest run against its nearest recorded ancestor, here the cross-agent run from [Harnesses](/guide/harnesses): what happened, the results, why, anomalies, and at most five actions. ES computes the facts, the model only explains them, and every claim must cite a fact (`F…`) or evidence (`E…`) from the digest. ES drops claims that don't, flags numbers no cited fact holds, and rejects any verify command its CLI wouldn't parse. The footer counts all three.
+
+<Warning>
+  A check doesn't make a claim right. Here the verify command parses, but `evals/skill.es.ts` has no `skill` tag, so it would run nothing. Read each action before you act on it.
+</Warning>
+
+The studio shows saved analyses on the run's Analysis tab, with citations that link to attempts:
+
+<Image src="/assets/studio/run-analysis.png" alt="ES studio Analysis tab with the TL;DR, what happened and results, each claim followed by its citations" width={800} />
+
+## Check it, cache it, save it
+
+```bash
+npx es analyze --config es.agents.config.ts --dry-run
+```
+
+```text
+digest 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg: 24 facts, 5 evidence items, 18 attempts
+size 26510 characters ≈ 6628 tokens (cap 20000 in, 8000 out)
+model google/gemini-3.8-flash · analysis-v1 · cache miss (.es/analysis/cb4f1ade460a94fdd4e5a9ddef213bd995e81adbbf4f83d0c4a7fa93e0a69398.json)
+```
+
+`--dry-run` shows the digest's size and the cache key without a call. The same inputs never call the model twice: `.es/analysis` caches each answer, and `--no-cache` asks again. `--save`, as above, also writes it into the run's history folder as JSON and Markdown, to commit. `--md` and `--json` print it for a PR comment or a script.
+
+`--context` needs no key and makes no call. It prints the digest and ES's rules as Markdown, for your own coding agent to read. To choose the model or steer it, set `analysis` in the config:
+
+```ts title="es.config.ts"
+export default defineConfig({
+  analysis: {
+    model: 'google/gemini-3.8-flash', // default: the judge's, if it can
+    instructions: 'Fewer tool calls count as a win.',
+  },
+  // …
+})
+```
 
 ## Next
 
@@ -140,7 +213,7 @@ es: es query is read-only: .es/history.db is a projection of the run records (at
   <Card title="Debugging" icon="bug" href="/guide/debugging">
     Find out why an attempt failed.
   </Card>
-  <Card title="es query" icon="terminal" href="/reference/cli/query">
-    Every flag, view and table.
+  <Card title="es analyze" icon="terminal" href="/reference/cli/analyze">
+    Every flag, the digest and the checks.
   </Card>
 </CardGroup>

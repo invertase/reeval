@@ -19,7 +19,7 @@ export const agy = antigravity({ model: 'gemini-3.8-flash-medium' })
 
 | Harness | Key | `model` |
 |---|---|---|
-| `cursor()` | `CURSOR_API_KEY` | Optional, such as `composer-2.5` |
+| `cursor()` | `CURSOR_API_KEY` | Required, such as `composer-2.5` |
 | `claudeCode()` | `ANTHROPIC_API_KEY` | Required: any id or alias the `claude` CLI takes |
 | `antigravity()` | `GEMINI_API_KEY`, a Gemini API key | Required: a slug `agy models` lists, such as `gemini-3.8-flash-medium` |
 
@@ -52,7 +52,7 @@ npx es image build --config es.claude.config.ts
 npx es run --config es.claude.config.ts
 ```
 
-Each harness has its own sandbox image with its CLI baked in, such as `evalsuite-sandbox:claude-code-1.0.128`. `es image build` builds the images for the harnesses the config plans.
+Each harness has its own sandbox image with its agent baked in, such as `evalsuite-sandbox:antigravity-0.1.0` or `evalsuite-sandbox:cursor-0.1.0`. `es image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code and Antigravity run their CLIs.
 
 ## Run several harnesses as cells
 
@@ -78,7 +78,7 @@ npx es run --config es.agents.config.ts --runs 2 --log-order grouped
 ```
 
 ```text
-plan  3 evals · 8 cells · 16 attempts · ~6m 35s serial (~1m 39s at concurrency 4)
+plan  3 evals · 8 cells · 16 attempts · ~12m 31s serial (~3m 08s at concurrency 4)
 es 0.0.1 · 2 eval files · harness cursor:composer-2.5, antigravity:gemini-3.8-flash-medium · sandbox docker · concurrency 4 · grouped logs
 …
 Summary
@@ -95,20 +95,35 @@ Summary
      ✓ greets in the house style                    4/8  100%  8 attempts
          cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
          antigravity:gemini-3.8-flash-medium/-/docker                    control    0/2    0%   not gated
          antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
+…
+Attempts  12 passed · 4 failed, not gated (16 attempts, 3 evals)
+Duration  2m 39s
+  Tokens  5149k in (2946k cached) · 64k out
+…
 ```
 
-Lift is always against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`. With it, both wrote the house greeting. Line prefixes name the harness when there are several, as in `[greets#1 antigravity:gemini-3.8-flash-medium · control]`.
+Lift and effort are always against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`. With it, both wrote the house greeting, and both did far less work: Antigravity's median fell from 24.5 tool calls to 3.5. Line prefixes name the harness when there are several, as in `[greets#1 antigravity:gemini-3.8-flash-medium · control]`.
 
 ## Name cells with ids
 
-```ts
-cursor({ model: 'composer-2.5' })            // id cursor:composer-2.5
-cursor({ model: 'composer-2', id: 'fast' })  // id fast
+```ts title="evals/guide-matrix.es.ts"
+harness: [
+  cursor({ model: 'composer-2.5' }), // id cursor:composer-2.5
+  cursor({ model: 'composer-2.5', params: { fast: 'true' }, id: 'fast' }),
+],
 ```
 
-A harness's id defaults to `<kind>:<model>`. It names the cell (`cursor:composer-2.5/with-house-greeting/docker`), so two harnesses of the same kind and model need distinct ids. Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit.harness` lists ids too.
+A harness's id defaults to `<kind>:<model>`. It names the cell (`cursor:composer-2.5/with-house-greeting/docker`), so two harnesses of the same kind and model need distinct ids, even when their `params` differ:
+
+```text
+es: evals/guide-matrix.es.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
+```
+
+`params` sets Cursor's model parameters, as strings. One you leave out takes the model's first allowed value, not the default variant Cursor's catalog lists, so set any that change the price. Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit.harness` lists ids too.
 
 ## Compare on some harnesses
 

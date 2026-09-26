@@ -23,7 +23,7 @@ export default defineConfig({
 })
 ```
 
-The [harness](/reference/harness/cursor) is the agent, and the [sandbox](/reference/sandbox/docker) is where it runs. `docker()` with no options uses ES's own image: Node 22, git and the Cursor CLI.
+The [harness](/reference/harness/cursor) is the agent, and the [sandbox](/reference/sandbox/docker) is where it runs. `docker()` with no options uses ES's own image: Node 22, git and Cursor's agent, which ES drives through the Cursor TypeScript SDK. `model` is required.
 
 ## Write the evals
 
@@ -84,11 +84,13 @@ npx es image build
 ```text
 Building evalsuite-sandbox-base:latest
 Installing the Cursor harness bootstrap
-Cursor CLI 2026.09.26-dd393fe
+Cursor @cursor/sdk 1.0.32
+…
+docker: evalsuite-sandbox:cursor-0.1.0 a987bc712d5b
 …
 ```
 
-ES bakes the agent's CLI into its image once, tagged with the harness adapter's version (`evalsuite-sandbox:cursor-1.0.37`). Rebuild after you upgrade ES.
+ES bakes the agent into its image once, tagged with the harness adapter's version (`evalsuite-sandbox:cursor-0.1.0`). Rebuild after you upgrade ES.
 
 ## Add your keys
 
@@ -110,7 +112,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=...
 `es run -v` says so for every attempt:
 
 ```text
-[agent#1 cursor]  17:06:35 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
+[agent#1 cursor]  17:40:47 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
 ```
 
 ## Run it
@@ -124,30 +126,33 @@ plan  2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency
 es 0.0.1 · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 [creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
 [adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
-[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  15s
-[creates#1 cursor]  +0:00 sandbox ready 2s
-[creates#1 cursor]  +0:01 turn 1 done 10s · 2 tool calls, 2 file edits
-[creates#1 cursor]  +0:12 $ node --test  exit 0 156ms
-[creates#1 cursor]  +0:12 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
-[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  19s
-[adds#1 cursor]  +0:00 sandbox ready 2s
-[adds#1 cursor]  +0:01 turn 1 done 11s · 2 tool calls, 1 file edit
-[adds#1 cursor]  +0:13 turn 2 done 3s · 1 tool call, 1 file edit
-[adds#1 cursor]  +0:16 $ node -e "import('./greet.js').then((m) => {…  exit 0 78ms
-[adds#1 cursor]  +0:16 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  9s
+[creates#1 cursor]  +0:00 sandbox ready 1s
+[creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
+[creates#1 cursor]  +0:07 $ node --test  exit 0 130ms
+[creates#1 cursor]  +0:07 judge  pass 0.99 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  16s
+[adds#1 cursor]  +0:00 sandbox ready 1s
+[adds#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 1 file edit
+[adds#1 cursor]  +0:10 turn 2 done 4s · 1 tool call, 1 file edit
+[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 79ms
+[adds#1 cursor]  +0:14 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
 
 Summary
  evals/hello.es.ts
    greet module
-     ✓ creates a tested greet module                15s  judge 1.00  1 turn
-     ✓ adds a default name in a follow-up turn      19s  judge 1.00  2 turns
+     ✓ creates a tested greet module                 9s  judge 0.99  1 turn
+     ✓ adds a default name in a follow-up turn      16s  judge 1.00  2 turns
 
    Evals  2 passed (2)
-Duration  20s
- Results  .es/runs/20260926T170537Z_bd6205e_ada-lovelace_b50g/summary.md
+Duration  17s
+  Tokens  155k in (72k cached) · 1205 out
+ Results  .es/runs/20260926T174005Z_b010670_ada-lovelace_xdb9/summary.md
 ```
 
 `hello` is a filter: it matches the file `evals/hello.es.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict.
+
+`Tokens` is what Cursor reported for the run: input tokens, the part of them served from cache, and output tokens. ES records them per turn and per attempt, but prices no models, so there's no cost.
 
 On a terminal, the same run is in colour:
 
@@ -157,8 +162,8 @@ On a terminal, the same run is in colour:
 
 ```text
 .es/runs/
-  20260926T170537Z_bd6205e_ada-lovelace_b50g.json    the record
-  20260926T170537Z_bd6205e_ada-lovelace_b50g/
+  20260926T174005Z_b010670_ada-lovelace_xdb9.json    the record
+  20260926T174005Z_b010670_ada-lovelace_xdb9/
     summary.md                                     the run as Markdown
     <eval>/<cell>/1/                               transcript, diff, checks, judge input
 ```

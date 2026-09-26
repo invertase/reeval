@@ -35,14 +35,14 @@ npx es run hello --log-order grouped
 
 ```text
 …
-[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  19s
-[adds#1 cursor]  +0:00 sandbox ready 2s
-[adds#1 cursor]  +0:01 turn 1 done 11s · 2 tool calls, 1 file edit
-[adds#1 cursor]  +0:13 turn 2 done 3s · 1 tool call, 1 file edit
-[adds#1 cursor]  +0:16 $ node -e "import('./greet.js').then((m) => {…  exit 0 78ms
-[adds#1 cursor]  +0:16 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  16s
+[adds#1 cursor]  +0:00 sandbox ready 1s
+[adds#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 1 file edit
+[adds#1 cursor]  +0:10 turn 2 done 4s · 1 tool call, 1 file edit
+[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 79ms
+[adds#1 cursor]  +0:14 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
 …
-     ✓ adds a default name in a follow-up turn      19s  judge 1.00  2 turns
+     ✓ adds a default name in a follow-up turn      16s  judge 1.00  2 turns
 ```
 
 Each turn gets a line with its time, tool calls and file edits. The summary counts the turns.
@@ -87,7 +87,7 @@ const edits = second.transcript.filter((e) => e.type === 'file-edit')
 expect(edits.length).toBeGreaterThan(0)
 ```
 
-`turn.transcript` is that turn's events, in order: `prompt`, `reasoning`, `text`, `tool`, `file-edit`, `web-search`, `web-fetch`, `error` and `turn-end`. Use it to check how the agent worked: which tools it called, whether it searched the web, how many files it touched. [Transcripts](/reference/transcript) lists every field.
+`turn.transcript` is that turn's events, in order: `prompt`, `reasoning`, `text`, `tool`, `file-edit`, `web-search`, `web-fetch`, `error` and `turn-end`. Use it to check how the agent worked: which tools it called and how many files it touched. Cursor's transcripts have no `web-search` or `web-fetch` events, because its SDK doesn't report them. [Transcripts](/reference/transcript) lists every field.
 
 ## Judge an earlier turn
 

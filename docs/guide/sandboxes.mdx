@@ -3,16 +3,16 @@ title: Sandboxes and toolchains
 description: Run the agent on Python, your own Dockerfile or ES's image with extra tools, using docker().
 ---
 
-Every attempt runs in a fresh Docker container. `docker()` with no options uses ES's image: Node 22, git and the harness's CLI. When the task needs another toolchain, give the sandbox another base.
+Every attempt runs in a fresh Docker container. `docker()` with no options uses ES's image: Node 22, git and the harness's agent. When the task needs another toolchain, give the sandbox another base.
 
 ```ts
 import { docker } from '{{ pkg }}/sandbox'
 
 docker()                                        // ES's image
-docker({ from: 'python:3.12-slim' })            // ES adds Node, git, the CLI
+docker({ from: 'python:3.12-slim' })            // ES adds Node, git, the agent
 docker({ install: ['npm i -g firebase-tools@14'] }) // extra tools
 docker({ dockerfile: './sandbox/Dockerfile' })  // your own, from this file
-docker({ image: 'ghcr.io/acme/agent:1' })         // already has the CLI
+docker({ image: 'ghcr.io/acme/agent:1' })       // already has the agent
 ```
 
 A sandbox has one base (`image`, `from` or `dockerfile`), and optionally `install` commands on top. What's baked into the image belongs to the sandbox. What each attempt adds, such as files, secrets and setup steps, belongs to the [environment](/guide/environments).
@@ -38,7 +38,7 @@ evaluate(
 )
 ```
 
-`from` takes any Debian or Ubuntu based image. ES bakes Node, pnpm, git and the harness's CLI on top the first time, and caches the result. `id: 'python'` names the sandbox in the cell key.
+`from` takes any Debian or Ubuntu based image. ES bakes Node, pnpm, git and the harness's agent on top the first time, and caches the result. `id: 'python'` names the sandbox in the cell key.
 
 ## Add tools with install
 
@@ -100,15 +100,15 @@ npx es image build --dry-run
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker + install · 1 eval
-  base               evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
   install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
 python · 1 eval
-  from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
 docker:sqlite · 1 eval
-  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-2b50887268f17930  (docker build (layer cache), tagged by content hash)
-  harness                              evalsuite-dockerfile:sqlite-2b50887268f17930  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-1.0.37)
+  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
+  harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
 ```
 
 `es image build` builds every image the planned evals need, per harness. Without it, `es run` builds `from`, `dockerfile` and `install` images on first use, once, while other attempts wait. Filters, `--tag` and `--profile` apply, as for `es run`.
@@ -120,21 +120,22 @@ npx es run python sqlite jq --log-order grouped
 ```
 
 ```text
-plan  3 evals · 3 cells · 3 attempts · ~51s serial (~17s at concurrency 4)
+plan  3 evals · 3 cells · 3 attempts · ~35s serial (~12s at concurrency 4)
 …
-[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  15s
+[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  10s
 [writes#1 cursor]  +0:00 sandbox ready 2s
-[writes#1 cursor]  +0:01 turn 1 done 11s · 2 tool calls, 2 file edits
-[writes#1 cursor]  +0:13 $ python3 --version  exit 0 50ms
-[writes#1 cursor]  +0:13 $ python3 -m unittest -q  exit 0 74ms
-
+[writes#1 cursor]  +0:01 turn 1 done 7s · 1 tool call, 2 file edits
+[writes#1 cursor]  +0:09 $ python3 --version  exit 0 149ms
+[writes#1 cursor]  +0:09 $ python3 -m unittest -q  exit 0 119ms
+…
 Summary
  evals/jq.es.ts
-   ✓ summarises a JSON file with jq           13s  1 turn
+   ✓ summarises a JSON file with jq           10s  1 turn
  evals/python.es.ts
-   ✓ writes and tests fizzbuzz in python      15s  1 turn
+   ✓ writes and tests fizzbuzz in python      10s  1 turn
  evals/sqlite.es.ts
-   ✓ queries a seeded SQLite database         14s  1 turn
+   ✓ queries a seeded SQLite database         13s  1 turn
+…
 ```
 
 ## One sandbox per eval

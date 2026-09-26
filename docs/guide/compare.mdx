@@ -61,13 +61,13 @@ npx es run skill --runs 2 --log-order grouped
 ```
 
 ```text
-plan  1 eval · 2 cells · 4 attempts · ~1m 08s serial (~17s at concurrency 4)
+plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
 …
-[greets#1 control] ✗ evals/skill.es.ts › house greeting › greets in the house style  26s  (not gated)
+[greets#1 control] ✗ evals/skill.es.ts › house greeting › greets in the house style  24s  (not gated)
 [greets#1 control]  +0:00 sandbox ready 2s
-[greets#1 control]  +0:02 turn 1 done 22s · 15 tool calls, 2 file edits
-[greets#1 control]  +0:24 $ node -e "import('./greet.js').then((m) => {…  exit 1 79ms
+[greets#1 control]  +0:01 turn 1 done 21s · 10 tool calls, 2 file edits
+[greets#1 control]  +0:23 $ node -e "import('./greet.js').then((m) => {…  exit 1 75ms
 [greets#1 control]  Error: expected command to succeed, exit code 1
 …
 [greets#1 control]  --- stdout ---
@@ -79,11 +79,17 @@ Summary
      ✓ greets in the house style      2/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+           effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 …
 Attempts  2 passed · 2 failed, not gated (4 attempts, 1 evals)
+Duration  24s
+  Tokens  362k in (169k cached) · 3525 out
+…
 ```
 
-Without the skill, Cursor guessed `Welcome home, Ada!` twice and failed. With it, Cursor wrote `Ahoy, Ada!` twice and passed. The lift is +100 points, and the run exits 0.
+Without the skill, Cursor guessed `Welcome home, Ada!` and `Welcome to the house, Ada!`, and failed. With it, Cursor wrote `Ahoy, Ada!` twice and passed. The lift is +100 points, and the run exits 0.
+
+The eval line reads `2/4 100%`: two of the four attempts passed, but only the variant gates, and it passed every time.
 
 ## Control and variant
 
@@ -129,13 +135,23 @@ lift +100 pts (95% +7…+100, 2/2 vs 0/2)
 
 Lift is the variant's pass rate minus the control's, on the same harness. The range is the 95% interval on that difference. When it spans 0, the summary adds `within noise`: at two runs a cell, +100 points can still be luck.
 
-The studio shows the same cells, roles and lift for every run:
-
-<Image src="/assets/studio/run-cells-lift.png" alt="ES studio run page with a cells table showing the control at 0% and the variant at 100%, with its lift" width={800} />
-
 <Warning>
   Few runs give a wide interval. Here, `+7…+100` is barely clear of 0. Raise `runs` before you trust a small lift.
 </Warning>
+
+The studio shows the same cells, roles, lift and effort for every run (here with two agents):
+
+<Image src="/assets/studio/run-cells-lift.png" alt="ES studio run page with a cells table: each agent's control at 0% and its variant at 100%, with +100 pts lift and fewer tool calls" width={800} />
+
+## Read the effort
+
+```text
+effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
+```
+
+Under each variant, the effort line compares the median attempt with the control's: tool calls, then the agent's time. With the skill, Cursor made 3 tool calls instead of 8 and finished in half the time.
+
+The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`. The studio's cells table shows effort next to lift, as in the screenshot above.
 
 ## Next
 

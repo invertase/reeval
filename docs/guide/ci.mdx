@@ -10,21 +10,22 @@ CI=1 npx es run hello jq
 ```
 
 ```text
-plan  profile pr (auto: CI is set) · 3 evals · 3 cells · 3 attempts · ~50s serial (~17s at concurrency 4) · budget 20 attempts ✓
+plan  profile pr (auto: CI is set) · 3 evals · 3 cells · 3 attempts · ~37s serial (~12s at concurrency 4) · budget 20 attempts ✓
 es 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 [summarises#1 cursor] ▶ evals/jq.es.ts › summarises a JSON file with jq
 [creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
 [adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
-[summarises#1 cursor] ✓ evals/jq.es.ts › summarises a JSON file with jq  14s
+[summarises#1 cursor] ✓ evals/jq.es.ts › summarises a JSON file with jq  10s
 [summarises#1 cursor]  +0:00 sandbox ready 2s
-[summarises#1 cursor]  +0:01 turn 1 done 11s · 3 tool calls, 2 file edits
-[summarises#1 cursor]  +0:12 $ jq --version  exit 0 39ms
-[summarises#1 cursor]  +0:12 $ ./count.sh  exit 0 52ms
+[summarises#1 cursor]  +0:01 turn 1 done 8s · 3 tool calls, 2 file edits
+[summarises#1 cursor]  +0:09 $ jq --version  exit 0 41ms
+[summarises#1 cursor]  +0:09 $ ./count.sh  exit 0 55ms
 …
    Evals  3 passed (3)
-Duration  22s
- Results  .es/runs/20260926T170648Z_bd6205e_ci_k5xp/summary.md
-recorded evals/.history/20260926T170648Z_bd6205e_ci_k5xp.json + 13 artifact files in evals/.history/20260926T170648Z_bd6205e_ci_k5xp/ (69.4 KB). Commit it with git.
+Duration  14s
+  Tokens  192k in (87k cached) · 1360 out
+ Results  .es/runs/20260926T174055Z_b010670_ci_vdfy/summary.md
+recorded evals/.history/20260926T174055Z_b010670_ci_vdfy.json + 13 artifact files in evals/.history/20260926T174055Z_b010670_ci_vdfy/ (43.8 KB). Commit it with git.
 ```
 
 ## What CI changes
@@ -42,11 +43,11 @@ After 60 seconds without output, plain mode prints what's still running and in w
 ## Output on GitHub Actions
 
 ```text
-::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  14s
-[creates#1 cursor]  +0:00 sandbox ready 2s
-[creates#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 2 file edits
-[creates#1 cursor]  +0:11 $ node --test  exit 0 131ms
-[creates#1 cursor]  +0:11 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  10s
+[creates#1 cursor]  +0:00 sandbox ready 1s
+[creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
+[creates#1 cursor]  +0:08 $ node --test  exit 0 137ms
+[creates#1 cursor]  +0:08 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
 ::endgroup::
 ```
 

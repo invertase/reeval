@@ -99,16 +99,20 @@ npx es run --config es.fake.config.ts --profile smoke --runs 20
 ```
 
 ```text
-plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~15s serial (~4s at concurrency 4) · budget 12 attempts ✗
+plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~13s serial (~3s at concurrency 4) · budget 12 attempts ✗
 …
 es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```
 
 `budget.attempts` is checked against the plan before anything starts. Over it, `es run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run is recorded with status `budget` (exit 1).
 
-<Info>
-  There's no cost budget. Cursor doesn't report usage, so `budget.usd` is an error.
-</Info>
+There's no cost or token budget. `budget: { usd: 5 }` stops the run before it starts:
+
+```text
+es: budget.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.
+```
+
+`cursor()` and `antigravity()` report tokens, and the summary prints the total, but ES has no model prices to turn them into a cost.
 
 ## Next
 
