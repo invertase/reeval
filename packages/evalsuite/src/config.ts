@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { createJiti } from 'jiti'
+import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
@@ -12,7 +13,6 @@ import { docker } from './sandbox.ts'
 import type {
   Budget,
   ConfigHelpers,
-  Duration,
   EnvVars,
   EsConfig,
   HarnessDescriptor,
@@ -66,14 +66,7 @@ export type ConfigInput = EsConfig | ((helpers: ConfigHelpers) => EsConfig)
  */
 export const defineConfig = <T extends ConfigInput>(config: T): T => config
 
-const UNITS = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const
-
-export function parseDuration(value: Duration): number {
-  if (typeof value === 'number') return value
-  const match = /^(\d+(?:\.\d+)?)(ms|s|m|h)$/.exec(value)
-  if (!match) throw new UsageError(`Invalid duration "${value}". Use e.g. "90s" or "15m".`)
-  return Number(match[1]) * UNITS[match[2] as keyof typeof UNITS]
-}
+export { parseDuration }
 
 export async function loadConfig(
   configPath: string,

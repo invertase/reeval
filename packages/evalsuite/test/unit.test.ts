@@ -186,6 +186,13 @@ test('parseDuration', () => {
   assert.equal(parseDuration('15m'), 900_000)
   assert.equal(parseDuration(250), 250)
   assert.throws(() => parseDuration('soon' as never), /Invalid duration/)
+  for (const value of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, '0s', '0m', '0.0h']) {
+    assert.throws(
+      () => parseDuration(value as never),
+      /A duration is more than zero/,
+      `parseDuration(${String(value)})`,
+    )
+  }
 })
 
 test('resolveConfig defaults', () => {
