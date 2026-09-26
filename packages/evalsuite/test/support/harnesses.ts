@@ -7,7 +7,7 @@ import { type BakedHarness, imageFor } from '@evalsuite/sandbox-docker'
 
 export type HarnessRow = {
   /** `ES_CONTRACT_HARNESS`, and the name in test titles. */
-  id: 'fake' | 'cursor' | 'antigravity' | 'claude-code' | 'opencode'
+  id: 'fake' | 'cursor' | 'antigravity' | 'claude-code' | 'opencode' | 'goose'
   /** The cheapest model that does the job; null for the fake agent. */
   model: string | null
   /**
@@ -93,6 +93,23 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['generativelanguage.googleapis.com'],
+    apiHost: 'generativelanguage.googleapis.com',
+    // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.
+    tokens: false,
+    servedModel: null,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'goose',
+    model: 'gemini-3.8-flash',
+    key: {
+      name: 'GOOGLE_GENERATIVE_AI_API_KEY',
+      from: ['GOOGLE_GENERATIVE_AI_API_KEY', 'GEMINI_API_KEY'],
+    },
+    image: 'goose',
+    skillContext:
+      /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
     // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.

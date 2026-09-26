@@ -5,6 +5,7 @@ import type {
   ClaudeCodeHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
+  GooseHarnessDescriptor,
   OpenCodeHarnessDescriptor,
 } from './types.ts'
 
@@ -76,7 +77,20 @@ export const opencode = (
   return { kind: 'opencode', ...options }
 }
 
-const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode']
+/**
+ * Goose, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google`
+ * provider. `id` names the cell; it defaults to `goose:<model>`.
+ */
+export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarnessDescriptor => {
+  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
+    throw new UsageError(
+      `goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
+    )
+  }
+  return { kind: 'goose', ...options }
+}
+
+const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode', 'goose']
 
 const STEP_KEYS = ['exec', 'write', 'reply', 'mcp', 'error']
 
@@ -128,6 +142,7 @@ export type {
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   FakeScriptStep,
+  GooseHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
 } from './types.ts'

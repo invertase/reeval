@@ -175,6 +175,7 @@
         { "title": "claudeCode()", "href": "/reference/harness/claude-code" },
         { "title": "antigravity()", "href": "/reference/harness/antigravity" },
         { "title": "opencode()", "href": "/reference/harness/opencode" },
+        { "title": "goose()", "href": "/reference/harness/goose" },
         { "title": "fakeHarness()", "href": "/reference/harness/fake" }
       ]
     },

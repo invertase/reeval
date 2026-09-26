@@ -49,7 +49,7 @@ jobs:
           HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
         run: |
           [ "$HAS_CURSOR" = true ] || echo "::notice::No CURSOR_API_KEY repository secret: the Cursor rows are skipped"
-          [ "$HAS_GEMINI" = true ] || echo "::notice::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity and OpenCode rows are skipped"
+          [ "$HAS_GEMINI" = true ] || echo "::notice::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode and Goose rows are skipped"
           echo "::notice::No ANTHROPIC_API_KEY for this project: the Claude Code rows are skipped"
           if [ "$HAS_CURSOR" = true ] || [ "$HAS_GEMINI" = true ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"

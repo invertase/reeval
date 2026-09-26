@@ -80,6 +80,16 @@ const BOOTSTRAPS: Record<
     // Its plugin runtime (63 MB from npm), which it installs into its config directory at start.
     warm: async () => (await import('@evalsuite/harness-opencode')).OPENCODE_WARM_COMMAND,
   },
+  goose: {
+    name: 'Goose',
+    cli: 'goose',
+    // The bootstrap only installs the CLI; the key and model are never used.
+    adapter: async () =>
+      (await import('@evalsuite/harness-goose')).createGoose({
+        auth: { GOOGLE_API_KEY: 'unused' },
+        model: 'unused',
+      }),
+  },
 }
 
 /**

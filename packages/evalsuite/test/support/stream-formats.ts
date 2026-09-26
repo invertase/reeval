@@ -59,6 +59,25 @@ const FORMATS: Record<string, Format> = {
     ],
     values: ['status', 'kind', 'stopReason'],
     lists: [],
+  }, // Goose's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
+  goose: {
+    kind: (e) =>
+      typeof e.sessionUpdate === 'string'
+        ? e.sessionUpdate
+        : typeof e.stopReason === 'string'
+          ? 'prompt-response'
+          : undefined,
+    opaque: [
+      'rawInput',
+      'rawOutput',
+      'content',
+      'locations',
+      'availableCommands',
+      'configOptions',
+      '_meta',
+    ],
+    values: ['status', 'kind', 'stopReason'],
+    lists: [],
   },
 }
 

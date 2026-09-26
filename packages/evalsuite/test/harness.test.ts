@@ -26,6 +26,11 @@ import {
   toUsage as cursorUsage,
 } from '@evalsuite/harness-cursor-sdk'
 import {
+  GOOSE_ENDPOINTS,
+  GOOSE_HOME_SKILLS_DIR,
+  GOOSE_WORKSPACE_SKILLS_DIR,
+} from '@evalsuite/harness-goose'
+import {
   OPENCODE_ENDPOINTS,
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
@@ -44,12 +49,13 @@ import {
   brokeringFor,
   claudeMcpServers,
   cursorMcpServers,
+  gooseMcpServers,
   LAYOUTS,
   layoutOf,
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
-import { antigravity, claudeCode, cursor, fakeHarness, opencode } from '../src/harness.ts'
+import { antigravity, claudeCode, cursor, fakeHarness, goose, opencode } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import { formatUsage } from '../src/view/model.ts'
@@ -136,6 +142,7 @@ describe('the Claude Code harness', () => {
       cursor({ model: 'composer-2.5' }),
       antigravity({ model: 'm' }),
       opencode({ model: 'm' }),
+      goose({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
@@ -143,7 +150,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'codex' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose' \(got "codex"\)/,
     )
   })
 
@@ -330,6 +337,58 @@ describe('the OpenCode harness', () => {
         path: '/v1beta/models/gemini-3.8-flash:streamGenerateContent',
       }),
       'gemini-3.8-flash',
+    )
+  })
+})
+
+describe('the Goose harness', () => {
+  test('is plain data with its own cell id, and needs a Gemini model id', () => {
+    const h = goose({ model: 'gemini-3.8-flash' })
+    assert.deepEqual(h, { kind: 'goose', model: 'gemini-3.8-flash' })
+    assert.equal(harnessId(h), 'goose:gemini-3.8-flash')
+    for (const model of [undefined, '', 'google/gemini-3.8-flash']) {
+      assert.throws(
+        () => goose({ model } as never),
+        /goose\(\) needs a Gemini model id, without a provider, since it runs on a Gemini API key, e\.g\. goose\(\{ model: 'gemini-3\.8-flash' \}\)/,
+        String(model),
+      )
+    }
+  })
+
+  test('is accepted by the config and needs GOOGLE_GENERATIVE_AI_API_KEY', () => {
+    const config = resolveConfig({ harness: [goose({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, { GOOGLE_API_KEY: 'x' }), [
+      'GOOGLE_GENERATIVE_AI_API_KEY',
+    ])
+    assert.deepEqual(missingCredentials(config, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [])
+  })
+
+  test('Goose reads rules from AGENTS.md, repo skills from .goose/skills, home skills in its own home', () => {
+    const h = goose({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: GOOSE_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: `.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/${GOOSE_HOME_SKILLS_DIR}`,
+    })
+    assert.equal(imageHarness(h), 'goose')
+    assert.deepEqual(AGENTS.goose.endpoints, GOOSE_ENDPOINTS)
+  })
+
+  test('gets MCP servers as Goose extensions (stdio and streamable_http), and refuses SSE', () => {
+    assert.deepEqual(
+      gooseMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      }),
+      {
+        files: { type: 'stdio', cmd: 'npx', args: ['mcp-files'], envs: { ROOT: '/es' } },
+        docs: { type: 'streamable_http', uri: 'https://docs.example/mcp', headers: { A: 'b' } },
+      },
+    )
+    assert.throws(
+      () =>
+        gooseMcpServers({ old: { transport: 'sse', url: 'https://x.example/sse', headers: {} } }),
+      /Goose has no SSE MCP transport, so it can't use the old server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
     )
   })
 })
@@ -741,6 +800,49 @@ describe('credential brokering per agent', () => {
           },
         }),
         /can't broker GOOGLE_GENERATIVE_AI_API_KEY/,
+      )
+      assert.equal(ran, false)
+    } finally {
+      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    }
+  })
+
+  test("Goose's adapter brokers only the Gemini key, as GOOGLE_API_KEY, to the Gemini API", async () => {
+    const rules = await adapterRules('goose', {
+      ...everything,
+      GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+      GOOGLE_API_KEY: 'host-google',
+      GEMINI_API_KEY: 'host-gemini',
+    })
+    assert.equal(rules.length, 1)
+    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com')
+    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
+    assert.equal(brokeringFor(goose({ model: 'm' }))?.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
+  })
+
+  test("Goose fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-real'
+    try {
+      const agent = AGENTS.goose
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor: goose({ model: 'm' }),
+      })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker GOOGLE_API_KEY/,
       )
       assert.equal(ran, false)
     } finally {

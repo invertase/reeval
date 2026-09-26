@@ -146,6 +146,24 @@ export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Recor
   )
 }
 
+/** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
+export function gooseMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) => {
+      if (s.transport === 'sse') {
+        throw new InfraError(
+          `Goose has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      return s.transport === 'stdio'
+        ? [name, { type: 'stdio', cmd: s.command, args: s.args, envs: s.env ?? {} }]
+        : [name, { type: 'streamable_http', uri: s.url, headers: s.headers ?? {} }]
+    }),
+  )
+}
+
 /** The Cursor SDK's `McpServerConfig` shape. */
 export function cursorMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -186,6 +204,14 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
+  },
+  // Goose's bootstrap gives it a private home, so its home skills are under that. 1.52.0 also
+  // reads .agents/skills and .claude/skills; nothing turns that off.
+  goose: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.goose/skills',
+    harnessSkillDir:
+      '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
   },
 }
 
@@ -288,6 +314,26 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
+        requireCredentialBrokering: true,
+      }),
+  },
+  goose: {
+    ...LAYOUTS.goose,
+    name: 'Goose',
+    factory: 'goose',
+    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    // The only request 1.52.0 sends the key on, with session naming off.
+    endpoints: GEMINI_ENDPOINTS,
+    servedModel: geminiServedModel,
+    mcpServers: gooseMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
+      (await import('@evalsuite/harness-goose')).createGoose({
+        // Goose reads the key as GOOGLE_API_KEY; ES's host variable is the one the others use.
+        auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        model: descriptor.model,
+        ...(mcpServers
+          ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
+          : {}),
         requireCredentialBrokering: true,
       }),
   },
