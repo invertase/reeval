@@ -76,7 +76,7 @@ export type ContactedHost = {
   sent: number
   received: number
 }
-/** A host the policy refused, and why. */
+/** A host the gateway refused, and why: the policy, or a name that doesn't resolve. */
 export type BlockedHost = { host: string; port: number; connections: number; reason: string }
 /** What went through the gateway, sorted by host and port. */
 export type EgressTraffic = { contacted: ContactedHost[]; blocked: BlockedHost[] }
@@ -222,8 +222,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`es:egress CONNECT ${host}:${port} denied (${verdict.reason})`)
-        if (verdict.status === 403) block(socket, host, port, verdict.reason)
-        else contact(socket, host, port)
+        block(socket, host, port, verdict.reason)
         return reply(socket, verdict.status, `blocked by the ES egress policy: ${verdict.reason}`)
       }
       contact(socket, host, port)
@@ -262,8 +261,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`es:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
-        if (verdict.status === 403) block(req.socket, host, port, verdict.reason)
-        else contact(req.socket, host, port)
+        block(req.socket, host, port, verdict.reason)
         return res
           .writeHead(verdict.status)
           .end(`blocked by the ES egress policy: ${verdict.reason}\n`)

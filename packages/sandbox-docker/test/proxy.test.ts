@@ -148,7 +148,10 @@ async function startProxy(
       if (process.env.DBG) console.error(l)
     },
     upstreamCA: upstreamCa.cert,
-    lookup: async (host) => (host.endsWith('.test') ? ['127.0.0.1'] : ['203.0.113.1']),
+    lookup: async (host) => {
+      if (host === 'nxdomain.test') throw new Error('ENOTFOUND')
+      return host.endsWith('.test') ? ['127.0.0.1'] : ['203.0.113.1']
+    },
     allowLoopback: true,
   })
   // Each connection reaches the proxy as a plain Duplex, as the gateway's mux streams do.
@@ -638,16 +641,24 @@ describe('egress policy through the proxy', () => {
     }
   })
 
-  test('allow-all records what it lets through and refuses only the always-denied', async () => {
+  test('allow-all records what it lets through, and a name that never resolved as refused', async () => {
     const gw = await startProxy({ mode: 'allow-all' }, {}, true)
     try {
       assert.ok((await connect(gw, HOST, h1.port)).ok)
+      assert.equal((await connect(gw, 'nxdomain.test', 443)).ok, false)
       const { contacted, blocked } = gw.proxy.traffic()
       assert.deepEqual(
         contacted.map((h) => h.host),
         [HOST],
       )
-      assert.deepEqual(blocked, [])
+      assert.deepEqual(blocked, [
+        {
+          host: 'nxdomain.test',
+          port: 443,
+          connections: 1,
+          reason: "can't resolve nxdomain.test: ENOTFOUND",
+        },
+      ])
     } finally {
       gw.close()
     }
