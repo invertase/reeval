@@ -385,6 +385,7 @@ export const inventory: InventoryFeature[] = [
     name: '`secrets: { unbrokered }` and the unbrokered warning',
     tests: [
       options('a Docker secret without hosts warns once in the plan'),
+      options("an optional secret that isn't set gets no real-value warning"),
       secrets('lists env and MCP secrets the sandbox would get as real values'),
     ],
   },

@@ -557,7 +557,11 @@ export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): Unbrokered
   const out = new Map<string, UnbrokeredSecret>()
   for (const a of attempts) {
     if (a.sandbox.kind !== 'docker') continue
-    for (const s of unbrokeredSecrets(env, a.environment.layers)) out.set(s.label, s)
+    for (const s of unbrokeredSecrets(env, a.environment.layers)) {
+      // An unset optional secret never reaches the sandbox.
+      if (s.optional && !process.env[s.from]) continue
+      out.set(s.label, s)
+    }
   }
   return [...out.values()]
 }

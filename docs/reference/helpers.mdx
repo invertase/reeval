@@ -96,7 +96,7 @@ Options for `secret()` and `secret.fromEnv()`:
 | `secret.hosts.anthropic` | `api.anthropic.com` |
 | `secret.hosts.github` | `api.github.com`, `uploads.github.com` |
 
-A secret without `hosts` reaches the sandbox as its real value, and the plan warns (or fails, with `secrets: { unbrokered: 'error' }` in the config):
+A secret without `hosts` reaches the sandbox as its real value, and the plan warns (or fails, with `secrets: { unbrokered: 'error' }` in the config). An `optional` secret whose host variable isn't set never reaches it, so it doesn't:
 
 ```text
 warning: SENTRY_DSN is in the sandbox as its real value. To give the agent only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('SENTRY_DSN', { hosts: ['api.example.com'] }).
