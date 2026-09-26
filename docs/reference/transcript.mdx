@@ -79,7 +79,7 @@ evals/.history/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
   A fetched URL, and whether the fetch succeeded.
 </Property>
 
-Cursor transcripts have no `web-search` or `web-fetch` events: the Cursor SDK doesn't report them, although the agent still searches and fetches through Cursor's backend. Cursor reports file edits relative to the workspace, with line counts.
+Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events. When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn. Cursor reports file edits relative to the workspace, with line counts.
 
 <Property name="error" type="{ message }">
   An error the harness reported. The turn usually ends with status `error`.

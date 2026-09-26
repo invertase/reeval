@@ -1,9 +1,9 @@
 ---
 title: Matchers
-description: The three matchers ES adds to expect, what they accept, and the failure messages they print.
+description: The matchers ES adds to expect, what they accept, and the failure messages they print.
 ---
 
-ES adds `toHaveFile`, `toSucceed` and `toPass` to `expect`, which you import from `'{{ pkg }}'`.
+ES adds `toHaveFile`, `toSucceed`, `toPass`, `toHaveSearched` and `toHaveFetched` to `expect`, which you import from `'{{ pkg }}'`.
 
 ```ts title="evals/greet.es.ts"
 import { evaluate, expect } from '{{ pkg }}'
@@ -89,6 +89,58 @@ judge score 0.95 is below 0.99 for "Is greet.js small and readable?" (fake)
 ```
 
 With `.not`, a passing verdict fails with `expected judge to fail: score … ≥ …`. Anything but a verdict throws `toPass() expects a t.judge() verdict`.
+
+## toHaveSearched and toHaveFetched
+
+```ts
+expect(turn).toHaveSearched(query?)
+expect(turn).toHaveFetched(url?)
+```
+
+<Property name="actual" type="Turn">
+  A turn from `t.send()`. Anything else throws `toHaveSearched() expects a turn from t.send()`.
+</Property>
+
+<Property name="query / url" type="string | RegExp" optional>
+  A substring or a RegExp matched against each `web-search` event's `query`, or each `web-fetch` event's `url`, in the turn's transcript. Without it, any search or fetch passes.
+</Property>
+
+A real Cursor run:
+
+```ts title="evals/web.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('looks up the latest Node.js LTS', async (t) => {
+  const turn = await t.send(
+    'Search the web for the current Node.js LTS release line and tell me its name.',
+  )
+
+  expect(turn).toHaveSearched(/node/i)
+  expect(turn).not.toHaveFetched('example.com')
+})
+```
+
+```text
+[looks#1 cursor] ✓ evals/web.es.ts › looks up the latest Node.js LTS  16s
+[looks#1 cursor]  +0:00 sandbox ready 1s
+[looks#1 cursor]  +0:01 turn 1 done 14s · 1 tool call, 0 file edits
+```
+
+The search it matched, from the attempt's `transcript.jsonl`:
+
+```text
+{"turn":0,"ts":"2026-09-26T18:01:03.610Z","atMs":4494,"durationMs":7096,"type":"web-search","toolCallId":"tool_25149535-3dd1-49a6-8027-0d896edbed2","query":"Node.js LTS release line 2025 2026 current","references":2}
+```
+
+Both are synchronous: no `await`. They fail with the events they saw (`expected web searches matching /node/i, got none`), and with `.not`, `expected no web fetches matching example.com, got ["https://example.com/"]`.
+
+A harness may not be able to report web events for a turn: then the turn lists them in `turn.unreported`, and both matchers throw `HarnessCapabilityError` (exported from `'{{ pkg }}'`), negated or not, instead of passing or failing on nothing:
+
+```text
+toHaveFetched() can't check this turn: its harness doesn't report web fetches ('web-fetch' is in turn.unreported), so the agent may have made them with no event. Check the reply or files instead, or use a harness that reports them.
+```
+
+Cursor's SDK leaves web calls out of its stream; ES's adapter recovers them after each turn from the agent's stored conversation, so a Cursor turn is `unreported` only when that recovery failed.
 
 ## Related
 

@@ -117,7 +117,9 @@ group('hello', () => {
   for what can be checked; use the judge for quality, with plain yes/no questions that don't
   name one specific way of doing it.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
-  `await expect(t.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`, plus Vitest's.
+  `await expect(t.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
+  `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw
+  `HarnessCapabilityError` when `turn.unreported` lists web events), plus Vitest's.
 
 ## Options and the cascade
 
