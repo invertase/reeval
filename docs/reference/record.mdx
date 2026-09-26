@@ -210,13 +210,19 @@ Counts attempts, except `evals`.
 
 ### Cost
 
-Tokens and USD, null when the harness or judge doesn't report them (Cursor reports none).
+What the run used. ES prices nothing, so `usd` stays null; tokens are the harnesses' own counts.
 
 <Property name="usd" type="number | null"></Property>
 
-<Property name="inputTokens" type="number | null"></Property>
+<Property name="inputTokens" type="number | null">
+  Prompt tokens, cache reads and writes included.
+</Property>
 
 <Property name="outputTokens" type="number | null"></Property>
+
+<Property name="usage" type="TokenUsage | null">
+  The same totals split as each turn reports them.
+</Property>
 
 <Property name="source" type="'reported' | 'unreported'"></Property>
 
@@ -412,8 +418,12 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="durationMs" type="number"></Property>
 
-<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string}>">
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null}>">
   `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
+</Property>
+
+<Property name="usage" type="TokenUsage | null">
+  Tokens across the attempt's turns; null when the harness reported none.
 </Property>
 
 <Property name="timings" type="PhaseTimings"></Property>

@@ -25,7 +25,7 @@ npx es run --dry-run
 ## Shared flags
 
 <Property name="--config" type="string" optional>
-  The config file every command reads. Default `./es.config.ts`. An explicit path that doesn't exist fails with `Config file not found`; with no config file at the default path, ES uses its defaults (`cursor()`, `docker()`, no judge model).
+  The config file every command reads. Default `./es.config.ts`. An explicit path that doesn't exist fails with `Config file not found`; with no config file at the default path, ES uses its defaults (`cursor({ model: 'composer-2.5' })`, `docker()`, no judge model).
 </Property>
 
 <Property name="-h, --help" type="boolean" optional>

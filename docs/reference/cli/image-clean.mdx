@@ -23,7 +23,7 @@ es image build [filter...]
 
 It collects the evals like `es run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and builds, in order:
 
-1. ES's image for each harness the plan uses, `evalsuite-sandbox:<harness>-<adapter version>` (for example `cursor-1.0.37`), which bakes that agent's CLI onto `evalsuite-sandbox-base:latest`.
+1. ES's image for each harness the plan uses, `evalsuite-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.0`), which bakes that agent's CLI onto `evalsuite-sandbox-base:latest`.
 2. Each `docker({ from })` and `docker({ dockerfile })` image, rebuilt once each.
 3. Each `install` layer, only if its base or its commands changed.
 

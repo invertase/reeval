@@ -36,6 +36,7 @@ group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'
 | [`defaultProfile`](#defaultprofile) | ✓ |  |  |  |
 | [`secrets`](#secrets) | ✓ |  |  |  |
 | [`debug`](#debug) | ✓ |  |  |  |
+| [`analysis`](#analysis) | ✓ |  |  |  |
 | [`compare`](#compare) |  |  | ✓ | ✓ |
 | [`tags`](#tags) |  |  | ✓ |  |
 | [`pin`](#pin) |  |  | ✓ |  |
@@ -46,7 +47,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 ## Options
 
 <Property name="harness" type="Harness | Harness[] | ((inherited: Harness[]) => Harness[])">
-  Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. A function edits the inherited list: `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, or two harnesses with the same id, is an error. Default `cursor()`.
+  Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. A function edits the inherited list: `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, or two harnesses with the same id, is an error. Default `cursor({ model: 'composer-2.5' })`.
 </Property>
 
 <Property name="environment" type="Environment">

@@ -42,7 +42,7 @@ import { docker } from '@invertase/foobar/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],              // default
-  harness: cursor({ model: 'composer-2.5' }), // CURSOR_API_KEY; needs docker()
+  harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY; docker()
   sandbox: docker(),                          // ES's image: Node 22, git, pnpm, the agent CLI
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // no default model; pin versions
   runs: 1,                                    // attempts per cell
@@ -50,12 +50,14 @@ export default defineConfig({
 })
 ```
 
-- Harnesses (`@invertase/foobar/harness`): `cursor({ model? })` (`CURSOR_API_KEY`),
+- Harnesses (`@invertase/foobar/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
+  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant),
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
   `gemini-3.8-flash-medium`) and `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that ES's gateway swaps on the
-  harness's own endpoints.
+  harness's own endpoints. Cursor and Antigravity report tokens, which ES records per turn,
+  attempt and run (no prices).
 - Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
   the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.
@@ -181,7 +183,9 @@ group('greetings', { compare: [houseStyle], runs: 2 }, () => {
   a failing control prints `(not gated)`. `compare.harness: ['cursor:composer-2.5']` compares on
   some harnesses only.
 - **Lift** is variant pass rate minus control pass rate, with a 95% interval; with few runs it's
-  usually "within noise". `compare: { variants: [x], minLift: 0 }` fails a variant whose
+  usually "within noise". The summary also prints **effort** under each variant (median tool
+  calls and agent time vs the control's), which often shows a skill's effect before pass rates
+  do: `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`. `compare: { variants: [x], minLift: 0 }` fails a variant whose
   interval's lower bound is below 0.
 - With `runs > 1`, a cell passes only if every attempt passes, unless `gate: { passRate: 0.8 }`.
 
@@ -217,7 +221,8 @@ blocked request doesn't fail the attempt; it's recorded, and your checks decide.
 ```text
 es run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> --record --ui plain -v
 es record            es history      es show [run]      es compare [base] [head] [--md]
-es query lift        es query "SELECT … FROM failing_attempts"      es query --schema
+es query lift        es query effort      es query "SELECT … FROM failing_attempts"
+es analyze           (one checked LLM reading of a run; --context for your own agent)
 es studio            es studio build --out site      es image build [--dry-run]      es clean
 ```
 
