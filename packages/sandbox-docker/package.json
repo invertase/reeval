@@ -2,7 +2,17 @@
   "name": "@evalsuite/sandbox-docker",
   "version": "0.1.0",
   "description": "A local Docker sandbox for AI SDK harnesses, with credential brokering and egress control",
-  "license": "MIT",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/invertase/evalsuite.git",
+    "directory": "packages/sandbox-docker"
+  },
+  "homepage": "https://github.com/invertase/evalsuite/tree/main/packages/sandbox-docker#readme",
+  "bugs": {
+    "url": "https://github.com/invertase/evalsuite/issues"
+  },
   "type": "module",
   "exports": {
     ".": {

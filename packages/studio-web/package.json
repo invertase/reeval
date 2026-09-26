@@ -1,6 +1,17 @@
 {
   "name": "studio-web",
   "version": "0.0.0",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/invertase/evalsuite.git",
+    "directory": "packages/studio-web"
+  },
+  "homepage": "https://github.com/invertase/evalsuite/tree/main/packages/studio-web#readme",
+  "bugs": {
+    "url": "https://github.com/invertase/evalsuite/issues"
+  },
   "private": true,
   "type": "module",
   "scripts": {

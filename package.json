@@ -1,6 +1,16 @@
 {
   "name": "es-monorepo",
   "version": "0.0.1",
+  "license": "Apache-2.0",
+  "author": "Invertase <oss@invertase.io>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/invertase/evalsuite.git"
+  },
+  "homepage": "https://github.com/invertase/evalsuite#readme",
+  "bugs": {
+    "url": "https://github.com/invertase/evalsuite/issues"
+  },
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.33.3",
