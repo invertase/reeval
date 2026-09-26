@@ -6,7 +6,8 @@ import type {
   HistoryEntry,
   RunRecord,
 } from '../history/types.ts'
-import type { Outcome, TranscriptEvent, TurnStatus } from '../types.ts'
+import type { Outcome, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
+import { promptTokens } from '../usage.ts'
 import {
   type CompareCell,
   type CompareRow,
@@ -113,17 +114,12 @@ export function formatDuration(ms: number | null | undefined): string {
 export const formatPercent = (rate: number | null) =>
   rate === null ? '–' : `${Math.round(rate * 100)}%`
 
-export const formatCost = (usd: number | null) =>
-  usd === null ? '–' : usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`
-
-/** Harness-reported tokens as `127k in · 776 out`; null when no harness reported any. */
-export function formatTokens(cost: {
-  inputTokens: number | null
-  outputTokens: number | null
-}): string | null {
-  if (cost.inputTokens === null || cost.outputTokens === null) return null
+/** Harness-reported tokens as `127k in (98k cached) · 776 out`; null when none were reported. */
+export function formatUsage(usage: TokenUsage | null | undefined): string | null {
+  if (!usage) return null
   const k = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : String(n))
-  return `${k(cost.inputTokens)} in · ${k(cost.outputTokens)} out`
+  const cached = usage.cacheRead ? ` (${k(usage.cacheRead)} cached)` : ''
+  return `${k(promptTokens(usage))} in${cached} · ${k(usage.output)} out`
 }
 
 export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : 'no git')

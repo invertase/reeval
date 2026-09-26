@@ -78,7 +78,8 @@ export function progressLine(c: Colors, p: Progress): string {
     case 'turn-end': {
       const status = p.status === 'completed' ? 'done' : c.red(p.status)
       const activity = [plural(p.tools, 'tool call'), plural(p.fileEdits, 'file edit')].join(', ')
-      return `turn ${p.turn} ${status} ${c.dim(`${formatDuration(p.ms)} · ${activity}`)}`
+      const error = p.error ? `: ${c.red(oneLine(p.error, 160))}` : ''
+      return `turn ${p.turn} ${status}${error} ${c.dim(`${formatDuration(p.ms)} · ${activity}`)}`
     }
     case 'check-start':
       return c.dim(`$ ${oneLine(p.command)}`)
@@ -157,11 +158,24 @@ export function failureLines(
   options: { max: number; reasons?: Array<string | null> },
 ): string[] {
   const outcome = outcomeOf(e)
+  if (outcome === 'cancelled') return [c.yellow('cancelled')]
   const message = e.errors[0] ?? ''
+  const turns = (e.meta?.turnErrors ?? [])
+    .filter((t) => !message.includes(t.replace(/^turn \d+ error: /, '')))
+    .map((t) => c.yellow(t))
+  return [...failureBody(c, e, outcome, message, options), ...turns]
+}
+
+function failureBody(
+  c: Colors,
+  e: EvalResult,
+  outcome: ReturnType<typeof outcomeOf>,
+  message: string,
+  options: { max: number; reasons?: Array<string | null> },
+): string[] {
   if (outcome === 'infra_error') {
     return [`${c.yellow('infra error')}`, ...tailLines(message, options.max)]
   }
-  if (outcome === 'cancelled') return [c.yellow('cancelled')]
   const failed = (e.meta?.judgements ?? []).filter((j) => j.verdict !== 'pass')
   if (e.meta?.errorKind === 'judge' && failed.length) {
     return failed.flatMap((j, i) => {

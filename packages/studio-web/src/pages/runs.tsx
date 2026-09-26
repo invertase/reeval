@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import {
-  formatCost,
   formatDuration,
   formatPercent,
+  formatUsage,
   type HistoryEntry,
   type RunRow,
   runOutcome,
@@ -271,7 +271,7 @@ export function RunsPage() {
                     <TableHead>Commit</TableHead>
                     <TableHead className="hidden md:table-cell">Who</TableHead>
                     <TableHead className="w-44">Result</TableHead>
-                    <TableHead className="hidden text-right lg:table-cell">Cost</TableHead>
+                    <TableHead className="hidden text-right lg:table-cell">Tokens</TableHead>
                     <TableHead className="hidden text-right sm:table-cell">Duration</TableHead>
                     <TableHead className="w-24" />
                   </TableRow>
@@ -359,7 +359,7 @@ export function RunsPage() {
                           />
                         </TableCell>
                         <TableCell className="tabular hidden text-right text-muted-foreground lg:table-cell">
-                          {formatCost(entry.costUsd)}
+                          {formatUsage(entry.usage) ?? '–'}
                         </TableCell>
                         <TableCell className="tabular hidden text-right text-muted-foreground sm:table-cell">
                           {formatDuration(entry.durationMs)}

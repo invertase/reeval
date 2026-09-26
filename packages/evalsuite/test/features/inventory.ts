@@ -52,6 +52,8 @@ const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
   `harness-cursor-sdk/test/${file}.test.ts › ${name}`
+const opencodeAdapter = (file: string, name: string) =>
+  `harness-opencode/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -164,6 +166,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       options('.only runs alone locally and exits 2 in CI'),
       options('tags filter, todo, for'),
+      options('common mistakes'),
       engine('skip is reported as skipped'),
       'evalsuite/test/plan.test.ts › .only in CI exits 2 before any plan prints',
     ],
@@ -204,6 +207,7 @@ export const inventory: InventoryFeature[] = [
       'skills/harness-placement',
       'harness/claude-code-harness-skills',
       'harness/antigravity-home-skills',
+      'harness/opencode-home-skills',
     ],
     real: ['contract › skill placed where the agent reads it, and used'],
   },
@@ -217,6 +221,7 @@ export const inventory: InventoryFeature[] = [
       'harness/cursor-workspace-skills',
       'harness/claude-code-workspace-skills',
       'harness/antigravity-workspace-skills',
+      'harness/opencode-workspace-skills',
     ],
   },
   {
@@ -302,12 +307,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor and Antigravity, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity and OpenCode, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
       'harness/claude-code-rules',
       'harness/antigravity-rules',
+      'harness/opencode-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -376,6 +382,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       unit('redactSecrets masks secret-looking env values'),
       secrets('redacting encoded forms'),
+      secrets('redacting fragments of a secret'),
     ],
   },
   {
@@ -440,7 +447,11 @@ export const inventory: InventoryFeature[] = [
     id: 'docker.dockerfile',
     area: 'Sandbox',
     name: '`docker({ dockerfile })` and `ES_BASE`',
-    fixtures: ['harness/claude-code-dockerfile', 'harness/antigravity-dockerfile'],
+    fixtures: [
+      'harness/claude-code-dockerfile',
+      'harness/antigravity-dockerfile',
+      'harness/opencode-dockerfile',
+    ],
     plan: ['images/install-from-dockerfile'],
     tests: [
       docker('dockerfile: FROM the ES_BASE arg'),
@@ -552,6 +563,24 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.opencode',
+    area: 'Harnesses',
+    name: '`opencode()`: OpenCode over ACP on a brokered Gemini key, its image, rules, skills and tool names',
+    fixtures: [
+      'harness/opencode-rules',
+      'harness/opencode-workspace-skills',
+      'harness/opencode-home-skills',
+      'harness/opencode-dockerfile',
+    ],
+    plan: ['opencode/opencode'],
+    tests: [
+      harness('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills'),
+      harness("the key is swapped in on OpenCode's model endpoint only"),
+      harness("OpenCode's edits and writes are file edits, relative to the workspace"),
+      opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
+    ],
+  },
+  {
     id: 'harness.cursor',
     area: 'Harnesses',
     name: '`cursor()`: Cursor through its TypeScript SDK, one runner per session',
@@ -604,7 +633,10 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: '`fakeHarness({ script })` and `layout`',
     fixtures: ['secrets/checks-hidden-from-agent', 'harness/cursor-rules'],
-    tests: [harness('a fake agent with a layout is placed exactly like that agent')],
+    tests: [
+      harness('a fake agent with a layout is placed exactly like that agent'),
+      engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
+    ],
   },
   {
     id: 'harness.transcripts',
@@ -661,6 +693,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/matchers.test.ts › passes when the file exists',
       'evalsuite/test/matchers.test.ts › passes on exit 0',
       'evalsuite/test/matchers.test.ts › passes on a pass verdict',
+      engine('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown'),
     ],
   },
 
@@ -806,6 +839,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/ui.test.ts › grouped: start lines stream',
       'evalsuite/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
       engine('agent mode prints failures only'),
+      engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
     ],
   },
   {
@@ -859,6 +893,7 @@ export const inventory: InventoryFeature[] = [
     name: 'Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included',
     tests: [
       debug('redaction holds on screen, in debug.log and in trace.ndjson, encoded forms included'),
+      debug("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript"),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
     ],
   },

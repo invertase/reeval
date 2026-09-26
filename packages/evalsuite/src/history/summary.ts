@@ -213,6 +213,7 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     lines.push(
       `- Prompt (${turn.status}, ${formatDuration(turn.durationMs)}): ${clip(cell(turn.prompt), 200)}`,
     )
+    if (turn.error) lines.push(`  - Error: ${clip(cell(turn.error), 500)}`)
   }
   const t = a.timings
   lines.push(

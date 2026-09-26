@@ -5,6 +5,7 @@ import type {
   ClaudeCodeHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
+  OpenCodeHarnessDescriptor,
 } from './types.ts'
 
 /**
@@ -59,9 +60,25 @@ export const antigravity = (
   return { kind: 'antigravity', ...options }
 }
 
-const LAYOUTS = ['cursor', 'claude-code', 'antigravity']
+/**
+ * OpenCode, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google`
+ * provider, since that's the only key it's given. `id` names the cell; it defaults to
+ * `opencode:<model>`.
+ */
+export const opencode = (
+  options: Omit<OpenCodeHarnessDescriptor, 'kind'>,
+): OpenCodeHarnessDescriptor => {
+  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
+    throw new UsageError(
+      `opencode() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. opencode({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
+    )
+  }
+  return { kind: 'opencode', ...options }
+}
 
-const STEP_KEYS = ['exec', 'write', 'reply', 'mcp']
+const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode']
+
+const STEP_KEYS = ['exec', 'write', 'reply', 'mcp', 'error']
 
 function checkScript(script: unknown): void {
   const example = "script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]]"
@@ -87,7 +104,7 @@ function checkScript(script: unknown): void {
           : typeof value === 'string')
     if (!valid) {
       throw new UsageError(
-        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string } or { mcp: '<server>/<tool>' } (got ${JSON.stringify(step)})`,
+        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got ${JSON.stringify(step)})`,
       )
     }
   }
@@ -112,4 +129,5 @@ export type {
   FakeHarnessDescriptor,
   FakeScriptStep,
   HarnessDescriptor,
+  OpenCodeHarnessDescriptor,
 } from './types.ts'

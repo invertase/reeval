@@ -8,7 +8,7 @@ import { attemptKey, recordFileName } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { clip } from '../text.ts'
-import type { ErrorKind, EvalMeta } from '../types.ts'
+import type { ErrorKind, EvalMeta, TranscriptEvent } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; message: string } {
@@ -81,5 +81,16 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
       threshold: j.threshold,
       question: clip(j.question, 200),
     })),
+    turnErrors: turnErrors(record.turns.map((t) => t.transcript)),
   }
+}
+
+/** `turn N error: <message>` for each turn with an error event. */
+export function turnErrors(transcripts: TranscriptEvent[][]): string[] {
+  return transcripts.flatMap((events, i) => {
+    const found = events.find((e) => e.type === 'error')
+    return found?.type === 'error'
+      ? [`turn ${i + 1} error: ${redactSecrets(clip(found.message.trim(), 500))}`]
+      : []
+  })
 }

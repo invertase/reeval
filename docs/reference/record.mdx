@@ -213,9 +213,7 @@ Counts attempts, except `evals`.
 
 ### Cost
 
-What the run used. ES prices nothing, so `usd` stays null; tokens are the harnesses' own counts.
-
-<Property name="usd" type="number | null"></Property>
+The tokens the run used, as the harnesses count them; ES prices nothing.
 
 <Property name="inputTokens" type="number | null">
   Prompt tokens, cache reads and writes included.
@@ -425,7 +423,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="durationMs" type="number"></Property>
 
-<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]}>">
+<Property name="turns" type="Array<{prompt: string; status: TurnStatus; startedAt: string; durationMs: number; text: string; usage: TokenUsage | null; model: string | null; unreported: WebEventType[]; error: string | null}>">
   `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`.
 </Property>
 

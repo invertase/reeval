@@ -1,0 +1,92 @@
+---
+title: opencode()
+description: The OpenCode harness, its options and id, its Gemini API key, the tokens it can't report and what it's kept from reading or fetching.
+---
+
+`opencode()` runs [OpenCode](https://opencode.ai) in the Docker sandbox over its ACP server (`opencode acp`), on a Google model with a Gemini API key. `model` is required.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { opencode } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: opencode({ model: 'gemini-3.8-flash' }),
+})
+```
+
+## Options
+
+<Property name="model" type="string">
+  A Gemini model id, such as `gemini-3.8-flash`, without a provider: ES runs it on OpenCode's `google` provider (`google/gemini-3.8-flash`), since a Gemini API key is the only key it's given. Required.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `opencode:<model>`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most OpenCode attempts at once across the run, for example for your key's rate limits.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key) |
+| Adapter | `@evalsuite/harness-opencode` 0.1.0 (over `@ai-sdk/harness-acp`), bundled with ES |
+| CLI | `opencode-ai` 1.18.32 |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:opencode-0.1.0` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `~/.config/opencode/skills` |
+| Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
+| Egress hosts added | `generativelanguage.googleapis.com` |
+| Tokens | Not reported (below) |
+
+Build its image once with `es image build` in a project whose config uses `opencode()`.
+
+## The key
+
+ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request, the one OpenCode 1.18.32 sends it on (its model, and the same model for session titles):
+
+| Host | Endpoint |
+|---|---|
+| `generativelanguage.googleapis.com` | `POST /v1beta/models/<model>:streamGenerateContent` |
+
+The adapter refuses to run in a sandbox that can't broker the key. `@ai-sdk/harness-opencode` brokers Anthropic, OpenAI and other keys but not a Google one, so ES uses its own thin config over `@ai-sdk/harness-acp` instead.
+
+## Tokens
+
+None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (a 4-call turn that used 33,942 input tokens reported 8,559), so ES records nothing rather than an undercount. The served model is still recorded, from the gateway's requests.
+
+## Settings
+
+ES starts OpenCode with its auto-update, share links, model-catalog fetch, LSP downloads and default plugins off, and without the files it would also read for Claude Code and `.agents` compatibility:
+
+| Variable | Why |
+|---|---|
+| `OPENCODE_DISABLE_AUTOUPDATE=1` | No self-update, so the CLI stays the image's. |
+| `OPENCODE_DISABLE_SHARE=1` | No share links. |
+| `OPENCODE_DISABLE_MODELS_FETCH=1` | No `models.opencode.ai` fetch: the model catalog is the one the CLI shipped with. |
+| `OPENCODE_DISABLE_LSP_DOWNLOAD=1`, `OPENCODE_DISABLE_DEFAULT_PLUGINS=1` | Nothing downloaded or loaded that the eval didn't set up. |
+| `OPENCODE_DISABLE_CLAUDE_CODE=1`, `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` | It reads `AGENTS.md` and its own skill directories only, not `CLAUDE.md`, `.claude/skills` or `.agents/skills`. |
+
+OpenCode installs its plugin runtime (`@opencode-ai/plugin`, 63 MB) into `~/.config/opencode` from npm on every start. ES's image has it installed already, so a run makes no npm requests and works under `egress: 'deny-all'`.
+
+MCP servers are passed in ACP's `session/new` shape; OpenCode accepts `stdio`, `http` and `sse` servers. Its MCP tools are named `mcp__<server>__<tool>` in the transcript, as on every harness.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No model, or one with a provider | `opencode() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. opencode({ model: 'gemini-3.8-flash' }) (got …)` |
+| No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the OpenCode harness can't authenticate. Set it in the environment or .env.local.` |
+| A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox` |
+| OpenCode doesn't start | `OpenCode harness failed to start: …` |
+
+## Related
+
+- [Harnesses](/guide/harnesses)
+- [Secrets and egress](/guide/secrets-and-egress)
+- [Transcripts](/reference/transcript)

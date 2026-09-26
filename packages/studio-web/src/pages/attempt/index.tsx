@@ -6,6 +6,7 @@ import {
   findAttempt,
   findEval,
   formatDuration,
+  formatUsage,
 } from 'evalsuite/view'
 import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
 import { Artifact } from '@/components/artifact'
@@ -108,6 +109,7 @@ export function AttemptPage() {
   const next = entry.attempts[index + 1]
   const judge = attempt.judgements[0]
   const failedChecks = attempt.checks.filter((c) => c.exitCode !== 0).length
+  const served = [...new Set(attempt.turns.flatMap((t) => (t.model ? [t.model] : [])))]
 
   return (
     <div className="space-y-6">
@@ -152,6 +154,8 @@ export function AttemptPage() {
             {attempt.activity.reasoningMs
               ? ` · ${formatDuration(attempt.activity.reasoningMs)} reasoning`
               : ''}
+            {attempt.usage ? ` · ${formatUsage(attempt.usage)} tokens` : ''}
+            {served.length ? ` · served by ${served.join(', ')}` : ''}
           </p>
         </div>
         {entry.attempts.length > 1 ? (

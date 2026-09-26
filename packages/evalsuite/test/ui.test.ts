@@ -115,7 +115,7 @@ const entry = (r: EvalResult, turns: number, judge?: number): EvalEntry =>
 
 const record = {
   durationMs: 365_000,
-  cost: { usd: null },
+  cost: { usage: null },
   summary: { evals: 2, attempts: 2, pass: 1, fail: 1, notGated: 0, infraError: 0, skipped: 0 },
   evals: [entry(greetResult, 1, 0.92), entry(defaultResult, 2)],
 } as unknown as RunRecord
