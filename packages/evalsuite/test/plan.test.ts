@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { describe, test } from 'node:test'
-import { runCli } from './helpers.ts'
+import { project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
 
@@ -93,6 +93,45 @@ describe('the JSON plan', { concurrency: true }, () => {
       )
     }
     assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
+  })
+
+  test('an mcp.sse server on Goose or pi exits 2 at plan time, naming the eval and the server', async () => {
+    for (const [factory, model, refusal] of [
+      [
+        'goose',
+        'gemini-3.8-flash',
+        /evaluate\("streams"\) on goose:gemini-3\.8-flash: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
+      ],
+      [
+        'pi',
+        'gemini-3.8-flash',
+        /evaluate\("streams"\) on pi:gemini-3\.8-flash: pi has no MCP client, so it can't use the events MCP server/,
+      ],
+    ] as const) {
+      const p = await project(`sse-${factory}`, {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { cursor, ${factory} } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({
+  harness: [cursor({ model: 'composer-2.5' }), ${factory}({ model: '${model}' })],
+  sandbox: docker(),
+})
+`,
+        'evals/s.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+const events = defineEnvironment('events', ({ mcp }) => ({ mcp: { events: mcp.sse('https://events.example.com/sse') } }))
+evaluate('streams', { environment: events }, async () => {})
+`,
+      })
+      for (const args of [
+        ['run', '--dry-run'],
+        ['run', '--dry-run', '--json'],
+      ]) {
+        const r = await runCli(p.dir, args)
+        assert.equal(r.code, 2, r.stdout + r.stderr)
+        assert.equal(r.stdout, '', args.join(' '))
+        assert.match(r.stderr, refusal)
+      }
+    }
   })
 
   test('the text plan names each restricted policy and its automatic hosts', async () => {

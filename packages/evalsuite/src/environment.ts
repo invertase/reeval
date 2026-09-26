@@ -91,6 +91,15 @@ const toPath = (value: string | URL, base: string) => {
   return isAbsolute(path) ? path : resolve(base, path)
 }
 
+/**
+ * A tarball or folder spec (`./x.tgz`, `../pkg`, `/abs`, `file:…`) as an absolute path, resolved
+ * like `file()`; npm resolves relative ones against its working directory, ES's cache.
+ */
+const localNpmSpec = (spec: string, base: string) => {
+  const path = spec.startsWith('file:') ? spec.slice('file:'.length) : spec
+  return /^\.{1,2}(?:\/|$)/.test(path) || isAbsolute(path) ? toPath(path, base) : spec
+}
+
 /** A host name, or `*.` and a domain for its subdomains. */
 const HOST = /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$/i
 const SUBSTITUTE_IN: readonly SubstituteIn[] = ['header', 'query', 'body']
@@ -384,7 +393,7 @@ function skillHelper(base: string): SkillHelper {
     npm: (spec, o = {}) => ({
       kind: 'skill',
       source: 'npm',
-      spec,
+      spec: localNpmSpec(spec, base),
       path: o.path ?? 'skills',
       ...(o.only ? { only: [...o.only] } : {}),
       ...exclude(o.exclude),

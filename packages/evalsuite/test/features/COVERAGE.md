@@ -41,13 +41,13 @@
 | `skill.git`: ref, `path`, `only` and the recorded commit | ✓ 2 | — | ● 1 | ● 1 | — |
 | `skill.inline` | ✓ 1 | — | — | — | — |
 | `skill.registry` | — | — | ● 1 | ● 1 | — |
-| `skill.npm` | — | — | ● 1 | ● 1 | — |
+| `skill.npm` | — | — | ● 2 | ● 2 | — |
 | Skill `exclude`: the defaults and a custom list | ✓ 2 | — | ● 2 | ● 2 | — |
 | `only` naming a missing skill | — | — | ● 1 | ● 1 | — |
 | `SKILL.md` frontmatter as YAML | ✓ 1 | — | — | — | — |
 | `mcp.stdio` | ✓ 3 | — | — | ● 1 | ● 2 |
 | `mcp.http` | ✓ 1 | — | — | — | — |
-| `mcp.sse` | ✓ 1 | ✓ 1 | — | — | — |
+| `mcp.sse` | ✓ 2 | ✓ 1 | — | — | — |
 | `secret.template` in MCP headers | ✓ 2 | — | — | — | — |
 | `rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose and pi, `CLAUDE.md` for Claude Code | ✓ 1 | — | ● 7 | ● 7 | ● 2 |
 | `files` in the workspace, and `file()` | ✓ 1 | — | — | — | — |

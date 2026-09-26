@@ -256,7 +256,7 @@ export const inventory: InventoryFeature[] = [
     id: 'skill.npm',
     area: 'Environments',
     name: '`skill.npm`',
-    fixtures: ['skills/npm-package'],
+    fixtures: ['skills/npm-package', 'skills/npm-local-path'],
   },
   {
     id: 'skill.exclude',
@@ -305,6 +305,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['egress/cascade'],
     tests: [
       'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
+      'evalsuite/test/plan.test.ts › an mcp.sse server on Goose or pi exits 2 at plan time',
     ],
   },
   {

@@ -3,7 +3,7 @@
 // touches the sandbox.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
-import { basename, join, relative, sep } from 'node:path'
+import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { placeholder, type Substitution } from '@evalsuite/sandbox-docker'
 import { run } from '@evalsuite/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
@@ -350,7 +350,8 @@ async function resolveSkills(root: string, s: SkillSource): Promise<Found> {
     }
     case 'npm': {
       const dir = await unpackNpm(root, s.spec)
-      const label = `npm:${s.spec}:${s.path}`
+      const spec = isAbsolute(s.spec) ? relative(root, s.spec).split(sep).join('/') : s.spec
+      const label = `npm:${spec}:${s.path}`
       return {
         skills: loadSkills(join(dir, s.path), label, s.only, s.exclude),
         source: label,

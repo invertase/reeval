@@ -1,0 +1,8 @@
+import { evaluate, expect } from 'evalsuite'
+import { staged, vendored } from './env.ts'
+
+// skill.npm with a relative tarball path stages that tarball's skills.
+evaluate('lands', { environment: vendored }, async (t) => {
+  await t.sandbox()
+  expect(await t.readFile(staged)).toContain('Greet people with "Ahoy, <name>!".')
+})
