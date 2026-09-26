@@ -372,13 +372,6 @@ const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
 /** The real tier runs only when asked, since it spends money; asked, it needs the key. */
 const real = process.env.ES_TEST_REAL === '1'
 const realModel = process.env.ES_REAL_MODEL ?? 'composer-2.5'
-/** Real attempts run one at a time (test-strategy §5). */
-let realQueue: Promise<unknown> = Promise.resolve()
-const oneAtATime = <T>(fn: () => Promise<T>): Promise<T> => {
-  const next = realQueue.then(fn, fn)
-  realQueue = next.catch(() => {})
-  return next
-}
 /** `ES_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
 const only = process.env.ES_FIXTURE_TIERS?.split(',')
 
@@ -407,11 +400,11 @@ function skipTier(tier: Tier, image?: BakedHarness): string | false {
   return false
 }
 
-describe('feature fixtures', { concurrency: 4 }, () => {
+function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
-    for (const tier of f.tiers) {
+    for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
       const timeout = { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
-      const run = async () => {
+      test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, async () => {
         if (tier === 'real')
           assert.ok(process.env.CURSOR_API_KEY, 'the real tier needs CURSOR_API_KEY')
         const p = await fixture(`features/${f.dir}`)
@@ -447,13 +440,14 @@ describe('feature fixtures', { concurrency: 4 }, () => {
         await f.record?.({ run, project: p.dir, runDir, tier })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
         if (tier !== 'fake') await containersGone(run.runId)
-      }
-      test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, () =>
-        tier === 'real' ? oneAtATime(run) : run(),
-      )
+      })
     }
   }
-})
+}
+
+describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker']))
+// Real attempts run one at a time (test-strategy §5), each within its own timeout.
+describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 
 test('every feature fixture is in the table, with one check and a canary', () => {
   const root = join(testDir, 'features')
