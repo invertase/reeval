@@ -10,6 +10,7 @@ import {
   formatCost,
   formatDuration,
   formatRatio,
+  formatTokens,
   isMatrix,
   type RunRecord,
   runOutcome,
@@ -86,6 +87,9 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
           <Meta icon={Clock}>{formatDuration(record.durationMs)}</Meta>
           {record.cost.usd !== null ? (
             <Meta icon={Coins}>{formatCost(record.cost.usd)}</Meta>
+          ) : null}
+          {formatTokens(record.cost) ? (
+            <Meta icon={Coins}>{formatTokens(record.cost)} tokens</Meta>
           ) : null}
         </div>
       </div>

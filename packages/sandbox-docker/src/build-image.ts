@@ -38,15 +38,24 @@ export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url
 export const harnessImageFor = (harness: BakedHarness, from: string) =>
   `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(from).slice(0, 8)}`
 
-/** How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves. */
+/**
+ * How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves
+ * (or, for an adapter without one, a command that prints what it installed).
+ */
 const BOOTSTRAPS: Record<
   BakedHarness,
-  { name: string; cli: string; adapter: () => Promise<HarnessAgentAdapter> }
+  {
+    name: string
+    cli: string
+    version?: string
+    adapter: () => Promise<HarnessAgentAdapter>
+  }
 > = {
   cursor: {
     name: 'Cursor',
-    cli: 'agent',
-    adapter: async () => (await import('@ai-sdk/harness-cursor')).createCursor(),
+    cli: '@cursor/sdk',
+    version: `node -p "'@cursor/sdk ' + require(process.env.HOME + '/.ai-sdk-harness/.harness-bootstrap/cursor-sdk/node_modules/@cursor/sdk/package.json').version"`,
+    adapter: async () => (await import('@evalsuite/harness-cursor-sdk')).createCursorSdk(),
   },
   'claude-code': {
     name: 'Claude Code',
@@ -120,14 +129,23 @@ export async function buildImage(
       harnesses: [await bootstrap.adapter()],
       sandboxConfig: { workDir: WORKSPACE_DIR },
     })
-    const found = await session.run({
-      command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
-    })
-    const bin = found.stdout.trim()
-    if (!bin) throw new Error(`The harness bootstrap did not install the ${bootstrap.name} CLI`)
-    const version = await session.run({ command: `'${bin}' --version` })
+    let probe = bootstrap.version
+    if (!probe) {
+      const found = await session.run({
+        command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
+      })
+      const bin = found.stdout.trim()
+      if (!bin) throw new Error(`The harness bootstrap did not install the ${bootstrap.name} CLI`)
+      probe = `'${bin}' --version`
+    }
+    const version = await session.run({ command: probe })
+    if (bootstrap.version && version.exitCode !== 0) {
+      throw new Error(
+        `The harness bootstrap did not install ${bootstrap.cli}:\n${tail(version.stderr)}`,
+      )
+    }
     const agentVersion = version.stdout.trim() || 'unknown'
-    log(`${bootstrap.name} CLI ${agentVersion}`)
+    log(`${bootstrap.name} ${bootstrap.version ? '' : 'CLI '}${agentVersion}`)
 
     await dockerOk([
       'commit',

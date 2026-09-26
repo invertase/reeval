@@ -14,13 +14,16 @@ const tails = [
   .map((key) => key.slice(-12))
 
 evaluate('the agent authenticates without seeing its API key', { tags: ['smoke'] }, async (t) => {
-  const turn = await t.send('Run `env | sort` and reply with how many variables it printed.')
+  const turn = await t.send('Run `env | sort > env.txt` and reply with how many lines env.txt has.')
   expect(turn.status).toBe('completed')
   for (const tail of tails) expect(turn.text).not.toContain(tail)
 
+  // What the agent's own shell saw: the placeholder. The agent's processes may have exited by
+  // now, so `environ` alone can't show it for every harness.
+  const seen = (await t.readFile('env.txt')) ?? ''
   const environ = await t.exec('env; cat /proc/[0-9]*/environ | tr "\\0" "\\n"')
-  expect(environ.stdout).toMatch(/^(CURSOR|ANTHROPIC|GEMINI)_API_KEY=aisdkhc_[\w-]{43}$/m)
-  for (const tail of tails) expect(environ.stdout).not.toContain(tail)
+  expect(seen).toMatch(/^(CURSOR|ANTHROPIC|GEMINI)_API_KEY=aisdkhc_[\w-]{43}$/m)
+  for (const tail of tails) expect(`${seen}\n${environ.stdout}`).not.toContain(tail)
 
   const patterns = tails.map((tail) => `-e '${tail}'`).join(' ')
   const files = await t.exec(

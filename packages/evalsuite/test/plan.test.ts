@@ -23,6 +23,7 @@ export const cases: PlanCase[] = [
   { dir: 'images', name: 'install-from-dockerfile', args: [] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },
+  { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'secrets', name: 'brokered', args: [] },
   { dir: 'egress', name: 'cascade', args: [] },
   { dir: 'egress', name: 'profile-defaults', args: ['--profile', 'locked', 'evals/cascade.es.ts'] },

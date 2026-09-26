@@ -2,7 +2,10 @@ import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import type { JSONValue } from '@ai-sdk/provider'
 import { projectToolCall } from './antigravity-tools.ts'
 
-/** Token counts as the CLI reports them; `output_tokens` includes `thinking_tokens`. */
+/**
+ * Token counts as the CLI reports them. `input_tokens` excludes `cache_read_tokens` (reads are
+ * often larger), and `output_tokens` includes `thinking_tokens`.
+ */
 export type AntigravityUsage = {
   input_tokens?: number
   output_tokens?: number
@@ -54,14 +57,14 @@ type FinishReason = Extract<HarnessV1StreamPart, { type: 'finish' }>['finishReas
 
 /** Maps the CLI's counts onto the AI SDK's usage shape, keeping the original under `raw`. */
 export function toUsage(usage: AntigravityUsage | undefined): Usage {
-  const input = usage?.input_tokens
+  const noCache = usage?.input_tokens
   const cacheRead = usage?.cache_read_tokens
   const output = usage?.output_tokens
   const reasoning = usage?.thinking_tokens
   return {
     inputTokens: {
-      total: input,
-      noCache: input !== undefined && cacheRead !== undefined ? input - cacheRead : undefined,
+      total: noCache !== undefined ? noCache + (cacheRead ?? 0) : undefined,
+      noCache,
       cacheRead,
       cacheWrite: undefined,
     },

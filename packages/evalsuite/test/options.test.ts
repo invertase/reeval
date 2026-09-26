@@ -532,7 +532,7 @@ describe('common mistakes', () => {
     [
       'a harness kind ES does not know',
       `evaluate('e', { harness: { kind: 'codex' } as never }, async () => {})`,
-      /harness in evaluate\("e"\) must be like cursor\(\) \(got an object with "kind"\)/,
+      /harness in evaluate\("e"\) must be like cursor\(\{ model: 'composer-2\.5' \}\) \(got an object with "kind"\)/,
     ],
     [
       'Claude Code without a model',
@@ -682,7 +682,7 @@ ${body}
     [
       'a usd budget',
       `budget: { usd: 20 },`,
-      /budget\.usd isn't supported: no harness ES runs reports cost or tokens yet \(Cursor reports no usage\)\. Cap the run with attempts or duration\./,
+      /budget\.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
     ],
     [
       'an unbrokered policy ES does not know',

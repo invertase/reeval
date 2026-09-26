@@ -226,7 +226,7 @@ describe('stream translation', () => {
         total_tokens: 130,
       }),
       {
-        inputTokens: { total: 100, noCache: 60, cacheRead: 40, cacheWrite: undefined },
+        inputTokens: { total: 140, noCache: 100, cacheRead: 40, cacheWrite: undefined },
         outputTokens: { total: 30, text: 20, reasoning: 10 },
         raw: {
           input_tokens: 100,
@@ -237,5 +237,16 @@ describe('stream translation', () => {
         },
       },
     )
+  })
+
+  test('input_tokens is uncached, so cache reads larger than it never go negative', () => {
+    // Counts from a real gemini-3.8-flash turn.
+    const usage = toUsage({ input_tokens: 70161, output_tokens: 412, cache_read_tokens: 143477 })
+    assert.deepEqual(usage.inputTokens, {
+      total: 213638,
+      noCache: 70161,
+      cacheRead: 143477,
+      cacheWrite: undefined,
+    })
   })
 })

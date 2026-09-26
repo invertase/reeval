@@ -3,7 +3,7 @@
  * `workspace:<version>` for this repo's own adapters); a test enforces it.
  */
 export const HARNESS_PACKAGES = {
-  cursor: { name: '@ai-sdk/harness-cursor', version: '1.0.37' },
+  cursor: { name: '@evalsuite/harness-cursor-sdk', version: '0.1.0' },
   'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.128' },
   antigravity: { name: '@evalsuite/harness-antigravity', version: '0.1.0' },
 } as const

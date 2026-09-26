@@ -19,7 +19,7 @@ evaluate(
 evaluate(
   'antigravity on a toolchain base',
   {
-    harness: [cursor(), antigravity({ model: 'gemini-3.1-pro-high' })],
+    harness: [cursor({ model: 'composer-2.5' }), antigravity({ model: 'gemini-3.1-pro-high' })],
     sandbox: docker({ from: 'python:3.12-slim' }),
   },
   async () => {},

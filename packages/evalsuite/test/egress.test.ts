@@ -83,8 +83,6 @@ describe('automatic hosts', () => {
     assert.deepEqual(planned.auto, [
       'api2.cursor.sh',
       '*.cursor.sh',
-      'cursor.com',
-      '*.cursor.com',
       '*.upload.example.com',
       'mcp.example.com',
     ])

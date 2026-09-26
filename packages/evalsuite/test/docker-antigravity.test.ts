@@ -165,6 +165,15 @@ evaluate('real', { environment: house }, async (t) => {
       assert.doesNotMatch(out, /refused/, 'no request needed the key off its endpoint')
       const { run, dir } = readRun(p.dir)
       assert.equal(liveContainers(run.runId), '')
+      // The CLI's token counts reach the record, per turn and totalled, and never go negative.
+      const turns = run.evals[0]?.attempts[0]?.turns ?? []
+      for (const t of turns) {
+        assert.ok(t.usage && t.usage.input > 0 && t.usage.output > 0, JSON.stringify(t.usage))
+        assert.ok(t.usage.cacheRead >= 0, JSON.stringify(t.usage))
+        assert.equal(t.model, 'gemini-3.8-flash-low')
+      }
+      assert.equal(run.cost.source, 'reported')
+      assert.equal(run.cost.usd, null)
       // The key (or its tail) is nowhere in what the run wrote, and the check can fail.
       const grep = (needle: string) => {
         try {
