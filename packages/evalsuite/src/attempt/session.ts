@@ -19,6 +19,7 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   const steps: ResolvedStep[] = env.setup
   record.setup = []
   for (const [i, step] of steps.entries()) {
+    const what = `setup step ${i + 1}/${steps.length} "${clip(step.run, 80)}" in environment ${spec.environment.name}`
     const start = performance.now()
     const stepSignal = AbortSignal.any([a.signal, AbortSignal.timeout(step.timeoutMs)])
     const r = await asCheck(a, () =>
@@ -29,6 +30,11 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
       }),
     ).catch((error) => {
       if (a.signal.aborted) throw error
+      if (!stepSignal.aborted) {
+        throw new InfraError(
+          `${what} couldn't run: ${error instanceof Error ? error.message : error}`,
+        )
+      }
       return null
     })
     const durationMs = Math.round(performance.now() - start)
@@ -52,7 +58,6 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
       `setup ${i + 1} output`,
     )
     if (r?.exitCode === 0) continue
-    const what = `setup step ${i + 1}/${steps.length} "${clip(step.run, 80)}" in environment ${spec.environment.name}`
     throw new InfraError(
       r
         ? `${what} exited ${r.exitCode} after ${formatDuration(durationMs)} (see setup.log):\n${tailOf(r.stderr || r.stdout)}`
