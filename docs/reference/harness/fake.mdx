@@ -72,7 +72,7 @@ npx es run --config es.fake.config.ts
   Throws an infra error with this message before the first turn, to simulate a harness that doesn't start.
 </Property>
 
-<Property name="layout" type="'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose'" optional>
+<Property name="layout" type="'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi'" optional>
   Behave like that agent without its key: its Docker image, rules file, skill directories and egress hosts. Without it, the fake reads `AGENTS.md` and `~/.agents/skills` and uses Cursor's image.
 </Property>
 
@@ -117,7 +117,7 @@ Harness-placed skills are written under `~/`, where the layout's adapter would p
 |---|---|
 | `script` not a list of lists | `fakeHarness({ script }) takes one list of steps per turn, e.g. script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]] (got …)` |
 | A bad step | `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string }, { mcp: '<server>/<tool>' } or { error: string } (got …)` |
-| A bad layout | `fakeHarness({ layout }) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose' (got …)` |
+| A bad layout | `fakeHarness({ layout }) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi' (got …)` |
 | An unknown MCP server | `The fake agent's script calls MCP server "docs", which the environment doesn't have (it has none)` |
 | A remote MCP server | `The fake agent calls stdio MCP servers only; "docs" is http` |
 

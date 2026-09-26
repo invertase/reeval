@@ -12,6 +12,7 @@ import { AntigravityStreamTranslator } from '@evalsuite/harness-antigravity'
 import { CursorSdkStreamTranslator } from '@evalsuite/harness-cursor-sdk'
 import { GooseStreamTranslator } from '@evalsuite/harness-goose'
 import { OpenCodeStreamTranslator } from '@evalsuite/harness-opencode'
+import { PiStreamTranslator } from '@evalsuite/harness-pi'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { testDir } from './support/fixture.ts'
@@ -63,24 +64,25 @@ const signals: Record<string, (es: TranscriptEvent[]) => void> = {
   },
 }
 
+const NO_MCP = new Set(['pi'])
+
 const harnesses = existsSync(root)
   ? readdirSync(root, { withFileTypes: true })
       .filter((d) => d.isDirectory() && d.name !== 'formats')
       .map((d) => d.name)
   : []
 
-test('there are captures for Cursor, Antigravity, OpenCode and Goose', () => {
-  assert.deepEqual(harnesses.sort(), ['antigravity', 'cursor', 'goose', 'opencode'])
+test('there are captures for Cursor, Antigravity, OpenCode, Goose and pi', () => {
+  assert.deepEqual(harnesses.sort(), ['antigravity', 'cursor', 'goose', 'opencode', 'pi'])
 })
 
 for (const harness of harnesses) {
   describe(`replay: ${harness}`, () => {
     const files = readdirSync(join(root, harness)).filter((f) => f.endsWith('.raw.jsonl'))
     test('one capture per behaviour', () => {
-      assert.deepEqual(
-        files.map((f) => f.replace('.raw.jsonl', '')).sort(),
-        Object.keys(signals).sort(),
-      )
+      // A harness with no MCP client has no MCP capture: its MCP attempts are refused.
+      const behaviours = Object.keys(signals).filter((b) => b !== 'mcp' || !NO_MCP.has(harness))
+      assert.deepEqual(files.map((f) => f.replace('.raw.jsonl', '')).sort(), behaviours.sort())
     })
     for (const file of files) {
       const name = file.replace('.raw.jsonl', '')
@@ -91,7 +93,7 @@ for (const harness of harnesses) {
       })
     }
     test('twin: a capture checked for another behaviour fails', () => {
-      assert.throws(() => signals.mcp?.(events(parse(read(harness, 'skill.raw.jsonl')))))
+      assert.throws(() => signals.egress?.(events(parse(read(harness, 'skill.raw.jsonl')))))
     })
   })
 }
@@ -100,12 +102,14 @@ for (const harness of harnesses) {
 const renamedTool: Record<string, [string, string]> = {
   antigravity: ['"run_command"', '"run_cmd_v2"'],
   cursor: ['"name":"shell"', '"name":"shell_v2"'],
+  pi: ['"name":"bash"', '"name":"bash_v2"'],
 }
 
 /** Each harness's translator, fresh for one turn: the native events go back through it. */
 const translators: Record<string, () => { push(line: string): HarnessV1StreamPart[] }> = {
   antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
   cursor: () => new CursorSdkStreamTranslator({ workDir: '/es/workspace' }),
+  pi: () => new PiStreamTranslator(),
 }
 
 for (const harness of Object.keys(translators))
@@ -240,6 +244,11 @@ const formatChanges: Record<string, Array<[string, string]>> = {
     ['"type":"tool_call"', '"type":"tool_use"'],
     ['"call_id"', '"callId"'],
     ['"status":"completed"', '"status":"done"'],
+  ],
+  pi: [
+    ['"type":"message_end"', '"type":"message_done"'],
+    ['"type":"toolcall_end"', '"type":"tool_call_end"'],
+    ['"stopReason":"toolUse"', '"stopReason":"tool_use"'],
   ],
   goose: [
     ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],

@@ -190,10 +190,11 @@ export type FakeHarnessDescriptor = {
   /**
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
-   * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`). Defaults to the
+   * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`,
+   * `~/.pi/agent/skills` for `pi`). Defaults to the
    * fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose'
+  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -272,6 +273,19 @@ export type GooseHarnessDescriptor = {
   /** The most Goose attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
 }
+/**
+ * pi through `@evalsuite/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
+ * Google models on a Gemini API key and reports each model call's tokens. It has no MCP client.
+ */
+export type PiHarnessDescriptor = {
+  kind: 'pi'
+  /** A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`. */
+  model: string
+  /** Cell id; defaults to `pi:<model>`. */
+  id?: string
+  /** The most pi attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -279,6 +293,7 @@ export type AgentHarnessDescriptor =
   | AntigravityHarnessDescriptor
   | OpenCodeHarnessDescriptor
   | GooseHarnessDescriptor
+  | PiHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {

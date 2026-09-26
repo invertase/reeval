@@ -7,6 +7,7 @@ import type {
   FakeHarnessDescriptor,
   GooseHarnessDescriptor,
   OpenCodeHarnessDescriptor,
+  PiHarnessDescriptor,
 } from './types.ts'
 
 /**
@@ -90,7 +91,20 @@ export const goose = (options: Omit<GooseHarnessDescriptor, 'kind'>): GooseHarne
   return { kind: 'goose', ...options }
 }
 
-const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode', 'goose']
+/**
+ * pi, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google` provider.
+ * `id` names the cell; it defaults to `pi:<model>`.
+ */
+export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescriptor => {
+  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
+    throw new UsageError(
+      `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
+    )
+  }
+  return { kind: 'pi', ...options }
+}
+
+const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi']
 
 const STEP_KEYS = ['exec', 'write', 'reply', 'mcp', 'error']
 
@@ -145,4 +159,5 @@ export type {
   GooseHarnessDescriptor,
   HarnessDescriptor,
   OpenCodeHarnessDescriptor,
+  PiHarnessDescriptor,
 } from './types.ts'

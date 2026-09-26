@@ -1,5 +1,13 @@
 import { defineConfig } from 'evalsuite'
-import { antigravity, claudeCode, cursor, fakeHarness, goose, opencode } from 'evalsuite/harness'
+import {
+  antigravity,
+  claudeCode,
+  cursor,
+  fakeHarness,
+  goose,
+  opencode,
+  pi,
+} from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
 import { fakeScript } from './evals/probes.ts'
 
@@ -20,6 +28,8 @@ const harness = () => {
       return opencode({ model })
     case 'goose':
       return goose({ model })
+    case 'pi':
+      return pi({ model })
     default:
       return fakeHarness({ layout: 'cursor', script: [fakeScript] })
   }
