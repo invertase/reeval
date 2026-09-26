@@ -40,15 +40,18 @@ You'll write one eval and run it against ES's fake agent, which needs no keys, D
     ```ts title="evals/hello.es.ts"
     import { evaluate, expect, group } from '{{ pkg }}'
 
-    const greetsAda = `node -e "import('./greet.js').then(m => process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
+    const greetsAda = `node -e "import('./greet.js').then((m) =>
+      process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
 
     group('greet module', () => {
       evaluate('creates greet.js', async (t) => {
-        const turn = await t.send('Create greet.js exporting greet(name) that returns "Hello, <name>!".')
+        const turn = await t.send(
+          'Create greet.js exporting greet(name) that returns "Hello, <name>!".',
+        )
 
         await expect(turn).toHaveFile('greet.js', /greet/)
         await expect(t.exec(greetsAda)).toSucceed()
-        expect(await t.judge('Does the final message describe what the agent changed?')).toPass()
+        expect(await t.judge('Does the final message describe the change?')).toPass()
       })
     })
     ```
@@ -64,18 +67,18 @@ You'll write one eval and run it against ES's fake agent, which needs no keys, D
     plan  1 eval · 1 cell · 1 attempt · ~1s serial
     es 0.0.1 · 1 eval file · harness fake · sandbox fake · concurrency 4 · stream logs
     [creates#1 fake] ▶ evals/hello.es.ts › greet module › creates greet.js
-    [creates#1 fake]  +0:00 turn 1 done 3ms · 0 tool calls, 1 file edit
-    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then(m => process.exit(m.greet('Ada') ===…  exit 0 23ms
-    [creates#1 fake]  +0:00 judge  pass 0.95 (≥ 0.8)  Does the final message describe what the agent changed?
-    [creates#1 fake] ✓ evals/hello.es.ts › greet module › creates greet.js  69ms
+    [creates#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
+    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then((m) =>…  exit 0 23ms
+    [creates#1 fake]  +0:00 judge  pass 0.95 (≥ 0.8)  Does the final message describe the change?
+    [creates#1 fake] ✓ evals/hello.es.ts › greet module › creates greet.js  66ms
 
     Summary
      evals/hello.es.ts
        greet module
-         ✓ creates greet.js     69ms  judge 0.95  1 turn
+         ✓ creates greet.js     66ms  judge 0.95  1 turn
 
        Evals  1 passed (1)
-    Duration  780ms
+    Duration  783ms
     ```
   </Step>
 </Steps>
