@@ -1,0 +1,225 @@
+{
+  "$schema": "https://docs.page/schema.json",
+  "name": "ES",
+  "description": "Evals for coding agents: does an agent use your SDK, skills and docs correctly?",
+  "variables": {
+    "pkg": "@invertase/foobar",
+    "cli": "es",
+    "node": "22.13"
+  },
+  "content": {
+    "zoomImages": true
+  },
+  "anchors": [
+    {
+      "icon": "github",
+      "title": "GitHub",
+      "href": "https://github.com/invertase/evalsuite"
+    },
+    {
+      "icon": "npm",
+      "title": "npm",
+      "href": "https://www.npmjs.com/package/@invertase/foobar"
+    }
+  ],
+  "tabs": [
+    { "id": "guide", "title": "Guide", "href": "/" },
+    { "id": "concepts", "title": "Concepts", "href": "/concepts" },
+    { "id": "recipes", "title": "Recipes", "href": "/recipes" },
+    { "id": "reference", "title": "Reference", "href": "/reference" }
+  ],
+  "sidebar": [
+    {
+      "group": "Start here",
+      "tab": "guide",
+      "pages": [
+        { "title": "Introduction", "href": "/" },
+        { "title": "Quickstart", "href": "/quickstart" },
+        { "title": "Your first real run", "href": "/guide/first-real-run" }
+      ]
+    },
+    {
+      "group": "Write evals",
+      "tab": "guide",
+      "pages": [
+        { "title": "Evals and checks", "href": "/guide/writing-evals" },
+        { "title": "Multi-turn evals", "href": "/guide/multi-turn" },
+        { "title": "Compare and lift", "href": "/guide/compare" },
+        { "title": "Environments and skills", "href": "/guide/environments" }
+      ]
+    },
+    {
+      "group": "Run anywhere",
+      "tab": "guide",
+      "pages": [
+        { "title": "Harnesses", "href": "/guide/harnesses" },
+        { "title": "Sandboxes and toolchains", "href": "/guide/sandboxes" },
+        { "title": "Secrets and egress", "href": "/guide/secrets-and-egress" },
+        { "title": "Sizing runs", "href": "/guide/profiles" }
+      ]
+    },
+    {
+      "group": "Results",
+      "tab": "guide",
+      "pages": [
+        { "title": "History", "href": "/guide/history" },
+        { "title": "The studio", "href": "/guide/studio" },
+        { "title": "CI", "href": "/guide/ci" },
+        { "title": "Analysis", "href": "/guide/analysis" },
+        { "title": "Debugging a run", "href": "/guide/debugging" }
+      ]
+    },
+    {
+      "group": "How ES works",
+      "tab": "concepts",
+      "pages": [
+        { "title": "Overview", "href": "/concepts" },
+        { "title": "The matrix", "href": "/concepts/matrix" },
+        { "title": "Options and inheritance", "href": "/concepts/options" },
+        { "title": "Attempt lifecycle", "href": "/concepts/attempt-lifecycle" }
+      ]
+    },
+    {
+      "group": "Measuring",
+      "tab": "concepts",
+      "pages": [
+        { "title": "Gates and lift", "href": "/concepts/lift" },
+        { "title": "Judges", "href": "/concepts/judges" },
+        { "title": "Fingerprints and drift", "href": "/concepts/fingerprints" }
+      ]
+    },
+    {
+      "group": "Isolation",
+      "tab": "concepts",
+      "pages": [
+        { "title": "Credential brokering", "href": "/concepts/credential-brokering" },
+        { "title": "Egress policies", "href": "/concepts/egress" }
+      ]
+    },
+    {
+      "group": "Running",
+      "tab": "concepts",
+      "pages": [
+        { "title": "Output modes", "href": "/concepts/output" },
+        { "title": "Concurrency", "href": "/concepts/concurrency" }
+      ]
+    },
+    {
+      "group": "Recipes",
+      "tab": "recipes",
+      "pages": [{ "title": "Overview", "href": "/recipes" }]
+    },
+    {
+      "group": "Skills and docs",
+      "tab": "recipes",
+      "pages": [
+        { "title": "Prove a skill helps", "href": "/recipes/skill-lift" },
+        { "title": "Evaluate an MCP server", "href": "/recipes/mcp-server" },
+        { "title": "Check a recommendation", "href": "/recipes/recommendation" },
+        { "title": "Table-driven evals", "href": "/recipes/eval-for" }
+      ]
+    },
+    {
+      "group": "Agents and toolchains",
+      "tab": "recipes",
+      "pages": [
+        { "title": "Compare agents", "href": "/recipes/compare-agents" },
+        { "title": "Python, Flutter and more", "href": "/recipes/toolchains" },
+        { "title": "Offline evals", "href": "/recipes/offline" }
+      ]
+    },
+    {
+      "group": "Workflow",
+      "tab": "recipes",
+      "pages": [
+        { "title": "Evals without Docker or keys", "href": "/recipes/fake-harness" },
+        { "title": "PR gate in GitHub Actions", "href": "/recipes/github-pr-gate" },
+        { "title": "Nightly matrix and Pages", "href": "/recipes/nightly-pages" }
+      ]
+    },
+    {
+      "group": "Case studies",
+      "tab": "recipes",
+      "pages": [{ "title": "ES evaluating ES", "href": "/recipes/case-study-dogfood" }]
+    },
+    {
+      "group": "Overview",
+      "tab": "reference",
+      "pages": [{ "title": "Reference", "href": "/reference" }]
+    },
+    {
+      "group": "Configuration",
+      "tab": "reference",
+      "pages": [
+        { "title": "defineConfig", "href": "/reference/config" },
+        { "title": "Options", "href": "/reference/options" },
+        { "title": "Profiles and budgets", "href": "/reference/profiles" }
+      ]
+    },
+    {
+      "group": "Authoring API",
+      "tab": "reference",
+      "pages": [
+        { "title": "group and evaluate", "href": "/reference/group-evaluate" },
+        { "title": "defineEnvironment", "href": "/reference/environment" },
+        { "title": "The t API", "href": "/reference/t" },
+        { "title": "Matchers", "href": "/reference/matchers" },
+        { "title": "secret, skill, mcp, file", "href": "/reference/helpers" }
+      ]
+    },
+    {
+      "group": "Harnesses",
+      "tab": "reference",
+      "pages": [
+        { "title": "cursor()", "href": "/reference/harness/cursor" },
+        { "title": "claudeCode()", "href": "/reference/harness/claude-code" },
+        { "title": "antigravity()", "href": "/reference/harness/antigravity" },
+        { "title": "fakeHarness()", "href": "/reference/harness/fake" }
+      ]
+    },
+    {
+      "group": "Sandboxes",
+      "tab": "reference",
+      "pages": [
+        { "title": "docker()", "href": "/reference/sandbox/docker" },
+        { "title": "fakeSandbox()", "href": "/reference/sandbox/fake" },
+        { "title": "Egress", "href": "/reference/egress" }
+      ]
+    },
+    {
+      "group": "Judges",
+      "tab": "reference",
+      "pages": [{ "title": "Judges", "href": "/reference/judges" }]
+    },
+    {
+      "group": "CLI",
+      "tab": "reference",
+      "pages": [
+        { "title": "Overview and exit codes", "href": "/reference/cli" },
+        { "title": "es run", "href": "/reference/cli/run" },
+        { "title": "es record", "href": "/reference/cli/record" },
+        { "title": "es history, show, compare", "href": "/reference/cli/history" },
+        { "title": "es query", "href": "/reference/cli/query" },
+        { "title": "es studio", "href": "/reference/cli/studio" },
+        { "title": "es image build, es clean", "href": "/reference/cli/image-clean" }
+      ]
+    },
+    {
+      "group": "Formats",
+      "tab": "reference",
+      "pages": [
+        { "title": "The run record", "href": "/reference/record" },
+        { "title": "Transcripts", "href": "/reference/transcript" },
+        { "title": "Debug data", "href": "/reference/debug-data" }
+      ]
+    },
+    {
+      "group": "Environment",
+      "tab": "reference",
+      "pages": [
+        { "title": "Environment variables", "href": "/reference/env-vars" },
+        { "title": "Errors", "href": "/reference/errors" }
+      ]
+    }
+  ]
+}
