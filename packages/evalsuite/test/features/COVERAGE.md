@@ -113,7 +113,7 @@
 | `es query` | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
 | `es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
-| Effort (tool calls, agent time) next to lift in the `es run` summary, `summary.md`, `es compare` and the studio | ✓ 2 | — | — | — | — |
+| Effort (tool calls, agent time) next to lift in the `es run` summary, `summary.md`, `es compare` and the studio | ✓ 3 | — | — | — | — |
 | `es analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 6 | — | — | — | — |
 | `es analyze` caches in `.es/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
 | `es studio` and `es studio build` | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
@@ -132,7 +132,7 @@
 | Local debug data: `.es/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 3 | — | — | — | ◐ 1 (1 without a canary) |
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `es clean` | ✓ 2 | — | — | — | — |
-| Concurrency caps, order and queue time | ✓ 3 | — | — | — | — |
+| Concurrency caps, order and queue time | ✓ 4 | — | — | — | — |
 | Eval timeouts and Ctrl-C | ✓ 2 | — | — | — | — |
 | The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — |
 
