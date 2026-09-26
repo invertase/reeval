@@ -51,7 +51,8 @@
     "test": "node --test --test-timeout=120000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",
-    "test:docker": "ES_FIXTURE_TIERS=docker ES_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts"
+    "test:docker": "ES_FIXTURE_TIERS=docker ES_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts",
+    "features:matrix": "node --experimental-strip-types --no-warnings --import ./test/support/tables-only.mjs test/support/feature-matrix.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "4.0.79",

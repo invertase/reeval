@@ -7,7 +7,8 @@ import { runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.ts'
 
-const cases: PlanCase[] = [
+// biome-ignore lint/suspicious/noExportsInTest: the feature matrix reads this table (support/feature-matrix.ts)
+export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.es.ts'] },
