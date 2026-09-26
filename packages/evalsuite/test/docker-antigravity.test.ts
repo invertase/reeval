@@ -77,6 +77,7 @@ evaluate('hi', async (t) => {
       const out = a.stdout + a.stderr
       assert.equal(a.code, 0, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
+      assert.match(out, /turn 1 error: The API rejected GEMINI_API_KEY: set a valid key/)
       assert.match(
         out,
         /es:egress POST https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/[\w.-]+:streamGenerateContent(\?alt=sse)? HTTP\/[\d.]+ \(set x-goog-api-key\)/,

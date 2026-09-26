@@ -526,6 +526,17 @@ export const inventory: InventoryFeature[] = [
     real: ['contract › real key never in the container'],
   },
   {
+    id: 'harness.auth-hint',
+    area: 'Harnesses',
+    name: 'A refused harness key names its variable and how to fix it',
+    tests: [
+      unit('an auth failure names the credential; other errors get no hint'),
+      docker('Cursor attempts broker the key; without brokering the attempt fails closed'),
+      docker('Claude Code attempts broker the key on its endpoints'),
+      'evalsuite/test/docker-antigravity.test.ts › Antigravity attempts broker the key on its model endpoint only',
+    ],
+  },
+  {
     id: 'ports',
     area: 'Sandbox',
     name: 'Ports: through the tunnel, or published without the gateway',

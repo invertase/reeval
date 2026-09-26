@@ -524,6 +524,10 @@ evaluate('hi', async (t) => { await t.send('hi') })
       })
       const a = await runCli(brokered.dir, ['run'], { env })
       assert.doesNotMatch(a.stdout + a.stderr, warning)
+      assert.match(
+        a.stdout + a.stderr,
+        /The API rejected CURSOR_API_KEY: set a valid key in the environment or \.env\.local\. Cursor harness failed to start: .*HTTP 401/,
+      )
       assert.equal(liveContainers(readRun(brokered.dir).run.runId), '')
 
       try {
@@ -865,6 +869,7 @@ evaluate('hi', async (t) => {
       const out = a.stdout + a.stderr
       assert.equal(a.code, 0, out)
       assert.ok(Date.now() - started < 200_000, 'a refused key ends the turn; nothing hangs')
+      assert.match(out, /turn 1 error: The API rejected ANTHROPIC_API_KEY: set a valid key/)
       assert.match(
         out,
         /es:egress POST https:\/\/api\.anthropic\.com\/v1\/messages HTTP\/[\d.]+ \(set x-api-key\)/,

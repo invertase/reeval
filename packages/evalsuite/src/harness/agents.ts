@@ -429,6 +429,20 @@ export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlock
   return kind ? AGENTS[kind].expectedBlocked : undefined
 }
 
+/**
+ * How the APIs behind the harnesses say they refused a key: an HTTP 401, Anthropic's and OpenAI's
+ * wording, Google's (which answers 400). A bare 403 isn't here: the gateway and MCP servers send
+ * those for reasons that have nothing to do with the harness's key.
+ */
+const REFUSED_KEY =
+  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b/i
+
+/** What to do when a harness error says its API refused the key, naming the variable; else undefined. */
+export function authHint(kind: AgentKind, message: string): string | undefined {
+  if (!REFUSED_KEY.test(message)) return undefined
+  return `The API rejected ${AGENTS[kind].credential}: set a valid key in the environment or .env.local`
+}
+
 /** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */
 export function agentAuth(agent: Agent, env: NodeJS.ProcessEnv = process.env) {
   const value = env[agent.credential]

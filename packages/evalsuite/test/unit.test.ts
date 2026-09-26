@@ -24,7 +24,7 @@ import {
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
-import { AGENTS, type AgentKind, agentAuth, brokeringFor } from '../src/harness/agents.ts'
+import { AGENTS, type AgentKind, agentAuth, authHint, brokeringFor } from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -178,6 +178,52 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     assert.deepEqual(crashed && [crashed.output, crashed.ok], ['boom', false])
   } finally {
     await box.destroy()
+  }
+})
+
+test('an auth failure names the credential; other errors get no hint', () => {
+  // What each harness reported with a made-up key (26 Sep 2026).
+  const refused: Array<[AgentKind, string]> = [
+    ['cursor', "Cursor's model catalog request failed: HTTP 401"],
+    ['claude-code', 'Invalid API key · Fix external API key'],
+    [
+      'antigravity',
+      'agent executor error: generating and executing: Error 400, Message: API key not valid. Please pass a valid API key., Status: INVALID_ARGUMENT',
+    ],
+    [
+      'opencode',
+      'ACP prompt update stream failed: Internal error: API key not valid. Please pass a valid API key.',
+    ],
+    [
+      'goose',
+      "Goose's model call failed: Request failed: Bad request (400): API key not valid. Please pass a valid API key.",
+    ],
+    [
+      'pi',
+      '{"error":{"code":400,"message":"API key not valid.","status":"INVALID_ARGUMENT","reason":"API_KEY_INVALID"}}',
+    ],
+    [
+      'claude-code',
+      '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+    ],
+  ]
+  for (const [kind, message] of refused) {
+    const { credential } = AGENTS[kind]
+    assert.equal(
+      authHint(kind, message),
+      `The API rejected ${credential}: set a valid key in the environment or .env.local`,
+      message,
+    )
+  }
+  // The twins: a rate limit, a server error, a missing model and a refused host aren't the key.
+  for (const message of [
+    'HTTP 429: Resource has been exhausted (e.g. check quota).',
+    'Request failed: 500 Internal Server Error',
+    'models/gemini-9 is not found for API version v1beta (404)',
+    'CONNECT blocked.example.net:443 → 403 · blocked',
+    'The Antigravity CLI exited with code 1 before reporting a result',
+  ]) {
+    assert.equal(authHint('antigravity', message), undefined, message)
   }
 })
 
