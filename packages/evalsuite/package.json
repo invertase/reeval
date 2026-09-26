@@ -45,7 +45,8 @@
   },
   "files": [
     "dist",
-    "docker"
+    "docker",
+    "assets"
   ],
   "publishConfig": {
     "access": "public",

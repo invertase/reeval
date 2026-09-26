@@ -98,7 +98,8 @@ import only the package's `dependencies`, so an inlined package's runtime depend
 among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
 files (`dist/setup.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
 module's `import.meta.url`; the build fails if a chunk below `dist/`'s top level uses it.
-An inlined package's other `files` (`sandbox-docker`'s `docker/` build context) ship at the
+An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, `harness-pi`'s
+`assets/` lockfile) ship at the
 root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `@invertase/foobar`'s `files` and `.gitignore`.
 

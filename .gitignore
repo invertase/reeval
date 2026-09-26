@@ -8,3 +8,4 @@ dist/
 .ignore/
 coverage/
 packages/evalsuite/docker/
+packages/evalsuite/assets/

@@ -35,8 +35,9 @@ test('the packed package installs into a clean project and runs es', {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))
   }
-  // sandbox-docker's build context, beside dist/ as in sandbox-docker itself.
+  // The bundled packages' other files, beside dist/ as in their own packages.
   assert.match(listing, /^package\/docker\/Dockerfile$/m)
+  assert.match(listing, /^package\/assets\/pnpm-lock\.yaml$/m)
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
 
   // The @evalsuite/* packages are bundled into dist, so nothing in the manifest points at the
