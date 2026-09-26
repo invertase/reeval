@@ -322,7 +322,7 @@ export const features: Feature[] = [
     env: 'closed',
     canaryEnv: 'open',
     hostEnv: egressEnv,
-    canary: /expected '200 exit=0' to match/,
+    canary: /expected '200 exit=0 dns=0' to match/,
     record: ({ run }) => {
       const egress = landed(run)?.egress
       assert.equal(egress?.policy, 'deny-all')
