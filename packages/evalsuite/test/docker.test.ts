@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
-import { pkgRoot, project, readRun, runCli } from './helpers.ts'
+import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const dockerReady = (() => {
   try {
@@ -564,6 +564,37 @@ evaluate('context', { environment: house }, async (t) => { await t.send('go') })
       assert.ok(row?.changes?.includes('agent context changed'), JSON.stringify(row))
     },
   )
+
+  test("npm installs the packed ES tarball in ES's image", {
+    ...docker,
+    timeout: 480_000,
+  }, async () => {
+    const out = tempDir('docker-pack')
+    const packed = spawnSync('pnpm', ['pack', '--pack-destination', out], {
+      cwd: pkgRoot,
+      encoding: 'utf8',
+    })
+    assert.equal(packed.status, 0, packed.stdout + packed.stderr)
+    const tarball = readdirSync(out).find((f) => f.endsWith('.tgz'))
+    assert.ok(tarball, readdirSync(out).join(', '))
+    const { version } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
+    const p = await project('docker-npm-tarball', {
+      'es.config.ts': config('{}'),
+      'evals/d.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const es = defineEnvironment('es-tarball', ({ file }) => ({
+  files: { 'es.tgz': file(${JSON.stringify(join(out, tarball))}) },
+}))
+evaluate('installs', { environment: es, timeout: '6m' }, async (t) => {
+  await t.sandbox()
+  await expect(t.exec('npm install --no-audit --no-fund ./es.tgz')).toSucceed()
+  expect((await t.exec('npx --no-install es --version')).stdout.trim()).toBe('${version}')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], { timeoutMs: 450_000 })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(liveContainers(readRun(p.dir).run.runId), '')
+  })
 
   test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',

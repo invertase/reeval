@@ -66,7 +66,7 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Docker: run, diff, and removal, on timeout too | ✓ 2 | — | — | — | — |
+| Docker: run, diff, and removal, on timeout too | ✓ 3 | — | — | — | — |
 | Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker | ✓ 2 | — | — | — | — |
 | `docker({ install })` layers | ✓ 3 | ✓ 1 | — | — | — |
 | `docker({ dockerfile })` and `ES_BASE` | ✓ 2 | ✓ 1 | — | ● 2 | — |

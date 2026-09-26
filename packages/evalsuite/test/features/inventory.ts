@@ -396,6 +396,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       docker('runs checks in the container, diffs, and removes it'),
       docker('a timeout removes the container'),
+      docker("npm installs the packed ES tarball in ES's image"),
     ],
   },
   {
