@@ -822,6 +822,37 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.match(r.stdout, /boom/)
   })
 
+  test('a failure with megabytes of output prints and records a bounded tail', async () => {
+    const p = await project('huge-failure', {
+      'es.config.ts': fakeConfig(),
+      'evals/h.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('noisy check', async (t) => {
+  await t.send('go')
+  await expect(t.exec('head -c 3000000 /dev/zero | tr "\\\\0" b; echo boom >&2; exit 3')).toSucceed()
+})
+evaluate('huge diff', async (t) => {
+  await t.sandbox()
+  expect('a'.repeat(3_000_000)).toBe('x')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run', '--ui', 'plain'])
+    assert.equal(r.code, 1, r.stderr)
+    const screen = r.stdout + r.stderr
+    assert.ok(screen.length < 200_000, `the screen got ${screen.length} characters`)
+    const { run } = readRun(p.dir)
+    for (const e of run.evals) {
+      const message = e.attempts[0]?.error?.message ?? ''
+      assert.ok(message.length <= 20_000, `${e.name}: a ${message.length}-character error`)
+    }
+    // The canary: what tells you why is still there, on screen and in the record.
+    assert.match(screen, /expected command to succeed, exit code 3/)
+    assert.match(screen, /boom/)
+    assert.match(screen, /to be 'x'/)
+    const noisy = run.evals.find((e) => e.name === 'noisy check')?.attempts[0]?.error?.message
+    assert.match(noisy ?? '', /exit code 3[\s\S]*boom[\s\S]*bbbb/)
+  })
+
   test("a turn's error message shows in the summary, agent output and summary.md without -v", async () => {
     const billing = 'Credit balance is too low to access the Anthropic API'
     const p = await project('turn-error', {

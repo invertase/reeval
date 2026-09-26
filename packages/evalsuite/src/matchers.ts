@@ -44,7 +44,13 @@ function webEvent(
   }
 }
 
-const tail = (s: string, lines = 20) => s.trimEnd().split('\n').slice(-lines).join('\n')
+/** The last `lines` lines, and at most `chars` characters of them: one line can be megabytes. */
+const tail = (s: string, lines = 20, chars = 2000) => {
+  const last = s.trimEnd().split('\n').slice(-lines).join('\n')
+  return last.length <= chars
+    ? last
+    : `[… ${last.length - chars} earlier characters]${last.slice(-chars)}`
+}
 
 type HasFiles = { readFile(path: string): Promise<string | null> }
 

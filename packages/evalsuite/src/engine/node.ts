@@ -21,6 +21,7 @@ import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
 import { DIST_DIR, PACKAGE_DIR } from '../root.ts'
 import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
+import { capMiddle } from '../text.ts'
 import type { AttemptMeta, RunContext } from '../types.ts'
 import type { EsEvent, EvalResult } from '../ui/events.ts'
 import { cancelMarker } from './cancel.ts'
@@ -145,8 +146,8 @@ function toEngineEval(root: string, test: TestCase, vitest?: Vitest): EngineEval
     attempt,
     state,
     durationMs: Math.round(test.meta().esRunMs ?? test.diagnostic()?.duration ?? 0),
-    errors: errors.map((e) => cleanMessage(e.message ?? String(e))),
-    formattedErrors: vitest ? errors.map(format) : [],
+    errors: errors.map((e) => capMiddle(cleanMessage(e.message ?? String(e)))),
+    formattedErrors: vitest ? errors.map((e) => capMiddle(format(e))) : [],
     meta: test.meta().es,
   }
 }
