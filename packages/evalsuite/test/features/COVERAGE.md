@@ -103,7 +103,7 @@
 | `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 3 | — | — | — | — |
 | `es compare --fail-on-regression` **(gap)** | — | — | — | — | — |
 | `es query` | ✓ 1 | — | — | — | — |
-| `es studio` and `es studio build` | ✓ 3 | — | — | — | — |
+| `es studio` and `es studio build` | ✓ 4 | — | — | — | — |
 
 ## CLI and runner
 

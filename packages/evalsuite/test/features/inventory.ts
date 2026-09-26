@@ -615,6 +615,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/studio.test.ts › serves the app with a strict CSP',
       'evalsuite/test/studio.test.ts › writes a static site',
       'evalsuite/test/studio.test.ts › a run whose only failures are ungated is passed',
+      'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
     ],
   },
 

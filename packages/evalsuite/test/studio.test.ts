@@ -8,6 +8,7 @@ import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
+  activityLabel,
   artifactPath,
   buildIndex,
   cellRows,
@@ -161,6 +162,17 @@ evaluate('writes ok', { compare }, async (t) => {
     )
   })
 
+  test('tool calls and file edits are counted apart, on every page', () => {
+    assert.equal(activityLabel({ tools: 21, fileEdits: 2 }), '21 tool calls · 2 file edits')
+    assert.equal(activityLabel({ tools: 1, fileEdits: 0 }), '1 tool call · 0 file edits')
+    const pages = ['pages/run.tsx', 'pages/attempt/index.tsx'].map((f) =>
+      readFileSync(join(pkgRoot, '../studio-web/src', f), 'utf8'),
+    )
+    for (const page of pages) {
+      assert.match(page, /activityLabel\((a|attempt)\.activity\)/)
+      assert.doesNotMatch(page, /'tool call'/, 'no page counts tool calls its own way')
+    }
+  })
 })
 
 describe('view-models over a real history', () => {

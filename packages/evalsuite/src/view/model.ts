@@ -108,6 +108,15 @@ export const formatCost = (usd: number | null) =>
 
 export const shortSha = (sha: string | null | undefined) => (sha ? sha.slice(0, 7) : 'no git')
 
+/**
+ * An attempt's effort, counted as the CLI's turn lines count it: tool calls, then file edits.
+ * Edit calls become one file edit per file they change, so they're counted apart, never summed.
+ */
+export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'fileEdits'>): string {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+  return `${plural(a.tools, 'tool call')} · ${plural(a.fileEdits, 'file edit')}`
+}
+
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────
 
 /**

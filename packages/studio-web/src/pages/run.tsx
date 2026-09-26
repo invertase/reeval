@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import {
+  activityLabel,
   type CellRow,
   cellRows,
   type EvalEntry,
@@ -300,10 +301,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="font-mono text-xs">{a.id}</span>
                     <span className="text-xs text-muted-foreground">
-                      {formatDuration(a.durationMs)} · {plural(a.turns.length, 'turn')}
-                      {a.activity.tools + a.activity.fileEdits
-                        ? ` · ${plural(a.activity.tools + a.activity.fileEdits, 'tool call')}`
-                        : ''}
+                      {formatDuration(a.durationMs)} · {plural(a.turns.length, 'turn')} ·{' '}
+                      {activityLabel(a.activity)}
                     </span>
                     {judge ? (
                       <span
