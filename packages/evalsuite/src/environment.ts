@@ -1,9 +1,11 @@
 import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type {
+  Duration,
   EgressPolicy,
   Environment,
   EnvironmentHelpers,
@@ -467,7 +469,14 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     if (typeof step === 'string') continue
     const extra = Object.keys(step).filter((k) => !['run', 'timeout', 'cwd'].includes(k))
     if (extra.length) throw new DefinitionError(`${shape} (got "${extra.join('", "')}")`)
-    const { cwd } = step as { cwd?: unknown }
+    const { cwd, timeout } = step as { cwd?: unknown; timeout?: Duration }
+    if (timeout !== undefined) {
+      try {
+        parseDuration(timeout)
+      } catch (error) {
+        throw new DefinitionError(`setup step "${run}" in ${where}: ${(error as Error).message}`)
+      }
+    }
     if (cwd !== undefined && (typeof cwd !== 'string' || !cwd.trim())) {
       throw new DefinitionError(
         `setup step "${run}" in ${where}: cwd must be a directory path, relative to the workspace or absolute (got ${JSON.stringify(cwd)})`,

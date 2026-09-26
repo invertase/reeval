@@ -548,6 +548,16 @@ describe('common mistakes', () => {
       /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.for, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
     ],
     [
+      'a zero timeout',
+      `evaluate('e', { timeout: 0 }, async () => {})`,
+      /Invalid duration 0\. A duration is more than zero: use e\.g\. "90s" or "15m"\./,
+    ],
+    [
+      'a zero setup step timeout',
+      `defineEnvironment('e', { setup: [{ run: 'ls', timeout: '0s' }] })`,
+      /Invalid duration "0s"\. A duration is more than zero/,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,
