@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
 const config = (extra: string, harness = 'fakeHarness({})') => `
@@ -444,6 +444,14 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
     assert.deepEqual(run.budget, { duration: '1s' })
     const outcomes = evals[0]?.attempts.map((a) => a.outcome) ?? []
     assert.ok(outcomes.includes('pass') && outcomes.includes('skipped'), outcomes.join(','))
+    assert.deepEqual(recordedRuns(p.dir), [], 'not recorded without --record or record: always')
+
+    // With --record, it's recorded as status budget (compare only takes complete runs as a base).
+    const recorded = await runCli(p.dir, ['run', '--record'])
+    assert.equal(recorded.code, 1, recorded.stdout + recorded.stderr)
+    assert.match(recorded.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    const history = readRun(p.dir, { history: 'evals/.history' })
+    assert.equal(history.run.status, 'budget')
   })
 })
 
@@ -557,7 +565,7 @@ describe('common mistakes', () => {
     [
       'a fake agent layout ES does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi' \(got "codex"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',

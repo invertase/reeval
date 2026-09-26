@@ -16,6 +16,7 @@ import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@evalsuite/harness-antigravity'
 import { GOOSE_CLI_VERSION } from '@evalsuite/harness-goose'
 import { OPENCODE_CLI_VERSION } from '@evalsuite/harness-opencode'
+import { PI_CLI_VERSION } from '@evalsuite/harness-pi'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli } from './helpers.ts'
@@ -607,6 +608,33 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'harness/pi-rules',
+    tiers: ['fake', 'docker'],
+    image: 'pi',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/pi-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'pi',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/pi-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'pi',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
     dir: 'harness/cursor-workspace-skills',
     tiers: ['fake', 'docker'],
     env: 'greeting',
@@ -662,6 +690,18 @@ export const features: Feature[] = [
         image?.agentCli ?? '',
         new RegExp(`${GOOSE_CLI_VERSION.replaceAll('.', '\\.')}$`),
       )
+    },
+  },
+  {
+    dir: 'harness/pi-dockerfile',
+    tiers: ['docker'],
+    image: 'pi',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.equal(image?.agentCli, PI_CLI_VERSION)
     },
   },
   {

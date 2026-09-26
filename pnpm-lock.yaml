@@ -92,6 +92,9 @@ importers:
       '@evalsuite/harness-opencode':
         specifier: workspace:0.1.0
         version: link:../harness-opencode
+      '@evalsuite/harness-pi':
+        specifier: workspace:0.1.0
+        version: link:../harness-pi
       '@evalsuite/sandbox-docker':
         specifier: workspace:*
         version: link:../sandbox-docker
@@ -165,6 +168,21 @@ importers:
         specifier: 4.6.5
         version: 4.6.5
 
+  packages/harness-pi:
+    dependencies:
+      '@ai-sdk/harness':
+        specifier: 1.0.124
+        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/provider':
+        specifier: 4.0.18
+        version: 4.0.18
+      '@ai-sdk/provider-utils':
+        specifier: 5.0.47
+        version: 5.0.47(zod@4.6.5)
+      zod:
+        specifier: 4.6.5
+        version: 4.6.5
+
   packages/sandbox-docker:
     dependencies:
       '@ai-sdk/harness':
@@ -185,6 +203,9 @@ importers:
       '@evalsuite/harness-opencode':
         specifier: workspace:0.1.0
         version: link:../harness-opencode
+      '@evalsuite/harness-pi':
+        specifier: workspace:0.1.0
+        version: link:../harness-pi
       ws:
         specifier: 8.21.0
         version: 8.21.0

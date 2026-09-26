@@ -79,6 +79,35 @@ const FORMATS: Record<string, Format> = {
     values: ['status', 'kind', 'stopReason'],
     lists: [],
   },
+  // pi's `--mode json` events, by `type` (and the assistant event inside `message_update`).
+  pi: {
+    kind: (e) => {
+      if (typeof e.type !== 'string') return undefined
+      const inner = (e.assistantMessageEvent as { type?: unknown } | undefined)?.type
+      const role = (e.message as { role?: unknown } | undefined)?.role
+      return typeof inner === 'string'
+        ? `${e.type}/${inner}`
+        : typeof role === 'string'
+          ? `${e.type}/${role}`
+          : e.type
+    },
+    opaque: [
+      'arguments',
+      'args',
+      'content',
+      'result',
+      'partialResult',
+      'sections',
+      'messages',
+      'errorMessage',
+      'details',
+      'thoughtSignature',
+      'delta',
+      'toolCall',
+    ],
+    values: ['stopReason', 'role', 'api', 'provider'],
+    lists: [],
+  },
 }
 
 export const hasFormat = (harness: string) => Object.hasOwn(FORMATS, harness)

@@ -55,6 +55,7 @@ const cursorAdapter = (file: string, name: string) =>
 const opencodeAdapter = (file: string, name: string) =>
   `harness-opencode/test/${file}.test.ts › ${name}`
 const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}.test.ts › ${name}`
+const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -210,6 +211,7 @@ export const inventory: InventoryFeature[] = [
       'harness/antigravity-home-skills',
       'harness/opencode-home-skills',
       'harness/goose-home-skills',
+      'harness/pi-home-skills',
     ],
     real: ['contract › skill placed where the agent reads it, and used'],
   },
@@ -225,6 +227,7 @@ export const inventory: InventoryFeature[] = [
       'harness/antigravity-workspace-skills',
       'harness/opencode-workspace-skills',
       'harness/goose-workspace-skills',
+      'harness/pi-workspace-skills',
     ],
   },
   {
@@ -310,7 +313,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode and Goose, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose and pi, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
@@ -318,6 +321,7 @@ export const inventory: InventoryFeature[] = [
       'harness/antigravity-rules',
       'harness/opencode-rules',
       'harness/goose-rules',
+      'harness/pi-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -456,6 +460,7 @@ export const inventory: InventoryFeature[] = [
       'harness/antigravity-dockerfile',
       'harness/opencode-dockerfile',
       'harness/goose-dockerfile',
+      'harness/pi-dockerfile',
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
@@ -603,6 +608,29 @@ export const inventory: InventoryFeature[] = [
       harness("Goose's adapter brokers only the Gemini key, as GOOGLE_API_KEY, to the Gemini API"),
       gooseAdapter('stream', 'names a call from its tool_call metadata, and drops the usage'),
       gooseAdapter('unit', "MCP servers are enabled extensions in Goose's config.yaml"),
+    ],
+  },
+  {
+    id: 'harness.pi',
+    area: 'Harnesses',
+    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens; MCP refused',
+    fixtures: [
+      'harness/pi-rules',
+      'harness/pi-workspace-skills',
+      'harness/pi-home-skills',
+      'harness/pi-dockerfile',
+    ],
+    plan: ['pi/pi'],
+    tests: [
+      harness(
+        'pi reads rules from AGENTS.md, repo skills from .pi/skills and home skills from ~/.pi/agent/skills',
+      ),
+      harness('pi has no MCP client, so MCP servers are refused, naming them'),
+      harness("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API"),
+      piAdapter(
+        'stream',
+        'a real multi-call turn: tool calls, results, one step per model call and their summed tokens',
+      ),
     ],
   },
   {

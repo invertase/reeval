@@ -27,6 +27,9 @@ const HOME_CONTEXT_PATHS = [
   '.config/goose/skills',
   '.config/goose/config.yaml',
   '.config/goose/.goosehints',
+  '.pi/agent/skills',
+  '.pi/agent/AGENTS.md',
+  '.pi/agent/settings.json',
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
@@ -55,6 +58,8 @@ const CONTEXT_PATHS = [
   'opencode.jsonc',
   '.goosehints',
   '.goose/skills',
+  '.pi/skills',
+  '.pi/settings.json',
 ]
 
 async function agentContext(box: Sandbox, signal: AbortSignal): Promise<EvalRecord['context']> {

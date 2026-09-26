@@ -1,0 +1,96 @@
+---
+title: pi()
+description: The pi harness, its options and id, its Gemini API key, the tokens it reports, and why it has no MCP servers.
+---
+
+`pi()` runs [pi](https://github.com/earendil-works/pi) in the Docker sandbox, one `pi --mode json` process per turn, on its `google` provider with a Gemini API key. `model` is required.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { pi } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: pi({ model: 'gemini-3.8-flash' }),
+})
+```
+
+## Options
+
+<Property name="model" type="string">
+  A Gemini model id, such as `gemini-3.8-flash`, without a provider. Required.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `pi:<model>`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most pi attempts at once across the run, for example for your key's rate limits.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`) |
+| Adapter | `@evalsuite/harness-pi` 0.1.0, bundled with ES |
+| CLI | `@earendil-works/pi-coding-agent` 0.87.1, from a pinned lockfile |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:pi-0.1.0` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `~/.pi/agent/skills` |
+| Skills (`placement: 'workspace'`) | `.pi/skills` in the workspace |
+| Egress hosts added | `generativelanguage.googleapis.com` |
+| Tokens | Reported for each model call |
+| MCP | None (refused, below) |
+
+Build its image once with `es image build` in a project whose config uses `pi()`.
+
+## Why not `@ai-sdk/harness-pi`
+
+That adapter runs pi's agent loop in ES's own process on the host: its model calls leave from the host with the real key, its MCP servers start on the host, and it patches Node's global `fs` to reach the sandbox's files, which isn't safe with attempts running side by side. ES's adapter runs the pi CLI inside the sandbox instead, so its model calls go through the gateway like every other harness's.
+
+## The key
+
+ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives pi a placeholder as `GEMINI_API_KEY`. The gateway swaps the real key in on one kind of request, the only one pi 0.87.1 sends it on:
+
+| Host | Endpoint |
+|---|---|
+| `generativelanguage.googleapis.com` | `POST /v1beta/models/<model>:streamGenerateContent` |
+
+The adapter refuses to run in a sandbox that can't broker the key.
+
+## Tokens
+
+Each model call pi makes is one step, with the tokens pi reports for it (uncached input, cache reads and writes, output and reasoning); each turn has their sum. pi also computes a USD cost from its own price table, which ES ignores: it prices no models.
+
+## Turns and settings
+
+Each turn runs `pi --mode json -p --offline --approve --no-extensions --provider google --model <model> --session-id <id>`, with the same session id every turn, so later turns continue the conversation.
+
+- `--offline` stops pi's startup network operations, so a turn contacts only the Gemini API.
+- `--approve` trusts the workspace, which pi needs to read `.pi/skills` there.
+- `--no-extensions` stops pi loading extensions from the workspace or home, so what the agent can do is what the eval set up.
+
+The prompt is a command-line argument, so it must stay under 128 KiB. Instructions go to `~/.pi/agent/AGENTS.md`, which pi reads before the workspace's.
+
+## MCP
+
+pi has no MCP client. An eval that gives `pi()` MCP servers fails its attempt as an infra error naming them, rather than running without them.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No model, or one with a provider | `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got …)` |
+| No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the pi harness can't authenticate. Set it in the environment or .env.local.` |
+| MCP servers | `pi has no MCP client, so it can't use the <names> MCP server` |
+| A non-Docker sandbox | `The pi harness needs the Docker sandbox` |
+| pi dies mid-turn | `pi exited with code <n> before ending the turn: …` |
+
+## Related
+
+- [Harnesses](/guide/harnesses)
+- [Secrets and egress](/guide/secrets-and-egress)
+- [Transcripts](/reference/transcript)

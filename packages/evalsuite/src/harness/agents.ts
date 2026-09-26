@@ -213,6 +213,13 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     harnessSkillDir:
       '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
   },
+  // 0.87.1 reads workspace skills only in a trusted project, which the adapter's --approve makes
+  // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
+  pi: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.pi/skills',
+    harnessSkillDir: '.pi/agent/skills',
+  },
 }
 
 /** Every real agent ES can drive, by harness kind. */
@@ -334,6 +341,27 @@ export const AGENTS: Record<AgentKind, Agent> = {
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
           : {}),
+        requireCredentialBrokering: true,
+      }),
+  },
+  pi: {
+    ...LAYOUTS.pi,
+    name: 'pi',
+    factory: 'pi',
+    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    // The only request 0.87.1 sends the key on; --offline stops its startup network operations.
+    endpoints: GEMINI_ENDPOINTS,
+    servedModel: geminiServedModel,
+    mcpServers: (servers) => {
+      const names = Object.keys(servers)
+      throw new InfraError(
+        `pi has no MCP client, so it can't use the ${names.join(', ')} MCP server${names.length === 1 ? '' : 's'}`,
+      )
+    },
+    adapter: async ({ auth }) =>
+      (await import('@evalsuite/harness-pi')).createPi({
+        // pi reads the key as GEMINI_API_KEY; ES's host variable is the one OpenCode and Goose use.
+        auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
         requireCredentialBrokering: true,
       }),
   },

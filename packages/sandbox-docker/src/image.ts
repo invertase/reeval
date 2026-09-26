@@ -8,6 +8,7 @@ export const HARNESS_PACKAGES = {
   antigravity: { name: '@evalsuite/harness-antigravity', version: '0.1.0' },
   opencode: { name: '@evalsuite/harness-opencode', version: '0.1.0' },
   goose: { name: '@evalsuite/harness-goose', version: '0.1.0' },
+  pi: { name: '@evalsuite/harness-pi', version: '0.1.0' },
 } as const
 
 /** A harness whose CLI an image can bake. */

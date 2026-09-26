@@ -35,6 +35,7 @@ import {
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
 } from '@evalsuite/harness-opencode'
+import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@evalsuite/harness-pi'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -55,7 +56,15 @@ import {
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
-import { antigravity, claudeCode, cursor, fakeHarness, goose, opencode } from '../src/harness.ts'
+import {
+  antigravity,
+  claudeCode,
+  cursor,
+  fakeHarness,
+  goose,
+  opencode,
+  pi,
+} from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import { formatUsage } from '../src/view/model.ts'
@@ -143,6 +152,7 @@ describe('the Claude Code harness', () => {
       antigravity({ model: 'm' }),
       opencode({ model: 'm' }),
       goose({ model: 'm' }),
+      pi({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
@@ -150,7 +160,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'codex' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi' \(got "codex"\)/,
     )
   })
 
@@ -389,6 +399,73 @@ describe('the Goose harness', () => {
       () =>
         gooseMcpServers({ old: { transport: 'sse', url: 'https://x.example/sse', headers: {} } }),
       /Goose has no SSE MCP transport, so it can't use the old server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
+    )
+  })
+})
+
+describe('the pi harness', () => {
+  test('is plain data with its own cell id, and needs a Gemini model id', () => {
+    const h = pi({ model: 'gemini-3.8-flash' })
+    assert.deepEqual(h, { kind: 'pi', model: 'gemini-3.8-flash' })
+    assert.equal(harnessId(h), 'pi:gemini-3.8-flash')
+    assert.throws(
+      () => pi({ model: 'google/gemini-3.8-flash' }),
+      /pi\(\) needs a Gemini model id, without a provider, since it runs on a Gemini API key, e\.g\. pi\(\{ model: 'gemini-3\.8-flash' \}\)/,
+    )
+  })
+
+  test('pi reads rules from AGENTS.md, repo skills from .pi/skills and home skills from ~/.pi/agent/skills', () => {
+    const h = pi({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: PI_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: PI_HOME_SKILLS_DIR,
+    })
+    assert.equal(imageHarness(h), 'pi')
+    assert.deepEqual(AGENTS.pi.endpoints, PI_ENDPOINTS)
+    const config = resolveConfig({ harness: [h] }, '/p')
+    assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
+      'GOOGLE_GENERATIVE_AI_API_KEY',
+    ])
+  })
+
+  test('pi has no MCP client, so MCP servers are refused, naming them', () => {
+    assert.throws(
+      () =>
+        AGENTS.pi.mcpServers({ stamp: { transport: 'stdio', command: 'node', args: [], env: {} } }),
+      /^InfraError: pi has no MCP client, so it can't use the stamp MCP server$/,
+    )
+  })
+
+  test("pi's edit results are file edits with the patch's line counts", () => {
+    const events = normaliseStream(
+      [
+        {
+          ms: 1,
+          part: {
+            type: 'tool-call',
+            toolCallId: 'e',
+            toolName: 'edit',
+            input: { path: 'b.txt', edits: [] },
+          },
+        },
+        {
+          ms: 2,
+          part: {
+            type: 'tool-result',
+            toolCallId: 'e',
+            output: {
+              output: 'ok',
+              details: { patch: '--- b.txt\n+++ b.txt\n@@ -1,1 +1,2 @@\n-bee\n+bumble\n+hive\n' },
+            },
+          },
+        },
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
+      [['b.txt', 'modify', 2, 1]],
     )
   })
 })
@@ -848,6 +925,17 @@ describe('credential brokering per agent', () => {
     } finally {
       delete process.env.GOOGLE_GENERATIVE_AI_API_KEY
     }
+  })
+
+  test("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API", async () => {
+    const rules = await adapterRules('pi', {
+      ...everything,
+      GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+      GEMINI_API_KEY: 'host-gemini',
+    })
+    assert.equal(rules.length, 1)
+    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com')
+    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
   })
 
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
