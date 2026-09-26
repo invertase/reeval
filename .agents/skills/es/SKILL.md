@@ -56,10 +56,11 @@ export default defineConfig({
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
   `gemini-3.8-flash-medium`), `opencode({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini
-  model id, e.g. `gemini-3.8-flash`) and `fakeHarness(…)`. A list runs each harness as its own cell.
+  model id, e.g. `gemini-3.8-flash`), `goose({ model })` (the same key and model ids) and
+  `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that ES's gateway swaps on the
   harness's own endpoints. Cursor, Claude Code and Antigravity report tokens, which ES records
-  per turn, attempt and run (no prices); OpenCode's can't be trusted, so it records none.
+  per turn, attempt and run (no prices); OpenCode's and Goose's can't be trusted, so it records none for them.
 - Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
   the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.
@@ -86,7 +87,7 @@ export default defineConfig({
 
 `fakeHarness` also takes `withSkill: { files, text }` (used when the environment gives the agent
 a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 'server/tool' }`
-steps per turn), `layout: 'cursor' | 'claude-code' | 'antigravity' | 'opencode'`, `failWith`, `delayMs`,
+steps per turn), `layout: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose'`, `failWith`, `delayMs`,
 `flakeRate`, `reasoning`, `tools` and `id`. Keep a fake config next to the real one and run it
 with `--config es.fake.config.ts`.
 

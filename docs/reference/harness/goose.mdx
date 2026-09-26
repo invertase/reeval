@@ -1,0 +1,91 @@
+---
+title: goose()
+description: The Goose harness, its options and id, its Gemini API key, the tokens it can't report, and how its MCP servers and skills are set up.
+---
+
+`goose()` runs [Goose](https://goose-docs.ai) in the Docker sandbox over its ACP server (`goose acp`), on its `google` provider with a Gemini API key. `model` is required.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { goose } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: goose({ model: 'gemini-3.8-flash' }),
+})
+```
+
+## Options
+
+<Property name="model" type="string">
+  A Gemini model id, such as `gemini-3.8-flash`, without a provider. Required: Goose won't start a session without one.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `goose:<model>`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Goose attempts at once across the run, for example for your key's rate limits.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; Goose sees it as `GOOGLE_API_KEY`) |
+| Adapter | `@evalsuite/harness-goose` 0.1.0 (over `@ai-sdk/harness-acp`), bundled with ES |
+| CLI | Goose 1.52.0, from its GitHub release, checked against its sha256 |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:goose-0.1.0` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `.config/goose/skills` in Goose's own home (below) |
+| Skills (`placement: 'workspace'`) | `.goose/skills` in the workspace |
+| Egress hosts added | `generativelanguage.googleapis.com` |
+| Tokens | Not reported (below) |
+
+Build its image once with `es image build` in a project whose config uses `goose()`.
+
+## The key
+
+ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives it to Goose as `GOOGLE_API_KEY`; the real key never enters the container. The gateway swaps it in on one kind of request, the only one Goose 1.52.0 sends it on:
+
+| Host | Endpoint |
+|---|---|
+| `generativelanguage.googleapis.com` | `POST /v1beta/models/<model>:streamGenerateContent` |
+
+The adapter refuses to run in a sandbox that can't broker the key.
+
+## Tokens
+
+None are recorded: every turn's `usage` is `null`. Goose's ACP server reports its last model call's tokens as the turn's (a 4-call turn that used 16,253 input tokens reported 4,179), so ES records nothing rather than an undercount. The served model is still recorded, from the gateway's requests.
+
+## Settings
+
+| Variable | Why |
+|---|---|
+| `GOOSE_PROVIDER=google`, `GOOSE_MODEL=<model>` | The Gemini API key's provider, and the model the session starts on. |
+| `GOOSE_MODE=auto` | Tool calls run without asking. |
+| `GOOSE_TELEMETRY_OFF=1` | No telemetry. With it, a turn contacts only the Gemini API. |
+| `GOOSE_DISABLE_KEYRING=1` | No system keyring in a container. |
+| `GOOSE_DISABLE_SESSION_NAMING=1` | No extra model call to name the session. |
+
+Goose runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`, so its config and home skills live there, not in the sandbox user's `~/.config/goose`. The attempt's `context` lists them under that path. In the workspace it reads `.goose/skills`, and also `.agents/skills` and `.claude/skills`; nothing turns those off.
+
+MCP servers go in Goose's `config.yaml` as enabled extensions (`stdio`, or `streamable_http` for `http` servers; Goose has no SSE). Servers passed over ACP start disabled in 1.52.0 until the model enables them itself. Their tools are named `mcp__<server>__<tool>` in the transcript.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No model, or one with a provider | `goose() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. goose({ model: 'gemini-3.8-flash' }) (got …)` |
+| No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the Goose harness can't authenticate. Set it in the environment or .env.local.` |
+| A non-Docker sandbox | `The Goose harness needs the Docker sandbox` |
+| Goose doesn't start | `Goose harness failed to start: …` |
+| An `mcp.sse` server | `Goose has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+
+## Related
+
+- [Harnesses](/guide/harnesses)
+- [Secrets and egress](/guide/secrets-and-egress)
+- [Transcripts](/reference/transcript)

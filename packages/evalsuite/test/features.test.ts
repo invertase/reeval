@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@evalsuite/harness-antigravity'
+import { GOOSE_CLI_VERSION } from '@evalsuite/harness-goose'
 import { OPENCODE_CLI_VERSION } from '@evalsuite/harness-opencode'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
@@ -579,6 +580,33 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'harness/goose-rules',
+    tiers: ['fake', 'docker'],
+    image: 'goose',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/goose-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'goose',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/goose-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'goose',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
     dir: 'harness/cursor-workspace-skills',
     tiers: ['fake', 'docker'],
     env: 'greeting',
@@ -619,6 +647,21 @@ export const features: Feature[] = [
       const [image] = run.stack.images
       assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
       assert.equal(image?.agentCli, OPENCODE_CLI_VERSION)
+    },
+  },
+  {
+    dir: 'harness/goose-dockerfile',
+    tiers: ['docker'],
+    image: 'goose',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(
+        image?.agentCli ?? '',
+        new RegExp(`${GOOSE_CLI_VERSION.replaceAll('.', '\\.')}$`),
+      )
     },
   },
   {

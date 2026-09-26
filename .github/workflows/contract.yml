@@ -27,11 +27,11 @@ jobs:
       ES_TEST_REAL: '1'
       ES_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key skips and says why.
-      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode
-      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all four rows,
+      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,goose
+      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all five rows,
       # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
       # first, and fails rather than go over.
-      ES_REAL_ATTEMPT_BUDGET: '70'
+      ES_REAL_ATTEMPT_BUDGET: '84'
       ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}

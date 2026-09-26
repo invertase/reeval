@@ -1,5 +1,5 @@
 import { defineConfig } from 'evalsuite'
-import { antigravity, claudeCode, cursor, fakeHarness, opencode } from 'evalsuite/harness'
+import { antigravity, claudeCode, cursor, fakeHarness, goose, opencode } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
 
 // The CLI end to end on a real agent: e2e-real.test.ts records two runs of this one eval and
@@ -9,7 +9,7 @@ const model = process.env.ES_CONTRACT_MODEL ?? ''
 const harness = () => {
   switch (process.env.ES_CONTRACT_HARNESS) {
     case 'cursor':
-      // fast=false: the cheaper variant; an unset parameter takes the model's first allowed value.
+      // fast=false: the cheaper variant; an unset parameter takes the catalog's default (fast=true).
       return cursor({ model, params: { fast: 'false' } })
     case 'antigravity':
       return antigravity({ model })
@@ -17,6 +17,8 @@ const harness = () => {
       return claudeCode({ model })
     case 'opencode':
       return opencode({ model })
+    case 'goose':
+      return goose({ model })
     default:
       return fakeHarness({ script: [[{ write: { 'hello.txt': 'hello from es\n' } }]] })
   }

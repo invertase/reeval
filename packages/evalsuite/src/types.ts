@@ -190,10 +190,10 @@ export type FakeHarnessDescriptor = {
   /**
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
-   * `~/.config/opencode/skills` for `opencode`). Defaults to the fake's own (`AGENTS.md`,
-   * `.agents/skills`) in Cursor's image.
+   * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`). Defaults to the
+   * fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode'
+  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -217,8 +217,8 @@ export type CursorHarnessDescriptor = {
   /** A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`. */
   model: string
   /**
-   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the model's first allowed value,
-   * so pass the ones that change cost (`fast`) explicitly.
+   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's
+   * model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.
    */
   params?: Record<string, string>
   /** Cell id; defaults to `cursor:<model>`. */
@@ -259,12 +259,26 @@ export type OpenCodeHarnessDescriptor = {
   /** The most OpenCode attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
 }
+/**
+ * Goose through `@evalsuite/harness-goose` (`goose acp`), made by `goose()`. It runs Google models
+ * on a Gemini API key, and reports no usage (its ACP server counts one call).
+ */
+export type GooseHarnessDescriptor = {
+  kind: 'goose'
+  /** A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`. */
+  model: string
+  /** Cell id; defaults to `goose:<model>`. */
+  id?: string
+  /** The most Goose attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
   | ClaudeCodeHarnessDescriptor
   | AntigravityHarnessDescriptor
   | OpenCodeHarnessDescriptor
+  | GooseHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {
