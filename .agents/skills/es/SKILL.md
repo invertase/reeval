@@ -19,7 +19,8 @@ site; its Reference tab has every option, flag and error).
 
 1. Install: `npm init -y` if there's no `package.json`, then `npm i -D @invertase/foobar`
    (or a tarball: `npm i -D /path/to/invertase-foobar.tgz`). Pre-release: pin the version.
-   Node 22.13 or later.
+   Node 22.13 or later; npm ≥ 11.6 recommended (older npm, e.g. Node 22's 10.9, can crash with
+   an `edgesOut` error: `npm i -g npm@latest`; pnpm and yarn are unaffected).
 2. Write `es.config.ts` at the project root and evals in `evals/**/*.es.ts` (the default
    `include`). Gitignore `.es/` and `.env*`.
 3. `npx es run --dry-run` prints the plan (evals, cells, attempts, estimate) without running

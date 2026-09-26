@@ -12,14 +12,16 @@ npx es clean --keep 3
 
 ## es image build
 
-{/* generated:cli-help:image-build */}
+[//]: # (generated:cli-help:image-build)
+
 ```text
 es image build [filter...]
                           Build every image the evals' Docker sandboxes need, per harness: ES's
                           image (bakes in its CLI), from and dockerfile images, install layers
   --dry-run               List the images and how each is made, without building
 ```
-{/* /generated:cli-help:image-build */}
+
+[//]: # (/generated:cli-help:image-build)
 
 It collects the evals like `es run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and builds, in order:
 
@@ -45,11 +47,13 @@ Without a config file it builds ES's Cursor image only. `es run` still builds `f
 
 ## es clean
 
-{/* generated:cli-help:clean */}
+[//]: # (generated:cli-help:clean)
+
 ```text
 es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
 ```
-{/* /generated:cli-help:clean */}
+
+[//]: # (/generated:cli-help:clean)
 
 `es run` already keeps only the newest `debug.keep` runs' debug data (default 20). `es clean` removes all of it, or all but the newest `--keep <n>` runs. It never touches `.es/runs/` or the history folder.
 

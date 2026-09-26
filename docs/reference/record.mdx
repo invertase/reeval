@@ -51,7 +51,8 @@ The type definitions are in `packages/evalsuite/src/history/types.ts`; the envir
 
 ### Value types
 
-{/* generated:record-values */}
+[//]: # (generated:record-values)
+
 | Type | Values |
 |---|---|
 | `Outcome` | `'pass'`, `'fail'`, `'infra_error'`, `'skipped'` |
@@ -59,11 +60,13 @@ The type definitions are in `packages/evalsuite/src/history/types.ts`; the envir
 | `TurnStatus` | `'completed'`, `'aborted'`, `'error'` |
 | `ArtifactLevel` | `'all'`, `'failures'`, `'none'` |
 | `RecordMode` | `'manual'`, `'ci'`, `'always'` |
-{/* /generated:record-values */}
+
+[//]: # (/generated:record-values)
 
 `runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
 
-{/* generated:record-types */}
+[//]: # (generated:record-types)
+
 ### RunRecord
 
 <Property name="kind" type="'es-run'"></Property>
@@ -625,7 +628,8 @@ Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` readi
 <Property name="path" type="string"></Property>
 
 <Property name="status" type="'added' | 'modified' | 'deleted'"></Property>
-{/* /generated:record-types */}
+
+[//]: # (/generated:record-types)
 
 ## What a record can't pin down
 

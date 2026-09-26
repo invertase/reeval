@@ -15,7 +15,8 @@ group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'
 
 ## Where each key is accepted
 
-{/* generated:option-keys */}
+[//]: # (generated:option-keys)
+
 | Key | `es.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
@@ -40,7 +41,8 @@ group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'
 | [`compare`](#compare) |  |  | ✓ | ✓ |
 | [`tags`](#tags) |  |  | ✓ |  |
 | [`pin`](#pin) |  |  | ✓ |  |
-{/* /generated:option-keys */}
+
+[//]: # (/generated:option-keys)
 
 Config-only keys are on [defineConfig](/reference/config); `profiles` and `defaultProfile` are on [Profiles and budgets](/reference/profiles). Options are plain objects: a function in the options position is an error, and an unknown key is exit 2 with a hint (`Unknown option "repeat" in evaluate("e"). Did you mean "runs"?`).
 

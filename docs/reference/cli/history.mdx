@@ -14,12 +14,14 @@ npx es checkout latest     # a worktree at that run's commit
 
 ## es history
 
-{/* generated:cli-help:history */}
+[//]: # (generated:cli-help:history)
+
 ```text
 es history [filter]       Pass/fail per recorded eval over recent runs
                           --limit <n> --all (include unrecorded runs) --json
 ```
-{/* /generated:cli-help:history */}
+
+[//]: # (/generated:cli-help:history)
 
 The filter is a case-insensitive substring of the eval id. Runs go oldest to newest, left to right.
 
@@ -36,22 +38,26 @@ The filter is a case-insensitive substring of the eval id. Runs go oldest to new
 
 ## es show
 
-{/* generated:cli-help:show */}
+[//]: # (generated:cli-help:show)
+
 ```text
 es show [run]             One run: table, --md (summary.md) or --json (the record)
 ```
-{/* /generated:cli-help:show */}
+
+[//]: # (/generated:cli-help:show)
 
 The default output is a state table (commit, dirty patch, lockfiles, images, harnesses, environments, judge, agent context, packages, runner), then a line per eval. `--md` prints the run's `summary.md`; `--json` prints the record.
 
 ## es compare
 
-{/* generated:cli-help:compare */}
+[//]: # (generated:cli-help:compare)
+
 ```text
 es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
                           --md --json --fail-on-regression
 ```
-{/* /generated:cli-help:compare */}
+
+[//]: # (/generated:cli-help:compare)
 
 - **Defaults:** head is `latest`. Base is the nearest recorded, complete run on head's git ancestry, falling back to the previous run by time.
 - **Statuses:** `regressed`, `fixed`, `changed (not comparable)`, `infra error`, `new`, `removed` and `same`.
@@ -70,12 +76,14 @@ base 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d) → head 20260926T1739
 
 ## es checkout
 
-{/* generated:cli-help:checkout */}
+[//]: # (generated:cli-help:checkout)
+
 ```text
 es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                           (default dir: .es/checkouts/<run>)
 ```
-{/* /generated:cli-help:checkout */}
+
+[//]: # (/generated:cli-help:checkout)
 
 It runs `git worktree add --detach` at the run's commit, then applies the run's `worktree.patch` if it was dirty. Remove the worktree with `git worktree remove <dir>`.
 

@@ -21,6 +21,12 @@ es: Unknown option "harnesses" in es.config.ts. Did you mean "harness"?
 
 Errors in an eval file are prefixed with the file (`es: evals/skill.es.ts: …`). See [es run](/reference/cli/run) for exit codes in full.
 
+## Installing
+
+| Message | Fix |
+|---|---|
+| `npm error Cannot read properties of null (reading 'edgesOut')` during `npm install` | A bug in npm before 11.6 ([npm/cli#8261](https://github.com/npm/cli/issues/8261)), which Node 22's bundled npm 10.9 still has. npm ≥ 11.6 is recommended: update it with `npm i -g npm@latest`. Node 22 is still supported, and pnpm and yarn aren't affected. |
+
 ## Config and options
 
 | Message | Fix |

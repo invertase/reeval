@@ -12,14 +12,16 @@ npx es studio build --out site
 
 ## es studio
 
-{/* generated:cli-help:studio */}
+[//]: # (generated:cli-help:studio)
+
 ```text
 es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
   --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
   --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
   --no-token              Skip the session token (for scripts; anyone local can then read it)
 ```
-{/* /generated:cli-help:studio */}
+
+[//]: # (/generated:cli-help:studio)
 
 ```text
 es studio · capproj · evals/.history/
@@ -38,13 +40,15 @@ Ctrl-C to stop.
 
 ## es studio build
 
-{/* generated:cli-help:studio-build */}
+[//]: # (generated:cli-help:studio-build)
+
 ```text
 es studio build           Write the studio as a static site for Pages, Netlify or any host
   --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
   --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
 ```
-{/* /generated:cli-help:studio-build */}
+
+[//]: # (/generated:cli-help:studio-build)
 
 ```text
 built ../capsite/: 2 runs, 83 files, 913 KB (records, transcripts, diffs, logs and judge inputs)

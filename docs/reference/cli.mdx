@@ -32,13 +32,15 @@ npx es run --dry-run
   Print the help and exit 0.
 </Property>
 
-{/* generated:cli-help:footer */}
+[//]: # (generated:cli-help:footer)
+
 ```text
 Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
 Options: --config <path> (default ./es.config.ts)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
 ```
-{/* /generated:cli-help:footer */}
+
+[//]: # (/generated:cli-help:footer)
 
 ## Run references
 
@@ -56,7 +58,8 @@ A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git conf
 
 ## Exit codes
 
-{/* generated:exit-codes */}
+[//]: # (generated:exit-codes)
+
 | Code | Name |
 |---|---|
 | 0 | `ok` |
@@ -64,7 +67,8 @@ A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git conf
 | 2 | `usage` |
 | 3 | `infra` |
 | 130 | `interrupted` |
-{/* /generated:exit-codes */}
+
+[//]: # (/generated:exit-codes)
 
 | Code | When |
 |---|---|

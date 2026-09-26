@@ -228,8 +228,9 @@ npx @docs.page/cli preview      # local preview in the browser
 npx @docs.page/cli check        # links, assets and frontmatter
 ```
 
-`scripts/docs.mjs` rewrites the blocks between `{/* generated:<name> */}` and
-`{/* /generated:<name> */}`: the CLI help per command (from `es --help`), the `es query` views and
+`scripts/docs.mjs` rewrites the blocks between `[//]: # (generated:<name>)` and
+`[//]: # (/generated:<name>)`, Markdown comments that docs.page hides and its MDX check accepts (it
+shows `{/* */}` as text and rejects `<!-- -->`): the CLI help per command (from `es --help`), the `es query` views and
 tables (from `es query --schema --json`), exit codes, the option keys and where each is accepted,
 and the record's fields (from `src/history/types.ts` and `src/types.ts` and their doc comments).
 `--check` also fails when an option key, `ES_*` variable or exit code in the code isn't named on

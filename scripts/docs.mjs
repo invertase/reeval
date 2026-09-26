@@ -5,7 +5,7 @@
 //   node scripts/docs.mjs --check   fail if a block is stale or the reference misses something
 //   node scripts/docs.mjs --print   list the blocks; --print <name> prints one
 //
-// Generated blocks sit between `{/* generated:<name> */}` and `{/* /generated:<name> */}` in
+// Generated blocks sit between `[//]: # (generated:<name>)` and `[//]: # (/generated:<name>)` in
 // the .mdx files; everything outside them is hand-written. The CLI help and the query schema
 // come from the built CLI, so run `pnpm build` first.
 import { execFileSync } from 'node:child_process'
@@ -358,7 +358,7 @@ if (print > 0) {
   process.exit(0)
 }
 const used = new Set()
-const marker = /(\{\/\* generated:([\w:-]+) \*\/\})\n(?:[\s\S]*?\n)?(\{\/\* \/generated:\2 \*\/\})/g
+const marker = /(\[\/\/\]: # \(generated:([\w:-]+)\))\n(?:[\s\S]*?\n)?(\[\/\/\]: # \(\/generated:\2\))/g
 
 for (const file of mdxFiles()) {
   const text = read(file)
@@ -368,7 +368,7 @@ for (const file of mdxFiles()) {
       problems.push(`${relative(root, file)}: unknown generated block "${name}"`)
       return all
     }
-    return `${open}\n${generated.get(name)}\n${close}`
+    return `${open}\n\n${generated.get(name)}\n\n${close}`
   })
   if (next !== text) {
     if (check) problems.push(`${relative(root, file)} is out of date: run node scripts/docs.mjs`)

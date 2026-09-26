@@ -12,7 +12,8 @@ npx es query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_no
 
 ## Help
 
-{/* generated:cli-help:query */}
+[//]: # (generated:cli-help:query)
+
 ```text
 es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
                           rebuilt from the records); views: lift, effort, factor_effects,
@@ -20,7 +21,8 @@ es query [sql | view]     Read-only SQL over every recorded and scratch run (.es
                           verdict_flips. No argument lists them
   --json                  Rows as JSON; --schema every table and column; --rebuild from scratch
 ```
-{/* /generated:cli-help:query */}
+
+[//]: # (/generated:cli-help:query)
 
 ## Behaviour
 
@@ -40,7 +42,8 @@ evals/skill.es.ts › house greeting › greets in the house…  cursor:composer
 
 ## Views
 
-{/* generated:query-views */}
+[//]: # (generated:query-views)
+
 | Name | Columns |
 |---|---|
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
@@ -52,7 +55,8 @@ evals/skill.es.ts › house greeting › greets in the house…  cursor:composer
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
 | `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
 | `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgement_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
-{/* /generated:query-views */}
+
+[//]: # (/generated:query-views)
 
 | View | One row per |
 |---|---|
@@ -68,7 +72,8 @@ evals/skill.es.ts › house greeting › greets in the house…  cursor:composer
 
 ## Tables
 
-{/* generated:query-tables */}
+[//]: # (generated:query-tables)
+
 | Name | Columns |
 |---|---|
 | `artifacts` | `run_id`, `attempt_key`, `kind`, `path`, `sha256`, `bytes` |
@@ -81,7 +86,8 @@ evals/skill.es.ts › house greeting › greets in the house…  cursor:composer
 | `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
 | `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `es`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
 | `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms` |
-{/* /generated:query-tables */}
+
+[//]: # (/generated:query-tables)
 
 The tables mirror [the run record](/reference/record) and join on `run_id`, `eval_key`, `cell_key` and `environment_digest`.
 
