@@ -5,4 +5,5 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 export default defineConfig({
   harness: [fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })],
   sandbox: fakeSandbox(),
+  profiles: { lean: { limit: { compare: { maxVariants: 1 } } } },
 })

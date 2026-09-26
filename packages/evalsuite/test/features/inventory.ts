@@ -76,7 +76,7 @@ export const inventory: InventoryFeature[] = [
     id: 'config.dotenv',
     area: 'Config and selection',
     name: '`.env` and `.env.local` loading',
-    gap: 'No test writes either file, though every command loads them (src/env.ts).',
+    tests: [engine('.env.local wins over .env, the shell wins over both, and evals see them')],
   },
   {
     id: 'matrix.harness-runs',
@@ -138,7 +138,7 @@ export const inventory: InventoryFeature[] = [
     id: 'profiles.max-variants',
     area: 'Config and selection',
     name: '`limit.compare.maxVariants`',
-    gap: 'No plan case or test sets it.',
+    plan: ['compare/max-variants'],
   },
   {
     id: 'plan.json',
@@ -177,7 +177,10 @@ export const inventory: InventoryFeature[] = [
     id: 'selection.group-skip',
     area: 'Config and selection',
     name: '`group.skip` and `group.todo`',
-    gap: "Only `group.only` and the `evaluate` forms are tested; a skipped group's evals aren't.",
+    plan: ['selection/only-local'],
+    tests: [
+      engine("a skipped group's evals, nested ones too, are recorded as skipped and never run"),
+    ],
   },
   {
     id: 'selection.tags',

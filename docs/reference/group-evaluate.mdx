@@ -86,9 +86,9 @@ group(name, fn, options)
 | `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
 | `evaluate.todo(name)` | A placeholder with no body; it counts as skipped. |
 | `evaluate.for(cases)(name, …)` | One eval per case. The body gets `(t, item)`. |
-| `group.skip(name, …)` | Skips every eval in the group. |
+| `group.skip(name, …)` | Skips every eval in the group, nested groups included; each counts as skipped. |
 | `group.only(name, …)` | Runs only this group's evals within its file. |
-| `group.todo(name)` | A placeholder group. |
+| `group.todo(name)` | A placeholder group. It has no evals, so it adds nothing to the plan or the record. |
 
 `.only` is refused when `CI` is set, so a forgotten `.only` can't shrink a CI run: `evaluate.only isn't allowed in CI` (or `group.only`).
 
