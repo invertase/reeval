@@ -7,9 +7,11 @@ import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { ArtifactLevel, HistoryEntry } from './history/types.ts'
 import {
+  type CompareRow,
   compare,
   formatCompare,
   formatHistory,
+  formatNoBaseline,
   formatShow,
   history,
   pickBaseline,
@@ -137,9 +139,21 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
     const ancestry = await lines(root, ['rev-list', '--max-count=5000', from])
     const candidates = entries.filter((e) => e.recorded && e.runId !== head.runId)
     base = pickBaseline(candidates, head, ancestry)
-    if (!base) throw new CommandError(`No earlier recorded run to compare ${head.runId} with`)
   }
-  const rows = compare(base, head)
+  const rows = base
+    ? compare(base, head)
+    : head.evals.map(
+        (e): CompareRow => ({ id: e.id, base: null, head: e.outcome, status: 'added' }),
+      )
+  const failing = regressions(rows)
+  if (!base) {
+    if (ctx.flags.json) {
+      ctx.out(
+        JSON.stringify({ base: null, head: { runId: head.runId }, changes: [], rows }, null, 2),
+      )
+    } else ctx.out(formatNoBaseline(head, rows, !!ctx.flags.md))
+    return ctx.flags['fail-on-regression'] && failing.length ? 1 : 0
+  }
   if (ctx.flags.json) {
     const flag = (e: HistoryEntry) => ({
       runId: e.runId,
@@ -154,8 +168,15 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
       ),
     )
   } else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
-  return ctx.flags['fail-on-regression'] && rows.some((r) => r.status === 'regressed') ? 1 : 0
+  return ctx.flags['fail-on-regression'] && failing.length ? 1 : 0
 }
+
+/**
+ * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new eval that
+ * fails, since nothing earlier vouches for it.
+ */
+export const regressions = (rows: CompareRow[]) =>
+  rows.filter((r) => r.status === 'regressed' || (r.status === 'added' && r.head === 'fail'))
 
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */
 export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number> {
