@@ -2,7 +2,12 @@ import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { AgentHarnessDescriptor, HarnessDescriptor, WebEventType } from '../types.ts'
+import type {
+  AgentHarnessDescriptor,
+  EnvironmentLayer,
+  HarnessDescriptor,
+  WebEventType,
+} from '../types.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
@@ -374,6 +379,32 @@ export const HARNESS_EXAMPLE = "cursor({ model: 'composer-2.5' })"
 
 export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
+
+/**
+ * Why a harness's agent can't take the environment's `mcp.sse` servers, in the agent's own words,
+ * so the plan refuses them before any attempt starts; undefined when it can.
+ */
+export function refusedSse(
+  harness: HarnessDescriptor,
+  layers: readonly EnvironmentLayer[],
+): string | undefined {
+  if (!isAgentKind(harness.kind)) return undefined
+  const servers = new Map<string, ResolvedMcpServer>()
+  for (const { spec } of layers) {
+    for (const [name, server] of Object.entries(spec.mcp ?? {})) {
+      if (server.transport === 'sse') servers.set(name, { ...server, headers: {} })
+      else servers.delete(name)
+    }
+  }
+  if (servers.size === 0) return undefined
+  try {
+    AGENTS[harness.kind].mcpServers(Object.fromEntries(servers))
+    return undefined
+  } catch (error) {
+    if (error instanceof InfraError) return error.message
+    throw error
+  }
+}
 
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
 export const agentOf = (h: HarnessDescriptor): Agent | undefined =>

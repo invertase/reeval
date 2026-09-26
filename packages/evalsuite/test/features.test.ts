@@ -307,6 +307,27 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'skills/npm-local-path',
+    tiers: ['fake', 'docker'],
+    env: 'npm-vendored',
+    canary: /to contain 'Hello there, <name>\.'/,
+    prepare(dir) {
+      const vendor = join(dir, 'vendor')
+      mkdirSync(vendor)
+      for (const version of ['1.2.3', '1.2.4']) {
+        execFileSync('npm', ['pack', '--silent', '--pack-destination', vendor], {
+          cwd: join(dir, 'packages', version),
+        })
+      }
+    },
+    hostEnv: (dir) => ({ npm_config_cache: join(dir, '.npm-cache') }),
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.source]),
+        [['house-greeting', 'npm:vendor/acme-skills-1.2.3.tgz:skills']],
+      ),
+  },
+  {
     dir: 'skills/only-missing',
     tiers: ['fake', 'docker'],
     env: 'typo',

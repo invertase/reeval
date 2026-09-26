@@ -77,7 +77,7 @@ The prompt is a command-line argument, so it must stay under 128 KiB. Instructio
 
 ## MCP
 
-pi has no MCP client. An eval that gives `pi()` MCP servers fails its attempt as an infra error naming them, rather than running without them.
+pi has no MCP client. An eval that gives `pi()` MCP servers fails its attempt as an infra error naming them, rather than running without them. An `mcp.sse` server is refused earlier, at plan time: the run (and `--dry-run`) exits 2 before any attempt starts.
 
 ## Errors
 
@@ -86,6 +86,7 @@ pi has no MCP client. An eval that gives `pi()` MCP servers fails its attempt as
 | No model, or one with a provider | `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got …)` |
 | No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the pi harness can't authenticate. Set it in the environment or .env.local.` |
 | MCP servers | `pi has no MCP client, so it can't use the <names> MCP server` |
+| An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi has no MCP client, so it can't use the <name> MCP server` |
 | A non-Docker sandbox | `The pi harness needs the Docker sandbox` |
 | pi dies mid-turn | `pi exited with code <n> before ending the turn: …` |
 

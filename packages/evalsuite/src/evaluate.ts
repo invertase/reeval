@@ -10,6 +10,7 @@ import {
 } from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import { UsageError } from './errors.ts'
+import { refusedSse } from './harness/agents.ts'
 import { attemptId, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
@@ -17,6 +18,7 @@ import {
   checkOptions,
   evalPlan,
   expand,
+  harnessId,
   type Level,
   matchesTags,
   type PlannedAttempt,
@@ -166,6 +168,8 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
   for (const planned of plannedAttempts) {
     const why = unenforceable(planned.egress, planned.sandbox, where)
     if (why) throw new UsageError(why)
+    const sse = refusedSse(planned.harness, planned.environment.layers)
+    if (sse) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${sse}`)
   }
   const plan = evalPlan(resolvedEval, plannedAttempts)
   if (resolvedEval.skip) {

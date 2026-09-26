@@ -82,7 +82,7 @@ MCP servers go in Goose's `config.yaml` as enabled extensions (`stdio`, or `stre
 | No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the Goose harness can't authenticate. Set it in the environment or .env.local.` |
 | A non-Docker sandbox | `The Goose harness needs the Docker sandbox` |
 | Goose doesn't start | `Goose harness failed to start: …` |
-| An `mcp.sse` server | `Goose has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on goose:<model>: Goose has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
 
 ## Related
 
