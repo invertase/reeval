@@ -53,8 +53,10 @@ evaluate('hi', async (t) => {
   // Gemini saw the swapped-in (made-up) key: the gateway brokered it.
   expect(turn.transcript.some((e) => e.type === 'error' && /API_KEY_INVALID/.test(e.message ?? ''))).toBe(true)
   // Nothing in the sandbox holds the key: the CLI's own env had only the placeholder.
-  const found = await t.exec('grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev not_a_real_key / || true')
-  expect(found.stdout.trim()).toBe('')
+  const search = (needle: string) => t.exec(\`grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev \${needle} / || true\`)
+  expect((await search('not_a_real_key')).stdout.trim()).toBe('')
+  // Twin: the same search finds the settings the adapter wrote.
+  expect((await search('modelProvider')).stdout).toContain('/.gemini/antigravity-cli/settings.json')
 })
 `
       // A made-up key, and host Google keys the adapter must ignore: the sandbox, the gateway and
@@ -93,7 +95,8 @@ evaluate('hi', async (t) => {
 
       try {
         execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
-      } catch {
+      } catch (error) {
+        if (requireDocker) throw error
         return
       }
       const refused = await project('docker-agy-no-broker', {

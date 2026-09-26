@@ -4,7 +4,12 @@ import type {
   HarnessV1NetworkSandboxSession,
   HarnessV1RequestTransformation,
 } from '@ai-sdk/harness'
-import { antigravityEndpoints } from '@evalsuite/harness-antigravity'
+import {
+  ANTIGRAVITY_HOME_SKILLS_DIR,
+  ANTIGRAVITY_WORKSPACE_RULES_FILE,
+  ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
+  antigravityEndpoints,
+} from '@evalsuite/harness-antigravity'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -17,6 +22,7 @@ import {
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
+  LAYOUTS,
   layoutOf,
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
@@ -213,8 +219,13 @@ describe('the Antigravity harness', () => {
     )
   })
 
-  test("the catalog's endpoints are the adapter's", () => {
+  test("the catalog's endpoints and layout are the adapter's", () => {
     assert.deepEqual(AGENTS.antigravity.endpoints, antigravityEndpoints())
+    assert.deepEqual(LAYOUTS.antigravity, {
+      rulesFile: ANTIGRAVITY_WORKSPACE_RULES_FILE,
+      workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
+    })
   })
 })
 
