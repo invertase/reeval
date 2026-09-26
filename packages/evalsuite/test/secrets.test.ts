@@ -10,7 +10,7 @@ import { defineEnvironment, layered, unbrokeredSecrets } from '../src/environmen
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { unbrokered } from '../src/options.ts'
-import { redactSecrets, registerSecret } from '../src/redact.ts'
+import { countSecrets, redactSecrets, registerSecret } from '../src/redact.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
 
@@ -344,5 +344,61 @@ describe('redacting encoded forms', () => {
   test('twin: a form the redactor does not know (hex) is left as is', () => {
     const hex = Buffer.from(value).toString('hex')
     assert.equal(redactSecrets(hex, {}), hex)
+  })
+})
+
+describe('redacting fragments of a secret', () => {
+  const key = 'crsr_7f3Kq9ZpL2mXw8Rt4VbN6yHc1JdS'
+  const env = { CURSOR_API_KEY: key }
+
+  test('masks the last 12 characters of a key, as a leak check would print them', () => {
+    const tail = key.slice(-12)
+    const out = redactSecrets(`$ grep -rlsF -e '${tail}' / || true`, env)
+    assert.equal(out, "$ grep -rlsF -e '[REDACTED]' / || true")
+  })
+
+  test('masks any stretch of 8 or more characters, wherever it starts', () => {
+    for (const [start, end] of [
+      [0, 8],
+      [5, 19],
+      [11, 30],
+      [key.length - 8, key.length],
+    ] as const) {
+      const fragment = key.slice(start, end)
+      const out = redactSecrets(`a ${fragment} b`, env)
+      assert.equal(out, 'a [REDACTED] b', fragment)
+    }
+  })
+
+  test('masks fragments inside JSON, a transcript line and a record', () => {
+    const text = JSON.stringify({ stdout: `key=${key.slice(3, 20)}\n`, cmd: key.slice(-10) })
+    const out = redactSecrets(text, env)
+    assert.equal(out.includes(key.slice(3, 20)) || out.includes(key.slice(-10)), false, out)
+    assert.equal(out, JSON.stringify({ stdout: 'key=[REDACTED]\n', cmd: '[REDACTED]' }))
+  })
+
+  test('masks fragments of a declared secret whatever its variable is called', () => {
+    const declared = 'es-declared/9c4e+a1b7d20f'
+    registerSecret(declared)
+    assert.equal(redactSecrets(`x ${declared.slice(2, 14)} y`, {}), 'x [REDACTED] y')
+  })
+
+  test('twin: 7 characters, a path-valued variable and word-like windows are left as they are', () => {
+    assert.equal(redactSecrets(key.slice(4, 11), env), key.slice(4, 11))
+    const home = '/home/someone-12345/.ssh/id_ed25519'
+    assert.equal(
+      redactSecrets('/home/someone-12345/work', { SSH_KEY_PATH: home }),
+      '/home/someone-12345/work',
+    )
+    const worded = 'password-2026-reset-token'
+    const env2 = { RESET_TOKEN: worded }
+    assert.equal(redactSecrets('forgot my password', env2), 'forgot my password')
+    assert.equal(redactSecrets('ord-2026-res', env2), '[REDACTED]')
+  })
+
+  test('countSecrets counts a fragment, so a history or analysis write stops on it', () => {
+    assert.equal(countSecrets(`tail ${key.slice(-12)}`, env), 1)
+    assert.equal(countSecrets(`whole ${key} and tail ${key.slice(-12)}`, env), 2)
+    assert.equal(countSecrets('nothing here', env), 0)
   })
 })
