@@ -27,6 +27,7 @@ Summary
      ✓ greets in the house style     5/10  100%  10 attempts
          fake/-/fake                    control    0/5    0%   not gated
          fake/with-house-greeting/fake  variant    5/5  100%   lift +100 pts (95% +39…+100, 5/5 vs 0/5) (minLift 0)   gate passRate 0.8
+…
 ```
 
 ## Choose which cells gate
@@ -94,6 +95,61 @@ One control attempt failed, so both skills show +50 pts, and neither is distingu
 <Info>
   Use `es query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
 </Info>
+
+## Effort next to lift
+
+Pass rate can't tell a skill that makes the agent four times cheaper from no skill at all when both pass. So under each variant the summary prints its effort: the median tool calls and agent time against its control's, the ratio, and a verdict. From a real run of Cursor and Antigravity at `--runs 2`:
+
+```text
+     ✓ greets in the house style                    4/8  100%  8 attempts
+         cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
+         antigravity:gemini-3.8-flash-medium/-/docker                    control    0/2    0%   not gated
+         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
+```
+
+The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time gets its own verdict in `es query effort`). Effort never fails a run.
+
+| Verdict | Printed | When |
+|---|---|---|
+| `fewer`, `more` | `fewer tool calls (p = 0.029)` | p is below 0.05 |
+| `noise` | `within noise` | p is 0.05 or more |
+| `insufficient` | `too few attempts to test` | Even complete separation couldn't reach p below 0.05 |
+
+The smallest p a rank test can give depends only on the attempt counts, so a verdict needs at least four attempts on each side:
+
+| Variant vs control | Smallest possible p | Can reach a verdict |
+|---|---|---|
+| 2 vs 2 | 0.333 | no |
+| 3 vs 3 | 0.100 | no |
+| 3 vs 4 | 0.057 | no |
+| 4 vs 4 | 0.029 | yes |
+| 5 vs 5 | 0.008 | yes |
+
+## Effects across runs
+
+`es query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Each row has an evidence tier:
+
+| `tier` | The contrast |
+|---|---|
+| `controlled` | Two cells in one run and eval |
+| `pooled` | The same contrast over comparable runs: attempts summed per eval, then across evals, where an effort effect needs the same verdict in at least 2/3 of them |
+| `observed` | A cell between two runs whose fingerprint changed in one part; `confounded` when several did |
+| `not_measured` | The factor has one level |
+
+Pooling is how 2 runs at a time add up to a verdict. Over the same history, each run's skill contrast is `insufficient` on effort, and the pooled one isn't:
+
+```text
+eval_key                                                    factor       tier        points  lo      hi     pass_verdict  effort_verdict
+evals/skill.es.ts › house greeting › greets in the house…   environment  controlled  1       0.07    1      effect        insufficient
+…
+evals/skill.es.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
+·                                                           harness      pooled      0       -0.436  0.436  noise         insufficient
+```
+
+`es analyze` reads these facts and explains a run in plain words; see [es analyze](/reference/cli/analyze).
 
 ## Gate on the lower bound with minLift
 

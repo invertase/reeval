@@ -77,16 +77,17 @@ In plain output, each attempt's lines carry a shorter tag: the eval's distinctiv
 
 ## Filter by cell
 
-Filters that aren't eval file paths match eval names and cell keys, so a harness id picks its cells:
+Filters that aren't eval file paths match eval names and cell keys, so a harness id picks its cells. Here `skill` picks the file and `claude-code` the cells:
 
 ```bash
-es run --dry-run claude-code
+es run --dry-run skill claude-code
 ```
 
 ```text
 plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 4)
 eval                                                            harnesses  variants  runs  attempts  notes
 evals/skill.es.ts › house greeting › greets in the house style  1          1         2     4
+…
 ```
 
 ## Read the plan as JSON

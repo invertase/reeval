@@ -25,8 +25,8 @@ The plan shows each restricted policy and the hosts ES adds to it:
 ```text
 plan  2 evals · 3 cells · 3 attempts · ~9m 00s serial (~3m 00s at concurrency 4)
 eval                                          harnesses  variants  runs  attempts  notes
-evals/offline.es.ts › installs from npm only  1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com
-evals/offline.es.ts › works offline           2          —         1     2         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com; deny-all + auto: api.anthropic.com, *.anthropic.com
+evals/offline.es.ts › installs from npm only  1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org + auto: api2.cursor.sh, *.cursor.sh
+evals/offline.es.ts › works offline           2          —         1     2         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh; deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
 ## Three policies
@@ -47,13 +47,13 @@ A restricted policy always allows what the attempt itself needs, so an agent sti
 
 | Added for | Hosts |
 |---|---|
-| Cursor | `api2.cursor.sh`, `*.cursor.sh`, `cursor.com`, `*.cursor.com` |
+| Cursor | `api2.cursor.sh`, `*.cursor.sh` |
 | Claude Code | `api.anthropic.com`, `*.anthropic.com` |
 | Antigravity | `generativelanguage.googleapis.com` |
 | Brokered secrets | Each secret's `hosts` |
 | MCP servers | Each `http` or `sse` server's host |
 
-Only the attempt's own harness's hosts are added: a Cursor attempt under `'deny-all'` can't reach Anthropic.
+Only the attempt's own harness's hosts are added: a Cursor attempt under `'deny-all'` can't reach Anthropic. Cursor needs only its agent backend: ES's Cursor adapter fetches the model catalog from `api.cursor.com` on the host, not in the sandbox.
 
 ## Expected telemetry hosts
 
@@ -91,7 +91,7 @@ flowchart LR
 | Under | The container |
 |---|---|
 | A restricted policy | Is detached from every Docker network before anything but `sleep` runs, so the gateway is its only way out; a client that ignores the proxy gets no connection |
-| `'allow-all'` | Keeps its network; only proxy-aware clients (curl, npm, pip, git, Node, the agents' CLIs) show up in the record |
+| `'allow-all'` | Keeps its network; only proxy-aware clients (curl, npm, pip, git, Node, the agents) show up in the record |
 | Any policy | Can't reach the host's loopback or link-local addresses (cloud metadata) |
 
 The allowlist is checked by name at `CONNECT`, before any DNS lookup. A name a `*.` pattern matches that resolves to a private address is refused. An HTTPS tunnel to an allowed host isn't inspected, so the TLS inside could name another host on the same CDN.
@@ -107,18 +107,11 @@ Each attempt's record has an `egress` block. From a real Cursor attempt under `'
             "recorded": true,
             "contacted": [
               {
-                "host": "agentn.global.api5.cursor.sh",
-                "port": 443,
-                "connections": 1,
-                "sent": 9260,
-                "received": 43246
-              },
-              {
                 "host": "api2.cursor.sh",
                 "port": 443,
-                "connections": 22,
-                "sent": 60224,
-                "received": 461634
+                "connections": 12,
+                "sent": 99152,
+                "received": 213426
               }
             ],
             "blocked": [],

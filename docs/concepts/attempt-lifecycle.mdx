@@ -24,27 +24,28 @@ flowchart TD
 `es run -v` prints each phase as it happens. A real Cursor attempt, trimmed:
 
 ```text
-[agent#1 cursor]  17:06:35 plan      harness cursor:composer-2.5 (es.config.ts or its default)
+[agent#1 cursor]  17:40:47 plan      harness cursor:composer-2.5 (es.config.ts or its default)
 …
-[agent#1 cursor]  17:06:35 env       environment - (digest eca09e8f139f)
-[agent#1 cursor]  17:06:35 env       vars none · secrets none
-[agent#1 cursor]  17:06:35 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
-[agent#1 cursor]  17:06:35 image     cache hit evalsuite-sandbox:cursor-1.0.37 (ES's image for cursor; es image build rebuilds it)
-[agent#1 cursor]  17:06:35 image     ready evalsuite-sandbox:cursor-1.0.37 (e034063c0c8d) in 27ms · agent CLI 2026.09.26-dd393fe
-[agent#1 cursor]  17:06:36 container created cef2216dd11f from evalsuite-sandbox:cursor-1.0.37 in 823ms
-[agent#1 cursor]  17:06:36 container network policy allow-all · keeps its Docker network
-[agent#1 cursor]  17:06:36 container egress gateway started · brokers CURSOR_API_KEY
-[agent#1 cursor]  17:06:36 env       workspace snapshot taken: the diff starts here
-[agent#1 cursor]  17:06:36 harness   starting cursor:composer-2.5: bootstrap and session
-[agent#1 cursor]  17:06:36 harness   cursor:composer-2.5 session ready in 544ms
-[agent#1 cursor]  17:06:36 harness   turn 1 started: "Run `env | sort` and reply with how many variables it printed."
+[agent#1 cursor]  17:40:47 env       environment - (digest eca09e8f139f)
+[agent#1 cursor]  17:40:47 env       vars none · secrets none
+[agent#1 cursor]  17:40:47 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
+[agent#1 cursor]  17:40:47 image     cache hit evalsuite-sandbox:cursor-0.1.0 (ES's image for cursor; es image build rebuilds it)
+[agent#1 cursor]  17:40:47 image     ready evalsuite-sandbox:cursor-0.1.0 (a987bc712d5b) in 33ms · agent CLI @cursor/sdk 1.0.32
+[agent#1 cursor]  17:40:48 container created 442ac2d4e235 from evalsuite-sandbox:cursor-0.1.0 in 800ms
+[agent#1 cursor]  17:40:48 container network policy allow-all · keeps its Docker network
+[agent#1 cursor]  17:40:48 container egress gateway started · brokers CURSOR_API_KEY
+[agent#1 cursor]  17:40:48 env       workspace snapshot taken: the diff starts here
+[agent#1 cursor]  17:40:48 harness   starting cursor:composer-2.5: bootstrap and session
+[agent#1 cursor]  17:40:49 harness   cursor:composer-2.5 session ready in 365ms
+[agent#1 cursor]  17:40:49 harness   turn 1 started: "Run `env | sort > env.txt` and reply with how many lines env.txt has."
 …
-[agent#1 cursor]  17:06:44 harness   turn 1 completed in 8s · 1 tool call · 0 file edits
-[agent#1 cursor]  17:06:44 check     $ env; cat /proc/[0-9]*/environ | tr "\0" "\n" → exit 0 · 42ms
+[agent#1 cursor]  17:40:53 harness   turn 1 completed in 4s · 1 tool call · 0 file edits
+[agent#1 cursor]  17:40:53 check     $ env; cat /proc/[0-9]*/environ | tr "\0" "\n" → exit 0 · 43ms
 …
-[agent#1 cursor]  17:06:48 teardown  harness session closed
-[agent#1 cursor]  17:06:48 teardown  sandbox destroyed (1s for teardown)
-[agent#1 cursor]  17:06:48 teardown  outcome pass
+[agent#1 cursor]  17:40:54 teardown  harness session closed
+[agent#1 cursor]  17:40:55 teardown  sandbox destroyed (289ms for teardown)
+[agent#1 cursor]  17:40:55 teardown  outcome pass
+…
 ```
 
 ## What each phase does
@@ -94,19 +95,26 @@ A cell's pass rate is passes over passes plus fails; infra errors and skipped at
 
 ## Timings in the record
 
-Each attempt in the record has per-phase timings in milliseconds. From a real Cursor attempt of `creates a tested greet module`:
+Each attempt in the record has per-phase timings in milliseconds, and the tokens its turns used when the harness reports them (Cursor and Antigravity do). From a real Cursor attempt of `creates a tested greet module`:
 
 ```text
+          "usage": {
+            "input": 23984,
+            "output": 367,
+            "cacheRead": 23040,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
           "timings": {
-            "setupMs": 1733,
-            "agentMs": 10100,
-            "diffMs": 93,
-            "checksMs": 132,
-            "judgeMs": 1170
+            "setupMs": 1808,
+            "agentMs": 7166,
+            "diffMs": 80,
+            "checksMs": 139,
+            "judgeMs": 1178
           },
 ```
 
-`setupMs` covers the image, container, files, setup steps and harness start. `agentMs` is the sum of every turn. The studio's Debug tab shows the same phases as a timeline.
+`setupMs` covers the image, container, files, setup steps and harness start. `agentMs` is the sum of every turn. `usage` is the sum of each turn's, and each turn also records the model that served it, such as `composer-2.5[fast=true]`. The studio's Debug tab shows the phases as a timeline.
 
 ## Next
 

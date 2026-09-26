@@ -25,7 +25,7 @@ evaluate('adds a default name in a follow-up turn', async (t) => {
 ```
 
 ```text
-[adds#1 cursor]  +0:18 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+[adds#1 cursor]  +0:10 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
 ```
 
 ## Score and threshold
@@ -85,7 +85,7 @@ A judge call that hits a transient error (a 429, a 5xx, "high demand", a dropped
 
 ## What the judge sees
 
-The judge sees four things: the latest turn's prompt as `task`, the agent's final message as `output`, the changed files and the diff since the eval started. Each call is saved in the attempt's `judge-input.json`. From the real multi-turn run above:
+The judge sees four things: the latest turn's prompt as `task`, the agent's final message as `output`, the changed files and the diff since the eval started. Each call is saved in the attempt's `judge-input.json`. From a real Cursor attempt of the multi-turn eval above:
 
 ```text
 [
@@ -94,13 +94,13 @@ The judge sees four things: the latest turn's prompt as `task`, the agent's fina
     "model": "google/gemini-3.8-flash",
     "state": {
       "task": "Make name default to \"world\" when greet() is called without arguments.",
-      "output": "Updated `greet` to use a default parameter:\n\n```javascript\nfunction greet(name = 'world') {\n  return `Hello, ${name}!`;\n}\n```\n\n`greet()` now returns `\"Hello, world!\"`.",
+      "output": "Updated `greet` to use a default parameter: `name = \"world\"`. Calling `greet()` returns `\"Hello, world!\"`; passing a name still works as before.",
       "files": [
         "added greet.js"
       ],
       "diff": {
         "$ref": "diff.patch",
-        "sha256": "9cfde9896b1696cbb9c0735139c523bc3a6f4a9f25e104b34b1f939513b742f7"
+        "sha256": "2d8d95c242d9ea1246dd52368f13f5220d8992713885b2be946af5c939915fdc"
       }
     }
   }

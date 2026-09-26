@@ -35,7 +35,7 @@ If your agent isn't detected, set `ES_UI=agent` (or `AI_AGENT=<name>`).
 The plan line comes first in every mode, then plain mode's run header:
 
 ```text
-plan  profile pr (auto: CI is set) · 3 evals · 3 cells · 3 attempts · ~50s serial (~17s at concurrency 4) · budget 20 attempts ✓
+plan  profile pr (auto: CI is set) · 3 evals · 3 cells · 3 attempts · ~37s serial (~12s at concurrency 4) · budget 20 attempts ✓
 es 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 ```
 
@@ -47,12 +47,12 @@ es 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · con
 [summarises#1 cursor] ▶ evals/jq.es.ts › summarises a JSON file with jq
 [creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
 [adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
-[summarises#1 cursor] ✓ evals/jq.es.ts › summarises a JSON file with jq  14s
+[summarises#1 cursor] ✓ evals/jq.es.ts › summarises a JSON file with jq  10s
 [summarises#1 cursor]  +0:00 sandbox ready 2s
-[summarises#1 cursor]  +0:01 turn 1 done 11s · 3 tool calls, 2 file edits
-[summarises#1 cursor]  +0:12 $ jq --version  exit 0 39ms
-[summarises#1 cursor]  +0:12 $ ./count.sh  exit 0 52ms
-[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  15s
+[summarises#1 cursor]  +0:01 turn 1 done 8s · 3 tool calls, 2 file edits
+[summarises#1 cursor]  +0:09 $ jq --version  exit 0 41ms
+[summarises#1 cursor]  +0:09 $ ./count.sh  exit 0 55ms
+[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  12s
 …
 ```
 
@@ -60,15 +60,15 @@ es 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · con
 
 ```text
 …
-[creates#1 fake]  +0:00 sandbox ready 21ms
+[creates#1 fake]  +0:00 sandbox ready 22ms
 [creates#1 fake]  +0:00 turn 1 started
-[adds#1 fake]  +0:00 sandbox ready 18ms
-[adds#1 fake]  +0:00 turn 1 started
-[langchain#1 fake]  +0:00 sandbox ready 18ms
+[langchain#1 fake]  +0:00 sandbox ready 19ms
+[langchain#1 fake]  +0:00 turn 1 started
+[adds#1 fake]  +0:00 sandbox ready 19ms
 …
 ```
 
-Detail lines carry an offset into the attempt (`+0:12`): sandbox start, each turn with its tool calls and file edits, each check, each judge verdict, and the eval's own `console.log` and `console.error`.
+Detail lines carry an offset into the attempt (`+0:09`): sandbox start, each turn with its tool calls and file edits, each check, each judge verdict, and the eval's own `console.log` and `console.error`.
 
 ## Prefixes and tags
 
@@ -79,7 +79,8 @@ Every line about an attempt starts with a tag: the first distinctive word of the
 | `[creates#1 cursor]` | Run 1; nothing varies, so the harness kind |
 | `[greets#2 control]` | Run 2 of a `compare` eval's control |
 | `[greets#1 with-house-greeting]` | Run 1 of its variant |
-| `[scaffolds#1 antigravity:gemini-3.8-flash-low · control]` | Several harnesses and a compare |
+| `[creates#1 cursor:composer-2.5]` | Several harnesses, so the harness id |
+| `[greets#2 antigravity:gemini-3.8-flash-medium · control]` | Several harnesses and a compare |
 
 `grep '\[greets#1'` pulls out one attempt's lines. `--log-prefix none` drops the tags.
 
@@ -96,11 +97,11 @@ ES_HEARTBEAT=30s es run   # 0 turns it off
 With `GITHUB_ACTIONS=true`, passing attempts collapse into `::group::` blocks titled with their result line, and failing ones stay open with an `::error` annotation. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as this real run did:
 
 ```text
-::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  14s
-[creates#1 cursor]  +0:00 sandbox ready 2s
-[creates#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 2 file edits
-[creates#1 cursor]  +0:11 $ node --test  exit 0 131ms
-[creates#1 cursor]  +0:11 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  10s
+[creates#1 cursor]  +0:00 sandbox ready 1s
+[creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
+[creates#1 cursor]  +0:08 $ node --test  exit 0 137ms
+[creates#1 cursor]  +0:08 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
 ::endgroup::
 ```
 
@@ -111,42 +112,47 @@ A failing control that isn't gated gets `(not gated)` and no annotation.
 Agent mode prints one block per failure with its record path, then totals, and the summary path last, so an agent reads what it needs and nothing else. A real run:
 
 ```text
-plan  7 evals · 7 cells · 7 attempts · ~1m 53s serial (~28s at concurrency 4)
+plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
 es run: 1 eval file
-FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (25s, judge)
+FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (21s, judge)
   judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
-  record: .es/runs/20260926T170730Z_bd6205e_ada-lovelace_8vkb/evals-preferences-es-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
+  record: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-es-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
 …
-1 passed, 6 failed
-summary: .es/runs/20260926T170730Z_bd6205e_ada-lovelace_8vkb/summary.md
+7 failed
+summary: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 ```
 
 ## The summary
 
-Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. Evals with several attempts get their pass count and a row per cell, with its role and lift.
+Plain output ends with a summary: a file › group tree with each eval's outcome, duration, lowest judge score and turns. Evals with several attempts get their pass count and a row per cell, with its role and lift, and each variant an `effort:` line (see [effort](/concepts/lift#effort-next-to-lift)). From a real run of Cursor and Antigravity at `--runs 2`:
 
 ```text
 Summary
  evals/hello.es.ts
    greet module
-     ✓ creates a tested greet module                         136ms  judge 0.95  1 turn
-     ✓ adds a default name in a follow-up turn                99ms  judge 0.95  2 turns
+     ✓ creates a tested greet module                4/4  100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
 …
  evals/skill.es.ts
    house greeting
-     ✓ greets in the house style                               1/2  100%  2 attempts
-         fake/-/fake                    control    0/1    0%   not gated
-         fake/with-house-greeting/fake  variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
-
-Failures (1)
-
-Assertion failures (1)
- ✗ evals/skill.es.ts › house greeting › greets in the house style  fake/-/fake#1  (not gated)
+     ✓ greets in the house style                    4/8  100%  8 attempts
+         cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
 …
-Attempts  10 passed · 1 failed, not gated (11 attempts, 10 evals)
-Duration  1s
- Results  .es/runs/20260926T170458Z_bd6205e_ada-lovelace_j1c4/summary.md
+Failures (4)
+
+Assertion failures (4)
+ ✗ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#1  (not gated)
+…
+Attempts  12 passed · 4 failed, not gated (16 attempts, 3 evals)
+Duration  2m 39s
+  Tokens  5149k in (2946k cached) · 64k out
+ Results  .es/runs/20260926T174444Z_b010670_ada-lovelace_7gmj/summary.md
 ```
+
+An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor and Antigravity do): input includes cached reads, and there's no cost line because ES prices no models.
 
 Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its artifact directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure.
 

@@ -61,7 +61,7 @@ The profile's `defaults` sit under the groups and evals: they fill in what the e
 
 | Level | Set in | Role |
 |---|---|---|
-| Config | `es.config.ts` | The base for every eval |
+| Config | `es.config.ts` | The base for every eval; with no `harness`, `cursor({ model: 'composer-2.5' })` |
 | Profile `defaults` | `profiles.<name>.defaults` | Fills in what groups and evals don't set |
 | Groups | `group(name, options, fn)`, outer then inner | Applies to every eval inside |
 | Eval | `evaluate(name, options, fn)` | The eval's own values |
