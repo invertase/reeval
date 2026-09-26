@@ -207,7 +207,7 @@ At the end of a complete run, ES copies it into the history folder and says so. 
 recorded evals/.history/20260926T174109Z_b010670_ci_8f60.json + 9 artifact files in evals/.history/20260926T174109Z_b010670_ci_8f60/ (30.2 KB). Commit it with git.
 ```
 
-A run that fails evals is still complete, so it's recorded, and `publish` still runs because of `!cancelled()`. A run that hits `budget.duration` ends with status `budget` and isn't recorded (`es record --allow-incomplete` records it by hand), so the publish job finds nothing new to commit.
+A run that fails evals is still complete, so it's recorded, and `publish` still runs because of `!cancelled()`. A run that hits `budget.duration` ends with status `budget` and is recorded too, with its unstarted attempts skipped, so the publish job commits what the budget allowed. `es compare` never takes it as a base.
 
 If your main branch is protected, let the `github-actions[bot]` push to it, or change the commit step to open a pull request.
 
