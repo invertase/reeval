@@ -5,13 +5,14 @@
 // suite's own checks are proven on every PR's Docker job. See test/contract/README.md.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import type { AttemptRecord, RunRecord } from '../src/history/types.ts'
 import { BLOCKED_HOST, PLANTED } from './contract/evals/constants.ts'
 import { type CliRun, readRun, runCli } from './helpers.ts'
 import { containersLeft } from './support/containers.ts'
-import { fixture } from './support/fixture.ts'
+import { fixture, testDir } from './support/fixture.ts'
 import {
   cellOf,
   type HarnessRow,
@@ -21,9 +22,18 @@ import {
   scanTargets,
   skipRow,
 } from './support/harnesses.ts'
+import {
+  hasFormat,
+  knownSignatures,
+  learnSignatures,
+  nativeEvents,
+  rawTranscripts,
+  signatures,
+} from './support/stream-formats.ts'
 
 type Ran = { cli: CliRun; run: RunRecord; runDir: string }
-type Check = (ran: Ran, row: HarnessRow) => void | Promise<void>
+/** Returns 'n/a' when the behaviour doesn't apply to the row. */
+type Check = (ran: Ran, row: HarnessRow) => void | 'n/a' | Promise<void>
 type Behaviour = { name: string; check: Check }
 
 const evalNamed = (run: RunRecord, name: string) => {
@@ -196,6 +206,25 @@ const behaviours: Behaviour[] = [
     },
   },
   {
+    name: 'native stream format unchanged',
+    check(ran, row) {
+      if (!hasFormat(row.id)) return 'n/a'
+      const events = rawTranscripts(ran.runDir).flatMap((f) =>
+        nativeEvents(readFileSync(f, 'utf8')),
+      )
+      assert.ok(events.length > 0, 'no native events in the raw transcripts')
+      const seen = signatures(row.id, events)
+      if (process.env.ES_UPDATE_FORMATS === '1') learnSignatures(row.id, seen)
+      const known = new Set(knownSignatures(row.id))
+      const unknown = seen.filter((s) => !known.has(s))
+      assert.deepEqual(
+        unknown,
+        [],
+        `${row.id}'s CLI sent what test/replay/formats/${row.id}.json doesn't know: its output format changed. Check the adapter handles it, then accept it with ES_UPDATE_FORMATS=1.`,
+      )
+    },
+  },
+  {
     name: 'clean teardown',
     async check(ran) {
       assert.equal(ran.run.status, 'complete')
@@ -203,6 +232,27 @@ const behaviours: Behaviour[] = [
     },
   },
 ]
+
+/** The evals whose streams test/replay keeps, per harness (ES_UPDATE_CAPTURES=1). */
+const CAPTURED = ['skill', 'mcp', 'edit and run', 'egress']
+
+/**
+ * Copies the captured evals' raw transcripts to test/replay/<harness>/, for replay.test.ts. Cursor's
+ * command list is dropped: it names the account's team commands and isn't used.
+ */
+function capture(ran: Ran, row: HarnessRow) {
+  const dir = join(testDir, 'replay', row.id)
+  mkdirSync(dir, { recursive: true })
+  for (const name of CAPTURED) {
+    const a = evalNamed(ran.run, name).attempts[0]
+    const raw = a?.files.rawTranscript?.path
+    assert.ok(a?.outcome === 'pass' && raw, `can't capture ${name}: ${a?.outcome}, ${raw}`)
+    const lines = readFileSync(join(ran.runDir, raw), 'utf8')
+      .split('\n')
+      .filter((l) => l && !l.includes('"sessionUpdate":"available_commands_update"'))
+    writeFileSync(join(dir, `${name.replaceAll(' ', '-')}.raw.jsonl`), `${lines.join('\n')}\n`)
+  }
+}
 
 /** Each row's result per behaviour, for the summary table. */
 const results = new Map<string, Map<string, string>>()
@@ -223,6 +273,8 @@ for (const row of harnesses) {
         const cli = await runCli(p.dir, ['run', '--concurrency', row.key ? '2' : '4'], {
           env: {
             ...rowEnv(row),
+            // Kept for the format check and the replay captures; the files are small.
+            ES_RAW_TRANSCRIPT: '1',
             ES_CONTRACT_KEY_TARGETS: scanTargets(keyOf(row) ?? `no key ${Date.now()}`),
             ES_CONTRACT_PLANTED_TARGETS: scanTargets(PLANTED),
           },
@@ -231,6 +283,7 @@ for (const row of harnesses) {
         const { run, dir } = readRun(p.dir)
         ran = { cli, run, runDir: dir }
         spent.set(row.id, withTurns(run).length)
+        if (process.env.ES_UPDATE_CAPTURES === '1') capture(ran, row)
       },
       { timeout: 26 * 60_000 },
     )
@@ -245,8 +298,7 @@ for (const row of harnesses) {
       test(b.name, async () => {
         try {
           assert.ok(ran, 'es run didn’t finish')
-          await b.check(ran, row)
-          mark(row, b.name, 'pass')
+          mark(row, b.name, (await b.check(ran, row)) ?? 'pass')
         } catch (e) {
           mark(row, b.name, 'FAIL')
           throw e

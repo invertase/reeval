@@ -1,0 +1,65 @@
+{"turn":0,"ms":286,"part":{"type":"start"}}
+{"turn":0,"ms":2913,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":3526,"part":{"type":"raw","rawValue":{"sessionUpdate":"session_info_update","title":"Curl Command Once"}}}
+{"turn":0,"ms":6295,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Running the exact curl"}}}}
+{"turn":0,"ms":6295,"part":{"type":"reasoning-start","id":"acp-reasoning-1"}}
+{"turn":0,"ms":6295,"part":{"type":"reasoning-delta","id":"acp-reasoning-1","text":"Running the exact curl"}}
+{"turn":0,"ms":6334,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":" command once, then "}}}}
+{"turn":0,"ms":6334,"part":{"type":"reasoning-delta","id":"acp-reasoning-1","text":" command once, then "}}
+{"turn":0,"ms":6337,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"stopping."}}}}
+{"turn":0,"ms":6337,"part":{"type":"reasoning-delta","id":"acp-reasoning-1","text":"stopping."}}
+{"turn":0,"ms":6338,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Running"}}}}
+{"turn":0,"ms":6338,"part":{"type":"reasoning-end","id":"acp-reasoning-1"}}
+{"turn":0,"ms":6338,"part":{"type":"text-start","id":"acp-text-2"}}
+{"turn":0,"ms":6338,"part":{"type":"text-delta","id":"acp-text-2","text":"Running"}}
+{"turn":0,"ms":6339,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" the exact curl"}}}}
+{"turn":0,"ms":6339,"part":{"type":"text-delta","id":"acp-text-2","text":" the exact curl"}}
+{"turn":0,"ms":6339,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" command once"}}}}
+{"turn":0,"ms":6339,"part":{"type":"text-delta","id":"acp-text-2","text":" command once"}}
+{"turn":0,"ms":6340,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":".\n"}}}}
+{"turn":0,"ms":6341,"part":{"type":"text-delta","id":"acp-text-2","text":".\n"}}
+{"turn":0,"ms":6341,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call","toolCallId":"tool_a2966ccb-cf45-4ab2-a604-93db2124a3d","title":"`curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt`","kind":"execute","status":"pending","rawInput":{"command":"curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt"}}}}
+{"turn":0,"ms":6341,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"tool_a2966ccb-cf45-4ab2-a604-93db2124a3d","status":"in_progress"}}}
+{"turn":0,"ms":6499,"part":{"type":"raw","rawValue":{"sessionUpdate":"tool_call_update","toolCallId":"tool_a2966ccb-cf45-4ab2-a604-93db2124a3d","status":"completed","rawOutput":{"exitCode":56,"stdout":"","stderr":"curl: (56) CONNECT tunnel failed, response 403\n"}}}}
+{"turn":0,"ms":7340,"part":{"type":"text-end","id":"acp-text-2"}}
+{"turn":0,"ms":7343,"part":{"type":"tool-call","toolCallId":"tool_a2966ccb-cf45-4ab2-a604-93db2124a3d","toolName":"bash","input":{"command":"curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt"},"providerExecuted":true,"title":"Terminal"}}
+{"turn":0,"ms":7344,"part":{"type":"tool-result","toolCallId":"tool_a2966ccb-cf45-4ab2-a604-93db2124a3d","toolName":"bash","output":{"exitCode":56,"stdout":"","stderr":"curl: (56) CONNECT tunnel failed, response 403\n"}}}
+{"turn":0,"ms":7344,"part":{"type":"finish-step","finishReason":"tool-calls","rawFinishReason":"tool-calls","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"m35lNEfjJhJwYzFX-0","timestamp":"2026-09-26T16:42:27.346Z","modelId":"composer-2.5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":12368,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":12369,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"The command failed with"}}}}
+{"turn":0,"ms":12369,"part":{"type":"reasoning-start","id":"acp-reasoning-3"}}
+{"turn":0,"ms":12369,"part":{"type":"reasoning-delta","id":"acp-reasoning-3","text":"The command failed with"}}
+{"turn":0,"ms":12412,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":" exit code 56. A CONNECT"}}}}
+{"turn":0,"ms":12412,"part":{"type":"reasoning-delta","id":"acp-reasoning-3","text":" exit code 56. A CONNECT"}}
+{"turn":0,"ms":12412,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":" tunnel failure returned"}}}}
+{"turn":0,"ms":12412,"part":{"type":"reasoning-delta","id":"acp-reasoning-3","text":" tunnel failure returned"}}
+{"turn":0,"ms":12412,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":" HTTP 403."}}}}
+{"turn":0,"ms":12412,"part":{"type":"reasoning-delta","id":"acp-reasoning-3","text":" HTTP 403."}}
+{"turn":0,"ms":12412,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"The"}}}}
+{"turn":0,"ms":12412,"part":{"type":"reasoning-end","id":"acp-reasoning-3"}}
+{"turn":0,"ms":12412,"part":{"type":"text-start","id":"acp-text-4"}}
+{"turn":0,"ms":12412,"part":{"type":"text-delta","id":"acp-text-4","text":"The"}}
+{"turn":0,"ms":12412,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" command ran once"}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":" command ran once"}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"."}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":"."}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" It exited with code"}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":" It exited with code"}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" **56** (`"}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":" **56** (`"}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"CONNECT tunnel failed,"}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":"CONNECT tunnel failed,"}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" response 403`)."}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":" response 403`)."}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" Output"}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":" Output"}}
+{"turn":0,"ms":12413,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" was written"}}}}
+{"turn":0,"ms":12413,"part":{"type":"text-delta","id":"acp-text-4","text":" was written"}}
+{"turn":0,"ms":12414,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":" to `blocked.txt"}}}}
+{"turn":0,"ms":12414,"part":{"type":"text-delta","id":"acp-text-4","text":" to `blocked.txt"}}
+{"turn":0,"ms":12414,"part":{"type":"raw","rawValue":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"`."}}}}
+{"turn":0,"ms":12414,"part":{"type":"text-delta","id":"acp-text-4","text":"`."}}
+{"turn":0,"ms":12513,"part":{"type":"raw","rawValue":{"stopReason":"end_turn"}}}
+{"turn":0,"ms":12513,"part":{"type":"text-end","id":"acp-text-4"}}
+{"turn":0,"ms":12513,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"end_turn","usage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"inferredStep":true}},"response":{"id":"m35lNEfjJhJwYzFX-1","timestamp":"2026-09-26T16:42:32.515Z","modelId":"composer-2.5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":12514,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"end_turn","totalUsage":{"inputTokenDetails":{},"outputTokenDetails":{}},"providerMetadata":{"acp":{"stopReason":"end_turn"}}}}
