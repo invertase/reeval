@@ -53,6 +53,7 @@ ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives 
 | Host | Endpoint |
 |---|---|
 | `generativelanguage.googleapis.com` | `POST /v1beta/models/<model>:streamGenerateContent` |
+| `generativelanguage.googleapis.com` | `GET /v1beta/models` (the model list, at the start of every turn) |
 
 The adapter refuses to run in a sandbox that can't broker the key.
 

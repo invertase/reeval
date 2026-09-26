@@ -74,7 +74,7 @@
 | `docker({ from })` toolchain images **(gap)** | — | — | — | — | — |
 | `es image build` and `--dry-run` | ✓ 1 | — | — | — | — |
 | `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 6 | ● 2 |
-| The harness's key never enters the container | ✓ 2 | — | — | — | ● 2 |
+| The harness's key never enters the container | ✓ 3 | — | — | — | ● 2 |
 | Ports: through the tunnel, or published without the gateway | ✓ 2 | — | — | — | — |
 | No container or sandbox left after a failure, timeout or abort | ✓ 2 | — | — | — | ◐ 2 (2 without a canary) |
 
