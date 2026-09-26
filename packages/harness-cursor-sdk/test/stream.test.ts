@@ -73,6 +73,44 @@ describe('stream translation', () => {
     assert.deepEqual(meta.model, { id: 'composer-2.5', params: [{ id: 'fast', value: 'false' }] })
   })
 
+  test('a real web turn on SDK 1.0.32: the agent searched and fetched, the stream has no tool call', () => {
+    // Captured live: the backend sent webSearchToolCall and webFetchToolCall, and the SDK
+    // dropped both, so there is nothing here to translate and nothing is invented.
+    const ndjson = fixture('web-1.0.32.ndjson')
+    assert.ok(!ndjson.includes('"tool_call"'))
+    const { parts } = translate(ndjson)
+    assert.equal(parts.filter((p) => p.type === 'tool-call').length, 0)
+    const text = parts
+      .filter((p) => p.type === 'text-delta')
+      .map((p) => p.delta)
+      .join('')
+    assert.match(text, /104\.238\.50\.245/, "the fetched page's content reached the reply")
+  })
+
+  test('web tools as the SDK reports its other tools: provider-executed builtins, with results', () => {
+    // The same turn with the backend's own webSearch / webFetch calls in the SDK's tool_call shape.
+    const { parts } = translate(fixture('web-tools.ndjson'))
+    const calls = parts.filter((p) => p.type === 'tool-call')
+    assert.deepEqual(
+      calls.map((c) => [c.toolName, c.providerExecuted, c.dynamic ?? false]),
+      [
+        ['webFetch', true, false],
+        ['webSearch', true, false],
+      ],
+    )
+    const [fetch, search] = calls.map((c) => JSON.parse(c.input))
+    assert.equal(fetch.url, 'https://httpbin.org/ip')
+    assert.equal(search.query, 'IANA example domain RFC 2606', 'the common webSearch field')
+    const results = new Map(
+      parts.flatMap((p) => (p.type === 'tool-result' ? [[p.toolCallId, p]] : [])),
+    )
+    const [fetchResult, searchResult] = calls.map(
+      (c) => results.get(c.toolCallId)?.result as Record<string, unknown>,
+    )
+    assert.match(String(fetchResult?.markdown), /104\.238\.50\.245/)
+    assert.equal((searchResult?.references as unknown[] | undefined)?.length, 2)
+  })
+
   test('a resumed turn keeps the agent id and reports its own usage', () => {
     const { parts, translator } = translate(fixture('resume.ndjson'))
     assert.equal(translator.agentId, 'agent-922f53b4-2f6c-4f26-9507-5878e7749f8f')

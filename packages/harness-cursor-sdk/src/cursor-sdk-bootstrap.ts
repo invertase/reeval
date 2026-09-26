@@ -3,6 +3,17 @@ import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 /** The SDK build the bootstrap installs. Bump it, then check the stream and endpoints still hold. */
 export const CURSOR_SDK_VERSION = '1.0.32'
 
+/**
+ * Built-in tools the agent can use at {@link CURSOR_SDK_VERSION} without any `tool_call` in the
+ * stream. Cursor's backend sends their calls, but the SDK's interaction-update converter maps
+ * `webSearchToolCall`, `webFetchToolCall` and `fetchToolCall` to null and drops them, so they
+ * never reach `run.stream()`, `onDelta` or `onStep`. A bump that reports them empties this.
+ */
+export const CURSOR_SDK_UNREPORTED_TOOLS: readonly ('webSearch' | 'webFetch')[] = [
+  'webSearch',
+  'webFetch',
+]
+
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CURSOR_SDK_BOOTSTRAP_DIR = '.harness-bootstrap/cursor-sdk'
 /** The runner's path relative to the bootstrap directory. */

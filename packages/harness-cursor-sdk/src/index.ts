@@ -23,6 +23,7 @@ export {
   CURSOR_SDK_MIN_NODE,
   CURSOR_SDK_RUNNER,
   CURSOR_SDK_RUNNER_PATH,
+  CURSOR_SDK_UNREPORTED_TOOLS,
   CURSOR_SDK_VERSION,
   cursorSdkInstallScript,
   getCursorSdkBootstrap,

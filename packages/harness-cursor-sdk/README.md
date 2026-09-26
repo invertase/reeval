@@ -60,9 +60,12 @@ this adapter passes them on as `finish-step` and `finish` usage.
   SDK's `project` setting source. Harness-placed skills go to `~/.agents/skills/` (`user`).
   `instructions` are prepended to the prompt in the ACP adapters' `<session-guidance>` block.
   `mcpServers` go inline, in the SDK's `McpServerConfig` shape, on every turn.
-- **Web tools.** SDK 1.0.32 reports no `tool_call` events for its web search and fetch (checked
-  live: the agent fetched a fresh page, and the stream had no tool calls), so they never reach
-  the stream. `webSearch` and `webFetch` are mapped for when it does.
+- **Web tools.** SDK 1.0.32 reports no `tool_call` events for its web search and fetch. Cursor's
+  backend sends `webSearchToolCall` and `webFetchToolCall` updates, but the SDK's converter maps
+  them (and `fetchToolCall`) to null, so they reach neither `run.stream()` nor `onDelta` /
+  `onStep`, and no hook fires for them. They run on Cursor's servers, not in the sandbox.
+  `CURSOR_SDK_UNREPORTED_TOOLS` lists them; empty it on a bump that reports them. `webSearch`
+  and `webFetch` are mapped already, as `test/fixtures/web-tools.ndjson` checks.
 - **Permissions.** The SDK's local agent runs every tool without asking. `sdkSandbox: true` turns
   on its own shell sandbox (bubblewrap), which a container sandbox doesn't need.
 
