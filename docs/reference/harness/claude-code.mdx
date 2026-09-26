@@ -77,6 +77,10 @@ The agent runs with every permission granted, inside the sandbox.
 
 Rules go to `CLAUDE.md` in the workspace. Skills go to `~/.claude/skills` by default, or `.claude/skills` in the workspace with `placement: 'workspace'`. MCP servers are passed in the `.mcp.json` shape.
 
+## Tokens
+
+Each turn records the tokens the CLI reports for each model call, cache reads and writes (cache creation) included. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; ES prices no models. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+
 ## Errors
 
 | Situation | Message |

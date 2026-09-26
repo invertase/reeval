@@ -189,10 +189,11 @@ export type FakeHarnessDescriptor = {
   maxConcurrent?: number
   /**
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
-   * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`). Defaults to
-   * the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
+   * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
+   * `~/.config/opencode/skills` for `opencode`). Defaults to the fake's own (`AGENTS.md`,
+   * `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity'
+  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -245,11 +246,25 @@ export type AntigravityHarnessDescriptor = {
   /** The most Antigravity attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
 }
+/**
+ * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
+ * Google models on a Gemini API key, and reports no usage (its ACP server counts one call).
+ */
+export type OpenCodeHarnessDescriptor = {
+  kind: 'opencode'
+  /** A Gemini model id, run on OpenCode's `google` provider, e.g. `gemini-3.8-flash`. */
+  model: string
+  /** Cell id; defaults to `opencode:<model>`. */
+  id?: string
+  /** The most OpenCode attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
   | ClaudeCodeHarnessDescriptor
   | AntigravityHarnessDescriptor
+  | OpenCodeHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {

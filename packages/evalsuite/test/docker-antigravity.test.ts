@@ -173,7 +173,6 @@ evaluate('real', { environment: house }, async (t) => {
         assert.equal(t.model, 'gemini-3.8-flash-low')
       }
       assert.equal(run.cost.source, 'reported')
-      assert.equal(run.cost.usd, null)
       // The key (or its tail) is nowhere in what the run wrote, and the check can fail.
       const grep = (needle: string) => {
         try {

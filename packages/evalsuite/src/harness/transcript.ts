@@ -1,3 +1,4 @@
+import { SANDBOX_ROOT, WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
 import type { FileEditEvent, TranscriptEvent } from '../types.ts'
 
 /** One stream part and when it arrived, in ms since the turn started. */
@@ -36,8 +37,20 @@ function lineDelta(before: string, after: string): { added: number; removed: num
   return { added, removed }
 }
 
-/** Cursor's edit tools take `path`; Claude Code's take `file_path`. */
-const editPath = (input: Record<string, unknown>) => str(input.path) || str(input.file_path)
+const WORKSPACE = `${SANDBOX_ROOT}/${WORKSPACE_DIR}/`
+
+/**
+ * Cursor's edit tools take `path`, Claude Code's `file_path` and OpenCode's `filePath`, which is
+ * made relative to the workspace, as Cursor's are.
+ */
+const editPath = (input: Record<string, unknown>) => {
+  const opencode = str(input.filePath)
+  return (
+    str(input.path) ||
+    str(input.file_path) ||
+    (opencode.startsWith(WORKSPACE) ? opencode.slice(WORKSPACE.length) : opencode)
+  )
+}
 
 /**
  * Cursor reports `referenceCount`; Claude Code lists `results`, where each search is
@@ -115,6 +128,33 @@ function fileEdits(
   }
   const result = record(output)
   if (typeof result.filePath === 'string') return [claudeEdit(toolCallId, result)]
+  const opencode = record(result.metadata)
+  // OpenCode's edit reports a `filediff` with counts; its write says whether the file `exists`.
+  const filediff = record(opencode.filediff)
+  if (typeof filediff.additions === 'number') {
+    return [
+      {
+        type: 'file-edit',
+        toolCallId,
+        path: editPath(input),
+        kind: 'modify',
+        added: filediff.additions,
+        removed: typeof filediff.deletions === 'number' ? filediff.deletions : null,
+      },
+    ]
+  }
+  if (typeof opencode.exists === 'boolean') {
+    return [
+      {
+        type: 'file-edit',
+        toolCallId,
+        path: editPath(input),
+        kind: opencode.exists ? 'modify' : 'create',
+        added: opencode.exists ? null : lines(str(input.content)).length,
+        removed: opencode.exists ? null : 0,
+      },
+    ]
+  }
   // Cursor reports counts and a unified diff, whose old side is /dev/null for a new file.
   if (typeof result.linesAdded === 'number') {
     return [

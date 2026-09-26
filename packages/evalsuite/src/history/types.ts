@@ -247,10 +247,8 @@ export type RunSummary = {
   skipped: number
 }
 
-/** Tokens and USD, null when the harness or judge doesn't report them (Cursor reports none). */
-/** What the run used. ES prices nothing, so `usd` stays null; tokens are the harnesses' own counts. */
+/** The tokens the run used, as the harnesses count them; ES prices nothing. */
 export type Cost = {
-  usd: number | null
   /** Prompt tokens, cache reads and writes included. */
   inputTokens: number | null
   outputTokens: number | null
@@ -407,7 +405,8 @@ export type HistoryEntry = {
   } | null
   harnesses: string[]
   summary: RunSummary
-  costUsd: number | null
+  /** The run's tokens, summed from the turns that reported them. */
+  usage: TokenUsage | null
   stack: StackSummary
   evals: Array<{
     id: string

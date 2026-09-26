@@ -29,6 +29,7 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   // The Gemini API only: with a Gemini API key the CLI needs no Google sign-in hosts, and its
   // auto-updater is off.
   antigravity: ['generativelanguage.googleapis.com'],
+  opencode: ['generativelanguage.googleapis.com'],
 }
 
 /** The package registries and GitHub, for a restricted policy that still installs. */

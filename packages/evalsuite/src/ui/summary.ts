@@ -2,6 +2,7 @@ import { gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
+import { formatUsage } from '../view/model.ts'
 import type { Colors } from './colors.ts'
 import type { EsEvent, EvalResult } from './events.ts'
 import { attemptOutcome, failureLines, formatDuration, mark, type Outcome } from './format.ts'
@@ -211,14 +212,8 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
     `${c.dim(label)}  ${totals(c, record.summary, cancelled)}`,
     `${c.dim('Duration')}  ${formatDuration(record.durationMs)}`,
   )
-  if (record.cost.usd !== null) lines.push(`    ${c.dim('Cost')}  $${record.cost.usd.toFixed(2)}`)
-  if (typeof record.cost.inputTokens === 'number' && typeof record.cost.outputTokens === 'number') {
-    const k = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : String(n))
-    const cached = record.cost.usage?.cacheRead ?? 0
-    lines.push(
-      `  ${c.dim('Tokens')}  ${k(record.cost.inputTokens)} in${cached ? ` (${k(cached)} cached)` : ''} · ${k(record.cost.outputTokens)} out`,
-    )
-  }
+  const tokens = formatUsage(record.cost.usage)
+  if (tokens) lines.push(`  ${c.dim('Tokens')}  ${tokens}`)
   lines.push(` ${c.dim('Results')}  ${e.summaryPath}`)
   return lines
 }

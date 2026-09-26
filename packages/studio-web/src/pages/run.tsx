@@ -7,10 +7,9 @@ import {
   type EvalEntry,
   effortSummary,
   evalTree,
-  formatCost,
   formatDuration,
   formatRatio,
-  formatTokens,
+  formatUsage,
   isMatrix,
   type RunRecord,
   runOutcome,
@@ -85,11 +84,8 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
             {record.runner.kind === 'ci' ? `CI · ${record.runner.provider}` : record.author}
           </Meta>
           <Meta icon={Clock}>{formatDuration(record.durationMs)}</Meta>
-          {record.cost.usd !== null ? (
-            <Meta icon={Coins}>{formatCost(record.cost.usd)}</Meta>
-          ) : null}
-          {formatTokens(record.cost) ? (
-            <Meta icon={Coins}>{formatTokens(record.cost)} tokens</Meta>
+          {record.cost.usage ? (
+            <Meta icon={Coins}>{formatUsage(record.cost.usage)} tokens</Meta>
           ) : null}
         </div>
       </div>

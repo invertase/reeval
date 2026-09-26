@@ -56,14 +56,13 @@ function turnError(transcript: TranscriptEvent[] | undefined): string | null {
   return message.length > TURN_ERROR_LIMIT ? `${message.slice(0, TURN_ERROR_LIMIT)}…` : message
 }
 
-/** Tokens across every turn that reported them; USD stays null, since ES prices no models. */
+/** Tokens across every turn that reported them. */
 function costOf(attempts: AttemptRecord[]): Cost {
   const usage = sumUsage(attempts.map((a) => a.usage))
   if (!usage) {
-    return { usd: null, inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
+    return { inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
   }
   return {
-    usd: null,
     inputTokens: promptTokens(usage),
     outputTokens: usage.output,
     usage,

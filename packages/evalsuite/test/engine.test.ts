@@ -596,6 +596,38 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.match(agent.stdout, new RegExp(`\\n {2}turn 1 error: ${billing}\\n`))
   })
 
+  test('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown', async () => {
+    const p = await project('unawaited', {
+      'es.config.ts': fakeConfig(),
+      'evals/file.es.ts': agentEval(`expect(turn).toHaveFile('missing.txt')`),
+      'evals/exec.es.ts': agentEval(
+        `expect(t.exec('sleep 0.3; echo ran > late.txt')).toSucceed()`,
+      ).replace("'agent eval'", "'unawaited pass'"),
+      'evals/awaited.es.ts': agentEval(
+        `await expect(t.exec('exit 2')).not.toSucceed()\n  await expect(turn).not.toHaveFile('missing.txt')`,
+      ).replace("'agent eval'", "'awaited'"),
+    })
+    const r = await runCli(p.dir)
+    const out = r.stdout + r.stderr
+    assert.equal(r.code, 1, out)
+    const { run, evals } = readRun(p.dir)
+    const byName = Object.fromEntries(evals.map((e) => [e.name, e]))
+    assert.equal(byName['agent eval']?.trial.outcome, 'fail', out)
+    assert.equal(byName['agent eval']?.error?.kind, 'assertion')
+    assert.match(byName['agent eval']?.error?.message ?? '', /expected file missing\.txt to exist/)
+    assert.match(
+      byName['agent eval']?.error?.message ?? '',
+      /expect\(…\)\.toHaveFile\(\) wasn't awaited\. Its check is async: write `await expect\(…\)\.toHaveFile\(\)`/,
+    )
+    // A check that would pass still fails its eval unawaited, and it finished before teardown.
+    assert.equal(byName['unawaited pass']?.trial.outcome, 'fail', out)
+    assert.match(byName['unawaited pass']?.error?.message ?? '', /toSucceed\(\) wasn't awaited/)
+    assert.equal(byName['unawaited pass']?.trial.checks[0]?.exitCode, 0, 'the check completed')
+    assert.equal(byName.awaited?.trial.outcome, 'pass', out)
+    assert.equal(run.summary.fail, 2)
+    assert.doesNotMatch(out, /Summary[\s\S]*\n\s*error: /, 'no stray error after the summary')
+  })
+
   test('a harness failure is an infra error and exits 3', async () => {
     const p = await project('infra', {
       'es.config.ts': fakeConfig({ harness: `{ failWith: 'agent CLI failed to start' }` }),
