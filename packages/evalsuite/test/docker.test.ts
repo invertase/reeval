@@ -597,6 +597,108 @@ evaluate('installs', { environment: es, timeout: '6m' }, async (t) => {
   })
 
   test(
+    '-v and -vv trace the image, container, brokering, gateway and docker commands',
+    docker,
+    async () => {
+      const TOKEN = 'es-docker-verbose-token-5b8e2c'
+      const curl = [
+        'curl -s -o /dev/null -w "%{http_code} " -H "Authorization: Bearer $API_KEY" https://example.com/',
+        'curl -s -o /dev/null -w "%{http_code}" http://blocked.invalid/',
+      ].join('; ')
+      const p = await project('docker-verbose', {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+import { fakeJudge } from 'evalsuite/judge'
+export default defineConfig(({ secret }) => ({
+  harness: fakeHarness({ script: [[{ exec: ${JSON.stringify(curl)} }]] }),
+  sandbox: docker(),
+  egress: { allow: ['example.com'] },
+  env: { API_KEY: secret.fromEnv('ES_DOCKER_TOKEN', { hosts: ['example.com'] }) },
+  judge: { model: fakeJudge() },
+}))
+`,
+        'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('calls out', async (t) => {
+  await t.send('call the api')
+  await expect(t.exec('true')).toSucceed()
+})
+`,
+      })
+      const env = { ES_DOCKER_TOKEN: TOKEN }
+      const v = await runCli(p.dir, ['run', '-v'], { env, ...slow })
+      assert.equal(v.code, 0, v.stdout + v.stderr)
+      const line = (phase: string, text: string) =>
+        new RegExp(`^\\[calls#1 fake\\]\\s+\\d{2}:\\d{2}:\\d{2} ${phase.padEnd(9)} ${text}`, 'm')
+      for (const [phase, text] of [
+        ['image', `cache hit ${DEFAULT_IMAGE.replace(/[.:]/g, '\\$&')} `],
+        ['image', 'ready \\S+ \\([0-9a-f]{12}\\) in '],
+        ['container', 'created [0-9a-f]{12} from '],
+        ['container', 'network policy allow example\\.com · detached from every Docker network'],
+        ['container', 'egress gateway started · brokers API_KEY$'],
+        [
+          'broker',
+          'API_KEY is a placeholder in the sandbox · swapped in on HTTPS to example\\.com in the header',
+        ],
+        [
+          'gateway',
+          'GET https://example\\.com/ → \\d{3} · allowed · ↑\\d+ B ↓[\\d.]+ K?B · \\d+ms · substituted API_KEY$',
+        ],
+        ['broker', 'substituted API_KEY for example\\.com \\(GET https://example\\.com/\\)$'],
+        [
+          'gateway',
+          "GET http://blocked\\.invalid:80/ → 403 · blocked: blocked\\.invalid isn't in the allowlist · ",
+        ],
+        ['check', '\\$ true → exit 0 · '],
+        ['teardown', 'sandbox destroyed'],
+      ]) {
+        assert.match(v.stdout, line(phase as string, text as string), `${phase} ${text}`)
+      }
+      assert.doesNotMatch(v.stdout, / docker {4}\$ docker /, '-v leaves the docker commands out')
+      const run = readRun(p.dir).run
+      const debugDir = join(p.dir, '.es/debug', run.runId)
+      const [requests] = execFileSync('find', [debugDir, '-name', 'requests.ndjson'], {
+        encoding: 'utf8',
+      }).split('\n')
+      const listed = readFileSync(requests as string, 'utf8')
+        .trim()
+        .split('\n')
+        .map((l) => JSON.parse(l))
+      assert.deepEqual(
+        listed.map((r) => [r.method, r.url, r.allowed, r.substituted]),
+        [
+          ['GET', 'https://example.com/', true, ['API_KEY']],
+          ['GET', 'http://blocked.invalid:80/', false, []],
+        ],
+      )
+
+      const vv = await runCli(p.dir, ['run', '-vv'], { env, ...slow })
+      assert.equal(vv.code, 0, vv.stdout + vv.stderr)
+      const traced = (text: string) =>
+        new RegExp(`^\\[calls#1 fake\\]\\s+\\d{2}:\\d{2}:\\d{2}\\.\\d{3} ${text}`, 'm')
+      for (const text of [
+        'docker {4}\\$ docker image inspect ',
+        'docker {4}\\$ docker run --detach --rm --init .* → exit 0 · \\d+ms$',
+        'docker {4}\\$ docker network disconnect --force ',
+        'docker {4}\\$ docker exec --interactive [0-9a-f]{64} node -e ',
+        'docker {4}\\$ docker rm -f [0-9a-f]{64} → exit 0',
+        'gateway {3}dns example\\.com → ',
+        'gateway {3}dns blocked\\.invalid refused: ',
+        'gateway {3}headers https://example\\.com/$',
+      ]) {
+        assert.match(vv.stdout, traced(text), text)
+      }
+      // The headers are as the sandbox sent them: the placeholder, never the key.
+      assert.match(vv.stdout, /"authorization":"Bearer es_secret_[0-9A-Za-z]{32}"/)
+      const everything = vv.stdout + vv.stderr + v.stdout + v.stderr
+      assert.equal(everything.includes(TOKEN), false, 'the key never prints')
+      const leaked = spawnSync('grep', ['-rlF', TOKEN, join(p.dir, '.es')], { encoding: 'utf8' })
+      assert.equal(leaked.stdout.trim(), '', 'no file under .es has the key')
+      assert.equal(leaked.status, 1, leaked.stderr)
+    },
+  )
+
+  test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',
     claudeImage,
     async () => {

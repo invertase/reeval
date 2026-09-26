@@ -13,6 +13,8 @@ import {
   buildIndex,
   cellRows,
   compareView,
+  type DebugView,
+  debugApiPath,
   evalHistory,
   evalTree,
   manifestPath,
@@ -23,6 +25,7 @@ import {
   runRows,
   shardPath,
   splitPatch,
+  traceApiPath,
   transcriptItems,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
@@ -423,6 +426,44 @@ describe('studio server', () => {
     }
   })
 
+  test("serves an attempt's local debug data, and null where there is none", async () => {
+    assert.equal((await (await get('/studio.json')).json()).features.debug, true)
+    // The second run fails its judge, so its attempt kept a trace; the first passed.
+    const [passed, failed] = [headers[0], headers[1]].map((h) => {
+      const run = records.get(h?.runId as string) as RunRecord
+      return { runId: run.runId, key: run.evals[0]?.attempts[0]?.key as string }
+    }) as [{ runId: string; key: string }, { runId: string; key: string }]
+    const view = async (runId: string, key: string) => {
+      const res = await get(`/${debugApiPath(runId, key)}`)
+      assert.equal(res.status, 200)
+      return (await res.json()) as DebugView | null
+    }
+    const pass = (await view(passed.runId, passed.key)) as DebugView
+    assert.deepEqual(
+      [...new Set(pass.lines.map((l) => l.phase))],
+      ['plan', 'env', 'image', 'container', 'harness', 'check', 'judge', 'teardown'],
+    )
+    assert.match(pass.lines[0]?.at ?? '', /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/)
+    assert.deepEqual([pass.requests, pass.trace], [[], false])
+    assert.equal((await get(`/${traceApiPath(passed.runId, passed.key)}`)).status, 404)
+
+    const fail = (await view(failed.runId, failed.key)) as DebugView
+    assert.equal(fail.trace, true)
+    const trace = await get(`/${traceApiPath(failed.runId, failed.key)}`)
+    assert.equal(trace.status, 200)
+    assert.equal(trace.headers.get('content-security-policy'), 'sandbox')
+    assert.match(await trace.text(), /^\{"kind":"trace",/)
+
+    for (const [runId, key] of [
+      [passed.runId, `${passed.key}0`],
+      [passed.runId, 'evals/hello.es.ts › greet › writes hello'],
+      [passed.runId, '../../../es.config.ts # x#1'],
+      ['not-a-run', passed.key],
+    ]) {
+      assert.equal(await view(runId as string, key as string), null, key)
+    }
+  })
+
   test("without the scratch source, unrecorded runs aren't served", async () => {
     const recordedOnly = createStudioApp({
       source: { ...source, scratch: false },
@@ -461,6 +502,12 @@ describe('es studio build', () => {
     const info = JSON.parse(readFileSync(join(out, 'studio.json'), 'utf8'))
     assert.equal(info.mode, 'static')
     assert.equal(info.features.artifacts, true)
+    assert.equal(info.features.debug, false, 'local debug data is never published')
+    assert.ok(existsSync(join(dir, '.es/debug')), 'twin: the project has debug data')
+    assert.deepEqual(
+      written.filter((f) => /debug\.log|trace\.ndjson|requests\.ndjson|^api\//.test(f)),
+      [],
+    )
 
     const app = createStudioApp({
       source: { ...source, historyDir: source.historyDir },

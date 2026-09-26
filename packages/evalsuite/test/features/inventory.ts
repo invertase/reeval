@@ -40,6 +40,8 @@ const engine = (name: string) => `evalsuite/test/engine.test.ts › ${name}`
 const secrets = (name: string) => `evalsuite/test/secrets.test.ts › ${name}`
 const harness = (name: string) => `evalsuite/test/harness.test.ts › ${name}`
 const docker = (name: string) => `evalsuite/test/docker.test.ts › ${name}`
+const debug = (name: string) => `evalsuite/test/debug.test.ts › ${name}`
+const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 
@@ -618,6 +620,17 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
     ],
   },
+  {
+    id: 'studio.debug',
+    area: 'Records and studio',
+    name: "The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.es/debug`, in `es studio` only",
+    tests: [
+      studio("serves an attempt's local debug data, and null where there is none"),
+      studio('writes a static site with the same paths the server answers'),
+      'studio-web/test/e2e.test.ts › es studio needs its token, then shows new runs as they land',
+      'studio-web/test/e2e.test.ts › a static build works from a subpath',
+    ],
+  },
 
   // CLI and runner
   {
@@ -652,6 +665,59 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `es run`',
     gap: 'The renderers are tested on recorded events; no test passes the flags to `es run`.',
+  },
+  {
+    id: 'verbose',
+    area: 'CLI and runner',
+    name: '`-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown)',
+    tests: [
+      debug('-v prints each phase line for an attempt, prefixed with the attempt'),
+      debug('canary: without -v, no phase line prints'),
+      debug('grouped logs keep each attempt’s debug lines in its own block'),
+      debug('agent mode prints -v lines too, under the attempt tag'),
+      docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
+      sandboxDocker(
+        'proxy',
+        'reports each request once done, with bytes and names, and each DNS decision',
+      ),
+    ],
+  },
+  {
+    id: 'trace',
+    area: 'CLI and runner',
+    name: '`-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times',
+    tests: [
+      debug('-vv adds raw payloads with millisecond times'),
+      docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
+    ],
+  },
+  {
+    id: 'debug.files',
+    area: 'CLI and runner',
+    name: 'Local debug data: `.es/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder',
+    tests: [
+      debug('debug.log is always written to .es/debug, and nothing of it lands in the history'),
+      debug('trace.ndjson is kept for a failing attempt, not a passing one unless --trace'),
+      debug('a small trace buffer drops the oldest entries and says how many'),
+    ],
+  },
+  {
+    id: 'debug.redaction',
+    area: 'CLI and runner',
+    name: 'Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included',
+    tests: [
+      debug('redaction holds on screen, in debug.log and in trace.ndjson, encoded forms included'),
+      docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
+    ],
+  },
+  {
+    id: 'debug.retention',
+    area: 'CLI and runner',
+    name: '`config.debug` (`keep`, `traceBufferMb`) and `es clean`',
+    tests: [
+      debug('keeps the newest debug.keep runs, and es clean clears them'),
+      options('common mistakes'),
+    ],
   },
   {
     id: 'concurrency',
