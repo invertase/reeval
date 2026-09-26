@@ -217,8 +217,8 @@ function compareCells(base: ComparableEval, head: ComparableEval): CompareCell[]
     pass: c.pass,
     fail: c.fail,
   })
-  return head.cells.flatMap((h) => {
-    const b = base.cells.find((c) => c.key === h.key)
+  return (head.cells ?? []).flatMap((h) => {
+    const b = base.cells?.find((c) => c.key === h.key)
     if (!b || !(b.lift || h.lift || (b.effort && h.effort))) return []
     return [{ key: h.key, base: pick(b), head: pick(h) }]
   })
