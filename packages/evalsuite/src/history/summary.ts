@@ -219,8 +219,10 @@ function attemptDetail(lines: string[], a: AttemptRecord): void {
     `- Time: setup ${formatDuration(t.setupMs)} · agent ${formatDuration(t.agentMs)} · checks ${formatDuration(t.checksMs)} · judge ${formatDuration(t.judgeMs)}`,
   )
   const act = a.activity
+  const web = (n: number | null, what: string) =>
+    n === null ? `${what} not reported` : `${n} ${what}`
   lines.push(
-    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${act.webSearches} web searches · ${act.webFetches} fetches · ${formatDuration(act.reasoningMs)} reasoning`,
+    `- Agent: ${act.fileEdits} file edits · ${act.tools} other tool calls · ${web(act.webSearches, 'web searches')} · ${web(act.webFetches, 'fetches')} · ${formatDuration(act.reasoningMs)} reasoning`,
   )
   for (const j of a.judgements) {
     const retried = j.retries?.length

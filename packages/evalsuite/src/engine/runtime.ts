@@ -25,6 +25,8 @@ declare module 'vitest' {
   interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
     toHaveFile(path: string, pattern?: RegExp | string): Promise<void>
     toSucceed(): Promise<void>
+    toHaveSearched(query?: RegExp | string): void
+    toHaveFetched(url?: RegExp | string): void
     toPass(): void
   }
   interface TestArtifactRegistry {

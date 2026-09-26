@@ -2,7 +2,7 @@ import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
-import type { AgentHarnessDescriptor, HarnessDescriptor } from '../types.ts'
+import type { AgentHarnessDescriptor, HarnessDescriptor, WebEventType } from '../types.ts'
 
 /** The kind of a real agent's harness, e.g. `cursor` or `claude-code`. */
 export type AgentKind = AgentHarnessDescriptor['kind']
@@ -41,6 +41,11 @@ export type Agent = Layout & {
    * `-v` summarises them once instead of a line per request.
    */
   expectedBlocked?: ExpectedBlocked
+  /**
+   * Transcript events the agent's harness never reports, though the agent can do them. Each turn
+   * carries these as `unreported`, so web matchers refuse instead of passing silently.
+   */
+  unreported?: readonly WebEventType[]
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -141,6 +146,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
       fields: ['accessToken', 'refreshToken'],
       hosts: ['cursor.sh', '*.cursor.sh'],
     },
+    // The adapter's CURSOR_SDK_UNREPORTED_TOOLS: SDK 1.0.32 drops web search and fetch calls
+    // (they run on Cursor's backend, so the egress log doesn't see them either).
+    unreported: ['web-search', 'web-fetch'],
     mcpServers: cursorMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@evalsuite/harness-cursor-sdk')).createCursorSdk({

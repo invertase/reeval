@@ -31,6 +31,7 @@ export function turnSender(
       transcript: [],
       usage: null,
       model: null,
+      unreported: [],
       startedAt: new Date().toISOString(),
       durationMs: 0,
     }

@@ -149,6 +149,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             status,
             usage,
             model: servedModel,
+            unreported: [...(catalog.unreported ?? [])],
             startedAt: new Date(startedAt).toISOString(),
             durationMs: Date.now() - startedAt,
             transcript: [...normaliseStream(parts, startedAt), ...extra],

@@ -44,6 +44,9 @@ export type TranscriptEvent = EventTime &
     | { type: 'error'; message: string }
   )
 
+/** The transcript events a harness may be unable to report. */
+export type WebEventType = 'web-search' | 'web-fetch'
+
 export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 
 export type FileChange = { path: string; status: 'added' | 'modified' | 'deleted' }
@@ -79,6 +82,12 @@ export type Turn = {
    * reports none. It can differ from the requested one (an alias, or parameters it filled in).
    */
   model: string | null
+  /**
+   * Event types this harness can't report: the agent may have searched or fetched with no event
+   * in `transcript`. `toHaveSearched()` and `toHaveFetched()` refuse such a turn. Cursor (SDK
+   * 1.0.32) is `['web-search', 'web-fetch']`; every other harness is `[]`.
+   */
+  unreported: WebEventType[]
   /** Workspace changes since the eval started, as of the end of this turn. */
   diff: Diff
   /** Runs in the eval's sandbox. Same as `t.exec`. */
@@ -655,7 +664,15 @@ export type ErrorKind = 'assertion' | 'timeout' | 'aborted' | 'infra' | 'judge'
 
 export type TurnRecord = Pick<
   Turn,
-  'prompt' | 'text' | 'status' | 'transcript' | 'startedAt' | 'durationMs' | 'usage' | 'model'
+  | 'prompt'
+  | 'text'
+  | 'status'
+  | 'transcript'
+  | 'startedAt'
+  | 'durationMs'
+  | 'usage'
+  | 'model'
+  | 'unreported'
 > & { raw?: unknown[] }
 
 /** Where an eval's time went, in ms. `agentMs` is the harness turns; `diffMs` reading changes. */

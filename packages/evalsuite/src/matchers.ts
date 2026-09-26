@@ -1,6 +1,48 @@
-import type { ExecResult, Verdict } from './types.ts'
+import type { ExecResult, TranscriptEvent, Turn, Verdict, WebEventType } from './types.ts'
 
 type Result = { pass: boolean; message: () => string }
+
+/** A check the turn's harness can't answer either way, e.g. a web fetch it never reports. */
+export class HarnessCapabilityError extends Error {
+  override name = 'HarnessCapabilityError'
+}
+
+const isTurn = (value: unknown): value is Pick<Turn, 'transcript' | 'unreported'> =>
+  typeof value === 'object' &&
+  value !== null &&
+  Array.isArray((value as Turn).transcript) &&
+  Array.isArray((value as Turn).unreported)
+
+const matches = (value: string, pattern: RegExp | string | undefined) =>
+  pattern === undefined ||
+  (typeof pattern === 'string' ? value.includes(pattern) : pattern.test(value))
+
+/** Passes when the turn has a `type` event whose `field` matches; refuses when it can't know. */
+function webEvent(
+  matcher: string,
+  actual: unknown,
+  type: WebEventType,
+  field: (e: TranscriptEvent) => string,
+  pattern: RegExp | string | undefined,
+): Result {
+  if (!isTurn(actual)) throw new TypeError(`${matcher}() expects a turn from t.send()`)
+  const what = type === 'web-search' ? 'web searches' : 'web fetches'
+  if (actual.unreported.includes(type)) {
+    throw new HarnessCapabilityError(
+      `${matcher}() can't check this turn: its harness doesn't report ${what} ('${type}' is in turn.unreported), so the agent may have made them with no event. Check the reply or files instead, or use a harness that reports them.`,
+    )
+  }
+  const seen = actual.transcript.filter((e) => e.type === type).map(field)
+  const pass = seen.some((v) => matches(v, pattern))
+  const target = pattern === undefined ? '' : ` matching ${pattern}`
+  return {
+    pass,
+    message: () =>
+      pass
+        ? `expected no ${what}${target}, got ${JSON.stringify(seen)}`
+        : `expected ${what}${target}, got ${seen.length ? JSON.stringify(seen) : 'none'}`,
+  }
+}
 
 const tail = (s: string, lines = 20) => s.trimEnd().split('\n').slice(-lines).join('\n')
 
@@ -34,6 +76,20 @@ export const matchers = {
           : `expected command to succeed, exit code ${r.exitCode}\n` +
             `--- stderr ---\n${tail(r.stderr)}\n--- stdout ---\n${tail(r.stdout)}`,
     }
+  },
+
+  toHaveSearched(actual: unknown, query?: RegExp | string): Result {
+    return webEvent(
+      'toHaveSearched',
+      actual,
+      'web-search',
+      (e) => ('query' in e ? e.query : ''),
+      query,
+    )
+  },
+
+  toHaveFetched(actual: unknown, url?: RegExp | string): Result {
+    return webEvent('toHaveFetched', actual, 'web-fetch', (e) => ('url' in e ? e.url : ''), url)
   },
 
   toPass(actual: unknown): Result {

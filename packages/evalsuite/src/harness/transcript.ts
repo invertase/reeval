@@ -43,8 +43,9 @@ const editPath = (input: Record<string, unknown>) => str(input.path) || str(inpu
  * `{ content: [{ title, url }] }` and plain strings are commentary.
  */
 function searchReferences(output: unknown): number | null {
-  const { referenceCount, results } = record(output)
+  const { referenceCount, references, results } = record(output)
   if (typeof referenceCount === 'number') return referenceCount
+  if (Array.isArray(references)) return references.length
   if (!Array.isArray(results)) return null
   return results.reduce((n: number, r) => {
     const links = record(r).content
