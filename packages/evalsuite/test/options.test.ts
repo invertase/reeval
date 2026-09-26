@@ -547,7 +547,7 @@ describe('common mistakes', () => {
     [
       'a fake agent layout ES does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode' \(got "codex"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',

@@ -25,6 +25,11 @@ import {
   cursorSdkEndpoints,
   toUsage as cursorUsage,
 } from '@evalsuite/harness-cursor-sdk'
+import {
+  OPENCODE_ENDPOINTS,
+  OPENCODE_HOME_SKILLS_DIR,
+  OPENCODE_WORKSPACE_SKILLS_DIR,
+} from '@evalsuite/harness-opencode'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -33,6 +38,7 @@ import { observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
+  acpMcpServers,
   agentAuth,
   antigravityMcpServers,
   brokeringFor,
@@ -43,7 +49,7 @@ import {
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
-import { antigravity, claudeCode, cursor, fakeHarness } from '../src/harness.ts'
+import { antigravity, claudeCode, cursor, fakeHarness, opencode } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
 import { formatUsage } from '../src/view/model.ts'
@@ -129,6 +135,7 @@ describe('the Claude Code harness', () => {
       claudeCode({ model: 'opus' }),
       cursor({ model: 'composer-2.5' }),
       antigravity({ model: 'm' }),
+      opencode({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
@@ -136,7 +143,7 @@ describe('the Claude Code harness', () => {
     }
     assert.throws(
       () => fakeHarness({ layout: 'codex' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode' \(got "codex"\)/,
     )
   })
 
@@ -261,6 +268,69 @@ describe('the Antigravity harness', () => {
       workspaceSkillDir: ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: ANTIGRAVITY_HOME_SKILLS_DIR,
     })
+  })
+})
+
+describe('the OpenCode harness', () => {
+  test('is plain data with its own cell id, and needs a Gemini model id', () => {
+    const h = opencode({ model: 'gemini-3.8-flash' })
+    assert.deepEqual(h, { kind: 'opencode', model: 'gemini-3.8-flash' })
+    assert.equal(harnessId(h), 'opencode:gemini-3.8-flash')
+    for (const model of [undefined, '', 'google/gemini-3.8-flash', 'anthropic/claude-sonnet-5']) {
+      assert.throws(
+        () => opencode({ model } as never),
+        /opencode\(\) needs a Gemini model id, without a provider, since it runs on a Gemini API key, e\.g\. opencode\(\{ model: 'gemini-3\.8-flash' \}\)/,
+        String(model),
+      )
+    }
+  })
+
+  test('is accepted by the config and needs GOOGLE_GENERATIVE_AI_API_KEY', () => {
+    const config = resolveConfig({ harness: [opencode({ model: 'm' })] }, '/p')
+    assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
+      'GOOGLE_GENERATIVE_AI_API_KEY',
+    ])
+    assert.deepEqual(missingCredentials(config, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [])
+  })
+
+  test('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills', () => {
+    const h = opencode({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
+    })
+    assert.equal(imageHarness(h), 'opencode')
+    assert.deepEqual(AGENTS.opencode.endpoints, OPENCODE_ENDPOINTS)
+  })
+
+  test('gets MCP servers in the ACP session/new shape, variables and headers as pairs', () => {
+    assert.deepEqual(
+      acpMcpServers({
+        files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
+        docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
+      }),
+      {
+        files: { command: 'npx', args: ['mcp-files'], env: [{ name: 'ROOT', value: '/es' }] },
+        docs: {
+          type: 'http',
+          url: 'https://docs.example/mcp',
+          headers: [{ name: 'A', value: 'b' }],
+        },
+      },
+    )
+  })
+
+  test('its brokered requests name the served model, as Antigravity’s do', () => {
+    const served = brokeringFor(opencode({ model: 'gemini-3.8-flash' }))?.servedModel
+    assert.equal(
+      served?.({
+        method: 'POST',
+        host: 'generativelanguage.googleapis.com',
+        path: '/v1beta/models/gemini-3.8-flash:streamGenerateContent',
+      }),
+      'gemini-3.8-flash',
+    )
   })
 })
 
@@ -602,6 +672,82 @@ describe('credential brokering per agent', () => {
     }
   })
 
+  test("OpenCode's adapter brokers only GOOGLE_GENERATIVE_AI_API_KEY to the Gemini API, whatever else the host has", async () => {
+    const rules = await adapterRules('opencode', {
+      ...everything,
+      GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+      GEMINI_API_KEY: 'host-gemini',
+      GOOGLE_API_KEY: 'host-google',
+    })
+    assert.equal(rules.length, 1)
+    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com')
+    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
+  })
+
+  test("the key is swapped in on OpenCode's model endpoint only; anything else is refused", async () => {
+    const brokering = brokeringFor(opencode({ model: 'm' }))
+    assert.equal(brokering?.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
+    const rules = await adapterRules('opencode', { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' })
+    const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
+    assert.match(placeholder, /^aisdkhc_/)
+    const send = (method: string, path: string) =>
+      applyTransformations(
+        rules,
+        {
+          host: 'generativelanguage.googleapis.com',
+          method,
+          path,
+          headers: { 'x-goog-api-key': placeholder },
+        },
+        brokering?.endpoints,
+      )
+    assert.equal(
+      send('POST', '/v1beta/models/gemini-3.8-flash:streamGenerateContent?alt=sse').headers[
+        'x-goog-api-key'
+      ],
+      'AIza-real',
+    )
+    for (const [method, path] of [
+      ['GET', '/v1beta/models'],
+      ['POST', '/v1beta/models/gemini-3.8-flash:generateContent'],
+      ['POST', '/v1beta/files'],
+    ] as const) {
+      const r = send(method, path)
+      assert.equal(r.refused, true, `${method} ${path}`)
+      assert.equal(r.headers['x-goog-api-key'], placeholder, `${method} ${path}`)
+    }
+  })
+
+  test("OpenCode fails closed on a sandbox that can't broker: the key never goes in", async () => {
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-real'
+    try {
+      const agent = AGENTS.opencode
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor: opencode({ model: 'm' }),
+      })
+      const { session } = recordingSession()
+      const { addRequestTransformations: _, ...plain } = session
+      let ran = false
+      await assert.rejects(
+        adapter.doStart({
+          sessionId: 's',
+          sandboxSession: {
+            ...plain,
+            run: async () => {
+              ran = true
+              throw new Error('ran')
+            },
+          },
+        }),
+        /can't broker GOOGLE_GENERATIVE_AI_API_KEY/,
+      )
+      assert.equal(ran, false)
+    } finally {
+      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    }
+  })
+
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
     await assert.rejects(
       adapterRules('claude-code', { AI_GATEWAY_API_KEY: 'host-gateway' }),
@@ -610,6 +756,42 @@ describe('credential brokering per agent', () => {
     await assert.rejects(
       adapterRules('antigravity', { GOOGLE_GENERATIVE_AI_API_KEY: 'host-judge' }),
       /GEMINI_API_KEY isn't set, so the Antigravity harness can't authenticate/,
+    )
+  })
+})
+
+describe('OpenCode transcripts', () => {
+  test("OpenCode's edits and writes are file edits, relative to the workspace", () => {
+    const call = (id: string, toolName: string, input: unknown) => ({
+      ms: 10,
+      part: { type: 'tool-call', toolCallId: id, toolName, input },
+    })
+    const result = (id: string, output: unknown) => ({
+      ms: 20,
+      part: { type: 'tool-result', toolCallId: id, output },
+    })
+    // OpenCode 1.18.32's own outputs (ACP rawOutput).
+    const events = normaliseStream(
+      [
+        call('w', 'write', { filePath: '/es/workspace/b.txt', content: 'bee\nsting\n' }),
+        result('w', { output: 'Wrote file successfully.', metadata: { exists: false } }),
+        call('o', 'write', { filePath: 'b.txt', content: 'bee\n' }),
+        result('o', { output: 'Wrote file successfully.', metadata: { exists: true } }),
+        call('e', 'edit', { filePath: '/es/workspace/src/a.ts', oldString: 'a', newString: 'b' }),
+        result('e', {
+          output: 'Edit applied successfully.',
+          metadata: { filediff: { file: '/es/workspace/src/a.ts', additions: 2, deletions: 1 } },
+        }),
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
+      [
+        ['b.txt', 'create', 2, 0],
+        ['b.txt', 'modify', null, null],
+        ['src/a.ts', 'modify', 2, 1],
+      ],
     )
   })
 })

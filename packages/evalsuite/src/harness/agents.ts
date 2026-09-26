@@ -84,6 +84,21 @@ export type ServedModel = (request: {
   path: string
 }) => string | undefined
 
+/** A Gemini API key's only request: `POST /v1beta/models/<model>:streamGenerateContent`. */
+const GEMINI_ENDPOINTS = [
+  {
+    host: 'generativelanguage.googleapis.com',
+    path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
+    method: ['POST'],
+  },
+] as const satisfies readonly EndpointMatch[]
+
+/** The model a Gemini API request names in its URL. */
+const geminiServedModel: ServedModel = ({ host, path }) =>
+  host === 'generativelanguage.googleapis.com'
+    ? /^\/v1beta\/models\/([^/:]+):streamGenerateContent$/.exec(path)?.[1]
+    : undefined
+
 /** Cursor's key exchange: the only request the Cursor SDK sends the API key on. */
 const CURSOR_EXCHANGE = {
   host: 'api2.cursor.sh',
@@ -113,6 +128,20 @@ export function antigravityMcpServers(
       s.transport === 'stdio'
         ? [name, { command: s.command, args: s.args, env: s.env }]
         : [name, { serverUrl: s.url, headers: s.headers }],
+    ),
+  )
+}
+
+const pairs = (values: Record<string, string> = {}) =>
+  Object.entries(values).map(([name, value]) => ({ name, value }))
+
+/** The ACP `session/new` shape: variables and headers as `{ name, value }` lists. */
+export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) =>
+      s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
+        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
     ),
   )
 }
@@ -150,6 +179,13 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
+  },
+  // With OPENCODE_DISABLE_CLAUDE_CODE and OPENCODE_DISABLE_EXTERNAL_SKILLS, 1.18.32 reads only its
+  // own skill directories (not .claude/skills or .agents/skills), and AGENTS.md but not CLAUDE.md.
+  opencode: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.opencode/skills',
+    harnessSkillDir: '.config/opencode/skills',
   },
 }
 
@@ -221,13 +257,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
     // The only request CLI 1.2.11 sends the key on (its main model, and a lite one for titles).
-    endpoints: [
-      {
-        host: 'generativelanguage.googleapis.com',
-        path: { regex: '^/v1beta/models/[^/]+:streamGenerateContent$' },
-        method: ['POST'],
-      },
-    ],
+    endpoints: GEMINI_ENDPOINTS,
     // CLI 1.2.11 opens both in every session. Neither `enableTelemetry: false` nor any other
     // setting or variable in the binary stops them (checked in its image behind a logging proxy).
     expectedBlocked: {
@@ -235,16 +265,29 @@ export const AGENTS: Record<AgentKind, Agent> = {
       why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
     },
     // The CLI's `-low`/`-high` ids name an effort; the URL names the model that served it.
-    servedModel: ({ host, path }) =>
-      host === 'generativelanguage.googleapis.com'
-        ? /^\/v1beta\/models\/([^/:]+):streamGenerateContent$/.exec(path)?.[1]
-        : undefined,
+    servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
     adapter: async ({ auth, mcpServers }) =>
       (await import('@evalsuite/harness-antigravity')).createAntigravity({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
         // ES's Docker sandbox always brokers; a sandbox that can't must not get the key.
+        requireCredentialBrokering: true,
+      }),
+  },
+  opencode: {
+    ...LAYOUTS.opencode,
+    name: 'OpenCode',
+    factory: 'opencode',
+    credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
+    // The only request 1.18.32 sends the key on (its model, and the same model for titles).
+    endpoints: GEMINI_ENDPOINTS,
+    servedModel: geminiServedModel,
+    mcpServers: acpMcpServers,
+    adapter: async ({ auth, mcpServers }) =>
+      (await import('@evalsuite/harness-opencode')).createOpenCode({
+        auth,
+        ...(mcpServers ? { mcpServers } : {}),
         requireCredentialBrokering: true,
       }),
   },
