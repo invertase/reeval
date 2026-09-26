@@ -1,4 +1,7 @@
 import { posix } from 'node:path'
+import { createInterface } from 'node:readline'
+import { Readable } from 'node:stream'
+import type { ReadableStream as WebReadableStream } from 'node:stream/web'
 import {
   HarnessCapabilityUnsupportedError,
   type HarnessV1,
@@ -15,6 +18,7 @@ import {
 import {
   generateSandboxCredentialPlaceholder,
   resolveSandboxHomeDir,
+  warnCredentialBrokeringUnavailable,
   writeInstructions,
   writeSkills,
 } from '@ai-sdk/harness/utils'
@@ -95,21 +99,8 @@ const unsupported = (what: string) =>
     harnessId: ANTIGRAVITY_HARNESS_ID,
   })
 
-async function* lines(stream: ReadableStream<Uint8Array>): AsyncGenerator<string> {
-  const decoder = new TextDecoder()
-  let buffer = ''
-  for await (const chunk of stream as unknown as AsyncIterable<Uint8Array>) {
-    buffer += decoder.decode(chunk, { stream: true })
-    let newline = buffer.indexOf('\n')
-    while (newline !== -1) {
-      yield buffer.slice(0, newline)
-      buffer = buffer.slice(newline + 1)
-      newline = buffer.indexOf('\n')
-    }
-  }
-  buffer += decoder.decode()
-  if (buffer) yield buffer
-}
+const lines = (stream: ReadableStream<Uint8Array>) =>
+  createInterface({ input: Readable.fromWeb(stream as WebReadableStream), crlfDelay: Infinity })
 
 async function tail(stream: ReadableStream<Uint8Array>, max = 4000): Promise<string> {
   let text = ''
@@ -163,9 +154,11 @@ async function startSession(
       `The sandbox can't broker ${ANTIGRAVITY_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
     )
   } else {
-    console.warn(
-      'The sandbox implementation does not support configuring request transformations, so credential brokering does not work. Falling back to less secure credential forwarding.',
-    )
+    warnCredentialBrokeringUnavailable({
+      environment: { [ANTIGRAVITY_CREDENTIAL_ENV]: credentials.apiKey },
+      forwardedEnvironment: { [ANTIGRAVITY_CREDENTIAL_ENV]: sandboxKey },
+      credentialEnvironmentVariables: [ANTIGRAVITY_CREDENTIAL_ENV],
+    })
   }
 
   const home = await resolveSandboxHomeDir({ sandbox, abortSignal })
@@ -232,13 +225,18 @@ async function startSession(
         ...(turn.abortSignal ? { abortSignal: turn.abortSignal } : {}),
       })
       const promptFile = posix.join(sessionDir, `prompt-${n}.txt`)
-      await sandbox.writeTextFile({ path: promptFile, content: promptText(turn.prompt) })
+      await sandbox.writeTextFile({
+        path: promptFile,
+        content: promptText(turn.prompt),
+        abortSignal: turn.abortSignal,
+      })
       let jsonSchemaFile: string | undefined
       if (turn.responseFormat?.type === 'json' && turn.responseFormat.schema) {
         jsonSchemaFile = posix.join(sessionDir, `schema-${n}.json`)
         await sandbox.writeTextFile({
           path: jsonSchemaFile,
           content: JSON.stringify(turn.responseFormat.schema),
+          abortSignal: turn.abortSignal,
         })
       }
       const command = buildAntigravityCommand({
@@ -268,7 +266,7 @@ async function startSession(
       const onAbort = () => void proc.kill()
       turn.abortSignal?.addEventListener('abort', onAbort, { once: true })
       const done = (async () => {
-        const stderr = tail(proc.stderr)
+        const stderr = tail(proc.stderr).catch(() => '')
         try {
           for await (const line of lines(proc.stdout)) emit(translator.push(line))
           const { exitCode } = await proc.wait()

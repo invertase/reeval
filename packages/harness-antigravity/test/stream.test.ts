@@ -58,7 +58,10 @@ describe('stream translation', () => {
         [true, 'hi\r\n'],
       ],
     )
-    assert.ok(results.every((r) => !('providerExecuted' in r)), 'not a tool-result field')
+    assert.ok(
+      results.every((r) => !('providerExecuted' in r)),
+      'not a tool-result field',
+    )
     // The step before a tool finishes as tool-calls, the last one as stop.
     const steps = parts.filter((p) => p.type === 'finish-step')
     assert.deepEqual(

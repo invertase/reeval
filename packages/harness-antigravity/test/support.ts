@@ -4,10 +4,12 @@ import type { HarnessV1RequestTransformation, HarnessV1StreamPart } from '@ai-sd
 export const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
 
-const stream = (text: string) =>
+/** A byte stream; a list of byte arrays arrives as those exact chunks. */
+const stream = (content: string | Uint8Array[]) =>
   new ReadableStream<Uint8Array>({
     start(controller) {
-      if (text) controller.enqueue(new TextEncoder().encode(text))
+      const chunks = typeof content === 'string' ? [new TextEncoder().encode(content)] : content
+      for (const chunk of chunks) if (chunk.length > 0) controller.enqueue(chunk)
       controller.close()
     },
   })
@@ -17,7 +19,7 @@ export type Spawned = { command: string; env: Record<string, string>; workingDir
 /** An in-memory sandbox: files in a map, `$HOME` is /root, and each spawn replays a script. */
 export function fakeSandbox(options: {
   broker?: boolean
-  turns?: Array<{ stdout: string; stderr?: string; exitCode?: number }>
+  turns?: Array<{ stdout: string | Uint8Array[]; stderr?: string; exitCode?: number }>
 }) {
   const files = new Map<string, string>()
   const spawned: Spawned[] = []

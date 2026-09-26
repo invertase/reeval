@@ -179,6 +179,18 @@ describe('createAntigravity', () => {
     )
   })
 
+  test('stdout split mid-line and mid-character, with no final newline, still parses', async () => {
+    const bytes = new TextEncoder().encode(result('c', 'café').trimEnd())
+    const cut = bytes.indexOf(0xc3) + 1
+    const sandbox = fakeSandbox({
+      turns: [{ stdout: [bytes.slice(0, 7), bytes.slice(7, cut), bytes.slice(cut)] }],
+    })
+    const parts = visible(await runTurn(await start(sandbox), 'go'))
+    const text = parts.find((p) => p.type === 'text-delta')
+    assert.equal(text?.type === 'text-delta' && text.delta, 'café')
+    assert.equal(parts.at(-1)?.type === 'finish' && parts.at(-1)?.finishReason.unified, 'stop')
+  })
+
   test('a CLI that dies without a result still finishes the turn', async () => {
     const sandbox = fakeSandbox({
       turns: [{ stdout: '', stderr: 'error: authentication required', exitCode: 1 }],
