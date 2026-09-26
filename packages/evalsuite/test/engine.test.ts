@@ -628,6 +628,29 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.doesNotMatch(out, /Summary[\s\S]*\n\s*error: /, 'no stray error after the summary')
   })
 
+  test('an eval with not-gated cells labels its pass rate gated; an all-gated one does not', async () => {
+    const p = await project('gated-label', {
+      'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
+      'evals/c.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
+evaluate('compared', { compare: [skilled], runs: 2 }, async (t) => {
+  await t.send('go')
+  await expect(t).toHaveFile('ok.txt')
+})
+evaluate('repeated', { runs: 4 }, async (t) => {
+  await t.send('go')
+  expect(t.attempt.n % 4).not.toBe(0)
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    const summary = r.stdout.slice(r.stdout.indexOf('\nSummary'))
+    // The control's two failures count in 2/4, but only the gated variant's 2/2 in the rate.
+    assert.match(summary, /✓ compared +2\/4 · 100% gated {2}4 attempts\n/)
+    assert.match(summary, /✗ repeated +3\/4 +75% {2}4 attempts\n/)
+  })
+
   test('a harness failure is an infra error and exits 3', async () => {
     const p = await project('infra', {
       'es.config.ts': fakeConfig({ harness: `{ failWith: 'agent CLI failed to start' }` }),

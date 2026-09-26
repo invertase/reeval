@@ -389,6 +389,14 @@ export const COMPARE_ORDER: CompareStatus[] = [
   'same',
 ]
 
+/**
+ * Whether some of an eval's cells aren't gated (`gate: 'none'`, e.g. controls under
+ * `compare.gate: 'variants'`). Its pass rate then covers fewer attempts than its pass count, so
+ * the eval line labels the rate `gated`: `2/4 · 100% gated`.
+ */
+export const hasUngatedCells = (cells: readonly Pick<HistoryCell, 'gate'>[]) =>
+  cells.some((c) => c.gate === 'none')
+
 /** Passes over passes and fails in the gated cells, as an eval's `passRate` counts them. */
 function gatedPassRate(cells: HistoryCell[]): number | null {
   const gated = cells.filter((c) => c.gate !== 'none')

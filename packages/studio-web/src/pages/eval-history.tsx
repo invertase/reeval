@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link } from '@tanstack/react-router'
-import { evalHistory, formatDuration, shortSha, splitEvalId } from 'evalsuite/view'
+import { evalHistory, formatDuration, hasUngatedCells, shortSha, splitEvalId } from 'evalsuite/view'
 import { ChevronRight, GitBranch, SearchX } from 'lucide-react'
 import { useMemo } from 'react'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
@@ -154,6 +154,9 @@ export function EvalHistoryPage() {
                   </TableCell>
                   <TableCell className="text-right">
                     <PassRate rate={p.passRate} />
+                    {hasUngatedCells(p.cells) ? (
+                      <span className="ml-1 text-xs text-muted-foreground">gated</span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="tabular hidden text-right text-muted-foreground sm:table-cell">
                     {formatDuration(p.run.durationMs)}
