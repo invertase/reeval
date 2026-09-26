@@ -2,7 +2,8 @@
 # the real-tier feature fixtures (real Cursor, `harness/cursor-web-fetch` among them), the check that
 # @cursor/sdk still declares what the Cursor harness recovers web calls from, and (pinned only) the
 # CLI end to end. Called by real.yml only, which gates it on this repository and its secrets.
-# `versions: latest` first swaps the newest `agy` and @cursor/sdk into the pinned images
+# `versions: latest` first swaps the newest `agy`, @cursor/sdk, OpenCode, Goose and pi into the
+# pinned images
 # (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
 # to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
 name: contract

@@ -3,7 +3,8 @@
 # and only with its secrets, skipping with a notice without them. One run at a time.
 #   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check
 #                        and the CLI end to end, on the pinned agent versions
-#   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy and @cursor/sdk
+#   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
+#                        OpenCode, Goose and pi
 #   real agents (Cursor) examples/hello's smoke profile
 # PRs get the pinned contract only. Budgets: each es run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
