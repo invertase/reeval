@@ -87,7 +87,7 @@
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — |
 | `cursor()`: Cursor through its TypeScript SDK, one runner per session | ✓ 4 | ✓ 1 | ● 2 | ● 2 | — |
 | Token usage and the served model, per turn and totalled, from any harness | ✓ 1 | — | — | — | ◐ 3 (2 without a canary) |
-| Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 7 | — | — | — | ● 1 |
+| Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched` | ✓ 12 | — | — | — | ◐ 2 (1 without a canary) |
 | `fakeHarness({ script })` and `layout` | ✓ 1 | — | ● 2 | ● 2 | — |
 | Transcripts, normalised per harness | ✓ 3 | — | — | — | ● 1 |
 | Each agent CLI's native stream: replayed through the adapters, and checked for format drift | ✓ 2 | — | — | — | ◐ 1 (1 without a canary) |

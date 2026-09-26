@@ -15,6 +15,7 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | real key never in the container | after a turn, a scan of every process's environment and command line and every file under the writable roots finds no form of the key | the same scan finds a value planted in the environment and a home file | the key isn't in the run directory |
 | deny-all plus auto hosts works | under `egress: 'deny-all'` the turn completes, and a `curl` to example.com gets a 403 at CONNECT | no turn: the same `curl` isn't a 200 | `egress`: the harness's automatic hosts allowed, its API contacted, example.com:443 refused and recorded |
 | served model recorded | — | — | every attempt's `servedModels` names the model (null for a harness whose requests don't say) |
+| nothing silently unreported | — | — | every turn's `unreported` is empty: no harness fell back to flagging events it couldn't report (the Cursor SDK's web calls, when recovering them fails or finds a stored shape it doesn't know) |
 | native stream format unchanged | — | — | every native event in the raw transcripts matches `../replay/formats/<harness>.json` |
 | clean teardown | — | — | the run is `complete` and no container with its label is left |
 

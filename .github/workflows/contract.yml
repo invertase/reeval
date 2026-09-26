@@ -1,7 +1,10 @@
-# The harness contract (and, on pinned versions, the CLI end to end) on real agents, in Docker.
-# Called by real.yml only, which gates it on this repository and its secrets. `versions: latest`
-# first swaps the newest agent CLI and SDK into the pinned images (scripts/drift/latest-images.sh):
-# the version-drift leg, which fails on any change to an agent's output format.
+# The real agents in Docker, on the pinned agent versions or the newest ones: the harness contract,
+# the real-tier feature fixtures (real Cursor, `harness/cursor-web-fetch` among them), the check that
+# @cursor/sdk still declares what the Cursor harness recovers web calls from, and (pinned only) the
+# CLI end to end. Called by real.yml only, which gates it on this repository and its secrets.
+# `versions: latest` first swaps the newest `agy` and @cursor/sdk into the pinned images
+# (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
+# to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
 name: contract
 
 on:
@@ -25,9 +28,10 @@ jobs:
       ES_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key skips and says why (Claude Code has none yet).
       ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code
-      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all three rows.
-      # Each row reserves its attempts in the ledger first, and fails rather than go over.
-      ES_REAL_ATTEMPT_BUDGET: '42'
+      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all three rows,
+      # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
+      # first, and fails rather than go over.
+      ES_REAL_ATTEMPT_BUDGET: '56'
       ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
@@ -55,6 +59,18 @@ jobs:
           files=test/contract.test.ts
           [ "${{ inputs.versions }}" = pinned ] && files="$files test/e2e-real.test.ts"
           node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings $files
+      - name: the stored conversation @cursor/sdk declares
+        working-directory: packages/evalsuite
+        run: node --test --experimental-strip-types --no-warnings test/cursor-sdk-shape.test.ts
+      # Real Cursor: without its key there's nothing to run (real.yml's gate says so).
+      - if: env.CURSOR_API_KEY != ''
+        name: real-tier fixtures on Cursor (web fetch recovery included)
+        working-directory: packages/evalsuite
+        env:
+          ES_FIXTURE_TIERS: real
+          ES_TEST_KEEP: '1'
+          TMPDIR: ${{ runner.temp }}/es-tests
+        run: node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings test/features.test.ts
       - if: always()
         name: summary
         run: |

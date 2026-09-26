@@ -1,9 +1,10 @@
 # The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labelled
 # `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code)
 # and only with its secrets, skipping with a notice without them. One run at a time.
-#   contract (pinned)    the harness contract and the CLI end to end, on the pinned agent versions
-#   contract (latest)    the version-drift leg: the contract on the newest agent CLI and SDK
-#   real agents (Cursor) the older real-tier fixtures and examples/hello's smoke profile
+#   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check
+#                        and the CLI end to end, on the pinned agent versions
+#   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy and @cursor/sdk
+#   real agents (Cursor) examples/hello's smoke profile
 # PRs get the pinned contract only. Budgets: each es run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
 name: real
@@ -83,6 +84,9 @@ jobs:
       !cancelled() && needs.gate.outputs.enabled == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    env:
+      CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -90,11 +94,11 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
-      - name: real-agent smoke
-        env:
-          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
-          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
-        run: pnpm smoke:real
+      # The real-tier fixtures ran in the contract legs; this is examples/hello's smoke profile.
+      - name: examples/hello smoke
+        if: env.CURSOR_API_KEY != '' && env.GOOGLE_GENERATIVE_AI_API_KEY != ''
+        working-directory: examples/hello
+        run: node ../../packages/evalsuite/dist/cli.js run --profile smoke
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

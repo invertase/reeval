@@ -222,6 +222,18 @@ export const behaviours: Behaviour[] = [
     },
   },
   {
+    name: 'nothing silently unreported',
+    canary: false,
+    check(ran) {
+      // A harness that couldn't report some events (the Cursor SDK's web calls, when recovering
+      // them from its stored conversation fails, or finds a shape it doesn't know) says so in
+      // `unreported`. Every contract turn must have reported everything.
+      for (const a of withTurns(ran.run))
+        for (const t of a.turns)
+          assert.deepEqual(t.unreported, [], `${a.key}: ${JSON.stringify(t.unreported)}`)
+    },
+  },
+  {
     name: 'native stream format unchanged',
     canary: false,
     check(ran, row) {

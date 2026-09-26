@@ -587,8 +587,17 @@ export const inventory: InventoryFeature[] = [
       cursorAdapter('stream', 'a real web turn on SDK 1.0.32'),
       cursorAdapter('stream', "the runner's recovered web calls"),
       cursorAdapter('unit', 'storedWebCalls: a live stored conversation'),
+      cursorAdapter(
+        'unit',
+        'the live conversation from SDK 1.0.32 has every field the runner reads',
+      ),
+      cursorAdapter('unit', 'each field it reads, gone or renamed, is named in the problem'),
+      "evalsuite/test/cursor-sdk-shape.test.ts › the image's @cursor/sdk declares every field the runner reads",
+      'evalsuite/test/replay.test.ts › upstream fixed, same ids: each web call once',
+      'evalsuite/test/replay.test.ts › upstream fixed, other ids: each web call once',
       'evalsuite/test/matchers.test.ts › refuse a turn whose harness',
     ],
+    real: ['contract › nothing silently unreported'],
   },
   {
     id: 'harness.fake-script',
