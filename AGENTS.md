@@ -37,14 +37,17 @@ its files import `evalsuite`.
   changes the matrix, and a one-check fixture with a canary if it changes what happens inside an
   attempt, in every tier it touches. A feature isn't done until they pass.
 - Vitest stays a hidden engine, pinned exactly, and only `packages/evalsuite/src/engine`
-  imports it.
+  imports it. Keep the pin on vitest's latest release: vitest's peer range on
+  `@vitest/browser-webdriverio` pulls in the newest vitest, and npm before 11.6 (Node 22's npm
+  10.9) crashes installing the package when that differs from the pin (npm/cli#8261). CI's
+  `packed install (npm 10.9)` leg catches it.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
-| `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
+| `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.2) |
 | `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |

@@ -18,7 +18,7 @@ import { shellQuote as q } from './process.ts'
 import { createDockerSession } from './session.ts'
 
 const PNPM_VERSION = '10.33.3'
-/** node:22's npm 10.9 crashes installing a local tarball; the same as docker/Dockerfile's. */
+/** npm before 11.6 (node:22 ships 10.9) can crash on circular peer sets (npm/cli#8261); the same as docker/Dockerfile's. */
 const NPM_VERSION = '11.20.0'
 
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex')

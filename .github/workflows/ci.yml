@@ -172,20 +172,32 @@ jobs:
           path: coverage/report
           retention-days: 14
 
+  # Installs the tarball with Node 22's npm 10.9 and with npm 11. npm before 11.6 crashes
+  # ("reading 'edgesOut'", npm/cli#8261) when vitest's peer set pulls in a newer vitest than
+  # the one pinned, so this leg fails if the pin falls behind vitest's latest.
   pack:
-    name: packed install
+    name: packed install (npm ${{ matrix.npm }})
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { npm: '10.9', node: '22' }
+          # The release job's npm.
+          - { npm: '11', node: '' }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
-      # The release job's npm. npm 10.9 (Node 22's) crashes installing the tarball (edgesOut).
-      - run: npm install --global npm@^11.5.1
+        with: { node-version: '${{ matrix.node }}' }
+      - run: npm install --global npm@${{ matrix.npm }} && npm --version
       - run: pnpm build
-      # pnpm pack rewrites workspace: ranges. On a release commit, release.yml publishes this.
+      # pnpm pack rewrites workspace: ranges, and .pnpmfile.cjs drops devDependencies and
+      # scripts. On a release commit, release.yml publishes the npm 11 leg's tarball.
       - run: pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/package"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - if: matrix.npm == '11'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: package
           path: ${{ runner.temp }}/package/*.tgz
@@ -196,8 +208,25 @@ jobs:
       # npm's dry run still refuses a version that's already published, so this dry-runs a
       # throwaway prerelease of it.
       - name: npm publish --dry-run
+        if: matrix.npm == '11'
         working-directory: packages/evalsuite
         run: |
           npm version --no-git-tag-version "$(node -p "require('./package.json').version")-ci.$GITHUB_RUN_ID"
           pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"
           npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/dry-run/*.tgz
+
+  # The required check: passes only when every npm leg of the pack job passed.
+  packed-install:
+    name: packed install
+    needs: pack
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULT: ${{ needs.pack.result }}
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error::packed install (npm 10.9 / npm 11): $RESULT"
+            exit 1
+          fi
