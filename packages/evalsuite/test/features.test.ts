@@ -1,7 +1,8 @@
-// Tiers F and D: one directory per feature under test/features/, each with one check
+// Tiers F, D and C: one directory per feature under test/features/, each with one check
 // (evals/lands.es.ts) and a canary that must fail (evals/canary.es.ts). The same fixture runs on
-// the fake sandbox and, when Docker and ES's image are there, in Docker. The oracle here checks
-// the record from outside; see test/features/README.md for adding one.
+// the fake sandbox, in Docker when Docker and ES's image are there, and on real Cursor with
+// ES_TEST_REAL=1 and CURSOR_API_KEY. The oracle here checks the record from outside; see
+// test/features/README.md for adding one.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync } from 'node:fs'
@@ -13,7 +14,8 @@ import { liveSandboxes, readRun, runCli } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
 
-type Tier = 'fake' | 'docker'
+/** `real` is Docker with real Cursor (ES_FIXTURE_HARNESS=cursor), one fixture at a time. */
+type Tier = 'fake' | 'docker' | 'real'
 
 type Feature = {
   /** Under `test/features/`. */
@@ -129,13 +131,33 @@ export const features: Feature[] = [
   },
   {
     dir: 'skills/harness-placement',
-    tiers: ['fake', 'docker'],
+    tiers: ['fake', 'docker', 'real'],
     env: 'greeting',
     canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
-    record: ({ run }) =>
+    record: ({ run, tier }) => {
       assert.deepEqual(
         skills(run).map((s) => [s.name, s.placement]),
         [['house-greeting', 'harness']],
+      )
+      if (tier === 'fake') return
+      // In the agent's home, taken after the turn: the fake's ~/.agents, or Cursor's adapter home.
+      // Adapters write SKILL.md afresh from its frontmatter and body, so the hash isn't the file's.
+      const seen = landed(run)?.context ?? []
+      assert.ok(
+        seen.some((c) => /^~\/(.+\/)?\.agents\/skills\/house-greeting\/SKILL\.md$/.test(c.path)),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
+    dir: 'mcp/stdio-reaches-harness',
+    tiers: ['docker', 'real'],
+    env: 'stamp',
+    canary: /expected '.*' to contain 'tools\/call'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        run.environments.map((e) => [e.name, e.mcp]),
+        [['stamp', ['stamp']]],
       ),
   },
   {
@@ -181,6 +203,12 @@ export const features: Feature[] = [
       assert.equal(filesContaining(runDir, TOKEN), '')
       assert.notEqual(filesContaining(runDir, 'CHECK_TOKEN'), '', 'twin: the search finds the name')
     },
+  },
+  {
+    dir: 'secrets/cursor-session-tokens',
+    tiers: ['real'],
+    env: 'plain',
+    canary: /expected '' to match \/\^es_secret_\//,
   },
   {
     dir: 'secrets/redaction-coverage',
@@ -253,6 +281,28 @@ export const features: Feature[] = [
     canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
   },
   {
+    dir: 'harness/cursor-rules-reach-agent',
+    tiers: ['real'],
+    env: 'house-rules',
+    canaryEnv: 'no-rules',
+    canary: /to contain 'MARMALADE'/,
+  },
+  {
+    dir: 'harness/claude-code-harness-skills',
+    tiers: ['fake', 'docker'],
+    image: 'claude-code',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run, tier }) => {
+      if (tier === 'fake') return
+      const seen = landed(run)?.context ?? []
+      assert.ok(
+        seen.some((c) => c.path === '~/.claude/skills/house-greeting/SKILL.md'),
+        JSON.stringify(seen),
+      )
+    },
+  },
+  {
     dir: 'harness/cursor-workspace-skills',
     tiers: ['fake', 'docker'],
     env: 'greeting',
@@ -319,6 +369,9 @@ const imageBuilt = (ref: string) => {
 }
 const dockerReady = imageBuilt(DEFAULT_IMAGE)
 const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+/** The real tier runs only when asked, since it spends money; asked, it needs the key. */
+const real = process.env.ES_TEST_REAL === '1'
+const realModel = process.env.ES_REAL_MODEL ?? 'composer-2.5'
 /** `ES_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
 const only = process.env.ES_FIXTURE_TIERS?.split(',')
 
@@ -338,6 +391,8 @@ async function containersGone(runId: string, deadlineMs = 20_000): Promise<void>
 
 function skipTier(tier: Tier, image?: BakedHarness): string | false {
   if (only && !only.includes(tier)) return `ES_FIXTURE_TIERS=${only.join(',')}`
+  if (tier === 'real')
+    return real ? false : 'set ES_TEST_REAL=1 (and CURSOR_API_KEY) for real Cursor'
   if (tier === 'docker' && !requireDocker) {
     if (!dockerReady) return `needs Docker and ${DEFAULT_IMAGE}`
     if (image && !imageBuilt(imageFor(image))) return `needs ${imageFor(image)}`
@@ -345,37 +400,54 @@ function skipTier(tier: Tier, image?: BakedHarness): string | false {
   return false
 }
 
-describe('feature fixtures', { concurrency: 4 }, () => {
+function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
-    for (const tier of f.tiers) {
-      const timeout = tier === 'docker' ? 240_000 : 60_000
+    for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
+      const timeout = { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, async () => {
+        if (tier === 'real')
+          assert.ok(process.env.CURSOR_API_KEY, 'the real tier needs CURSOR_API_KEY')
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
-        const r = await runCli(p.dir, ['run'], {
-          env: { ...f.hostEnv, ES_FIXTURE_SANDBOX: tier },
+        const r = await runCli(p.dir, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
+          env: {
+            ...f.hostEnv,
+            ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
+            ...(tier === 'real'
+              ? {
+                  ES_FIXTURE_HARNESS: 'cursor',
+                  ES_REAL_MODEL: realModel,
+                  CURSOR_API_KEY: process.env.CURSOR_API_KEY,
+                }
+              : {}),
+          },
           timeoutMs: timeout - 10_000,
         })
-        const sandbox = tier === 'docker' ? 'docker' : 'fake'
+        const sandbox = tier === 'fake' ? 'fake' : 'docker'
+        const harness = tier === 'real' ? `cursor:${realModel}` : 'fake'
         const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,
           evals: {
-            lands: { outcome: 'pass', ...f.lands, attempts: [`fake/${f.env}/${sandbox}#1`] },
+            lands: { outcome: 'pass', ...f.lands, attempts: [`${harness}/${f.env}/${sandbox}#1`] },
             canary: {
               outcome: 'fail',
-              attempts: [`fake/${f.canaryEnv ?? f.env}/${sandbox}#1`],
+              attempts: [`${harness}/${f.canaryEnv ?? f.env}/${sandbox}#1`],
               error: { kind: 'assertion', message: f.canary },
             },
           },
         })
         await f.record?.({ run, project: p.dir, runDir, tier })
         assert.deepEqual(liveSandboxes(p), [], 'every sandbox is removed')
-        if (tier === 'docker') await containersGone(run.runId)
+        if (tier !== 'fake') await containersGone(run.runId)
       })
     }
   }
-})
+}
+
+describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker']))
+// Real attempts run one at a time (test-strategy §5), each within its own timeout.
+describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 
 test('every feature fixture is in the table, with one check and a canary', () => {
   const root = join(testDir, 'features')

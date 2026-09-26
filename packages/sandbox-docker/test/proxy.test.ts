@@ -6,6 +6,7 @@ import https from 'node:https'
 import net from 'node:net'
 import { after, before, describe, test } from 'node:test'
 import tls from 'node:tls'
+import { gzipSync } from 'node:zlib'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import {
@@ -19,6 +20,14 @@ import type { Substitution } from '../src/egress/substitution.ts'
 const PLACEHOLDER = `aisdkhc_${'P'.repeat(43)}`
 const REAL = 'crsr_real_integration_key_0123456789abcdef'
 const HOST = 'api.upstream.test'
+/** Real JWTs as an exchange returns them: header, claims with an `exp`, signature. */
+const jwt = (claims: object, signature: string) =>
+  [{ alg: 'HS256', typ: 'JWT' }, claims]
+    .map((part) => Buffer.from(JSON.stringify(part)).toString('base64url'))
+    .concat(signature)
+    .join('.')
+const ACCESS = jwt({ sub: 'user_1', exp: 2_000_000_000 }, 'real-access-signature-0123456789')
+const REFRESH = jwt({ sub: 'user_1', exp: 2_100_000_000 }, 'real-refresh-signature-987654321')
 const OTHER = 'other.upstream.test'
 
 type Seen = { host: string; method: string; path: string; headers: http.IncomingHttpHeaders }
@@ -50,6 +59,27 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
           'x-echo-authorization': String(req.headers.authorization ?? ''),
         })
         return out.end(echo)
+      }
+      if (req.url?.startsWith('/tokens/')) {
+        const auth = String(req.headers.authorization ?? '')
+        if (req.url === '/tokens/denied') {
+          out.writeHead(401, { 'content-type': 'application/json' })
+          return out.end(JSON.stringify({ error: 'unauthorized', auth }))
+        }
+        if (req.url === '/tokens/gzip') {
+          out.writeHead(200, { 'content-type': 'application/json', 'content-encoding': 'gzip' })
+          return out.end(gzipSync(JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH })))
+        }
+        if (req.url === '/tokens/echo') {
+          out.writeHead(200, { 'content-type': 'application/json' })
+          return out.end(JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH, auth }))
+        }
+        if (req.url === '/tokens/garbled') {
+          out.writeHead(200, { 'content-type': 'text/plain' })
+          return out.end(`oops ${ACCESS}`)
+        }
+        out.writeHead(200, { 'content-type': 'application/json' })
+        return out.end(JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH, kind: 'user' }))
       }
       if (req.url === '/trailers') {
         out.writeHead(200, { 'content-type': 'application/grpc', trailer: 'grpc-status' })
@@ -98,7 +128,10 @@ const rule = (port: number): RequestTransformation => ({
 /** The gateway's proxy on a local TCP port, as the in-container forwarder would reach it. */
 async function startProxy(
   policy: NetworkPolicy = { mode: 'allow-all' },
-  extra: Pick<EgressProxyOptions, 'endpoints' | 'onRefused' | 'onUnsubstituted'> = {},
+  extra: Pick<
+    EgressProxyOptions,
+    'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens'
+  > = {},
 ) {
   const ca = createCertificateAuthority()
   const lines: string[] = []
@@ -191,7 +224,7 @@ async function viaProxy(
 }
 
 /** The same over HTTP/2, as the Cursor CLI's Connect clients can. */
-async function viaProxyH2(gw: Gw, host: string, port: number, path: string, auth: string) {
+async function viaProxyH2(gw: Gw, host: string, port: number, path: string, auth = '') {
   const tunnel = await connect(gw, host, port)
   if (!tunnel.ok) throw new Error(`refused: ${tunnel.status}`)
   const session = http2.connect(`https://${host}:${port}`, {
@@ -858,6 +891,139 @@ describe('brokered secrets through the proxy', () => {
         /self-signed|unable to verify|certificate/i,
         'tunnelled blind: the gateway CA is not presented',
       )
+    } finally {
+      gw.close()
+    }
+  })
+})
+
+describe('derived tokens through the proxy', () => {
+  const derivedTokens = [
+    {
+      name: 'CURSOR_API_KEY',
+      endpoint: { host: HOST, path: { startsWith: '/tokens/' }, method: ['POST'] },
+      fields: ['accessToken', 'refreshToken'],
+      hosts: [HOST],
+    },
+  ]
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  let other: { port: number; close(): void }
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+    h2 = await startUpstream(HOST, true)
+    other = await startUpstream(OTHER, false)
+  })
+  after(() => {
+    h1.close()
+    h2.close()
+    other.close()
+  })
+  const exchange = (gw: Gw, path = '/tokens/exchange') =>
+    viaProxy(gw, HOST, h1.port, { method: 'POST', path, body: '{}' })
+  const parts = (token: string) => token.split('.')
+
+  test('the exchange response reaches the sandbox with placeholders that keep the real exp', async () => {
+    const gw = await startProxy(undefined, { derivedTokens })
+    try {
+      const r = await exchange(gw)
+      const body = JSON.parse(r.body) as Record<string, string>
+      const access = body.accessToken ?? ''
+      assert.doesNotMatch(r.body, /real-(access|refresh)-signature/)
+      assert.match(access, /^[\w-]+\.[\w-]+\.es_secret_[0-9A-Za-z]{32}$/)
+      assert.deepEqual(parts(access).slice(0, 2), parts(ACCESS).slice(0, 2), 'header and claims')
+      assert.notEqual(body.refreshToken, access, 'one placeholder per token')
+      assert.equal(body.kind, 'user', 'other fields untouched')
+      assert.equal(Number(r.headers['content-length']), Buffer.byteLength(r.body))
+      assert.ok(
+        gw.lines.some((l) => l.includes('tokenised accessToken, refreshToken (CURSOR_API_KEY)')),
+        gw.lines.join('\n'),
+      )
+      assert.doesNotMatch(gw.lines.join('\n'), /real-(access|refresh)-signature|es_secret_/)
+    } finally {
+      gw.close()
+    }
+    // Twin: without derived tokens, the same exchange hands the sandbox the real ones.
+    const plain = await startProxy()
+    try {
+      plain.proxy.setSubstitutions([
+        { name: 'X', placeholder: 'es_secret_x', value: 'x-value', hosts: [HOST], in: ['header'] },
+      ])
+      assert.match((await exchange(plain)).body, /real-access-signature/)
+    } finally {
+      plain.close()
+    }
+  })
+
+  test('over HTTP/2 too', async () => {
+    const gw = await startProxy(undefined, { derivedTokens })
+    try {
+      const r = await viaProxyH2(gw, HOST, h2.port, '/tokens/exchange')
+      const { accessToken } = JSON.parse(r.body) as { accessToken: string }
+      assert.match(accessToken, /\.es_secret_[0-9A-Za-z]{32}$/)
+      assert.doesNotMatch(r.body, /real-access-signature/)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('token placeholders get the real token on the token hosts only, over HTTP/1.1 and HTTP/2', async () => {
+    const gw = await startProxy(undefined, { derivedTokens })
+    try {
+      const { accessToken } = JSON.parse((await exchange(gw)).body) as { accessToken: string }
+      gw.proxy.setSubstitutions([])
+      seen.length = 0
+      const r = await viaProxy(gw, HOST, h1.port, {
+        path: '/echo',
+        headers: { authorization: `Bearer ${accessToken}` },
+      })
+      assert.equal(seen[0]?.headers.authorization, `Bearer ${ACCESS}`, 'kept by setSubstitutions')
+      assert.equal(r.headers['x-echo-authorization'], `Bearer ${accessToken}`, 'headers scrubbed')
+      await viaProxyH2(gw, HOST, h2.port, '/echo', `Bearer ${accessToken}`)
+      assert.equal(seen[1]?.headers.authorization, `Bearer ${ACCESS}`)
+      // Twin: another host is tunnelled blind, so nothing there could swap the token in.
+      await assert.rejects(
+        viaProxy(gw, OTHER, other.port, {
+          path: '/echo',
+          headers: { authorization: `Bearer ${accessToken}` },
+        }),
+        /self-signed|unable to verify|certificate/i,
+      )
+      assert.equal(seen.length, 2)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('a failed exchange passes through; an unreadable success is a 502 without the tokens', async () => {
+    const gw = await startProxy(undefined, { derivedTokens })
+    try {
+      const denied = await exchange(gw, '/tokens/denied')
+      assert.equal(denied.status, 401)
+      assert.equal(denied.body, '{"error":"unauthorized","auth":""}')
+      const garbled = await exchange(gw, '/tokens/garbled')
+      assert.equal(garbled.status, 502)
+      assert.match(garbled.body, /couldn't keep CURSOR_API_KEY's tokens out of the sandbox/)
+      assert.doesNotMatch(garbled.body, /real-access-signature/)
+      const gzipped = await exchange(gw, '/tokens/gzip')
+      assert.equal(gzipped.status, 502)
+      assert.match(gzipped.body, /the response is gzip-encoded/)
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('the brokered key is scrubbed from the exchange response, as from any other', async () => {
+    const gw = await startProxy(undefined, { derivedTokens })
+    try {
+      const key = { name: 'CURSOR_API_KEY', placeholder: 'es_secret_key', value: REAL }
+      gw.proxy.setSubstitutions([{ ...key, hosts: [HOST], in: ['header'] }])
+      const headers = { authorization: `Bearer ${key.placeholder}` }
+      for (const path of ['/tokens/echo', '/tokens/denied']) {
+        const r = await viaProxy(gw, HOST, h1.port, { method: 'POST', path, body: '{}', headers })
+        assert.equal(seen.at(-1)?.headers.authorization, `Bearer ${REAL}`, path)
+        assert.equal(JSON.parse(r.body).auth, `Bearer ${key.placeholder}`, path)
+      }
     } finally {
       gw.close()
     }

@@ -413,3 +413,29 @@ export function missingCredentials(
   }
   return missing
 }
+
+/** Where a value has its first whitespace or control character, from 1; 0 when it has none. */
+export const badCharacterAt = (value: string) =>
+  [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
+
+/**
+ * Keys the run sends in request headers (the agents' credentials and the judge's) whose value has
+ * whitespace or a control character in it, with where the first one is: a key pasted from a
+ * wrapped terminal line picks up a line break, and the agent then hangs on a request it can't send
+ * rather than failing to authenticate.
+ */
+export function malformedCredentials(
+  config: ResolvedConfig,
+  env = process.env,
+  options: { harnessKinds?: string[] } = {},
+): string[] {
+  const kinds = options.harnessKinds ?? config.harness.map((h) => h.kind)
+  const names = [...new Set(kinds)].flatMap((kind) =>
+    isAgentKind(kind) ? [AGENTS[kind].credential] : [],
+  )
+  if (config.judge.model !== undefined) names.push(...judgeCredentials(config.judge.model))
+  return [...new Set(names)].flatMap((name) => {
+    const at = badCharacterAt(env[name] ?? '')
+    return at ? [`${name} (character ${at})`] : []
+  })
+}

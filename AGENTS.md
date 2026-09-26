@@ -45,6 +45,8 @@ its files import `evalsuite`.
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
 | `packages/evalsuite/src/engine` | The only code that imports `vitest` (pinned to 5.0.1) |
+| `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
+| `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`; `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`) and Claude Code (`@ai-sdk/harness-claude-code`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
@@ -53,7 +55,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/sandbox-docker`), so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr` and `nightly` profiles), `es.claude.config.ts` (the coding evals under Claude Code), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
+| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts` (the coding evals under Claude Code), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
 
 ## Development
 
@@ -75,8 +77,16 @@ In `packages/evalsuite`, the tests run `dist/cli.js`, so rebuild after changing 
 pnpm test:plan                          # plan snapshots
 pnpm test:features                      # feature fixtures on the fake sandbox, and Docker if it's there
 pnpm test:docker                        # Docker only, failing (not skipping) without it
+pnpm test:real                          # the real tier: fixtures on real Cursor (CURSOR_API_KEY)
 ES_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the diff
 ```
+
+The real tier is skipped (with a reason) unless `ES_TEST_REAL=1`, which `pnpm test:real` sets. It
+runs the fixtures that list `real` on Cursor in Docker, one at a time, on `composer-2.5` unless
+`ES_REAL_MODEL` names another. From the repo root, `pnpm smoke:real` is the nightly real-agent
+smoke: the real tier, then `examples/hello`'s `smoke` profile (the judge-free evals tagged
+`smoke`). It exits 0 with a note when `CURSOR_API_KEY` isn't set, and skips the example without
+`GOOGLE_GENERATIVE_AI_API_KEY`.
 
 The engine and wrapper tests drive the real `es` CLI against generated projects with the fake
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
@@ -190,11 +200,14 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    pnpm es run                  # or: pnpm es run greet   (filter by path, eval name or cell)
    pnpm es run skill --runs 2   # the skill compare: control and variant, twice each, with lift
    pnpm es run --profile pr     # sized like a PR run: one run per cell, no variants
+   pnpm es run --profile smoke  # the nightly smoke: two judge-free evals, once, on composer-2.5
    pnpm es run --config es.claude.config.ts   # the coding evals under Claude Code
    ```
 
 The harness keys stay on the host (see [Secrets](#secrets)). ES masks secret-looking values in
-everything it writes to `.es/`.
+everything it writes to `.es/`. A key with whitespace or a line break in it (pasted from a wrapped
+terminal line) stops the run with exit 2 naming it and the character, for the agents' and the
+judge's keys; a brokered secret that goes in a header fails its attempt the same way.
 
 ## Authoring API
 
@@ -208,7 +221,9 @@ everything it writes to `.es/`.
 
 - **Harnesses:** `cursor({ model? })` (needs `CURSOR_API_KEY`), `claudeCode({ model })` (needs
   `ANTHROPIC_API_KEY`; `model` is any id or alias the `claude` CLI takes, and it's required) and
-  `fakeHarness({ … })`, a scripted agent for tests and dry runs. `fakeHarness({ layout:
+  `fakeHarness({ … })`, a scripted agent for tests and dry runs (its `script` steps are
+  `{ exec }`, `{ write }`, `{ reply }` and `{ mcp: '<server>/<tool>' }`, which calls a stdio MCP
+  server's tool in the sandbox). `fakeHarness({ layout:
   'claude-code' })` behaves like that agent without a key: its image, and where it reads rules and
   skills. Real harnesses need `docker()`, and each authenticates only with its own key, passed to
   its adapter explicitly: a host `AI_GATEWAY_API_KEY`, subscription or keychain is never used.
@@ -534,12 +549,21 @@ A request carrying the placeholder anywhere else gets a 403 from the gateway, ne
 the attempt's output prints `warning: the egress gateway refused POST https://…`, so a CLI update
 that needs a new endpoint fails loudly rather than hanging or leaking. Claude Code runs with
 `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` (no telemetry or feature-flag fetches, so flags
-can't change between runs). Other hosts pass through untouched and end to end. The short-lived
-session token the Cursor CLI gets back does live in the container. If the gateway can't start
+can't change between runs). Other hosts pass through untouched and end to end. If the gateway can't start
 (for example, an `image` without `node`), the attempt is an infra error that names the key, so a
 change of image can't widen the credential boundary: there's no way to pass the real key in.
 `docker({ from })` or `docker({ dockerfile })` give any Debian or Ubuntu image what the gateway
 needs. `ES_DEBUG=1` logs each connection and decrypted request (never header values).
+
+The session tokens the Cursor CLI gets for its key don't enter the container either. The gateway
+reads the exchange's response and hands the CLI placeholders for `accessToken` and
+`refreshToken`: each keeps the real JWT's header and claims, so the CLI still sees the real
+`exp`, with `es_secret_…` for a signature. The real tokens are swapped back in, in headers only,
+on requests to `cursor.sh` and its subdomains, including the agent's long-lived HTTP/2
+`AgentService/Run` stream. The CLI doesn't check the signature (checked on real Cursor). Token
+responses are scrubbed in headers only, since scrubbing a body holds back bytes and would stall
+those streams; an exchange response the gateway can't read (compressed, over 1 MB, not JSON) is a
+502, so real tokens never go through.
 
 ## Judges
 
@@ -821,7 +845,7 @@ the turn started), and events have `durationMs`:
 Types: `prompt`, `reasoning`, `text`, `tool` (a call merged with its result), `file-edit`
 (`create | modify | delete` with line counts), `web-search`, `web-fetch`, `error` and
 `turn-end`. Cursor reports only the query or URL for web tools, not result URLs, titles or
-content. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
+content. An MCP tool call is named `mcp__<server>__<tool>` on both harnesses. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
 `transcript.raw.jsonl`. The record adds per-turn durations, per-phase timings (setup, agent,
 diff, checks, judge) and activity counts, and `summary.md` quotes each eval's last message.
 
@@ -869,7 +893,10 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
 - **Stack:** every sandbox image's tag, content-addressed id and registry digests, with its
   agent CLI version; the harness and AI SDK package versions; the harnesses; the judge
   model, the model ids the provider reported, and a judge version; the skills, rules and MCP
-  config the agent could see in its sandbox, by content hash; ES and Node versions.
+  config the agent could see in its sandbox, by content hash (taken once after the first turn, or
+  at teardown with no turn, since adapters write harness skills when a turn starts; it includes
+  each adapter's own home, `~/.ai-sdk-harness/.harness-bootstrap/<agent>/implementation/home`);
+  ES and Node versions.
 - **What it can't pin down,** listed per record: sampled agent output, provider-side model
   updates, network-dependent results such as web search and package registries, and locally
   built images.

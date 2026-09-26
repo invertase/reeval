@@ -42,6 +42,27 @@ describe('resolving brokered secrets', () => {
     ])
   })
 
+  test('a value with a line break in it fails the attempt when it would go in a header', async () => {
+    process.env.ES_UNIT_WRAPPED = 'AQ.abc\n   │ def'
+    try {
+      await assert.rejects(
+        resolve(({ secret }) => ({
+          env: { API_KEY: secret.fromEnv('ES_UNIT_WRAPPED', { hosts: secret.hosts.gemini }) },
+        })),
+        /^InfraError: API_KEY has whitespace or a line break in it \(character 7\), so it can't go in a request header\. A key copied from a wrapped terminal line picks these up; set it again as one line\.$/,
+      )
+      // A body-only secret may be anything, a PEM say.
+      const r = await resolve(({ secret }) => ({
+        env: {
+          API_KEY: secret.fromEnv('ES_UNIT_WRAPPED', { hosts: ['api.example.com'], in: ['body'] }),
+        },
+      }))
+      assert.match(r.vars.API_KEY ?? '', PLACEHOLDER)
+    } finally {
+      delete process.env.ES_UNIT_WRAPPED
+    }
+  })
+
   test('the record names the brokered secret, and never has its value or placeholder', async () => {
     const r = await resolve(({ secret }) => ({
       env: { API_KEY: secret.fromEnv('ES_UNIT_BROKERED', { hosts: ['api.example.com'] }) },

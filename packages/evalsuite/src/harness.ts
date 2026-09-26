@@ -31,7 +31,7 @@ export const claudeCode = (
 
 const LAYOUTS = ['cursor', 'claude-code']
 
-const STEP_KEYS = ['exec', 'write', 'reply']
+const STEP_KEYS = ['exec', 'write', 'reply', 'mcp']
 
 function checkScript(script: unknown): void {
   const example = "script: [[{ exec: 'cat notes.txt' }, { reply: 'done' }]]"
@@ -52,10 +52,12 @@ function checkScript(script: unknown): void {
         ? typeof value === 'object' &&
           value !== null &&
           Object.values(value).every((c) => typeof c === 'string')
-        : typeof value === 'string')
+        : key === 'mcp'
+          ? typeof value === 'string' && /^[^/]+\/[^/]+$/.test(value)
+          : typeof value === 'string')
     if (!valid) {
       throw new UsageError(
-        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } } or { reply: string } (got ${JSON.stringify(step)})`,
+        `fakeHarness({ script }) steps are { exec: string }, { write: { path: content } }, { reply: string } or { mcp: '<server>/<tool>' } (got ${JSON.stringify(step)})`,
       )
     }
   }

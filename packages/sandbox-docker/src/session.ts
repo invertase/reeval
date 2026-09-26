@@ -8,6 +8,7 @@ import { type Gateway, type GatewayOptions, startGateway } from './egress/gatewa
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { Substitution } from './egress/substitution.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
+import { shellQuote as q } from './process.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
 export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
@@ -35,8 +36,6 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
   /** With the gateway: the brokered secrets, each swapped in only on HTTPS to its own hosts. */
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
 }
-
-const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 
 /** Set on every exec, so a kill can find the command's whole process tree in the container. */
 const EXEC_MARKER = 'ES_EXEC_ID'

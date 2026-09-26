@@ -4,13 +4,14 @@ import type {
   HarnessV1NetworkSandboxSession,
   HarnessV1RequestTransformation,
 } from '@ai-sdk/harness'
-import { applyTransformations } from '@evalsuite/sandbox-docker'
-import { missingCredentials, resolveConfig } from '../src/config.ts'
+import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
+import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered } from '../src/environment.ts'
 import {
   AGENTS,
   type AgentKind,
+  acpMcpServers,
   agentAuth,
   brokeringFor,
   claudeMcpServers,
@@ -59,6 +60,26 @@ describe('the Claude Code harness', () => {
       ['ANTHROPIC_API_KEY'],
     )
     assert.deepEqual(missingCredentials(config, {}, { harnessKinds: ['fake'] }), [])
+  })
+
+  test('names agent and judge keys with a line break in them, never other variables', () => {
+    const config = resolveConfig(
+      { harness: [cursor()], judge: { model: 'google/gemini-3.8-flash' } },
+      '/p',
+    )
+    const wrapped = 'AQ.abc\n   │ def'
+    assert.deepEqual(
+      malformedCredentials(config, {
+        CURSOR_API_KEY: 'crsr_ok',
+        GOOGLE_GENERATIVE_AI_API_KEY: wrapped,
+        UNRELATED: wrapped,
+      }),
+      ['GOOGLE_GENERATIVE_AI_API_KEY (character 7)'],
+    )
+    assert.deepEqual(malformedCredentials(config, { CURSOR_API_KEY: ` ${'k'}` }), [
+      'CURSOR_API_KEY (character 1)',
+    ])
+    assert.deepEqual(malformedCredentials(config, {}), [], 'unset is missingCredentials')
   })
 
   test('reads rules from CLAUDE.md and repo skills from .claude/skills, in its own image', () => {
@@ -282,6 +303,28 @@ describe('credential brokering per agent', () => {
     assert.equal(exchange.headers.authorization, 'Bearer crsr_real')
   })
 
+  test("Cursor's session tokens are tokenised at its exchange and swapped back on its hosts only", () => {
+    const tokens = brokeringFor(cursor())?.tokens
+    assert.equal(tokens?.name, 'CURSOR_API_KEY')
+    assert.deepEqual(tokens?.fields, ['accessToken', 'refreshToken'])
+    assert.ok(
+      onEndpoint([tokens?.endpoint ?? { host: 'none' }], {
+        host: 'api2.cursor.sh',
+        method: 'POST',
+        path: '/auth/exchange_user_api_key',
+        headers: {},
+      }),
+    )
+    const hosts = tokens?.hosts ?? []
+    for (const host of ['api2.cursor.sh', 'agentn.global.api5.cursor.sh', 'cursor.sh']) {
+      assert.ok(hostAllowed(hosts, host), host)
+    }
+    for (const host of ['cursor.sh.evil.test', 'api.anthropic.com']) {
+      assert.ok(!hostAllowed(hosts, host), host)
+    }
+    assert.equal(brokeringFor(claudeCode({ model: 'opus' }))?.tokens, undefined)
+  })
+
   test('with no credential set, the harness fails closed before the adapter starts', async () => {
     await assert.rejects(
       adapterRules('claude-code', { AI_GATEWAY_API_KEY: 'host-gateway' }),
@@ -451,5 +494,65 @@ describe('Claude Code transcripts', () => {
         ['web-search', 'cursor search', 3],
       ],
     )
+  })
+})
+
+describe('the Cursor harness', () => {
+  test('gets MCP servers in the ACP session/new shape: env and headers as name/value pairs', () => {
+    assert.deepEqual(
+      acpMcpServers({
+        files: {
+          transport: 'stdio',
+          command: 'node',
+          args: ['mcp.mjs'],
+          env: { ROOT: '/es', N: '1' },
+        },
+        docs: {
+          transport: 'http',
+          url: 'https://docs.example/mcp',
+          headers: { Authorization: 'Bearer t' },
+        },
+        feed: { transport: 'sse', url: 'https://feed.example/sse', headers: {} },
+      }),
+      {
+        files: {
+          command: 'node',
+          args: ['mcp.mjs'],
+          env: [
+            { name: 'ROOT', value: '/es' },
+            { name: 'N', value: '1' },
+          ],
+        },
+        docs: {
+          type: 'http',
+          url: 'https://docs.example/mcp',
+          headers: [{ name: 'Authorization', value: 'Bearer t' }],
+        },
+        feed: { type: 'sse', url: 'https://feed.example/sse', headers: [] },
+      },
+    )
+  })
+
+  test('with no MCP servers, the ACP shape is empty', () => {
+    assert.deepEqual(acpMcpServers({}), {})
+  })
+
+  test('an MCP tool call is named mcp__<server>__<tool>, not by its per-call id', () => {
+    const [event] = normaliseStream(
+      [
+        {
+          ms: 10,
+          part: {
+            type: 'tool-call',
+            toolCallId: 'tool_9a',
+            toolName: 'acp_tool_tool_9a',
+            input: { providerIdentifier: 'stamp', toolName: 'house_stamp', args: {} },
+          },
+        },
+        { ms: 20, part: { type: 'tool-result', toolCallId: 'tool_9a', output: { success: true } } },
+      ],
+      0,
+    )
+    assert.equal(event?.type === 'tool' && event.tool, 'mcp__stamp__house_stamp')
   })
 })

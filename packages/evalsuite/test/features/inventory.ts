@@ -186,7 +186,7 @@ export const inventory: InventoryFeature[] = [
     id: 'skill.harness',
     area: 'Environments',
     name: '`skill.local`, placed by the harness',
-    fixtures: ['skills/harness-placement'],
+    fixtures: ['skills/harness-placement', 'harness/claude-code-harness-skills'],
   },
   {
     id: 'skill.workspace',
@@ -250,6 +250,7 @@ export const inventory: InventoryFeature[] = [
     id: 'mcp.stdio',
     area: 'Environments',
     name: '`mcp.stdio`',
+    fixtures: ['mcp/stdio-reaches-harness'],
     tests: [
       options('skills, MCP, rules, files, setup steps and secrets reach the sandbox'),
       harness('gets MCP servers in the .mcp.json shape'),
@@ -281,7 +282,12 @@ export const inventory: InventoryFeature[] = [
     id: 'rules',
     area: 'Environments',
     name: '`rules`: `AGENTS.md` for Cursor, `CLAUDE.md` for Claude Code',
-    fixtures: ['env/rules', 'harness/cursor-rules', 'harness/claude-code-rules'],
+    fixtures: [
+      'env/rules',
+      'harness/cursor-rules',
+      'harness/claude-code-rules',
+      'harness/cursor-rules-reach-agent',
+    ],
     tests: [harness('rules win over a file at the same path')],
   },
   {
@@ -437,6 +443,7 @@ export const inventory: InventoryFeature[] = [
     id: 'brokering.harness-key',
     area: 'Sandbox',
     name: "The harness's key never enters the container",
+    fixtures: ['secrets/cursor-session-tokens'],
     tests: [
       sandboxDocker('docker', 'env, /proc and files in the container never contain the real key'),
       harness('credential brokering per agent'),
@@ -466,7 +473,12 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.cursor-real',
     area: 'Harnesses',
     name: 'Real Cursor, end to end',
-    gap: "No automated run on PRs: real.yml runs `smoke:real` nightly once a ref has it, and the real fixture tier isn't on this branch yet.",
+    fixtures: [
+      'skills/harness-placement',
+      'mcp/stdio-reaches-harness',
+      'harness/cursor-rules-reach-agent',
+      'secrets/cursor-session-tokens',
+    ],
   },
   {
     id: 'harness.claude-code',

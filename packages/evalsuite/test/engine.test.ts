@@ -166,6 +166,16 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
     const creds = await runCli(real.dir)
     assert.equal(creds.code, 2)
     assert.match(creds.stderr, /Missing credentials: CURSOR_API_KEY/)
+
+    const wrapped = await runCli(real.dir, ['run'], {
+      env: { CURSOR_API_KEY: 'crsr_0123456789\n   │ abcdef' },
+    })
+    assert.equal(wrapped.code, 2)
+    assert.match(
+      wrapped.stderr,
+      /Credentials with whitespace or a line break in them: CURSOR_API_KEY \(character 16\)\. A key copied from a wrapped terminal line picks these up; set it again as one line\./,
+    )
+    assert.doesNotMatch(wrapped.stderr, /abcdef/, 'never prints the value')
   })
 
   test("a project's own vitest, for its own tests, coexists without a warning", async () => {

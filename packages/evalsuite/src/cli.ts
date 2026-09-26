@@ -8,6 +8,7 @@ import { detectAgent } from 'std-env'
 import {
   hostCapacity,
   loadConfig,
+  malformedCredentials,
   missingCredentials,
   parseDuration,
   resolveConcurrency,
@@ -498,6 +499,14 @@ async function executeRun(
     if (missing.length) {
       throw new UsageError(
         `Missing credentials: ${missing.join(', ')}. Set them in the environment or .env.local.`,
+      )
+    }
+    const malformed = malformedCredentials(config, process.env, {
+      harnessKinds: plan.harnessKinds,
+    })
+    if (malformed.length) {
+      throw new UsageError(
+        `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
     }
     sandboxVersions = await preflight(targets)
