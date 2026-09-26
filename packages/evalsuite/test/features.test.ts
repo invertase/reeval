@@ -317,7 +317,30 @@ export const features: Feature[] = [
             reason: "blocked.invalid isn't in the allowlist",
           },
         ],
+        expectedBlocked: [],
       }),
+  },
+  {
+    dir: 'egress/expected-blocked',
+    tiers: ['docker'],
+    env: 'closed',
+    image: 'antigravity',
+    canary: /expected '403 000' to match/,
+    record: ({ run }) => {
+      const egress = landed(run)?.egress
+      assert.deepEqual(
+        egress?.blocked.map((h) => [h.host, h.port, h.connections]),
+        [['blocked.invalid', 80, 1]],
+        'only the host nothing expects is listed as blocked',
+      )
+      assert.deepEqual(
+        egress?.expectedBlocked?.map((h) => [h.host, h.port, h.connections, h.reason]),
+        [
+          ['antigravity-unleash.goog', 443, 1, "antigravity-unleash.goog isn't in the allowlist"],
+          ['play.googleapis.com', 443, 1, "play.googleapis.com isn't in the allowlist"],
+        ],
+      )
+    },
   },
   {
     dir: 'egress/deny-all',

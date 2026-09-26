@@ -72,7 +72,7 @@
 | `docker({ dockerfile })` and `ES_BASE` | ✓ 2 | ✓ 1 | — | ● 2 | — |
 | `docker({ from })` toolchain images **(gap)** | — | — | — | — | — |
 | `es image build` and `--dry-run` | ✓ 1 | — | — | — | — |
-| `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 5 | ● 1 |
+| `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 6 | ● 1 |
 | The harness's key never enters the container | ✓ 2 | — | — | — | ● 1 |
 | Ports: through the tunnel, or published without the gateway | ✓ 2 | — | — | — | — |
 | No container or sandbox left after a failure, timeout or abort | ✓ 2 | — | — | — | — |
@@ -114,7 +114,7 @@
 | Exit code precedence (a failure and an infra error in one run) **(gap)** | — | — | — | — | — |
 | Output modes, renderers and GitHub Actions groups | ✓ 3 | — | — | — | — |
 | `--log-order`, `--log-prefix` and `--output-logs` through `es run` **(gap)** | — | — | — | — | — |
-| `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 7 | — | — | — | — |
+| `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 8 | — | — | — | — |
 | `-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — |
 | Local debug data: `.es/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 3 | — | — | — | — |
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 2 | — | — | — | — |

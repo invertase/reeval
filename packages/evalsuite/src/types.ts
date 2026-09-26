@@ -668,7 +668,8 @@ export type EnvironmentRecord = {
  * An attempt's network traffic. `allowed` is every host a restricted policy let through, its own
  * and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see
  * the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the
- * sandbox and the egress gateway, TLS included.
+ * sandbox and the egress gateway, TLS included. `expectedBlocked` are refused hosts the harness
+ * always tries (its CLI's telemetry, say), kept out of `blocked` so a real block stands out.
  */
 export type EgressRecord = {
   policy: EgressPolicy
@@ -682,6 +683,7 @@ export type EgressRecord = {
     received: number
   }>
   blocked: Array<{ host: string; port: number; connections: number; reason: string }>
+  expectedBlocked: Array<{ host: string; port: number; connections: number; reason: string }>
 }
 
 /** The image an attempt's container started from, and how ES made it. */

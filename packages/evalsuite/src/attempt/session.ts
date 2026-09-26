@@ -1,7 +1,7 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
-import { brokeringFor } from '../harness/agents.ts'
+import { brokeringFor, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import { harnessId } from '../options.ts'
@@ -80,6 +80,7 @@ export async function startSession(
     env: env.vars,
     image: a.image,
     brokering: brokeringFor(spec.harness),
+    expectedBlocked: expectedBlockedFor(spec.harness)?.hosts,
     substitutions: env.substitutions,
     egress: spec.egress,
   })

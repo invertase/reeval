@@ -648,12 +648,19 @@ evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (
   cell of `--dry-run --json` has `egress: { policy, auto }`.
 - **Fingerprint:** a restricted policy is part of the environment digest (host order doesn't
   matter); `allow-all` leaves the digest as it was without the option.
-- **Record:** each attempt has `egress: { policy, allowed, recorded, contacted, blocked }`:
-  `allowed` is every host a restricted policy let through (null under `allow-all`),
-  `contacted` each `host:port` reached with its connections and bytes `sent` and `received`
-  (between the sandbox and the gateway, TLS included), and `blocked` each refused `host:port`
-  with its connections and the reason. `recorded: false` (the fake sandbox) leaves both empty.
-  The studio's attempt page shows it.
+- **Record:** each attempt has `egress: { policy, allowed, recorded, contacted, blocked,
+  expectedBlocked }`: `allowed` is every host a restricted policy let through (null under
+  `allow-all`), `contacted` each `host:port` reached with its connections and bytes `sent` and
+  `received` (between the sandbox and the gateway, TLS included), and `blocked` each refused
+  `host:port` with its connections and the reason. `recorded: false` (the fake sandbox) leaves
+  them empty. The studio's attempt page shows it.
+- **Expected blocks:** hosts a harness's CLI always tries and nothing needs are listed in the
+  harness catalog (`expectedBlocked` in `harness/agents.ts`). They're still refused, but they go
+  to `expectedBlocked` instead of `blocked`, and `-v` prints one `expected blocks` line at
+  teardown instead of a `gateway` line per request (`-vv` and `requests.ndjson` keep every
+  request). Antigravity's CLI 1.2.11 opens `play.googleapis.com` (Clearcut telemetry) and
+  `antigravity-unleash.goog` (feature flags) in every session. Neither `enableTelemetry: false`
+  nor any other setting or variable in the binary stops them.
 
 ## Judges
 

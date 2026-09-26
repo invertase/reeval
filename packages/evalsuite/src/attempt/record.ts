@@ -1,7 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { debugLog } from '../debug/attempt.ts'
 import { allowedHosts } from '../egress.ts'
 import { isTimeout } from '../errors.ts'
+import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
@@ -35,15 +37,27 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
 }
 
-/** The attempt's egress policy and, when its sandbox records it, what it contacted and was refused. */
+/**
+ * The attempt's egress policy and, when its sandbox records it, what it contacted and was refused.
+ * Refused hosts the harness always tries are `expectedBlocked`, summarised in one `-v` line.
+ */
 export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   const traffic = sandbox?.traffic?.()
+  const expected = expectedBlockedFor(a.spec.harness)
+  const refused = traffic?.blocked ?? []
+  const isExpected = (h: { host: string }) => !!expected?.hosts.includes(h.host)
+  const expectedBlocked = refused.filter(isExpected)
   a.record.egress = {
     policy: a.spec.egress.policy,
     allowed: allowedHosts(a.spec.egress),
     recorded: !!traffic,
     contacted: traffic?.contacted ?? [],
-    blocked: traffic?.blocked ?? [],
+    blocked: refused.filter((h) => !isExpected(h)),
+    expectedBlocked,
+  }
+  if (expected && expectedBlocked.length) {
+    const hosts = expectedBlocked.map((h) => `${h.host}:${h.port} ×${h.connections}`).join(', ')
+    debugLog('gateway', `expected blocks, not logged per request: ${hosts} · ${expected.why}`)
   }
 }
 

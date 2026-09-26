@@ -597,6 +597,58 @@ evaluate('installs', { environment: es, timeout: '6m' }, async (t) => {
   })
 
   test(
+    "-v summarises a harness's expected blocked hosts once, and -vv still lists each request",
+    docker,
+    async () => {
+      const curl = [
+        'curl -s -o /dev/null https://play.googleapis.com/log',
+        'curl -s -o /dev/null https://play.googleapis.com/log',
+        'curl -s -o /dev/null https://antigravity-unleash.goog/api/',
+        'curl -s -o /dev/null http://blocked.invalid/',
+        'true',
+      ].join('; ')
+      const p = await project('docker-expected-blocked', {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({
+  harness: fakeHarness({ layout: 'antigravity', script: [[{ exec: ${JSON.stringify(curl)} }]] }),
+  sandbox: docker(),
+  egress: 'deny-all',
+})
+`,
+        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('calls home', async (t) => {
+  await t.send('call home')
+})
+`,
+      })
+      const v = await runCli(p.dir, ['run', '-v'], slow)
+      assert.equal(v.code, 0, v.stdout + v.stderr)
+      const gateway = v.stdout.split('\n').filter((l) => / gateway {3}/.test(l))
+      assert.deepEqual(
+        gateway
+          .filter((l) => /play\.googleapis|antigravity-unleash/.test(l))
+          .map((l) => l.replace(/^.*? gateway {3}/, '')),
+        [
+          "expected blocks, not logged per request: antigravity-unleash.goog:443 ×1, play.googleapis.com:443 ×2 · Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
+        ],
+      )
+      assert.ok(
+        gateway.some((l) => /GET http:\/\/blocked\.invalid:80\/ → 403 · blocked: /.test(l)),
+        'a host nothing expects still gets its own line',
+      )
+      const vv = await runCli(p.dir, ['run', '-vv'], slow)
+      assert.equal(vv.code, 0, vv.stdout + vv.stderr)
+      assert.equal(
+        vv.stdout.match(/ gateway {3}CONNECT play\.googleapis\.com:443 → 403 · blocked: /g)?.length,
+        2,
+        '-vv keeps every request',
+      )
+    },
+  )
+
+  test(
     '-v and -vv trace the image, container, brokering, gateway and docker commands',
     docker,
     async () => {

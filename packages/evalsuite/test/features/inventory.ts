@@ -458,6 +458,7 @@ export const inventory: InventoryFeature[] = [
       'egress/deny-all',
       'egress/secret-hosts-allowed',
       'egress/harness-under-deny-all',
+      'egress/expected-blocked',
     ],
     plan: ['egress/cascade', 'egress/profile-defaults'],
     tests: [
@@ -682,6 +683,7 @@ export const inventory: InventoryFeature[] = [
       debug('grouped logs keep each attempt’s debug lines in its own block'),
       debug('agent mode prints -v lines too, under the attempt tag'),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
+      docker("-v summarises a harness's expected blocked hosts once"),
       unit("the -v broker line names each brokered endpoint's path matcher"),
       sandboxDocker(
         'proxy',
