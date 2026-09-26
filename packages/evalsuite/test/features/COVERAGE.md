@@ -27,7 +27,7 @@
 | `limit.compare.maxVariants` **(gap)** | — | — | — | — | — |
 | `es run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 2 | ✓ 1 | — | — | — |
-| `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 4 | ✓ 1 | — | — | — |
+| `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 5 | ✓ 1 | — | — | — |
 | `group.skip` and `group.todo` **(gap)** | — | — | — | — | — |
 | Tags: `--tag`, `!tag` and profile tags | ✓ 1 | ✓ 1 | — | — | — |
 | Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2 | ✓ 5 | ✓ 1 | — | — | — |
@@ -99,7 +99,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 3 | — | — | — | — |
 | A real judge model call **(gap)** | — | — | — | — | — |
-| `toHaveFile`, `toSucceed` and `toPass` | ✓ 3 | — | — | — | — |
+| `toHaveFile`, `toSucceed` and `toPass` | ✓ 4 | — | — | — | — |
 
 ## Records and studio
 

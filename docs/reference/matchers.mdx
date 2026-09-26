@@ -18,6 +18,8 @@ evaluate('creates a tested greet module', async (t) => {
 
 `expect` is Vitest's, so its own matchers (`toBe`, `toContain`, `toMatch`, `toHaveLength`, `.not`, …) work too. A failed matcher fails the attempt.
 
+`toHaveFile`, `toSucceed` and `.resolves`/`.rejects` are async. One you don't `await` still runs before the sandbox is torn down, but it fails the attempt, with its own failure or with `expect(…).toSucceed() wasn't awaited`.
+
 ## toHaveFile
 
 ```ts

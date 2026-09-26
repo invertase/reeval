@@ -510,6 +510,16 @@ describe('common mistakes', () => {
       /Unknown option "repeat" .*Did you mean "runs"\?/,
     ],
     [
+      'two evals with the same name',
+      `evaluate('e', async () => {}); evaluate('e', { runs: 2 }, async () => {})`,
+      /evaluate\("e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\./,
+    ],
+    [
+      'evaluate.for cases with the same name',
+      `evaluate.for([{ a: 1, b: 2 }, { a: 1, b: 3 }])('adds $a', async () => {})`,
+      /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.for, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,

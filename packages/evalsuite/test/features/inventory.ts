@@ -164,6 +164,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       options('.only runs alone locally and exits 2 in CI'),
       options('tags filter, todo, for'),
+      options('common mistakes'),
       engine('skip is reported as skipped'),
       'evalsuite/test/plan.test.ts › .only in CI exits 2 before any plan prints',
     ],
@@ -661,6 +662,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/matchers.test.ts › passes when the file exists',
       'evalsuite/test/matchers.test.ts › passes on exit 0',
       'evalsuite/test/matchers.test.ts › passes on a pass verdict',
+      engine('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown'),
     ],
   },
 
