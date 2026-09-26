@@ -113,6 +113,46 @@ export default defineConfig({
     assert.ok(!existsSync(join(p.dir, '.es/runs')), 'no run written')
   })
 
+  for (const [what, body, message] of [
+    ['throws', `throw new Error('boom at import')`, /evals\/bad\.es\.ts: boom at import/],
+    ['imports a missing file', `import './nope.ts'`, /evals\/bad\.es\.ts: .*nope\.ts/],
+    [
+      'has a syntax error',
+      `evaluate('f' async () => {})`,
+      /evals\/bad\.es\.ts: Transform failed[\s\S]*Expected `,` or `\)`/,
+    ],
+  ] as const) {
+    test(`an eval file that ${what} exits 2 naming it, next to a good file`, async () => {
+      const p = await project('bad-eval-file', {
+        'es.config.ts': fakeConfig(),
+        'evals/good.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('good', async () => {})\n`,
+        'evals/bad.es.ts': `import { evaluate } from 'evalsuite'\n${body}\nevaluate('bad', async () => {})\n`,
+      })
+      for (const args of [['run'], ['run', '--dry-run']]) {
+        const r = await runCli(p.dir, args)
+        assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
+        assert.match(r.stderr, message)
+        assert.ok(!existsSync(join(p.dir, '.es/runs')), 'no run written')
+      }
+    })
+  }
+
+  test('a tsconfig that extends a missing file fails every eval file loudly, once', async () => {
+    const p = await project('bad-tsconfig', {
+      'es.config.ts': fakeConfig(),
+      'tsconfig.json': '{ "extends": "../../tsconfig.base.json" }',
+      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async () => {})\n`,
+      'evals/b.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('b', async () => {})\n`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /2 eval files failed to load:\nevals\/a\.es\.ts, evals\/b\.es\.ts: [\s\S]*Failed to load tsconfig '\.\.\/\.\.\/tsconfig\.base\.json'/,
+    )
+    assert.equal(r.stderr.includes('\u001b['), false, 'no terminal colours')
+  })
+
   test('groups nest, cascade options and appear in ids and result.json', async () => {
     const p = await project('groups', {
       'es.config.ts': fakeConfig(),
@@ -241,7 +281,10 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     const empty = await project('empty', { 'es.config.ts': fakeConfig() })
     const none = await runCli(empty.dir)
     assert.equal(none.code, 2)
-    assert.match(none.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts/)
+    assert.match(
+      none.stderr,
+      /No eval files match evals\/\*\*\/\*\.es\.ts \(config\.include\) in \S*empty\S*\. Name eval files to match it, or set include in es\.config\.ts\./,
+    )
 
     assert.equal((await runCli(empty.dir, ['run', '--config', 'missing.ts'])).code, 2)
     assert.equal((await runCli(empty.dir, ['bogus'])).code, 2)

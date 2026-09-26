@@ -636,6 +636,11 @@ async function executeRun(
   } finally {
     clearTimeout(budgetTimer)
   }
+  if (engineRun.noFiles && !filters.length && !tags.length) {
+    throw new UsageError(
+      `No eval files match ${config.include.join(', ')} (config.include) in ${config.root}. Name eval files to match it, or set include in es.config.ts.`,
+    )
+  }
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted)) {
     throw noMatch(config, filters, tags)
   }
