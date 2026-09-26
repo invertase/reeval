@@ -250,13 +250,13 @@ export const inventory: InventoryFeature[] = [
     id: 'skill.registry',
     area: 'Environments',
     name: '`skill.registry`',
-    gap: 'No test: it needs a fake registry.',
+    fixtures: ['skills/registry-version'],
   },
   {
     id: 'skill.npm',
     area: 'Environments',
     name: '`skill.npm`',
-    gap: 'No test: it needs a local tarball or registry.',
+    fixtures: ['skills/npm-package'],
   },
   {
     id: 'skill.exclude',
@@ -272,7 +272,7 @@ export const inventory: InventoryFeature[] = [
     id: 'skill.only-missing',
     area: 'Environments',
     name: '`only` naming a missing skill',
-    gap: 'The error (environment/resolve.ts) has no test.',
+    fixtures: ['skills/only-missing'],
   },
   {
     id: 'skill.frontmatter',
