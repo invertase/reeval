@@ -1,13 +1,25 @@
 import { spawn } from 'node:child_process'
 import { type RunResult, run } from './process.ts'
+import { traceDocker } from './trace.ts'
 
 export type DockerResult = RunResult<Buffer>
 
 /** Runs the docker CLI. `env` values are passed via the CLI's environment, never argv. */
-export const docker = (
+export async function docker(
   args: string[],
   options: { input?: Uint8Array | string; env?: Record<string, string>; signal?: AbortSignal } = {},
-): Promise<DockerResult> => run('docker', args, { ...options, binary: true })
+): Promise<DockerResult> {
+  const startedAt = Date.now()
+  const stdin = options.input?.length ?? 0
+  try {
+    const r = await run('docker', args, { ...options, binary: true })
+    traceDocker(args, startedAt, { ...r, stdin })
+    return r
+  } catch (error) {
+    traceDocker(args, startedAt, { error })
+    throw error
+  }
+}
 
 export async function dockerOk(args: string[], opts?: Parameters<typeof docker>[1]) {
   const r = await docker(args, opts)
@@ -20,12 +32,15 @@ export function removeContainerDetached(id: string): Promise<void> {
   return new Promise((resolve) => {
     // A detached child doesn't keep the event loop alive on its own.
     const keepAlive = setInterval(() => {}, 1000)
-    const done = () => {
+    const startedAt = Date.now()
+    const args = ['rm', '-f', id]
+    const done = (exitCode: number | null) => {
       clearInterval(keepAlive)
+      traceDocker(args, startedAt, { exitCode })
       resolve()
     }
-    const child = spawn('docker', ['rm', '-f', id], { detached: true, stdio: 'ignore' })
-    child.on('error', done)
+    const child = spawn('docker', args, { detached: true, stdio: 'ignore' })
+    child.on('error', () => done(null))
     child.on('close', done)
   })
 }

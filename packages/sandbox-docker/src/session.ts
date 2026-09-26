@@ -10,6 +10,7 @@ import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
 import { shellQuote as q } from './process.ts'
+import { traceDocker } from './trace.ts'
 
 /** Starts the egress gateway: credential brokering, and an enforceable network policy. */
 export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
@@ -239,13 +240,18 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     async spawn(o) {
       const env = envFor(o.env)
       const marker = nextMarker()
-      const child = spawn('docker', execArgs(o.command, marker, o.workingDirectory, env), {
+      const args = execArgs(o.command, marker, o.workingDirectory, env)
+      const startedAt = Date.now()
+      const child = spawn('docker', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: true,
         env: env ? { ...process.env, ...env } : process.env,
       })
       const exited = new Promise<{ exitCode: number }>((resolve) =>
-        child.on('close', (code) => resolve({ exitCode: code ?? 1 })),
+        child.on('close', (code) => {
+          traceDocker(args, startedAt, { exitCode: code, stdout: '<streamed>' })
+          resolve({ exitCode: code ?? 1 })
+        }),
       )
       const kill = async () => {
         child.kill('SIGKILL')

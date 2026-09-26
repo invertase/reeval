@@ -35,7 +35,13 @@ export {
   type NetworkPolicy,
   PACKAGE_HOSTS,
 } from './egress/policy.ts'
-export type { BlockedHost, ContactedHost, EgressTraffic } from './egress/proxy.ts'
+export type {
+  BlockedHost,
+  ContactedHost,
+  EgressEvent,
+  EgressRequestEvent,
+  EgressTraffic,
+} from './egress/proxy.ts'
 export {
   applyTransformations,
   type EndpointMatch,
@@ -67,3 +73,4 @@ export {
   type EgressStatus,
   type SessionOptions,
 } from './session.ts'
+export { type DockerCommand, onDockerCommand } from './trace.ts'

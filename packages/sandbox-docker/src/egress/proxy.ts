@@ -2,7 +2,7 @@ import http, { type IncomingHttpHeaders, type OutgoingHttpHeaders } from 'node:h
 import http2 from 'node:http2'
 import https from 'node:https'
 import net from 'node:net'
-import type { Duplex, Readable, Transform } from 'node:stream'
+import { type Duplex, type Readable, Transform } from 'node:stream'
 import tls from 'node:tls'
 import { type CertificateAuthority, issueServerCertificate } from './cert.ts'
 import { link } from './mux.ts'
@@ -63,7 +63,43 @@ export type EgressProxyOptions = {
    * with placeholders, and the real tokens are swapped back in on their hosts, in headers only.
    */
   derivedTokens?: readonly DerivedTokens[]
+  /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
+  onEvent?: (event: EgressEvent) => void
 }
+
+type Headers = Record<string, string | string[]>
+
+/** One request through the gateway, or one tunnel it passed through without reading. */
+export type EgressRequestEvent = {
+  type: 'request'
+  method: string
+  /** `https://host/path` or `http://host:port/path`, without the query; `host:port` for a tunnel. */
+  url: string
+  host: string
+  port: number
+  /** `tunnel`: CONNECT passed through end to end; `decrypted`: read by the gateway; `http`: plain. */
+  via: 'tunnel' | 'decrypted' | 'http'
+  allowed: boolean
+  status?: number
+  /** Why it was refused. */
+  reason?: string
+  /** Body bytes from the sandbox and to it (a tunnel's are the connection's, TLS included). */
+  sent: number
+  received: number
+  /** Brokered secrets swapped into the request, by name. */
+  substituted: string[]
+  /** Credential headers the gateway set (the harness's key), by name. */
+  credentials: string[]
+  ms: number
+  /** As the sandbox sent them: placeholders, never real values. */
+  requestHeaders?: Headers
+  /** As the sandbox got them, scrubbed. */
+  responseHeaders?: Headers
+}
+
+export type EgressEvent =
+  | { type: 'dns'; host: string; allowed: boolean; address?: string; reason?: string }
+  | EgressRequestEvent
 
 /**
  * A host the sandbox reached through the gateway. `sent` and `received` are the bytes between the
@@ -94,6 +130,20 @@ export type EgressProxy = {
 }
 
 type Target = { host: string; port: number; address: string }
+
+type RequestTracker = {
+  refuse(reason: string): void
+  set(
+    fields: Partial<
+      Pick<
+        EgressRequestEvent,
+        'substituted' | 'credentials' | 'responseHeaders' | 'status' | 'reason'
+      >
+    >,
+  ): void
+  sent(bytes: number): void
+  received(bytes: number): void
+}
 /** HTTP/1.1 and HTTP/2 compatibility responses share this surface. */
 type Response = http.ServerResponse
 
@@ -133,8 +183,29 @@ function reply(socket: Duplex, status: number, reason: string) {
   )
 }
 
+/** Counts the bytes passing through, without changing the flow. */
+const counter = (count: (n: number) => void) =>
+  new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      count(chunk.length)
+      done(null, chunk)
+    },
+  })
+
+const plainHeaders = (headers: IncomingHttpHeaders | OutgoingHttpHeaders): Headers =>
+  Object.fromEntries(
+    Object.entries(headers).flatMap(([k, v]) =>
+      v === undefined ? [] : [[k, Array.isArray(v) ? v.map(String) : String(v)]],
+    ),
+  )
+
 export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const log = options.log ?? (() => {})
+  const emit = (event: EgressEvent) => {
+    try {
+      options.onEvent?.(event)
+    } catch {}
+  }
   let rules: RequestTransformation[] = []
   let subs: Substitution[] = []
   /** Substitutions for derived tokens, added as their exchanges answer; kept by setSubstitutions. */
@@ -142,7 +213,18 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const allSubs = () => (tokens.length ? [...subs, ...tokens] : subs)
   const derived = options.derivedTokens ?? []
   const tokenHosts = derived.flatMap((d) => [d.endpoint.host, ...d.hosts])
-  let check = createPolicyCheck(options.policy, options)
+  let policyCheck = createPolicyCheck(options.policy, options)
+  const check = async (host: string) => {
+    const verdict = await policyCheck(host)
+    emit(
+      verdict.allowed
+        ? { type: 'dns', host, allowed: true, address: verdict.address }
+        : { type: 'dns', host, allowed: false, reason: verdict.reason },
+    )
+    return verdict
+  }
+  /** Bytes each sandbox connection carried, both ways, for its tunnel's event. */
+  const carried = new WeakMap<Duplex, { sent: number; received: number }>()
   const leaves = new Map<string, { key: string | Buffer; cert: string }>()
   const open = new Set<Duplex>()
   const sessions = new Map<string, http2.ClientHttp2Session>()
@@ -183,10 +265,13 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   }
   /** Counts what the connection carries each way, without reading it or changing its flow. */
   const countBytes = (connection: Duplex) => {
+    const total = { sent: 0, received: 0 }
+    carried.set(connection, total)
     const push = connection.push.bind(connection)
     connection.push = (chunk: unknown, encoding?: BufferEncoding) => {
       const entry = counting.get(connection)
       const n = chunk ? Buffer.byteLength(chunk as Buffer) : 0
+      total.sent += n
       if (entry) entry.sent += n
       else unclaimed.set(connection, (unclaimed.get(connection) ?? 0) + n)
       return push(chunk, encoding)
@@ -194,7 +279,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const write = connection.write.bind(connection) as (...args: unknown[]) => boolean
     connection.write = ((chunk: unknown, ...rest: unknown[]) => {
       const entry = counting.get(connection)
-      if (entry && chunk) entry.received += Buffer.byteLength(chunk as Buffer)
+      const n = chunk ? Buffer.byteLength(chunk as Buffer) : 0
+      total.received += n
+      if (entry) entry.received += n
       return write(chunk, ...rest)
     }) as Duplex['write']
   }
@@ -202,6 +289,45 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     [...entries]
       .map((e) => ({ ...e }))
       .sort((a, b) => a.host.localeCompare(b.host) || a.port - b.port)
+
+  /** Collects one request's event as it goes, and emits it when the response closes. */
+  const requestEvent = (
+    res: Response,
+    base: Pick<EgressRequestEvent, 'method' | 'url' | 'host' | 'port' | 'via' | 'requestHeaders'>,
+  ): RequestTracker => {
+    const startedAt = Date.now()
+    const event: EgressRequestEvent = {
+      type: 'request',
+      ...base,
+      allowed: true,
+      sent: 0,
+      received: 0,
+      substituted: [],
+      credentials: [],
+      ms: 0,
+    }
+    let emitted = false
+    res.once('close', () => {
+      if (emitted) return
+      emitted = true
+      emit({ ...event, status: event.status ?? res.statusCode, ms: Date.now() - startedAt })
+    })
+    return {
+      refuse(reason) {
+        event.allowed = false
+        event.reason = reason
+      },
+      set(fields) {
+        Object.assign(event, fields)
+      },
+      sent: (n) => {
+        event.sent += n
+      },
+      received: (n) => {
+        event.received += n
+      },
+    }
+  }
 
   const credentialsFor = (host: string) => {
     let creds = leaves.get(host)
@@ -219,10 +345,31 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   const front = http.createServer()
   front.on('connect', (req: http.IncomingMessage, socket: Duplex, head: Buffer) => {
     const { host, port } = parseAuthority(req.url ?? '', 443)
+    const startedAt = Date.now()
+    const tunnel = {
+      type: 'request' as const,
+      method: 'CONNECT',
+      url: `${host}:${port}`,
+      host,
+      port,
+      via: 'tunnel' as const,
+      substituted: [],
+      credentials: [],
+      requestHeaders: plainHeaders(req.headers),
+    }
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`es:egress CONNECT ${host}:${port} denied (${verdict.reason})`)
         block(socket, host, port, verdict.reason)
+        emit({
+          ...tunnel,
+          allowed: false,
+          status: verdict.status,
+          reason: verdict.reason,
+          sent: 0,
+          received: 0,
+          ms: Date.now() - startedAt,
+        })
         return reply(socket, verdict.status, `blocked by the ES egress policy: ${verdict.reason}`)
       }
       contact(socket, host, port)
@@ -234,6 +381,21 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         return decrypt(socket, target)
       }
       log(`es:egress CONNECT ${host}:${port} tunnel`)
+      let status = 200
+      let reason: string | undefined
+      const before = { ...(carried.get(socket) ?? { sent: 0, received: 0 }) }
+      socket.once('close', () => {
+        const after = carried.get(socket) ?? before
+        emit({
+          ...tunnel,
+          allowed: true,
+          status,
+          ...(reason ? { reason } : {}),
+          sent: after.sent - before.sent,
+          received: after.received - before.received,
+          ms: Date.now() - startedAt,
+        })
+      })
       const upstream = track(net.connect({ host: target.address, port, allowHalfOpen: true }))
       upstream.once('connect', () => {
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
@@ -242,6 +404,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       })
       upstream.once('error', (error) => {
         log(`es:egress CONNECT ${host}:${port} failed (${error.message})`)
+        status = 502
+        reason = `couldn't reach ${host}:${port}: ${error.message}`
         reply(socket, 502, `ES egress gateway couldn't reach ${host}:${port}: ${error.message}`)
       })
     })
@@ -258,10 +422,19 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     if (url.protocol !== 'http:') return res.writeHead(400).end('ES egress gateway: http only\n')
     const { host, port } = parseAuthority(url.host, 80)
+    const done = requestEvent(res, {
+      method: req.method ?? 'GET',
+      url: `http://${host}:${port}${url.pathname}`,
+      host,
+      port,
+      via: 'http',
+      requestHeaders: plainHeaders(req.headers),
+    })
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
         log(`es:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
         block(req.socket, host, port, verdict.reason)
+        done.refuse(verdict.reason)
         return res
           .writeHead(verdict.status)
           .end(`blocked by the ES egress policy: ${verdict.reason}\n`)
@@ -275,7 +448,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         path: url.pathname + url.search,
         headers: { ...endToEnd(req.headers), host: url.host },
       })
-      forwardHttp1(req, res, upstream)
+      forwardHttp1(req.pipe(counter(done.sent)), res, upstream, [], undefined, done)
     })
   })
   front.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => {
@@ -313,6 +486,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     headers: OutgoingHttpHeaders
     path: string
     own: Substitution[]
+    /** Brokered secrets substituted, and credential headers set, by name. */
+    names: string[]
+    credentials: string[]
     refused?: { status: number; reason: string }
     /** Set when this is a token exchange, whose response gets placeholders for its tokens. */
     exchange?: DerivedTokens
@@ -322,7 +498,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     if (named && asked !== target.host) {
       const reason = `ES egress gateway: the request names ${asked}, but the connection is to ${target.host}; send it on a connection to ${asked}.`
       log(`es:egress ${method} https://${target.host}${pathOnly(path)} refused (Host ${asked})`)
-      return { headers: {}, path, own: [], refused: { status: 421, reason } }
+      return {
+        headers: {},
+        path,
+        own: [],
+        names: [],
+        credentials: [],
+        refused: { status: 421, reason },
+      }
     }
     const {
       headers: out,
@@ -346,6 +529,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         headers: {},
         path,
         own: [],
+        names: [],
+        credentials: [],
         refused: {
           status: 403,
           reason: `ES egress gateway: refused ${method} ${url}. It carries a brokered credential, and it isn't one of the endpoints ES brokers it for.`,
@@ -372,6 +557,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       headers: substituted.headers as OutgoingHttpHeaders,
       path: substituted.path,
       own,
+      names: substituted.names,
+      credentials: replaced,
       ...(exchange ? { exchange } : {}),
     }
   }
@@ -384,17 +571,24 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     req: Readable,
     headers: OutgoingHttpHeaders,
     own: Substitution[],
+    t?: RequestTracker,
   ): Readable | Transform {
+    const counted = t ? req.pipe(counter(t.sent)) : req
     const encoded = String(headers['content-encoding'] ?? 'identity') !== 'identity'
-    if (encoded || !own.some((s) => s.in.includes('body'))) return req
+    if (encoded || !own.some((s) => s.in.includes('body'))) return counted
     delete headers['content-length']
-    return req.pipe(bodySubstituter(own))
+    return counted.pipe(bodySubstituter(own))
   }
 
   /** The response body as sent to the sandbox: real values put back as placeholders. */
   const scrubs = options.scrubResponses !== false
-  function responseBody(up: Readable, own: Substitution[]): Readable | Transform {
-    return scrubbedInBodies(own).length && scrubs ? up.pipe(scrubber(own)) : up
+  function responseBody(
+    up: Readable,
+    own: Substitution[],
+    t?: RequestTracker,
+  ): Readable | Transform {
+    const body = scrubbedInBodies(own).length && scrubs ? up.pipe(scrubber(own)) : up
+    return t ? body.pipe(counter(t.received)) : body
   }
 
   const responseHeaders = (headers: IncomingHttpHeaders, own: Substitution[]) => {
@@ -419,6 +613,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     up: Readable,
     res: Response,
     own: Substitution[],
+    t?: RequestTracker,
   ) {
     const chunks: Buffer[] = []
     let size = 0
@@ -431,7 +626,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
 `)
       } else res.destroy()
     }
-    const scrubbed = responseBody(up, own)
+    const scrubbed = responseBody(up, own, t)
     scrubbed.on('data', (chunk: Buffer) => {
       size += chunk.length
       if (size <= EXCHANGE_LIMIT) chunks.push(chunk)
@@ -440,6 +635,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     scrubbed.once('end', () => {
       const body = Buffer.concat(chunks)
       const out = responseHeaders(headers, own)
+      t?.set({ responseHeaders: plainHeaders(out) })
       if (status < 200 || status >= 300) return res.writeHead(status, out).end(body)
       const encoding = String(headers['content-encoding'] ?? 'identity')
       if (encoding !== 'identity') return refuse(`the response is ${encoding}-encoded`)
@@ -464,15 +660,25 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     res: Response,
   ) {
     const method = req.method ?? 'GET'
-    const { headers, path, own, refused, exchange } = transformed(
+    const url = `https://${target.host}${pathOnly(req.url ?? '/')}`
+    const t = requestEvent(res, {
+      method,
+      url,
+      host: target.host,
+      port: target.port,
+      via: 'decrypted',
+      requestHeaders: plainHeaders(req.headers),
+    })
+    const { headers, path, own, names, credentials, refused, exchange } = transformed(
       target,
       method,
       req.url ?? '/',
       req.headers,
       req.httpVersion,
     )
-    const url = `https://${target.host}${pathOnly(req.url ?? '/')}`
+    t.set({ substituted: names, credentials })
     if (refused) {
+      t.refuse(refused.reason)
       req.resume()
       return res
         .writeHead(refused.status, { 'content-type': 'text/plain' })
@@ -480,7 +686,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     delete headers.upgrade
     delete headers.connection
-    const body = requestBody(req as Readable, headers, own)
+    const body = requestBody(req as Readable, headers, own, t)
     const authority = target.port === 443 ? target.host : `${target.host}:${target.port}`
     const session = req.httpVersionMajor === 2 ? await upstreamSession(target) : null
     if (!session) {
@@ -494,7 +700,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         agent,
         ca,
       })
-      return forwardHttp1(body, res, upstream, own, exchange && { exchange, url })
+      return forwardHttp1(body, res, upstream, own, exchange && { exchange, url }, t)
     }
     const stream = session.request({
       ...headers,
@@ -509,12 +715,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     stream.once('error', fail)
     stream.once('response', (h) => {
-      if (exchange) return tokenised(exchange, url, Number(h[':status']), h, stream, res, own)
-      res.writeHead(Number(h[':status']), responseHeaders(h, own))
-      stream.once('trailers', (t) =>
-        res.addTrailers(responseHeaders(t, own) as Record<string, string>),
+      if (exchange) return tokenised(exchange, url, Number(h[':status']), h, stream, res, own, t)
+      const out = responseHeaders(h, own)
+      t.set({ responseHeaders: plainHeaders(out) })
+      res.writeHead(Number(h[':status']), out)
+      stream.once('trailers', (trailers) =>
+        res.addTrailers(responseHeaders(trailers, own) as Record<string, string>),
       )
-      responseBody(stream, own).pipe(res)
+      responseBody(stream, own, t).pipe(res)
     })
     body.pipe(stream)
     req.once('aborted', () => stream.close(http2.constants.NGHTTP2_CANCEL))
@@ -526,21 +734,25 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     upstream: http.ClientRequest,
     own: Substitution[] = [],
     tokenise?: { exchange: DerivedTokens; url: string },
+    t?: RequestTracker,
   ) {
     upstream.once('response', (up) => {
       if (tokenise) {
         const { exchange, url } = tokenise
-        return tokenised(exchange, url, up.statusCode ?? 502, up.headers, up, res, own)
+        return tokenised(exchange, url, up.statusCode ?? 502, up.headers, up, res, own, t)
       }
-      res.writeHead(up.statusCode ?? 502, responseHeaders(up.headers, own))
+      const out = responseHeaders(up.headers, own)
+      t?.set({ responseHeaders: plainHeaders(out) })
+      res.writeHead(up.statusCode ?? 502, out)
       up.once('end', () => {
         if (Object.keys(up.trailers).length) {
           res.addTrailers(responseHeaders(up.trailers, own) as Record<string, string>)
         }
       })
-      responseBody(up, own).pipe(res)
+      responseBody(up, own, t).pipe(res)
     })
     upstream.once('error', (error) => {
+      t?.set({ status: 502, reason: error.message })
       if (!res.headersSent) res.writeHead(502).end(`ES egress gateway: ${error.message}\n`)
       else res.destroy()
     })
@@ -549,14 +761,35 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
 
   function onUpgrade(target: Target, req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     const method = req.method ?? 'GET'
-    const { headers, path, refused } = transformed(
+    const startedAt = Date.now()
+    const { headers, path, names, credentials, refused } = transformed(
       target,
       method,
       req.url ?? '/',
       req.headers,
       req.httpVersion,
     )
-    if (refused) return reply(socket, refused.status, refused.reason)
+    const upgraded = (fields: Partial<EgressRequestEvent>) =>
+      emit({
+        type: 'request',
+        method,
+        url: `https://${target.host}${pathOnly(req.url ?? '/')}`,
+        host: target.host,
+        port: target.port,
+        via: 'decrypted',
+        allowed: true,
+        sent: 0,
+        received: 0,
+        substituted: names,
+        credentials,
+        requestHeaders: plainHeaders(req.headers),
+        ...fields,
+        ms: Date.now() - startedAt,
+      })
+    if (refused) {
+      upgraded({ allowed: false, status: refused.status, reason: refused.reason })
+      return reply(socket, refused.status, refused.reason)
+    }
     const upstream = https.request({
       host: target.address,
       servername: net.isIP(target.host) ? undefined : target.host,
@@ -567,6 +800,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       ca,
     })
     upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
+      upgraded({ status: up.statusCode, responseHeaders: plainHeaders(up.headers) })
       const lines = [`HTTP/1.1 ${up.statusCode} ${up.statusMessage}`]
       for (let i = 0; i < up.rawHeaders.length; i += 2) {
         lines.push(`${up.rawHeaders[i]}: ${up.rawHeaders[i + 1]}`)
@@ -628,7 +862,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       rules = [...all]
     },
     setPolicy(policy) {
-      check = createPolicyCheck(policy, options)
+      policyCheck = createPolicyCheck(policy, options)
     },
     setSubstitutions(all) {
       subs = [...all]

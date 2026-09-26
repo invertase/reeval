@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import net from 'node:net'
 import { Duplex } from 'node:stream'
 import { docker } from '../docker-cli.ts'
+import { traceDocker } from '../trace.ts'
 import { createCertificateAuthority } from './cert.ts'
 import { createMux, forwarderScript, link } from './mux.ts'
 import type { NetworkPolicy } from './policy.ts'
@@ -66,12 +67,11 @@ export async function startGateway(
   }
   const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
   const proxy = createEgressProxy({ ...options, ca })
-  const child = spawn(
-    'docker',
-    ['exec', '--interactive', containerId, 'node', '-e', forwarderScript(PROXY_PORT)],
-    // Own process group, like every docker call: ES handles Ctrl-C and tears the gateway down.
-    { stdio: 'pipe', detached: true },
-  )
+  const args = ['exec', '--interactive', containerId, 'node', '-e', forwarderScript(PROXY_PORT)]
+  const startedAt = Date.now()
+  // Own process group, like every docker call: ES handles Ctrl-C and tears the gateway down.
+  const child = spawn('docker', args, { stdio: 'pipe', detached: true })
+  child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }))
   let stderr = ''
   child.stderr.on('data', (d) => {
     stderr += d
