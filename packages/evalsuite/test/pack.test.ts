@@ -106,6 +106,38 @@ evaluate('hello', async (t) => {
   ])
   assert.equal(loaded.status, 0, loaded.stderr)
 
+  // What users and Vitest load (every export, setup.js and worker-signals.js) never reaches
+  // cli.js, whose import runs the CLI, following import() as well as static imports.
+  const reached = (entry: string, dynamic = true) => {
+    const via = new Map<string, string | null>([[entry, null]])
+    const pattern = dynamic
+      ? /(?:\bfrom\s*|\bimport\s*\(\s*)"(\.\.?\/[^"]+)"/g
+      : /\bfrom\s*"(\.\.?\/[^"]+)"/g
+    for (const file of via.keys()) {
+      for (const m of source(file).matchAll(pattern)) {
+        const target = posix.join(posix.dirname(file), m[1] as string)
+        if (!via.has(target)) via.set(target, file)
+      }
+    }
+    return via
+  }
+  const entries = [
+    ...Object.values(manifest.exports as Record<string, string | { default: string }>).flatMap(
+      (target) => (typeof target === 'string' ? [] : [target.default.replace(/^\.\/dist\//, '')]),
+    ),
+    'setup.js',
+    'worker-signals.js',
+  ]
+  assert.ok(entries.includes('harness.js') && entries.includes('view/index.js'), entries.join())
+  for (const entry of entries) {
+    const via = reached(entry)
+    const path: string[] = []
+    for (let f: string | null | undefined = 'cli.js'; f; f = via.get(f)) path.unshift(f)
+    assert.equal(via.has('cli.js'), false, `${entry} reaches cli.js: ${path.join(' → ')}`)
+  }
+  // The canary: the walk follows import(), which is how the CLI loads most of itself.
+  assert.ok(reached('cli.js').size > reached('cli.js', false).size)
+
   if (hasDocker) {
     // `es image build` builds Cursor's image from the docker/ directory in the installed package.
     await writeFile(
