@@ -75,9 +75,18 @@ function exitCodes() {
   return [...match[1].matchAll(/(\w+): (\d+)/g)].map((m) => ({ name: m[1], code: Number(m[2]) }))
 }
 
-function cliOptions() {
-  const block = /options: \{([\s\S]*?)\n {4}\},\n {2}\}\)/.exec(read(join(src, 'cli.ts')))
-  return [...block[1].matchAll(/^ {6}'?([a-z-]+)'?: \{/gm)].map((m) => m[1])
+/** Every command's flags, from the spec `es` parses its own arguments from. */
+async function cliCommands() {
+  const spec = join(root, 'packages/evalsuite/dist/cli-spec.js')
+  if (!existsSync(spec)) return null
+  const { COMMANDS } = await import(spec)
+  const out = new Map()
+  for (const [name, command] of Object.entries(COMMANDS)) {
+    if (!command.sub || command.flags?.length) out.set(name, command.flags ?? [])
+    for (const [sub, spec] of Object.entries(command.sub ?? {}))
+      out.set(`${name} ${sub}`, spec.flags)
+  }
+  return out
 }
 
 function esVariables() {
@@ -378,8 +387,22 @@ const page = (href) => {
 }
 const mentions = (text, token) => text.includes(token)
 
-for (const flag of cliOptions()) {
-  if (!help.includes(`--${flag}`)) problems.push(`es --help doesn't mention --${flag}`)
+const commands = await cliCommands()
+const sections = helpSections(help)
+const GLOBAL_FLAGS = ['config', 'help', 'version']
+if (!commands) problems.push('packages/evalsuite/dist/cli-spec.js is missing: rebuild')
+for (const [name, flags] of commands ?? []) {
+  const section = sections.get(name)
+  if (!section) {
+    problems.push(`es --help has no section for es ${name}`)
+    continue
+  }
+  const text = section.join('\n')
+  for (const flag of flags) {
+    if (!GLOBAL_FLAGS.includes(flag) && !text.includes(`--${flag}`)) {
+      problems.push(`es --help doesn't list --${flag} under es ${name}`)
+    }
+  }
 }
 
 const optionsPage =

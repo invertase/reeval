@@ -200,6 +200,7 @@
         { "title": "es record", "href": "/reference/cli/record" },
         { "title": "es history, show, compare", "href": "/reference/cli/history" },
         { "title": "es query", "href": "/reference/cli/query" },
+        { "title": "es analyze", "href": "/reference/cli/analyze" },
         { "title": "es studio", "href": "/reference/cli/studio" },
         { "title": "es image build, es clean", "href": "/reference/cli/image-clean" }
       ]
