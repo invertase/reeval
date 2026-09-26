@@ -230,7 +230,9 @@ function collectPlan(
   if (problems.usage) throw new UsageError(problems.usage)
   // A file that fails to load registers none of its evals: running the rest would drop them.
   if (problems.failed.size) {
-    const lines = [...problems.failed].map(([message, files]) => `${files.join(', ')}: ${message}`)
+    const lines = [...problems.failed]
+      .map(([message, files]) => `${files.sort().join(', ')}: ${message}`)
+      .sort()
     const count = [...problems.failed.values()].flat().length
     throw new UsageError(
       `${count === 1 ? 'An eval file' : `${count} eval files`} failed to load:\n${lines.join('\n')}`,
