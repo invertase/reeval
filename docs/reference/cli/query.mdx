@@ -68,6 +68,10 @@ evals/skill.es.ts › house greeting › greets in the house…  cursor:composer
 | `drift` | Run where a cell's fingerprint changed from its previous run, the parts and context paths that changed, and `noise = 1` when only an agent CLI's own runtime state changed |
 | `failing_attempts` | Failed attempt, with the skill of its environment (joined by digest), harness, model and error |
 | `eval_trend` | Eval per run: outcome, pass rate, branch, PR and fingerprint |
+
+In the text table, `·` is SQL `NULL`; `--json` has `null`. On `factor_effects`, a `pooled` row has `run_id` `NULL` (it spans runs), and a row pooled across evals (with `strata` set and `runs` `NULL`) has `eval_key` and `runs` `NULL` too.
+
+Several views repeat a cell's key across evals in a run, so join `attempts` and `cells` on `eval_key` as well as `cell_key`; on `cell_key` alone each attempt matches every eval's cell of that key and is counted once per eval.
 | `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |
 
 ## Tables

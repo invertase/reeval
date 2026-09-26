@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
@@ -198,6 +198,23 @@ describe('concurrency', () => {
     const bad = await runCli(p.dir, ['run', '--concurrency', '0'])
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--concurrency must be a whole number of at least 1 \(got 0\)/)
+  })
+
+  test('--dry-run sizes the default concurrency from the Docker VM, as a real run does', async () => {
+    const p = await project('conc-docker-vm', {
+      'es.config.ts': fakeConfig().replace(
+        "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),",
+        "sandbox: (await import('evalsuite/sandbox')).docker(),",
+      ),
+      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('go') })\n`,
+      // A docker CLI whose VM has 3 CPUs and 16 GB, whatever the host has.
+      'bin/docker': `#!/bin/sh\n[ "$1" = info ] && case "$*" in *NCPU*) echo "3 16000000000"; exit 0;; esac\nexit 1\n`,
+    })
+    chmodSync(join(p.dir, 'bin/docker'), 0o755)
+    const env = { PATH: `${join(p.dir, 'bin')}:${process.env.PATH}` }
+    const r = await runCli(p.dir, ['run', '--dry-run', '--json'], { env })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(JSON.parse(r.stdout).concurrency, 3)
   })
 
   test('a sandbox cap holds on top of the run cap; the judge takes its own leases', async () => {

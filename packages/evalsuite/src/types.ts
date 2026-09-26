@@ -350,7 +350,8 @@ export type SkillSource = { kind: 'skill'; placement: SkillPlacement } & (
 /** A `docker({ install })` command, baked into a cached image layer: no secrets, root, cwd `/`. */
 export type InstallStep = string | { run: string; timeout?: Duration }
 /** Runs in every attempt before the agent starts, with secrets, outside the eval timeout. */
-export type SetupStep = { run: string; timeout?: Duration; cwd?: string }
+/** A shell command, or `{ run, timeout?, cwd? }`; `cwd` is relative to the workspace or absolute. */
+export type SetupStep = string | { run: string; timeout?: Duration; cwd?: string }
 
 /**
  * Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or

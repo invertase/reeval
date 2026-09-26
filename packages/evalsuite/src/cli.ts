@@ -379,7 +379,8 @@ async function prepareRun(flags: Flags) {
     ...(profile?.defaults.sandbox ? [profile.defaults.sandbox] : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
-    if (flags['dry-run'] || !sandboxes.some((s) => s.kind === 'docker')) return hostCapacity()
+    // Sized from the Docker VM when Docker answers, as a real run is, so --dry-run shows the same.
+    if (!sandboxes.some((s) => s.kind === 'docker')) return hostCapacity()
     const { dockerCapacity } = await import('@evalsuite/sandbox-docker')
     return (await dockerCapacity()) ?? hostCapacity()
   })

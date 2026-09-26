@@ -44,7 +44,7 @@ plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~6m 00s at concurrency
 plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 6)
 ```
 
-Those are `es run --dry-run`, then with `ES_CONCURRENCY=2`, then with `--concurrency 6`. A dry run measures the host, not the Docker VM, so its default can be higher than the real run's.
+Those are `es run --dry-run`, then with `ES_CONCURRENCY=2`, then with `--concurrency 6`. A dry run measures the Docker VM too when Docker is running, so its default matches the real run's; without Docker it measures the host.
 
 ## Caps per kind
 

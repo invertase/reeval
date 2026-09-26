@@ -208,7 +208,13 @@ export function mcpHosts(url: string): string[] | undefined {
  * A secret an attempt puts in the sandbox: where it's set (`KEY`, `mcp.docs.headers.auth`), the
  * host variable it reads, and the hosts it's brokered to, or none when the sandbox gets its value.
  */
-export type PlannedSecret = { label: string; from: string; hosts?: readonly string[] }
+export type PlannedSecret = {
+  label: string
+  from: string
+  hosts?: readonly string[]
+  /** `to: 'checks'`: only `t.exec` and setup steps get it, never the agent. */
+  checksOnly?: boolean
+}
 export type UnbrokeredSecret = Omit<PlannedSecret, 'hosts'>
 
 /**
@@ -223,11 +229,22 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
     for (const [name, server] of Object.entries(spec.mcp ?? {})) servers.set(name, server)
   }
   const out = new Map<string, PlannedSecret>()
-  const add = (label: string, from: string, hosts: readonly string[] | undefined) =>
-    out.set(label, { label, from, ...(hosts ? { hosts } : {}) })
+  const add = (
+    label: string,
+    from: string,
+    hosts: readonly string[] | undefined,
+    checksOnly = false,
+  ) =>
+    out.set(label, {
+      label,
+      from,
+      ...(hosts ? { hosts } : {}),
+      ...(checksOnly ? { checksOnly } : {}),
+    })
   const fromVars = (values: EnvVars, prefix: string) => {
     for (const [name, value] of Object.entries(values)) {
-      if (isSecret(value)) add(`${prefix}${name}`, value.from ?? name, value.hosts)
+      if (isSecret(value))
+        add(`${prefix}${name}`, value.from ?? name, value.hosts, value.to === 'checks')
     }
   }
   fromVars(vars, '')
@@ -422,7 +439,9 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
   for (const key of Object.keys(spec)) {
     if (SPEC_KEYS.includes(key)) continue
     if (SANDBOX_KEYS.includes(key)) {
-      const as = key === 'image' ? 'install' : key
+      // `image: 'node:22'` names a base image; `image: ['npm i -g x']` lists install steps.
+      const value = (spec as Record<string, unknown>)[key]
+      const as = key === 'image' ? (typeof value === 'string' ? 'from' : 'install') : key
       throw new DefinitionError(
         `"${key}" isn't an environment field (${where}). What's baked into the image is the sandbox's: docker({ ${as}: … }). An environment only runs setup steps, in every attempt, with its secrets.`,
       )
@@ -441,9 +460,17 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     return value ?? []
   }
   for (const step of list('setup')) {
+    const shape = `Steps in ${where} are strings or { run, timeout?, cwd? } objects`
     const run = typeof step === 'string' ? step : (step as { run?: unknown })?.run
-    if (typeof run !== 'string' || !run.trim()) {
-      throw new DefinitionError(`Steps in ${where} are strings or { run, timeout? } objects`)
+    if (typeof run !== 'string' || !run.trim()) throw new DefinitionError(shape)
+    if (typeof step === 'string') continue
+    const extra = Object.keys(step).filter((k) => !['run', 'timeout', 'cwd'].includes(k))
+    if (extra.length) throw new DefinitionError(`${shape} (got "${extra.join('", "')}")`)
+    const { cwd } = step as { cwd?: unknown }
+    if (cwd !== undefined && (typeof cwd !== 'string' || !cwd.trim())) {
+      throw new DefinitionError(
+        `setup step "${run}" in ${where}: cwd must be a directory path, relative to the workspace or absolute (got ${JSON.stringify(cwd)})`,
+      )
     }
   }
   for (const skill of list('skills')) {

@@ -510,6 +510,26 @@ describe('common mistakes', () => {
       /Unknown option "repeat" .*Did you mean "runs"\?/,
     ],
     [
+      'an eval with no function',
+      `evaluate('x', {})`,
+      /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(t\) => \{ … \}\)\./,
+    ],
+    [
+      'a base image on an environment',
+      `defineEnvironment('node', { image: 'node:22' })`,
+      /"image" isn't an environment field \(defineEnvironment\("node"\)\)\. What's baked into the image is the sandbox's: docker\(\{ from: … \}\)/,
+    ],
+    [
+      'a setup step with an empty cwd',
+      `defineEnvironment('e', { setup: [{ run: 'ls', cwd: '' }] })`,
+      /setup step "ls" in defineEnvironment\("e"\): cwd must be a directory path, relative to the workspace or absolute \(got ""\)/,
+    ],
+    [
+      'a setup step with an unknown key',
+      `defineEnvironment('e', { setup: [{ run: 'ls', dir: 'x' } as never] })`,
+      /Steps in defineEnvironment\("e"\) are strings or \{ run, timeout\?, cwd\? \} objects \(got "dir"\)/,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,
@@ -688,6 +708,11 @@ ${body}
       'an unbrokered policy ES does not know',
       `secrets: { unbrokered: 'deny' as never },`,
       /config\.secrets\.unbrokered is 'warn' or 'error' \(got "deny"\)/,
+    ],
+    [
+      'maxConcurrent 0 on a config harness',
+      `harness: fakeHarness({ maxConcurrent: 0 }),`,
+      /maxConcurrent must be a whole number of at least 1 \(got 0\) for harness in es\.config\.ts/,
     ],
     [
       'keeping no debug runs',

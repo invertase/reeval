@@ -9,7 +9,7 @@ import { type BrokeredSecret, resolveEnvironment } from '../src/environment/reso
 import { defineEnvironment, layered, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import type { PlannedAttempt } from '../src/options.ts'
-import { unbrokered } from '../src/options.ts'
+import { unbrokered, unbrokeredWarning } from '../src/options.ts'
 import { redactSecrets, registerSecret } from '../src/redact.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
@@ -305,6 +305,20 @@ describe('unbrokered secrets', () => {
     }))
     const child = parent.extend('child', ({ secret }) => ({ env: { KEY: secret() } }))
     assert.deepEqual(unbrokeredSecrets({}, child.layers), [{ label: 'KEY', from: 'KEY' }])
+  })
+
+  test("a to: 'checks' secret's warning says the agent never gets it", () => {
+    assert.equal(
+      unbrokeredWarning({ label: 'CHECK_TOKEN', from: 'CHECK_TOKEN', checksOnly: true }),
+      "CHECK_TOKEN reaches the checks (t.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
+    )
+    const env = { CHECK_TOKEN: { kind: 'secret' as const, to: 'checks' as const } }
+    const [found] = unbrokeredSecrets(env, [])
+    assert.deepEqual(found, { label: 'CHECK_TOKEN', from: 'CHECK_TOKEN', checksOnly: true })
+    assert.match(
+      unbrokeredWarning({ label: 'PLAIN', from: 'PLAIN' }),
+      /^PLAIN is in the sandbox as its real value/,
+    )
   })
 
   test('only Docker attempts count', () => {

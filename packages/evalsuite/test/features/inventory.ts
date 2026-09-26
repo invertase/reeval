@@ -729,6 +729,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       analysis('the rank test is exact'),
       analysis('es run, summary.md and es compare show each variant cell'),
+      unit('effort under 10s reads in tenths, so a ratio matches its times'),
     ],
   },
   {
@@ -876,6 +877,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/concurrency.test.ts › --concurrency caps attempts across files',
       'evalsuite/test/concurrency.test.ts › a sandbox cap holds on top of the run cap',
       'evalsuite/test/concurrency.test.ts › time spent queued counts toward neither',
+      'evalsuite/test/concurrency.test.ts › --dry-run sizes the default concurrency from the Docker VM',
     ],
   },
   {

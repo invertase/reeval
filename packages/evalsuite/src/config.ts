@@ -7,7 +7,7 @@ import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { AGENTS, DEFAULT_HARNESS, HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
-import { checkOptions } from './options.ts'
+import { checkHarnesses, checkOptions } from './options.ts'
 import { docker } from './sandbox.ts'
 import type {
   Budget,
@@ -271,6 +271,7 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
       `harness is an empty list in es.config.ts. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
     )
   }
+  checkHarnesses(harness, 'es.config.ts')
   const profiles: Record<string, Profile> = {}
   if (user.profiles !== undefined) {
     if (typeof user.profiles !== 'object' || user.profiles === null) {

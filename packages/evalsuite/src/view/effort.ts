@@ -128,6 +128,8 @@ export const formatRatio = (r: number | null) => (r === null ? '×–' : `×${r.
 
 /** Seconds for agent time: `21s`, `1m 05s`. */
 export function formatSeconds(ms: number): string {
+  // Under 10s, a tenth: `0.2s vs 0.4s` reads with its ×0.50 where `0s vs 0s` doesn't.
+  if (ms < 9950) return ms < 50 ? '0s' : `${(ms / 1000).toFixed(1)}s`
   const s = Math.round(ms / 1000)
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`
 }
