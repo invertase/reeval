@@ -66,6 +66,10 @@ const packageName: string = require('../../package.json').name
 
 // ES's own frames (src/ via source maps, or dist/) are noise in an eval's stack trace.
 const esDirs = ['../../src/', '../../dist/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
+// Workers load ES's built modules natively, as they do from node_modules once ES is installed.
+// From a workspace checkout Vitest would otherwise transform them under their own file URLs,
+// which V8 coverage can't map back to the files.
+const esDist = new RegExp(`^${esDirs[1]?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
 
 const silentLogger = {
   hasWarned: false,
@@ -340,6 +344,7 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
         testTimeout: config.timeoutMs,
         hookTimeout: config.timeoutMs,
         pool: 'forks',
+        server: { deps: { external: [esDist] } },
         maxWorkers: workers,
         sequence: { concurrent: true },
         // Every attempt in a file asks the scheduler for a lease at once; it decides who runs.
