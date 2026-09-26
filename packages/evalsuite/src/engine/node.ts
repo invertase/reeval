@@ -40,8 +40,16 @@ export type PlannedItem = { id: string; key: string; file: string; attempt: Atte
 /** An eval collection left out: `.skip`, `.todo`, or a sibling of an `.only`. */
 export type ExcludedEval = { id: string; mode: 'skip' | 'todo' }
 
-/** What a run would start, from collecting the eval files; `matched` counts name-filter hits. */
-export type CollectedPlan = { planned: PlannedItem[]; excluded: ExcludedEval[]; matched: number }
+/**
+ * What a run would start, from collecting the eval files; `matched` counts filter hits, and
+ * `unmatched` lists the name or cell filter parts that matched no eval while others did.
+ */
+export type CollectedPlan = {
+  planned: PlannedItem[]
+  excluded: ExcludedEval[]
+  matched: number
+  unmatched: string[]
+}
 
 export type EngineOptions = {
   run: RunContext
@@ -197,6 +205,7 @@ function collectPlan(
   root: string,
   modules: readonly TestModule[],
   matchesName: (e: EngineEval) => boolean,
+  nameFilters: readonly string[],
 ): CollectedPlan {
   const problems = moduleProblems(root, modules)
   if (problems.usage) throw new UsageError(problems.usage)
@@ -205,9 +214,11 @@ function collectPlan(
     .flatMap((m) => [...m.children.allTests()])
   const planned: PlannedItem[] = []
   const excluded = new Map<string, ExcludedEval>()
+  const unmatched = new Set(nameFilters)
   let matched = 0
   for (const test of tests) {
     const e = toEngineEval(root, test)
+    for (const f of unmatched) if (nameText(e).includes(f)) unmatched.delete(f)
     if (!matchesName(e)) continue
     matched++
     const { attempt } = e
@@ -217,8 +228,12 @@ function collectPlan(
       excluded.set(e.id, { id: e.id, mode: test.options.mode === 'todo' ? 'todo' : 'skip' })
     }
   }
-  return { planned, excluded: [...excluded.values()], matched }
+  return { planned, excluded: [...excluded.values()], matched, unmatched: [...unmatched] }
 }
+
+/** What a name or cell filter matches: the groups, the eval's name and `[cell#n]`. */
+const nameText = (e: EngineEval) =>
+  [...e.group, e.name, e.attempt ? `[${e.attempt.cell.key}#${e.attempt.n}]` : ''].join(' ')
 
 export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const { config } = options.run
@@ -318,11 +333,8 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const stderr = new Capture()
   let vitest: Vitest | undefined
   let namePattern: RegExp | undefined
-  const matchesName = (e: EngineEval) =>
-    !namePattern ||
-    namePattern.test(
-      [...e.group, e.name, e.attempt ? `[${e.attempt.cell.key}#${e.attempt.n}]` : ''].join(' '),
-    )
+  const nameFilters: string[] = []
+  const matchesName = (e: EngineEval) => !namePattern || namePattern.test(nameText(e))
   const sigintListeners = new Set(process.listeners('SIGINT'))
   const { concurrency } = options.run
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each; one
@@ -369,12 +381,18 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
     }
     vitest.provide('es:run', options.run)
 
-    let specs = await vitest.globTestSpecifications(options.filters)
-    if (specs.length === 0 && options.filters.length > 0) {
-      const escaped = options.filters.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    // A part that names an eval file picks files; any other part picks evals by name or cell.
+    // Parts of one kind widen the selection, and the two kinds narrow each other.
+    const pathFilters: string[] = []
+    for (const f of options.filters) {
+      if ((await vitest.globTestSpecifications([f])).length) pathFilters.push(f)
+      else nameFilters.push(f)
+    }
+    const specs = await vitest.globTestSpecifications(pathFilters)
+    if (nameFilters.length) {
+      const escaped = nameFilters.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       namePattern = new RegExp(escaped.join('|'))
       vitest.setGlobalTestNamePattern(namePattern)
-      specs = await vitest.globTestSpecifications()
     }
     if (specs.length === 0)
       return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
@@ -383,7 +401,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       collecting = true
       const collected = await vitest.collectTests(specs)
       collecting = false
-      const plan = collectPlan(config.root, collected.testModules, matchesName)
+      const plan = collectPlan(config.root, collected.testModules, matchesName, nameFilters)
+      // When no part matched anything, the run's own "no evals matched" says so.
+      if (plan.unmatched.length === options.filters.length) plan.unmatched = []
       if (!(await options.onPlan(plan))) {
         return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
       }

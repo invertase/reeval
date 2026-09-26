@@ -137,6 +137,13 @@ function Row({ row, head }: { row: CompareViewRow; head: string }) {
         <div className="truncate font-mono text-[11px] text-muted-foreground">
           {row.id.split(' › ')[0]}
         </div>
+        {row.cells ? (
+          <div className="text-[11px] text-muted-foreground">
+            compared on the cells both runs have
+            {row.cells.added.length ? ` · added ${row.cells.added.join(', ')}` : ''}
+            {row.cells.removed.length ? ` · removed ${row.cells.removed.join(', ')}` : ''}
+          </div>
+        ) : null}
       </TableCell>
       <TableCell>
         <span className="inline-flex items-center gap-1.5">

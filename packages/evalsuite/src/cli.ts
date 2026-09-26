@@ -251,6 +251,7 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
       ),
       filters,
       onPlan: async (collected) => {
+        if (collected.unmatched.length) throw unmatchedFilter(config, collected.unmatched)
         planned = collected.planned.filter((p) => !p.attempt.plan.skip)
         return false
       },
@@ -485,6 +486,13 @@ function noMatch(config: StartedRun['config'], filters: string[], tags: string[]
   )
 }
 
+function unmatchedFilter(config: StartedRun['config'], parts: string[]) {
+  const which = parts.map((p) => `"${p}"`).join(', ')
+  return new UsageError(
+    `filter ${which} ${parts.length === 1 ? 'matches' : 'match'} no eval file, eval name or cell in ${config.include.join(', ')}`,
+  )
+}
+
 /**
  * Collects the evals and prints the plan; stops there for `--dry-run`, or on a budget, credential
  * or Docker problem (exit 2). Then runs the engine with live output and Ctrl-C handling.
@@ -504,7 +512,8 @@ async function executeRun(
   let sandboxVersions: SandboxVersions = { images: [] }
   let reached = false
   let budgetTimer: NodeJS.Timeout | undefined
-  const onPlan = async ({ planned, excluded, matched }: CollectedPlan) => {
+  const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
+    if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
     plan = await buildPlan({
       planned,
@@ -606,7 +615,7 @@ async function executeRun(
           at: Date.now(),
           version,
           files,
-          harness: config.harness.map(harnessId).join(', '),
+          harness: (plan?.harnesses ?? config.harness.map(harnessId)).join(', '),
           sandbox: sandboxId(config.sandbox),
           concurrency,
         }),

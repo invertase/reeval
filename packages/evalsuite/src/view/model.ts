@@ -7,7 +7,14 @@ import type {
   RunRecord,
 } from '../history/types.ts'
 import type { Outcome, TranscriptEvent, TurnStatus } from '../types.ts'
-import { type CompareStatus, compare, type StackChange, stackChanges } from './compare.ts'
+import {
+  type CompareRow,
+  type CompareStatus,
+  cellsChanged,
+  compare,
+  type StackChange,
+  stackChanges,
+} from './compare.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 
 // ── Index ────────────────────────────────────────────────────────────────────────────────────
@@ -140,31 +147,41 @@ export type RunRow = {
   passed: number
   /** Attempts that reached a verdict or errored; skips excluded. */
   total: number
-  /** Stack changes against the previous complete run. */
+  /** Stack changes in the cells it shares with earlier runs, and in the judge since the previous complete run. */
   drift: StackChange[]
-  /** Evals whose fingerprint changed since the last run that had them. */
+  /** Evals with a cell whose fingerprint changed since the last run that had that cell. */
   changedEvals: number
 }
 
-/** Newest first. Drift is measured against the next older complete run. */
+/**
+ * Newest first. Drift is measured per cell, against the last run that had it: a run over fewer
+ * cells (a filtered run) is no drift, and neither is the full run after it. The judge's settings
+ * compare with the next older complete run.
+ */
 export function runRows(entries: HistoryEntry[]): RunRow[] {
   const oldest = [...entries].sort((a, b) => (a.runId < b.runId ? -1 : 1))
   const seen = new Map<string, string>()
+  const lastCells = new Map<string, Map<string, HistoryCell>>()
   let previous: HistoryEntry | null = null
   const rows: RunRow[] = []
   for (const entry of oldest) {
     const { pass, fail, infraError } = entry.summary
+    const base = previous && {
+      stack: previous.stack,
+      evals: [...lastCells].map(([id, cells]) => ({ id, cells: [...cells.values()] })),
+    }
     let changedEvals = 0
     for (const e of entry.evals) {
-      const fp = seen.get(e.id)
-      if (fp !== undefined && fp !== e.fingerprint) changedEvals++
-      seen.set(e.id, e.fingerprint)
+      if (cellsChanged(seen, e.id, e.cells)) changedEvals++
+      const cells = lastCells.get(e.id) ?? new Map<string, HistoryCell>()
+      for (const c of e.cells) cells.set(c.key, c)
+      lastCells.set(e.id, cells)
     }
     rows.push({
       entry,
       passed: pass,
       total: pass + fail + infraError,
-      drift: previous ? stackChanges(previous, entry) : [],
+      drift: base ? stackChanges(base, entry) : [],
       changedEvals,
     })
     if (entry.status === 'complete') previous = entry
@@ -300,7 +317,7 @@ export type EvalHistoryPoint = {
   outcome: Outcome
   passRate: number | null
   cells: HistoryCell[]
-  /** The fingerprint differs from the previous run that had this eval. */
+  /** A cell's fingerprint differs from the last run that had that cell. */
   changed: boolean
 }
 
@@ -308,7 +325,7 @@ export type EvalHistoryPoint = {
 export function evalHistory(entries: HistoryEntry[], slug: string): EvalHistoryPoint[] {
   const oldest = [...entries].sort((a, b) => (a.runId < b.runId ? -1 : 1))
   const points: EvalHistoryPoint[] = []
-  let fingerprint: string | undefined
+  const seen = new Map<string, string>()
   for (const run of oldest) {
     const e = run.evals.find((x) => x.slug === slug)
     if (!e) continue
@@ -317,9 +334,8 @@ export function evalHistory(entries: HistoryEntry[], slug: string): EvalHistoryP
       outcome: e.outcome,
       passRate: e.passRate,
       cells: e.cells,
-      changed: fingerprint !== undefined && fingerprint !== e.fingerprint,
+      changed: cellsChanged(seen, e.id, e.cells),
     })
-    fingerprint = e.fingerprint
   }
   return points
 }
@@ -334,6 +350,9 @@ export type CompareViewRow = {
   head: Outcome | null
   basePassRate: number | null
   headPassRate: number | null
+  /** See `CompareRow`: then the pass rates are over the cells both runs have too. */
+  cells?: CompareRow['cells']
+  changes?: string[]
   /** Mean judge score per run; null without judgements or without the record. */
   baseScore: number | null
   headScore: number | null
@@ -354,6 +373,14 @@ export const COMPARE_ORDER: CompareStatus[] = [
   'same',
 ]
 
+/** Passes over passes and fails in the gated cells, as an eval's `passRate` counts them. */
+function gatedPassRate(cells: HistoryCell[]): number | null {
+  const gated = cells.filter((c) => c.gate !== 'none')
+  const pass = gated.reduce((n, c) => n + c.pass, 0)
+  const counted = pass + gated.reduce((n, c) => n + c.fail, 0)
+  return counted ? pass / counted : null
+}
+
 /** `es compare`'s classification, plus pass rates and judge-score deltas from the records. */
 export function compareView(
   base: HistoryEntry,
@@ -363,11 +390,18 @@ export function compareView(
   const rows: CompareViewRow[] = compare(base, head).map((row) => {
     const b = base.evals.find((e) => e.id === row.id)
     const h = head.evals.find((e) => e.id === row.id)
+    const baseKeys = new Set(b?.cells.map((c) => c.key))
+    const shared =
+      row.cells && new Set(h?.cells.filter((c) => baseKeys.has(c.key)).map((c) => c.key))
+    const passRate = (e: typeof b) => {
+      if (!e) return null
+      return shared ? gatedPassRate(e.cells.filter((c) => shared.has(c.key))) : e.passRate
+    }
     return {
       ...row,
       slug: h?.slug ?? b?.slug ?? null,
-      basePassRate: b?.passRate ?? null,
-      headPassRate: h?.passRate ?? null,
+      basePassRate: passRate(b),
+      headPassRate: passRate(h),
       baseScore: meanScore(records.base?.evals.find((e) => e.id === row.id)),
       headScore: meanScore(records.head?.evals.find((e) => e.id === row.id)),
     }

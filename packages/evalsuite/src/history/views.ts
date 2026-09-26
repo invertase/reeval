@@ -1,6 +1,6 @@
 import { formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
-import { type CompareRow, type CompareStatus, stackChanges } from '../view/compare.ts'
+import { type CompareRow, type CompareStatus, cellsChanged, stackChanges } from '../view/compare.ts'
 import { warnings } from './state.ts'
 import { cellCounts, OUTCOME_MARK, repeatsVerdict, stateRows, summaryCounts } from './summary.ts'
 import type { HistoryEntry, RunRecord } from './types.ts'
@@ -105,13 +105,12 @@ export function history(
     .filter((id) => !needle || id.toLowerCase().includes(needle))
     .map((id) => {
       const row: HistoryRow = { id, outcomes: [], drift: [], pass: 0, counted: 0 }
-      let fingerprint: string | undefined
+      const seen = new Map<string, string>()
       runs.forEach((run, i) => {
         const e = run.evals.find((x) => x.id === id)
         row.outcomes.push(e?.outcome ?? null)
         if (!e) return
-        if (fingerprint !== undefined && e.fingerprint !== fingerprint) row.drift.push(i)
-        fingerprint = e.fingerprint
+        if (cellsChanged(seen, id, e.cells)) row.drift.push(i)
         if (e.outcome === 'pass' || e.outcome === 'fail') row.counted++
         if (e.outcome === 'pass') row.pass++
       })
@@ -158,8 +157,16 @@ const STATUS_LABEL: Record<CompareStatus, string> = {
   infra: 'infra error',
 }
 
-/** `: evals/helpers.ts changed, harness config changed` for a row that isn't comparable. */
-const why = (r: CompareRow) => (r.changes?.length ? `: ${r.changes.join(', ')}` : '')
+/**
+ * `: evals/helpers.ts changed, harness config changed` for a row that isn't comparable, and
+ * ` · cells removed: …` when the runs ran different cells of the eval.
+ */
+const why = (r: CompareRow) =>
+  [
+    r.changes?.length ? `: ${r.changes.join(', ')}` : '',
+    r.cells?.added.length ? ` · cells added: ${r.cells.added.join(', ')}` : '',
+    r.cells?.removed.length ? ` · cells removed: ${r.cells.removed.join(', ')}` : '',
+  ].join('')
 
 const ORDER: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added', 'removed', 'same']
 

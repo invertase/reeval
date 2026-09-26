@@ -35,6 +35,12 @@ export type Agent = Layout & {
    * sandbox too: the exchange's response carries placeholders, swapped back on these hosts.
    */
   tokens?: Omit<DerivedTokens, 'name'>
+  /**
+   * Hosts the agent's CLI always tries and nothing needs, which no setting turns off. A
+   * restricted policy still refuses them, but ES records them apart from the real blocks and
+   * `-v` summarises them once instead of a line per request.
+   */
+  expectedBlocked?: ExpectedBlocked
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -46,6 +52,9 @@ export type Agent = Layout & {
     auth: Record<string, string>
   }) => Promise<HarnessAgentAdapter>
 }
+
+/** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
+export type ExpectedBlocked = { hosts: readonly string[]; why: string }
 
 const pairs = (values: Record<string, unknown> = {}) =>
   Object.entries(values).map(([name, value]) => ({ name, value: String(value) }))
@@ -187,6 +196,12 @@ export const AGENTS: Record<AgentKind, Agent> = {
         method: ['POST'],
       },
     ],
+    // CLI 1.2.11 opens both in every session. Neither `enableTelemetry: false` nor any other
+    // setting or variable in the binary stops them (checked in its image behind a logging proxy).
+    expectedBlocked: {
+      hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
+      why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
+    },
     mcpServers: antigravityMcpServers,
     adapter: async (options) =>
       (await import('@evalsuite/harness-antigravity')).createAntigravity({
@@ -215,6 +230,12 @@ const FAKE_LAYOUT: Layout = {
 export function layoutOf(descriptor: HarnessDescriptor): Layout {
   if (descriptor.kind !== 'fake') return LAYOUTS[descriptor.kind]
   return descriptor.layout ? LAYOUTS[descriptor.layout] : FAKE_LAYOUT
+}
+
+/** The hosts a harness's agent is known to try; a fake agent with `layout` expects that agent's. */
+export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlocked | undefined {
+  const kind = descriptor.kind === 'fake' ? descriptor.layout : descriptor.kind
+  return kind ? AGENTS[kind].expectedBlocked : undefined
 }
 
 /** The CLI runtime state in the harness's image; a fake one runs in Cursor's unless `layout` says. */

@@ -14,6 +14,7 @@ export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.es.ts'] },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.es.ts'] },
+  { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.es.ts', 'b/skilled'] },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },
@@ -98,6 +99,37 @@ describe('the JSON plan', { concurrency: true }, () => {
       /egress: deny-all \+ auto: generativelanguage\.googleapis\.com, mcp\.example\.com/,
     )
     assert.match(r.stdout, /egress: allow api\.example\.com \+ auto: uploads\.example\.com/)
+  })
+
+  test("a cell filter narrows each row's counts in the text plan, not only the totals", async () => {
+    const p = await fixture('plan/compare')
+    const r = await runCli(p.dir, ['run', '--dry-run', 'evals/variants.es.ts', 'b/skilled'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /2 evals · 2 cells · 3 attempts/)
+    const rows = r.stdout
+      .split('\n')
+      .filter((l) => l.startsWith('evals/variants.es.ts'))
+      .map((l) => l.split(/\s{2,}/).slice(1, 5))
+    assert.deepEqual(rows, [
+      ['1', '1 of 2', '1', '1'],
+      ['1', '1', '2', '2'],
+    ])
+  })
+
+  test('a filter part that matches no file, eval name or cell exits 2 and names it', async () => {
+    const p = await fixture('plan/compare')
+    for (const args of [
+      ['evals/variants.es.ts', 'nosuchcell'],
+      ['b/skilled', 'nosuchcell'],
+    ]) {
+      const r = await runCli(p.dir, ['run', '--dry-run', ...args])
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.equal(r.stdout, '')
+      assert.match(
+        r.stderr,
+        /filter "nosuchcell" matches no eval file, eval name or cell in evals\/\*\*\/\*\.es\.ts/,
+      )
+    }
   })
 
   test('--json without --dry-run exits 2 with the fix', async () => {

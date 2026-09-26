@@ -176,10 +176,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'selection.filters',
     area: 'Config and selection',
-    name: 'Filters (path, eval name, cell key); no match exits 2',
+    name: 'Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2',
+    plan: ['compare/mixed-filter'],
     tests: [
       engine('filters match paths, then eval names'),
+      engine('a path filter and a cell filter together run only that cell of that file'),
       options('a filter that matches nothing exits 2'),
+      "evalsuite/test/plan.test.ts › a cell filter narrows each row's counts in the text plan",
+      'evalsuite/test/plan.test.ts › a filter part that matches no file, eval name or cell exits 2',
     ],
   },
 
@@ -454,6 +458,7 @@ export const inventory: InventoryFeature[] = [
       'egress/deny-all',
       'egress/secret-hosts-allowed',
       'egress/harness-under-deny-all',
+      'egress/expected-blocked',
     ],
     plan: ['egress/cascade', 'egress/profile-defaults'],
     tests: [
@@ -594,6 +599,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
       'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
+      unit('compare classifies an eval on the cells both runs have, and lists the rest'),
       docker("the CLI's own runtime state leaves runs comparable"),
     ],
   },
@@ -618,6 +624,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/studio.test.ts › writes a static site',
       'evalsuite/test/studio.test.ts › a run whose only failures are ungated is passed',
       'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
+      studio('runs list: a run over a subset of cells is no drift, before or after it'),
     ],
   },
   {
@@ -676,6 +683,8 @@ export const inventory: InventoryFeature[] = [
       debug('grouped logs keep each attempt’s debug lines in its own block'),
       debug('agent mode prints -v lines too, under the attempt tag'),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
+      docker("-v summarises a harness's expected blocked hosts once"),
+      unit("the -v broker line names each brokered endpoint's path matcher"),
       sandboxDocker(
         'proxy',
         'reports each request once done, with bytes and names, and each DNS decision',

@@ -147,15 +147,23 @@ export class AttemptDebug {
     })
   }
 
-  /** One gateway request: a `gateway` line, a line of requests.ndjson, and its headers traced. */
-  request(r: DebugRequest, headers?: { request?: unknown; response?: unknown }): void {
+  /**
+   * One gateway request: a `gateway` line, a line of requests.ndjson, and its headers traced.
+   * An `expected` one (a refused host the harness always tries) is a `-vv` line instead.
+   */
+  request(
+    r: DebugRequest,
+    headers?: { request?: unknown; response?: unknown },
+    expected = false,
+  ): void {
     if (this.#closed) return
     if (!this.#requests) {
       this.#requests = createWriteStream(join(this.dir, REQUESTS_FILE), { flags: 'a' })
       this.#requests.on('error', () => {})
     }
     this.#requests.write(`${redactSecrets(JSON.stringify(r))}\n`)
-    this.log('gateway', requestLine(r))
+    if (expected) this.traceLine('gateway', 'request', r, requestLine(r))
+    else this.log('gateway', requestLine(r))
     if (headers) this.trace('gateway', 'headers', { url: r.url, ...headers }, `headers ${r.url}`)
   }
 
