@@ -194,6 +194,15 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.env !== undefined) checkEnv(o.env, where, UsageError)
   if (o.egress !== undefined) checkEgress(o.egress, where, UsageError)
   checkMaxConcurrent(o.judge?.maxConcurrent, `judge in ${where}`)
+  const threshold = o.judge?.threshold
+  if (
+    threshold !== undefined &&
+    !(typeof threshold === 'number' && threshold >= 0 && threshold <= 1)
+  ) {
+    throw new UsageError(
+      `judge.threshold must be between 0 and 1 (got ${String(threshold)}) in ${where}`,
+    )
+  }
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
       throw new UsageError(

@@ -100,7 +100,7 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Judge verdicts, errors, option cascade and retries | ✓ 3 | — | — | — | — |
+| Judge verdicts, errors, option cascade and retries | ✓ 4 | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — |
 | `toHaveFile`, `toSucceed` and `toPass` | ✓ 4 | — | — | — | — |
 

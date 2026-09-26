@@ -558,6 +558,11 @@ describe('common mistakes', () => {
       /Invalid duration "0s"\. A duration is more than zero/,
     ],
     [
+      'a judge threshold over 1 on a group',
+      `group('g', { judge: { threshold: 2 } }, () => { evaluate('e', async () => {}) })`,
+      /judge\.threshold must be between 0 and 1 \(got 2\) in group\("g"\)/,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,

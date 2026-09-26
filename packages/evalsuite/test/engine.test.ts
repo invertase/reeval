@@ -811,6 +811,26 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.match(r.stdout, /t\.judge\(\) has no turn to grade/)
   })
 
+  test('t.judge with an empty question or a threshold outside 0…1 fails without asking the judge', async () => {
+    const p = await project('judge-bad-call', {
+      'es.config.ts': fakeConfig(),
+      'evals/j.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('empty', async (t) => { await t.send('go'); await t.judge('  ') })
+evaluate('over one', async (t) => { await t.send('go'); await t.judge('Is it ok?', { threshold: 2 }) })
+evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it ok?', { threshold: 0.5 })).toPass() })
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /t\.judge\(\) needs a question: a non-empty string \(got " {2}"\)/)
+    assert.match(r.stdout, /t\.judge\(\) threshold must be between 0 and 1 \(got 2\)/)
+    const judged = Object.fromEntries(
+      readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
+    )
+    // The canary: a valid call is judged, so a count of 0 means the bad ones never reached it.
+    assert.deepEqual(judged, { empty: 0, 'over one': 0, fine: 1 })
+  })
+
   test('a failing check shows the tail of stderr', async () => {
     const p = await project('check-fail', {
       'es.config.ts': fakeConfig(),
