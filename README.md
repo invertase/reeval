@@ -139,10 +139,11 @@ adds a Debug tab for attempts with local debug data.
 
 ## Learn more
 
-[AGENTS.md](./AGENTS.md) is the full reference, written for people and coding agents alike. It
-covers config and options, environments, profiles and budgets, the Docker sandbox
-(`docker({ install, dockerfile })`), secrets, judges, CLI flags and exit codes, output,
-concurrency, and the history and record format. It also covers developing this repo.
+The user docs in [`docs/`](./docs) are a [docs.page](https://use.docs.page) site: a Guide from a
+first eval to CI, Concepts, Recipes, and a Reference tab with every option, command, flag, exit
+code and file format. Preview them with `npx @docs.page/cli preview`. Coding agents writing evals
+can load the ES skill in [`.agents/skills/es/SKILL.md`](./.agents/skills/es/SKILL.md).
+[AGENTS.md](./AGENTS.md) covers developing this repo.
 
 ## License
 

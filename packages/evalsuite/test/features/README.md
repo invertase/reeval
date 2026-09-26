@@ -133,3 +133,6 @@ it and run `es run --ui plain`. Add `ES_FIXTURE_SANDBOX=docker` for the Docker t
    feature touches Docker.
 5. The change lists the fixtures it adds, and its entry in `inventory.ts` names them (or says why
    it's a gap), with `COVERAGE.md` regenerated.
+6. The docs are updated: the feature's page in the Reference tab (`docs/reference/`), and the
+   Guide or a Recipe if it changes how people use ES. `pnpm docs:check` is green (see
+   [AGENTS.md](../../../../AGENTS.md#docs)).
