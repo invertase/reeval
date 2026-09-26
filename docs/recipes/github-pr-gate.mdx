@@ -101,10 +101,6 @@ jobs:
           npx es compare --md --fail-on-regression > compare.md
           code=$?
           cat compare.md >> "$GITHUB_STEP_SUMMARY"
-          if [ "$code" -eq 2 ]; then
-            echo "::notice::No recorded run to compare with yet"
-            exit 0
-          fi
           exit "$code"
 
       - name: Upload runs
@@ -172,17 +168,19 @@ Base 20260926T172538Z_nogit_ci_hz13 (no-git) → head 20260926T172540Z_nogit_ci_
 | evals/hello.es.ts › greet module › creates a tested greet module | ✓ | ✗ | regressed |
 ```
 
-The command exits 1, so the step and the check fail. In the job summary the table renders as a table. Only `regressed` rows fail the check: a new eval that fails shows as `new`, and a changed eval as `not comparable`.
+The command exits 1, so the step and the check fail. In the job summary the table renders as a table. A `regressed` row fails the check, and so does a `new` eval that fails; a changed eval shows as `not comparable` and doesn't.
 
 ## The first run
 
-`es compare` needs a recorded run on an ancestor of the PR's commit. Until one exists it exits 2:
+`es compare` compares with a recorded run on an ancestor of the PR's commit. Until one exists, every eval is new, and `--fail-on-regression` fails the check only if one of them fails:
 
 ```text
-es: No earlier recorded run to compare 20260926T172508Z_nogit_ci_br2m with
+### ES: 20260926T172508Z_nogit_ci_br2m
+
+No earlier recorded run to compare 20260926T172508Z_nogit_ci_br2m with: every eval is new.
 ```
 
-The compare step turns that into a notice. To give pull requests a base, commit runs to `evals/.history` on your main branch; [Nightly matrix and Pages](/recipes/nightly-pages) does it every night.
+To give pull requests a base, commit runs to `evals/.history` on your main branch; [Nightly matrix and Pages](/recipes/nightly-pages) does it every night.
 
 ## Variations
 

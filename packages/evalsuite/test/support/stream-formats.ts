@@ -40,6 +40,26 @@ const FORMATS: Record<string, Format> = {
     values: ['status', 'role'],
     lists: [],
   },
+  // OpenCode's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
+  opencode: {
+    kind: (e) =>
+      typeof e.sessionUpdate === 'string'
+        ? e.sessionUpdate
+        : typeof e.stopReason === 'string'
+          ? 'prompt-response'
+          : undefined,
+    opaque: [
+      'rawInput',
+      'rawOutput',
+      'content',
+      'locations',
+      'availableCommands',
+      'configOptions',
+      '_meta',
+    ],
+    values: ['status', 'kind', 'stopReason'],
+    lists: [],
+  },
 }
 
 export const hasFormat = (harness: string) => Object.hasOwn(FORMATS, harness)

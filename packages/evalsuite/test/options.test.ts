@@ -518,6 +518,16 @@ describe('common mistakes', () => {
       /Unknown option "repeat" .*Did you mean "runs"\?/,
     ],
     [
+      'two evals with the same name',
+      `evaluate('e', async () => {}); evaluate('e', { runs: 2 }, async () => {})`,
+      /evaluate\("e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\./,
+    ],
+    [
+      'evaluate.for cases with the same name',
+      `evaluate.for([{ a: 1, b: 2 }, { a: 1, b: 3 }])('adds $a', async () => {})`,
+      /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.for, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,
@@ -555,7 +565,7 @@ describe('common mistakes', () => {
     [
       'a fake agent layout ES does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode' \(got "codex"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',
@@ -565,12 +575,12 @@ describe('common mistakes', () => {
     [
       'a fake agent script step with two actions',
       `evaluate('e', { harness: fakeHarness({ script: [[{ exec: 'ls', reply: 'x' } as never]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \}, \{ reply: string \} or \{ mcp: '<server>\/<tool>' \}/,
+      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \}, \{ reply: string \}, \{ mcp: '<server>\/<tool>' \} or \{ error: string \}/,
     ],
     [
       'a fake agent MCP step without a tool',
       `evaluate('e', { harness: fakeHarness({ script: [[{ mcp: 'stamp' }]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are .+ or \{ mcp: '<server>\/<tool>' \} \(got \{"mcp":"stamp"\}\)/,
+      /fakeHarness\(\{ script \}\) steps are .+ \{ mcp: '<server>\/<tool>' \} or \{ error: string \} \(got \{"mcp":"stamp"\}\)/,
     ],
     [
       'an empty hosts list',

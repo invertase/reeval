@@ -69,6 +69,36 @@ describe('createCursorSdk', () => {
     assert.equal(visible(parts).at(-1)?.type, 'finish')
   })
 
+  test("unset model parameters are sent explicitly, from the catalog's default variant", async () => {
+    // As Cursor's catalog lists composer-2.5: the first allowed value is false, the default is true.
+    const catalog = [
+      {
+        id: 'composer-2.5',
+        parameters: [{ id: 'fast', values: [{ value: 'false' }, { value: 'true' }] }],
+        variants: [
+          { params: [{ id: 'fast', value: 'true' }], displayName: 'Composer 2.5', isDefault: true },
+          { params: [{ id: 'fast', value: 'false' }], displayName: 'Composer 2.5' },
+        ],
+      },
+      { id: 'gpt-5.2' },
+    ]
+    const model = async (settings: Parameters<typeof createCursorSdk>[0], id = 'composer-2.5') => {
+      const sandbox = fakeSandbox({ turns: [{ stdout: fixture('tools-mcp-skills.ndjson') }] })
+      const session = await start(sandbox, { modelCatalog: catalog, ...settings })
+      await runTurn(session, 'go', { model: id })
+      return turnConfig(sandbox, 1).model
+    }
+    assert.deepEqual(await model({}), {
+      id: 'composer-2.5',
+      params: [{ id: 'fast', value: 'true' }],
+    })
+    assert.deepEqual(await model({ modelParams: { fast: 'false' } }), {
+      id: 'composer-2.5',
+      params: [{ id: 'fast', value: 'false' }],
+    })
+    assert.deepEqual(await model({}, 'gpt-5.2'), { id: 'gpt-5.2' }, 'no variants, no params')
+  })
+
   test('fail-closed: requireCredentialBrokering refuses a sandbox that cannot broker', async () => {
     const sandbox = fakeSandbox({ broker: false })
     await assert.rejects(

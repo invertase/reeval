@@ -189,22 +189,25 @@ export type FakeHarnessDescriptor = {
   maxConcurrent?: number
   /**
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
-   * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`). Defaults to
-   * the fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
+   * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
+   * `~/.config/opencode/skills` for `opencode`). Defaults to the fake's own (`AGENTS.md`,
+   * `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity'
+  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
  * the command's stdout, `write` as file edits, and `reply` is the turn's final message. `mcp`
  * (`'<server>/<tool>'`) starts the environment's stdio MCP server in the sandbox, as an agent
  * would, and calls the tool with no arguments; it's reported as `mcp__<server>__<tool>`.
+ * `error` ends the turn there with status `error` and that message, as a provider error would.
  */
 export type FakeScriptStep =
   | { exec: string }
   | { write: Record<string, string> }
   | { reply: string }
   | { mcp: string }
+  | { error: string }
 /**
  * Cursor's agent through the Cursor TypeScript SDK's local runtime
  * (`@evalsuite/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.
@@ -214,8 +217,8 @@ export type CursorHarnessDescriptor = {
   /** A model id `Cursor.models.list()` returns for the key, e.g. `composer-2.5`. */
   model: string
   /**
-   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the model's first allowed value,
-   * so pass the ones that change cost (`fast`) explicitly.
+   * Model parameters, e.g. `{ fast: 'false' }`. Unset ones take the default variant in Cursor's
+   * model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.
    */
   params?: Record<string, string>
   /** Cell id; defaults to `cursor:<model>`. */
@@ -243,11 +246,25 @@ export type AntigravityHarnessDescriptor = {
   /** The most Antigravity attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
 }
+/**
+ * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
+ * Google models on a Gemini API key, and reports no usage (its ACP server counts one call).
+ */
+export type OpenCodeHarnessDescriptor = {
+  kind: 'opencode'
+  /** A Gemini model id, run on OpenCode's `google` provider, e.g. `gemini-3.8-flash`. */
+  model: string
+  /** Cell id; defaults to `opencode:<model>`. */
+  id?: string
+  /** The most OpenCode attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
   | ClaudeCodeHarnessDescriptor
   | AntigravityHarnessDescriptor
+  | OpenCodeHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {
@@ -854,6 +871,8 @@ export type EvalMeta = {
   outcome: EvalRecord['outcome']
   errorKind: ErrorKind | null
   judgements: Array<Pick<Verdict, 'verdict' | 'score' | 'threshold'> & { question: string }>
+  /** Each turn that ended in an error, as `turn 2 error: <message>`, so a failure shows why. */
+  turnErrors?: string[]
 }
 
 export type RunContext = {

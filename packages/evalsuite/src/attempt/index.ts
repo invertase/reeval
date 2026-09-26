@@ -42,7 +42,7 @@ export async function runAttempt(spec: AttemptSpec, fn: EvalFn, handle: TestHand
 async function attemptBody(
   spec: AttemptSpec,
   fn: EvalFn,
-  { signal: testSignal, setMeta, progress }: TestHandle,
+  { signal: testSignal, setMeta, progress, unawaited }: TestHandle,
   id: string,
   debug: AttemptDebug,
 ): Promise<void> {
@@ -101,11 +101,15 @@ async function attemptBody(
     await fn(t)
     // A body that ignores the signal can still return normally after a timeout or cancel.
     a.signal.throwIfAborted()
+    const missed = await unawaited()
+    if (missed) throw missed
   } catch (error) {
     recordFailure(a, error, timedOut())
     if (timedOut()) throw new Error(`Eval timed out after ${spec.timeoutMs / 1000}s`)
     throw error
   } finally {
+    // Checks the eval didn't await still use the sandbox: let them finish before teardown.
+    if (!a.signal.aborted) await unawaited().catch(() => {})
     clock?.clear()
     const { sandbox } = a
     if (sandbox && !a.signal.aborted) await takeContext(sandbox, AbortSignal.timeout(30_000))

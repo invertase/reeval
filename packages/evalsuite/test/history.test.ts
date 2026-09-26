@@ -381,6 +381,52 @@ evaluate('agent', async (t) => {
     assert.deepEqual(config?.changes, ['harness config changed'])
   })
 
+  test('es compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
+    const flip = `import { evaluate, expect } from 'evalsuite'
+evaluate('flips', async (t) => {
+  await t.send('write hello.txt')
+  expect(process.env.ES_TEST_BREAK ?? 'ok').toBe('ok')
+})
+`
+    const p = await gitProject('fail-on-regression', { 'evals/a.es.ts': flip })
+    const broken = { env: { ES_TEST_BREAK: '1' } }
+    const compareCode = async (...args: string[]) => {
+      const r = await runCli(p.dir, ['compare', ...args])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+
+    // No recorded run yet: every eval is new, which isn't an error.
+    assert.equal((await runCli(p.dir)).code, 0)
+    const first = await compareCode()
+    assert.equal(first.code, 0, first.out)
+    assert.match(first.out, /No earlier recorded run to compare \S+ with: every eval is new\./)
+    assert.match(first.out, /✓ {2}new {2}evals\/a\.es\.ts › flips/)
+    assert.equal((await compareCode('--fail-on-regression')).code, 0)
+    assert.equal(JSON.parse((await compareCode('--json')).out).base, null)
+    assert.equal((await runCli(p.dir, ['run'], broken)).code, 1)
+    const newFailing = await compareCode('--fail-on-regression')
+    assert.equal(newFailing.code, 1, newFailing.out)
+    assert.match(newFailing.out, /every eval is new, and 1 fails\./)
+    assert.match((await compareCode('--md')).out, /^### ES: \S+\n\nNo earlier recorded run/)
+
+    // With a recorded base: pass → fail regresses.
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    assert.equal((await runCli(p.dir, ['run'], broken)).code, 1)
+    assert.equal((await compareCode('--fail-on-regression')).code, 1)
+    assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
+
+    // A new eval that fails fails the check too; one that passes doesn't.
+    await writeFile(join(p.dir, 'evals/b.es.ts'), failing)
+    assert.equal((await runCli(p.dir)).code, 1)
+    const added = await compareCode('--fail-on-regression')
+    assert.equal(added.code, 1, added.out)
+    assert.match(added.out, /· → ✗ {2}new +evals\/b\.es\.ts › broken/)
+    await writeFile(join(p.dir, 'evals/b.es.ts'), agent('fresh'))
+    assert.equal((await runCli(p.dir)).code, 0)
+    const twin = await compareCode('--fail-on-regression')
+    assert.equal(twin.code, 0, twin.out)
+  })
+
   test("a turn's text is cut at 8 KB in the record; transcript.jsonl keeps it whole", async () => {
     const long = 'x'.repeat(20_000)
     const p = await project('turn-cap', {

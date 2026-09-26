@@ -23,7 +23,7 @@ With no `harness` in the config, ES uses `cursor({ model: 'composer-2.5' })`.
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the model's first allowed value, not the catalog's default variant, so set the ones that matter to you.
+  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalog, which ES sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -88,7 +88,7 @@ Duration  8s
   Tokens  31k in (15k cached) · 111 out
 ```
 
-ES records tokens but prices no models, so the record's `usd` is `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+ES records tokens but prices no models, so there's no USD. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
 File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
 

@@ -41,7 +41,7 @@ import { docker } from '@invertase/foobar/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],
-  harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), or a list: each is its own cell
+  harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), opencode({ model }), or a list: each is its own cell
   sandbox: docker(),
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // optional; pin the version
   timeout: '15m',

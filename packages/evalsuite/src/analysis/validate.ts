@@ -1,7 +1,7 @@
 // Checks a model's analysis against its digest: citations must name something in it, quotes must be
 // in the cited evidence, numbers should be in the cited facts, and verify commands must parse as
-// ES's own CLI. What fails is dropped (or, for numbers, flagged), and counted in `validation`.
-import { checkCommand } from '../cli-spec.ts'
+// ES's own CLI and, for `es run`, select an eval of the run. What fails is dropped (or, for numbers, flagged), and counted in `validation`.
+import { checkCommand, type SelectableEval } from '../cli-spec.ts'
 import type {
   AnalysisAction,
   AnalysisAnomaly,
@@ -93,6 +93,7 @@ export function validateAnalysis(
   output: AnalysisOutput,
   digest: Digest,
   tables: readonly string[],
+  evals?: readonly SelectableEval[],
 ): { body: AnalysisBody; validation: AnalysisValidation } {
   const { resolve } = citations(digest)
   const validation: AnalysisValidation = {
@@ -159,7 +160,7 @@ export function validateAnalysis(
     if (!c) return []
     const verify = a.verify.trim().replace(/^`+|`+$/g, '')
     validation.commands++
-    const problem = verify ? checkCommand(verify, tables) : 'no command'
+    const problem = verify ? checkCommand(verify, tables, evals) : 'no command'
     if (problem) validation.invalidCommands.push(`${verify}: ${problem}`)
     return [
       {
