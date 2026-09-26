@@ -46,6 +46,7 @@ import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
 import { antigravity, claudeCode, cursor, fakeHarness } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
+import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
   test('is plain data with its own cell id, and needs a model', () => {
@@ -999,10 +1000,29 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(served, 'composer-2.5[fast=false]')
   })
 
+  test('Claude Code: the API usage its bridge maps, cache creation as cache writes', async () => {
+    // harness-claude-code 1.0.128's bridge (`mapUsage`) on a real Messages API usage block:
+    // input_tokens 6, cache_creation_input_tokens 4210, cache_read_input_tokens 15022, output 311.
+    const claude = {
+      inputTokens: { total: 19238, noCache: 6, cacheRead: 15022, cacheWrite: 4210 },
+      outputTokens: { total: 311, text: 311 },
+    }
+    const { usage } = await turnThrough(finishWith(claude))
+    assert.deepEqual(usage, {
+      input: 6,
+      output: 311,
+      cacheRead: 15022,
+      cacheWrite: 4210,
+      reasoning: null,
+    })
+    assert.equal(formatUsage(usage), '19k in (15k cached) · 311 out')
+  })
+
   test('a harness that reports neither records null for both', async () => {
     const none = cursorUsage(undefined)
     const { usage, served } = await turnThrough(finishWith(none))
     assert.equal(usage, null)
+    assert.equal(formatUsage(usage), null)
     assert.equal(served, undefined)
   })
 })
