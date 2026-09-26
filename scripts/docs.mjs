@@ -358,7 +358,8 @@ if (print > 0) {
   process.exit(0)
 }
 const used = new Set()
-const marker = /(\[\/\/\]: # \(generated:([\w:-]+)\))\n(?:[\s\S]*?\n)?(\[\/\/\]: # \(\/generated:\2\))/g
+const marker =
+  /(\[\/\/\]: # \(generated:([\w:-]+)\))\n(?:[\s\S]*?\n)?(\[\/\/\]: # \(\/generated:\2\))/g
 
 for (const file of mdxFiles()) {
   const text = read(file)
