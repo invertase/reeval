@@ -54,10 +54,11 @@ describe('stream translation', () => {
     assert.deepEqual(
       results.map((r) => [r.toolCallId === calls[results.indexOf(r)]?.toolCallId, r.result]),
       [
-        [true, null],
+        [true, ''],
         [true, 'hi\r\n'],
       ],
     )
+    assert.ok(results.every((r) => !('providerExecuted' in r)), 'not a tool-result field')
     // The step before a tool finishes as tool-calls, the last one as stop.
     const steps = parts.filter((p) => p.type === 'finish-step')
     assert.deepEqual(
@@ -160,6 +161,35 @@ describe('stream translation', () => {
     const t = new AntigravityStreamTranslator({ turn: 1 })
     t.push(line({ event: 'result', result: { status: 'SUCCESS', response: 'x' } }))
     assert.deepEqual(t.end({ exitCode: 0 }), [])
+  })
+
+  test('a tool still running when the process ends gets an error result', () => {
+    const running = [
+      line({ event: 'init', conversation_id: 'c1', init: {} }),
+      step({
+        step_index: 4,
+        state: 'ACTIVE',
+        step_type: 'tool',
+        tool_info: { name: 'run_command', parameters: { CommandLine: 'sleep 600' } },
+      }),
+    ].join('\n')
+    for (const [end, message] of [
+      [{ exitCode: 137, aborted: true }, 'run_command aborted'],
+      [{ exitCode: 1 }, 'run_command interrupted'],
+    ] as const) {
+      const { parts } = translate(running, end)
+      const call = parts.find((p) => p.type === 'tool-call')
+      const result = parts.find((p) => p.type === 'tool-result')
+      assert.ok(call?.type === 'tool-call' && result?.type === 'tool-result')
+      assert.deepEqual(result, {
+        type: 'tool-result',
+        toolCallId: call.toolCallId,
+        toolName: 'bash',
+        result: message,
+        isError: true,
+      })
+      assert.equal(parts.at(-1)?.type, 'finish')
+    }
   })
 
   test('tools outside the catalog are dynamic; unparsable lines pass through as raw', () => {

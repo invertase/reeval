@@ -1,4 +1,5 @@
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
+import type { JSONValue } from '@ai-sdk/provider'
 import { projectToolCall } from './antigravity-tools.ts'
 
 /** Token counts as the CLI reports them; `output_tokens` includes `thinking_tokens`. */
@@ -18,7 +19,7 @@ export type AntigravityResult = {
   duration_seconds?: number
   num_turns?: number
   usage?: AntigravityUsage
-  structured_output?: unknown
+  structured_output?: JSONValue
 }
 
 export type AntigravityStepUpdate = {
@@ -33,7 +34,7 @@ export type AntigravityStepUpdate = {
   tool_info?: {
     name?: string
     parameters?: Record<string, unknown>
-    output?: unknown
+    output?: JSONValue
     error?: { type?: string; message?: string }
   }
 }
@@ -90,7 +91,10 @@ export class AntigravityStreamTranslator {
   private finished = false
   private sawText = false
   private openText = new Set<number>()
-  private openTools = new Set<number>()
+  private openTools = new Map<
+    number,
+    { toolCallId: string; toolName: string; nativeName: string; dynamic: boolean }
+  >()
   private pendingStep: AntigravityUsage | undefined
   private stepUsage = false
   private readonly turn: number
@@ -98,10 +102,6 @@ export class AntigravityStreamTranslator {
   constructor(options: { turn: number; conversationId?: string | undefined }) {
     this.turn = options.turn
     this.conversationId = options.conversationId
-  }
-
-  get done(): boolean {
-    return this.finished
   }
 
   /** Parts for one stdout line. Lines that aren't JSON events are passed through as raw. */
@@ -135,6 +135,12 @@ export class AntigravityStreamTranslator {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
+    for (const call of this.openTools.values()) {
+      parts.push(
+        this.toolResult(call, `${call.nativeName} ${options.aborted ? 'aborted' : 'interrupted'}`),
+      )
+    }
+    this.openTools.clear()
     this.closeBlocks(parts)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
@@ -164,6 +170,21 @@ export class AntigravityStreamTranslator {
 
   private id(step: number) {
     return `agy-${this.conversationId ?? `turn${this.turn}`}-${step}`
+  }
+
+  private toolResult(
+    call: { toolCallId: string; toolName: string; dynamic: boolean },
+    error: string | undefined,
+    output: NonNullable<JSONValue> = '',
+  ): HarnessV1StreamPart {
+    return {
+      type: 'tool-result',
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      result: error ?? output,
+      ...(error !== undefined ? { isError: true } : {}),
+      ...(call.dynamic ? { dynamic: true } : {}),
+    }
   }
 
   private flushStep(parts: HarnessV1StreamPart[], next: 'tool-calls' | 'stop') {
@@ -209,15 +230,16 @@ export class AntigravityStreamTranslator {
       this.flushStep(parts, 'tool-calls')
       const info = s.tool_info ?? {}
       const nativeName = info.name ?? s.tool_name ?? 'unknown'
-      const call = projectToolCall(nativeName, info.parameters)
-      const toolCallId = this.id(index)
-      if (!this.openTools.has(index)) {
-        this.openTools.add(index)
+      let call = this.openTools.get(index)
+      if (!call) {
+        const projected = projectToolCall(nativeName, info.parameters)
+        call = { ...projected, toolCallId: this.id(index) }
+        this.openTools.set(index, call)
         parts.push({
           type: 'tool-call',
-          toolCallId,
+          toolCallId: call.toolCallId,
           toolName: call.toolName,
-          input: JSON.stringify(call.input),
+          input: JSON.stringify(projected.input),
           providerExecuted: true,
           ...(call.dynamic ? { dynamic: true } : {}),
           ...(call.toolName !== nativeName ? { nativeName } : {}),
@@ -226,17 +248,13 @@ export class AntigravityStreamTranslator {
       if (s.state && TERMINAL_TOOL_STATES.has(s.state)) {
         this.openTools.delete(index)
         const failed = s.state !== 'DONE' || info.error !== undefined
-        parts.push({
-          type: 'tool-result',
-          toolCallId,
-          toolName: call.toolName,
-          result: failed
-            ? (info.error?.message ?? `${nativeName} ${s.state.toLowerCase()}`)
-            : ((info.output ?? null) as never),
-          ...(failed ? { isError: true } : {}),
-          providerExecuted: true,
-          ...(call.dynamic ? { dynamic: true } : {}),
-        } as HarnessV1StreamPart)
+        parts.push(
+          this.toolResult(
+            call,
+            failed ? (info.error?.message ?? `${nativeName} ${s.state.toLowerCase()}`) : undefined,
+            info.output ?? '',
+          ),
+        )
       }
     }
   }
@@ -269,7 +287,7 @@ export class AntigravityStreamTranslator {
       finishReason: { unified: FINISH[status] ?? 'other', raw: status },
       totalUsage: toUsage(r.usage),
       ...(r.structured_output !== undefined
-        ? { harnessMetadata: { antigravity: { structuredOutput: r.structured_output as never } } }
+        ? { harnessMetadata: { antigravity: { structuredOutput: r.structured_output } } }
         : {}),
     })
   }
