@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { traceEnvironment } from '../src/attempt/debug.ts'
+import type { AttemptSpec } from '../src/attempt/state.ts'
 import {
   defaultConcurrency,
   evalRoot,
@@ -12,6 +14,8 @@ import {
   resolveConfig,
   selectProfile,
 } from '../src/config.ts'
+import type { AttemptDebug } from '../src/debug/attempt.ts'
+import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
   DEFAULT_SKILL_EXCLUDE,
@@ -20,7 +24,7 @@ import {
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
-import { AGENTS, agentAuth, brokeringFor } from '../src/harness/agents.ts'
+import { AGENTS, type AgentKind, agentAuth, brokeringFor } from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
@@ -35,6 +39,48 @@ import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
+
+test("the -v broker line names each brokered endpoint's path matcher", () => {
+  const brokerLine = (kind: AgentKind) => {
+    const lines: string[] = []
+    const debug = {
+      log: (phase: string, text: string) => lines.push(`${phase} ${text}`),
+      trace() {},
+    }
+    const record = {
+      name: 'e',
+      digest: 'sha256:0',
+      overrides: [],
+      unset: [],
+      vars: [],
+      secrets: [],
+    }
+    traceEnvironment(
+      debug as unknown as AttemptDebug,
+      { harness: { kind } } as unknown as AttemptSpec,
+      {
+        record,
+        substitutions: [],
+        vars: {},
+        checkVars: {},
+        files: [],
+        skills: [],
+        workspaceSkills: [],
+        mcp: {},
+      } as unknown as ResolvedEnvironment,
+    )
+    return lines.filter((l) => l.startsWith('broker '))
+  }
+  assert.deepEqual(brokerLine('antigravity'), [
+    'broker GEMINI_API_KEY stays on the host · the gateway swaps it in on POST generativelanguage.googleapis.com (path ~ /^/v1beta/models/[^/]+:streamGenerateContent$/)',
+  ])
+  assert.deepEqual(brokerLine('cursor'), [
+    'broker CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key',
+  ])
+  for (const kind of Object.keys(AGENTS) as AgentKind[]) {
+    assert.doesNotMatch(brokerLine(kind).join('\n'), /\[object /, kind)
+  }
+})
 
 test("a harness's auth is only its own credential, and a missing one fails closed", () => {
   const host = { CURSOR_API_KEY: 'crsr_k', AI_GATEWAY_API_KEY: 'gw_k', ANTHROPIC_API_KEY: 'sk-a' }

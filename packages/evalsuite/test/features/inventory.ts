@@ -676,6 +676,7 @@ export const inventory: InventoryFeature[] = [
       debug('grouped logs keep each attempt’s debug lines in its own block'),
       debug('agent mode prints -v lines too, under the attempt tag'),
       docker('-v and -vv trace the image, container, brokering, gateway and docker commands'),
+      unit("the -v broker line names each brokered endpoint's path matcher"),
       sandboxDocker(
         'proxy',
         'reports each request once done, with bytes and names, and each DNS decision',
