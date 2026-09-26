@@ -47,6 +47,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/vendor-sandbox-docker.mjs && node scripts/copy-studio-app.mjs",
+    "features:matrix": "node --experimental-strip-types --no-warnings --import ./test/support/tables-only.mjs test/support/feature-matrix.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test --test-timeout=120000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",

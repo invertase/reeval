@@ -69,7 +69,8 @@ const git = (cwd: string, ...args: string[]) =>
     encoding: 'utf8',
   }).trim()
 
-const features: Feature[] = [
+// biome-ignore lint/suspicious/noExportsInTest: the feature matrix reads this table (support/feature-matrix.ts)
+export const features: Feature[] = [
   {
     dir: 'skills/workspace-placement',
     tiers: ['fake', 'docker'],

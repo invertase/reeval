@@ -1,0 +1,629 @@
+// Every user-facing feature of ES, and what covers it on each tier. The feature matrix
+// (COVERAGE.md, `pnpm features:matrix`) is generated from this, the fixture table in
+// features.test.ts and the plan cases in plan.test.ts; matrix.test.ts fails when a feature has
+// nothing on any tier and isn't a known gap, when a fixture or plan case covers no feature, or
+// when an entry names something that doesn't exist. Seeded from test-strategy.md §1.
+
+export type InventoryFeature = {
+  /** Stable, dotted, e.g. `skill.git`. */
+  id: string
+  area: Area
+  /** The feature as the docs name it. */
+  name: string
+  /** Directories under test/features/. Their tiers (fake, docker, real) come from features.test.ts. */
+  fixtures?: string[]
+  /** Plan cases in plan.test.ts, as `dir/name`. */
+  plan?: string[]
+  /**
+   * Plain `node:test` cases (the unit tier, including runner-level tests through the CLI), as
+   * `<path under packages/> › <the test's title, or a part of it>`.
+   */
+  tests?: string[]
+  /** Why nothing covers it yet. Only for features with no fixture, plan case or test. */
+  gap?: string
+}
+
+export const AREAS = [
+  'Config and selection',
+  'Environments',
+  'Sandbox',
+  'Harnesses',
+  'Judges and matchers',
+  'Records and studio',
+  'CLI and runner',
+] as const
+export type Area = (typeof AREAS)[number]
+
+const unit = (name: string) => `evalsuite/test/unit.test.ts › ${name}`
+const options = (name: string) => `evalsuite/test/options.test.ts › ${name}`
+const engine = (name: string) => `evalsuite/test/engine.test.ts › ${name}`
+const secrets = (name: string) => `evalsuite/test/secrets.test.ts › ${name}`
+const harness = (name: string) => `evalsuite/test/harness.test.ts › ${name}`
+const docker = (name: string) => `evalsuite/test/docker.test.ts › ${name}`
+const sandboxDocker = (file: string, name: string) =>
+  `sandbox-docker/test/${file}.test.ts › ${name}`
+
+export const inventory: InventoryFeature[] = [
+  // Config and selection
+  {
+    id: 'config.define',
+    area: 'Config and selection',
+    name: '`defineConfig` (object or function) and its defaults',
+    plan: ['matrix/default'],
+    tests: [unit('resolveConfig defaults')],
+  },
+  {
+    id: 'config.mistakes',
+    area: 'Config and selection',
+    name: 'Config and option mistakes exit 2 with the fix',
+    tests: [options('common mistakes'), engine('usage errors exit 2')],
+  },
+  {
+    id: 'config.dotenv',
+    area: 'Config and selection',
+    name: '`.env` and `.env.local` loading',
+    gap: 'No test writes either file, though every command loads them (src/env.ts).',
+  },
+  {
+    id: 'matrix.harness-runs',
+    area: 'Config and selection',
+    name: '`harness` lists × `runs`, and `--runs`',
+    plan: ['matrix/default', 'matrix/runs-override'],
+    tests: [
+      unit('expand: per harness, the control then each variant'),
+      options('harness lists and runs expand into attempts'),
+    ],
+  },
+  {
+    id: 'matrix.cascade',
+    area: 'Config and selection',
+    name: 'Option cascade through groups and evals; harness edit functions',
+    tests: [
+      engine('groups nest, cascade options'),
+      options('groups replace the harness list, evals can edit it'),
+    ],
+  },
+  {
+    id: 'compare',
+    area: 'Config and selection',
+    name: '`compare`: control, variants, lift and `minLift`',
+    plan: ['compare/control-and-variants'],
+    tests: [
+      options('variants run next to the control, lift is stored'),
+      'evalsuite/test/results.test.ts › Newcombe',
+    ],
+  },
+  {
+    id: 'compare.harness',
+    area: 'Config and selection',
+    name: '`compare.harness`',
+    plan: ['compare/harness-scoped'],
+    tests: [options('compare.harness scopes variants')],
+  },
+  {
+    id: 'gate',
+    area: 'Config and selection',
+    name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",
+    tests: [
+      'evalsuite/test/results.test.ts › the option takes all or { passRate }',
+      options('a config-level gate applies to every eval'),
+    ],
+  },
+  {
+    id: 'profiles',
+    area: 'Config and selection',
+    name: 'Profiles: `defaults`, `limit`, `pin`, selection and typos',
+    plan: ['profiles/local-none', 'profiles/pr-in-ci', 'profiles/nightly'],
+    tests: [
+      unit('selectProfile: --profile, then ES_PROFILE'),
+      unit('cascade: profile defaults sit under evals'),
+      options('a profile name typo exits 2'),
+    ],
+  },
+  {
+    id: 'profiles.max-variants',
+    area: 'Config and selection',
+    name: '`limit.compare.maxVariants`',
+    gap: 'No plan case or test sets it.',
+  },
+  {
+    id: 'plan.json',
+    area: 'Config and selection',
+    name: '`es run --dry-run` and `--dry-run --json`',
+    plan: ['matrix/default'],
+    tests: [
+      'evalsuite/test/plan.test.ts › is one document with the host-dependent fields',
+      'evalsuite/test/plan.test.ts › --json without --dry-run exits 2',
+    ],
+  },
+  {
+    id: 'budget',
+    area: 'Config and selection',
+    name: '`budget.attempts`, `budget.duration` and `--force`',
+    plan: ['profiles/pr-in-ci'],
+    tests: [
+      options('a plan over budget.attempts exits 2 unless --force'),
+      options('budget.duration stops new attempts'),
+    ],
+  },
+  {
+    id: 'selection.modes',
+    area: 'Config and selection',
+    name: '`evaluate.only`, `.skip`, `.todo` and `.for`; `group.only`',
+    plan: ['selection/only-local'],
+    tests: [
+      options('.only runs alone locally and exits 2 in CI'),
+      options('tags filter, todo, for'),
+      engine('skip is reported as skipped'),
+      'evalsuite/test/plan.test.ts › .only in CI exits 2 before any plan prints',
+    ],
+  },
+  {
+    id: 'selection.group-skip',
+    area: 'Config and selection',
+    name: '`group.skip` and `group.todo`',
+    gap: "Only `group.only` and the `evaluate` forms are tested; a skipped group's evals aren't.",
+  },
+  {
+    id: 'selection.tags',
+    area: 'Config and selection',
+    name: 'Tags: `--tag`, `!tag` and profile tags',
+    plan: ['selection/tags'],
+    tests: [options('tags filter, todo, for')],
+  },
+  {
+    id: 'selection.filters',
+    area: 'Config and selection',
+    name: 'Filters (path, eval name, cell key); no match exits 2',
+    tests: [
+      engine('filters match paths, then eval names'),
+      options('a filter that matches nothing exits 2'),
+    ],
+  },
+
+  // Environments
+  {
+    id: 'skill.harness',
+    area: 'Environments',
+    name: '`skill.local`, placed by the harness',
+    fixtures: ['skills/harness-placement'],
+  },
+  {
+    id: 'skill.workspace',
+    area: 'Environments',
+    name: "`skill.local` with `placement: 'workspace'`",
+    fixtures: [
+      'skills/workspace-placement',
+      'skills/workspace-content',
+      'harness/cursor-workspace-skills',
+      'harness/claude-code-workspace-skills',
+    ],
+  },
+  {
+    id: 'skill.git',
+    area: 'Environments',
+    name: '`skill.git`: ref, `path`, `only` and the recorded commit',
+    fixtures: ['skills/git-ref'],
+    tests: [unit('git refs and repo shorthands'), options('skills come from a git URL at a ref')],
+  },
+  {
+    id: 'skill.inline',
+    area: 'Environments',
+    name: '`skill.inline`',
+    tests: [options('skills come from a git URL at a ref')],
+  },
+  {
+    id: 'skill.registry',
+    area: 'Environments',
+    name: '`skill.registry`',
+    gap: 'No test: it needs a fake registry.',
+  },
+  {
+    id: 'skill.npm',
+    area: 'Environments',
+    name: '`skill.npm`',
+    gap: 'No test: it needs a local tarball or registry.',
+  },
+  {
+    id: 'skill.exclude',
+    area: 'Environments',
+    name: 'Skill `exclude`: the defaults and a custom list',
+    fixtures: ['skills/exclude-default', 'skills/exclude-custom'],
+    tests: [
+      unit('excludeMatcher is gitignore-style'),
+      unit('skill directories leave out eval material'),
+    ],
+  },
+  {
+    id: 'skill.only-missing',
+    area: 'Environments',
+    name: '`only` naming a missing skill',
+    gap: 'The error (environment/resolve.ts) has no test.',
+  },
+  {
+    id: 'skill.frontmatter',
+    area: 'Environments',
+    name: '`SKILL.md` frontmatter as YAML',
+    tests: [unit('SKILL.md frontmatter is parsed as YAML')],
+  },
+  {
+    id: 'mcp.stdio',
+    area: 'Environments',
+    name: '`mcp.stdio`',
+    tests: [
+      options('skills, MCP, rules, files, setup steps and secrets reach the sandbox'),
+      harness('gets MCP servers in the .mcp.json shape'),
+      secrets('MCP stdio env secrets are brokered only with explicit hosts'),
+    ],
+  },
+  {
+    id: 'mcp.http',
+    area: 'Environments',
+    name: '`mcp.http` and the ACP server shape',
+    tests: [secrets('MCP header secrets are brokered to the server')],
+  },
+  {
+    id: 'mcp.sse',
+    area: 'Environments',
+    name: '`mcp.sse`',
+    gap: 'No test builds an SSE server entry.',
+  },
+  {
+    id: 'secret.template',
+    area: 'Environments',
+    name: '`secret.template` in MCP headers',
+    tests: [
+      secrets('MCP header secrets are brokered to the server'),
+      secrets('MCP header secrets on plain HTTP stay real values'),
+    ],
+  },
+  {
+    id: 'rules',
+    area: 'Environments',
+    name: '`rules`: `AGENTS.md` for Cursor, `CLAUDE.md` for Claude Code',
+    fixtures: ['env/rules', 'harness/cursor-rules', 'harness/claude-code-rules'],
+    tests: [harness('rules win over a file at the same path')],
+  },
+  {
+    id: 'files.workspace',
+    area: 'Environments',
+    name: '`files` in the workspace, and `file()`',
+    tests: [options('skills, MCP, rules, files, setup steps and secrets reach the sandbox')],
+  },
+  {
+    id: 'files.home',
+    area: 'Environments',
+    name: '`files` under `~/`',
+    fixtures: ['env/files-home'],
+  },
+  {
+    id: 'env.vars',
+    area: 'Environments',
+    name: '`env` variables, `secret.fromEnv` and `optional`',
+    fixtures: ['secrets/checks-visible-to-checks'],
+    tests: [options('a missing secret is an infra error')],
+  },
+  {
+    id: 'secret.checks',
+    area: 'Environments',
+    name: "`to: 'checks'` secrets: hidden from the agent",
+    fixtures: ['secrets/checks-hidden-from-agent'],
+    tests: [secrets('twin: during a check, the checks secret is active')],
+  },
+  {
+    id: 'secret.brokered',
+    area: 'Environments',
+    name: 'Brokered secrets (`hosts`, `in`) and their placeholders',
+    fixtures: [
+      'secrets/brokered-agent-sees-placeholder',
+      'secrets/brokered-checks-see-placeholder',
+    ],
+    plan: ['secrets/brokered'],
+    tests: [
+      secrets('the sandbox gets a placeholder, and the gateway the value on its hosts'),
+      sandboxDocker('docker', 'a brokered secret: the upstream gets the value'),
+    ],
+  },
+  {
+    id: 'secret.unbrokered',
+    area: 'Environments',
+    name: '`secrets: { unbrokered }` and the unbrokered warning',
+    tests: [
+      options('a Docker secret without hosts warns once in the plan'),
+      secrets('lists env and MCP secrets the sandbox would get as real values'),
+    ],
+  },
+  {
+    id: 'redaction',
+    area: 'Environments',
+    name: 'Secrets masked in everything ES writes',
+    fixtures: ['secrets/redaction-coverage'],
+    tests: [
+      unit('redactSecrets masks secret-looking env values'),
+      secrets('redacting encoded forms'),
+    ],
+  },
+  {
+    id: 'setup.steps',
+    area: 'Environments',
+    name: '`setup` steps: order, a failing step named, `setup.log`',
+    fixtures: ['env/setup-order'],
+    tests: [options('a failing setup step names itself')],
+  },
+  {
+    id: 'setup.timeout',
+    area: 'Environments',
+    name: "A setup step's own `timeout`",
+    fixtures: ['env/setup-timeout'],
+  },
+  {
+    id: 'env.extend',
+    area: 'Environments',
+    name: '`extend`, overrides and the environment digest',
+    fixtures: ['env/setup-order'],
+    tests: [unit('layered environments and overrides'), harness('one environment has one digest')],
+  },
+  {
+    id: 't.sandbox',
+    area: 'Environments',
+    name: '`t.sandbox()`: checks without a turn',
+    fixtures: ['env/files-home', 'skills/workspace-placement'],
+  },
+
+  // Sandbox
+  {
+    id: 'docker.run',
+    area: 'Sandbox',
+    name: 'Docker: run, diff, and removal, on timeout too',
+    tests: [
+      docker('runs checks in the container, diffs, and removes it'),
+      docker('a timeout removes the container'),
+    ],
+  },
+  {
+    id: 'sandbox.contract',
+    area: 'Sandbox',
+    name: 'Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker',
+    tests: [
+      'evalsuite/test/sandbox-contract.test.ts › writeFile then exec reads it',
+      unit('the fake sandbox reads and writes ~/ paths'),
+    ],
+  },
+  {
+    id: 'docker.install',
+    area: 'Sandbox',
+    name: '`docker({ install })` layers',
+    plan: ['images/install-from-dockerfile'],
+    tests: [
+      docker('a failing install command names itself'),
+      docker('concurrent attempts in two workers share one build'),
+      sandboxDocker('unit', 'install layers are keyed on the base image id'),
+    ],
+  },
+  {
+    id: 'docker.dockerfile',
+    area: 'Sandbox',
+    name: '`docker({ dockerfile })` and `ES_BASE`',
+    fixtures: ['harness/claude-code-dockerfile'],
+    plan: ['images/install-from-dockerfile'],
+    tests: [
+      docker('dockerfile: FROM the ES_BASE arg'),
+      sandboxDocker('unit', 'the Dockerfile tag hashes the Dockerfile'),
+    ],
+  },
+  {
+    id: 'docker.from',
+    area: 'Sandbox',
+    name: '`docker({ from })` toolchain images',
+    gap: "Only `es image build --dry-run`'s listing is tested; building on a `from` image and running in it is manual (test-strategy §11.4, I2).",
+  },
+  {
+    id: 'image.build',
+    area: 'Sandbox',
+    name: '`es image build` and `--dry-run`',
+    tests: [options('es image build --dry-run lists every image')],
+  },
+  {
+    id: 'egress',
+    area: 'Sandbox',
+    name: 'Egress policies (sandbox-docker; no public option yet)',
+    tests: [
+      sandboxDocker('docker', 'allowlist: a listed host gets 200'),
+      sandboxDocker('docker', 'no direct route: custom and deny-all'),
+      sandboxDocker('unit', 'deny list: every always-denied form'),
+    ],
+  },
+  {
+    id: 'brokering.harness-key',
+    area: 'Sandbox',
+    name: "The harness's key never enters the container",
+    tests: [
+      sandboxDocker('docker', 'env, /proc and files in the container never contain the real key'),
+      harness('credential brokering per agent'),
+    ],
+  },
+  {
+    id: 'ports',
+    area: 'Sandbox',
+    name: 'Ports: through the tunnel, or published without the gateway',
+    tests: [
+      sandboxDocker('docker', 'port tunnel: same URL and live connection'),
+      sandboxDocker('docker', 'without the gateway the bridge port is published'),
+    ],
+  },
+  {
+    id: 'cleanup',
+    area: 'Sandbox',
+    name: 'No container or sandbox left after a failure, timeout or abort',
+    tests: [
+      sandboxDocker('session', 'an abort at any point while creating leaves no container'),
+      'evalsuite/test/concurrency.test.ts › timeouts under concurrency fail every attempt and destroy every sandbox',
+    ],
+  },
+
+  // Harnesses
+  {
+    id: 'harness.cursor-real',
+    area: 'Harnesses',
+    name: 'Real Cursor, end to end',
+    gap: "No automated run on PRs: real.yml runs `smoke:real` nightly once a ref has it, and the real fixture tier isn't on this branch yet.",
+  },
+  {
+    id: 'harness.claude-code',
+    area: 'Harnesses',
+    name: '`claudeCode()`: its image, rules, skills and MCP shape',
+    fixtures: [
+      'harness/claude-code-rules',
+      'harness/claude-code-workspace-skills',
+      'harness/claude-code-dockerfile',
+    ],
+    plan: ['harnesses/claude-code'],
+    tests: [harness('reads rules from CLAUDE.md and repo skills from .claude/skills')],
+  },
+  {
+    id: 'harness.fake-script',
+    area: 'Harnesses',
+    name: '`fakeHarness({ script })` and `layout`',
+    fixtures: ['secrets/checks-hidden-from-agent', 'harness/cursor-rules'],
+    tests: [harness('a fake agent with a layout is placed exactly like that agent')],
+  },
+  {
+    id: 'harness.transcripts',
+    area: 'Harnesses',
+    name: 'Transcripts, normalised per harness',
+    tests: [
+      unit('a real Cursor stream normalises to one event per action'),
+      harness('its Edit and Write tools are file edits'),
+    ],
+  },
+
+  // Judges and matchers
+  {
+    id: 'judge',
+    area: 'Judges and matchers',
+    name: 'Judge verdicts, errors, option cascade and retries',
+    tests: [
+      engine('judge options cascade from config to group, eval and call'),
+      engine('a failing judge fails the eval as a judge error'),
+      unit('judge calls retry transient provider errors'),
+    ],
+  },
+  {
+    id: 'judge.real',
+    area: 'Judges and matchers',
+    name: 'A real judge model call',
+    gap: "Tests use `fakeJudge`; provider resolution is unit-tested, a model call isn't.",
+  },
+  {
+    id: 'matchers',
+    area: 'Judges and matchers',
+    name: '`toHaveFile`, `toSucceed` and `toPass`',
+    tests: [
+      'evalsuite/test/matchers.test.ts › passes when the file exists',
+      'evalsuite/test/matchers.test.ts › passes on exit 0',
+      'evalsuite/test/matchers.test.ts › passes on a pass verdict',
+    ],
+  },
+
+  // Records and studio
+  {
+    id: 'history',
+    area: 'Records and studio',
+    name: 'Recording, merges across branches, rebases and `es checkout`',
+    tests: [
+      'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
+      'evalsuite/test/history.test.ts › two branches record, merge with zero conflicts',
+      'evalsuite/test/history.test.ts › a dirty run saves worktree.patch',
+    ],
+  },
+  {
+    id: 'history.commands',
+    area: 'Records and studio',
+    name: '`es history`, `es show` and `es compare`, with `--json` and `--md`',
+    tests: [
+      'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
+      'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
+    ],
+  },
+  {
+    id: 'compare.fail-on-regression',
+    area: 'Records and studio',
+    name: '`es compare --fail-on-regression`',
+    gap: 'No test passes the flag.',
+  },
+  {
+    id: 'query',
+    area: 'Records and studio',
+    name: '`es query`',
+    tests: ['evalsuite/test/query.test.ts › the projection matches the record'],
+  },
+  {
+    id: 'studio',
+    area: 'Records and studio',
+    name: '`es studio` and `es studio build`',
+    tests: [
+      'evalsuite/test/studio.test.ts › serves the app with a strict CSP',
+      'evalsuite/test/studio.test.ts › writes a static site',
+    ],
+  },
+
+  // CLI and runner
+  {
+    id: 'exit-codes',
+    area: 'CLI and runner',
+    name: 'Exit codes 0, 1, 2, 3 and 130',
+    tests: [
+      engine('a passing eval exits 0'),
+      engine('a failing assertion exits 1'),
+      engine('a harness failure is an infra error and exits 3'),
+      engine('exits 130, records the run'),
+    ],
+  },
+  {
+    id: 'exit-precedence',
+    area: 'CLI and runner',
+    name: 'Exit code precedence (a failure and an infra error in one run)',
+    gap: 'No test has both in one run.',
+  },
+  {
+    id: 'output',
+    area: 'CLI and runner',
+    name: 'Output modes, renderers and GitHub Actions groups',
+    tests: [
+      'evalsuite/test/ui.test.ts › grouped: start lines stream',
+      'evalsuite/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
+      engine('agent mode prints failures only'),
+    ],
+  },
+  {
+    id: 'output.flags',
+    area: 'CLI and runner',
+    name: '`--log-order`, `--log-prefix` and `--output-logs` through `es run`',
+    gap: 'The renderers are tested on recorded events; no test passes the flags to `es run`.',
+  },
+  {
+    id: 'concurrency',
+    area: 'CLI and runner',
+    name: 'Concurrency caps, order and queue time',
+    tests: [
+      'evalsuite/test/concurrency.test.ts › --concurrency caps attempts across files',
+      'evalsuite/test/concurrency.test.ts › a sandbox cap holds on top of the run cap',
+      'evalsuite/test/concurrency.test.ts › time spent queued counts toward neither',
+    ],
+  },
+  {
+    id: 'cancel',
+    area: 'CLI and runner',
+    name: 'Eval timeouts and Ctrl-C',
+    tests: [
+      'evalsuite/test/concurrency.test.ts › Ctrl-C cancels running attempts',
+      engine('a timeout aborts the agent and destroys the sandbox'),
+    ],
+  },
+  {
+    id: 'pack',
+    area: 'CLI and runner',
+    name: 'The packed package installs into a clean project and runs',
+    tests: ['evalsuite/test/pack.test.ts › the packed package installs into a clean project'],
+  },
+]

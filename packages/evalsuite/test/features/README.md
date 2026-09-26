@@ -39,6 +39,21 @@ outside. Every user-facing feature or option lands with its fixtures in the same
     of the run record.
 - The table test fails if a directory here is missing from the table, or lacks either eval.
 
+## The inventory and COVERAGE.md
+
+Every user-facing feature has an entry in [`inventory.ts`](./inventory.ts): an id, its area, its
+name as the docs give it, and what covers it. That's `fixtures` (directories here), `plan` cases
+(`dir/name`) and `tests` (`<path under packages/> › <test title>`). [`COVERAGE.md`](./COVERAGE.md)
+is the feature × tier matrix (unit, plan, fake, docker, real) generated from it, the table in
+`features.test.ts` and the cases in `plan.test.ts`. CI writes the same matrix to the job summary.
+
+- **A new feature adds its entry** in the same change, naming the fixtures, plan cases or tests
+  that cover it. Every fixture and plan case must be named by some entry.
+- **A feature that nothing covers yet** needs `gap: '<why>'`. Once something covers it, delete
+  the gap.
+- `pnpm features:matrix --write` regenerates `COVERAGE.md`. `matrix.test.ts` fails on anything
+  above that's missing, on a name that doesn't exist, and when `COVERAGE.md` is stale.
+
 ## Checks without an agent, and checks as the agent
 
 - **Checks on what the environment set up** (files, rules, skills, setup steps) don't need a
@@ -87,4 +102,5 @@ it and run `es run --ui plain`. Add `ES_FIXTURE_SANDBOX=docker` for the Docker t
 3. Plan snapshot diffs are reviewed and show only the intended change.
 4. `pnpm test`, `pnpm lint` and `pnpm typecheck` are green, with no Docker test skipped when the
    feature touches Docker.
-5. The change lists the fixtures it adds.
+5. The change lists the fixtures it adds, and its entry in `inventory.ts` names them (or says why
+   it's a gap), with `COVERAGE.md` regenerated.

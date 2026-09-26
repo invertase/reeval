@@ -63,6 +63,7 @@ You need Node 22.13 or later, pnpm 10 and, for the Docker tests and real runs, a
 pnpm install
 pnpm build       # build the studio app, then compile the packages (and copy the app in)
 pnpm test        # build, then run every package's tests: engine, wrapper, studio, sandbox, Docker and browser
+pnpm coverage    # the same tests with code coverage from every process they start (below)
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
@@ -98,6 +99,16 @@ with recorded runs, and `ES_STUDIO_PROJECT=/tmp/es-demo pnpm --filter studio-web
 app with hot reload on port 4985 against it. The browser test needs Chrome or Chromium and skips
 without one.
 
+**Coverage.** `pnpm coverage` builds, runs every package's tests with `NODE_V8_COVERAGE` set, and
+merges what each process wrote with c8, mapped back to `src/` through the build's source maps.
+That's the test runner, each `es` CLI, its Vitest workers and the egress gateway, which runs in
+them. It writes `coverage/report/` (`index.html`, `lcov.info` and `summary.md`) and is report-only,
+with no threshold. It doesn't count code inside Docker containers (the gateway's forwarder, the
+harness CLIs), the studio app in the browser, or the packed-install test, which runs an installed
+copy outside the repo. Without Docker, the Docker-only code reads as uncovered. Which features
+have fixtures on which tier is a separate, generated matrix:
+[`test/features/COVERAGE.md`](./packages/evalsuite/test/features/COVERAGE.md).
+
 ### CI and releases
 
 GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with Node from
@@ -105,7 +116,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test) and `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) |
+| `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
 | `real.yml` | The real-agent tier (`pnpm smoke:real`), nightly and on demand, only when the `CURSOR_API_KEY` secret exists; never on PRs |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
@@ -113,6 +124,10 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
   versions and the build context.
+- **Coverage:** the `unit` (newest Node), `features`, `docker` and `studio` jobs run their tests
+  with `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
+  (`coverage-report`) and writes the summary and the feature × tier matrix to the job summary.
+  It's report-only, so it doesn't fail on a low number.
 - **Merge with squash,** so the PR title (checked by `commits.yml`) is the commit release-please
   reads. `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking
   change bumps the minor too.
