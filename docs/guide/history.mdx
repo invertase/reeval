@@ -91,7 +91,9 @@ base 20260926T174239Z_b010670_ada-lovelace_yzmg (b010670) → head 20260926T1744
       antigravity:gemini-3.8-flash-medium/-/docker  tools 49 → 25 (×0.51) · agent 2m 00s → 1m 05s (×0.54)
 ```
 
-`es compare` takes a base and a head run. With none, it diffs the latest run against its nearest recorded ancestor in git. Each eval is `regressed`, `fixed`, `same`, `new`, `removed` or `not comparable`. Not comparable means something the eval depends on changed, such as its file, a helper it imports, the image or the judge, and the line says which. Under a cell in both runs, a line shows how its effort changed: here Antigravity needed half the tool calls in the second run.
+`es compare` takes a base and a head run. With none, it diffs the latest run against its nearest recorded ancestor in git. Each eval is `regressed`, `fixed`, `same`, `new`, `removed` or `not comparable`.
+
+Not comparable means something the eval depends on changed, such as its file, a helper it imports, the image or the judge, and the line says which. Under a cell in both runs, a line shows how its effort changed: here Antigravity needed half the tool calls in the second run.
 
 <Image src="/assets/studio/compare.png" alt="The studio's compare page, listing evals as regressed, fixed or not comparable between two runs" width={800} />
 

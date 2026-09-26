@@ -63,7 +63,9 @@ The CLI reads home skills from `~/.gemini/config/skills`, not the `~/.gemini/ant
 
 ## Telemetry it sends anyway
 
-CLI 1.2.11 opens `play.googleapis.com` (telemetry) and `antigravity-unleash.goog` (feature flags) in every session. No setting stops them, and neither gets the key. Under a restricted egress policy the gateway refuses them, records them under the record's `egress.expectedBlocked` rather than `blocked`, and `-v` prints one `gateway` line at teardown instead of one per request: `expected blocks, not logged per request:`, each `host:port` with its connection count, then the reason ("Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off").
+CLI 1.2.11 opens `play.googleapis.com` (telemetry) and `antigravity-unleash.goog` (feature flags) in every session. No setting stops them, and neither gets the key.
+
+Under a restricted egress policy the gateway refuses them, records them under the record's `egress.expectedBlocked` rather than `blocked`, and `-v` prints one `gateway` line at teardown instead of one per request: `expected blocks, not logged per request:`, each `host:port` with its connection count, then the reason ("Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off").
 
 ## Tokens
 

@@ -90,7 +90,9 @@ Duration  8s
 
 ES records tokens but prices no models, so the record's `usd` is `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
-File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events. When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn.
+File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
+
+When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn.
 
 ## Skills, rules and MCP
 

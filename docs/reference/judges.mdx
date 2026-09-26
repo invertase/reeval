@@ -65,7 +65,9 @@ es: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_K
 
 ## Retries
 
-A transient provider error (408, 409, 425, 429, a 5xx, or a message about high demand, overload, rate limits or a reset connection) is retried up to six tries in all, with exponential backoff from 2 seconds, capped at 30 seconds, and at least any `retry-after`. Each retry is recorded on the verdict as `{ error, delayMs }`. A judge that still fails is a judge error for the attempt, not a failed check.
+A transient provider error (408, 409, 425, 429, a 5xx, or a message about high demand, overload, rate limits or a reset connection) is retried up to six tries in all, with exponential backoff from 2 seconds, capped at 30 seconds, and at least any `retry-after`.
+
+Each retry is recorded on the verdict as `{ error, delayMs }`. A judge that still fails is a judge error for the attempt, not a failed check.
 
 ## fakeJudge
 
