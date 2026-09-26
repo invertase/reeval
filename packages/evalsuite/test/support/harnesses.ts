@@ -41,7 +41,7 @@ export const harnesses: HarnessRow[] = [
     key: null,
     image: 'cursor',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
-    autoHosts: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
+    autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: null,
     tokens: false,
     servedModel: null,
@@ -53,10 +53,11 @@ export const harnesses: HarnessRow[] = [
     key: { name: 'CURSOR_API_KEY', from: ['CURSOR_API_KEY'] },
     image: 'cursor',
     skillContext: /^~\/(.+\/)?\.agents\/skills\/contract-probe\/SKILL\.md$/,
-    autoHosts: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
+    autoHosts: ['api2.cursor.sh', '*.cursor.sh'],
     apiHost: 'api2.cursor.sh',
-    tokens: false,
-    servedModel: null,
+    tokens: true,
+    // The SDK reports the resolved model with its parameters, e.g. composer-2.5[fast=false].
+    servedModel: /^composer-2\.5/,
     wireModel: null,
   },
   {

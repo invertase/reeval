@@ -22,6 +22,8 @@ for pair in $images; do
   image=${pair#*=}
   docker image inspect "$image" >/dev/null 2>&1 || { echo "skipped $image: not built"; continue; }
   pinned=$(label "$image")
+  version=${pinned##* }
+  new_label=""
   bootstrap=/root/.ai-sdk-harness/.harness-bootstrap
   case "$harness" in
     antigravity)
@@ -43,17 +45,19 @@ $bootstrap/antigravity/bin/agy --version"
         continue
       fi
       latest=${ES_DRIFT_CURSOR_SDK_VERSION:-$(npm view @cursor/sdk version)}
+      new_label="@cursor/sdk $latest"
       swap="set -eu
 cd $bootstrap/cursor-sdk
-npm install --no-audit --no-fund --save-exact @cursor/sdk@$latest >/dev/null
-node -p \"require('@cursor/sdk/package.json').version\""
+npm install --omit=dev --no-audit --no-fund --loglevel=error --save-exact @cursor/sdk@$latest
+node -p \"JSON.parse(require('fs').readFileSync('node_modules/@cursor/sdk/package.json')).version\""
       ;;
     *)
       rows+=("| $harness | $pinned | — | no latest source (no key to test it with) |")
       continue
       ;;
   esac
-  if [ "$latest" = "$pinned" ]; then
+  new_label=${new_label:-$latest}
+  if [ "$latest" = "$version" ]; then
     rows+=("| $harness | $pinned | $latest | already the latest |")
     continue
   fi
@@ -61,10 +65,10 @@ node -p \"require('@cursor/sdk/package.json').version\""
   context=$(mktemp -d)
   printf '%s\n' "$swap" > "$context/swap.sh"
   printf 'FROM %s\nCOPY swap.sh /tmp/swap.sh\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nLABEL dev.evalsuite.agent-version=%s\n' \
-    "$image" "$latest" > "$context/Dockerfile"
+    "$image" "\"$new_label\"" > "$context/Dockerfile"
   docker build -q -t "$image" "$context" >/dev/null
   rm -rf "$context"
-  [ "$(label "$image")" = "$latest" ]
+  [ "$(label "$image")" = "$new_label" ]
   rows+=("| $harness | $pinned | **$latest** | swapped in |")
 done
 

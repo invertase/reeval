@@ -1,6 +1,6 @@
 // Replays real agent streams, captured from the contract suite (test/replay/<harness>/, refreshed
 // with ES_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: ES's normaliser must
-// still find each behaviour's signals, Antigravity's adapter must still translate the native events
+// still find each behaviour's signals, each adapter (Antigravity, the Cursor SDK) must still translate the native events
 // to the same tool calls, text and token counts, and every native event must match the committed
 // format (test/replay/formats/). Each check has a twin that proves it can fail.
 import assert from 'node:assert/strict'
@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { AntigravityStreamTranslator } from '@evalsuite/harness-antigravity'
+import { CursorSdkStreamTranslator } from '@evalsuite/harness-cursor-sdk'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { testDir } from './support/fixture.ts'
@@ -86,84 +87,113 @@ for (const harness of harnesses) {
   })
 }
 
-describe('replay: the Antigravity adapter, from the CLI’s own events', () => {
-  /** The native events through today's translator, as its parts (raw ones dropped). */
-  const retranslate = (lines: Line[]) => {
-    const t = new AntigravityStreamTranslator({ turn: 1 })
-    const parts: HarnessV1StreamPart[] = []
-    for (const e of nativeEvents(lines.map((l) => JSON.stringify(l)).join('\n')))
-      parts.push(...t.push(JSON.stringify(e)))
-    return parts.filter((p) => p.type !== 'raw')
-  }
-  /** What must match between the captured parts and today's: tool calls, text and token totals. */
-  const essence = (parts: Array<{ type: string; [k: string]: unknown }>) => ({
-    calls: parts
-      .filter((p) => p.type === 'tool-call')
-      .map((p) => [
-        p.toolName,
-        // The harness layer makes paths workspace-relative after the adapter.
-        JSON.parse(text(p.input).replaceAll('/es/workspace/', '')),
-      ]),
-    text: parts
-      .filter((p) => p.type === 'text-delta')
-      .map((p) => p.delta ?? p.text)
-      .join(''),
-    tokens: (() => {
-      const u = parts.find((p) => p.type === 'finish')?.totalUsage as
-        | { raw?: { input_tokens?: number; output_tokens?: number } }
-        | undefined
-      return [u?.raw?.input_tokens, u?.raw?.output_tokens]
-    })(),
-  })
+/** A native tool name in each harness's edit-and-run capture, and a name its adapter doesn't know. */
+const renamedTool: Record<string, [string, string]> = {
+  antigravity: ['"run_command"', '"run_cmd_v2"'],
+  cursor: ['"name":"shell"', '"name":"shell_v2"'],
+}
 
-  for (const file of readdirSync(join(root, 'antigravity')).filter((f) => f.endsWith('.jsonl'))) {
-    test(`${file}: the same tool calls, text and tokens as when it was captured`, () => {
-      const lines = parse(read('antigravity', file))
-      const captured = essence(lines.map((l) => l.part))
-      assert.ok(captured.calls.length > 0 && captured.tokens[0], 'the capture has calls and tokens')
-      assert.deepEqual(essence(retranslate(lines) as never), captured)
+/** Each harness's translator, fresh for one turn: the native events go back through it. */
+const translators: Record<string, () => { push(line: string): HarnessV1StreamPart[] }> = {
+  antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
+  cursor: () => new CursorSdkStreamTranslator({ workDir: '/es/workspace' }),
+}
+
+for (const harness of Object.keys(translators))
+  describe(`replay: the ${harness} adapter, from the agent’s own events`, () => {
+    /** The native events through today's translator, as its parts (raw ones dropped). */
+    const retranslate = (lines: Line[]) => {
+      const t = (translators[harness] as () => { push(line: string): HarnessV1StreamPart[] })()
+      const parts: HarnessV1StreamPart[] = []
+      for (const e of nativeEvents(lines.map((l) => JSON.stringify(l)).join('\n')))
+        parts.push(...t.push(JSON.stringify(e)))
+      return parts.filter((p) => p.type !== 'raw')
+    }
+    /** What must match between the captured parts and today's: tool calls, text and token totals. */
+    const essence = (parts: Array<{ type: string; [k: string]: unknown }>) => ({
+      calls: parts
+        .filter((p) => p.type === 'tool-call')
+        .map((p) => [
+          p.toolName,
+          // The harness layer makes paths workspace-relative after the adapter.
+          JSON.parse(text(p.input).replaceAll('/es/workspace/', '')),
+        ]),
+      text: parts
+        .filter((p) => p.type === 'text-delta')
+        .map((p) => p.delta ?? p.text)
+        .join(''),
+      // Captured parts carry the AI SDK's numbers; the translator's, `{ total }`.
+      tokens: (() => {
+        const u = parts.find((p) => p.type === 'finish')?.totalUsage as
+          | Record<string, number | { total?: number } | undefined>
+          | undefined
+        const n = (v: number | { total?: number } | undefined) =>
+          typeof v === 'number' ? v : v?.total
+        return [n(u?.inputTokens), n(u?.outputTokens)]
+      })(),
     })
-  }
 
-  test('twin: a changed event changes the translation', () => {
-    const lines = parse(
-      read('antigravity', 'edit-and-run.raw.jsonl').replaceAll('"run_command"', '"run_cmd_v2"'),
-    )
-    const captured = essence(
-      parse(read('antigravity', 'edit-and-run.raw.jsonl')).map((l) => l.part),
-    )
-    assert.notDeepEqual(essence(retranslate(lines) as never).calls, captured.calls)
-  })
-})
-
-describe('replay: native stream formats', () => {
-  test('every captured Antigravity event matches the committed format', () => {
-    const known = new Set(knownSignatures('antigravity'))
-    assert.ok(known.size > 0, 'test/replay/formats/antigravity.json is empty')
-    for (const file of readdirSync(join(root, 'antigravity'))) {
-      const seen = signatures('antigravity', nativeEvents(read('antigravity', file)))
-      assert.deepEqual(
-        seen.filter((s) => !known.has(s)),
-        [],
-        file,
-      )
+    for (const file of readdirSync(join(root, harness)).filter((f) => f.endsWith('.jsonl'))) {
+      test(`${file}: the same tool calls, text and tokens as when it was captured`, () => {
+        const lines = parse(read(harness, file))
+        const captured = essence(lines.map((l) => l.part))
+        assert.ok(
+          captured.calls.length > 0 && captured.tokens[0],
+          'the capture has calls and tokens',
+        )
+        assert.deepEqual(essence(retranslate(lines) as never), captured)
+      })
     }
+
+    test('twin: a changed event changes the translation', () => {
+      const [from, to] = renamedTool[harness] as [string, string]
+      const base = read(harness, 'edit-and-run.raw.jsonl')
+      assert.ok(base.includes(from), `${from} is in the capture`)
+      const lines = parse(base.replaceAll(from, to))
+      const captured = essence(parse(base).map((l) => l.part))
+      assert.notDeepEqual(essence(retranslate(lines) as never).calls, captured.calls)
+    })
   })
 
-  test('twin: a new event kind, step type, key or tool is a format change', () => {
-    const known = new Set(knownSignatures('antigravity'))
-    const base = read('antigravity', 'edit-and-run.raw.jsonl')
-    for (const [from, to] of [
-      ['"event":"result"', '"event":"final_result"'],
-      ['"step_type":"tool"', '"step_type":"tool_v2"'],
-      ['"text_delta"', '"delta_text"'],
-      ['"run_command"', '"run_cmd_v2"'],
-      ['"state":"DONE"', '"state":"FINISHED"'],
-    ] as const) {
-      const changed = base.replaceAll(from, to)
-      assert.notEqual(changed, base, `${from} is in the capture`)
-      const unknown = signatures('antigravity', nativeEvents(changed)).filter((s) => !known.has(s))
-      assert.notDeepEqual(unknown, [], `${from} → ${to} went unnoticed`)
-    }
+/** Changes to each harness's native stream that must each read as a format change. */
+const formatChanges: Record<string, Array<[string, string]>> = {
+  antigravity: [
+    ['"event":"result"', '"event":"final_result"'],
+    ['"step_type":"tool"', '"step_type":"tool_v2"'],
+    ['"text_delta"', '"delta_text"'],
+    ['"run_command"', '"run_cmd_v2"'],
+    ['"state":"DONE"', '"state":"FINISHED"'],
+  ],
+  cursor: [
+    ['"type":"result"', '"type":"final_result"'],
+    ['"type":"tool_call"', '"type":"tool_use"'],
+    ['"call_id"', '"callId"'],
+    ['"status":"completed"', '"status":"done"'],
+  ],
+}
+
+for (const harness of Object.keys(formatChanges))
+  describe(`replay: ${harness}'s native stream format`, () => {
+    const known = new Set(knownSignatures(harness))
+    test('every captured event matches the committed format', () => {
+      assert.ok(known.size > 0, `test/replay/formats/${harness}.json is empty`)
+      for (const file of readdirSync(join(root, harness))) {
+        const seen = signatures(harness, nativeEvents(read(harness, file)))
+        assert.deepEqual(
+          seen.filter((s) => !known.has(s)),
+          [],
+          file,
+        )
+      }
+    })
+
+    test('twin: a new event kind, step type, key or tool is a format change', () => {
+      const base = read(harness, 'edit-and-run.raw.jsonl')
+      for (const [from, to] of formatChanges[harness] ?? []) {
+        const changed = base.replaceAll(from, to)
+        assert.notEqual(changed, base, `${from} is in the capture`)
+        const unknown = signatures(harness, nativeEvents(changed)).filter((s) => !known.has(s))
+        assert.notDeepEqual(unknown, [], `${from} → ${to} went unnoticed`)
+      }
+    })
   })
-})

@@ -29,6 +29,17 @@ const FORMATS: Record<string, Format> = {
     values: ['state', 'status', 'permission_mode'],
     lists: ['tools'],
   },
+  // The Cursor SDK harness's runner lines: `init`, `event` (the SDK's own messages), `result`.
+  cursor: {
+    kind: (e) => {
+      if (typeof e.type !== 'string') return undefined
+      const inner = (e.event as { type?: unknown } | undefined)?.type
+      return typeof inner === 'string' ? `${e.type}/${inner}` : e.type
+    },
+    opaque: ['args', 'value', 'params', 'result'],
+    values: ['status', 'role'],
+    lists: [],
+  },
 }
 
 export const hasFormat = (harness: string) => Object.hasOwn(FORMATS, harness)
