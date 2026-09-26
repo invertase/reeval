@@ -101,6 +101,12 @@ at a time, at `--concurrency 1`, and spend money, so keep them cheap:
 - A fixture whose behaviour only a real agent has (rules reaching its context) lists `real` alone,
   next to the fake/Docker fixture that checks where ES put the file.
 
+What every real harness must do, on each of them, is the **harness contract**
+([`../contract/README.md`](../contract/README.md)): a table of behaviours run once per harness
+row. A feature a real harness receives (skills, rules, MCP, auth, egress, the record) adds a
+behaviour there when it applies to every harness, and names it in its inventory entry's `real`
+(`contract › <behaviour>`); a harness-specific check stays a fixture here.
+
 ## Running
 
 ```bash

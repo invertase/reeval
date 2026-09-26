@@ -6,6 +6,7 @@
 //   --json      print { problems, markdown, current } for matrix.test.ts
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { behaviours } from '../contract.test.ts'
 import { inventory } from '../features/inventory.ts'
 import { features } from '../features.test.ts'
 import { cases } from '../plan.test.ts'
@@ -22,6 +23,7 @@ const matrix = buildMatrix(inventory, {
     canary: existsSync(join(testDir, 'features', f.dir, 'evals/canary.es.ts')),
   })),
   planCases: cases.map((c) => `${c.dir}/${c.name}`),
+  contract: behaviours.map((b) => ({ name: b.name, canary: b.canary })),
   testSource: (path) => {
     const file = join(packages, path)
     return existsSync(file) ? readFileSync(file, 'utf8') : null

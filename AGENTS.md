@@ -62,7 +62,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/analysis` | `es analyze`: the digest, the schema and prompt, the model call, validation, rendering, and the cache and saved files |
 | `packages/evalsuite/src/cli-spec.ts` | Every command and flag as data: `es` parses from it and `es analyze` checks verify commands against it |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
-| `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
+| `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents) and `replay/` (captured real streams and each CLI's known stream format) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
 | `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`, and the build vendors it into `@invertase/foobar` (`dist/vendor/harness-antigravity`) like `sandbox-docker` |
 | `packages/harness-cursor-sdk` | `@evalsuite/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Vendored into `@invertase/foobar` like `harness-antigravity` |
@@ -90,8 +90,26 @@ pnpm test:plan                          # plan snapshots
 pnpm test:features                      # feature fixtures on the fake sandbox, and Docker if it's there
 pnpm test:docker                        # Docker only, failing (not skipping) without it
 pnpm test:real                          # the real tier: fixtures on real Cursor (CURSOR_API_KEY)
+pnpm test:contract                      # the harness contract and e2e CLI suite on every real harness with a key
+pnpm test:replay                        # captured real streams through today's adapters and normaliser, key-free
 ES_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the diff
 ```
+
+**The harness contract** (`test/contract.test.ts`, [its README](./packages/evalsuite/test/contract/README.md))
+runs one ES project on each real harness (the rows in `test/support/harnesses.ts`: Cursor,
+Antigravity, Claude Code) and checks the same behaviours on each: a placed skill is used, rules are
+read, a stdio MCP server is called, a file edit and a command are in the transcript, tokens and the
+served model are recorded, the real key is nowhere in the container, `deny-all` with the automatic
+hosts works and a blocked host is refused and recorded, the native stream format is known, and
+nothing is left behind. Each behaviour is an eval, a canary that must fail and a check of the
+record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness and checks `es
+compare` says "same", every `es query` view answers, `-v` and `.es/debug` have the trace, and `es
+studio build` builds the history. Both need `ES_TEST_REAL=1` (which `pnpm test:contract` sets) and
+each harness's key; a row without its key skips and says so (Claude Code has none yet). Their
+`fake` rows run key-free in the Docker tier. `test/replay.test.ts` replays streams captured from
+real runs (`ES_UPDATE_CAPTURES=1` on a contract run refreshes them, `ES_UPDATE_FORMATS=1` accepts a
+new native format). No real-agent test retries: checks read files, exit codes, the record and
+transcript events, never the model's wording.
 
 The real tier is skipped (with a reason) unless `ES_TEST_REAL=1`, which `pnpm test:real` sets. It
 runs the fixtures that list `real` on Cursor in Docker, one at a time, on `composer-2.5` unless
@@ -143,7 +161,8 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
-| `real.yml` | The real-agent tier (`pnpm smoke:real`), nightly and on demand, only when the `CURSOR_API_KEY` secret exists; never on PRs |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's), skipping with a notice without the `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` secrets: `contract (pinned)` (the harness contract and e2e CLI suite), `contract (latest)` (the version-drift leg: `scripts/drift/latest-images.sh` swaps the newest `agy` and `@cursor/sdk` into the images, and any change to a CLI's output format fails it; not on PRs) and `real agents (Cursor)` (`pnpm smoke:real`; not on PRs). One run at a time, one leg after another |
+| `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
@@ -1168,7 +1187,10 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   comparable.
 - **Attempts:** each attempt's key (unique in the run), cell, run number, start order and time,
   image id (details in the stack), variable and secret names, egress (the policy, and the hosts
-  contacted and refused, with bytes), turns (text cut at 8 KB; the
+  contacted and refused, with bytes), `servedModels` (the models the harness's own API requests
+  named, as the egress gateway saw them: `gemini-3.8-flash` for Antigravity's
+  `gemini-3.8-flash-low`, plus its title model; null for a harness whose requests don't name one),
+  turns (text cut at 8 KB; the
   whole message is in `transcript.jsonl`) and verdicts, each with a key that follows the same
   question across runs.
 - **Environments:** each environment's digest, parent and overrides, egress policy, setup steps,

@@ -35,7 +35,8 @@ import {
 type Ran = { cli: CliRun; run: RunRecord; runDir: string }
 /** Returns 'n/a' when the behaviour doesn't apply to the row. */
 type Check = (ran: Ran, row: HarnessRow) => void | 'n/a' | Promise<void>
-type Behaviour = { name: string; check: Check }
+/** `canary`: whether the check includes a canary that must fail (a record-only check has none). */
+type Behaviour = { name: string; canary: boolean; check: Check }
 
 const evalNamed = (run: RunRecord, name: string) => {
   const found = run.evals.find((e) => e.name === name)
@@ -96,9 +97,10 @@ type TurnRecord = AttemptRecord['turns'][number] & {
 /** What one contract run starts: es.config.ts's budget.attempts, which es run enforces too. */
 const CONTRACT_ATTEMPTS = 12
 
-const behaviours: Behaviour[] = [
+export const behaviours: Behaviour[] = [
   {
     name: 'skill placed where the agent reads it, and used',
+    canary: true,
     check(ran, row) {
       const a = checkAndCanary(
         ran,
@@ -116,11 +118,13 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'rules read',
+    canary: true,
     check: (ran, row) =>
       void checkAndCanary(ran, row, 'rules', 'ruled', /expected null to be 'TANGERINE-41'/),
   },
   {
     name: 'stdio MCP server started and called',
+    canary: true,
     check(ran, row) {
       checkAndCanary(ran, row, 'mcp', 'stamped', /expected '' to contain 'tools\/call'/)
       const env = ran.run.environments.find((e) => e.name === 'stamped')
@@ -129,6 +133,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'file edited and command run, both in the transcript',
+    canary: true,
     check(ran, row) {
       const a = checkAndCanary(
         ran,
@@ -146,6 +151,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'tokens recorded where the harness reports them',
+    canary: false,
     check(ran, row) {
       const turns = withTurns(ran.run).flatMap((a) => a.turns as TurnRecord[])
       assert.ok(turns.length > 0, 'no turns ran')
@@ -164,6 +170,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'real key never in the container',
+    canary: true,
     check(ran, row) {
       checkAndCanary(ran, row, 'key', 'scanned', /to deeply equal \[\]/)
       const key = keyOf(row)
@@ -172,6 +179,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'deny-all plus auto hosts works, a blocked host refused and recorded',
+    canary: true,
     check(ran, row) {
       const a = checkAndCanary(ran, row, 'egress', 'closed', /expected '403 000' to match/)
       const egress = a.egress
@@ -192,6 +200,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'served model recorded',
+    canary: false,
     check(ran, row) {
       const attempts = withTurns(ran.run)
       assert.ok(attempts.length > 0, 'no turns ran')
@@ -211,6 +220,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'native stream format unchanged',
+    canary: false,
     check(ran, row) {
       if (!hasFormat(row.id)) return 'n/a'
       const events = rawTranscripts(ran.runDir).flatMap((f) =>
@@ -230,6 +240,7 @@ const behaviours: Behaviour[] = [
   },
   {
     name: 'clean teardown',
+    canary: false,
     async check(ran) {
       assert.equal(ran.run.status, 'complete')
       assert.equal(await containersLeft(ran.run.runId), '', 'containers left behind')
