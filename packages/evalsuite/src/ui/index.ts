@@ -14,6 +14,8 @@ export function createRenderer(options: {
   output: OutputOptions
   harness: string
   attemptDir: AttemptDir
+  /** `-v` (1) or `-vv` (2): how debug lines' times read. */
+  verbosity?: 0 | 1 | 2
 }): Renderer {
   if (options.output.mode === 'agent') return new AgentRenderer(options)
   return new PlainRenderer({ ...options, colors: colors(options.output.color) })

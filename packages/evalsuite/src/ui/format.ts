@@ -1,11 +1,28 @@
 import type { AttemptRecord } from '../history/types.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { AttemptMeta } from '../types.ts'
+import { type DebugLine, debugTime } from '../view/debug.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
 import type { EvalResult, Progress } from './events.ts'
 
 export { formatDuration }
+
+/** Most detail lines a `-vv` payload prints under its line. */
+const DEBUG_DETAIL_LINES = 40
+
+/**
+ * A debug line as the terminal shows it, `12:50:01 image     cache hit …` (with milliseconds under
+ * `-vv`), then its detail indented under it.
+ */
+export function debugLines(c: Colors, line: DebugLine, ms: boolean): string[] {
+  const phase = line.phase.padEnd(9)
+  const head = `${c.dim(debugTime(line.at, ms))} ${c.dim(phase)} ${line.level === 2 ? c.dim(line.text) : line.text}`
+  const detail = (line.detail ?? '').split('\n').filter((l) => l.trim())
+  const shown = detail.slice(0, DEBUG_DETAIL_LINES).map((l) => c.dim(`    ${l}`))
+  const more = detail.length - shown.length
+  return [head, ...shown, ...(more > 0 ? [c.dim(`    … ${more} more lines in trace.ndjson`)] : [])]
+}
 
 /** Offset into an attempt, `+1:05`. */
 export function offset(ms: number): string {

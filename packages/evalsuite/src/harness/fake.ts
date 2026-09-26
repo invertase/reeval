@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises'
 import { shellQuote as q } from '@evalsuite/sandbox-docker/process'
+import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
 import type { FakeHarnessDescriptor, TranscriptEvent } from '../types.ts'
@@ -22,6 +23,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
       for (const f of skillFiles(skill)) {
         await sandbox.writeFile(`${dir}/${skill.name}/${f.path}`, f.content)
       }
+      debugLog('env', `skill ${skill.name} placed at ${dir}/${skill.name}/ by the fake agent`)
     }
     const names = [...skills.map((s) => s.name), ...workspaceSkills]
     const loaded = [
@@ -67,6 +69,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
           const time = at()
           const before = await sandbox.readFile(path)
           await sandbox.writeFile(path, content)
+          debugLog('harness', `tool write ${path} (${before === null ? 'create' : 'modify'})`)
           transcript.push({
             ...time,
             type: 'file-edit',
@@ -102,7 +105,12 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
         for (const step of steps) {
           if ('exec' in step) {
             const time = at()
+            debugLog('harness', `tool shell called: $ ${step.exec}`)
             const r = await sandbox.exec(step.exec, { signal })
+            debugLog(
+              'harness',
+              `tool shell returned exit ${r.exitCode} in ${Date.now() - startedAt - time.atMs}ms`,
+            )
             transcript.push({
               ...time,
               type: 'tool',
@@ -118,7 +126,9 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
           } else if ('mcp' in step) {
             const time = at()
             const [server = '', tool = ''] = step.mcp.split('/')
+            debugLog('harness', `tool mcp__${server}__${tool} called`)
             const r = await callMcpTool(sandbox, mcp, server, tool, signal)
+            debugLog('harness', `tool mcp__${server}__${tool} ${r.ok ? 'returned' : 'failed'}`)
             transcript.push({
               ...time,
               type: 'tool',

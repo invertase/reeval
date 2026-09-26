@@ -1,5 +1,6 @@
 import { google } from '@ai-sdk/google'
 import { experimental_evaluate as evaluate } from 'ai'
+import { debugTrace } from '../debug/attempt.ts'
 import type { JudgeModel, JudgeOptions } from '../types.ts'
 import { type JudgeState, judgeRoute } from './index.ts'
 
@@ -34,5 +35,12 @@ export async function scoreWithModel(
     // ES retries itself, with longer backoff, and records each retry with the verdict.
     maxRetries: 0,
   })
+  const { answers, usage, warnings, response, providerMetadata } = result
+  debugTrace(
+    'judge',
+    'provider-response',
+    { answers, usage, warnings, response, providerMetadata },
+    'judge provider response',
+  )
   return { score: result.answers.answer.probability, resolvedModel: result.response?.modelId }
 }

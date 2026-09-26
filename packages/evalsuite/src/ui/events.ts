@@ -2,6 +2,7 @@
 // its reporter hooks into these events.
 import type { RunRecord } from '../history/types.ts'
 import type { AttemptMeta, EvalMeta, TurnStatus } from '../types.ts'
+import type { DebugLine } from '../view/debug.ts'
 
 /** One attempt's result. `id` is the eval's; `key` is unique per attempt. */
 export type EvalResult = {
@@ -79,6 +80,8 @@ export type EsEvent =
   | { type: 'collected'; at: number; file: string; evals: CollectedEval[] }
   | ({ type: 'eval-start'; at: number } & AttemptRef)
   | { type: 'eval-progress'; key: string; progress: Progress }
+  /** A `-v` (level 1) or `-vv` (level 2) debug line from an attempt, as it happens. */
+  | { type: 'debug'; key: string; line: DebugLine }
   /** User `console.log`/`console.error` output; `key` is unset for output outside an eval. */
   | { type: 'log'; at: number; key?: string; stream: 'stdout' | 'stderr'; text: string }
   | { type: 'eval-end'; at: number; result: EvalResult }

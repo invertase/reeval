@@ -1,11 +1,42 @@
 import { HarnessAgent } from '@ai-sdk/harness/agent'
 import { WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
+import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, TranscriptEvent, TurnStatus } from '../types.ts'
 import { AGENTS, agentAuth } from './agents.ts'
 import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
+
+/** A stream part into the attempt's trace, and each tool call as a `-v` line as it happens. */
+function traceStreamPart(
+  part: StampedPart['part'],
+  ms: number,
+  tools: Map<string, { name: string; at: number }>,
+) {
+  const p = part as { type: string; toolCallId?: string; toolName?: string; error?: unknown }
+  debugTrace(
+    'harness',
+    'stream',
+    { ms, part },
+    p.type.endsWith('-delta') ? false : `stream ${p.type}`,
+  )
+  if (p.type === 'tool-call' && p.toolCallId) {
+    const name = p.toolName ?? 'tool'
+    tools.set(p.toolCallId, { name, at: ms })
+    debugLog('harness', `tool ${name} called (${p.toolCallId})`)
+  } else if ((p.type === 'tool-result' || p.type === 'tool-error') && p.toolCallId) {
+    const call = tools.get(p.toolCallId)
+    const took = call ? ` in ${ms - call.at}ms` : ''
+    const how = p.type === 'tool-error' ? `failed: ${errorText(p.error)}` : 'returned'
+    debugLog(
+      'harness',
+      `tool ${call?.name ?? p.toolName ?? 'tool'} ${how}${took} (${p.toolCallId})`,
+    )
+  } else if (p.type === 'error') {
+    debugLog('harness', `stream error: ${errorText(p.error)}`)
+  }
+}
 
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
 export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
@@ -51,8 +82,11 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           try {
             // stream(), not generate(): only the stream says when each event happened.
             const result = await agent.stream({ session, prompt, abortSignal: turnSignal })
+            const tools = new Map<string, { name: string; at: number }>()
             for await (const part of result.fullStream) {
-              parts.push({ ms: Date.now() - startedAt, part: part as StampedPart['part'] })
+              const ms = Date.now() - startedAt
+              parts.push({ ms, part: part as StampedPart['part'] })
+              traceStreamPart(part as StampedPart['part'], ms, tools)
             }
             return finish(await result.text, 'completed')
           } catch (error) {

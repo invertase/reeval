@@ -17,6 +17,8 @@ import {
   LABEL,
 } from '@evalsuite/sandbox-docker'
 import { parseDuration } from '../config.ts'
+import { debugLog } from '../debug/attempt.ts'
+import '../debug/docker.ts'
 import { stepCommand } from '../environment.ts'
 import { withLease } from '../scheduler/client.ts'
 import type { AttemptImage, DockerSandboxDescriptor, HarnessDescriptor } from '../types.ts'
@@ -112,8 +114,11 @@ async function harnessBase(
   const bake = async (from: string) => {
     const ref = harnessImageFor(harness, from)
     const force = rebuild(ref)
+    const cached = force ? null : await imageInfo(ref)
+    if (cached) debugLog('image', `cache hit ${ref} (${from} with the ${harness} CLI baked on)`)
+    else debugLog('image', `building ${ref}: ${from} with Node, git and the ${harness} CLI`)
     const info =
-      (force ? null : await imageInfo(ref)) ??
+      cached ??
       (await buildOnce(ref, () => buildImage(log, { harness, from, signal }), signal, force))
     if (!info) throw new InfraError(`The sandbox image ${ref} disappeared after building`)
     return { ref, info }
@@ -126,6 +131,7 @@ async function harnessBase(
         `Docker image ${sandbox.image} not found. docker({ image }) is used as is, so pull or build it first (or use from or dockerfile to have ES build it).`,
       )
     }
+    debugLog('image', `using ${sandbox.image} as is (docker({ image }))`)
     return { ref: sandbox.image, info, dockerfile: null }
   }
   if (sandbox.from) return { ...(await bake(sandbox.from)), dockerfile: null }
@@ -143,8 +149,15 @@ async function harnessBase(
     let built: ImageInfo | null
     try {
       log(`Building ${dockerfile.path} as ${tag}`)
+      const cached = force ? null : await imageInfo(tag)
+      debugLog(
+        'image',
+        cached
+          ? `cache hit ${tag} (${dockerfile.path}, context ${sha256.slice(0, 12)})`
+          : `building ${dockerfile.path} as ${tag} (log: ${projectPath(root, logFile.file)})`,
+      )
       built =
-        (force ? null : await imageInfo(tag)) ??
+        cached ??
         (await buildOnce(
           tag,
           () => buildDockerfile(path, { harness, signal, log: logFile.write, force: true }),
@@ -166,6 +179,7 @@ async function harnessBase(
   const ref = imageFor(harness)
   const info = await imageInfo(ref)
   if (!info) throw new InfraError(`Docker image ${ref} not found. Build it with: es image build`)
+  debugLog('image', `cache hit ${ref} (ES's image for ${harness}; es image build rebuilds it)`)
   return { ref, info, dockerfile: null }
 }
 
@@ -194,7 +208,13 @@ export async function prepareImage(
   let info: ImageInfo | null
   try {
     info = await imageInfo(ref)
-    if (!info) {
+    if (info) {
+      debugLog('image', `cache hit ${ref}: install layer on ${base.ref}, no install steps ran`)
+    } else {
+      debugLog(
+        'image',
+        `building ${ref} on ${base.ref}: running install ${steps.map((s, i) => `${i + 1}. ${s.run}`).join(' ')} (log: ${projectPath(root, logFile.file)})`,
+      )
       options.log?.(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
       info = await buildOnce(
         ref,

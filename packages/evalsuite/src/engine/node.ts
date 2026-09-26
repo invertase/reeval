@@ -267,6 +267,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       } else if (artifact.type === 'es:progress') {
         const { key } = identify(config.root, test)
         emit({ type: 'eval-progress', key, progress: artifact.progress })
+      } else if (artifact.type === 'es:debug') {
+        const { key } = identify(config.root, test)
+        emit({ type: 'debug', key, line: artifact.line })
       }
     },
     onUserConsoleLog(log) {

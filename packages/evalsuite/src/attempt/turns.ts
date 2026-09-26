@@ -1,6 +1,8 @@
+import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { diffSinceSnapshot } from '../diff.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import type { Sandbox } from '../sandbox/index.ts'
+import { clip, formatDuration } from '../text.ts'
 import type { Diff, ExecResult, Turn } from '../types.ts'
 import type { Attempt } from './state.ts'
 
@@ -33,8 +35,18 @@ export function turnSender(
     a.record.turns.push(entry)
     const turnNumber = a.record.turns.length
     a.report({ kind: 'turn-start', turn: turnNumber })
+    debugLog('harness', `turn ${turnNumber} started: ${JSON.stringify(clip(prompt, 160))}`)
+    debugTrace('harness', 'prompt', { turn: turnNumber, prompt }, `turn ${turnNumber} prompt`)
     const { raw, ...result } = await a.timed('agentMs', () => agent.send(prompt, a.signal))
     Object.assign(entry, result, raw ? { raw } : {})
+    for (const event of result.transcript) {
+      debugTrace(
+        'harness',
+        'transcript',
+        { turn: turnNumber, ...event },
+        `transcript ${event.type}`,
+      )
+    }
     await takeContext(box, a.signal)
     const count = (...types: string[]) =>
       result.transcript.filter((e) => types.includes(e.type)).length
@@ -46,6 +58,12 @@ export function turnSender(
       tools: count('tool', 'web-search', 'web-fetch'),
       fileEdits: count('file-edit'),
     })
+    const failure = result.transcript.find((e) => e.type === 'error')
+    const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+    debugLog(
+      'harness',
+      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(String(failure.message), 200)}` : ''}`,
+    )
     a.signal.throwIfAborted()
     const diff: Diff = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
     a.record.diff = diff

@@ -295,6 +295,8 @@ export type Resolved = {
   timeout: Duration | undefined
   tags: string[]
   pin: PinnableKey[]
+  /** Which level last set each option, e.g. `group("genkit")`; for the debug trace. */
+  sources?: Partial<Record<keyof EvalOptions, string>>
 }
 
 function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
@@ -317,6 +319,9 @@ function applyLevel(
   where: string,
   egress: 'inherited' | 'own' = 'own',
 ): void {
+  for (const [key, value] of Object.entries(options)) {
+    if (value !== undefined) out.sources = { ...out.sources, [key]: where }
+  }
   if (options.egress !== undefined) out.egress[egress] = options.egress
   out.harness = applyHarness(out.harness, options.harness, where)
   if (options.sandbox !== undefined) out.sandbox = options.sandbox

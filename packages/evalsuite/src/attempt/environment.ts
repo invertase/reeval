@@ -1,5 +1,8 @@
+import { attemptDebug, debugLog } from '../debug/attempt.ts'
 import { resolveEnvironment } from '../environment/resolve.ts'
 import { layoutOf } from '../harness/index.ts'
+import { formatDuration } from '../text.ts'
+import { traceEnvironment } from './debug.ts'
 import type { Attempt } from './state.ts'
 
 /**
@@ -32,11 +35,21 @@ export async function prepareEnvironment(
     secrets,
     brokered,
   }
+  const debug = attemptDebug()
+  if (debug) traceEnvironment(debug, spec, env)
   record.image = null
   if (spec.sandbox.kind === 'docker') {
     const { imageHarness, prepareImage } = await import('../sandbox/prepare.ts')
     const harness = imageHarness(spec.harness)
+    const start = performance.now()
     record.image = await prepareImage(spec.sandbox, harness, root, signal)
     a.image = record.image.ref
+    const { ref, id, base, install, agentCli } = record.image
+    debugLog(
+      'image',
+      `ready ${ref} (${id.replace(/^sha256:/, '').slice(0, 12)}) in ${formatDuration(performance.now() - start)}${ref !== base ? ` · on ${base}` : ''}${agentCli ? ` · agent CLI ${agentCli}` : ''}${install.length ? ` · install: ${install.join(' && ')}` : ''}`,
+    )
+  } else {
+    debugLog('image', `none: the ${spec.sandbox.kind} sandbox runs on the host`)
   }
 }

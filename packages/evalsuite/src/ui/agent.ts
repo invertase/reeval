@@ -2,8 +2,16 @@
 // failures, each with where its detail lives, in a stable greppable vocabulary.
 import { colors } from './colors.ts'
 import type { EsEvent, EvalResult, OutputStream, Renderer } from './events.ts'
-import { capLines, failureLines, formatDuration, outcomeOf } from './format.ts'
+import {
+  attemptAxes,
+  capLines,
+  debugLines,
+  failureLines,
+  formatDuration,
+  outcomeOf,
+} from './format.ts'
 import { type AttemptDir, failingAttempts, resultFor } from './summary.ts'
+import { Tagger } from './tags.ts'
 
 const MAX_LINES = 12
 const WORD = { fail: 'FAIL', infra_error: 'INFRA', cancelled: 'CANCELLED' } as const
@@ -11,6 +19,7 @@ const WORD = { fail: 'FAIL', infra_error: 'INFRA', cancelled: 'CANCELLED' } as c
 export type AgentRendererOptions = {
   out: OutputStream
   attemptDir: AttemptDir
+  verbosity?: 0 | 1 | 2
 }
 
 export class AgentRenderer implements Renderer {
@@ -18,6 +27,9 @@ export class AgentRenderer implements Renderer {
   readonly #c = colors(false)
   readonly #logs = new Map<string, string[]>()
   readonly #printed = new Set<string>()
+  /** `[key]` prefixes for `-v` lines, from each attempt's start. */
+  readonly #labels = new Map<string, string>()
+  readonly #tags = new Tagger()
 
   constructor(options: AgentRendererOptions) {
     this.#o = options
@@ -62,6 +74,21 @@ export class AgentRenderer implements Renderer {
       case 'run-start':
         this.#write(`es run: ${e.files} eval file${e.files === 1 ? '' : 's'}`)
         return
+      case 'collected':
+        this.#tags.addFile(e.evals)
+        return
+      case 'eval-start': {
+        const tag = this.#tags.label(e.id, e.attempt?.n ?? 1)
+        this.#labels.set(e.key, `[${tag} ${attemptAxes(e.attempt, 'agent')}]`)
+        return
+      }
+      case 'debug': {
+        const label = this.#labels.get(e.key) ?? `[${e.key}]`
+        for (const line of debugLines(this.#c, e.line, this.#o.verbosity === 2)) {
+          this.#write(`${label} ${line}`)
+        }
+        return
+      }
       case 'log': {
         if (!e.key) return
         const logs = this.#logs.get(e.key) ?? []

@@ -1,8 +1,10 @@
+import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
 import { brokeringFor } from '../harness/agents.ts'
-import { createHarness, workspaceSkillDir } from '../harness/index.ts'
+import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
 import type { HarnessSession } from '../harness/types.ts'
+import { harnessId } from '../options.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
@@ -32,6 +34,23 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
     const durationMs = Math.round(performance.now() - start)
     const output = r ? [r.stdout, r.stderr].filter(Boolean).join('\n') : ''
     record.setup.push({ run: step.run, exitCode: r?.exitCode ?? null, durationMs, output })
+    debugLog(
+      'env',
+      `setup ${i + 1}/${steps.length} $ ${clip(step.run, 120)} → ${r ? `exit ${r.exitCode}` : `timed out after ${formatDuration(step.timeoutMs)}`} · ${formatDuration(durationMs)}${step.cwd ? ` · in ${step.cwd}` : ''}`,
+    )
+    debugTrace(
+      'env',
+      'setup',
+      {
+        run: step.run,
+        cwd: step.cwd,
+        exitCode: r?.exitCode ?? null,
+        durationMs,
+        stdout: r?.stdout,
+        stderr: r?.stderr,
+      },
+      `setup ${i + 1} output`,
+    )
     if (r?.exitCode === 0) continue
     const what = `setup step ${i + 1}/${steps.length} "${clip(step.run, 80)}" in environment ${spec.environment.name}`
     throw new InfraError(
@@ -65,25 +84,59 @@ export async function startSession(
     egress: spec.egress,
   })
   a.sandbox = box
+  if (spec.sandbox.kind === 'fake') debugLog('container', `fake sandbox at ${box.workdir}`)
   a.phases = brokerPhases(box, env.substitutions)
   if (a.signal.aborted) void box.destroy()
   a.signal.throwIfAborted()
   await a.phases.start()
-  for (const f of env.files) await box.writeFile(f.path, f.content)
+  if (env.substitutions.length) {
+    const agent = env.substitutions.filter((s) => s.phase === 'agent').map((s) => s.name)
+    debugLog('broker', `gateway swaps in ${agent.join(', ') || 'nothing'} for the agent`)
+  }
+  for (const f of env.files) {
+    await box.writeFile(f.path, f.content)
+    const size = typeof f.content === 'string' ? Buffer.byteLength(f.content) : f.content.byteLength
+    debugLog('env', `file ${f.path} (${size} bytes)`)
+  }
   const skillDir = workspaceSkillDir(spec.harness)
   for (const skill of env.workspaceSkills) {
-    for (const f of skillFiles(skill)) {
+    const files = skillFiles(skill)
+    for (const f of files) {
       await box.writeFile(`${skillDir}/${skill.name}/${f.path}`, f.content)
     }
+    debugLog(
+      'env',
+      `skill ${skill.name} → ${skillDir}/${skill.name}/ (${files.length} files, workspace)`,
+    )
+  }
+  const layout = layoutOf(spec.harness)
+  for (const skill of env.skills) {
+    debugLog(
+      'env',
+      `skill ${skill.name} → the harness adapter places it (~/${layout.harnessSkillDir}/${skill.name}/ for ${spec.harness.kind === 'fake' ? `the fake ${spec.harness.layout ?? 'cursor'} layout` : spec.harness.kind})`,
+    )
+  }
+  for (const [name, server] of Object.entries(env.mcp)) {
+    debugLog(
+      'env',
+      `mcp ${name} (${server.transport}${server.transport === 'stdio' ? `: ${server.command} ${server.args.join(' ')}` : `: ${server.url}`}) → the harness adapter writes its MCP config`,
+    )
   }
   await runSetup(a, box, env)
   await snapshot(box, a.signal)
+  debugLog('env', 'workspace snapshot taken: the diff starts here')
   const harness = await createHarness(spec.harness)
+  const harnessStart = performance.now()
+  debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
   const session = await harness.start(box, a.signal, {
     skills: env.skills,
     workspaceSkills: env.workspaceSkills.map((s) => s.name),
     mcp: env.mcp,
   })
+  debugLog(
+    'harness',
+    `${harnessId(spec.harness)} session ready in ${formatDuration(performance.now() - harnessStart)}`,
+  )
   a.session = session
   a.report({ kind: 'sandbox-ready', ms: Math.round(performance.now() - setupStart) })
   return [box, session]

@@ -544,6 +544,11 @@ export type EsConfig = {
   defaultProfile?: { ci?: string; local?: string }
   /** `unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`). */
   secrets?: { unbrokered?: 'warn' | 'error' }
+  /**
+   * Local debug data in `.es/debug`: how many runs to keep (default 20), and how many MB of raw
+   * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
+   */
+  debug?: { keep?: number; traceBufferMb?: number }
 }
 
 /** What a `defineConfig` callback gets: the environment helpers plus the run's context. */
@@ -592,6 +597,7 @@ export type ResolvedConfig = {
   profiles: Record<string, Profile>
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
+  debug: { keep: number; traceBufferBytes: number }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
@@ -789,4 +795,8 @@ export type RunContext = {
   /** How many attempts run at once, across the run. */
   concurrency: number
   profile: ResolvedProfile | null
+  /** `-v` (1) or `-vv`/`--trace` (2) streams the attempts' debug lines; 0 only writes debug.log. */
+  verbosity?: 0 | 1 | 2
+  /** The config file, relative to the project root, for the debug trace. */
+  configFile?: string
 }
