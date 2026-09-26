@@ -892,6 +892,11 @@ export type AttemptMeta = {
   minLift?: number
   /** The secrets this attempt brokers, as `NAME → host, host`. */
   brokered: string[]
+  /**
+   * The host variables its secrets read, by name: the CLI's own process masks their values on
+   * screen, since the attempt's worker is the only other process that knows them.
+   */
+  secretVars: string[]
   egress: PlannedEgress
   plan: EvalPlan
 }

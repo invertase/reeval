@@ -21,6 +21,7 @@ import {
   matchesTags,
   type PlannedAttempt,
   type Resolved,
+  secretVarsIn,
   unbrokered,
   unbrokeredError,
 } from './options.ts'
@@ -181,6 +182,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
       sandbox: first.sandbox,
       gate: 'none',
       brokered: [],
+      secretVars: [],
       egress: first.egress,
       plan,
     }
@@ -206,6 +208,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
       gate: planned.gate,
       ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
       brokered: brokeredIn(resolved.env, planned),
+      secretVars: secretVarsIn(resolved.env, planned),
       egress: planned.egress,
       plan,
     }
