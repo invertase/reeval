@@ -179,7 +179,9 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
               }
             }
             const total = tokenUsage(await result.totalUsage)
-            return finish(await result.text, 'completed', [], total ?? stepUsage)
+            // A turn the abort cut short can still end its stream cleanly.
+            const status = turnSignal.aborted ? 'aborted' : 'completed'
+            return finish(await result.text, status, [], total ?? stepUsage)
           } catch (error) {
             const message = errorText(error)
             const at = Date.now() - startedAt
