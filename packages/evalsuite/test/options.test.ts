@@ -813,6 +813,28 @@ evaluate('one', { sandbox: docker(), environment: keys }, async () => {})
 evaluate('two', { sandbox: docker(), environment: keys }, async () => {})
 `
 
+  test("an optional secret that isn't set gets no real-value warning; set, it does", async () => {
+    const p = await project('unbrokered-optional', {
+      'es.config.ts': fakeConfig(),
+      'evals/o.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+const maybe = defineEnvironment('maybe', ({ secret }) => ({
+  env: { SENTRY_TOKEN: secret.fromEnv('ES_TEST_MAYBE_TOKEN', { optional: true }) },
+}))
+evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
+`,
+    })
+    const warning = /SENTRY_TOKEN is in the sandbox as its real value/
+    const unset = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(unset.code, 0, unset.stdout + unset.stderr)
+    assert.doesNotMatch(unset.stdout, warning)
+    // The canary: set on the host, it does reach the sandbox as its real value.
+    const set = await runCli(p.dir, ['run', '--dry-run'], {
+      env: { ES_TEST_MAYBE_TOKEN: 'set-for-the-canary' },
+    })
+    assert.match(set.stdout, warning)
+  })
+
   test('a Docker secret without hosts warns once in the plan', async () => {
     const p = await project('unbrokered', {
       'es.config.ts': fakeConfig(),

@@ -217,6 +217,8 @@ export type PlannedSecret = {
   hosts?: readonly string[]
   /** `to: 'checks'`: only `t.exec` and setup steps get it, never the agent. */
   checksOnly?: boolean
+  /** `optional: true`: left out of the sandbox when the host variable isn't set. */
+  optional?: boolean
 }
 export type UnbrokeredSecret = Omit<PlannedSecret, 'hosts'>
 
@@ -237,17 +239,25 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
     from: string,
     hosts: readonly string[] | undefined,
     checksOnly = false,
+    optional = false,
   ) =>
     out.set(label, {
       label,
       from,
       ...(hosts ? { hosts } : {}),
       ...(checksOnly ? { checksOnly } : {}),
+      ...(optional ? { optional } : {}),
     })
   const fromVars = (values: EnvVars, prefix: string) => {
     for (const [name, value] of Object.entries(values)) {
       if (isSecret(value))
-        add(`${prefix}${name}`, value.from ?? name, value.hosts, value.to === 'checks')
+        add(
+          `${prefix}${name}`,
+          value.from ?? name,
+          value.hosts,
+          value.to === 'checks',
+          value.optional === true,
+        )
     }
   }
   fromVars(vars, '')
