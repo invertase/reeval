@@ -1,11 +1,13 @@
 // Main-process half of the engine adapter: embeds Vitest and translates its reporter events
 // into ES types. Nothing here leaks Vitest types to callers.
+
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
 import { join, sep } from 'node:path'
 import { Writable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
+import { stripVTControlCharacters } from 'node:util'
 import { configDefaults } from 'vitest/config'
 import {
   createVitest,
@@ -157,6 +159,8 @@ const onlyInCi = (file: string) =>
 function moduleProblems(root: string, modules: readonly TestModule[]) {
   let usage: string | undefined
   const unhandled: string[] = []
+  /** Files that failed to load, by error: one bad tsconfig fails every file the same way. */
+  const failed = new Map<string, string[]>()
   for (const module of modules) {
     const file = relativeFile(root, module.moduleId)
     for (const test of module.children.allTests()) {
@@ -169,10 +173,14 @@ function moduleProblems(root: string, modules: readonly TestModule[]) {
         usage = onlyInCi(file)
       } else if (error.name === 'UsageError' || error.name === 'DefinitionError') {
         usage = `${file}: ${error.message}`
-      } else unhandled.push(error.message)
+      } else {
+        const message = stripVTControlCharacters(cleanMessage(error.message)).trim()
+        unhandled.push(`${file}: ${message}`)
+        failed.set(message, [...(failed.get(message) ?? []), file])
+      }
     }
   }
-  return { usage, unhandled }
+  return { usage, unhandled, failed }
 }
 
 /**
@@ -220,6 +228,16 @@ function collectPlan(
 ): CollectedPlan {
   const problems = moduleProblems(root, modules)
   if (problems.usage) throw new UsageError(problems.usage)
+  // A file that fails to load registers none of its evals: running the rest would drop them.
+  if (problems.failed.size) {
+    const lines = [...problems.failed]
+      .map(([message, files]) => `${files.sort().join(', ')}: ${message}`)
+      .sort()
+    const count = [...problems.failed.values()].flat().length
+    throw new UsageError(
+      `${count === 1 ? 'An eval file' : `${count} eval files`} failed to load:\n${lines.join('\n')}`,
+    )
+  }
   const tests = [...modules]
     .sort((a, b) => (a.moduleId < b.moduleId ? -1 : 1))
     .flatMap((m) => [...m.children.allTests()])

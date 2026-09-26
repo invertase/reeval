@@ -64,6 +64,8 @@ See [Profiles and budgets](/reference/profiles).
 |---|---|
 | `No evals matched evals/hello.es.ts, … with filter "nope"` | Check the filter: it matches file paths, eval names and cell keys. |
 | `filter "x" matches no eval file, eval name or cell in …` | One of several filter words matched nothing. |
+| `No eval files match evals/**/*.es.ts (config.include) in /path/to/project. …` | No file matches `include`: check the file names, or set `include` in `es.config.ts`. |
+| `3 eval files failed to load:` then `evals/a.es.ts, …: <error>` | A file threw, imported something missing, had a syntax error, or its `tsconfig.json` extends a file that isn't there (as in a copied example). Nothing runs until every file loads. |
 | `es run --json only prints the plan: add --dry-run. A run writes its record to .es/runs; read it with es show --json.` | Add `--dry-run`, or use `es show --json` after the run. |
 | `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
 | `Unknown command "image foo". Did you mean es image build?` | Use `es image build`. |
