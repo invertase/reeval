@@ -90,7 +90,7 @@ const PACKAGES = [
 ]
 
 export function packageVersions(engine: Record<string, string>): Record<string, string> {
-  // Vendored into dist, so the published package can't resolve its package.json.
+  // Bundled into dist, so the published package can't resolve their package.json.
   const out: Record<string, string> = {
     ...engine,
     '@evalsuite/harness-antigravity': ANTIGRAVITY_VERSION,

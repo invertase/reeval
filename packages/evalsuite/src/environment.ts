@@ -1,7 +1,8 @@
 import { isIP } from 'node:net'
-import { dirname, isAbsolute, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { SECRET_NAME } from './redact.ts'
+import { PACKAGE_DIR } from './root.ts'
 import type {
   EgressPolicy,
   Environment,
@@ -63,7 +64,7 @@ export const isEnvironment = (value: unknown): value is Environment =>
   Array.isArray((value as Environment).layers)
 
 // ES's own files, so a stack trace's first frame outside them is the file that called us.
-const OWN_DIRS = ['../src/', '../dist/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
+const OWN_DIRS = ['src', 'dist'].map((dir) => join(PACKAGE_DIR, dir, sep))
 
 /** The directory of the file that called into ES, from the stack; relative paths resolve here. */
 export function callerDir(): string | undefined {

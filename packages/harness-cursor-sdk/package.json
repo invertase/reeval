@@ -1,6 +1,7 @@
 {
   "name": "@evalsuite/harness-cursor-sdk",
   "version": "0.1.0",
+  "private": true,
   "description": "An AI SDK harness adapter for Cursor's agent, over the Cursor TypeScript SDK's local runtime",
   "license": "Apache-2.0",
   "author": "Invertase <oss@invertase.io>",

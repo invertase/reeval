@@ -1,6 +1,7 @@
 {
   "name": "@evalsuite/sandbox-docker",
   "version": "0.1.0",
+  "private": true,
   "description": "A local Docker sandbox for AI SDK harnesses, with credential brokering and egress control",
   "license": "Apache-2.0",
   "author": "Invertase <oss@invertase.io>",

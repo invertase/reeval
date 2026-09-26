@@ -26,8 +26,8 @@
     "format": "biome check --write .",
     "example": "pnpm --filter hello-example es run",
     "smoke:real": "bash scripts/real-smoke.sh",
-    "docs": "node scripts/docs.mjs",
-    "docs:check": "node scripts/docs.mjs --check"
+    "docs": "node --experimental-strip-types --no-warnings scripts/docs.mjs",
+    "docs:check": "node --experimental-strip-types --no-warnings scripts/docs.mjs --check"
   },
   "devDependencies": {
     "@bcoe/v8-coverage": "1.0.2",
