@@ -144,6 +144,18 @@ describe('tools', () => {
     })
     assert.equal(projectToolCall('manage_task', {}).dynamic, true)
   })
+
+  test('an MCP call is named mcp__<server>__<tool>, like the other harnesses (CLI 1.2.11)', () => {
+    const p = { Arguments: { n: 1 }, ServerName: 'stamp', ToolName: 'house_stamp' }
+    assert.deepEqual(projectToolCall('call_mcp_tool', p), {
+      toolName: 'mcp__stamp__house_stamp',
+      nativeName: 'call_mcp_tool',
+      input: p,
+      dynamic: true,
+    })
+    // Without both names there's nothing to name it by: the native tool, as before.
+    assert.equal(projectToolCall('call_mcp_tool', { ToolName: 'x' }).toolName, 'call_mcp_tool')
+  })
 })
 
 describe('command', () => {
