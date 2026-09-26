@@ -43,6 +43,21 @@ export async function readRecord(path: string): Promise<RunRecord> {
   return parseRecord(await readFile(path), path)
 }
 
+const warnedUnreadable = new Set<string>()
+
+/**
+ * Says once per process that a run-named file isn't a readable record, so a run lost to a bad
+ * merge or a cut-short copy doesn't silently drop out of history, compare's base and queries.
+ */
+export function warnUnreadable(path: string, error: unknown): void {
+  if (warnedUnreadable.has(path)) return
+  warnedUnreadable.add(path)
+  const why = error instanceof Error ? error.message : String(error)
+  process.stderr.write(
+    `warning: skipped ${relative(process.cwd(), path)}: not a readable ES run record (${why}). Restore it from git, or delete it.\n`,
+  )
+}
+
 /** A run's record file in a history or scratch folder. */
 export const recordFile = (dir: string, runId: string) => join(dir, `${runId}.json`)
 /** A run's artifact directory in a history or scratch folder. */
@@ -126,6 +141,7 @@ export async function listRuns(
       changed = true
     } catch (error) {
       if (!(error instanceof HistoryError) && !(error instanceof SyntaxError)) throw error
+      warnUnreadable(path, error)
     }
   }
   if (changed) {

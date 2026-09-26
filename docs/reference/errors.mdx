@@ -70,6 +70,7 @@ See [Profiles and budgets](/reference/profiles).
 | `--runs must be a whole number of at least 1 (got 0)` | Pass a positive whole number. |
 | `Unknown command "image foo". Did you mean es image build?` | Use `es image build`. |
 | `Unknown command "frob". Run es --help.` | See [CLI](/reference/cli). |
+| `warning: skipped evals/.history/<run>.json: not a readable ES run record (…). Restore it from git, or delete it.` | A record was cut short or left with merge conflict markers. Every history command carries on without it; restore it with `git checkout -- <file>` or delete it. |
 
 ## Credentials
 
