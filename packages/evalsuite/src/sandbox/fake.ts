@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { EgressCapabilities } from '@evalsuite/sandbox-docker'
-import { run } from '@evalsuite/sandbox-docker/process'
+import { run, shellQuote } from '@evalsuite/sandbox-docker/process'
 import type { FakeSandboxDescriptor } from '../types.ts'
 import type { Sandbox } from './types.ts'
 
@@ -28,9 +28,11 @@ export async function createFakeSandbox(
 
   return {
     workdir,
+    // The shell changes into `cwd`, so a missing one fails the command (as in Docker) rather
+    // than the spawn.
     exec: (command, { cwd, env: extra, signal } = {}) =>
-      run('sh', ['-c', command], {
-        cwd: cwd ? join(workdir, cwd) : workdir,
+      run('sh', ['-c', cwd ? `cd ${shellQuote(cwd)} && ${command}` : command], {
+        cwd: workdir,
         env: { HOME: base, ...env, ...extra },
         signal,
       }),

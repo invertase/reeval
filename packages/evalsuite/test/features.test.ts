@@ -883,6 +883,21 @@ export const features: Feature[] = [
     },
     canary: /expected '' to be null/,
   },
+  {
+    dir: 'env/setup-missing-cwd',
+    tiers: ['fake', 'docker'],
+    env: 'missing',
+    canaryEnv: 'present',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^setup step 1\/1 "touch ran" in environment missing exited [1-9]\d* after \d+m?s \(see setup\.log\):\n.*nope\/dir/,
+      },
+    },
+    canary: /expected '' to be null/,
+  },
 ]
 
 /** Paths under `dir` whose content includes `needle`, one per line; '' when none do. */

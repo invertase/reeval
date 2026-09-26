@@ -402,8 +402,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'setup.steps',
     area: 'Environments',
-    name: '`setup` steps: order, a failing step named, `setup.log`',
-    fixtures: ['env/setup-order'],
+    name: '`setup` steps: order, a failing step named, a missing `cwd`, `setup.log`',
+    fixtures: ['env/setup-order', 'env/setup-missing-cwd'],
     tests: [options('a failing setup step names itself')],
   },
   {
