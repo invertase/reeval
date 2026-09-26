@@ -50,13 +50,7 @@ function mcpServerHosts(layers: readonly EnvironmentLayer[]): string[] {
       else urls.set(name, server.url)
     }
   }
-  return [...urls.values()].flatMap((url) => {
-    try {
-      return [new URL(url).hostname]
-    } catch {
-      return []
-    }
-  })
+  return [...urls.values()].flatMap((url) => URL.parse(url)?.hostname ?? [])
 }
 
 /**
