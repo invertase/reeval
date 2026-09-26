@@ -79,6 +79,29 @@ describe('engine', () => {
     assert.deepEqual(readdirSync(join(p.dir, '.es/staging')), [], 'no staging left behind')
   })
 
+  test('a path filter and a cell filter together run only that cell of that file', async () => {
+    const p = await project('mixed-filter', {
+      'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+import { fakeSandbox } from 'evalsuite/sandbox'
+export default defineConfig({
+  harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+})
+`,
+      'evals/scaffold.es.ts': math(1),
+      'evals/other.es.ts': math(1),
+    })
+    const r = await runCli(p.dir, ['run', 'scaffold', 'right/', '--ui', 'plain'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, / · harness right · /, 'the header names only the harness that runs')
+    const { evals } = readRun(p.dir)
+    assert.deepEqual(
+      evals.map((e) => [e.id, e.cells.map((c) => c.key)]),
+      [['evals/scaffold.es.ts › math', ['right/-/fake']]],
+    )
+  })
+
   test('eval files that declare no evals exit 2 instead of writing an empty run', async () => {
     const p = await project('no-evals', {
       'es.config.ts': fakeConfig(),

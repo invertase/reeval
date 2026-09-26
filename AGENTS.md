@@ -727,6 +727,12 @@ es --version | es --help
 Every command takes `--config <path>` (default `./es.config.ts`). A run is `latest`, `latest~N`,
 a run id or a unique prefix of one, or a git SHA prefix (the newest run at that commit).
 
+`es run` and `es image build` filter parts that name an eval file pick files. Every other part
+picks evals by name or cell key (`antigravity`, `es-good`, `b/skilled`). Parts of one kind add
+up, and the two kinds narrow each other: `es run scaffold antigravity` runs the Antigravity cells
+of the scaffold evals, and the plan's rows and totals count only those cells. A part that matches
+nothing exits 2 and names it.
+
 | Exit code | Meaning |
 |---|---|
 | 0 | Every gated cell passed (a control's failures aren't gated by default); also `--dry-run` |
