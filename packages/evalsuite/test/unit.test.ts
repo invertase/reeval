@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { test } from 'node:test'
+import { traceEnvironment } from '../src/attempt/debug.ts'
+import type { AttemptSpec } from '../src/attempt/state.ts'
 import {
   defaultConcurrency,
   evalRoot,
@@ -12,6 +14,8 @@ import {
   resolveConfig,
   selectProfile,
 } from '../src/config.ts'
+import type { AttemptDebug } from '../src/debug/attempt.ts'
+import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
   DEFAULT_SKILL_EXCLUDE,
@@ -20,13 +24,13 @@ import {
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
-import { AGENTS, agentAuth, brokeringFor } from '../src/harness/agents.ts'
+import { AGENTS, type AgentKind, agentAuth, brokeringFor } from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
-import { compare, stackChanges } from '../src/history/views.ts'
+import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
@@ -35,6 +39,48 @@ import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
+
+test("the -v broker line names each brokered endpoint's path matcher", () => {
+  const brokerLine = (kind: AgentKind) => {
+    const lines: string[] = []
+    const debug = {
+      log: (phase: string, text: string) => lines.push(`${phase} ${text}`),
+      trace() {},
+    }
+    const record = {
+      name: 'e',
+      digest: 'sha256:0',
+      overrides: [],
+      unset: [],
+      vars: [],
+      secrets: [],
+    }
+    traceEnvironment(
+      debug as unknown as AttemptDebug,
+      { harness: { kind } } as unknown as AttemptSpec,
+      {
+        record,
+        substitutions: [],
+        vars: {},
+        checkVars: {},
+        files: [],
+        skills: [],
+        workspaceSkills: [],
+        mcp: {},
+      } as unknown as ResolvedEnvironment,
+    )
+    return lines.filter((l) => l.startsWith('broker '))
+  }
+  assert.deepEqual(brokerLine('antigravity'), [
+    'broker GEMINI_API_KEY stays on the host · the gateway swaps it in on POST generativelanguage.googleapis.com (path ~ /^/v1beta/models/[^/]+:streamGenerateContent$/)',
+  ])
+  assert.deepEqual(brokerLine('cursor'), [
+    'broker CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key',
+  ])
+  for (const kind of Object.keys(AGENTS) as AgentKind[]) {
+    assert.doesNotMatch(brokerLine(kind).join('\n'), /\[object /, kind)
+  }
+})
 
 test("a harness's auth is only its own credential, and a missing one fails closed", () => {
   const host = { CURSOR_API_KEY: 'crsr_k', AI_GATEWAY_API_KEY: 'gw_k', ANTHROPIC_API_KEY: 'sk-a' }
@@ -320,6 +366,61 @@ const entry = (
     ...stack,
   },
   evals: [{ id: 'e', fingerprint: 'fp', outcome }],
+})
+
+test('compare classifies an eval on the cells both runs have, and lists the rest', () => {
+  const cell = (
+    key: string,
+    outcome: 'pass' | 'fail',
+    gate = 'all',
+    fingerprint = `fp ${key}`,
+  ) => ({
+    key,
+    gate,
+    outcome,
+    fingerprint,
+    fingerprintParts: {},
+  })
+  const run = (outcome: 'pass' | 'fail', cells: ReturnType<typeof cell>[]): HistoryEntry => ({
+    ...entry(outcome),
+    evals: [
+      {
+        id: 'e',
+        outcome,
+        sources: [],
+        fingerprint: cells.map((c) => c.fingerprint).join(),
+        cells,
+      } as unknown as HistoryEntry['evals'][number],
+    ],
+  })
+  // The dogfood shape: base is the full run (✗, an Antigravity variant failed), head only re-ran
+  // Antigravity's es-good cell.
+  const base = run('fail', [
+    cell('cursor/-', 'pass', 'none'),
+    cell('cursor/es-good', 'pass'),
+    cell('agy/-', 'fail', 'none'),
+    cell('agy/es-weak', 'fail'),
+    cell('agy/es-good', 'pass'),
+  ])
+  const removed = ['cursor/-', 'cursor/es-good', 'agy/-', 'agy/es-weak']
+  const head = run('pass', [cell('agy/es-good', 'pass')])
+  assert.deepEqual(compare(base, head), [
+    { id: 'e', status: 'same', base: 'pass', head: 'pass', cells: { added: [], removed } },
+  ])
+  assert.match(
+    formatCompare(base, head, compare(base, head), false),
+    /✓ → ✓ {2}same {22}e · cells removed: cursor\/-, cursor\/es-good, agy\/-, agy\/es-weak$/m,
+  )
+  // The shared cell still decides: a flip in it is a regression, and a change in it is drift.
+  const failed = run('fail', [cell('agy/es-good', 'fail')])
+  assert.deepEqual(
+    compare(base, failed).map((r) => [r.status, r.base, r.head]),
+    [['regressed', 'pass', 'fail']],
+  )
+  const changed = run('pass', [cell('agy/es-good', 'pass', 'all', 'fp changed')])
+  assert.equal(compare(base, changed)[0]?.status, 'drift')
+  const disjoint = run('pass', [cell('other/-', 'pass')])
+  assert.equal(compare(base, disjoint)[0]?.status, 'drift', 'no shared cell: not comparable')
 })
 
 test('compare calls a flip drift when the judge changed outside the fingerprint', () => {

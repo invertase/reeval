@@ -1,5 +1,6 @@
 // What an attempt's debug trace says about its plan and environment. The lines name secrets,
 // never their values; the payloads leave values out too, and are redacted besides.
+import type { EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { AttemptDebug } from '../debug/attempt.ts'
 import { egressLabel } from '../egress.ts'
 import type { ResolvedEnvironment } from '../environment/resolve.ts'
@@ -65,6 +66,18 @@ export function tracePlan(debug: AttemptDebug, spec: AttemptSpec, ctx: RunContex
   )
 }
 
+/** `POST api2.cursor.sh/auth/exchange`, `GET host/v1/*` or `POST host (path ~ /re/)`. */
+function endpointLabel({ method, host, path }: EndpointMatch): string {
+  const where = !path
+    ? host
+    : 'exact' in path
+      ? `${host}${path.exact}`
+      : 'startsWith' in path
+        ? `${host}${path.startsWith}*`
+        : `${host} (path ~ /${path.regex}/)`
+  return `${method?.join('|') ?? '*'} ${where}`
+}
+
 /** The resolved environment and what the gateway brokers, by name. */
 export function traceEnvironment(
   debug: AttemptDebug,
@@ -89,9 +102,7 @@ export function traceEnvironment(
   }
   const brokering = brokeringFor(spec.harness)
   if (brokering) {
-    const endpoints = brokering.endpoints
-      .map((e) => `${e.method ?? '*'} ${e.host}${e.path ? String(e.path) : ''}`)
-      .join(', ')
+    const endpoints = brokering.endpoints.map(endpointLabel).join(', ')
     debug.log(
       'broker',
       `${brokering.credential} stays on the host · the gateway swaps it in on ${endpoints}`,

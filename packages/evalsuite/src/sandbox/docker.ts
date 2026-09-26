@@ -30,8 +30,15 @@ function networkPolicy(egress: PlannedEgress): NetworkPolicy {
   return hosts.length ? { mode: 'custom', allowedHosts: hosts } : { mode: 'deny-all' }
 }
 
-/** The gateway's events as debug lines: one per request, with DNS decisions and headers traced. */
-function gatewayEvents(debug: AttemptDebug | undefined, credential: string | undefined) {
+/**
+ * The gateway's events as debug lines: one per request, with DNS decisions and headers traced.
+ * Refused requests to the harness's expected hosts are traced only; teardown summarises them.
+ */
+function gatewayEvents(
+  debug: AttemptDebug | undefined,
+  credential: string | undefined,
+  expected: readonly string[],
+) {
   if (!debug) return undefined
   return (event: EgressEvent) => {
     if (event.type === 'dns') {
@@ -51,6 +58,7 @@ function gatewayEvents(debug: AttemptDebug | undefined, credential: string | und
     debug.request(
       { at: new Date(Date.now() - event.ms).toISOString(), ...rest, substituted },
       { request: requestHeaders, response: responseHeaders },
+      !rest.allowed && expected.includes(rest.host),
     )
     for (const name of substituted) {
       debug.log('broker', `substituted ${name} for ${event.host} (${event.method} ${event.url})`)
@@ -83,7 +91,7 @@ export async function createDockerSandbox(
     egress: {
       policy,
       log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
-      onEvent: gatewayEvents(debug, brokering?.credential),
+      onEvent: gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? []),
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
         console.warn(
           `warning: the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,

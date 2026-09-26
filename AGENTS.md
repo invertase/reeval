@@ -651,12 +651,19 @@ evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (
   cell of `--dry-run --json` has `egress: { policy, auto }`.
 - **Fingerprint:** a restricted policy is part of the environment digest (host order doesn't
   matter); `allow-all` leaves the digest as it was without the option.
-- **Record:** each attempt has `egress: { policy, allowed, recorded, contacted, blocked }`:
-  `allowed` is every host a restricted policy let through (null under `allow-all`),
-  `contacted` each `host:port` reached with its connections and bytes `sent` and `received`
-  (between the sandbox and the gateway, TLS included), and `blocked` each refused `host:port`
-  with its connections and the reason. `recorded: false` (the fake sandbox) leaves both empty.
-  The studio's attempt page shows it.
+- **Record:** each attempt has `egress: { policy, allowed, recorded, contacted, blocked,
+  expectedBlocked }`: `allowed` is every host a restricted policy let through (null under
+  `allow-all`), `contacted` each `host:port` reached with its connections and bytes `sent` and
+  `received` (between the sandbox and the gateway, TLS included), and `blocked` each refused
+  `host:port` with its connections and the reason. `recorded: false` (the fake sandbox) leaves
+  them empty. The studio's attempt page shows it.
+- **Expected blocks:** hosts a harness's CLI always tries and nothing needs are listed in the
+  harness catalog (`expectedBlocked` in `harness/agents.ts`). They're still refused, but they go
+  to `expectedBlocked` instead of `blocked`, and `-v` prints one `expected blocks` line at
+  teardown instead of a `gateway` line per request (`-vv` and `requests.ndjson` keep every
+  request). Antigravity's CLI 1.2.11 opens `play.googleapis.com` (Clearcut telemetry) and
+  `antigravity-unleash.goog` (feature flags) in every session. Neither `enableTelemetry: false`
+  nor any other setting or variable in the binary stops them.
 
 ## Judges
 
@@ -729,6 +736,12 @@ es --version | es --help
 
 Every command takes `--config <path>` (default `./es.config.ts`). A run is `latest`, `latest~N`,
 a run id or a unique prefix of one, or a git SHA prefix (the newest run at that commit).
+
+`es run` and `es image build` filter parts that name an eval file pick files. Every other part
+picks evals by name or cell key (`antigravity`, `es-good`, `b/skilled`). Parts of one kind add
+up, and the two kinds narrow each other: `es run scaffold antigravity` runs the Antigravity cells
+of the scaffold evals, and the plan's rows and totals count only those cells. A part that matches
+nothing exits 2 and names it.
 
 | Exit code | Meaning |
 |---|---|
@@ -1010,6 +1023,9 @@ duration, drift), a run's eval tree with per-cell pass rates, roles and lift, on
 compare of two runs, and each attempt's transcript, diff, checks, judge input and state. It
 listens on `127.0.0.1:4984` (or the next free port) and prints a URL with a session token; new
 runs appear as they're recorded, and unrecorded runs from `.es/runs/` are labelled scratch.
+A run's `drift` badge compares each cell with the last run that had it (its fingerprint, image,
+agent CLI and environment), so a filtered run over fewer cells, and the full run after it, aren't
+drift. `es history`'s `¦` mark works the same way.
 
 `es studio build --out site` writes the same thing as a static folder (hash routing, relative
 paths) for GitHub Pages, Netlify, Cloudflare Pages or any static host. It includes transcripts
@@ -1042,7 +1058,10 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   environment's digest (the key into the run's environments), pass rate, overrides and, for
   variants, lift with its interval. Its fingerprint is the hash of `fingerprintParts` (sources,
   harness config, environment, image, agent CLI, judge and agent context), so `es compare` can
-  say which part changed: `not comparable: evals/helpers.ts changed`.
+  say which part changed: `not comparable: evals/helpers.ts changed`. When two runs ran different
+  cells of an eval (one was filtered), `es compare` classifies it on the cells both ran and lists
+  the rest: `same · cells removed: cursor:composer-2.5/-/fake`. With no cell in common, it's not
+  comparable.
 - **Attempts:** each attempt's key (unique in the run), cell, run number, start order and time,
   image id (details in the stack), variable and secret names, egress (the policy, and the hosts
   contacted and refused, with bytes), turns (text cut at 8 KB; the

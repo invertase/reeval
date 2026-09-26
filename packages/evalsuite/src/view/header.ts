@@ -62,6 +62,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
         infraError: c.infraError,
         skipped: c.skipped,
         passRate: c.passRate,
+        outcome: c.outcome,
         ...(c.lift
           ? {
               lift: {

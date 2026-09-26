@@ -221,12 +221,75 @@ describe('view-models over a real history', () => {
         [1, 1],
       ],
     )
-    assert.deepEqual(
-      rows[1]?.drift.map((c) => c.label),
-      ['environments'],
-    )
-    assert.equal(rows[1]?.changedEvals, 1)
+    // The compare run adds a variant cell: new coverage, while the control it shares is unchanged.
+    assert.deepEqual(rows[1]?.drift, [])
+    assert.equal(rows[1]?.changedEvals, 0)
     assert.deepEqual(rows[2]?.drift, [])
+  })
+
+  test('runs list: a run over a subset of cells is no drift, before or after it', () => {
+    const cell = (harness: string, env: string, image: string) => ({
+      key: `${harness}/${env}/es-tarball`,
+      role: 'variant',
+      variant: env,
+      harness,
+      environment: env,
+      environmentDigest: `sha256:${env}0000000000000`,
+      fingerprint: `${harness}/${env}/${image}`,
+      fingerprintParts: { image, agentCli: harness.startsWith('cursor') ? '2026.09' : '1.2.11' },
+    })
+    const agy = ['es-good', 'es-weak'].map((e) => cell('antigravity:gemini', e, 'sha256:a1'))
+    const cursor = (image: string) =>
+      ['es-good', 'es-weak'].map((e) => cell('cursor:composer', e, image))
+    const run = (n: number, cells: ReturnType<typeof cell>[]) =>
+      ({
+        runId: `2026092${n}T000000Z_abc1234_ci_000${n}`,
+        status: 'complete',
+        summary: { pass: cells.length, fail: 0, infraError: 0 },
+        stack: {
+          imageIds: [...new Set(cells.map((c) => c.fingerprintParts.image))],
+          agentClis: [...new Set(cells.map((c) => c.fingerprintParts.agentCli))],
+          harnesses: [...new Set(cells.map((c) => c.harness))],
+          environments: [...new Set(cells.map((c) => `${c.environment}@${c.environment}00000`))],
+          judgeModel: 'google/gemini-3.8-flash',
+          judgeServed: [],
+          judgeVersion: '1',
+          threshold: 0.8,
+          fingerprintScope: ['sources'],
+        },
+        evals: [
+          {
+            id: 'evals/scaffold.es.ts › scaffolds',
+            slug: 'scaffolds',
+            outcome: 'pass',
+            fingerprint: cells.map((c) => c.fingerprint).join(),
+            cells,
+          },
+        ],
+      }) as unknown as HistoryEntry
+    const runs = [
+      run(1, [...cursor('sha256:c1'), ...agy]),
+      run(2, agy.slice(0, 1)),
+      run(3, [...cursor('sha256:c2'), ...agy]),
+      run(4, agy.slice(0, 1)),
+      run(5, [...cursor('sha256:c2'), ...agy]),
+    ]
+    assert.deepEqual(
+      evalHistory(runs, 'scaffolds').map((p) => p.changed),
+      [false, false, true, false, false],
+    )
+    const rows = runRows(runs).reverse()
+    assert.deepEqual(
+      rows.map((r) => [r.drift.map((c) => `${c.label}: ${c.base} → ${c.head}`), r.changedEvals]),
+      [
+        [[], 0],
+        [[], 0],
+        // Measured against the last run that had the Cursor cells, not the subset run before it.
+        [['image ids: sha256:c1 → sha256:c2'], 1],
+        [[], 0],
+        [[], 0],
+      ],
+    )
   })
 
   test('eval tree, cells and lift for a multi-cell run', () => {
@@ -252,8 +315,9 @@ describe('view-models over a real history', () => {
       [
         ['pass', false],
         ['fail', false],
-        ['pass', true],
-        ['pass', true],
+        // Adding a variant cell, then running without it again, changes no cell they share.
+        ['pass', false],
+        ['pass', false],
       ],
     )
   })

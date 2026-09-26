@@ -37,6 +37,8 @@ export type RunPlan = {
   hints: string[]
   sandboxes: SandboxDescriptor[]
   harnessKinds: string[]
+  /** The harness ids the planned attempts run on, for the run header. */
+  harnesses: string[]
 }
 
 const median = (values: number[]) => {
@@ -89,6 +91,9 @@ export async function buildPlan(options: {
   const warnings = new Set<string>()
   const sandboxes = new Map<string, SandboxDescriptor>()
   const kinds = new Set<string>()
+  const harnesses = new Set<string>()
+  // A filter can leave out some of an eval's cells: each row counts what it actually plans.
+  const counted = new Map<string, { harnesses: Set<string>; variants: Set<string>; n: number }>()
   let attempts = 0
   let estimateMs = 0
   for (const { id, attempt } of planned) {
@@ -100,6 +105,23 @@ export async function buildPlan(options: {
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
     kinds.add(attempt.harness.kind)
+    harnesses.add(attempt.cell.harness)
+    const row = counted.get(id) ?? { harnesses: new Set(), variants: new Set(), n: 0 }
+    row.harnesses.add(attempt.cell.harness)
+    if (attempt.cell.variant !== undefined) row.variants.add(attempt.cell.variant)
+    row.n++
+    counted.set(id, row)
+  }
+  for (const row of rows.values()) {
+    const c = counted.get(row.id)
+    if (!c) continue
+    const { variants } = row.plan
+    row.plan = {
+      ...row.plan,
+      harnesses: c.harnesses.size,
+      variants: variants && { run: c.variants.size, of: variants.of },
+      attempts: c.n,
+    }
   }
   return {
     profile: options.profile,
@@ -114,6 +136,7 @@ export async function buildPlan(options: {
     hints: gateHint([...rows.values()]),
     sandboxes: [...sandboxes.values()],
     harnessKinds: [...kinds],
+    harnesses: [...harnesses],
   }
 }
 
