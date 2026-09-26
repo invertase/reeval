@@ -10,6 +10,11 @@ export type CompareRow = {
   head: Outcome | null
   /** For `drift`: what changed, e.g. `evals/helpers.ts changed` or `harness config changed`. */
   changes?: string[]
+  /**
+   * When the runs ran different cells of the eval: the cells only head or only base has. Then
+   * `status`, `base` and `head` are over the cells both have.
+   */
+  cells?: { added: string[]; removed: string[] }
 }
 
 export type StackChange = {
@@ -164,22 +169,57 @@ export function whyChanged(base: ComparableEval, head: ComparableEval): string[]
   return [...out, ...[...parts].map((p) => `${p} changed`)]
 }
 
+/** An eval's outcome from some of its cells, as the run rolls it up: ungated failures pass. */
+function outcomeOf(cells: ReadonlyArray<Pick<HistoryCell, 'gate' | 'outcome'>>): Outcome {
+  const outcomes = cells.map((c) =>
+    c.gate === 'none' && c.outcome === 'fail' ? 'pass' : c.outcome,
+  )
+  if (outcomes.includes('fail')) return 'fail'
+  if (outcomes.includes('infra_error')) return 'infra_error'
+  return outcomes.every((o) => o === 'skipped') ? 'skipped' : 'pass'
+}
+
+/**
+ * When two runs of an eval differ only in which cells ran (a filtered run, a harness added), its
+ * outcome on the cells both have, and the cells only one has. Null when no cell is shared or a
+ * shared cell changed.
+ */
+function sharedScope(b: ComparableEval, h: ComparableEval) {
+  const before = new Map(b.cells.map((c) => [c.key, c]))
+  const shared = h.cells.filter((c) => before.has(c.key))
+  if (!shared.length || shared.some((c) => before.get(c.key)?.fingerprint !== c.fingerprint)) {
+    return null
+  }
+  const keys = new Set(h.cells.map((c) => c.key))
+  return {
+    base: outcomeOf(shared.map((c) => before.get(c.key) ?? c)),
+    head: outcomeOf(shared),
+    cells: {
+      added: h.cells.filter((c) => !before.has(c.key)).map((c) => c.key),
+      removed: b.cells.filter((c) => !keys.has(c.key)).map((c) => c.key),
+    },
+  }
+}
+
 export function compare(base: Comparable, head: Comparable): CompareRow[] {
   const graderChanged = stackChanges(base, head).some((c) => c.outsideFingerprint)
   const ids = [...new Set([...head.evals.map((e) => e.id), ...base.evals.map((e) => e.id)])]
   return ids.map((id) => {
     const b = base.evals.find((e) => e.id === id)
     const h = head.evals.find((e) => e.id === id)
-    const row = { id, base: b?.outcome ?? null, head: h?.outcome ?? null }
-    if (!b) return { ...row, status: 'added' }
-    if (!h) return { ...row, status: 'removed' }
-    if (b.outcome === 'infra_error' || h.outcome === 'infra_error')
-      return { ...row, status: 'infra' }
-    if (b.fingerprint !== h.fingerprint)
+    if (!b) return { id, base: null, head: h?.outcome ?? null, status: 'added' }
+    if (!h) return { id, base: b.outcome, head: null, status: 'removed' }
+    const scoped = b.fingerprint === h.fingerprint ? null : sharedScope(b, h)
+    const row: Omit<CompareRow, 'status'> = scoped
+      ? { id, ...scoped }
+      : { id, base: b.outcome, head: h.outcome }
+    if (row.base === 'infra_error' || row.head === 'infra_error') return { ...row, status: 'infra' }
+    if (b.fingerprint !== h.fingerprint && !scoped) {
       return { ...row, status: 'drift', changes: whyChanged(b, h) }
-    if (graderChanged && b.outcome !== h.outcome) return { ...row, status: 'drift' }
-    if (b.outcome === 'pass' && h.outcome === 'fail') return { ...row, status: 'regressed' }
-    if (b.outcome === 'fail' && h.outcome === 'pass') return { ...row, status: 'fixed' }
+    }
+    if (graderChanged && row.base !== row.head) return { ...row, status: 'drift' }
+    if (row.base === 'pass' && row.head === 'fail') return { ...row, status: 'regressed' }
+    if (row.base === 'fail' && row.head === 'pass') return { ...row, status: 'fixed' }
     return { ...row, status: 'same' }
   })
 }

@@ -157,8 +157,16 @@ const STATUS_LABEL: Record<CompareStatus, string> = {
   infra: 'infra error',
 }
 
-/** `: evals/helpers.ts changed, harness config changed` for a row that isn't comparable. */
-const why = (r: CompareRow) => (r.changes?.length ? `: ${r.changes.join(', ')}` : '')
+/**
+ * `: evals/helpers.ts changed, harness config changed` for a row that isn't comparable, and
+ * ` · cells removed: …` when the runs ran different cells of the eval.
+ */
+const why = (r: CompareRow) =>
+  [
+    r.changes?.length ? `: ${r.changes.join(', ')}` : '',
+    r.cells?.added.length ? ` · cells added: ${r.cells.added.join(', ')}` : '',
+    r.cells?.removed.length ? ` · cells removed: ${r.cells.removed.join(', ')}` : '',
+  ].join('')
 
 const ORDER: CompareStatus[] = ['regressed', 'fixed', 'drift', 'infra', 'added', 'removed', 'same']
 

@@ -598,6 +598,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
       'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
+      unit('compare classifies an eval on the cells both runs have, and lists the rest'),
       docker("the CLI's own runtime state leaves runs comparable"),
     ],
   },

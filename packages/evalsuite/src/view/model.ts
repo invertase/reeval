@@ -8,6 +8,7 @@ import type {
 } from '../history/types.ts'
 import type { Outcome, TranscriptEvent, TurnStatus } from '../types.ts'
 import {
+  type CompareRow,
   type CompareStatus,
   cellsChanged,
   compare,
@@ -349,6 +350,9 @@ export type CompareViewRow = {
   head: Outcome | null
   basePassRate: number | null
   headPassRate: number | null
+  /** See `CompareRow`: then the pass rates are over the cells both runs have too. */
+  cells?: CompareRow['cells']
+  changes?: string[]
   /** Mean judge score per run; null without judgements or without the record. */
   baseScore: number | null
   headScore: number | null
@@ -369,6 +373,14 @@ export const COMPARE_ORDER: CompareStatus[] = [
   'same',
 ]
 
+/** Passes over passes and fails in the gated cells, as an eval's `passRate` counts them. */
+function gatedPassRate(cells: HistoryCell[]): number | null {
+  const gated = cells.filter((c) => c.gate !== 'none')
+  const pass = gated.reduce((n, c) => n + c.pass, 0)
+  const counted = pass + gated.reduce((n, c) => n + c.fail, 0)
+  return counted ? pass / counted : null
+}
+
 /** `es compare`'s classification, plus pass rates and judge-score deltas from the records. */
 export function compareView(
   base: HistoryEntry,
@@ -378,11 +390,18 @@ export function compareView(
   const rows: CompareViewRow[] = compare(base, head).map((row) => {
     const b = base.evals.find((e) => e.id === row.id)
     const h = head.evals.find((e) => e.id === row.id)
+    const baseKeys = new Set(b?.cells.map((c) => c.key))
+    const shared =
+      row.cells && new Set(h?.cells.filter((c) => baseKeys.has(c.key)).map((c) => c.key))
+    const passRate = (e: typeof b) => {
+      if (!e) return null
+      return shared ? gatedPassRate(e.cells.filter((c) => shared.has(c.key))) : e.passRate
+    }
     return {
       ...row,
       slug: h?.slug ?? b?.slug ?? null,
-      basePassRate: b?.passRate ?? null,
-      headPassRate: h?.passRate ?? null,
+      basePassRate: passRate(b),
+      headPassRate: passRate(h),
       baseScore: meanScore(records.base?.evals.find((e) => e.id === row.id)),
       headScore: meanScore(records.head?.evals.find((e) => e.id === row.id)),
     }

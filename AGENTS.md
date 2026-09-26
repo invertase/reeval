@@ -1048,7 +1048,10 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   environment's digest (the key into the run's environments), pass rate, overrides and, for
   variants, lift with its interval. Its fingerprint is the hash of `fingerprintParts` (sources,
   harness config, environment, image, agent CLI, judge and agent context), so `es compare` can
-  say which part changed: `not comparable: evals/helpers.ts changed`.
+  say which part changed: `not comparable: evals/helpers.ts changed`. When two runs ran different
+  cells of an eval (one was filtered), `es compare` classifies it on the cells both ran and lists
+  the rest: `same · cells removed: cursor:composer-2.5/-/fake`. With no cell in common, it's not
+  comparable.
 - **Attempts:** each attempt's key (unique in the run), cell, run number, start order and time,
   image id (details in the stack), variable and secret names, egress (the policy, and the hosts
   contacted and refused, with bytes), turns (text cut at 8 KB; the

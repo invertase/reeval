@@ -355,6 +355,7 @@ export type HistoryCell = Pick<
   | 'infraError'
   | 'skipped'
   | 'passRate'
+  | 'outcome'
 > & { lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean } }
 
 /**
