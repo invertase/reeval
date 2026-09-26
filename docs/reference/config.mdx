@@ -1,0 +1,177 @@
+---
+title: defineConfig
+description: Every key of es.config.ts, its default and type, the callback's helpers, and the errors ES raises for a bad config.
+---
+
+`es.config.ts` default-exports `defineConfig(…)`: the project's defaults, profiles and run settings.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig(({ ci, secret }) => ({
+  harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
+  judge: { model: 'typesafe-ai/jev-1.13.0' },
+  env: { NPM_TOKEN: secret({ hosts: ['registry.npmjs.org'] }) },
+  concurrency: ci ? 2 : 4,
+}))
+```
+
+Without a config file, every key takes its default. The option keys (`harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config.
+
+## Loading
+
+`es` loads `es.config.ts` from the current directory, or the file you pass with `--config`. A missing `es.config.ts` means all defaults; a missing `--config` file is an error (`Config file not found: nope.ts`).
+
+The config's directory is the project root: `include` globs and helper paths (`skill.local`, `file`) resolve against it. ES also loads `.env.local`, then `.env`, from the current directory; a variable already set in the environment wins.
+
+The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `es.config.ts must default-export defineConfig({...})`.
+
+## The callback
+
+Pass a function to get helpers and facts about the run. It runs once, when the config loads, and must return the config synchronously: a `Promise` is refused.
+
+<Property name="secret" type="SecretHelper">
+  Marks a value as a secret read from the host: `secret()`, `secret.fromEnv('HOST_VAR')`, `secret.template(…)`, `secret.hosts.*`. See [Helpers](/reference/helpers#secret).
+</Property>
+
+<Property name="skill" type="SkillHelper">
+  Skill sources: `skill.local`, `skill.git`, `skill.npm`, `skill.registry`, `skill.inline`. Local paths resolve against the config's directory. See [Helpers](/reference/helpers#skill).
+</Property>
+
+<Property name="mcp" type="McpHelper">
+  MCP servers: `mcp.stdio`, `mcp.http`, `mcp.sse`. See [Helpers](/reference/helpers#mcp).
+</Property>
+
+<Property name="file" type="(path: string | URL) => HostFile">
+  A host file, relative to the config's directory, read when an attempt starts. See [Helpers](/reference/helpers#file).
+</Property>
+
+<Property name="ci" type="boolean">
+  `true` when `CI` is set to anything but `false`.
+</Property>
+
+<Property name="command" type="string">
+  The command loading the config: `run` (also for `es image build`), `studio`, `clean`, or a history command (`record`, `history`, `show`, `compare`, `checkout`, `query`).
+</Property>
+
+<Property name="hostEnv" type="NodeJS.ProcessEnv">
+  `process.env` of the `es` process, after `.env.local` and `.env` are loaded.
+</Property>
+
+<Property name="profile" type="string | undefined">
+  The profile named by `--profile` or `ES_PROFILE`. It's `undefined` when the profile comes from `defaultProfile`, which is resolved after the callback returns.
+</Property>
+
+`defineConfig` itself does nothing at runtime: it returns what you pass, and exists for types.
+
+## Keys
+
+<Property name="include" type="string[]">
+  Globs of eval files, relative to the config's directory. Default `['evals/**/*.es.ts']`. Must be a list of strings.
+</Property>
+
+<Property name="harness" type="Harness | Harness[]">
+  The agents every eval runs on, unless a group or eval replaces them. Default `cursor({ model: 'composer-2.5' })`, whose id is `cursor:composer-2.5`. An empty list, or two harnesses with the same id, is an error. See [Options](/reference/options#harness).
+</Property>
+
+<Property name="sandbox" type="Sandbox">
+  Where the agent runs: one `docker(…)` or `fakeSandbox(…)`. A list is an error. Default `docker()`. See [docker()](/reference/sandbox/docker) and [fakeSandbox()](/reference/sandbox/fake).
+</Property>
+
+<Property name="environment" type="Environment">
+  The environment every eval runs in, from `defineEnvironment`. Default none. See [defineEnvironment](/reference/environment).
+</Property>
+
+<Property name="runs" type="number">
+  Attempts per cell. A whole number of at least 1. Default `1`.
+</Property>
+
+<Property name="gate" type="'all' | { passRate: number }">
+  What makes a cell pass: `'all'` (every attempt passes) or `{ passRate }`, a share above 0 and at most 1. Default `'all'`.
+</Property>
+
+<Property name="env" type="Record<string, string | Secret>">
+  Variables for the sandbox. A literal string under a secret-looking name (containing `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`) is refused. A required secret that isn't set stops the run before it starts. Default `{}`.
+</Property>
+
+<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }">
+  Which hosts the sandbox can reach. Default `'allow-all'`. See [Egress](/reference/egress).
+</Property>
+
+<Property name="judge" type="{ model?, threshold?, providerOptions?, maxConcurrent? }">
+  Judge settings. In the config, `model` must be a `"provider/model"` string or `fakeJudge()`; pass model objects per group, eval or call. Default threshold `0.8`, no model. See [Judges](/reference/judges).
+</Property>
+
+<Property name="timeout" type="string | number">
+  How long one attempt may take: `'90s'`, `'15m'`, `'1h'`, `'500ms'`, or a number of milliseconds. Default `'15m'`. Time spent starting the sandbox and running setup doesn't count.
+</Property>
+
+<Property name="concurrency" type="number">
+  How many attempts run at once. A whole number of at least 1. Default: the smallest of 8, the CPU count, and the memory in GB, measured on the Docker VM (or the host when Docker isn't available). `--concurrency` beats `ES_CONCURRENCY`, which beats this key.
+</Property>
+
+<Property name="record" type="'manual' | 'ci' | 'always'">
+  When `es run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `es record`. Default `'ci'`.
+</Property>
+
+<Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }">
+  `dir` is the history folder, relative to the config's directory; default `.history` inside the folder of your eval files (`evals/.history`). `artifacts` says which attempts keep their transcripts, diffs and logs; default `'all'`.
+</Property>
+
+<Property name="budget" type="{ attempts?: number, duration?: string | number }">
+  Caps a run: `attempts` refuses a plan with more attempts, `duration`, counted from the first attempt's start, lets running attempts finish and skips queued ones once it's reached. A profile's `budget` is merged over this one. See [Profiles and budgets](/reference/profiles#budget).
+</Property>
+
+<Property name="profiles" type="Record<string, Profile>">
+  Named presets of `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. See [Profiles and budgets](/reference/profiles).
+</Property>
+
+<Property name="defaultProfile" type="{ ci?: string, local?: string }">
+  The profile used when neither `--profile` nor `ES_PROFILE` names one: `ci` when `CI` is set, `local` otherwise. Each must name a key of `profiles`.
+</Property>
+
+<Property name="secrets" type="{ unbrokered?: 'warn' | 'error' }">
+  What to do about a secret the sandbox gets as a real value (one with no `hosts`). `warn` prints a line in the plan; `error` stops the run. Default `'warn'`. See [Credential brokering](/concepts/credential-brokering).
+</Property>
+
+<Property name="debug" type="{ keep?: number, traceBufferMb?: number }">
+  `keep` is how many runs of `.es/debug` data to keep (default `20`); `traceBufferMb` caps each attempt's in-memory trace (default `8`). See [Debug data](/reference/debug-data).
+</Property>
+
+<Property name="analysis" type="{ model?, instructions?, maxInputTokens?, maxOutputTokens? }">
+  Settings for `es analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). See [es analyze](/reference/cli/analyze).
+</Property>
+
+`compare`, `tags` and `pin` belong on groups and evals, not in the config.
+
+## Errors
+
+Every config error exits 2 before anything runs. An unknown key gets a hint when it looks like a known one:
+
+```text
+es: Unknown option "harnesses" in es.config.ts. Did you mean "harness"?
+```
+
+| Mistake | Message |
+|---|---|
+| `compare` in the config | `compare can't be set in es.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.` |
+| A literal secret | `env.API_KEY in es.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` |
+| A judge model object | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
+| A model without a provider | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
+| A bad duration | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` |
+| A bad concurrency | `config.concurrency must be a whole number of at least 1 (got 0)` |
+| An unknown `debug` key | `Unknown option "keepRuns" in config.debug. Use keep, traceBufferMb.` |
+| A missing default profile | `defaultProfile names "pr", which isn't in profiles (none)` |
+| A `Promise` from the callback | `The defineConfig callback in es.config.ts returned a Promise. …` |
+
+More messages, with fixes, are on [Errors](/reference/errors).
+
+## Related
+
+- [Options](/reference/options): how each option key cascades.
+- [Profiles and budgets](/reference/profiles)
+- [Helpers](/reference/helpers)
+- [Environment variables](/reference/env-vars)

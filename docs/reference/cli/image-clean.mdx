@@ -1,0 +1,68 @@
+---
+title: es image build, es clean
+description: Build every sandbox image a run needs, and remove local debug data.
+---
+
+`es image build` builds the Docker images your evals need before a run. `es clean` removes the local debug data runs leave in `.es/debug`.
+
+```bash
+npx es image build --dry-run
+npx es clean --keep 3
+```
+
+## es image build
+
+[//]: # (generated:cli-help:image-build)
+
+```text
+es image build [filter...]
+                          Build every image the evals' Docker sandboxes need, per harness: ES's
+                          image (bakes in its CLI), from and dockerfile images, install layers
+  --dry-run               List the images and how each is made, without building
+```
+
+[//]: # (/generated:cli-help:image-build)
+
+It collects the evals like `es run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and builds, in order:
+
+1. ES's image for each harness the plan uses, `evalsuite-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.0`), which bakes that agent's CLI onto `evalsuite-sandbox-base:latest`.
+2. Each `docker({ from })` and `docker({ dockerfile })` image, rebuilt once each.
+3. Each `install` layer, only if its base or its commands changed.
+
+A real `--dry-run` in `examples/hello`:
+
+```text
+images  4 sandbox images (nothing built: --dry-run)
+docker · 15 evals
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+docker + install · 1 eval
+  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
+python · 1 eval
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: …)
+…
+```
+
+Without a config file it builds ES's Cursor image only. `es run` still builds `from`, `dockerfile` and `install` images on first use, but not ES's harness images: a missing one is exit 2 with `Build it once with: es image build`. Rebuild after upgrading ES.
+
+## es clean
+
+[//]: # (generated:cli-help:clean)
+
+```text
+es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
+```
+
+[//]: # (/generated:cli-help:clean)
+
+`es run` already keeps only the newest `debug.keep` runs' debug data (default 20). `es clean` removes all of it, or all but the newest `--keep <n>` runs. It never touches `.es/runs/` or the history folder.
+
+```text
+Removed debug data for 4 runs (106.9 KB) from .es/debug
+```
+
+## Related
+
+- [Sandboxes and toolchains](/guide/sandboxes)
+- [docker()](/reference/sandbox/docker)
+- [Debug data](/reference/debug-data)

@@ -1,0 +1,209 @@
+---
+title: Python, Flutter and more
+description: Give the agent the toolchain your task needs, from an official image, extra packages or your own Dockerfile.
+---
+
+**Goal:** run evals whose tasks need more than Node: Python, a CLI tool, a seeded database or a heavy SDK such as Flutter.
+
+What's baked into the image belongs to the [sandbox](/guide/sandboxes), `docker()`. ES adds what the agent needs on top of it: Node, git and the harness's CLI.
+
+| You need | Use | Example |
+|---|---|---|
+| A language's official image | `docker({ from })` | Python |
+| A few packages on ES's image | `docker({ install })` | `jq` |
+| Files, a database, several steps | `docker({ dockerfile })` starting `FROM ${ES_BASE}` | SQLite |
+| A large SDK image | `docker({ from })` with a longer timeout | Flutter |
+
+All three of the first examples are in `examples/hello`.
+
+## Python from the official image
+
+```ts title="evals/python.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+// A non-Node toolchain: ES bakes Node (for the harness bridge) and the Cursor CLI onto the
+// official Python image the first time this runs, then reuses it.
+evaluate(
+  'writes and tests fizzbuzz in python',
+  { sandbox: docker({ from: 'python:3.12-slim', id: 'python' }) },
+  async (t) => {
+    await t.send(
+      'Write fizzbuzz.py with a function fizzbuzz(n) returning the usual FizzBuzz string for n, ' +
+        'and test_fizzbuzz.py with unittest tests for 3, 5, 15 and 7. Standard library only.',
+    )
+    await expect(t.exec('python3 --version')).toSucceed()
+    await expect(t.exec('python3 -m unittest -q')).toSucceed()
+  },
+)
+```
+
+`from` takes any Debian or Ubuntu based image. `id: 'python'` names the sandbox in cell keys (`cursor:composer-2.5/-/python`).
+
+## Packages on ES's image
+
+```ts title="evals/jq.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+const withJq = docker({
+  install: [
+    'apt-get update && apt-get install -y --no-install-recommends jq && rm -rf /var/lib/apt/lists/*',
+  ],
+})
+
+evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
+  await t.send(
+    'Write orders.json with five orders (id, customer, total), then count.sh, a bash script that ' +
+      'prints the number of orders over 100 using jq. Make it executable.',
+  )
+  await expect(t.exec('jq --version')).toSucceed()
+  await expect(t.exec('./count.sh')).toSucceed()
+})
+```
+
+`install` commands run once, as root, with no secrets and no workspace. ES caches the result by the base image and the exact command list, so any edit builds a new layer.
+
+## Your own Dockerfile
+
+```dockerfile title="docker/sqlite/Dockerfile"
+ARG ES_BASE
+FROM ${ES_BASE}
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends sqlite3 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY seed.sql /opt/seed.sql
+```
+
+```ts title="evals/sqlite.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+evaluate(
+  'queries a seeded SQLite database',
+  { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },
+  async (t) => {
+    await t.send(
+      'Load /opt/seed.sql into app.db with sqlite3, then write report.sql that lists customer ' +
+        'names alphabetically, one per line.',
+    )
+    const report = await t.exec('sqlite3 app.db < report.sql')
+    await expect(report).toSucceed()
+    expect(report.stdout).toBe('Ada\nGrace\nLinus\n')
+  },
+)
+```
+
+ES passes `--build-arg ES_BASE=<ES's image for the harness>`, so `FROM ${ES_BASE}` layers on an image that already has the agent's CLI. The path is relative to the eval file, and the build context is the Dockerfile's directory.
+
+## Build and run
+
+```bash
+npx es image build --dry-run
+```
+
+```text
+images  4 sandbox images (nothing built: --dry-run)
+docker · 15 evals
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+docker + install · 1 eval
+  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
+python · 1 eval
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+docker:sqlite · 1 eval
+  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
+  harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
+```
+
+```bash
+npx es image build
+npx es run python sqlite jq
+```
+
+A real run on Cursor:
+
+```text
+plan  3 evals · 3 cells · 3 attempts · ~35s serial (~12s at concurrency 4)
+es 0.0.1 · 3 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+…
+[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  10s
+[writes#1 cursor]  +0:00 sandbox ready 2s
+[writes#1 cursor]  +0:01 turn 1 done 7s · 1 tool call, 2 file edits
+[writes#1 cursor]  +0:09 $ python3 --version  exit 0 149ms
+[writes#1 cursor]  +0:09 $ python3 -m unittest -q  exit 0 119ms
+…
+Summary
+ evals/jq.es.ts
+   ✓ summarises a JSON file with jq           10s  1 turn
+ evals/python.es.ts
+   ✓ writes and tests fizzbuzz in python      10s  1 turn
+ evals/sqlite.es.ts
+   ✓ queries a seeded SQLite database         13s  1 turn
+
+   Evals  3 passed (3)
+Duration  14s
+  Tokens  174k in (85k cached) · 1651 out
+```
+
+Without `es image build`, `es run` builds `from`, `dockerfile` and `install` images on first use, one at a time, and the other attempts wait for them.
+
+## A heavy SDK: Flutter
+
+Large toolchain images work the same way. This one was checked with `--dry-run` only:
+
+```ts title="evals/flutter.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+
+const flutter = docker({
+  from: 'ghcr.io/cirruslabs/flutter:3.38.10',
+  id: 'flutter',
+})
+
+evaluate(
+  'adds a counter widget test',
+  { sandbox: flutter, timeout: '20m' },
+  async (t) => {
+    await t.send(
+      'Create a Flutter app called counter with flutter create, then ' +
+        'add a widget test that taps the + button twice and expects 2.',
+    )
+    await expect(t.exec('cd counter && flutter test')).toSucceed()
+  },
+)
+```
+
+```text
+images  1 sandbox image (nothing built: --dry-run)
+flutter · 1 eval
+  from ghcr.io/cirruslabs/flutter:3.38.10  evalsuite-sandbox:cursor-0.1.0-ghcr-io-cirruslabs-flutter-3-38-10-ef09bba3  (rebuild: Node, git and the harness bootstrap on top)
+```
+
+- Pin the tag. A moving tag (`stable`) changes the toolchain between runs.
+- Image builds and setup steps don't count towards `timeout`, but `flutter create` and the first `flutter test` inside the turn do, so give the eval room.
+- An idle agent container takes about 300 MB, and an SDK's builds take far more. Lower `--concurrency` on small machines.
+
+<Warning>
+  Keep the image's user as `root` and leave `/es` alone: ES's bootstrap and the harness live there. `install` doesn't combine with `dockerfile`; put those commands in the Dockerfile as `RUN` lines.
+</Warning>
+
+## Variations
+
+- **An image that already has the harness:** `docker({ image: 'ghcr.io/acme/agent:1' })` is used as is.
+- **Per-attempt steps with secrets:** `npm ci` or a database migration belongs in an environment's `setup`, not in `install`, which never sees secrets or the workspace.
+- **Other harnesses:** a `FROM ${ES_BASE}` Dockerfile builds once per harness, on that harness's image (see [Compare agents](/recipes/compare-agents)).
+- **Registries only:** add `egress: { allow: [...DEFAULT_EGRESS_ALLOW] }` so the agent can install packages but reach nothing else (see [Offline evals](/recipes/offline)).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="docker()" icon="box" href="/reference/sandbox/docker">
+    Every option, image tag and cache rule.
+  </Card>
+  <Card title="Offline evals" icon="lock" href="/recipes/offline">
+    Limit where the sandbox can connect.
+  </Card>
+</CardGroup>

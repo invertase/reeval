@@ -1,0 +1,181 @@
+---
+title: Prove a skill helps
+description: Run one eval with and without a skill, gate on a pass rate and fail the run when the skill makes things worse.
+---
+
+**Goal:** show that agents do better with your skill, and fail CI if it stops helping.
+
+You give the agent a skill through an environment, run the same eval with and without it, and read the difference as [lift](/concepts/lift).
+
+## The files
+
+The skill teaches something the agent can't guess, so only the variant should pass.
+
+```md title="skills/house-greeting/SKILL.md"
+---
+name: house-greeting
+description: The house style for greetings in this organisation. Use when
+  writing any greeting function, message or text.
+---
+
+# House greeting style
+
+- The greeting word is always "Ahoy", never "Hello" or "Hi".
+- Format: `Ahoy, <name>!` (comma after Ahoy, exclamation mark at the end).
+```
+
+```ts title="evals/skill.es.ts"
+import { defineEnvironment, evaluate, expect, group } from '{{ pkg }}'
+
+const withHouseGreeting = defineEnvironment(
+  'with-house-greeting',
+  ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }),
+)
+
+const greetAda = `node -e "import('./greet.js').then((m) => {
+  const out = (m.greet ?? m.default)('Ada')
+  console.log(out)
+  process.exit(out === 'Ahoy, Ada!' ? 0 : 1)
+})"`
+
+group(
+  'house greeting',
+  {
+    compare: { variants: [withHouseGreeting], minLift: 0 },
+    runs: 3,
+    gate: { passRate: 0.6 },
+    pin: ['compare', 'runs'],
+  },
+  () => {
+    evaluate('greets in the house style', async (t) => {
+      await t.send(
+        'Create greet.js exporting greet(name) that greets the person ' +
+          'in our house greeting style. Add a package.json with ' +
+          '"type": "module". No dependencies.',
+      )
+      await expect(t.exec(greetAda)).toSucceed()
+    })
+  },
+)
+```
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash' },
+})
+```
+
+| Option | What it does here |
+|---|---|
+| `compare.variants` | Runs a variant cell with the skill next to the control, which has none |
+| `compare.minLift: 0` | Fails the variant when the lift's 95% interval dips below 0 |
+| `runs: 3` | Three attempts per cell, so the interval narrows |
+| `gate: { passRate: 0.6 }` | A cell passes at 2 of 3, so one flaky attempt doesn't fail CI |
+| `pin` | Keeps a `pr` profile's `limit` from turning `compare` off or cutting `runs` |
+
+## Run it
+
+```bash
+npx es run --dry-run
+npx es run skill
+```
+
+```text
+plan  1 eval · 2 cells · 6 attempts · ~18m 00s serial (~4m 30s at concurrency 4)
+eval                                                            harnesses  variants  runs  attempts  notes
+evals/skill.es.ts › house greeting › greets in the house style  1          1         3     6
+```
+
+This is a real Cursor run of the same eval in `examples/hello` (`--runs 2`, no `minLift`):
+
+```text
+Summary
+ evals/skill.es.ts
+   house greeting
+     ✓ greets in the house style      2/4  100%  4 attempts
+         cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+           effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
+…
+Attempts  2 passed · 2 failed, not gated (4 attempts, 1 evals)
+Duration  24s
+  Tokens  362k in (169k cached) · 3525 out
+```
+
+Without the skill, the control attempts wrote `Welcome home, Ada!` and `Welcome to the house, Ada!`. With it, both variant attempts wrote `Ahoy, Ada!`.
+
+## Read the lift
+
+The recipe as written, under the [fake harness](/recipes/fake-harness) (which writes the house greeting only when it has a skill):
+
+```text
+     ✓ greets in the house style      3/6  100%  6 attempts
+         fake/-/fake                    control    0/3    0%   not gated
+         fake/with-house-greeting/fake  variant    3/3  100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
+           effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.50): too few attempts to test
+```
+
+- `2/4` or `3/6` counts every attempt. `100%` is the pass rate of the cells that gate, which here is only the variant.
+- `lift +100 pts` is the variant's pass rate minus the control's.
+- `95% +21…+100` is the interval on that difference. Its lower bound is above `minLift`, so the cell passes.
+- The control's failures print as `not gated`, so they don't change the exit code.
+- The fake agent makes no tool calls, so its `effort` line compares zeros.
+
+## Read the effort
+
+A skill can help without changing the pass rate: the agent gets there with less searching. The `effort:` line under each variant compares medians with the control's. In the real run above, the variant used 3 tool calls against 8, and 9 s of agent time against 18 s.
+
+`×0.38` is the variant's median divided by the control's. The verdict at the end comes from a rank test on tool calls: `fewer tool calls` or `more tool calls` (with its p) when it's significant, `within noise` when it isn't, and `too few attempts to test` when the counts can't reach significance at all. Two or three attempts per side never can; four per side can.
+
+```bash
+npx es run skill --runs 4
+npx es query effort
+npx es analyze
+```
+
+`es query effort` lists the same numbers for every recorded run. [`es analyze`](/reference/cli/analyze) explains a run in plain words, lift and effort included, with each claim tied to a fact from the run.
+
+## When the skill doesn't help
+
+The same eval, with an agent that already writes `Ahoy` without the skill:
+
+```text
+     ✗ greets in the house style      6/6  100%  6 attempts
+         fake/-/fake                    control    3/3  100%
+         fake/with-house-greeting/fake  variant    3/3  100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
+           effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.90): too few attempts to test
+
+Lift below minLift (1)
+ ✗ evals/skill.es.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise: its lower bound is below minLift 0
+```
+
+Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidence that the skill is no worse, and three attempts per side can't give it.
+
+<Warning>
+  `minLift` checks the interval's lower bound, not the lift. At `runs: 3`, only a large effect clears 0, and a control that already passes never does. Use `minLift` on evals the agent fails without help, or raise `runs`.
+</Warning>
+
+## Variations
+
+- **Several skills:** `compare: { variants: [good, weak], minLift: 0 }` gives each its own cell and lift against the same control.
+- **Skill from git or npm:** `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan.
+- **A shared starting point:** set `environment: base` on the group; each variant runs as `base.extend(variant)`.
+- **Report only:** drop `minLift` and set `compare: { variants, gate: 'none' }` to see lift without failing anything.
+- **Across runs:** `es query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Gates and lift" icon="chart-line" href="/concepts/lift">
+    How the interval, `minLift` and "within noise" work.
+  </Card>
+  <Card title="Evaluate an MCP server" icon="plug" href="/recipes/mcp-server">
+    The same compare, with an MCP server as the variant.
+  </Card>
+</CardGroup>

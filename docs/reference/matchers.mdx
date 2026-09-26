@@ -1,0 +1,149 @@
+---
+title: Matchers
+description: The matchers ES adds to expect, what they accept, and the failure messages they print.
+---
+
+ES adds `toHaveFile`, `toSucceed`, `toPass`, `toHaveSearched` and `toHaveFetched` to `expect`, which you import from `'{{ pkg }}'`.
+
+```ts title="evals/greet.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('creates a tested greet module', async (t) => {
+  const turn = await t.send('Create greet.js exporting greet(name).')
+  await expect(turn).toHaveFile('greet.js', /export/)
+  await expect(t.exec('node --check greet.js')).toSucceed()
+  expect(await t.judge('Is greet.js small and readable?')).toPass()
+})
+```
+
+`expect` is Vitest's, so its own matchers (`toBe`, `toContain`, `toMatch`, `toHaveLength`, `.not`, …) work too. A failed matcher fails the attempt.
+
+## toHaveFile
+
+```ts
+await expect(turnOrT).toHaveFile(path, pattern?)
+```
+
+<Property name="actual" type="Turn | EvalContext">
+  A turn from `t.send()`, or `t` itself. Both read the sandbox as it is now.
+</Property>
+
+<Property name="path" type="string">
+  Workspace-relative, or `~/` for the home directory.
+</Property>
+
+<Property name="pattern" type="RegExp | string" optional>
+  What the file must contain. A string matches when the file includes it; a `RegExp` when it matches. Without it, the file only has to exist.
+</Property>
+
+It's async, so `await` it. Failure messages:
+
+```text
+expected file greet.js to exist
+```
+
+```text
+expected greet.js to match /welcome/
+--- greet.js ---
+<the file's last 20 lines>
+```
+
+Anything else as `actual` throws `toHaveFile() expects a turn from t.send(), or t`.
+
+## toSucceed
+
+```ts
+await expect(t.exec(command)).toSucceed()
+```
+
+<Property name="actual" type="Promise<ExecResult> | ExecResult">
+  What `t.exec()` or `turn.exec()` returns, awaited or not. It passes when `exitCode` is 0.
+</Property>
+
+It's async, so `await` it. On failure it shows the tail (last 20 lines) of both streams:
+
+```text
+expected command to succeed, exit code 1
+--- stderr ---
+…
+--- stdout ---
+…
+```
+
+Anything else throws `toSucceed() expects run.exec(...)`.
+
+## toPass
+
+```ts
+expect(await t.judge(question)).toPass()
+```
+
+<Property name="actual" type="Verdict">
+  A verdict from `t.judge()`. It passes when the verdict is `pass`: the score is at least the threshold.
+</Property>
+
+It's synchronous: await the judge, not the matcher. Failure messages:
+
+```text
+judge score 0.95 is below 0.99 for "Is greet.js small and readable?" (fake)
+```
+
+With `.not`, a passing verdict fails with `expected judge to fail: score … ≥ …`. Anything but a verdict throws `toPass() expects a t.judge() verdict`.
+
+## toHaveSearched and toHaveFetched
+
+```ts
+expect(turn).toHaveSearched(query?)
+expect(turn).toHaveFetched(url?)
+```
+
+<Property name="actual" type="Turn">
+  A turn from `t.send()`. Anything else throws `toHaveSearched() expects a turn from t.send()`.
+</Property>
+
+<Property name="query / url" type="string | RegExp" optional>
+  A substring or a RegExp matched against each `web-search` event's `query`, or each `web-fetch` event's `url`, in the turn's transcript. Without it, any search or fetch passes.
+</Property>
+
+A real Cursor run:
+
+```ts title="evals/web.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('looks up the latest Node.js LTS', async (t) => {
+  const turn = await t.send(
+    'Search the web for the current Node.js LTS release line and tell me its name.',
+  )
+
+  expect(turn).toHaveSearched(/node/i)
+  expect(turn).not.toHaveFetched('example.com')
+})
+```
+
+```text
+[looks#1 cursor] ✓ evals/web.es.ts › looks up the latest Node.js LTS  16s
+[looks#1 cursor]  +0:00 sandbox ready 1s
+[looks#1 cursor]  +0:01 turn 1 done 14s · 1 tool call, 0 file edits
+```
+
+The search it matched, from the attempt's `transcript.jsonl`:
+
+```text
+{"turn":0,"ts":"2026-09-26T18:01:03.610Z","atMs":4494,"durationMs":7096,"type":"web-search","toolCallId":"tool_25149535-3dd1-49a6-8027-0d896edbed2","query":"Node.js LTS release line 2025 2026 current","references":2}
+```
+
+Both are synchronous: no `await`. They fail with the events they saw (`expected web searches matching /node/i, got none`), and with `.not`, `expected no web fetches matching example.com, got ["https://example.com/"]`.
+
+A harness may not be able to report web events for a turn: then the turn lists them in `turn.unreported`, and both matchers throw `HarnessCapabilityError` (exported from `'{{ pkg }}'`), negated or not, instead of passing or failing on nothing:
+
+```text
+toHaveFetched() can't check this turn: its harness doesn't report web fetches ('web-fetch' is in turn.unreported), so the agent may have made them with no event. Check the reply or files instead, or use a harness that reports them.
+```
+
+Cursor's SDK leaves web calls out of its stream; ES's adapter recovers them after each turn from the agent's stored conversation, so a Cursor turn is `unreported` only when that recovery failed.
+
+## Related
+
+- [The t API](/reference/t)
+- [Judges](/reference/judges)
+- [Writing evals](/guide/writing-evals)

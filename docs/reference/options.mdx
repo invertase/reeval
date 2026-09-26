@@ -1,0 +1,120 @@
+---
+title: Options
+description: Every option groups, evals, profiles and the config accept, and how each one inherits.
+---
+
+`defineConfig`, `group` and `evaluate` take the same options. They cascade config → profile `defaults` → outer group → inner group → eval, then the profile's `limit` narrows them, then `--runs` overrides.
+
+```ts title="evals/skill.es.ts"
+group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'] }, () => {
+  evaluate('greets in the house style', { timeout: '10m', tags: ['skills'] }, async (t) => {
+    // …
+  })
+})
+```
+
+## Where each key is accepted
+
+[//]: # (generated:option-keys)
+
+| Key | `es.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
+|---|---|---|---|---|
+| [`include`](#include) | ✓ |  |  |  |
+| [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
+| [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
+| [`environment`](#environment) | ✓ | ✓ | ✓ |  |
+| [`runs`](#runs) | ✓ | ✓ | ✓ | ✓ |
+| [`gate`](#gate) | ✓ | ✓ | ✓ |  |
+| [`env`](#env) | ✓ | ✓ | ✓ |  |
+| [`egress`](#egress) | ✓ | ✓ | ✓ |  |
+| [`judge`](#judge) | ✓ | ✓ | ✓ |  |
+| [`timeout`](#timeout) | ✓ | ✓ | ✓ |  |
+| [`concurrency`](#concurrency) | ✓ |  |  |  |
+| [`record`](#record) | ✓ |  |  |  |
+| [`history`](#history) | ✓ |  |  |  |
+| [`budget`](#budget) | ✓ |  |  |  |
+| [`profiles`](#profiles) | ✓ |  |  |  |
+| [`defaultProfile`](#defaultprofile) | ✓ |  |  |  |
+| [`secrets`](#secrets) | ✓ |  |  |  |
+| [`debug`](#debug) | ✓ |  |  |  |
+| [`analysis`](#analysis) | ✓ |  |  |  |
+| [`compare`](#compare) |  |  | ✓ | ✓ |
+| [`tags`](#tags) |  |  | ✓ |  |
+| [`pin`](#pin) |  |  | ✓ |  |
+
+[//]: # (/generated:option-keys)
+
+Config-only keys are on [defineConfig](/reference/config); `profiles` and `defaultProfile` are on [Profiles and budgets](/reference/profiles). Options are plain objects: a function in the options position is an error, and an unknown key is exit 2 with a hint (`Unknown option "repeat" in evaluate("e"). Did you mean "runs"?`).
+
+## Options
+
+<Property name="harness" type="Harness | Harness[] | ((inherited: Harness[]) => Harness[])">
+  Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. A function edits the inherited list: `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, or two harnesses with the same id, is an error. Default `cursor({ model: 'composer-2.5' })`.
+</Property>
+
+<Property name="environment" type="Environment">
+  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list: to compare environments, use `compare`. It's the control of `compare`. Default none.
+</Property>
+
+<Property name="compare" type="Environment[] | { variants, gate?, minLift?, harness? } | false">
+  Variants to run next to the inherited environment, reported as lift. **Replaces**. Groups and evals only: it's refused in `es.config.ts`. `false` opts out.
+
+  - `variants`: environments. Each variant cell runs `control.extend(variant)`.
+  - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
+  - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it.
+  - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.
+</Property>
+
+<Property name="sandbox" type="Sandbox">
+  Where the eval runs: one `docker(…)` or `fakeSandbox(…)`. **Replaces**. A list is an error. Default `docker()`.
+</Property>
+
+<Property name="runs" type="number">
+  Attempts per cell, a whole number of at least 1. **Replaces**. `es run --runs n` overrides every level, pins included. Default 1.
+</Property>
+
+<Property name="gate" type="'all' | { passRate: number }">
+  How a cell passes. **Replaces**. `'all'` (default) passes only when every attempt passes. `{ passRate: 0.8 }` passes when at least 80% of passes and fails are passes; infra errors don't count.
+</Property>
+
+<Property name="env" type="Record<string, string | Secret>">
+  Variables for the sandbox. **Merges by variable name**. Secrets come from a `defineConfig` or `defineEnvironment` callback's `secret` helper; a literal string under a secret-looking name is refused.
+</Property>
+
+<Property name="egress" type="'allow-all' | 'deny-all' | { allow: string[] }">
+  Where the sandbox may connect. **Replaces**. An environment's `egress` sits between the profile `defaults` and the groups. Default `'allow-all'`. See [Egress](/reference/egress).
+</Property>
+
+<Property name="judge" type="{ model?, threshold?, maxConcurrent?, providerOptions? }">
+  Judge settings. **Merges field by field**, so overriding `threshold` keeps the model. No default model; `threshold` defaults to 0.8. See [Judges](/reference/judges).
+</Property>
+
+<Property name="timeout" type="number | string">
+  Per attempt: milliseconds, or `'500ms'`, `'90s'`, `'15m'`, `'1h'`. **Replaces**. Image builds and setup steps don't count, and the clock starts when the attempt gets a concurrency slot. Default `'15m'`.
+</Property>
+
+<Property name="tags" type="string[]">
+  Labels for `es run --tag`. **Union** of every level.
+</Property>
+
+<Property name="pin" type="Array<'harness' | 'runs' | 'compare'>">
+  Keys a profile's `limit` may not narrow here. **Union**. Anything else is an error.
+</Property>
+
+## Precedence, top wins
+
+| Level | Where |
+|---|---|
+| `--runs` | The command line (runs only) |
+| Profile `limit` | Narrows only, unless the key is pinned |
+| Eval | `evaluate(name, options, fn)` |
+| Inner group, then outer group | `group(name, options, fn)` |
+| Environment `egress` | For `egress` only |
+| Profile `defaults` | Fills in what nothing else set |
+| Config | `es.config.ts` |
+
+## Related
+
+- [Options and inheritance](/concepts/options)
+- [defineConfig](/reference/config)
+- [Profiles and budgets](/reference/profiles)

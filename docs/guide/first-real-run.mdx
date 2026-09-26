@@ -1,0 +1,195 @@
+---
+title: Your first real run
+description: Run the quickstart's evals on Cursor in a Docker sandbox, with your keys kept on the host.
+---
+
+The quickstart ran against a fake agent. Here you run the same kind of eval on a real one: Cursor does the task in a fresh Docker container, and a real judge grades it.
+
+**Before you begin:** Node {{ node }} or later, a running Docker, a Cursor API key and a key for your judge.
+
+## Point the config at Cursor
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  include: ['evals/**/*.es.ts'],
+  harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
+  timeout: '15m',
+})
+```
+
+The [harness](/reference/harness/cursor) is the agent, and the [sandbox](/reference/sandbox/docker) is where it runs. `docker()` with no options uses ES's own image: Node 22, git and Cursor's agent, which ES drives through the Cursor TypeScript SDK. `model` is required.
+
+## Write the evals
+
+These are the `greet` evals from `examples/hello`, which the rest of the Guide builds on:
+
+```ts title="evals/hello.es.ts"
+import { evaluate, expect, group } from '{{ pkg }}'
+
+const callGreetWithNoArgs = `node -e "import('./greet.js').then((m) => {
+  const greet = m.greet ?? m.default?.greet ?? m.default
+  process.exit(greet() === 'Hello, world!' ? 0 : 1)
+})"`
+
+group('greet module', () => {
+  evaluate('creates a tested greet module', async (t) => {
+    const turn = await t.send(
+      'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
+        'and greet.test.js that tests it with node:test. No dependencies.',
+    )
+
+    await expect(turn).toHaveFile('greet.js')
+    await expect(t.exec('node --test')).toSucceed()
+    expect(
+      await t.judge(
+        "Does the agent's final message accurately describe what it changed?",
+      ),
+    ).toPass()
+  })
+
+  evaluate('adds a default name in a follow-up turn', async (t) => {
+    await t.send(
+      'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
+        'No dependencies.',
+    )
+    await t.send(
+      'Make name default to "world" ' +
+        'when greet() is called without arguments.',
+    )
+
+    await expect(t.exec(callGreetWithNoArgs)).toSucceed()
+    expect(
+      await t.judge(
+        'Did the agent add the default without breaking greet(name)?',
+      ),
+    ).toPass()
+  })
+})
+```
+
+[Evals and checks](/guide/writing-evals) explains each line.
+
+## Build the sandbox image
+
+```bash
+npx es image build
+```
+
+```text
+Building evalsuite-sandbox-base:latest
+Installing the Cursor harness bootstrap
+Cursor @cursor/sdk 1.0.32
+…
+docker: evalsuite-sandbox:cursor-0.1.0 a987bc712d5b
+…
+```
+
+ES bakes the agent into its image once, tagged with the harness adapter's version (`evalsuite-sandbox:cursor-0.1.0`). Rebuild after you upgrade ES.
+
+## Add your keys
+
+```bash title=".env.local"
+CURSOR_API_KEY=...
+GOOGLE_GENERATIVE_AI_API_KEY=...
+```
+
+`es run` reads `.env.local` and `.env` from the current directory. The judge key depends on the judge model: `google/*` models use `GOOGLE_GENERATIVE_AI_API_KEY`, and `typesafe-ai/jev-1.13.0` uses `TYPESAFE_AI_API_KEY`.
+
+<Warning>
+  Run `es` from the directory that holds `.env.local`, usually your project root. A key in another directory isn't read.
+</Warning>
+
+## Your key stays on the host
+
+`CURSOR_API_KEY` never enters the container. The agent sees a placeholder, and ES's egress gateway swaps in the real key only on the request that exchanges it with Cursor. A check that prints `env` in the sandbox finds `aisdkhc_…`, not your key. [Credential brokering](/concepts/credential-brokering) shows how.
+
+`es run -v` says so for every attempt:
+
+```text
+[agent#1 cursor]  17:40:47 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
+```
+
+## Run it
+
+```bash
+npx es run hello --log-order grouped
+```
+
+```text
+plan  2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
+es 0.0.1 · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
+[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
+[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  9s
+[creates#1 cursor]  +0:00 sandbox ready 1s
+[creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
+[creates#1 cursor]  +0:07 $ node --test  exit 0 130ms
+[creates#1 cursor]  +0:07 judge  pass 0.99 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  16s
+[adds#1 cursor]  +0:00 sandbox ready 1s
+[adds#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 1 file edit
+[adds#1 cursor]  +0:10 turn 2 done 4s · 1 tool call, 1 file edit
+[adds#1 cursor]  +0:14 $ node -e "import('./greet.js').then((m) => {…  exit 0 79ms
+[adds#1 cursor]  +0:14 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+
+Summary
+ evals/hello.es.ts
+   greet module
+     ✓ creates a tested greet module                 9s  judge 0.99  1 turn
+     ✓ adds a default name in a follow-up turn      16s  judge 1.00  2 turns
+
+   Evals  2 passed (2)
+Duration  17s
+  Tokens  155k in (72k cached) · 1205 out
+ Results  .es/runs/20260926T174005Z_b010670_ada-lovelace_xdb9/summary.md
+```
+
+`hello` is a filter: it matches the file `evals/hello.es.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict.
+
+`Tokens` is what Cursor reported for the run: input tokens, the part of them served from cache, and output tokens. ES records them per turn and per attempt, but prices no models, so there's no cost.
+
+On a terminal, the same run is in colour:
+
+<Image src="/assets/cli/run-tty.png" alt="A colour terminal showing an es run with two passing evals and the summary" width={800} />
+
+## Find the run
+
+```text
+.es/runs/
+  20260926T174005Z_b010670_ada-lovelace_xdb9.json    the record
+  20260926T174005Z_b010670_ada-lovelace_xdb9/
+    summary.md                                     the run as Markdown
+    <eval>/<cell>/1/                               transcript, diff, checks, judge input
+```
+
+Every `es run` writes a scratch run under `.es/runs/`. The name is the UTC start time, the commit, the author and a random suffix. [History](/guide/history) shows how to keep runs in git.
+
+## Ignore local files
+
+```text title=".gitignore"
+.es/
+.env*
+```
+
+`.es/` holds scratch runs, caches and debug data. `.env*` holds your keys.
+
+<Success>
+  A real agent passed your evals in Docker, and your key never left the host.
+</Success>
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Evals and checks" icon="flask" href="/guide/writing-evals">
+    Prompts, commands, matchers and the judge.
+  </Card>
+  <Card title="Credential brokering" icon="lock" href="/concepts/credential-brokering">
+    How the agent works without seeing its key.
+  </Card>
+</CardGroup>

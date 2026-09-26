@@ -1,0 +1,118 @@
+---
+title: cursor()
+description: The Cursor harness, its options and id, the key it needs, how ES brokers that key, and the tokens it reports.
+---
+
+`cursor({ model })` runs Cursor's agent in the Docker sandbox, through the Cursor TypeScript SDK. `model` is required.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5', params: { fast: 'true' } }),
+})
+```
+
+With no `harness` in the config, ES uses `cursor({ model: 'composer-2.5' })`.
+
+## Options
+
+<Property name="model" type="string">
+  The model the agent uses, as Cursor names it (`composer-2.5`). Required: the SDK has no default for local agents.
+</Property>
+
+<Property name="params" type="Record<string, string>" optional>
+  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the model's first allowed value, not the catalog's default variant, so set the ones that matter to you.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `cursor:<model>`, such as `cursor:composer-2.5`. Letters, digits and `.`, `_`, `:`, `@`, `+`, `-`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Cursor attempts at once across the run, for example to stay under your account's rate limits. A whole number of at least 1.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `CURSOR_API_KEY` (a user or service-account API key) |
+| Adapter | `@evalsuite/harness-cursor-sdk` 0.1.0, bundled with ES |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:cursor-0.1.0` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `~/.agents/skills` |
+| Skills (`placement: 'workspace'`) | `.cursor/skills` in the workspace |
+| Egress hosts added | `api2.cursor.sh`, `*.cursor.sh` |
+| Tokens | Reported per turn |
+
+## How it runs
+
+The agent loop runs in the sandbox, in a Node process, with its tools acting on the workspace; inference runs on Cursor's hosted models. One runner serves all of an attempt's turns and keeps the agent loaded between them, so a follow-up turn starts quickly and keeps the conversation. If the runner stops, or a turn is aborted, the next turn resumes the same agent.
+
+The adapter fetches Cursor's model catalog on the host and hands it to the runner, so the sandbox only ever talks to `api2.cursor.sh`. The runner sends the agent's stream over HTTP/1.1, so it goes through the sandbox's proxy and egress gateway like every other request.
+
+The agent runs every tool without asking, inside the sandbox.
+
+## The key
+
+ES reads `CURSOR_API_KEY` on the host and passes it to the adapter explicitly: a host AI Gateway key, subscription or keychain is never used. The key never enters the container, and the adapter refuses a sandbox that can't broker it. The agent sees a placeholder (`aisdkhc_…`), and the egress gateway swaps in the real key on one endpoint only:
+
+| Host | Endpoint |
+|---|---|
+| `api2.cursor.sh` | `POST /auth/exchange_user_api_key` |
+
+The SDK exchanges the key for session tokens. The gateway replaces the `accessToken` and `refreshToken` in that response with placeholders too, and swaps the real ones back, in headers only, on `cursor.sh` and its subdomains, including the agent's `BidiService/BidiAppend` stream. With `-v`, the attempt's log shows it:
+
+```text
+broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
+…
+gateway   POST https://api2.cursor.sh/auth/exchange_user_api_key → 200 · allowed · ↑2 B ↓956 B · 76ms · substituted CURSOR_API_KEY (authorization)
+broker    substituted CURSOR_API_KEY (authorization) for api2.cursor.sh (POST https://api2.cursor.sh/auth/exchange_user_api_key)
+…
+gateway   POST https://api2.cursor.sh/aiserver.v1.BidiService/BidiAppend → 200 · allowed · ↑437 B ↓0 B · 57ms · substituted CURSOR_API_KEY accessToken
+```
+
+A request carrying the placeholder anywhere else gets a 403, and the attempt prints `warning: the egress gateway refused …`. See [Credential brokering](/concepts/credential-brokering).
+
+## Tokens and transcripts
+
+Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=true]`). The run's summary totals them:
+
+```text
+   Evals  1 passed (1)
+Duration  8s
+  Tokens  31k in (15k cached) · 111 out
+```
+
+ES records tokens but prices no models, so the record's `usd` is `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+
+File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
+
+When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn.
+
+## Skills, rules and MCP
+
+Rules go to `AGENTS.md` in the workspace. Skills with the default placement go to `~/.agents/skills`; `placement: 'workspace'` writes them to `.cursor/skills`. The SDK loads both, as the Cursor CLI does. MCP servers are passed to the agent on every turn.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No `model` | `cursor() needs a model, e.g. cursor({ model: 'composer-2.5' })` |
+| Bad `params` | `cursor({ params }) maps parameter ids to string values, e.g. { fast: 'false' } (got …)` |
+| No key, before the run | `Missing credentials: CURSOR_API_KEY, … Set them in the environment or .env.local.` |
+| A key with a line break | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). …` |
+| A non-Docker sandbox | `The Cursor harness needs the Docker sandbox` |
+| The agent doesn't start | `Cursor harness failed to start: …` |
+| The image isn't built | `Sandbox image evalsuite-sandbox:cursor-0.1.0 not found. Build it once with: es image build` |
+
+## Related
+
+- [Harnesses guide](/guide/harnesses)
+- [docker()](/reference/sandbox/docker)
+- [Credential brokering](/concepts/credential-brokering)
+- [Egress](/reference/egress)

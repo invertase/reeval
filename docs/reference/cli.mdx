@@ -1,0 +1,91 @@
+---
+title: CLI overview and exit codes
+description: Every es command, the flags they share, run references and exit codes.
+---
+
+The `es` CLI ships with the package. Run it with `npx es`, or `pnpm es` in a pnpm project.
+
+```bash
+npx es run --dry-run
+```
+
+## Commands
+
+| Command | What it does | Page |
+|---|---|---|
+| `es run [filter...]` | Plan and run evals | [es run](/reference/cli/run) |
+| `es record [run...]` | Copy scratch runs into the history folder | [es record](/reference/cli/record) |
+| `es history`, `es show`, `es compare`, `es checkout` | Read and compare recorded runs | [es history, show, compare](/reference/cli/history) |
+| `es query [sql \| view]` | Read-only SQL across runs | [es query](/reference/cli/query) |
+| `es studio`, `es studio build` | The web studio, live or as a static site | [es studio](/reference/cli/studio) |
+| `es image build`, `es clean` | Build sandbox images; remove local debug data | [es image build, es clean](/reference/cli/image-clean) |
+
+`es --help` prints the full help and exits 0. `es` with no command prints it and exits 2. `es --version` prints the version.
+
+## Shared flags
+
+<Property name="--config" type="string" optional>
+  The config file every command reads. Default `./es.config.ts`. An explicit path that doesn't exist fails with `Config file not found`; with no config file at the default path, ES uses its defaults (`cursor({ model: 'composer-2.5' })`, `docker()`, no judge model).
+</Property>
+
+<Property name="-h, --help" type="boolean" optional>
+  Print the help and exit 0.
+</Property>
+
+[//]: # (generated:cli-help:footer)
+
+```text
+Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
+Options: --config <path> (default ./es.config.ts)
+Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
+```
+
+[//]: # (/generated:cli-help:footer)
+
+## Run references
+
+Commands that take a `[run]` accept any of these. They search recorded runs and unrecorded scratch runs.
+
+| Reference | Means |
+|---|---|
+| `latest` | The newest run (the default) |
+| `latest~N` | N runs before the newest |
+| `20260926T170558Z_bd6205e_ada-lovelace_sycz` | A full run id |
+| `20260926T1705` | A unique prefix of a run id |
+| `bd6205e` | A git SHA prefix of 4+ characters: the newest run at that commit |
+
+A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git config user.name` as a slug, or `ci` in CI.
+
+## Exit codes
+
+[//]: # (generated:exit-codes)
+
+| Code | Name |
+|---|---|
+| 0 | `ok` |
+| 1 | `failed` |
+| 2 | `usage` |
+| 3 | `infra` |
+| 130 | `interrupted` |
+
+[//]: # (/generated:exit-codes)
+
+| Code | When |
+|---|---|
+| 0 | Every gated cell passed. Failing controls under `compare.gate: 'variants'` don't count. Also `--dry-run`, and `es compare` without `--fail-on-regression`. |
+| 1 | A gated attempt failed, a variant fell below its `minLift`, `budget.duration` stopped the run, or `es compare --fail-on-regression` found a regression. |
+| 2 | A usage, config or credentials error. That includes an unknown command, flag, option or profile, a filter or tag that matches no eval, a plan over `budget.attempts` without `--force`, `.only` in CI, Docker not running, a missing image, a bad run reference and a refused record. None of these writes a run. |
+| 3 | An infrastructure error (sandbox, harness or setup step) and no failures. |
+| 130 | Interrupted with Ctrl-C. Sandboxes are destroyed and the run is saved as `interrupted`. Press Ctrl-C twice to force-exit. |
+
+A real exit 2, from a filter that matches nothing:
+
+```text
+es: No evals matched evals/hello.es.ts, evals/preferences.es.ts, evals/skill.es.ts with filter "nope"
+```
+
+## Related
+
+- [Environment variables](/reference/env-vars): the variables that stand in for flags
+- [Errors](/reference/errors): common messages and their fixes
+- [Output modes](/concepts/output): what `es run` prints and when

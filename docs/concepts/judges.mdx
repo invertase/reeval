@@ -1,0 +1,142 @@
+---
+title: Judges
+description: How a judge scores a yes/no question, which model it calls, and how to write questions it can grade.
+---
+
+`t.judge(question)` asks an evaluation model a yes/no question about the agent's latest turn. The model returns the probability of "yes", and the verdict passes when that score is at or above the threshold.
+
+```ts title="evals/hello.es.ts"
+evaluate('adds a default name in a follow-up turn', async (t) => {
+  await t.send(
+    'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
+      'No dependencies.',
+  )
+  await t.send(
+    'Make name default to "world" when greet() is called without arguments.',
+  )
+
+  await expect(t.exec(callGreetWithNoArgs)).toSucceed()
+  expect(
+    await t.judge(
+      'Did the agent add the default without breaking greet(name)?',
+    ),
+  ).toPass()
+})
+```
+
+```text
+[adds#1 cursor]  +0:10 judge  pass 1.00 (≥ 0.8)  Did the agent add the default without breaking greet(name)?
+```
+
+## Score and threshold
+
+The score is P(yes), from 0 to 1. The threshold defaults to 0.8, and a verdict is `{ verdict, score, threshold, question, model }`. With `-v`, the judge line says why:
+
+```text
+[adds#3 fake]  17:15:24 judge     fake · 4ms · score 0.90 ≥ 0.7 · pass · reason: P(yes) 0.90 is at or above the 0.7 threshold
+```
+
+`judge` merges field by field, innermost first: the call, then the eval, then each group, then the config. So an eval or a single call can change the threshold and keep the config's model:
+
+```ts title="evals/strict.es.ts"
+evaluate('strict', { judge: { threshold: 0.9 } }, async (t) => {
+  await t.send('Rename add.js to sum.js and update its imports.')
+  const minimal = await t.judge('Is the change minimal?', { threshold: 0.7 })
+  expect(minimal).toPass()
+})
+```
+
+## Which model it calls
+
+There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `t.judge()` fails with `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in es.config.ts, on the group or eval, or pass { model } to this call.`
+
+```mermaid
+flowchart LR
+  M["model string"] --> D{"provider's own key set?"}
+  D -- yes --> P["provider's AI SDK package"]
+  D -- no --> G{"AI Gateway key set?"}
+  G -- yes --> W["Vercel AI Gateway"]
+  G -- no --> E["the judge call fails, naming both"]
+```
+
+| `model` | With its own key | Otherwise |
+|---|---|---|
+| `'typesafe-ai/jev-1.13.0'` (recommended) | `TYPESAFE_AI_API_KEY` | The AI Gateway |
+| `'google/gemini-3.8-flash'` | `GOOGLE_GENERATIVE_AI_API_KEY` | The AI Gateway |
+| Any other `provider/model` | — | The AI Gateway, with `AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN` |
+| An evaluation model object | Used as is, per group, eval or call only | — |
+| `fakeJudge({ score })` | A fixed score, no model call | — |
+
+<Warning>
+  Pin model versions: `jev-1.13.0`, not `jev-latest`. A moving alias changes scores between runs, and the judge's model is part of every [fingerprint](/concepts/fingerprints).
+</Warning>
+
+## Retries
+
+A judge call that hits a transient error (a 429, a 5xx, "high demand", a dropped connection) is retried with exponential backoff, up to six tries over about a minute, honouring `retry-after`. A bad request or a bad key fails straight away.
+
+| Where | What's recorded |
+|---|---|
+| The verdict | `retries`: each error and the delay before the next try |
+| The attempt | A judge call that fails for good makes the attempt a `judge` failure |
+| The timeout | Retries count toward the eval's `timeout` |
+
+`judge: { maxConcurrent: 2 }` caps calls at once per provider, for rate limits. See [Concurrency](/concepts/concurrency).
+
+## What the judge sees
+
+The judge sees four things: the latest turn's prompt as `task`, the agent's final message as `output`, the changed files and the diff since the eval started. Each call is saved in the attempt's `judge-input.json`. From a real Cursor attempt of the multi-turn eval above:
+
+```text
+[
+  {
+    "question": "Did the agent add the default without breaking greet(name)?",
+    "model": "google/gemini-3.8-flash",
+    "state": {
+      "task": "Make name default to \"world\" when greet() is called without arguments.",
+      "output": "Updated `greet` to use a default parameter: `name = \"world\"`. Calling `greet()` returns `\"Hello, world!\"`; passing a name still works as before.",
+      "files": [
+        "added greet.js"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "2d8d95c242d9ea1246dd52368f13f5220d8992713885b2be946af5c939915fdc"
+      }
+    }
+  }
+]
+```
+
+| Sees | Doesn't see |
+|---|---|
+| The latest turn's prompt | Earlier prompts |
+| The agent's final message | Its reasoning and intermediate messages |
+| Changed files, dependency folders collapsed | The transcript: commands it ran, tool calls, web fetches |
+| The diff since the eval started | Your checks and their output |
+
+So the judge can't tell whether the agent ran the tests; check that with `t.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message.
+
+## Write questions the judge can grade
+
+Ask one thing, about what the judge sees, in words that don't assume one solution. The ES dogfood run found the failure mode: a question that named specific matchers failed a correct scaffold at 0.05, because the agent used `t.readFile` and `toEqual` instead.
+
+| Brittle | Better |
+|---|---|
+| Pass only if the eval uses `toHaveFile` or `t.exec` to check the file. | Does the eval check that the file was created with the right content? |
+| Pass only if the final message names all three mistakes correctly: … | Does the final message explain why `compare` can't go in `es.config.ts`? |
+| Did the agent run the tests? | Use `t.exec('npm test')` and `toSucceed()` instead |
+
+"Pass only if …" questions with several conditions are the most brittle: every extra clause is another way to score near 0. Split them into several `t.judge` calls, and move anything a command can check into a check.
+
+<Image src="/assets/studio/attempt-judge.png" alt="ES studio attempt page, Judge tab: the question, the score against the threshold and the judge input" width={800} />
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Fingerprints and drift" icon="code-compare" href="/concepts/fingerprints">
+    Why a judge change makes two runs not comparable.
+  </Card>
+  <Card title="Judges reference" icon="book" href="/reference/judges">
+    Every judge option, model string and helper.
+  </Card>
+</CardGroup>

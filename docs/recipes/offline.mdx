@@ -1,0 +1,143 @@
+---
+title: Offline evals
+description: Cut the sandbox off from the network, or allow only the hosts you list, and see what the agent tried to reach.
+---
+
+**Goal:** check that an agent can do a task without the internet, or with only your package registries, and see every host it tried.
+
+An `egress` policy says where the sandbox may connect. Under a restricted policy, the Docker container is detached from every network and the attempt's egress gateway is its only way out (see [Egress policies](/concepts/egress)).
+
+## The files
+
+```ts title="evals/offline.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate(
+  'writes a CSV parser offline',
+  { egress: 'deny-all' },
+  async (t) => {
+    await t.send(
+      'Create csv.js exporting parse(text) that handles quoted fields, ' +
+        'and csv.test.js using node:test. No dependencies.',
+    )
+    await expect(t.exec('node --test')).toSucceed()
+  },
+)
+```
+
+```ts title="evals/installs.es.ts"
+import { DEFAULT_EGRESS_ALLOW, defineEnvironment, evaluate, expect } from
+  '{{ pkg }}'
+
+const registriesOnly = defineEnvironment('registries-only', {
+  egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'api.acme.dev'] },
+})
+
+evaluate(
+  'adds zod validation',
+  { environment: registriesOnly },
+  async (t) => {
+    await t.send('Install zod and add a validated parseUser(input) to user.js.')
+    await expect(t.exec('npm ls zod')).toSucceed()
+  },
+)
+```
+
+| Policy | The sandbox can reach |
+|---|---|
+| `'allow-all'` (default) | Anything |
+| `'deny-all'` | Only the automatic hosts below |
+| `{ allow: [...] }` | The listed hosts, plus the automatic hosts |
+
+`DEFAULT_EGRESS_ALLOW` is the package registries and GitHub: `registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`, `*.githubusercontent.com`, `pypi.org` and `files.pythonhosted.org`. `*.example.com` matches subdomains, not `example.com` itself.
+
+## Check the plan
+
+```bash
+npx es run --dry-run
+```
+
+```text
+plan  2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
+eval                                               harnesses  variants  runs  attempts  notes
+evals/installs.es.ts › adds zod validation         1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org, api.acme.dev + auto: api2.cursor.sh, *.cursor.sh
+evals/offline.es.ts › writes a CSV parser offline  1          —         1     1         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
+```
+
+Each restricted eval lists its policy and the automatic hosts it adds.
+
+## What the agent can still reach
+
+`'deny-all'` means "nothing but what the attempt itself needs", so the agent still works:
+
+- **The harness's API:** `api2.cursor.sh` and `*.cursor.sh` for Cursor, `api.anthropic.com` and `*.anthropic.com` for Claude Code, and `generativelanguage.googleapis.com` for Antigravity.
+- **Every brokered secret's `hosts`**, so a key the agent is meant to use keeps working.
+- **Each MCP `http` or `sse` server's host.**
+
+The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them and the egress record doesn't see them. ES still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway.
+
+## Run it and see what was blocked
+
+```bash
+npx es run offline -v
+```
+
+A request to any other host gets a `403` from the gateway and the attempt carries on; your checks decide whether it passed. `-v` prints one `gateway` line per request. This one is from a real Antigravity run under an allowlist:
+
+```text
+… 14:00:24 gateway   CONNECT antigravity-unleash.goog:443 → 403 · blocked: antigravity-unleash.goog isn't in the allowlist · ↑0 B ↓0 B · 2ms · no key substituted
+```
+
+That host is Antigravity's feature-flag service, which its CLI contacts in every session. ES now lists hosts like it as expected blocks: still refused, but summarised in one `expected blocks` line at teardown instead of a line per request.
+
+The record keeps every attempt's traffic under `egress`:
+
+```bash
+npx es show latest --json \
+  | jq -c '.evals[].attempts[] | {key, blocked: .egress.blocked}'
+```
+
+| Field | What it holds |
+|---|---|
+| `policy`, `allowed` | The policy, and every host a restricted policy let through |
+| `contacted` | Each `host:port` reached, with connections and bytes sent and received |
+| `blocked` | Each refused `host:port`, with connections and the reason |
+| `expectedBlocked` | Refused hosts the harness's CLI always tries and nothing needs |
+
+In the studio, the attempt's State tab shows the same panel:
+
+<Image src="/assets/studio/attempt-state-egress.png" alt="Studio attempt State tab with the egress panel listing the policy, contacted hosts with bytes, and refused hosts" width={800} />
+
+## It needs Docker
+
+The fake sandbox runs commands on the host, so it can't enforce a policy, and ES refuses before anything starts:
+
+```bash
+npx es run --config es.fake.config.ts --dry-run
+```
+
+```text
+es: evals/offline.es.ts: evaluate("writes a CSV parser offline") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
+```
+
+<Warning>
+  An allowlist is checked by host name when the connection opens. An HTTPS tunnel to an allowed host that shares a CDN with others isn't inspected, so treat an allowlist as a guard against accidents, not against a determined agent.
+</Warning>
+
+## Variations
+
+- **One policy for the whole suite:** set `egress` in `es.config.ts` or a profile's `defaults`; groups, environments and evals can still override it.
+- **Offline as a compare:** `compare: [offline]` with `const offline = defineEnvironment('offline', { egress: 'deny-all' })` shows how much the agent relies on the network, as lift.
+- **Your API only:** `{ allow: ['api.acme.dev'] }` without `DEFAULT_EGRESS_ALLOW` blocks installs as well.
+- **A brokered key:** `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })` adds `api.acme.dev` to the automatic hosts and keeps the token out of the sandbox.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Egress policies" icon="shield" href="/concepts/egress">
+    What each policy enforces, and what's recorded.
+  </Card>
+  <Card title="Secrets and egress" icon="lock" href="/guide/secrets-and-egress">
+    Brokered keys and allowlists together.
+  </Card>
+</CardGroup>

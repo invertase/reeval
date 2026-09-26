@@ -1,0 +1,124 @@
+---
+title: es analyze
+description: Explain a run in plain words with one checked LLM call over a digest of its facts.
+---
+
+`es analyze` explains a run: what happened, what the numbers mean, why, and what to change. ES computes the facts; one structured LLM call explains and ranks them, and ES checks the answer before showing it.
+
+```bash
+npx es analyze                                  # latest vs its nearest recorded ancestor
+npx es analyze latest --vs latest~2 --eval skill
+npx es analyze --context                        # the digest for your own agent: no key, no call
+```
+
+## Help
+
+[//]: # (generated:cli-help:analyze)
+
+```text
+es analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
+                          nearest recorded ancestor), citations and commands checked; cached
+                          in .es/analysis (model: config.analysis.model)
+  --vs <run>              The run to compare with; --eval <filter> only matching evals
+  --save                  Also write it into the run's history folder: <run>/analysis/
+  --context               Print the digest and rules for your own coding agent (no key, no call)
+  --dry-run               Print the digest's size and the cache key, without calling the model
+  --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again
+```
+
+[//]: # (/generated:cli-help:analyze)
+
+## A real run
+
+`--dry-run` shows the digest's size and cache key without calling the model:
+
+```text
+digest 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg: 24 facts, 5 evidence items, 18 attempts
+size 26510 characters ≈ 6628 tokens (cap 20000 in, 8000 out)
+model google/gemini-3.8-flash · analysis-v1 · cache miss (.es/analysis/cb4f1ade460a94fdd4e5a9ddef213bd995e81adbbf4f83d0c4a7fa93e0a69398.json)
+```
+
+Then the analysis, over a real Cursor and Antigravity run with the skill compare (trimmed):
+
+```text
+analysing 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg with google/gemini-3.8-flash…
+analysis 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg
+
+TL;DR  The house-greeting skill was introduced in run r2 and produced a statistically significant +100 percentage point pass-rate lift over control for both Cursor and Antigravity harnesses. Without the skill, agents in the control cells could not guess the proprietary greeting convention and failed assertion checks. Evaluated baseline tasks hello-1 and hello-2 remained saturated at 100% pass rate …
+
+Results
+  - In a pooled factor analysis across 2 runs for cursor:composer-2.5 on eval 'skill', environment:with-house-greeting achieved a pass-rate lift of +100 pts (95% CI +31…+100, verdict: effect) and reduced tool calls by ×0.38 (p = 0.0286, verdict: fewer). [F11]
+…
+Suggested actions
+  1. Increase attempt count on skill eval to reach statistical power for effort (eval · impact medium · effort low) [F10] [F11]
+     verify: es run --runs 6 --tag skill
+…
+gemini-3.8-flash · analysis-v1 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
+```
+
+The studio shows saved analyses (and, in `es studio`, cached ones) on the run's Analysis tab, with each citation linking to its attempt:
+
+<Image src="/assets/studio/run-analysis.png" alt="ES studio Analysis tab with the TL;DR, what happened and results, each claim followed by fact and evidence citations" width={800} />
+
+## How it works
+
+```mermaid
+flowchart LR
+  R[run records] --> D[digest: facts F1… and evidence E1…]
+  D --> M[one model call, with a schema]
+  M --> V[validation: citations, quotes, numbers, commands]
+  V --> O[analysis: shown, cached, optionally saved]
+```
+
+1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, the judge's scores, failures, flaky cells, drift, the compare), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and check tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>`. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them.
+2. **Call.** One `generateText` call with a schema: TL;DR, what happened, results, why, anomalies, at most five actions (target, change, expected effect, verify command, impact, effort) and a confidence.
+3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged. Each verify command must parse as ES's own CLI, with only that command's flags. The counts are in the footer.
+4. **Storage.** Every analysis is cached in `.es/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into.
+
+## Configuration
+
+```ts title="es.config.ts"
+export default defineConfig({
+  judge: { model: 'typesafe-ai/jev-1.13.0' },
+  analysis: {
+    model: 'google/gemini-3.8-flash', // default: the judge's, when it's a language model
+    instructions: 'Fewer tool calls count as a win.',
+    maxInputTokens: 20_000,           // the digest's cap (characters ÷ 4)
+    maxOutputTokens: 8_000,           // the answer's cap
+  },
+})
+```
+
+<Property name="analysis.model" type="string" optional>
+  A `provider/model` language model. `google/*` goes direct with `GOOGLE_GENERATIVE_AI_API_KEY`; anything else through the Vercel AI Gateway (`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`). Defaults to the judge's model when that's a language model. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
+</Property>
+
+<Property name="analysis.instructions" type="string" optional>
+  Your own guidance, added to the prompt: what counts as a win, which skill is under test.
+</Property>
+
+<Property name="analysis.maxInputTokens" type="number" optional>
+  The digest's cap, at least 1000. Default 20000.
+</Property>
+
+<Property name="analysis.maxOutputTokens" type="number" optional>
+  The answer's cap, at least 500. Default 8000.
+</Property>
+
+For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. ES has no prices, so the footer shows tokens used and no cost.
+
+## Errors
+
+| Message | Fix |
+|---|---|
+| `es analyze takes --json or --md, not both` | Pick one |
+| `es analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
+| `es analyze --vs names the run itself` | Name an earlier run |
+| `No eval in <run> matches "<filter>"` | Check `--eval` against `es show <run>` |
+| A missing key, or an evaluation model | Set the key, set `analysis.model`, or use `--context` with your own agent |
+
+## Related
+
+- [Analysis](/guide/analysis)
+- [es query](/reference/cli/query): the views the facts come from
+- [Gates and lift](/concepts/lift)

@@ -1,0 +1,97 @@
+---
+title: es query
+description: Read-only SQL over every recorded and scratch run, with every view and table.
+---
+
+`es query` answers questions across runs with SQL. It reads `.es/history.db`, a gitignored SQLite projection of every record in the history folder and `.es/runs/`.
+
+```bash
+npx es query lift
+npx es query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"
+```
+
+## Help
+
+[//]: # (generated:cli-help:query)
+
+```text
+es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
+                          rebuilt from the records); views: lift, effort, factor_effects,
+                          skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
+                          verdict_flips. No argument lists them
+  --json                  Rows as JSON; --schema every table and column; --rebuild from scratch
+```
+
+[//]: # (/generated:cli-help:query)
+
+## Behaviour
+
+- **Argument:** a view or table name runs `SELECT * FROM <name>`. Anything else is a SQL statement. No argument lists the views and tables with examples.
+- **Read-only, one statement at a time.**
+- **Always current:** each query re-reads only records that are new or changed. A recorded run wins over its scratch copy. `--rebuild` rebuilds the database from scratch, and you can delete it at any time.
+- **Output:** an aligned table, or JSON rows with `--json`. The sync line (`history.db: 13 runs`) goes to stderr, so output pipes cleanly.
+- **Needs** Node 22.13 or later (`node:sqlite`).
+
+A real query (`points`, `lo` and `hi` are fractions: 1 is +100 points):
+
+```text
+eval_key                                                   harness                              variant              variant_pass  variant_counted  control_pass  control_counted  points  lo    hi  within_noise
+…
+evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
+```
+
+## Views
+
+[//]: # (generated:query-views)
+
+| Name | Columns |
+|---|---|
+| `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
+| `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tools_p`, `agent_s_p`, `separated`, `verdict`, `time_verdict` |
+| `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `pass_rate`, `fingerprint` |
+| `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `note` |
+| `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `error_kind`, `error_message`, `duration_ms` |
+| `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `rate`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
+| `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
+| `skill_reads` | `run_id`, `eval_key`, `cell_key`, `attempt_key`, `attempt_id`, `variant`, `skill`, `placement`, `read_line`, `reads` |
+| `verdict_flips` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `judgement_key`, `question`, `prev_pass_rate`, `pass_rate`, `n` |
+
+[//]: # (/generated:query-views)
+
+| View | One row per |
+|---|---|
+| `lift` | Variant cell per run: its control, both sides' counts, points, the 95% interval (`lo`, `hi`), `within_noise`, `min_lift` |
+| `effort` | Cell per run: attempts, median and quartiles of tool calls and agent seconds; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and a verdict |
+| `factor_effects` | One factor's contrast (`environment`, `harness`, `model`) by evidence tier (`controlled`, `pooled`, `observed`, `not_measured`), with pass-rate and effort verdicts |
+| `skill_reads` | Attempt and skill its environment placed: the transcript line of its first read, and how many |
+| `flaky_cells` | Cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (`flaky` from 6 counted attempts) and a likely cause (`infra`, `judge`, `agent`) |
+| `drift` | Run where a cell's fingerprint changed from its previous run, the parts and context paths that changed, and `noise = 1` when only an agent CLI's own runtime state changed |
+| `failing_attempts` | Failed attempt, with the skill of its environment (joined by digest), harness, model and error |
+| `eval_trend` | Eval per run: outcome, pass rate, branch, PR and fingerprint |
+| `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |
+
+## Tables
+
+[//]: # (generated:query-tables)
+
+| Name | Columns |
+|---|---|
+| `artifacts` | `run_id`, `attempt_key`, `kind`, `path`, `sha256`, `bytes` |
+| `attempt_context` | `run_id`, `attempt_key`, `path`, `sha256`, `runtime` |
+| `attempts` | `run_id`, `eval_key`, `cell_key`, `key`, `id`, `n`, `seq`, `started_at`, `outcome`, `error_kind`, `error_message`, `duration_ms`, `image_id`, `turns`, `tools`, `file_edits`, `setup_ms`, `agent_ms`, `checks_ms`, `judge_ms`, `last_text`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `served_model` |
+| `cells` | `run_id`, `eval_key`, `key`, `role`, `variant`, `harness`, `harness_kind`, `model`, `environment`, `environment_digest`, `sandbox`, `gate`, `gate_pass_rate`, `fingerprint`, `fp_sources`, `fp_harness`, `fp_environment`, `fp_image`, `fp_agent_cli`, `fp_judge`, `fp_context`, `runs`, `pass`, `fail`, `infra_error`, `skipped`, `pass_rate`, `outcome`, `lift_vs`, `lift_points`, `lift_lo`, `lift_hi`, `within_noise`, `min_lift`, `comparable` |
+| `env_skills` | `run_id`, `digest`, `name`, `source`, `commit_sha`, `sha256`, `placement` |
+| `environments` | `run_id`, `name`, `digest`, `parent`, `overrides` |
+| `evals` | `run_id`, `key`, `id`, `slug`, `file`, `groups`, `name`, `tags`, `fingerprint`, `outcome`, `pass_rate`, `sources` |
+| `judgements` | `run_id`, `attempt_key`, `key`, `question`, `verdict`, `score`, `threshold`, `model`, `resolved_model`, `input_path` |
+| `runs` | `run_id`, `recorded`, `status`, `started_at`, `ended_at`, `duration_ms`, `author`, `git_sha`, `branch`, `dirty`, `runner`, `ci_provider`, `ci_url`, `pr_number`, `pr_base`, `es`, `judge_model`, `judge_version`, `profile`, `evals`, `attempts`, `pass`, `fail`, `not_gated`, `infra_error`, `skipped` |
+| `tool_calls` | `run_id`, `attempt_key`, `line`, `turn`, `tool`, `target`, `ok`, `duration_ms` |
+
+[//]: # (/generated:query-tables)
+
+The tables mirror [the run record](/reference/record) and join on `run_id`, `eval_key`, `cell_key` and `environment_digest`.
+
+## Related
+
+- [Analysis](/guide/analysis)
+- [The run record](/reference/record)

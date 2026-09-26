@@ -1,0 +1,172 @@
+---
+title: Evals and checks
+description: Write evals with prompts, sandbox commands, file checks, matchers and an LLM judge.
+---
+
+An eval gives the agent a task, then checks what it did. Here's the first `greet` eval again, the one you ran on Cursor:
+
+```ts title="evals/hello.es.ts"
+import { evaluate, expect, group } from '{{ pkg }}'
+
+group('greet module', () => {
+  evaluate('creates a tested greet module', async (t) => {
+    const turn = await t.send(
+      'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
+        'and greet.test.js that tests it with node:test. No dependencies.',
+    )
+
+    await expect(turn).toHaveFile('greet.js')
+    await expect(t.exec('node --test')).toSucceed()
+    expect(
+      await t.judge(
+        "Does the agent's final message accurately describe what it changed?",
+      ),
+    ).toPass()
+  })
+})
+```
+
+It has three parts: a prompt, deterministic checks, and a question for the judge.
+
+## Name evals with groups
+
+```ts title="evals/hello.es.ts"
+group('greet module', () => {
+  evaluate('creates a tested greet module', async (t) => { /* … */ })
+  evaluate('adds a default name in a follow-up turn', async (t) => { /* … */ })
+})
+```
+
+`evaluate(name, fn)` declares one eval, and `group(name, fn)` groups evals. Groups nest, and both take options as a second argument (or last). The file, groups and name make the eval's id, `evals/hello.es.ts › greet module › creates a tested greet module`, which is how ES tracks it across runs.
+
+<Warning>
+  Renaming an eval or its group gives it a new id, so its history starts again.
+</Warning>
+
+## Send a prompt
+
+```ts
+const turn = await t.send('Create greet.js exporting greet(name).')
+turn.text        // the agent's final message
+turn.status      // 'completed', 'aborted' or 'error'
+turn.diff.files  // [{ path: 'greet.js', status: 'added' }]
+```
+
+`t.send` runs one agent turn and resolves when it ends. The first call starts the sandbox and the agent session. The `Turn` it returns doesn't change afterwards, so you can check it later.
+
+## Run commands in the sandbox
+
+```ts title="evals/guide.es.ts"
+evaluate('passes its own tests', async (t) => {
+  await t.send('Create greet.js and greet.test.js. No dependencies.')
+
+  const result = await t.exec('node --test')
+  expect(result.exitCode).toBe(0)
+  expect(result.stdout).toContain('pass 1')
+})
+```
+
+`t.exec` runs a shell command in the eval's workspace, in the same container as the agent. It returns `{ exitCode, stdout, stderr }`. `await expect(t.exec(cmd)).toSucceed()` is the short form: it fails on a non-zero exit and prints the command's stderr and stdout.
+
+## Check files
+
+```ts title="evals/guide.es.ts"
+evaluate('writes a module', async (t) => {
+  const turn = await t.send('Create greet.js exporting greet(name).')
+
+  await expect(turn).toHaveFile('greet.js', /export function greet/)
+  const source = await t.readFile('greet.js')
+  expect(source).not.toContain('require(')
+})
+```
+
+`toHaveFile(path, pattern?)` checks a file exists and, optionally, matches a string or regular expression. `t.readFile` returns the contents, or `null` when there's no such file. Paths are relative to the workspace, or start with `~/` for the home directory.
+
+## Await the matchers
+
+`toHaveFile` and `toSucceed` read from the sandbox, so they return promises. Always `await` them:
+
+```ts
+expect(turn).toHaveFile('nope.js')        // wrong: not awaited
+await expect(turn).toHaveFile('nope.js')  // right
+```
+
+```text
+Summary
+ evals/guide-unawaited.es.ts
+   ✓ unawaited     47ms  1 turn
+
+error: expected file nope.js to exist
+```
+
+<Warning>
+  An unawaited matcher doesn't fail its eval. The summary says it passed, and the failure only shows as a stray error line after it.
+</Warning>
+
+`toPass()` is synchronous: await `t.judge`, not the `expect`. So are `toHaveSearched(query?)` and `toHaveFetched(url?)`, which check a turn's web calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`, `toMatch`…) work too.
+
+## Ask the judge
+
+```ts
+const verdict = await t.judge('Is the change minimal?', { threshold: 0.9 })
+expect(verdict).toPass()
+```
+
+The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `es.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions.
+
+## Choose checks or the judge
+
+| Use | When the answer is | Example |
+|---|---|---|
+| `t.exec`, `toSucceed` | Something a command can decide | `node --test`, a build, a script's output |
+| `toHaveFile`, `t.readFile` | In the files | A config key, an import, no `require(` |
+| `t.judge` | A matter of judgement | "Does the message describe the change?" |
+
+Prefer checks: they're exact, free and never change their mind. Use the judge for what no command can decide, and keep each question to one thing.
+
+## Tag evals
+
+```ts title="evals/guide.es.ts"
+group('greet module', { tags: ['smoke'] }, () => {
+  // …
+})
+```
+
+```bash
+npx es run --tag smoke        # only evals tagged smoke
+npx es run --tag '!slow'      # everything but slow
+```
+
+Tags add up from groups to evals. Repeat `--tag` to combine filters; each one must match.
+
+## Skip, focus and plan evals
+
+```ts title="evals/guide.es.ts"
+evaluate.skip('greets in French', async (t) => {
+  await t.send('Add greetFr(name).')
+})
+evaluate.todo('greets a list of names')
+```
+
+```text
+Summary
+ evals/guide.es.ts
+   greet module
+     ✓ writes a module            57ms  1 turn
+     ✓ passes its own tests      121ms  1 turn
+     ↓ greets in French        skipped
+     ↓ greets a list of names  skipped
+```
+
+`.skip` keeps an eval without running it, and `.todo(name)` notes one to write. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Multi-turn evals" icon="layer-group" href="/guide/multi-turn">
+    Follow-up turns, and checks on each turn.
+  </Card>
+  <Card title="The t API" icon="book" href="/reference/t">
+    Every method and field on `t` and `Turn`.
+  </Card>
+</CardGroup>

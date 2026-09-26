@@ -1,0 +1,186 @@
+---
+title: Helpers
+description: The secret, skill, mcp and file helpers that defineConfig and defineEnvironment callbacks receive.
+---
+
+`defineConfig` and `defineEnvironment` callbacks receive four helpers: `secret`, `skill`, `mcp` and `file`.
+
+```ts title="evals/environments.ts"
+import { DEFAULT_SKILL_EXCLUDE, defineEnvironment } from '{{ pkg }}'
+
+export const tools = defineEnvironment(
+  'tools',
+  ({ file, mcp, secret, skill }) => ({
+    env: {
+      GEMINI_API_KEY: secret({ hosts: secret.hosts.gemini }),
+      DB_URL: secret.fromEnv('TEST_DB_URL', { to: 'checks' }),
+      SENTRY_DSN: secret({ optional: true }),
+    },
+    skills: [
+      skill.local('./skills', {
+        exclude: [...DEFAULT_SKILL_EXCLUDE, 'drafts/'],
+      }),
+      skill.git('github:acme/skills', { ref: 'v2.4.0', only: ['genkit'] }),
+      skill.npm('@acme/skills@1.2.3'),
+      skill.registry('acme/skills@review', { version: 'v1.0.0' }),
+      skill.inline({
+        name: 'commit-style',
+        description: 'How to write commit messages here.',
+        content: 'Use the imperative mood.',
+      }),
+    ],
+    mcp: {
+      docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']),
+      search: mcp.http('https://mcp.acme.dev/mcp', {
+        headers: { Authorization: secret.template('Bearer ${ACME_TOKEN}') },
+      }),
+    },
+    files: { 'fixtures/data.json': file('./fixtures/data.json') },
+  }),
+)
+```
+
+Group and eval options are plain objects, so the helpers aren't available there: put secrets in an environment or the config's `env`.
+
+## secret
+
+A secret is read from the host when an attempt starts. Its value is masked in everything ES writes, travels through the Docker CLI's environment rather than its arguments, and only its name is recorded.
+
+<Property name="secret(options?)" type="Secret">
+  Reads the host variable with the same name as the key it's set under.
+</Property>
+
+<Property name="secret.fromEnv(name, options?)" type="Secret">
+  Reads the host variable `name`, whatever key it's set under.
+</Property>
+
+<Property name="secret.template(template)" type="SecretTemplate">
+  A string with host variables substituted, for MCP headers: `secret.template('Bearer ${TOKEN}')`. Every variable must be set.
+</Property>
+
+<Property name="secret.hosts" type="{ gemini, openai, anthropic, github }">
+  The hosts well-known APIs take their keys on, for `hosts`.
+</Property>
+
+Options for `secret()` and `secret.fromEnv()`:
+
+<Property name="hosts" type="string[]" optional>
+  Brokers the secret. The sandbox gets a per-attempt placeholder (`es_secret_` and 32 characters), and the Docker egress gateway swaps in the real value on requests to these hosts. Host names only, no URL or port; `*.example.com` matches subdomains. Brokered hosts are allowed through a restricted egress policy automatically.
+</Property>
+
+<Property name="in" type="Array<'header' | 'query' | 'body'>" optional>
+  Where in a request the gateway substitutes the placeholder. Default `['header']`. Only for a brokered secret.
+</Property>
+
+<Property name="to" type="'agent' | 'checks'" optional>
+  `agent` (default) puts it in the container's environment. `checks` gives it only to `t.exec` and `setup` steps, never the agent.
+</Property>
+
+<Property name="optional" type="boolean" optional>
+  When the host variable isn't set, leave the variable out instead of failing. The record lists it as unset.
+</Property>
+
+| Key | Hosts |
+|---|---|
+| `secret.hosts.gemini` | `generativelanguage.googleapis.com` |
+| `secret.hosts.openai` | `api.openai.com` |
+| `secret.hosts.anthropic` | `api.anthropic.com` |
+| `secret.hosts.github` | `api.github.com`, `uploads.github.com` |
+
+A secret without `hosts` reaches the sandbox as its real value, and the plan warns (or fails, with `secrets: { unbrokered: 'error' }` in the config):
+
+```text
+warning: SENTRY_DSN is in the sandbox as its real value. To give the agent only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('SENTRY_DSN', { hosts: ['api.example.com'] }).
+```
+
+A required secret that isn't set fails the attempt with `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` Secrets in the config (and profile `defaults`) are checked before the run starts. See [Credential brokering](/concepts/credential-brokering).
+
+## skill
+
+Every skill source takes `placement`: `'harness'` (default) lets the harness adapter install it where its agent reads skills; `'workspace'` writes it into the repo's skill directory (`.cursor/skills`, `.claude/skills` or `.agents/skills`, depending on the harness).
+
+<Property name="skill.local(path, options?)" type="SkillSource">
+  A directory with a `SKILL.md`, or a directory of such directories. `path` is relative to the calling file, or an absolute path or `URL`.
+</Property>
+
+<Property name="skill.git(repo, options?)" type="SkillSource">
+  A git repository: `https://…`, `git@…`, `github:owner/repo`, or a GitHub `/tree/<ref>/<path>` URL. `ref` is a branch, tag or SHA; `path` is the directory inside the repository.
+</Property>
+
+<Property name="skill.npm(spec, options?)" type="SkillSource">
+  A pinned npm package, fetched with `npm pack`. Skills are read from `path` inside it, default `skills`.
+</Property>
+
+<Property name="skill.registry(id, options?)" type="SkillSource">
+  A skills.sh id, `owner/repo@skill`. ES clones the GitHub repository and reads the skill from its `skills/` directory when it has one. `version` is a git ref.
+</Property>
+
+<Property name="skill.inline(skill, options?)" type="SkillSource">
+  A skill written in place: `name` (kebab-case), `description`, `content` (the body of `SKILL.md`) and optional `files`, keyed by path.
+</Property>
+
+Directory sources (`local`, `git`, `npm`) also take:
+
+<Property name="only" type="string[]" optional>
+  The skill names to take from a directory of skills. A name that isn't there is an error.
+</Property>
+
+<Property name="exclude" type="string[]" optional>
+  Paths to leave out of the sandbox, gitignore-style. It replaces `DEFAULT_SKILL_EXCLUDE`, so spread that to add to it, or pass `[]` to keep everything. `.git` is always left out. What's left out is recorded as the skill's `excluded`.
+</Property>
+
+`DEFAULT_SKILL_EXCLUDE` is `['/evals/', '.history/', '*.es.ts']`, so a skill's own evals don't reach the agent.
+
+A skill needs a `SKILL.md` with YAML frontmatter naming it (kebab-case) and describing it. A git skill on a moving ref, or a registry skill without a version, warns in the plan; the resolved commit is recorded either way:
+
+```text
+warning: skill.git(github:acme/skills) uses moving ref "main": results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).
+```
+
+## mcp
+
+<Property name="mcp.stdio(command, args?, options?)" type="McpServer">
+  A server the agent starts in the sandbox. `options.env` sets its variables, secrets included.
+</Property>
+
+<Property name="mcp.http(url, options?)" type="McpServer">
+  A Streamable HTTP server. `options.headers` values are strings, secrets or `secret.template(…)`.
+</Property>
+
+<Property name="mcp.sse(url, options?)" type="McpServer">
+  A server-sent events server, with the same options as `mcp.http`.
+</Property>
+
+A secret in an HTTPS server's headers is brokered to that server's host unless it sets its own `hosts`, and the host is allowed through a restricted egress policy. The plan shows it:
+
+```text
+brokered: GEMINI_API_KEY → generativelanguage.googleapis.com; mcp.search.headers.Authorization → mcp.acme.dev
+```
+
+## file
+
+<Property name="file(path)" type="HostFile">
+  A file on the host, relative to the calling file (or an absolute path or `URL`), read when an attempt starts and copied byte for byte. Use it for `files` values and `rules`.
+</Property>
+
+## Errors
+
+| Mistake | Message |
+|---|---|
+| An empty `hosts` | `secret(): hosts must list the hosts the secret is sent to, e.g. hosts: ['api.example.com'] or secret.hosts.gemini (got [])` |
+| `in` without `hosts` | `secret(): in only applies to a brokered secret; add hosts, e.g. { hosts: ['api.example.com'], in: ["query"] }` |
+| A bad `in` | `secret(): in lists where the gateway substitutes: 'header', 'query' and/or 'body' (got ["cookie"])` |
+| A bad `to` | `secret(): to must be 'agent' or 'checks'` |
+| A bad variable name | `secret.fromEnv("my-var") needs a host variable name` |
+| A bad placement | `skill placement must be 'harness' or 'workspace' (got home)` |
+| `exclude` not a list | `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.es.ts'] (got "/evals/")` |
+| A bad registry id | `skill.registry("genkit") needs an id like owner/repo@skill` |
+| No repository | `skill.git() needs a repository URL` |
+| No command | `mcp.stdio() needs a command` |
+
+## Related
+
+- [defineEnvironment](/reference/environment)
+- [Secrets and egress](/guide/secrets-and-egress)
+- [Credential brokering](/concepts/credential-brokering)
+- [Egress](/reference/egress)

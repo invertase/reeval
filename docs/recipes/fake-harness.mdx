@@ -1,0 +1,219 @@
+---
+title: Evals without Docker or keys
+description: Write and debug evals against a scripted fake agent, sandbox and judge, then run the same files on a real agent.
+---
+
+**Goal:** iterate on eval files in about a second per run, with no Docker, no API keys and no model spend.
+
+Keep a second config next to your real one. It swaps in `fakeHarness()`, `fakeSandbox()` and `fakeJudge()`; the eval files stay the same.
+
+## The files
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash' },
+})
+```
+
+```ts title="es.fake.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { fakeHarness } from '{{ pkg }}/harness'
+import { fakeJudge } from '{{ pkg }}/judge'
+import { fakeSandbox } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: fakeHarness({
+    files: {
+      'package.json': '{ "type": "module" }\n',
+      'greet.js':
+        "export const greet = (name = 'world') => `Hello, ${name}!`\n",
+      'greet.test.js': [
+        "import { test } from 'node:test'",
+        "import assert from 'node:assert/strict'",
+        "import { greet } from './greet.js'",
+        "test('greets', () => assert.equal(greet('Ada'), 'Hello, Ada!'))",
+        '',
+      ].join('\n'),
+    },
+    text: 'I created greet.js and greet.test.js.',
+    script: [
+      [{ reply: 'I created greet.js and greet.test.js.' }],
+      [{ exec: 'node --test' }, { reply: 'Tests pass.' }],
+    ],
+  }),
+  sandbox: fakeSandbox(),
+  judge: { model: fakeJudge({ score: 0.95 }) },
+})
+```
+
+```json title="package.json (scripts)"
+{
+  "scripts": {
+    "eval": "es run",
+    "eval:fake": "es run --config es.fake.config.ts"
+  }
+}
+```
+
+The evals are `examples/hello/evals/hello.es.ts` and this one, which checks the second scripted turn:
+
+```ts title="evals/scripted.es.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('runs the tests after a follow-up', async (t) => {
+  await t.send('Create greet.js.')
+  const turn = await t.send('Now run the tests.')
+  const shell = turn.transcript.filter(
+    (e) => e.type === 'tool' && e.tool === 'shell',
+  )
+  expect(shell).toHaveLength(1)
+  expect(turn.text).toBe('Tests pass.')
+})
+```
+
+## Run it
+
+```bash
+npx es run --config es.fake.config.ts --log-order grouped
+```
+
+```text
+[runs#1 fake] ✓ evals/scripted.es.ts › runs the tests after a follow-up  131ms
+[runs#1 fake]  +0:00 sandbox ready 18ms
+[runs#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 3 file edits
+[runs#1 fake]  +0:00 turn 2 done 76ms · 1 tool call, 3 file edits
+…
+Summary
+ evals/hello.es.ts
+   greet module
+     ✓ creates a tested greet module              134ms  judge 0.95  1 turn
+     ✓ adds a default name in a follow-up turn    153ms  judge 0.95  2 turns
+ evals/scripted.es.ts
+   ✓ runs the tests after a follow-up             131ms  2 turns
+
+   Evals  3 passed (3)
+Duration  944ms
+```
+
+The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`t.exec`, `toHaveFile`, `t.judge`) run for real against what it wrote.
+
+When a coding agent runs ES for you, agent output prints only the failures. This is `examples/hello` under its fake config, where the skill compare's control fails on purpose:
+
+```bash
+ES_UI=agent npx es run --config es.fake.config.ts
+```
+
+```text
+plan  10 evals · 11 cells · 11 attempts · ~678ms serial (~170ms at concurrency 4)
+es run: 3 eval files
+FAIL evals/skill.es.ts › house greeting › greets in the house style [control] (72ms, assertion, not gated)
+  Error: expected command to succeed, exit code 1
+…
+  record: .es/runs/20260926T173927Z_7e5376d_ada-lovelace_j03w/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
+10 passed, 1 failed, not gated (11 attempts, 10 evals)
+summary: .es/runs/20260926T173927Z_7e5376d_ada-lovelace_j03w/summary.md
+```
+
+<Warning>
+  A fake run proves your eval's logic, not the agent. Passing checks here mean the eval passes when an agent writes those files; run the real config before you trust a result.
+</Warning>
+
+## fakeHarness options
+
+| Option | What the fake agent does |
+|---|---|
+| `files` | Writes these files on every turn |
+| `text` | Replies with this final message (default `Done.`) |
+| `withSkill` | Uses these `files` and `text` instead when the environment gives it a skill, so a `compare` shows lift |
+| `script` | One list of steps per `t.send` (the last repeats): `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: '<server>/<tool>' }` |
+| `failWith` | Throws before the first turn, as an infra error |
+| `layout` | `'claude-code'` or `'antigravity'`: reads rules and skills where that agent does, in its image |
+| `delayMs` | Waits this long per turn, and honours timeouts and Ctrl-C |
+
+`{ exec }` runs as the agent and shows as a `shell` tool call; `{ mcp }` calls a stdio MCP server's tool and shows as `mcp__<server>__<tool>` (see [Evaluate an MCP server](/recipes/mcp-server)).
+
+## Simulate an infra failure
+
+```ts title="es.fail.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { fakeHarness } from '{{ pkg }}/harness'
+import { fakeSandbox } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  include: ['evals/scripted.es.ts'],
+  harness: fakeHarness({ failWith: 'the agent CLI crashed on start' }),
+  sandbox: fakeSandbox(),
+})
+```
+
+```bash
+npx es run --config es.fail.config.ts
+```
+
+```text
+Infra errors (1)
+ ! evals/scripted.es.ts › runs the tests after a follow-up
+   infra error
+   the agent CLI crashed on start
+…
+   Evals  1 infra error (1)
+Duration  727ms
+```
+
+The run exits 3, so you can check how your CI treats an infrastructure error before a real one happens.
+
+## Check where rules land
+
+`layout` makes the fake agent read rules and skills where a real one would. With `layout: 'claude-code'`, rules go to `CLAUDE.md`:
+
+```ts title="evals/rules.es.ts"
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
+
+const houseRules = defineEnvironment('house-rules', {
+  rules: 'Greet with "Ahoy".\n',
+})
+
+evaluate(
+  'puts rules where Claude Code reads them',
+  { environment: houseRules },
+  async (t) => {
+    const box = await t.sandbox()
+    expect(await box.readFile('CLAUDE.md')).toContain('Ahoy')
+  },
+)
+```
+
+`t.sandbox()` starts the sandbox without a turn, so the check sees only what the environment set up.
+
+## The fake sandbox and judge
+
+- `fakeSandbox()` gives each attempt a temporary directory on the host (`dir` picks the parent). Commands run on your machine with your tools.
+- It can't enforce `egress`: an eval with a restricted policy stops the run with exit 2 under it (see [Offline evals](/recipes/offline)). Brokered secrets become placeholders that nothing substitutes.
+- `fakeJudge({ score })` returns that score for every question (default 1), so `fakeJudge({ score: 0.3 })` tests how a failing verdict reads.
+
+Both configs plan the same evals, so `--dry-run` under either shows the same eval rows.
+
+## Variations
+
+- **A flaky agent:** `fakeHarness({ files, flakeRate: 0.3 })` writes nothing in about 30% of attempts, for trying `gate: { passRate }`.
+- **Canned tool calls:** `tools: [{ tool: 'read', input: {…}, output: '…' }]` adds tool events to every turn, for transcript checks.
+- **Only some files:** `include: ['evals/hello.es.ts']` in the fake config leaves out evals that need a real agent or Docker.
+- **Profiles:** the fake config needs its own `profiles` if you pass `--profile`; `examples/hello/es.fake.config.ts` has `smoke` and `nightly`.
+- **Record fake runs:** `es run --config es.fake.config.ts --record` writes history you can open in `es studio`, handy for trying the studio or `es query`.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="fakeHarness()" icon="flask" href="/reference/harness/fake">
+    Every option and script step.
+  </Card>
+  <Card title="PR gate in GitHub Actions" icon="code-compare" href="/recipes/github-pr-gate">
+    Run the real config on every pull request.
+  </Card>
+</CardGroup>

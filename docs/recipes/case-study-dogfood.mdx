@@ -1,0 +1,187 @@
+---
+title: ES evaluating ES
+description: A real suite that asked whether a skill helps a coding agent use ES, and what its numbers did and didn't show.
+---
+
+**Question:** can a coding agent use ES itself, and does a skill about ES help? No model has seen ES before, so a skill about it is a real variable.
+
+<Info>
+  These runs used ES from before PR #8, #10 and #12. Since then, Cursor's per-session files no longer make every run "not comparable", the studio no longer marks a run with only an ungated failure as Failed, and ES computes effort itself. The numbers below are unaffected.
+</Info>
+
+## The scenario
+
+| | |
+|---|---|
+| Harness | `cursor({ model: 'composer-2.5' })` in Docker, concurrency 4 |
+| Judge | `google/gemini-3.8-flash`, threshold 0.8 |
+| Cells per eval | control (no skill), `es-weak` and `es-good`, via `compare: [esWeak, esGood]` |
+| Runs | `runs: 2`, `gate: { passRate: 0.5 }`, budget 20 attempts and 1 hour |
+| Sandbox | ES's image plus npm 11 and the packed ES tarball, from a `FROM ${ES_BASE}` Dockerfile |
+| Egress | `DEFAULT_EGRESS_ALLOW`: npm, PyPI and GitHub, plus Cursor's own hosts |
+
+Inside the sandbox the agent has no Docker and no API key, so it has to use ES's fake harness, sandbox and judge. The checks run ES in the agent's project and read the plan as JSON.
+
+`es-good` is about 230 lines covering the whole API with a table of common mistakes. `es-weak` is about 20 lines, and wrong: it names the wrong package, config file and options.
+
+## The files
+
+Two skills and a broken project, as environments:
+
+```ts title="evals/envs.ts"
+import { defineEnvironment } from '{{ pkg }}'
+
+/** A hastily written skill: shallow, vague and partly out of date. */
+export const esWeak = defineEnvironment('es-weak', ({ skill }) => ({
+  skills: [skill.local('../skills/es-weak')],
+}))
+
+/** An in-depth, accurate skill for writing and running ES evals. */
+export const esGood = defineEnvironment('es-good', ({ skill }) => ({
+  skills: [skill.local('../skills/es-good')],
+}))
+
+const broken = '../fixtures/broken-project'
+
+/** An ES project someone got wrong. The variants add a skill on top. */
+export const brokenProject = defineEnvironment(
+  'broken-project',
+  ({ file }) => ({
+    files: {
+      'package.json': file(`${broken}/package.json`),
+      'es.config.ts': file(`${broken}/es.config.ts`),
+      'evals/environments.ts': file(`${broken}/evals/environments.ts`),
+      'evals/docs.es.ts': file(`${broken}/evals/docs.es.ts`),
+      'docs/api.md': file(`${broken}/docs/api.md`),
+    },
+    setup: [{ run: 'npm install --no-audit --no-fund', timeout: '3m' }],
+  }),
+)
+```
+
+The hardest of the three evals. `dryRun` runs `npx --no-install es run --dry-run --json` in the sandbox and parses the plan:
+
+```ts title="evals/fix-config.es.ts"
+import { evaluate, expect, group } from '{{ pkg }}'
+import { dryRun } from './checks.ts'
+import { brokenProject, esGood, esWeak } from './envs.ts'
+
+const task =
+  'This is an ES project (ES is an eval runner for coding agents; npm ' +
+  'package {{ pkg }}, CLI `es`, already installed). `npx es run ' +
+  '--dry-run` fails. Fix es.config.ts and the evals so the plan is what ' +
+  'the author meant: the docs eval compares no environment against the ' +
+  'with-docs environment, 3 runs per cell, on the fake harness. Then list ' +
+  'each mistake you fixed, one line each.'
+
+const question =
+  'Pass only if the final message names all three mistakes correctly: ' +
+  'compare cannot be set in es.config.ts (it goes on the group or eval); ' +
+  'environment takes one environment, not a list, and there is no ' +
+  'baseline export (compare against the inherited environment instead); ' +
+  'and the option is runs, not repeat.'
+
+group(
+  'broken project',
+  { environment: brokenProject, compare: [esWeak, esGood] },
+  () => {
+    evaluate('fixes a broken config and explains it', async (t) => {
+      await t.send(task)
+      const verdict = await t.judge(question)
+
+      const { exitCode, plan } = await dryRun(t)
+      expect(exitCode, 'es run --dry-run --json exits 0').toBe(0)
+      expect(plan?.totals).toMatchObject({ evals: 1, cells: 2, attempts: 6 })
+      await expect(t.exec('npx --no-install es run --ui plain')).toSucceed()
+      expect(verdict).toPass()
+    })
+  },
+)
+```
+
+ES's own errors point at the mistakes one at a time. Run in the broken project, before and after the first fix:
+
+```text
+es: compare can't be set in es.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.
+```
+
+```text
+es: evals/docs.es.ts: Unknown option "repeat" in evaluate("answers from the docs"). Did you mean "runs"?
+```
+
+## The plan
+
+```text
+plan  3 evals · 9 cells · 18 attempts · ~54m 00s serial (~13m 30s at concurrency 4) · budget 20 attempts ✓, 1h
+eval                                                           harnesses  variants  runs  attempts  notes
+evals/compare.es.ts › from scratch › plans a skill compare     1          2         2     6         egress: allow registry.npmjs.org, …
+evals/fix-config.es.ts › broken project › fixes a broken…      1          2         2     6         egress: allow registry.npmjs.org, …
+evals/scaffold.es.ts › from scratch › scaffolds a first eval…  1          2         2     6         egress: allow registry.npmjs.org, …
+```
+
+The run took about 4 minutes, so the first estimate was far too high. It improves once there's history to estimate from.
+
+## Pass rates: lift +0
+
+Two recorded runs, the second with `CI=1`. Its summary:
+
+```text
+ evals/compare.es.ts
+   from scratch
+     ✓ plans a skill compare                      6/6  100%  6 attempts
+         cursor:composer-2.5/-/es-tarball        control    2/2  100%
+         cursor:composer-2.5/es-weak/es-tarball  variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/es-good/es-tarball  variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
+ evals/fix-config.es.ts
+   broken project
+     ✓ fixes a broken config and explains it      5/6  100%  6 attempts
+         cursor:composer-2.5/broken-project/es-tarball  control    1/2   50%   not gated
+         cursor:composer-2.5/es-weak/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/es-good/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+…
+Attempts  17 passed · 1 failed, not gated (18 attempts, 3 evals)
+Duration  3m 54s
+```
+
+Over both runs, 35 of 36 attempts passed: control 11/12, `es-weak` 12/12, `es-good` 12/12. Lift was +0 on two evals in both runs; the +50 on the third is one control failure, and its interval crosses zero.
+
+## What actually differed: effort
+
+The skill's real effect was in effort, not in the pass rate. At the time it took a script over the records' `activity` and `timings`:
+
+| Eval | Cell | Median agent time | Median tool calls |
+|---|---|---|---|
+| scaffolds a first eval | control | 45 s | 42 |
+| | `es-good` | 21 s | 4 |
+| plans a skill compare | control | 56 s | 50 |
+| | `es-good` | 27 s | 10 |
+| fixes a broken config | control | 31 s | 28 |
+| | `es-good` | 30 s | 14 |
+
+Overall, `es-good` needed 4× fewer tool calls (median 10 against 40) and about 35% less agent time (26 s against 41 s). Every control transcript read the tarball's compiled `dist/`; the package shipped no README. `es-weak` matched the control: no attempt followed its wrong advice, because the prompt's concrete facts overrode it.
+
+## What the judge caught
+
+35 of 36 verdicts were 0.98 or higher. The one failure, 0.10, was the control on `fix-config`. It fixed the config, but its explanation said `baseline` "added nothing" and `repeat` "is only an alias". Neither is true: `baseline` doesn't exist and `repeat` isn't an alias. The judge was right, and that was the one quality difference the run found.
+
+The verdict carried no reason, so finding the false claims meant reading the final message. In the smoke run the judge also failed a correct scaffold at 0.05, because the question named specific matchers and the agent used others. That was a bug in the question.
+
+## Lessons
+
+- **Tasks the agent already solves saturate.** composer-2.5 solved all three tasks from the type definitions and ES's error messages. To separate variants, make the task harder or measure effort.
+- **Lift measures pass rate only.** The skill's 4× effect appeared nowhere in `lift`. ES now prints an `effort:` line under each variant (median tool calls and agent time against the control's, with a rank test), and `es query effort` and [`es analyze`](/reference/cli/analyze) report it across runs.
+- **Name outcomes, not methods, in judge questions.** "Checks hello.txt with a deterministic assertion" survives; "uses `toHaveFile`" fails correct work.
+- **Two runs a cell is a smoke test.** Every interval here is more than 100 points wide.
+
+The same suite later ran on Cursor and Antigravity side by side; see [Compare agents](/recipes/compare-agents).
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Prove a skill helps" icon="chart-line" href="/recipes/skill-lift">
+    The skill compare, as a recipe.
+  </Card>
+  <Card title="Lift" icon="flask" href="/concepts/lift">
+    What the interval means, and when to trust it.
+  </Card>
+</CardGroup>

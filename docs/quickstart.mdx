@@ -1,0 +1,143 @@
+---
+title: Quickstart
+description: Write and run your first eval in two minutes, with no API keys or Docker.
+---
+
+You'll write one eval and run it against ES's fake agent, which needs no keys, Docker or network. Then you'll switch it to a real agent.
+
+**Before you begin:** Node {{ node }} or later.
+
+<Steps>
+  <Step title="Install ES">
+    ```bash
+    npm install -D {{ pkg }}
+    ```
+
+    The package ships the `es` CLI.
+
+    <Warning>
+      npm ≥ 11.6 recommended. On older npm (e.g. npm 10.9, the Node 22 default), install can crash with an `edgesOut` error: update npm (`npm i -g npm@latest`). Node 22 is still supported, and pnpm and yarn aren't affected.
+    </Warning>
+  </Step>
+  <Step title="Add a config">
+    The fake agent writes the files you give it. The fake judge returns a fixed score.
+
+    ```ts title="es.config.ts"
+    import { defineConfig } from '{{ pkg }}'
+    import { fakeHarness } from '{{ pkg }}/harness'
+    import { fakeJudge } from '{{ pkg }}/judge'
+    import { fakeSandbox } from '{{ pkg }}/sandbox'
+
+    export default defineConfig({
+      harness: fakeHarness({
+        files: { 'greet.js': 'export const greet = (name) => `Hello, ${name}!`\n' },
+        text: 'I created greet.js exporting greet(name).',
+      }),
+      sandbox: fakeSandbox(),
+      judge: { model: fakeJudge({ score: 0.95 }) },
+    })
+    ```
+  </Step>
+  <Step title="Write an eval">
+    ES finds `evals/**/*.es.ts` by default.
+
+    ```ts title="evals/hello.es.ts"
+    import { evaluate, expect, group } from '{{ pkg }}'
+
+    const greetsAda = `node -e "import('./greet.js').then((m) =>
+      process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
+
+    group('greet module', () => {
+      evaluate('creates greet.js', async (t) => {
+        const turn = await t.send(
+          'Create greet.js exporting greet(name) that returns "Hello, <name>!".',
+        )
+
+        await expect(turn).toHaveFile('greet.js', /greet/)
+        await expect(t.exec(greetsAda)).toSucceed()
+        expect(await t.judge('Does the final message describe the change?')).toPass()
+      })
+    })
+    ```
+
+    `t.send` runs an agent turn. `t.exec` runs a command in the sandbox. `t.judge` asks the judge a yes/no question about the turn.
+  </Step>
+  <Step title="Run it">
+    ```bash
+    npx es run
+    ```
+
+    ```text
+    plan  1 eval · 1 cell · 1 attempt · ~1s serial
+    es 0.0.1 · 1 eval file · harness fake · sandbox fake · concurrency 4 · stream logs
+    [creates#1 fake] ▶ evals/hello.es.ts › greet module › creates greet.js
+    [creates#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
+    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then((m) =>…  exit 0 24ms
+    [creates#1 fake]  +0:00 judge  pass 0.95 (≥ 0.8)  Does the final message describe the change?
+    [creates#1 fake] ✓ evals/hello.es.ts › greet module › creates greet.js  70ms
+
+    Summary
+     evals/hello.es.ts
+       greet module
+         ✓ creates greet.js     70ms  judge 0.95  1 turn
+
+       Evals  1 passed (1)
+    Duration  754ms
+    ```
+  </Step>
+</Steps>
+
+<Success>
+  Your first eval passes. ES saved the run under `.es/runs/`, so add `.es/` and `.env*` to `.gitignore`.
+</Success>
+
+## Switch to a real agent
+
+Swap the fakes for Cursor in Docker and a real judge. The eval doesn't change.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
+  judge: { model: 'typesafe-ai/jev-1.13.0' },
+})
+```
+
+Check what will run first. `--dry-run` needs no keys or Docker:
+
+```bash
+npx es run --dry-run
+```
+
+```text
+plan  1 eval · 1 cell · 1 attempt · ~3m 00s serial
+eval                                                 harnesses  variants  runs  attempts  notes
+evals/hello.es.ts › greet module › creates greet.js  1          —         1     1
+```
+
+Then build the sandbox image once, add your keys and run:
+
+```bash
+npx es image build
+printf 'CURSOR_API_KEY=...\nTYPESAFE_AI_API_KEY=...\n' > .env.local
+npx es run
+```
+
+<Warning>
+  `es run` reads `.env.local` and `.env` from the current directory, not the config's. Run it from your project root.
+</Warning>
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Your first real run" icon="play" href="/guide/first-real-run">
+    What happens in Docker, and how your key stays out of the sandbox.
+  </Card>
+  <Card title="Compare and lift" icon="chart-line" href="/guide/compare">
+    Run with and without a skill and read the lift.
+  </Card>
+</CardGroup>

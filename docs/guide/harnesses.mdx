@@ -1,0 +1,175 @@
+---
+title: Harnesses
+description: Run evals on Cursor, Claude Code or Antigravity, or on several at once as separate cells.
+---
+
+A harness is the coding agent ES drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
+
+```ts title="evals/harnesses.ts"
+import { antigravity, claudeCode, cursor } from '{{ pkg }}/harness'
+
+export const composer = cursor({ model: 'composer-2.5' })
+export const claude = claudeCode({ model: 'claude-sonnet-5' })
+export const agy = antigravity({ model: 'gemini-3.8-flash-medium' })
+```
+
+`examples/hello` defines its harnesses once, so the config, evals and profiles share them.
+
+## Give each harness its key
+
+| Harness | Key | `model` |
+|---|---|---|
+| `cursor()` | `CURSOR_API_KEY` | Required, such as `composer-2.5` |
+| `claudeCode()` | `ANTHROPIC_API_KEY` | Required: any id or alias the `claude` CLI takes |
+| `antigravity()` | `GEMINI_API_KEY`, a Gemini API key | Required: a slug `agy models` lists, such as `gemini-3.8-flash-medium` |
+
+```bash title=".env.local"
+CURSOR_API_KEY=...
+ANTHROPIC_API_KEY=...
+GEMINI_API_KEY=...
+```
+
+Each harness authenticates only with its own key, which stays on the host. ES never falls back to an `AI_GATEWAY_API_KEY`, a subscription or a keychain login. Real harnesses need `docker()`.
+
+## Run under another harness
+
+```ts title="es.claude.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+import { claude } from './evals/harnesses.ts'
+
+export default defineConfig({
+  include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+  harness: claude,
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
+  timeout: '15m',
+})
+```
+
+```bash
+npx es image build --config es.claude.config.ts
+npx es run --config es.claude.config.ts
+```
+
+Each harness has its own sandbox image with its agent baked in, such as `evalsuite-sandbox:antigravity-0.1.0` or `evalsuite-sandbox:cursor-0.1.0`. `es image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code and Antigravity run their CLIs.
+
+## Run several harnesses as cells
+
+```ts title="es.agents.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+import { agy, composer } from './evals/harnesses.ts'
+
+export default defineConfig({
+  include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+  harness: [composer, agy],
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
+  gate: { passRate: 0.5 },
+  timeout: '15m',
+})
+```
+
+`harness` is the one option that takes a list: each harness is its own [cell](/concepts/matrix), and each compare variant runs on every one. The `greet` evals and the house-greeting compare on Cursor and Antigravity, twice each:
+
+```bash
+npx es run --config es.agents.config.ts --runs 2 --log-order grouped
+```
+
+```text
+plan  3 evals · 8 cells · 16 attempts · ~12m 31s serial (~3m 08s at concurrency 4)
+es 0.0.1 · 2 eval files · harness cursor:composer-2.5, antigravity:gemini-3.8-flash-medium · sandbox docker · concurrency 4 · grouped logs
+…
+Summary
+ evals/hello.es.ts
+   greet module
+     ✓ creates a tested greet module                4/4  100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
+     ✓ adds a default name in a follow-up turn      4/4  100%  4 attempts
+         cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
+         antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
+ evals/skill.es.ts
+   house greeting
+     ✓ greets in the house style                    4/8  100%  8 attempts
+         cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
+         cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
+         antigravity:gemini-3.8-flash-medium/-/docker                    control    0/2    0%   not gated
+         antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+           effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
+…
+Attempts  12 passed · 4 failed, not gated (16 attempts, 3 evals)
+Duration  2m 39s
+  Tokens  5149k in (2946k cached) · 64k out
+…
+```
+
+Lift and effort are always against the control on the same harness. Without the skill, Cursor wrote `Welcome home, Ada!` and Antigravity `Hello, Ada!`. With it, both wrote the house greeting, and both did far less work: Antigravity's median fell from 24.5 tool calls to 3.5. Line prefixes name the harness when there are several, as in `[greets#1 antigravity:gemini-3.8-flash-medium · control]`.
+
+## Name cells with ids
+
+```ts title="evals/guide-matrix.es.ts"
+harness: [
+  cursor({ model: 'composer-2.5' }), // id cursor:composer-2.5
+  cursor({ model: 'composer-2.5', params: { fast: 'true' }, id: 'fast' }),
+],
+```
+
+A harness's id defaults to `<kind>:<model>`. It names the cell (`cursor:composer-2.5/with-house-greeting/docker`), so two harnesses of the same kind and model need distinct ids, even when their `params` differ:
+
+```text
+es: evals/guide-matrix.es.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
+```
+
+`params` sets Cursor's model parameters, as strings. One you leave out takes the model's first allowed value, not the default variant Cursor's catalog lists, so set any that change the price. Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit.harness` lists ids too.
+
+## Compare on some harnesses
+
+```ts title="evals/guide-matrix.es.ts"
+{
+  harness: [composer, claude, agy],
+  compare: {
+    variants: [withHouseGreeting],
+    harness: ['cursor:composer-2.5'],
+  },
+  runs: 5,
+}
+```
+
+```text
+eval                                                         harnesses  variants  runs  attempts  notes
+evals/guide-matrix.es.ts › house greeting on every agent ›…  3          1         5     20
+```
+
+`compare.harness` runs the variants only on the listed harnesses; the others run the control alone. Here that's three controls and one variant, five times each: 20 attempts instead of 30.
+
+## Add to the inherited list
+
+```ts
+{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }
+```
+
+A list replaces the inherited harnesses. A function gets the inherited list and returns a new one.
+
+## Where each agent reads context
+
+| Harness | Rules file | Workspace skills directory |
+|---|---|---|
+| Cursor | `AGENTS.md` | `.cursor/skills` |
+| Claude Code | `CLAUDE.md` | `.claude/skills` |
+| Antigravity | `AGENTS.md` | `.agents/skills` |
+
+ES writes an environment's rules and skills where each agent looks, so one environment works on every harness. The environment's digest hashes content, not paths, so it's the same on each.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Sandboxes and toolchains" icon="box" href="/guide/sandboxes">
+    Python, your own Dockerfile, or extra tools baked in.
+  </Card>
+  <Card title="Compare agents" icon="code-compare" href="/recipes/compare-agents">
+    Cursor, Claude Code and Antigravity on one suite.
+  </Card>
+</CardGroup>
