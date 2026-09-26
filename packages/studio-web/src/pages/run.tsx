@@ -182,11 +182,14 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
             <TableHead>Harness</TableHead>
             <TableHead>Environment</TableHead>
             {compare ? <TableHead>Role</TableHead> : null}
-            <TableHead className="hidden sm:table-cell">Sandbox</TableHead>
+            <TableHead className="hidden 2xl:table-cell">Sandbox</TableHead>
             <TableHead>Attempts</TableHead>
             <TableHead className="text-right">Pass rate</TableHead>
-            {showLift ? <TableHead className="text-right">Lift</TableHead> : null}
-            {showEffort ? <TableHead className="text-right">Effort</TableHead> : null}
+            {showLift || showEffort ? (
+              <TableHead className="text-right">
+                {showLift && showEffort ? 'Lift and effort' : showLift ? 'Lift' : 'Effort'}
+              </TableHead>
+            ) : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -217,7 +220,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                   </div>
                 </TableCell>
               ) : null}
-              <TableCell className="hidden font-mono text-xs sm:table-cell">
+              <TableCell className="hidden font-mono text-xs 2xl:table-cell">
                 {row.sandbox}
               </TableCell>
               <TableCell>
@@ -241,17 +244,17 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                   {row.pass}/{row.pass + row.fail}
                 </span>
               </TableCell>
-              {showLift ? (
-                <TableCell className="text-right">
-                  <Lift points={row.lift} interval={row.liftInterval} />
+              {showLift || showEffort ? (
+                <TableCell className="min-w-44 whitespace-normal text-right">
+                  {showLift ? <Lift points={row.lift} interval={row.liftInterval} /> : null}
                   {row.belowMinLift ? (
                     <div className="text-[11px] text-fail">lower bound below minLift</div>
                   ) : null}
-                </TableCell>
-              ) : null}
-              {showEffort ? (
-                <TableCell className="text-right">
-                  <Effort row={row} />
+                  {showEffort ? (
+                    <div className={showLift ? 'mt-1' : undefined}>
+                      <Effort row={row} />
+                    </div>
+                  ) : null}
                 </TableCell>
               ) : null}
             </TableRow>

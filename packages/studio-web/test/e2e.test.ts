@@ -2,7 +2,15 @@
 // `es studio` that picks up a new run over SSE. Skips when no Chrome or Chromium is installed.
 import assert from 'node:assert/strict'
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -89,6 +97,60 @@ after(async () => {
   await rm(demo, { recursive: true, force: true })
 })
 
+/** A saved analysis as `es analyze --save` writes it, citing one failing attempt. */
+function savedAnalysis(runId: string, attempt: { slug: string; id: string }) {
+  const doc = {
+    kind: 'es-analysis',
+    schemaVersion: 1,
+    scope: { kind: 'run', head: runId, base: null, evals: null },
+    anchor: runId,
+    inputs: { records: [], digestVersion: 1, digestHash: 'sha256:0' },
+    promptVersion: 'analysis-v1',
+    model: 'fake',
+    resolvedModel: null,
+    route: 'fake',
+    usage: { inputTokens: null, outputTokens: null },
+    latencyMs: 0,
+    createdAt: '2026-09-26T12:00:00.000Z',
+    author: 'grace-hopper',
+    validation: {
+      citations: 2,
+      invalid: [],
+      dropped: 0,
+      commands: 1,
+      invalidCommands: ['es run --nope'],
+      unverifiedNumbers: 0,
+    },
+    analysis: {
+      tldr: 'The greet module regressed in one attempt.',
+      whatHappened: [
+        { text: 'One attempt failed.', cites: ['r1/greet/control#1', 'F1'], confidence: 'high' },
+      ],
+      results: [],
+      why: [],
+      anomalies: [],
+      actions: [
+        {
+          title: 'Retry it',
+          target: 'evals/greet.es.ts',
+          kind: 'eval',
+          change: 'Run it again',
+          expectedEffect: 'It passes',
+          verify: null,
+          verifyProblem: 'es run --nope',
+          impact: 'low',
+          effort: 'low',
+          cites: ['F1'],
+        },
+      ],
+      confidence: { overall: 'low', why: 'one attempt' },
+    },
+    attempts: { 'r1/greet/control#1': { runId, evalSlug: attempt.slug, attempt: attempt.id } },
+    cited: { F1: '{"kind":"failure"}' },
+  }
+  return { runId, entries: [{ file: 'analysis/x.json', source: 'saved', doc }] }
+}
+
 describe('studio in a browser', () => {
   test('a static build works from a subpath: runs → run → attempt → tabs', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
@@ -101,6 +163,20 @@ describe('studio in a browser', () => {
       },
     )
     assert.equal(built.status, 0, built.stderr)
+    const grace = readdirSync(join(out, 'data/runs'))
+      .filter((n) => n.endsWith('.json') && n.includes('grace-hopper'))[0]
+      ?.slice(0, -5) as string
+    const record = JSON.parse(readFileSync(join(out, 'data/runs', `${grace}.json`), 'utf8'))
+    const failing = record.evals
+      .flatMap((e: { slug: string; attempts: Array<{ id: string; outcome: string }> }) =>
+        e.attempts.map((a) => ({ slug: e.slug, ...a })),
+      )
+      .find((a: { outcome: string }) => a.outcome === 'fail')
+    mkdirSync(join(out, 'data/analysis'), { recursive: true })
+    writeFileSync(
+      join(out, 'data/analysis', `${grace}.json`),
+      JSON.stringify(savedAnalysis(grace, failing)),
+    )
     const { page, errors } = await open(await host(out))
 
     await page.waitForSelector('tbody tr')
@@ -111,6 +187,15 @@ describe('studio in a browser', () => {
     await page.waitForSelector('h2')
     assert.match(page.url(), /#\/runs\/\d{8}T\d{6}Z_[0-9a-f]+_grace-hopper/)
     assert.ok((await page.getByText('9 failed').count()) > 0)
+
+    await page.getByRole('tab', { name: 'Analysis' }).click()
+    await page.getByText('The greet module regressed in one attempt.').waitFor()
+    await page.getByText('Verify command rejected: es run --nope').waitFor()
+    await page.getByRole('link', { name: 'r1/greet/control#1' }).click()
+    await page.waitForSelector('[role=tablist]')
+    assert.match(page.url(), /\/attempts\//, 'a citation opens its attempt')
+    await page.goBack()
+    await page.getByRole('tab', { name: 'Evals' }).click()
 
     await page.locator('a[href*="/attempts/"]').first().click()
     await page.waitForSelector('[role=tablist]')
