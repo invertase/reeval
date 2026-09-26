@@ -26,7 +26,7 @@ jobs:
     env:
       ES_TEST_REAL: '1'
       ES_TEST_REQUIRE_DOCKER: '1'
-      # Every real row; one without its key skips and says why (Claude Code has none yet).
+      # Every real row; one without its key skips and says why.
       ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode
       # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all four rows,
       # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
@@ -35,6 +35,7 @@ jobs:
       ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
