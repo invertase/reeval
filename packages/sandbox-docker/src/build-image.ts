@@ -90,6 +90,13 @@ const BOOTSTRAPS: Record<
         model: 'unused',
       }),
   },
+  pi: {
+    name: 'pi',
+    cli: 'pi',
+    // The bootstrap only installs the CLI; the key is never used.
+    adapter: async () =>
+      (await import('@evalsuite/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
+  },
 }
 
 /**

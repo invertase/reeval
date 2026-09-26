@@ -1,5 +1,6 @@
 // Copies the built @evalsuite/sandbox-docker, @evalsuite/harness-antigravity,
-// @evalsuite/harness-opencode, @evalsuite/harness-goose and @evalsuite/harness-cursor-sdk into dist/vendor/<name> and points dist's imports of them there (including the vendored copies'
+// @evalsuite/harness-opencode, @evalsuite/harness-goose, @evalsuite/harness-pi and
+// @evalsuite/harness-cursor-sdk into dist/vendor/<name> and points dist's imports of them there (including the vendored copies'
 // imports of each other), so the published package needs no second package. Their runtime
 // dependencies must stay a subset of this package's.
 import { cp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
@@ -17,6 +18,7 @@ const VENDORED = [
   { name: 'harness-antigravity', subpaths: { '': 'index.js' }, extra: [] },
   { name: 'harness-opencode', subpaths: { '': 'index.js' }, extra: [] },
   { name: 'harness-goose', subpaths: { '': 'index.js' }, extra: [] },
+  { name: 'harness-pi', subpaths: { '': 'index.js' }, extra: ['assets'] },
   { name: 'harness-cursor-sdk', subpaths: { '': 'index.js' }, extra: [] },
 ].map((v) => ({
   ...v,

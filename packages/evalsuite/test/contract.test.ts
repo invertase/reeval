@@ -127,6 +127,16 @@ export const behaviours: Behaviour[] = [
     name: 'stdio MCP server started and called',
     canary: true,
     check(ran, row) {
+      if (row.mcp === false) {
+        // Fails closed: the attempt is refused, naming the server, rather than run without it.
+        const a = attempt(ran, row, 'mcp', 'stamped')
+        assert.equal(a.outcome, 'infra_error', detail(a))
+        assert.match(
+          a.error?.message ?? '',
+          /has no MCP client, so it can't use the stamp MCP server/,
+        )
+        return 'refused'
+      }
       checkAndCanary(ran, row, 'mcp', 'stamped', /expected '' to contain 'tools\/call'/)
       const env = ran.run.environments.find((e) => e.name === 'stamped')
       assert.deepEqual(env?.mcp, ['stamp'])
@@ -273,7 +283,7 @@ const CAPTURED = ['skill', 'mcp', 'edit and run', 'egress']
 function capture(ran: Ran, row: HarnessRow) {
   const dir = join(testDir, 'replay', row.id)
   mkdirSync(dir, { recursive: true })
-  for (const name of CAPTURED) {
+  for (const name of CAPTURED.filter((n) => n !== 'mcp' || row.mcp !== false)) {
     const a = evalNamed(ran.run, name).attempts[0]
     const raw = a?.files.rawTranscript?.path
     assert.ok(a?.outcome === 'pass' && raw, `can't capture ${name}: ${a?.outcome}, ${raw}`)

@@ -1,0 +1,35 @@
+{
+  "name": "@evalsuite/harness-pi",
+  "version": "0.1.0",
+  "description": "An AI SDK harness adapter for pi on a Gemini API key, running pi --mode json in the sandbox",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "keywords": [
+    "ai",
+    "harness",
+    "pi",
+    "gemini"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/harness": "1.0.124",
+    "@ai-sdk/provider": "4.0.18",
+    "@ai-sdk/provider-utils": "5.0.47",
+    "zod": "4.6.5"
+  }
+}

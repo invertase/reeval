@@ -128,6 +128,21 @@ function fileEdits(
   }
   const result = record(output)
   if (typeof result.filePath === 'string') return [claudeEdit(toolCallId, result)]
+  // pi's edit reports a unified `patch` in its `details`.
+  const patch = str(record(result.details).patch)
+  if (patch) {
+    const body = lines(patch).filter((l) => !l.startsWith('+++') && !l.startsWith('---'))
+    return [
+      {
+        type: 'file-edit',
+        toolCallId,
+        path: editPath(input),
+        kind: 'modify',
+        added: body.filter((l) => l.startsWith('+')).length,
+        removed: body.filter((l) => l.startsWith('-')).length,
+      },
+    ]
+  }
   const opencode = record(result.metadata)
   // OpenCode's edit reports a `filediff` with counts; its write says whether the file `exists`.
   const filediff = record(opencode.filediff)

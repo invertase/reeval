@@ -7,7 +7,7 @@ import { type BakedHarness, imageFor } from '@evalsuite/sandbox-docker'
 
 export type HarnessRow = {
   /** `ES_CONTRACT_HARNESS`, and the name in test titles. */
-  id: 'fake' | 'cursor' | 'antigravity' | 'claude-code' | 'opencode' | 'goose'
+  id: 'fake' | 'cursor' | 'antigravity' | 'claude-code' | 'opencode' | 'goose' | 'pi'
   /** The cheapest model that does the job; null for the fake agent. */
   model: string | null
   /**
@@ -23,6 +23,8 @@ export type HarnessRow = {
   autoHosts: string[]
   /** A host it reaches on every turn; null for the fake agent, which reaches none. */
   apiHost: string | null
+  /** False for a harness with no MCP client: its MCP attempts must be refused, not run. */
+  mcp?: false
   /** Whether it reports token usage for each turn; checked either way. */
   tokens: boolean
   /** What every turn's `model` (the model the harness says served it) looks like; null: none. */
@@ -115,6 +117,22 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.
     tokens: false,
     servedModel: null,
+    wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    id: 'pi',
+    model: 'gemini-3.8-flash',
+    key: {
+      name: 'GOOGLE_GENERATIVE_AI_API_KEY',
+      from: ['GOOGLE_GENERATIVE_AI_API_KEY', 'GEMINI_API_KEY'],
+    },
+    image: 'pi',
+    skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['generativelanguage.googleapis.com'],
+    apiHost: 'generativelanguage.googleapis.com',
+    mcp: false,
+    tokens: true,
+    servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
   },
 ]

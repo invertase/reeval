@@ -1,18 +1,19 @@
 ---
 title: Harnesses
-description: Run evals on Cursor, Claude Code, Antigravity, OpenCode or Goose, or on several at once as separate cells.
+description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose or pi, or on several at once as separate cells.
 ---
 
 A harness is the coding agent ES drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
 
 ```ts title="evals/harnesses.ts"
-import { antigravity, claudeCode, cursor, goose, opencode } from '{{ pkg }}/harness'
+import { antigravity, claudeCode, cursor, goose, opencode, pi } from '{{ pkg }}/harness'
 
 export const composer = cursor({ model: 'composer-2.5' })
 export const claude = claudeCode({ model: 'claude-sonnet-5' })
 export const agy = antigravity({ model: 'gemini-3.8-flash-medium' })
 export const oc = opencode({ model: 'gemini-3.8-flash' })
 export const gs = goose({ model: 'gemini-3.8-flash' })
+export const pim = pi({ model: 'gemini-3.8-flash' })
 ```
 
 `examples/hello` defines its harnesses once, so the config, evals and profiles share them.
@@ -26,6 +27,7 @@ export const gs = goose({ model: 'gemini-3.8-flash' })
 | `antigravity()` | `GEMINI_API_KEY`, a Gemini API key | Required: a slug `agy models` lists, such as `gemini-3.8-flash-medium` |
 | `opencode()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
 | `goose()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
+| `pi()` | `GOOGLE_GENERATIVE_AI_API_KEY`, a Gemini API key | Required: a Gemini model id, such as `gemini-3.8-flash` |
 
 ```bash title=".env.local"
 CURSOR_API_KEY=...
@@ -57,7 +59,7 @@ npx es image build --config es.claude.config.ts
 npx es run --config es.claude.config.ts
 ```
 
-Each harness has its own sandbox image with its agent baked in, such as `evalsuite-sandbox:antigravity-0.1.0` or `evalsuite-sandbox:cursor-0.1.0`. `es image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code and Antigravity run their CLIs, and OpenCode and Goose their ACP servers.
+Each harness has its own sandbox image with its agent baked in, such as `evalsuite-sandbox:antigravity-0.1.0` or `evalsuite-sandbox:cursor-0.1.0`. `es image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity and pi run their CLIs, and OpenCode and Goose their ACP servers.
 
 ## Run several harnesses as cells
 
