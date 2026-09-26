@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { vitestMismatch } from '../src/engine/node.ts'
@@ -642,6 +644,72 @@ evaluate('passes', async () => {})
     const summary = readRun(p.dir).read('summary.md')
     assert.match(summary, /Judge \*\*fail\*\* 0\.30/)
     assert.doesNotMatch(summary, /judge score/, 'the verdict is printed once')
+  })
+
+  test('a model judge makes a real provider call: the request carries the question and transcript, the verdict the reply', async () => {
+    // A Gemini API stand-in: P(true) comes from the question, so one eval passes and one fails.
+    const requests: { path: string; key: string | undefined; body: string }[] = []
+    const server = createServer(async (req, res) => {
+      let body = ''
+      for await (const chunk of req) body += chunk
+      requests.push({ path: req.url ?? '', key: req.headers['x-goog-api-key'] as string, body })
+      const p = body.includes('Is the greeting friendly?') ? 0.92 : 0.12
+      res.setHeader('content-type', 'application/json')
+      res.end(
+        JSON.stringify({
+          candidates: [
+            {
+              content: { role: 'model', parts: [{ text: JSON.stringify({ q0: p }) }] },
+              finishReason: 'STOP',
+            },
+          ],
+          usageMetadata: { promptTokenCount: 40, candidatesTokenCount: 5, totalTokenCount: 45 },
+          modelVersion: 'gemini-stand-in-001',
+        }),
+      )
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    try {
+      const google = join(pkgRoot, 'node_modules/@ai-sdk/google/dist/index.js')
+      const p = await project('judge-model', {
+        'es.config.ts': fakeConfig({ harness: `{ text: 'Hello, friend!' }` }),
+        'evals/judged.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+import { createGoogleGenerativeAI } from '${google}'
+const gemini = createGoogleGenerativeAI({ baseURL: 'http://127.0.0.1:${port}/v1beta', apiKey: 'es-judge-test-key' })
+group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test') } }, () => {
+  evaluate('friendly', async (t) => {
+    await t.send('greet me')
+    expect(await t.judge('Is the greeting friendly?')).toPass()
+  })
+  evaluate('canary', async (t) => {
+    await t.send('greet me')
+    expect(await t.judge('Is the greeting in French?')).toPass()
+  })
+})
+`,
+      })
+      const r = await runCli(p.dir)
+      assert.equal(r.code, 1, r.stdout + r.stderr)
+      const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+      const friendly = byName.friendly?.trial.judgements[0]
+      assert.equal(byName.friendly?.outcome, 'pass', r.stdout)
+      assert.deepEqual([friendly?.verdict, friendly?.score], ['pass', 0.92])
+      // @ai-sdk/google reports the model it asked for, not the reply's modelVersion.
+      assert.equal(friendly?.resolvedModel, 'gemini-under-test')
+      assert.equal(byName.canary?.outcome, 'fail')
+      assert.equal(byName.canary?.error?.kind, 'judge')
+      assert.equal(byName.canary?.trial.judgements[0]?.score, 0.12)
+
+      assert.equal(requests.length, 2, 'one call per judge, no retries')
+      for (const req of requests) {
+        assert.equal(req.path, '/v1beta/models/gemini-under-test:generateContent')
+        assert.equal(req.key, 'es-judge-test-key')
+        assert.match(req.body, /Hello, friend!/, 'the transcript is in the state the judge sees')
+      }
+    } finally {
+      server.close()
+    }
   })
 
   test('a judge that errors fails the eval as a judge error', async () => {

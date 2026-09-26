@@ -745,7 +745,7 @@ export const inventory: InventoryFeature[] = [
     id: 'judge.real',
     area: 'Judges and matchers',
     name: 'A real judge model call',
-    gap: "Tests use `fakeJudge`; provider resolution is unit-tested, a model call isn't.",
+    tests: [engine('a model judge makes a real provider call')],
   },
   {
     id: 'matchers',
