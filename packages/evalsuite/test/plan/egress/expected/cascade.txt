@@ -1,5 +1,5 @@
 no profile · 10 evals · 11 cells · 11 attempts
-evals/auto.es.ts › secret and MCP hosts are allowed                       fake/services/docker  control         gated    ×1  brokered: GEMINI_API_KEY → generativelanguage.googleapis.com; mcp.docs.headers.x-api-key → mcp.example.com · egress "deny-all" + generativelanguage.googleapis.com, mcp.example.com
+evals/auto.es.ts › secret and MCP hosts are allowed                       fake/services/docker  control         gated    ×1  brokered: GEMINI_API_KEY → generativelanguage.googleapis.com; mcp.docs.headers.x-api-key → mcp.example.com; mcp.events.headers.authorization → events.example.com · egress "deny-all" + generativelanguage.googleapis.com, mcp.example.com, events.example.com
 evals/auto.es.ts › hosts the policy lists are not repeated                fake/listed/docker    control         gated    ×1  brokered: API_KEY → api.example.com, uploads.example.com · egress {"allow":["api.example.com"]} + uploads.example.com
 evals/cascade.es.ts › the config policy                                   fake/-/docker         control         gated    ×1  egress {"allow":["config.example.com"]}
 evals/cascade.es.ts › an environment replaces it                          fake/closed/docker    control         gated    ×1  egress "deny-all"

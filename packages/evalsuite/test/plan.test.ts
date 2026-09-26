@@ -101,7 +101,7 @@ describe('the JSON plan', { concurrency: true }, () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /egress: deny-all \+ auto: generativelanguage\.googleapis\.com, mcp\.example\.com/,
+      /egress: deny-all \+ auto: generativelanguage\.googleapis\.com, mcp\.example\.com, events\.example\.com$/m,
     )
     assert.match(r.stdout, /egress: allow api\.example\.com \+ auto: uploads\.example\.com/)
   })
