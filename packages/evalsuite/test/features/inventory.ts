@@ -561,6 +561,18 @@ export const inventory: InventoryFeature[] = [
     tests: [harness('token usage and the served model, from any harness')],
   },
   {
+    id: 'harness.web-events',
+    area: 'Harnesses',
+    name: 'Web search and fetch events, `turn.unreported`, `toHaveSearched` and `toHaveFetched`',
+    fixtures: ['harness/cursor-web-fetch'],
+    tests: [
+      harness('web calls in the SDK stream survive the adapter, HarnessAgent and the normaliser'),
+      harness('SDK 1.0.32 loses them before our first layer'),
+      cursorAdapter('stream', 'a real web turn on SDK 1.0.32'),
+      'evalsuite/test/matchers.test.ts › refuse a turn whose harness',
+    ],
+  },
+  {
     id: 'harness.fake-script',
     area: 'Harnesses',
     name: '`fakeHarness({ script })` and `layout`',

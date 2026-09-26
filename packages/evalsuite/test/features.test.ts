@@ -498,6 +498,22 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/cursor-web-fetch',
+    tiers: ['real'],
+    env: 'plain',
+    canary: /not to match \/Root=1-/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      const [turn] = attempt?.turns ?? []
+      // A harness that reports fetches counts this one; one that can't records null, not 0.
+      if (turn?.unreported.includes('web-fetch')) {
+        assert.equal(attempt?.activity.webFetches, null)
+      } else {
+        assert.ok((attempt?.activity.webFetches ?? 0) >= 1, 'the fetch is in the record')
+      }
+    },
+  },
+  {
     dir: 'harness/claude-code-harness-skills',
     tiers: ['fake', 'docker'],
     image: 'claude-code',
