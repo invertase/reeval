@@ -115,7 +115,7 @@ evaluate('keeps its variants', { pin: ['compare'] }, async (t) => {
 </Property>
 
 <Property name="duration" type="string | number" optional>
-  The longest the run may take, from the first attempt's start: `'2h'`, `'45m'`, or milliseconds. When it's reached, running attempts finish and queued ones are skipped; the run record says so.
+  The longest the run may take, from the first attempt's start: `'2h'`, `'45m'`, or milliseconds. When it's reached, running attempts finish and queued ones are skipped, and the run ends with status `budget` (exit 1). It's still recorded when the run would be (`--record`, `record: 'always'`, or `'ci'` in CI): the skipped attempts show as skipped, and `es compare` never takes it as a base.
 </Property>
 
 The plan line shows the budget and whether the plan fits:

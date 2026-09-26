@@ -26,7 +26,7 @@ es record [run...]        Copy runs (default: latest) from .es/runs into the his
 - **Default run:** `latest`. Pass one or more [run references](/reference/cli#run-references) to record others.
 - **Where:** the config's `history.dir`, by default `.history/` next to your evals (`evals/.history/` for the default `include`).
 - **Idempotent:** recording a run that's already recorded does nothing.
-- **Refusals** (exit 2): an interrupted run, unless `--allow-incomplete`; and any file that still looks like a secret after redaction, `worktree.patch` included, unless `--skip-secret-scan`.
+- **Refusals** (exit 2): an interrupted or budget-stopped run, unless `--allow-incomplete` (`es run` records a budget-stopped run itself when it records); and any file that still looks like a secret after redaction, `worktree.patch` included, unless `--skip-secret-scan`.
 - **Artifacts:** `--artifacts` overrides the config's `history.artifacts` for this copy: `all` (every attempt's files), `failures` (only failing attempts') or `none` (the record only).
 
 A real record, after a run:
