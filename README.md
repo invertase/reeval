@@ -76,11 +76,12 @@ group('house greeting', { compare: [withHouseGreeting] }, () => {
 
 ```text
 $ es run skill --runs 2
-plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 4)
+plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 …
-     ✓ greets in the house style      2/4   50%  4 attempts
+     ✓ greets in the house style      2/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+           effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 ```
 
 ## Run it
