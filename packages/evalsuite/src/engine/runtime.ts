@@ -2,6 +2,7 @@
 // code allowed to import `vitest`.
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { existsSync, readFileSync } from 'node:fs'
+import { format } from 'node:util'
 import {
   afterAll,
   describe,
@@ -41,12 +42,48 @@ declare module 'vitest' {
     'es:progress': { type: 'es:progress'; progress: Progress }
     'es:start': { type: 'es:start'; at: number }
     'es:debug': { type: 'es:debug'; line: DebugLine }
+    'es:log': { type: 'es:log'; at: number; stream: 'stdout' | 'stderr'; text: string }
   }
 }
 
 // Attempts run concurrently in one worker, so an assertion must reach the attempt that made it:
 // Vitest's global `expect` records async assertions on whichever test started last.
 const currentExpect = new AsyncLocalStorage<typeof vitestExpect>()
+
+// Vitest also tags console output with whichever test started last, so a line an eval logs
+// reaches the attempt through its async context instead. The attempt waits for its lines to
+// arrive before it ends, so none land after its result.
+type Logging = { task: Parameters<typeof recordArtifact>[0]; sent: Set<Promise<unknown>> }
+const currentTask = new AsyncLocalStorage<Logging>()
+const CONSOLE = {
+  log: 'stdout',
+  info: 'stdout',
+  debug: 'stdout',
+  warn: 'stderr',
+  error: 'stderr',
+} as const
+let consoleRouted = false
+
+function routeConsole(): void {
+  if (consoleRouted) return
+  consoleRouted = true
+  const target = globalThis.console
+  for (const [method, stream] of Object.entries(CONSOLE) as [
+    keyof typeof CONSOLE,
+    'stdout' | 'stderr',
+  ][]) {
+    const original = target[method].bind(target)
+    target[method] = (...args: unknown[]) => {
+      const logging = currentTask.getStore()
+      if (!logging) return original(...args)
+      const text = `${format(...args)}\n`
+      const sent = recordArtifact(logging.task, { type: 'es:log', at: Date.now(), stream, text })
+        .catch(() => original(...args))
+        .finally(() => logging.sent.delete(sent))
+      logging.sent.add(sent)
+    }
+  }
+}
 
 /** An async assertion (`toHaveFile`, `toSucceed`, `.resolves`…) and whether the eval awaited it. */
 type Pending = { assertion: string; settled: Promise<unknown>; observed: boolean }
@@ -184,22 +221,26 @@ export function registerTest(
     recordArtifact(ctx.task, { type: 'es:start', at: startedAt }).catch(() => {})
     const timeout = new AbortController()
     const pending: Pending[] = []
-    const running = currentExpect.run(ctx.expect, () =>
-      currentPending.run(pending, () =>
-        body({
-          file: ctx.task.file.filepath,
-          signal: AbortSignal.any([ctx.signal, timeout.signal]),
-          setMeta: (meta) => {
-            ctx.task.meta.es = meta
-          },
-          progress: (progress) => {
-            recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})
-          },
-          debug: (line) => {
-            recordArtifact(ctx.task, { type: 'es:debug', line }).catch(() => {})
-          },
-          unawaited: () => unawaitedError(pending),
-        }),
+    routeConsole()
+    const logging: Logging = { task: ctx.task, sent: new Set() }
+    const running = currentTask.run(logging, () =>
+      currentExpect.run(ctx.expect, () =>
+        currentPending.run(pending, () =>
+          body({
+            file: ctx.task.file.filepath,
+            signal: AbortSignal.any([ctx.signal, timeout.signal]),
+            setMeta: (meta) => {
+              ctx.task.meta.es = meta
+            },
+            progress: (progress) => {
+              recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})
+            },
+            debug: (line) => {
+              recordArtifact(ctx.task, { type: 'es:debug', line }).catch(() => {})
+            },
+            unawaited: () => unawaitedError(pending),
+          }),
+        ),
       ),
     )
     inFlight.add(running)
@@ -212,6 +253,7 @@ export function registerTest(
       await (options.timeout ? withTimeout(running, options.timeout, timeout) : running)
     } finally {
       ctx.task.meta.esRunMs = Date.now() - startedAt
+      await Promise.allSettled(logging.sent)
     }
   })
 }

@@ -529,6 +529,74 @@ evaluate('on a value', async (t) => {
     assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.es\.ts › agent eval {2}\d+ms$/m)
   })
 
+  test('--log-order, --log-prefix and --output-logs shape what es run prints', async () => {
+    // Two attempts of one file run at once in one worker; each logs after the other has started.
+    const p = await project('output-flags', {
+      'es.config.ts': fakeConfig(),
+      'evals/o.es.ts': `import { evaluate, expect } from 'evalsuite'
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
+evaluate('passes', async (t) => {
+  await t.send('go')
+  await pause(400)
+  console.log('log from passes')
+})
+evaluate('fails', async (t) => {
+  await pause(200)
+  await t.send('go')
+  console.error('log from fails')
+  expect(1).toBe(2)
+})
+`,
+    })
+    const run = (...flags: string[]) =>
+      runCli(p.dir, ['run', '--ui', 'plain', '--concurrency', '2', ...flags])
+    const lines = (out: string) => out.slice(0, out.indexOf('\nSummary')).split('\n')
+
+    const stream = await run('--log-order', 'stream', '--log-prefix', 'task')
+    assert.equal(stream.code, 1, stream.stdout + stream.stderr)
+    assert.match(stream.stdout, / · stream logs$/m)
+    const logs = lines(stream.stdout).filter((l) => /(stdout|stderr) \| log from/.test(l))
+    assert.deepEqual(
+      logs.map((l) => l.replace(/ {2}\+0:\d\d /, ' ')).sort(),
+      ['[fails#1 fake] stderr | log from fails', '[passes#1 fake] stdout | log from passes'],
+      'each console line is prefixed with the attempt that logged it',
+    )
+
+    const grouped = await run(
+      '--log-order',
+      'grouped',
+      '--log-prefix',
+      'none',
+      '--output-logs',
+      'errors-only',
+    )
+    assert.equal(grouped.code, 1, grouped.stdout + grouped.stderr)
+    assert.match(grouped.stdout, / · grouped logs$/m)
+    const out = lines(grouped.stdout)
+    assert.ok(!out.some((l) => l.includes('log from passes')), 'a passing attempt prints no detail')
+    const head = out.findIndex((l) => l.startsWith('[fails#1 fake] ✗ evals/o.es.ts › fails'))
+    const rest = out.slice(head + 1)
+    const next = rest.findIndex((l) => l.startsWith('['))
+    const block = next < 0 ? rest : rest.slice(0, next)
+    assert.ok(head >= 0, grouped.stdout)
+    assert.ok(
+      block.some((l) => /^ \+0:\d\d stderr \| log from fails$/.test(l)),
+      `the failing attempt's detail follows its result line, unprefixed:\n${grouped.stdout}`,
+    )
+
+    const none = await run('--output-logs', 'none')
+    assert.equal(none.code, 1)
+    assert.doesNotMatch(lines(none.stdout).join('\n'), /log from|sandbox ready|AssertionError/)
+
+    const byEnv = await runCli(p.dir, ['run', '--ui', 'plain'], {
+      env: { ES_LOG_ORDER: 'grouped' },
+    })
+    assert.match(byEnv.stdout, / · grouped logs$/m, 'ES_LOG_ORDER stands in for the flag')
+    const bad = await run('--log-order', 'sideways')
+    assert.equal(bad.code, 2)
+    assert.match(bad.stderr, /--log-order must be one of stream, grouped, auto/)
+  })
+
   test('agent mode prints failures only, with record and summary paths, and no colour', async () => {
     const p = await project('agent-mode', {
       'es.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
@@ -705,6 +773,33 @@ evaluate('early', async (t) => { await t.judge('?') })
     assert.equal(e?.outcome, 'infra_error')
     assert.deepEqual(e?.error, { kind: 'infra', message: 'agent CLI failed to start' })
     assert.deepEqual(liveSandboxes(p), [])
+  })
+
+  test('a failure outranks an infra error in the same run: exit 1, not 3', async () => {
+    const p = await project('precedence', {
+      'es.config.ts': fakeConfig(),
+      'evals/agent.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+evaluate('broken agent', { harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (t) => {
+  await t.send('go')
+})
+evaluate('wrong answer', async () => expect(1).toBe(2))
+evaluate('fine', async () => {})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    assert.deepEqual(
+      run.evals.map((e) => [e.name, e.outcome]),
+      [
+        ['broken agent', 'infra_error'],
+        ['wrong answer', 'fail'],
+        ['fine', 'pass'],
+      ],
+    )
+    const infraOnly = await runCli(p.dir, ['run', 'broken agent', 'fine'])
+    assert.equal(infraOnly.code, 3, 'without the failure, the infra error exits 3')
   })
 
   test('a timeout aborts the agent and destroys the sandbox', async () => {

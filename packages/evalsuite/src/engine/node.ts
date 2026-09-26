@@ -296,6 +296,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       } else if (artifact.type === 'es:debug') {
         const { key } = identify(config.root, test)
         emit({ type: 'debug', key, line: artifact.line })
+      } else if (artifact.type === 'es:log') {
+        const { key } = identify(config.root, test)
+        emit({ type: 'log', at: artifact.at, key, stream: artifact.stream, text: artifact.text })
       }
     },
     onUserConsoleLog(log) {

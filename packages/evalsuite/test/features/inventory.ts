@@ -889,7 +889,7 @@ export const inventory: InventoryFeature[] = [
     id: 'exit-precedence',
     area: 'CLI and runner',
     name: 'Exit code precedence (a failure and an infra error in one run)',
-    gap: 'No test has both in one run.',
+    tests: [engine('a failure outranks an infra error in the same run: exit 1, not 3')],
   },
   {
     id: 'output',
@@ -906,7 +906,7 @@ export const inventory: InventoryFeature[] = [
     id: 'output.flags',
     area: 'CLI and runner',
     name: '`--log-order`, `--log-prefix` and `--output-logs` through `es run`',
-    gap: 'The renderers are tested on recorded events; no test passes the flags to `es run`.',
+    tests: [engine('--log-order, --log-prefix and --output-logs shape what es run prints')],
   },
   {
     id: 'verbose',
