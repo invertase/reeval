@@ -62,7 +62,7 @@ await expect(t.exec(command)).toSucceed()
   What `t.exec()` or `turn.exec()` returns, awaited or not. It passes when `exitCode` is 0.
 </Property>
 
-It's async, so `await` it. On failure it shows the tail (last 20 lines) of both streams:
+It's async, so `await` it. On failure it shows the tail (last 20 lines, at most 2,000 characters) of both streams; the whole output is in the attempt's check log. Any failure's text is capped at 16 KB on screen and in the record, keeping its start and its end:
 
 ```text
 expected command to succeed, exit code 1

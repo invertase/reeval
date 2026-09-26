@@ -777,6 +777,7 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/matchers.test.ts › passes on exit 0',
       'evalsuite/test/matchers.test.ts › passes on a pass verdict',
       engine('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown'),
+      engine('a failure with megabytes of output prints and records a bounded tail'),
     ],
   },
 

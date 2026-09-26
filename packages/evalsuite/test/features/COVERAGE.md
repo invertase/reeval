@@ -103,7 +103,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 4 | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — |
-| `toHaveFile`, `toSucceed` and `toPass` | ✓ 4 | — | — | — | — |
+| `toHaveFile`, `toSucceed` and `toPass` | ✓ 5 | — | — | — | — |
 
 ## Records and studio
 

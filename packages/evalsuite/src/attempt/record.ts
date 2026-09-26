@@ -7,7 +7,7 @@ import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
-import { clip } from '../text.ts'
+import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, TranscriptEvent } from '../types.ts'
 import type { Attempt } from './state.ts'
 
@@ -32,6 +32,7 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
   record.error = timedOut
     ? { kind: 'timeout', message: 'The eval timed out' }
     : classify(error, a.signal)
+  record.error.message = capMiddle(record.error.message)
   const judgeFailed = a.judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
   if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
