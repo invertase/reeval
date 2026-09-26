@@ -21,6 +21,7 @@ import {
   scrubbedInBodies,
   scrubber,
   scrubHeaders,
+  scrubValue,
   substituteRequest,
   substitutes,
   substitutionsFor,
@@ -762,13 +763,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
   function onUpgrade(target: Target, req: http.IncomingMessage, socket: Duplex, head: Buffer) {
     const method = req.method ?? 'GET'
     const startedAt = Date.now()
-    const { headers, path, names, credentials, refused } = transformed(
+    const { headers, path, own, names, credentials, refused } = transformed(
       target,
       method,
       req.url ?? '/',
       req.headers,
       req.httpVersion,
     )
+    const scrubbed = (value: string) => (scrubs ? scrubValue(own, value) : value)
     const upgraded = (fields: Partial<EgressRequestEvent>) =>
       emit({
         type: 'request',
@@ -800,10 +802,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       ca,
     })
     upstream.once('upgrade', (up, upSocket: Duplex, upHead: Buffer) => {
-      upgraded({ status: up.statusCode, responseHeaders: plainHeaders(up.headers) })
+      const out = scrubs ? scrubHeaders(own, up.headers) : up.headers
+      upgraded({ status: up.statusCode, responseHeaders: plainHeaders(out) })
       const lines = [`HTTP/1.1 ${up.statusCode} ${up.statusMessage}`]
       for (let i = 0; i < up.rawHeaders.length; i += 2) {
-        lines.push(`${up.rawHeaders[i]}: ${up.rawHeaders[i + 1]}`)
+        lines.push(`${up.rawHeaders[i]}: ${scrubbed(up.rawHeaders[i + 1] ?? '')}`)
       }
       socket.write(`${lines.join('\r\n')}\r\n\r\n`)
       if (upHead.length) socket.write(upHead)
