@@ -21,6 +21,7 @@ import {
   parseGitRepo,
 } from '../src/environment.ts'
 import { AGENTS, agentAuth, brokeringFor } from '../src/harness/agents.ts'
+import { createFakeHarness } from '../src/harness/fake.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -70,6 +71,48 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
     assert.equal(readFileSync(join(box.home, '.config/es/hint.txt'), 'utf8'), 'from home')
     assert.equal(await box.readFile('.config/es/hint.txt'), null, 'not in the workspace')
     assert.equal((await box.exec('cat ~/.config/es/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test("the fake agent's MCP step waits for a slow server's reply, and reports a crash", async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  // Answers the call after 1.5s, and exits as soon as stdin closes, as SDK stdio servers do.
+  await box.writeFile(
+    '~/slow.mjs',
+    `process.stdin.on('end', () => process.exit(0))
+process.stdin.on('data', (d) => {
+  for (const m of String(d).split('\\n').filter(Boolean).map((l) => JSON.parse(l))) {
+    if (m.method !== 'tools/call') continue
+    const result = { content: [{ type: 'text', text: 'STAMP-7Q' }] }
+    setTimeout(() => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result }) + '\\n'), 1500)
+  }
+})
+`,
+  )
+  const call = async (args: string[]) => {
+    const harness = createFakeHarness({
+      kind: 'fake',
+      script: [[{ mcp: 'stamp/house_stamp' }, { reply: 'done' }]],
+    })
+    const session = await harness.start(box, AbortSignal.timeout(30_000), {
+      skills: [],
+      workspaceSkills: [],
+      mcp: { stamp: { transport: 'stdio', command: 'sh', args, env: {} } },
+    })
+    const turn = await session.send('stamp', AbortSignal.timeout(30_000))
+    return turn.transcript.find((e) => e.type === 'tool')
+  }
+  try {
+    const slow = await call(['-c', 'exec node "$HOME/slow.mjs"'])
+    assert.deepEqual(slow && [slow.tool, slow.output, slow.ok], [
+      'mcp__stamp__house_stamp',
+      'STAMP-7Q',
+      true,
+    ])
+    const crashed = await call(['-c', 'echo boom >&2; exit 3'])
+    assert.deepEqual(crashed && [crashed.output, crashed.ok], ['boom', false])
   } finally {
     await box.destroy()
   }

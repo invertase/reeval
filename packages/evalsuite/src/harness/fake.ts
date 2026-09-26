@@ -151,7 +151,7 @@ const q = (s: string) => `'${s.replaceAll("'", `'\\''`)}'`
 
 /**
  * Starts a stdio MCP server in the sandbox, as an agent would, and calls one tool with no
- * arguments: initialize, then the call, with stdin held open a moment so the server can answer.
+ * arguments: initialize, then the call.
  */
 async function callMcpTool(
   sandbox: Sandbox,
@@ -187,10 +187,20 @@ async function callMcpTool(
     { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: {} } },
   ].map((m) => q(JSON.stringify(m)))
   const command = [server.command, ...server.args].map(q).join(' ')
-  const r = await sandbox.exec(`{ printf '%s\\n' ${messages.join(' ')}; sleep 1; } | ${command}`, {
-    signal,
-    env: server.env,
-  })
+  // stdin stays open until the call's reply is out (or the server exits, or 30s pass): a server
+  // may drop requests it hasn't answered when stdin closes.
+  const script = [
+    'd=$(mktemp -d) && mkfifo "$d/in" || exit 1',
+    `${command} < "$d/in" > "$d/out" 2> "$d/err" & pid=$!`,
+    'exec 3> "$d/in"',
+    `printf '%s\\n' ${messages.join(' ')} >&3`,
+    'i=0',
+    `while [ $i -lt 300 ] && kill -0 $pid 2>/dev/null && ! grep -Eq '"id": ?2[,}]' "$d/out"; do sleep 0.1; i=$((i + 1)); done`,
+    'exec 3>&-',
+    'wait $pid; code=$?',
+    'cat "$d/out"; cat "$d/err" >&2; rm -rf "$d"; exit $code',
+  ].join('\n')
+  const r = await sandbox.exec(script, { signal, env: server.env })
   const reply = r.stdout
     .split('\n')
     .flatMap((line) => {
