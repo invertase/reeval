@@ -11,13 +11,16 @@
     "build": "pnpm -r --filter './packages/*' build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm build && pnpm -r --filter './packages/*' test",
+    "coverage": "pnpm build && node scripts/coverage.mjs run",
     "lint": "biome check .",
     "format": "biome check --write .",
     "example": "pnpm --filter hello-example es run"
   },
   "devDependencies": {
+    "@bcoe/v8-coverage": "1.0.2",
     "@biomejs/biome": "2.5.14",
     "@types/node": "22.20.4",
+    "c8": "12.0.0",
     "typescript": "7.0.2"
   }
 }
