@@ -83,9 +83,10 @@ export type Turn = {
    */
   model: string | null
   /**
-   * Event types this harness can't report: the agent may have searched or fetched with no event
-   * in `transcript`. `toHaveSearched()` and `toHaveFetched()` refuse such a turn. Cursor (SDK
-   * 1.0.32) is `['web-search', 'web-fetch']`; every other harness is `[]`.
+   * Event types the harness couldn't report for this turn: the agent may have searched or
+   * fetched with no event in `transcript`. `toHaveSearched()` and `toHaveFetched()` refuse such a
+   * turn. Usually `[]`; a Cursor turn whose web calls the adapter couldn't recover (its SDK drops
+   * them from the stream) is `['web-search', 'web-fetch']`.
    */
   unreported: WebEventType[]
   /** Workspace changes since the eval started, as of the end of this turn. */

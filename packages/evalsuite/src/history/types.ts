@@ -131,7 +131,7 @@ export type AttemptRecord = {
   activity: {
     tools: number
     fileEdits: number
-    /** Null when the harness doesn't report them (Cursor), rather than a count of 0 that isn't one. */
+    /** Null when a turn with none couldn't report them (`unreported`), not a count of 0 that isn't one. */
     webSearches: number | null
     webFetches: number | null
     reasoningMs: number

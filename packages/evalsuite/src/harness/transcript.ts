@@ -4,7 +4,8 @@ import type { FileEditEvent, TranscriptEvent } from '../types.ts'
 export type StampedPart = { ms: number; part: { type: string; [key: string]: unknown } }
 
 type Pending = { ms: number; part: StampedPart['part'] }
-type Timing = { start?: number; end?: number }
+/** `at` places a call recovered after the turn where it happened, not where it was reported. */
+type Timing = { start?: number; end?: number; at?: number }
 
 const str = (value: unknown) => (typeof value === 'string' ? value : '')
 const record = (value: unknown): Record<string, unknown> =>
@@ -167,8 +168,15 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
     const id = event.type === 'tool_call' ? str(event.call_id) : ''
     if (!id) continue
     const t = timing.get(id) ?? {}
-    if (event.status === 'running' && t.start === undefined) t.start = ms
-    if (event.status === 'completed' || event.status === 'error') t.end = ms
+    // A call recovered after the turn carries the backend's own times, as epoch ms.
+    const started =
+      typeof event.started_at_ms === 'number' ? event.started_at_ms - startedAt : undefined
+    const ended =
+      typeof event.completed_at_ms === 'number' ? event.completed_at_ms - startedAt : undefined
+    if (started !== undefined) t.at = t.start = started
+    else if (event.status === 'running' && t.start === undefined) t.start = ms
+    if (ended !== undefined) t.end = ended
+    else if (event.status === 'completed' || event.status === 'error') t.end = ms
     timing.set(id, t)
   }
 
@@ -177,10 +185,12 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
   const blocks = new Map<string, { type: 'text' | 'reasoning'; ms: number; text: string }>()
   const pending = new Map<string, Pending>()
 
-  const toolDone = (id: string, call: Pending, end: StampedPart, failed: boolean) => {
+  const toolDone = (id: string, reported: Pending, end: StampedPart, failed: boolean) => {
+    let call = reported
     const t = timing.get(id)
     const start = t?.start ?? call.ms
     const durationMs = t?.end !== undefined ? t.end - start : end.ms - call.ms
+    call = t?.at === undefined ? call : { ...call, ms: t.at }
     const input = record(call.part.input)
     const name = toolName(call.part)
     const raw = failed ? errorText(end.part.error) : end.part.output

@@ -504,13 +504,8 @@ export const features: Feature[] = [
     canary: /not to match \/Root=1-/,
     record: ({ run }) => {
       const attempt = landed(run)
-      const [turn] = attempt?.turns ?? []
-      // A harness that reports fetches counts this one; one that can't records null, not 0.
-      if (turn?.unreported.includes('web-fetch')) {
-        assert.equal(attempt?.activity.webFetches, null)
-      } else {
-        assert.ok((attempt?.activity.webFetches ?? 0) >= 1, 'the fetch is in the record')
-      }
+      assert.deepEqual(attempt?.turns[0]?.unreported, [])
+      assert.ok((attempt?.activity.webFetches ?? 0) >= 1, 'the fetch is in the record')
     },
   },
   {

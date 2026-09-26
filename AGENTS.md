@@ -1097,11 +1097,14 @@ the turn started), and events have `durationMs`:
 Types: `prompt`, `reasoning`, `text`, `tool` (a call merged with its result), `file-edit`
 (`create | modify | delete` with line counts), `web-search`, `web-fetch`, `error` and
 `turn-end`. Cursor reports file edits relative to the workspace, with line counts. Its SDK
-(1.0.32) doesn't report web search or fetch calls at all: Cursor's backend sends them, runs them
-on its own servers (so the egress log doesn't see them either), and the SDK drops them before
-its stream. So Cursor turns have `unreported: ['web-search', 'web-fetch']`, the record's
-`activity.webSearches` / `webFetches` are null rather than 0, and the web matchers refuse
-them. An MCP tool call is named
+(1.0.32) leaves web search and fetch calls out of its stream: Cursor's backend sends them and
+runs them on its own servers (so the egress log doesn't see them either), and the SDK drops them.
+The adapter's runner recovers them after each turn from the agent's stored conversation
+(`Agent.messages.list`), with the backend's own start and end times, so they're normal
+`web-search` / `web-fetch` events. A turn it couldn't recover them for (the store unreadable, or
+the turn ended before its result) has `unreported: ['web-search', 'web-fetch']`, the record's
+`activity.webSearches` / `webFetches` are null rather than 0, and the web matchers refuse it.
+An MCP tool call is named
 `mcp__<server>__<tool>` on every harness. Set `ES_RAW_TRANSCRIPT=1` to also write the harness's unnormalised stream to
 `transcript.raw.jsonl`. The record adds per-turn durations, per-phase timings (setup, agent,
 diff, checks, judge) and activity counts, and `summary.md` quotes each eval's last message.
