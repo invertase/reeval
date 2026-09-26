@@ -24,7 +24,7 @@ es history [filter]       Pass/fail per recorded eval over recent runs
 The filter is a case-insensitive substring of the eval id. Runs go oldest to newest, left to right.
 
 ```text
-2 runs, oldest → newest: 20260926T170456Z_bd6205e_ada-lovelace_avn4 (bd6205e) … 20260926T170458Z_bd6205e_ada-lovelace_j1c4 (bd6205e)
+2 runs, oldest → newest: 20260926T173922Z_7e5376d_ada-lovelace_31fh (7e5376d) … 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d)
 
   ✓✓    2/2  evals/hello.es.ts › greet module › creates a tested greet module
   ✓✓    2/2  evals/hello.es.ts › greet module › adds a default name in a follow-up turn
@@ -61,7 +61,7 @@ es compare [base] [head]  Diff two runs; base defaults to head's nearest recorde
 - `--fail-on-regression` exits 1 when any eval regressed. Without it, `es compare` exits 0.
 
 ```text
-base 20260926T170458Z_bd6205e_ada-lovelace_j1c4 (bd6205e) → head 20260926T170502Z_bd6205e_ada-lovelace_c5gk (bd6205e, not recorded)
+base 20260926T173923Z_7e5376d_ada-lovelace_t2ea (7e5376d) → head 20260926T173927Z_7e5376d_ada-lovelace_j03w (7e5376d, not recorded)
 0 regressed · 0 fixed · 0 not comparable · 10 same
 
   ✓ → ✓  same                      evals/hello.es.ts › greet module › creates a tested greet module

@@ -26,6 +26,38 @@ es analyze [run]          Explain a run with one LLM call over a digest of its f
 ```
 {/* /generated:cli-help:analyze */}
 
+## A real run
+
+`--dry-run` shows the digest's size and cache key without calling the model:
+
+```text
+digest 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg: 24 facts, 5 evidence items, 18 attempts
+size 26510 characters ≈ 6628 tokens (cap 20000 in, 8000 out)
+model google/gemini-3.8-flash · analysis-v1 · cache miss (.es/analysis/cb4f1ade460a94fdd4e5a9ddef213bd995e81adbbf4f83d0c4a7fa93e0a69398.json)
+```
+
+Then the analysis, over a real Cursor and Antigravity run with the skill compare (trimmed):
+
+```text
+analysing 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg with google/gemini-3.8-flash…
+analysis 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg
+
+TL;DR  The house-greeting skill was introduced in run r2 and produced a statistically significant +100 percentage point pass-rate lift over control for both Cursor and Antigravity harnesses. Without the skill, agents in the control cells could not guess the proprietary greeting convention and failed assertion checks. Evaluated baseline tasks hello-1 and hello-2 remained saturated at 100% pass rate …
+
+Results
+  - In a pooled factor analysis across 2 runs for cursor:composer-2.5 on eval 'skill', environment:with-house-greeting achieved a pass-rate lift of +100 pts (95% CI +31…+100, verdict: effect) and reduced tool calls by ×0.38 (p = 0.0286, verdict: fewer). [F11]
+…
+Suggested actions
+  1. Increase attempt count on skill eval to reach statistical power for effort (eval · impact medium · effort low) [F10] [F11]
+     verify: es run --runs 6 --tag skill
+…
+gemini-3.8-flash · analysis-v1 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
+```
+
+The studio shows saved analyses (and, in `es studio`, cached ones) on the run's Analysis tab, with each citation linking to its attempt:
+
+<Image src="/assets/studio/run-analysis.png" alt="ES studio Analysis tab with the TL;DR, what happened and results, each claim followed by fact and evidence citations" width={800} />
+
 ## How it works
 
 ```mermaid

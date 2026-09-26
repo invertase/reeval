@@ -30,12 +30,12 @@ es query [sql | view]     Read-only SQL over every recorded and scratch run (.es
 - **Output:** an aligned table, or JSON rows with `--json`. The sync line (`history.db: 13 runs`) goes to stderr, so output pipes cleanly.
 - **Needs** Node 22.13 or later (`node:sqlite`).
 
-A real query:
+A real query (`points`, `lo` and `hi` are fractions: 1 is +100 points):
 
 ```text
-eval_key                                                   harness              variant              variant_pass  variant_counted  control_pass  control_counted  points  lo      hi  within_noise
+eval_key                                                   harness                              variant              variant_pass  variant_counted  control_pass  control_counted  points  lo    hi  within_noise
 …
-evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5  with-house-greeting  2             2                0             2                1       0.07    1   0
+evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
 ```
 
 ## Views
@@ -57,8 +57,11 @@ evals/skill.es.ts › house greeting › greets in the house…  cursor:composer
 | View | One row per |
 |---|---|
 | `lift` | Variant cell per run: its control, both sides' counts, points, the 95% interval (`lo`, `hi`), `within_noise`, `min_lift` |
-| `flaky_cells` | Cell and fingerprint whose attempts disagreed within a run: how often, first and last seen |
-| `drift` | Run where a cell's fingerprint changed from its previous run, with the parts that changed |
+| `effort` | Cell per run: attempts, median and quartiles of tool calls and agent seconds; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and a verdict |
+| `factor_effects` | One factor's contrast (`environment`, `harness`, `model`) by evidence tier (`controlled`, `pooled`, `observed`, `not_measured`), with pass-rate and effort verdicts |
+| `skill_reads` | Attempt and skill its environment placed: the transcript line of its first read, and how many |
+| `flaky_cells` | Cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (`flaky` from 6 counted attempts) and a likely cause (`infra`, `judge`, `agent`) |
+| `drift` | Run where a cell's fingerprint changed from its previous run, the parts and context paths that changed, and `noise = 1` when only an agent CLI's own runtime state changed |
 | `failing_attempts` | Failed attempt, with the skill of its environment (joined by digest), harness, model and error |
 | `eval_trend` | Eval per run: outcome, pass rate, branch, PR and fingerprint |
 | `verdict_flips` | Judge question per cell whose pass rate changed from its previous run |

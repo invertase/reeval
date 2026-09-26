@@ -17,10 +17,13 @@ group('house greeting', { compare: [withHouseGreeting] }, () => {
 A real agent does the task in a fresh Docker sandbox, once without the skill and once with it. ES checks the result and reports the difference as lift:
 
 ```text
- ✓ greets in the house style      2/4   50%  4 attempts
-     cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
-     cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+✓ greets in the house style      2/4  100%  4 attempts
+    cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+    cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
+      effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 ```
+
+With the skill the agent also needed fewer tool calls and half the time: ES reports that effort next to the lift.
 
 ## How it works
 
@@ -39,7 +42,7 @@ flowchart LR
 |---|---|
 | Agent | Runs Cursor, Claude Code or Antigravity on your prompt, in its own sandbox |
 | Checks | Runs your commands in the sandbox and asks an LLM judge yes/no questions |
-| Compare | Runs the same eval with and without a skill, MCP server or docs |
+| Compare | Runs the same eval with and without a skill, MCP server or docs, and reports lift and effort |
 | History | Saves every run as a file you commit, diff and browse |
 
 ## See every attempt

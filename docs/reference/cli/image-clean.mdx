@@ -32,12 +32,12 @@ A real `--dry-run` in `examples/hello`:
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker + install · 1 eval
-  base               evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
   install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
 python · 1 eval
-  from python:3.12-slim  evalsuite-sandbox:cursor-1.0.37-python-3-12-slim-1d044754  (rebuild: …)
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: …)
 …
 ```
 
@@ -54,7 +54,7 @@ es clean                  Remove local debug data (.es/debug); --keep <n> keeps 
 `es run` already keeps only the newest `debug.keep` runs' debug data (default 20). `es clean` removes all of it, or all but the newest `--keep <n>` runs. It never touches `.es/runs/` or the history folder.
 
 ```text
-Removed debug data for 4 runs (106.7 KB) from .es/debug
+Removed debug data for 4 runs (106.9 KB) from .es/debug
 ```
 
 ## Related

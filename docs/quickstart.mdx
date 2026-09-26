@@ -68,17 +68,17 @@ You'll write one eval and run it against ES's fake agent, which needs no keys, D
     es 0.0.1 · 1 eval file · harness fake · sandbox fake · concurrency 4 · stream logs
     [creates#1 fake] ▶ evals/hello.es.ts › greet module › creates greet.js
     [creates#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
-    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then((m) =>…  exit 0 23ms
+    [creates#1 fake]  +0:00 $ node -e "import('./greet.js').then((m) =>…  exit 0 24ms
     [creates#1 fake]  +0:00 judge  pass 0.95 (≥ 0.8)  Does the final message describe the change?
-    [creates#1 fake] ✓ evals/hello.es.ts › greet module › creates greet.js  66ms
+    [creates#1 fake] ✓ evals/hello.es.ts › greet module › creates greet.js  70ms
 
     Summary
      evals/hello.es.ts
        greet module
-         ✓ creates greet.js     66ms  judge 0.95  1 turn
+         ✓ creates greet.js     70ms  judge 0.95  1 turn
 
        Evals  1 passed (1)
-    Duration  783ms
+    Duration  754ms
     ```
   </Step>
 </Steps>

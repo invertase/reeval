@@ -59,7 +59,7 @@ npx es run skill antigravity            # the Antigravity cells of skill.es.ts
 Every run starts with it, before anything runs:
 
 ```text
-plan  1 eval · 2 cells · 4 attempts · ~1m 08s serial (~17s at concurrency 4)
+plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 ```
 
 The estimate is the median of each eval's recent attempts on that harness (the last 30 runs, recorded and scratch), else the harness's median, else 3 minutes an attempt. With a profile and a budget it also says which profile, why, and whether the plan fits:
