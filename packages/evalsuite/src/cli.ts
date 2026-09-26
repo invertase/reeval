@@ -25,6 +25,7 @@ import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
+import { registerSecret } from './redact.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -499,6 +500,8 @@ async function executeRun(
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
+    for (const p of planned)
+      for (const name of p.attempt.secretVars) registerSecret(process.env[name])
     plan = await buildPlan({
       planned,
       profile,

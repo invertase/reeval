@@ -281,6 +281,40 @@ evaluate('leaks', async (t) => {
     assert.match(outputs['debug.log'], /check +\$ echo "\$LEAKY"; .* → exit 0/)
   })
 
+  test("a declared secret under a plain name is masked in an eval's logs and failures on screen", async () => {
+    const DSN = 'dsn_7c1d9ab04e4f2a6b8c'
+    const p = await project('debug-redact-declared', {
+      'es.config.ts': fakeConfig(),
+      'evals/b.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const env = defineEnvironment('sentry', ({ secret }) => ({
+  env: { SENTRY_DSN: secret.fromEnv('ES_DEBUG_DSN') },
+}))
+evaluate('prints the dsn', { environment: env }, async (t) => {
+  await t.sandbox()
+  const dsn = (await t.exec('printenv SENTRY_DSN')).stdout.trim()
+  console.log('logged', dsn)
+  console.error('warned', dsn)
+  expect(dsn).toBe('wrong')
+})
+`,
+    })
+    for (const ui of ['plain', 'agent']) {
+      const r = await runCli(p.dir, ['run', '--ui', ui], { env: { ES_DEBUG_DSN: DSN } })
+      assert.equal(r.code, 1, r.stdout + r.stderr)
+      const screen = r.stdout + r.stderr
+      for (const n of [DSN.length, 12, 8]) {
+        assert.equal(
+          screen.includes(DSN.slice(-n)),
+          false,
+          `${ui}: the screen has ${DSN.slice(-n)}`,
+        )
+      }
+      // The canary: the failure is on screen with the value masked, so a leak would show.
+      assert.match(screen, /expected '\[REDACTED\]' to be 'wrong'/, `${ui}: ${screen}`)
+      if (ui === 'plain') assert.match(screen, /stdout \| logged \[REDACTED\]/)
+    }
+  })
+
   test("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript", async () => {
     const KEY = 'crsr_debug_7f3Kq9ZpL2mXw8Rt4VbN6yHc'
     const tail = KEY.slice(-12)

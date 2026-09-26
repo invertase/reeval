@@ -557,6 +557,11 @@ export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
     s.hosts ? [`${s.label} → ${s.hosts.join(', ')}`] : [],
   )
 
+/** The host variables an attempt's secrets read, brokered or not. */
+export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
+  ...new Set(plannedSecrets(env, attempt.environment.layers).map((s) => s.from)),
+]
+
 const brokerHint = (s: UnbrokeredSecret) =>
   /^mcp\.[^.]+\.headers\./.test(s.label)
     ? 'give the MCP server an https:// URL (ES brokers its header secrets to its own host, over HTTPS only)'
