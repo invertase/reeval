@@ -52,6 +52,7 @@ evaluate('hi', async (t) => {
   const turn = await t.send('Reply with the word hi.')
   // Gemini saw the swapped-in (made-up) key: the gateway brokered it.
   expect(turn.transcript.some((e) => e.type === 'error' && /API_KEY_INVALID/.test(e.message ?? ''))).toBe(true)
+  expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
   // Nothing in the sandbox holds the key: the CLI's own env had only the placeholder.
   const search = (needle: string) => t.exec(\`grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev \${needle} / || true\`)
   expect((await search('not_a_real_key')).stdout.trim()).toBe('')

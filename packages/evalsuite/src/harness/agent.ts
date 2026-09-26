@@ -175,9 +175,24 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
           } catch (error) {
             const message = errorText(error)
             const at = Date.now() - startedAt
-            return finish('', turnSignal.aborted ? 'aborted' : 'error', [
-              { type: 'error', message, ts: new Date(startedAt + at).toISOString(), atMs: at },
-            ])
+            // An adapter's `error` part is thrown here too: record the failure once.
+            const reported = parts.some(
+              ({ part }) => part.type === 'error' && errorText(part.error) === message,
+            )
+            return finish(
+              '',
+              turnSignal.aborted ? 'aborted' : 'error',
+              reported
+                ? []
+                : [
+                    {
+                      type: 'error',
+                      message,
+                      ts: new Date(startedAt + at).toISOString(),
+                      atMs: at,
+                    },
+                  ],
+            )
           }
         },
         close: () => session.destroy().catch(() => {}),
