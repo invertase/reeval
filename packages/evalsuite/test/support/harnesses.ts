@@ -50,7 +50,7 @@ export const harnesses: HarnessRow[] = [
     autoHosts: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
     apiHost: 'api2.cursor.sh',
     tokens: false,
-    servedModel: /^composer-2\.5/,
+    servedModel: null,
   },
   {
     id: 'antigravity',
