@@ -21,6 +21,14 @@ export type Matrix = { rows: MatrixRow[]; problems: string[] }
 
 const covered = (row: MatrixRow) => TIERS.some((t) => row.cells[t].count > 0)
 
+/** The literal first argument of every `test(`, `it(`, `describe(` or `suite(` call, `.skip` etc. too. */
+const testTitles = (source: string) =>
+  [
+    ...source.matchAll(
+      /\b(?:test|it|describe|suite)(?:\.\w+)*\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1/g,
+    ),
+  ].map((m) => m[2] ?? '')
+
 export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Matrix {
   const problems: string[] = []
   const fixtures = new Map(sources.fixtures.map((f) => [f.dir, f]))
@@ -58,7 +66,8 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
       const source = file ? sources.testSource(file) : null
       if (!file || !title || rest.length) problems.push(`${at}: "${ref}" isn't "<file> › <title>"`)
       else if (source === null) problems.push(`${at}: ${file} doesn't exist`)
-      else if (!source.includes(title)) problems.push(`${at}: ${file} has no test "${title}"`)
+      else if (!testTitles(source).some((t) => t.includes(title)))
+        problems.push(`${at}: ${file} has no test "${title}"`)
       else cells.unit.count++
     }
     const row = { feature, cells }

@@ -16,7 +16,7 @@ export type InventoryFeature = {
   plan?: string[]
   /**
    * Plain `node:test` cases (the unit tier, including runner-level tests through the CLI), as
-   * `<path under packages/> › <the test's title, or a part of it that's in the file>`.
+   * `<path under packages/> › <the test's title, or a part of it>`.
    */
   tests?: string[]
   /** Why nothing covers it yet. Only for features with no fixture, plan case or test. */

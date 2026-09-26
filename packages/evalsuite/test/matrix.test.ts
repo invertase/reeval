@@ -46,7 +46,10 @@ describe('the matrix check (twins: it can fail)', () => {
       { dir: 'skills/b', tiers: ['fake'], canary: false },
     ],
     planCases: ['matrix/default'],
-    testSource: (path) => (path === 'evalsuite/test/unit.test.ts' ? "test('parses a thing'" : null),
+    testSource: (path) =>
+      path === 'evalsuite/test/unit.test.ts'
+        ? "// covers a comment\nconst label = 'a helper string'\ntest('parses a thing', () => {})"
+        : null,
   }
   const feature = (f: Partial<InventoryFeature>): InventoryFeature => ({
     id: 'x',
@@ -113,6 +116,8 @@ describe('the matrix check (twins: it can fail)', () => {
           plan: ['matrix/nope'],
           tests: [
             'evalsuite/test/unit.test.ts › a test that is not there',
+            'evalsuite/test/unit.test.ts › covers a comment',
+            'evalsuite/test/unit.test.ts › a helper string',
             'evalsuite/test/nope.test.ts › anything',
             'no title',
           ],
@@ -125,6 +130,8 @@ describe('the matrix check (twins: it can fail)', () => {
       "inventory y: fixture skills/nope isn't in features.test.ts",
       "inventory y: plan case matrix/nope isn't in plan.test.ts",
       'inventory y: evalsuite/test/unit.test.ts has no test "a test that is not there"',
+      'inventory y: evalsuite/test/unit.test.ts has no test "covers a comment"',
+      'inventory y: evalsuite/test/unit.test.ts has no test "a helper string"',
       "inventory y: evalsuite/test/nope.test.ts doesn't exist",
       'inventory y: "no title" isn\'t "<file> › <title>"',
       'inventory y: nothing covers it on any tier. Add a fixture, plan case or test, or mark it a known gap with the reason',
