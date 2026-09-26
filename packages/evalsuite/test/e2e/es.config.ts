@@ -1,5 +1,5 @@
 import { defineConfig } from 'evalsuite'
-import { antigravity, claudeCode, cursor, fakeHarness } from 'evalsuite/harness'
+import { antigravity, claudeCode, cursor, fakeHarness, opencode } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
 
 // The CLI end to end on a real agent: e2e-real.test.ts records two runs of this one eval and
@@ -15,6 +15,8 @@ const harness = () => {
       return antigravity({ model })
     case 'claude-code':
       return claudeCode({ model })
+    case 'opencode':
+      return opencode({ model })
     default:
       return fakeHarness({ script: [[{ write: { 'hello.txt': 'hello from es\n' } }]] })
   }

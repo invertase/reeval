@@ -59,12 +59,13 @@
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",
     "test:docker": "ES_FIXTURE_TIERS=docker ES_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts test/docker-antigravity.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts",
     "test:real": "ES_FIXTURE_TIERS=real ES_TEST_REAL=1 node --test --experimental-strip-types --no-warnings test/features.test.ts",
-    "test:contract": "ES_TEST_REAL=1 ES_CONTRACT_HARNESSES=${ES_CONTRACT_HARNESSES:-cursor,antigravity,claude-code} node --test --test-concurrency=1 --experimental-strip-types --no-warnings test/contract.test.ts test/e2e-real.test.ts",
+    "test:contract": "ES_TEST_REAL=1 ES_CONTRACT_HARNESSES=${ES_CONTRACT_HARNESSES:-cursor,antigravity,claude-code,opencode} node --test --test-concurrency=1 --experimental-strip-types --no-warnings test/contract.test.ts test/e2e-real.test.ts",
     "test:replay": "node --test --experimental-strip-types --no-warnings test/replay.test.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "4.0.79",
     "@ai-sdk/harness": "1.0.124",
+    "@ai-sdk/harness-acp": "1.0.62",
     "@ai-sdk/harness-claude-code": "1.0.128",
     "@ai-sdk/provider-utils": "5.0.47",
     "@ai-sdk/typesafe-ai": "3.0.6",
@@ -81,6 +82,7 @@
   "devDependencies": {
     "@evalsuite/harness-antigravity": "workspace:0.1.0",
     "@evalsuite/harness-cursor-sdk": "workspace:0.1.0",
+    "@evalsuite/harness-opencode": "workspace:0.1.0",
     "@evalsuite/sandbox-docker": "workspace:*",
     "studio-web": "workspace:*"
   }
