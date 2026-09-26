@@ -1,4 +1,4 @@
-import { runtimeStateOf } from '../harness/agents.ts'
+import { RUNTIME_STATE, runtimeStateOf } from '../harness/agents.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import type { EvalRecord, HarnessDescriptor } from '../types.ts'
 import type { Attempt } from './state.ts'
@@ -76,6 +76,14 @@ export function contextTaker(a: Attempt) {
     taken = true
     a.record.context = await agentContext(box, signal)
   }
+}
+
+const ALL_RUNTIME_STATE = new Set(Object.values(RUNTIME_STATE).flat())
+
+/** A context path that is some agent CLI's own runtime state, whichever harness recorded it. */
+export function isRuntimeState(path: string): boolean {
+  if (!path.startsWith('~/')) return false
+  return ALL_RUNTIME_STATE.has(path.replace(ADAPTER_HOME, '~/').slice(2))
 }
 
 /**

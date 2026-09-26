@@ -10,6 +10,7 @@ import type {
   PhaseTimings,
   TurnStatus,
 } from '../types.ts'
+import type { CellEffort } from '../view/effort.ts'
 
 /** Stays 1 while ES is pre-release: the record changes in place. */
 export const SCHEMA_VERSION = 1
@@ -356,7 +357,11 @@ export type HistoryCell = Pick<
   | 'skipped'
   | 'passRate'
   | 'outcome'
-> & { lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean } }
+> & {
+  lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
+  /** Median tool calls and agent time over the counted attempts; null when none counted. */
+  effort: CellEffort | null
+}
 
 /**
  * One line of the derived history listing: cached locally by the CLI, and the run header in the

@@ -2,15 +2,17 @@
 // it isn't in `evals/.history` or `.es/runs`; it's rebuilt incrementally from them on every query
 // and can be deleted at any time.
 import { statSync } from 'node:fs'
-import { mkdir, stat } from 'node:fs/promises'
+import { mkdir, readFile, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { dirname, join, relative } from 'node:path'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
+import { isRuntimeState } from '../attempt/context.ts'
 import { UsageError } from '../errors.ts'
-import { RUN_ID } from '../ids.ts'
+import { RUN_ID, sha256 } from '../ids.ts'
+import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir } from './files.ts'
-import type { RunRecord } from './types.ts'
+import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
 const DB_VERSION = 1
@@ -71,7 +73,7 @@ CREATE TABLE cells (
   fp_harness TEXT, fp_environment TEXT, fp_image TEXT, fp_agent_cli TEXT, fp_judge TEXT,
   fp_context TEXT, runs INTEGER, pass INTEGER, fail INTEGER, infra_error INTEGER,
   skipped INTEGER, pass_rate REAL, outcome TEXT, lift_vs TEXT, lift_points REAL, lift_lo REAL,
-  lift_hi REAL, within_noise INTEGER, min_lift REAL,
+  lift_hi REAL, within_noise INTEGER, min_lift REAL, comparable TEXT,
   PRIMARY KEY (run_id, eval_key, key)
 );
 CREATE TABLE attempts (
@@ -79,11 +81,12 @@ CREATE TABLE attempts (
   id TEXT, n INTEGER, seq INTEGER, started_at TEXT, outcome TEXT, error_kind TEXT,
   error_message TEXT, duration_ms INTEGER, image_id TEXT, turns INTEGER, tools INTEGER,
   file_edits INTEGER, setup_ms INTEGER, agent_ms INTEGER, checks_ms INTEGER, judge_ms INTEGER,
+  last_text TEXT,
   PRIMARY KEY (run_id, key)
 );
 CREATE TABLE judgements (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, key TEXT NOT NULL, question TEXT,
-  verdict TEXT, score REAL, threshold REAL, model TEXT, resolved_model TEXT,
+  verdict TEXT, score REAL, threshold REAL, model TEXT, resolved_model TEXT, input_path TEXT,
   PRIMARY KEY (run_id, attempt_key, key)
 );
 CREATE TABLE environments (
@@ -98,7 +101,19 @@ CREATE TABLE artifacts (
   run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, kind TEXT NOT NULL, path TEXT NOT NULL,
   sha256 TEXT, bytes INTEGER
 );
+-- What the agent could see, by content hash; runtime = 1 for an agent CLI's own session state.
+CREATE TABLE attempt_context (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, path TEXT NOT NULL, sha256 TEXT, runtime INTEGER
+);
+-- Every tool call in each attempt's transcript: its line in transcript.jsonl (from 1) and target.
+CREATE TABLE tool_calls (
+  run_id TEXT NOT NULL, attempt_key TEXT NOT NULL, line INTEGER NOT NULL, turn INTEGER,
+  tool TEXT, target TEXT, ok INTEGER, duration_ms INTEGER
+);
+${DERIVED_TABLES}
 CREATE INDEX cells_by_eval ON cells (eval_key, key);
+CREATE INDEX tool_calls_by_attempt ON tool_calls (run_id, attempt_key);
+CREATE INDEX context_by_attempt ON attempt_context (run_id, attempt_key);
 CREATE INDEX attempts_by_cell ON attempts (run_id, eval_key, cell_key);
 CREATE INDEX env_skills_by_digest ON env_skills (run_id, digest);
 `
@@ -115,36 +130,32 @@ CREATE VIEW lift AS
   JOIN cells k ON k.run_id = c.run_id AND k.eval_key = c.eval_key AND k.key = c.lift_vs
   WHERE c.role = 'variant';
 
--- Cells whose attempts disagreed within a run, and when that first happened at this fingerprint.
-CREATE VIEW flaky_cells AS
-  SELECT c.eval_key, c.key AS cell_key, c.fingerprint, COUNT(*) AS flaky_runs,
-    MIN(r.started_at) AS first_seen, MAX(r.started_at) AS last_seen,
-    SUM(c.pass) AS pass, SUM(c.pass + c.fail) AS counted
-  FROM cells c JOIN runs r USING (run_id)
-  WHERE c.pass > 0 AND c.fail > 0
-  GROUP BY c.eval_key, c.key, c.fingerprint;
+-- Cells with mixed outcomes, pooled over runs whose fingerprints match once agent runtime state is
+-- left out; 'flaky' needs FLAKY_MIN_ATTEMPTS counted attempts, else 'insufficient'.
+CREATE VIEW flaky_cells AS SELECT * FROM flaky_m;
 
--- Each run where a cell's fingerprint differs from the same cell's previous run, and which parts.
-CREATE VIEW drift AS
-  WITH ordered AS (
-    SELECT c.*, LAG(c.run_id) OVER w AS prev_run_id, LAG(c.fingerprint) OVER w AS prev_fingerprint,
-      LAG(c.fp_sources) OVER w AS p_sources, LAG(c.fp_harness) OVER w AS p_harness,
-      LAG(c.fp_environment) OVER w AS p_environment, LAG(c.fp_image) OVER w AS p_image,
-      LAG(c.fp_agent_cli) OVER w AS p_agent_cli, LAG(c.fp_judge) OVER w AS p_judge,
-      LAG(c.fp_context) OVER w AS p_context
-    FROM cells c WINDOW w AS (PARTITION BY c.eval_key, c.key ORDER BY c.run_id)
-  )
-  SELECT run_id, prev_run_id, eval_key, key AS cell_key,
-    TRIM(
-      IIF(fp_sources IS NOT p_sources, 'sources ', '') ||
-      IIF(fp_harness IS NOT p_harness, 'harness ', '') ||
-      IIF(fp_environment IS NOT p_environment, 'environment ', '') ||
-      IIF(fp_image IS NOT p_image, 'image ', '') ||
-      IIF(fp_agent_cli IS NOT p_agent_cli, 'agent_cli ', '') ||
-      IIF(fp_judge IS NOT p_judge, 'judge ', '') ||
-      IIF(fp_context IS NOT p_context, 'context', '')
-    ) AS changed
-  FROM ordered WHERE prev_run_id IS NOT NULL AND fingerprint IS NOT prev_fingerprint;
+-- Each run where a cell's fingerprint differs from its previous run: which parts, which context
+-- paths, and noise = 1 when only agent runtime state changed (not a real change).
+CREATE VIEW drift AS SELECT * FROM drift_m;
+
+-- Tool calls and agent time per cell, and a variant's against its control in the same run.
+CREATE VIEW effort AS SELECT * FROM effort_m;
+
+-- What a factor (environment, harness, model) did, by evidence tier: controlled (one run),
+-- pooled (comparable runs, and across evals), observed (over time), not_measured (one level).
+CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
+
+-- Whether each attempt read each skill its environment placed, and at which transcript line.
+CREATE VIEW skill_reads AS
+  SELECT a.run_id, a.eval_key, a.cell_key, a.key AS attempt_key, a.id AS attempt_id, c.variant,
+    s.name AS skill, s.placement,
+    (SELECT MIN(t.line) FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key
+      AND t.target LIKE '%skills/' || s.name || '/%') AS read_line,
+    (SELECT COUNT(*) FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key
+      AND t.target LIKE '%skills/' || s.name || '/%') AS reads
+  FROM attempts a
+  JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
+  JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest;
 
 -- Failed attempts with the cell's harness, model and each of its environment's skills.
 CREATE VIEW failing_attempts AS
@@ -179,6 +190,9 @@ CREATE VIEW verdict_flips AS
 
 export const VIEW_NAMES = [
   'lift',
+  'effort',
+  'factor_effects',
+  'skill_reads',
   'flaky_cells',
   'drift',
   'failing_attempts',
@@ -188,7 +202,81 @@ export const VIEW_NAMES = [
 
 const json = (value: unknown) => JSON.stringify(value)
 
-function insertRun(db: DatabaseSync, record: RunRecord, recorded: boolean): void {
+/** `attempts.last_text` is the agent's final message, capped: most "why" questions start there. */
+export const LAST_TEXT_LIMIT = 2048
+
+/** A tool call's target: its path, pattern, command or URL, else its input, capped. */
+function toolTarget(input: unknown): string {
+  if (typeof input !== 'object' || input === null) return String(input ?? '').slice(0, 300)
+  const i = input as Record<string, unknown>
+  for (const key of [
+    'path',
+    'file_path',
+    'filePath',
+    'pattern',
+    'glob_pattern',
+    'command',
+    'url',
+    'query',
+  ]) {
+    if (typeof i[key] === 'string') return (i[key] as string).slice(0, 300)
+  }
+  return JSON.stringify(input).slice(0, 300)
+}
+
+export type ToolCall = {
+  line: number
+  turn: number | null
+  tool: string
+  target: string
+  ok: boolean
+  durationMs: number | null
+}
+
+/** The tool calls in a transcript.jsonl, numbered by line from 1; lines that aren't JSON are skipped. */
+export function toolCalls(transcript: string): ToolCall[] {
+  const calls: ToolCall[] = []
+  transcript.split('\n').forEach((line, i) => {
+    if (!line.trim()) return
+    let event: Record<string, unknown>
+    try {
+      event = JSON.parse(line)
+    } catch {
+      return
+    }
+    if (event?.type !== 'tool') return
+    calls.push({
+      line: i + 1,
+      turn: typeof event.turn === 'number' ? event.turn : null,
+      tool: String(event.tool ?? ''),
+      target: toolTarget(event.input),
+      ok: event.ok !== false,
+      durationMs: typeof event.durationMs === 'number' ? event.durationMs : null,
+    })
+  })
+  return calls
+}
+
+/**
+ * What a cell's results can be pooled on across runs: its fingerprint parts, with the context
+ * part replaced by the context files that aren't an agent CLI's own runtime state.
+ */
+export function comparableFingerprint(cell: CellRecord, attempts: AttemptRecord[]): string {
+  const { context: _context, ...parts } = cell.fingerprintParts
+  const files = new Map<string, string>()
+  for (const a of attempts) {
+    if (a.cell !== cell.key) continue
+    for (const c of a.context) if (!isRuntimeState(c.path)) files.set(c.path, c.sha256)
+  }
+  return sha256(json({ parts, context: [...files].sort(([a], [b]) => (a < b ? -1 : 1)) }))
+}
+
+function insertRun(
+  db: DatabaseSync,
+  record: RunRecord,
+  recorded: boolean,
+  transcripts: Map<string, string>,
+): void {
   const run = (sql: string, ...values: SQLInputValue[]) => db.prepare(sql).run(...values)
   const { runner, summary, git } = record
   run(
@@ -261,7 +349,7 @@ function insertRun(db: DatabaseSync, record: RunRecord, recorded: boolean): void
     for (const c of e.cells) {
       const p = c.fingerprintParts
       run(
-        `INSERT INTO cells VALUES (${Array(34).fill('?').join(', ')})`,
+        `INSERT INTO cells VALUES (${Array(35).fill('?').join(', ')})`,
         record.runId,
         e.key,
         c.key,
@@ -296,11 +384,12 @@ function insertRun(db: DatabaseSync, record: RunRecord, recorded: boolean): void
         c.lift?.interval.hi ?? null,
         c.lift ? (c.lift.withinNoise ? 1 : 0) : null,
         c.lift?.minLift ?? null,
+        comparableFingerprint(c, e.attempts),
       )
     }
     for (const a of e.attempts) {
       run(
-        `INSERT INTO attempts VALUES (${Array(20).fill('?').join(', ')})`,
+        `INSERT INTO attempts VALUES (${Array(21).fill('?').join(', ')})`,
         record.runId,
         e.key,
         a.cell,
@@ -321,10 +410,35 @@ function insertRun(db: DatabaseSync, record: RunRecord, recorded: boolean): void
         a.timings.agentMs,
         a.timings.checksMs,
         a.timings.judgeMs,
+        a.turns.at(-1)?.text.slice(0, LAST_TEXT_LIMIT) ?? null,
       )
+      for (const c of a.context) {
+        run(
+          'INSERT INTO attempt_context VALUES (?, ?, ?, ?, ?)',
+          record.runId,
+          a.key,
+          c.path,
+          c.sha256,
+          isRuntimeState(c.path) ? 1 : 0,
+        )
+      }
+      const transcript = transcripts.get(a.key)
+      for (const t of transcript ? toolCalls(transcript) : []) {
+        run(
+          'INSERT INTO tool_calls VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          record.runId,
+          a.key,
+          t.line,
+          t.turn,
+          t.tool,
+          t.target,
+          t.ok ? 1 : 0,
+          t.durationMs,
+        )
+      }
       for (const j of a.judgements) {
         run(
-          'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          'INSERT OR IGNORE INTO judgements VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
           record.runId,
           a.key,
           j.key,
@@ -334,6 +448,7 @@ function insertRun(db: DatabaseSync, record: RunRecord, recorded: boolean): void
           j.threshold,
           j.model,
           j.resolvedModel ?? null,
+          a.files.judgeInput?.path ?? null,
         )
       }
       for (const [kind, ref] of Object.entries(a.files)) {
@@ -373,6 +488,8 @@ const DATA_TABLES = [
   'environments',
   'env_skills',
   'artifacts',
+  'attempt_context',
+  'tool_calls',
 ]
 
 function removeRun(db: DatabaseSync, runId: string): void {
@@ -409,6 +526,22 @@ function current(db: DatabaseSync): boolean {
   } catch {
     return false
   }
+}
+
+/** Each attempt's transcript.jsonl, by attempt key, where the run kept it. */
+async function readTranscripts(dir: string, record: RunRecord): Promise<Map<string, string>> {
+  const out = new Map<string, string>()
+  for (const e of record.evals) {
+    for (const a of e.attempts) {
+      const ref = a.files.transcript
+      if (!ref) continue
+      const text = await readFile(join(dir, record.runId, ...ref.path.split('/')), 'utf8').catch(
+        () => null,
+      )
+      if (text !== null) out.set(a.key, text)
+    }
+  }
+  return out
 }
 
 export type SyncResult = { runs: number; added: number; removed: number; rebuilt: boolean }
@@ -465,10 +598,11 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
         continue
       }
       if (had) removeRun(db, runId)
-      insertRun(db, record, recorded)
+      insertRun(db, record, recorded, await readTranscripts(dirname(path), record))
       db.prepare('INSERT INTO files VALUES (?, ?, ?, ?)').run(runId, rel, info.size, info.mtimeMs)
       added++
     }
+    if (added || removed || rebuilt) deriveFacts(db)
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')
@@ -533,7 +667,7 @@ export async function openHistoryDb(
     schema() {
       const objects = db
         .prepare(
-          "SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files') AND name NOT LIKE 'sqlite_%' ORDER BY type, name",
+          `SELECT name, type FROM sqlite_schema WHERE type IN ('table', 'view') AND name NOT IN ('meta', 'files', ${DERIVED.map((d) => `'${d}'`).join(', ')}) AND name NOT LIKE 'sqlite_%' ORDER BY type, name`,
         )
         .all() as Array<{ name: string; type: 'table' | 'view' }>
       return objects.map((o) => ({

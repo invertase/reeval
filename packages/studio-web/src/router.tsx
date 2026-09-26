@@ -42,7 +42,7 @@ const runsRoute = createRoute({
   component: RunsPage,
 })
 
-export type RunSearch = { eval?: string; show?: 'failed' }
+export type RunSearch = { eval?: string; show?: 'failed'; tab?: 'analysis' }
 
 const runRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -50,6 +50,7 @@ const runRoute = createRoute({
   validateSearch: (s: Record<string, unknown>): RunSearch => ({
     eval: str(s.eval),
     show: oneOf(['failed'] as const, s.show),
+    tab: oneOf(['analysis'] as const, s.tab),
   }),
   loader: ({ context, params }) => context.queryClient.prefetchQuery(recordQuery(params.runId)),
   component: RunPage,

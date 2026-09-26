@@ -5,14 +5,17 @@ import {
   type CellRow,
   cellRows,
   type EvalEntry,
+  effortSummary,
   evalTree,
   formatCost,
   formatDuration,
+  formatRatio,
   isMatrix,
   type RunRecord,
   runOutcome,
   shortSha,
   type TreeNode,
+  VERDICT_TEXT,
 } from 'evalsuite/view'
 import {
   ChevronRight,
@@ -41,9 +44,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { headersQuery, recordQuery } from '@/lib/data'
 import { formatDate, plural, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { RunAnalysis } from '@/pages/run-analysis'
 
 const route = getRouteApi('/runs/$runId')
 
@@ -167,6 +172,7 @@ function pruneFailed(nodes: TreeNode[]): TreeNode[] {
 
 function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slug: string }) {
   const showLift = rows.some((r) => r.lift !== null)
+  const showEffort = rows.some((r) => r.effort !== null)
   const compare = rows.some((r) => r.role === 'variant')
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -180,6 +186,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
             <TableHead>Attempts</TableHead>
             <TableHead className="text-right">Pass rate</TableHead>
             {showLift ? <TableHead className="text-right">Lift</TableHead> : null}
+            {showEffort ? <TableHead className="text-right">Effort</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -242,10 +249,38 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                   ) : null}
                 </TableCell>
               ) : null}
+              {showEffort ? (
+                <TableCell className="text-right">
+                  <Effort row={row} />
+                </TableCell>
+              ) : null}
             </TableRow>
           ))}
         </TableBody>
       </Table>
+    </div>
+  )
+}
+
+/** Median tool calls and agent time; for a variant, against its control with the test's verdict. */
+function Effort({ row }: { row: CellRow }) {
+  if (!row.effort) return <span className="text-muted-foreground">–</span>
+  const vs = row.effortVsControl
+  const effect = vs && (vs.verdict === 'fewer' || vs.verdict === 'more')
+  return (
+    <div className="tabular text-xs">
+      <div>{effortSummary(row.effort)}</div>
+      {vs ? (
+        <div
+          className={cn(
+            'text-[11px]',
+            effect ? (vs.verdict === 'fewer' ? 'text-pass' : 'text-fail') : 'text-muted-foreground',
+          )}
+          title={vs.toolsP !== null ? `exact rank test p = ${vs.toolsP.toFixed(3)}` : undefined}
+        >
+          tools {formatRatio(vs.toolsRatio)} vs control · {VERDICT_TEXT[vs.verdict]('tool calls')}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -426,65 +461,88 @@ export function RunPage() {
         />
       </div>
 
-      {record.evals.length === 0 ? (
-        <EmptyState icon={ListFilter} title="No evals ran">
-          This run matched no evals, so there's nothing to show.
-        </EmptyState>
-      ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
-            <div className="rounded-xl border bg-card">
-              <div className="flex items-center justify-between border-b px-3 py-2">
-                <span className="text-sm font-medium">Evals</span>
-                <div className="inline-flex rounded-md bg-muted p-0.5 text-xs">
-                  {(
-                    [
-                      [undefined, 'All'],
-                      ['failed', 'Failing'],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={label}
-                      type="button"
-                      onClick={() =>
-                        navigate({ search: (s) => ({ ...s, show: value }), replace: true })
-                      }
-                      className={cn(
-                        'rounded px-2 py-0.5',
-                        search.show === value ? 'bg-background shadow-sm' : 'text-muted-foreground',
-                      )}
-                    >
-                      {label}
-                    </button>
-                  ))}
+      <Tabs
+        value={search.tab ?? 'evals'}
+        onValueChange={(tab) =>
+          navigate({
+            search: (s) => ({ ...s, tab: tab === 'analysis' ? 'analysis' : undefined }),
+            replace: true,
+          })
+        }
+      >
+        <TabsList>
+          <TabsTrigger value="evals">Evals</TabsTrigger>
+          <TabsTrigger value="analysis">Analysis</TabsTrigger>
+        </TabsList>
+        <TabsContent value="evals" className="mt-4">
+          {record.evals.length === 0 ? (
+            <EmptyState icon={ListFilter} title="No evals ran">
+              This run matched no evals, so there's nothing to show.
+            </EmptyState>
+          ) : (
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+              <aside className="min-w-0 lg:sticky lg:top-20 lg:self-start">
+                <div className="rounded-xl border bg-card">
+                  <div className="flex items-center justify-between border-b px-3 py-2">
+                    <span className="text-sm font-medium">Evals</span>
+                    <div className="inline-flex rounded-md bg-muted p-0.5 text-xs">
+                      {(
+                        [
+                          [undefined, 'All'],
+                          ['failed', 'Failing'],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() =>
+                            navigate({ search: (s) => ({ ...s, show: value }), replace: true })
+                          }
+                          className={cn(
+                            'rounded px-2 py-0.5',
+                            search.show === value
+                              ? 'bg-background shadow-sm'
+                              : 'text-muted-foreground',
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="max-h-[60vh] overflow-y-auto p-1.5 lg:max-h-[calc(100dvh-14rem)]">
+                    {shown.length === 0 ? (
+                      <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                        Nothing failed in this run.
+                      </p>
+                    ) : (
+                      shown.map((node) => (
+                        <TreeRow
+                          key={node.key}
+                          node={node}
+                          depth={0}
+                          selected={selected?.slug}
+                          onSelect={(slug) =>
+                            navigate({ search: (s) => ({ ...s, eval: slug }), replace: true })
+                          }
+                        />
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="max-h-[60vh] overflow-y-auto p-1.5 lg:max-h-[calc(100dvh-14rem)]">
-                {shown.length === 0 ? (
-                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                    Nothing failed in this run.
-                  </p>
-                ) : (
-                  shown.map((node) => (
-                    <TreeRow
-                      key={node.key}
-                      node={node}
-                      depth={0}
-                      selected={selected?.slug}
-                      onSelect={(slug) =>
-                        navigate({ search: (s) => ({ ...s, eval: slug }), replace: true })
-                      }
-                    />
-                  ))
-                )}
-              </div>
+              </aside>
+              <section className="min-w-0 rounded-xl border bg-card p-5">
+                {selected ? <EvalPanel record={record} entry={selected} /> : null}
+              </section>
             </div>
-          </aside>
-          <section className="min-w-0 rounded-xl border bg-card p-5">
-            {selected ? <EvalPanel record={record} entry={selected} /> : null}
+          )}
+        </TabsContent>
+        <TabsContent value="analysis" className="mt-4">
+          <section className="rounded-xl border bg-card p-5">
+            <RunAnalysis runId={runId} />
           </section>
-        </div>
-      )}
+        </TabsContent>
+      </Tabs>
       <p className="text-xs text-muted-foreground">
         Started {timeAgo(record.startedAt)} · artifacts: {record.artifacts} · ES {record.stack.es}
       </p>

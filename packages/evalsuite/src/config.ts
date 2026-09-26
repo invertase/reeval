@@ -43,6 +43,7 @@ const CONFIG_KEYS = [
   'defaultProfile',
   'secrets',
   'debug',
+  'analysis',
 ]
 const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
 const DEFAULTS_KEYS = [
@@ -312,7 +313,38 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     history: { dir: historyDir, artifacts },
     secrets: checkSecrets(user.secrets),
     debug: checkDebug(user.debug),
+    analysis: checkAnalysis(user.analysis),
   }
+}
+
+export const ANALYSIS_DEFAULTS = { maxInputTokens: 20_000 } as const
+
+function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis'] {
+  if (analysis === undefined) return { ...ANALYSIS_DEFAULTS }
+  if (typeof analysis !== 'object' || analysis === null) {
+    throw new UsageError(
+      "config.analysis must be an object like { model: 'google/gemini-3.8-flash' }",
+    )
+  }
+  unknownKey(analysis, ['model', 'instructions', 'maxInputTokens'], 'config.analysis')
+  const { model, instructions, maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens } = analysis
+  if (typeof model === 'string') {
+    const problem = checkModelString(model)
+    if (problem) throw new UsageError(problem.replace('Judge model', 'config.analysis.model'))
+  } else if (model !== undefined && (model as { kind?: string })?.kind !== 'fake-analysis') {
+    throw new UsageError(
+      "config.analysis.model must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash'",
+    )
+  }
+  if (instructions !== undefined && typeof instructions !== 'string') {
+    throw new UsageError('config.analysis.instructions must be a string')
+  }
+  if (!(Number.isInteger(maxInputTokens) && maxInputTokens >= 1000)) {
+    throw new UsageError(
+      `config.analysis.maxInputTokens must be a whole number of at least 1000 (got ${maxInputTokens})`,
+    )
+  }
+  return { ...analysis, maxInputTokens }
 }
 
 /** Runs whose local debug data `.es/debug` keeps, and the trace buffer per attempt. */

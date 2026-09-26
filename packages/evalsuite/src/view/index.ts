@@ -11,8 +11,10 @@ export type {
   StackSummary,
 } from '../history/types.ts'
 export type { Outcome, TranscriptEvent } from '../types.ts'
+export * from './analysis.ts'
 export * from './compare.ts'
 export * from './debug.ts'
+export * from './effort.ts'
 export { runHeader } from './header.ts'
 export * from './model.ts'
 export * from './paths.ts'

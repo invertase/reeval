@@ -41,7 +41,7 @@ const recorded = (config: ResolvedConfig) => listRuns(config.root, config.histor
 const scratch = (config: ResolvedConfig) => listRuns(config.root, scratchDir(config.root), false)
 
 /** Recorded runs plus scratch runs that weren't recorded, sorted by run id. */
-async function allRuns(config: ResolvedConfig): Promise<HistoryEntry[]> {
+export async function allRuns(config: ResolvedConfig): Promise<HistoryEntry[]> {
   const kept = await recorded(config)
   const ids = new Set(kept.map((e) => e.runId))
   return [...kept, ...(await scratch(config)).filter((e) => !ids.has(e.runId))].sort((a, b) =>
@@ -49,14 +49,14 @@ async function allRuns(config: ResolvedConfig): Promise<HistoryEntry[]> {
   )
 }
 
-async function lines(root: string, args: string[]): Promise<string[] | null> {
+export async function lines(root: string, args: string[]): Promise<string[] | null> {
   const r = await git(root, args)
   if (r.code !== 0) return null
   return r.stdout.toString('utf8').split('\n').filter(Boolean)
 }
 
 /** Commits reachable from HEAD; null when git can't tell (no repo, or a shallow clone). */
-async function reachability(root: string): Promise<Reachability> {
+export async function reachability(root: string): Promise<Reachability> {
   const shallow = await lines(root, ['rev-parse', '--is-shallow-repository'])
   if (!shallow || shallow[0] === 'true') return null
   const shas = await lines(root, ['rev-list', '--max-count=20000', 'HEAD'])

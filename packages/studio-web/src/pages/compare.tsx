@@ -4,6 +4,7 @@ import {
   type CompareStatus,
   type CompareViewRow,
   compareView,
+  effortChangeLabel,
   formatPercent,
   type HistoryEntry,
   shortSha,
@@ -109,6 +110,10 @@ function Delta({
   )
 }
 
+const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
+const liftShort = (l: CompareViewRow['perCell'][number]['base']['lift']) =>
+  l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.withinNoise ? ' noise' : ''}` : '–'
+
 const formatScore = (n: number) => n.toFixed(2)
 const formatRate = (n: number) => formatPercent(n)
 
@@ -143,6 +148,24 @@ function Row({ row, head }: { row: CompareViewRow; head: string }) {
             {row.cells.added.length ? ` · added ${row.cells.added.join(', ')}` : ''}
             {row.cells.removed.length ? ` · removed ${row.cells.removed.join(', ')}` : ''}
           </div>
+        ) : null}
+        {row.perCell.length ? (
+          <ul className="mt-1.5 space-y-0.5 text-[11px] text-muted-foreground">
+            {row.perCell.map((c) => (
+              <li key={c.key} className="tabular">
+                <span className="font-mono">{c.key}</span>
+                {c.base.lift || c.head.lift ? (
+                  <>
+                    {' · lift '}
+                    {liftShort(c.base.lift)} → {liftShort(c.head.lift)}
+                  </>
+                ) : null}
+                {c.base.effort && c.head.effort ? (
+                  <> · {effortChangeLabel(c.base.effort, c.head.effort)}</>
+                ) : null}
+              </li>
+            ))}
+          </ul>
         ) : null}
       </TableCell>
       <TableCell>
@@ -205,8 +228,9 @@ export function ComparePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Compare runs</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          What flipped between two runs, with pass-rate and judge-score deltas. Uses the same rules
-          as <code className="font-mono text-xs">es compare</code>.
+          What flipped between two runs, with pass-rate and judge-score deltas, and each cell's lift
+          and effort (tool calls, agent time). Uses the same rules as{' '}
+          <code className="font-mono text-xs">es compare</code>.
         </p>
       </div>
 

@@ -1,6 +1,6 @@
 // `evalsuite/judge`: judge helpers and types. Models are `'provider/model'` strings or AI SDK
 // evaluation model objects, e.g. `openai.evaluationModel('…')`.
-import type { FakeJudgeModel } from './types.ts'
+import type { FakeAnalysisModel, FakeJudgeModel } from './types.ts'
 
 /** A judge that always returns `score`, without calling a model. For tests and dry runs. */
 export const fakeJudge = ({ score = 1 }: { score?: number } = {}): FakeJudgeModel => ({
@@ -8,9 +8,24 @@ export const fakeJudge = ({ score = 1 }: { score?: number } = {}): FakeJudgeMode
   score,
 })
 
+/**
+ * An analysis model for tests: `es analyze` gets `output` (or `output(digest)`) back as the
+ * model's structured answer, through the same parsing and validation as a real one.
+ */
+export const fakeAnalysis = ({
+  output,
+}: {
+  output: FakeAnalysisModel['output']
+}): FakeAnalysisModel => ({
+  kind: 'fake-analysis',
+  output,
+})
+
 export { DEFAULT_THRESHOLD, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
 export type {
+  AnalysisConfig,
   ConfigJudgeOptions,
+  FakeAnalysisModel,
   FakeJudgeModel,
   JudgeCallOptions,
   JudgeModel,

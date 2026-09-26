@@ -2,6 +2,7 @@ import { existsSync, lstatSync } from 'node:fs'
 import { cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { scratchDir } from '../history/files.ts'
+import { type AnalysisIndex, analysisDataPath, sortAnalyses } from '../view/analysis.ts'
 import { indexFiles, type StudioInfo } from '../view/model.ts'
 import { recordPath, studioPath } from '../view/paths.ts'
 import { listHeaders, type StudioSource } from './source.ts'
@@ -69,8 +70,18 @@ export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
     await mkdir(dirname(join(out, path)), { recursive: true })
     await writeFile(join(out, path), JSON.stringify(body))
   }
+  const { listAnalyses } = await import('../analysis/files.ts')
   for (const header of headers) {
     const dir = header.recorded ? source.historyDir : scratchDir(source.root)
+    const saved = header.recorded
+      ? await listAnalyses(source.root, [source.historyDir], header.runId, false)
+      : []
+    if (saved.length) {
+      const index: AnalysisIndex = { runId: header.runId, entries: sortAnalyses(saved) }
+      const file = join(out, analysisDataPath(header.runId))
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, JSON.stringify(index))
+    }
     const target = join(out, recordPath(header.runId))
     await mkdir(dirname(target), { recursive: true })
     await cp(join(dir, `${header.runId}.json`), target)
