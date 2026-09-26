@@ -432,7 +432,15 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'egress',
     area: 'Sandbox',
-    name: 'Egress policies (sandbox-docker; no public option yet)',
+    name: '`egress`: allowlist or deny-all, enforced in Docker and recorded per attempt',
+    fixtures: [
+      'egress/allowed-host-reachable',
+      'egress/blocked-host-recorded',
+      'egress/deny-all',
+      'egress/secret-hosts-allowed',
+      'egress/harness-under-deny-all',
+    ],
+    plan: ['egress/cascade', 'egress/profile-defaults'],
     tests: [
       sandboxDocker('docker', 'allowlist: a listed host gets 200'),
       sandboxDocker('docker', 'no direct route: custom and deny-all'),
