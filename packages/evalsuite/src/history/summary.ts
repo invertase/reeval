@@ -1,5 +1,6 @@
 import { clip, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
+import { cellContrast, effortLabel } from '../view/effort.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
 
@@ -54,6 +55,9 @@ export function cellCounts(e: EvalEntry): string {
         c.gate === 'none' ? 'not gated' : '',
         c.gate !== 'all' && c.gate !== 'none' ? `gate ${gateLabel(c.gate)}` : '',
         c.lift ? liftLabel(c.lift) : '',
+        ...[cellContrast(e, c.key)].flatMap((effort) =>
+          effort ? [`effort ${effortLabel(effort)}`] : [],
+        ),
         c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
       ].filter(Boolean)
       return `${c.key} ${c.pass}/${c.pass + c.fail}${notes.length ? ` (${notes.join(', ')})` : ''}`

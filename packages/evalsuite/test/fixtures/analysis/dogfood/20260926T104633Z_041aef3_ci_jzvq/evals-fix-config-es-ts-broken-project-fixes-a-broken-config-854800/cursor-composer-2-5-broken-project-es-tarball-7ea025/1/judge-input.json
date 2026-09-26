@@ -1,0 +1,10 @@
+[
+ {
+  "question": "Pass only if the final message names all three mistakes correctly: compare cannot be set in es.config.ts (it goes on the group or eval); environment takes one environment, not a list, and there is no baseline export (compare against the inherited environment instead); and the option is runs, not repeat.",
+  "model": "google/gemini-3.8-flash",
+  "state": {
+   "task": "This is an ES project (ES is an eval runner for coding agents; npm package @invertase/foobar, CLI `es`, already installed). `npx es run --dry-run` fails. Fix es.config.ts and the evals so the plan is what the author meant: the docs eval compares no environment against the with-docs environment, 3 runs per cell, on the fake harness. Then list each mistake you fixed, one line each.",
+   "output": "Fixed. `npx es run --dry-run` now succeeds with the intended plan: 1 eval, 2 cells (control vs `with-docs`), 3 runs each, 6 attempts on the fake harness.\n\n**Mistakes fixed:**\n\n1. **`compare` was in `es.config.ts`** — ES forbids top-level compare because it would apply to every eval; it belongs on the eval that asks the question.\n2. **`environment: [baseline, withDocs]` treated compare as an environment list** — `environment` accepts one environment only; A/B comparison uses `compare`.\n3. **`baseline` was unnecessary** — with no inherited environment, the control is already empty (no docs); explicit `baseline` added nothing.\n4. **`repeat: 3` instead of `runs: 3`** — the option is `runs` (attempts per cell); `repeat` is only an alias and the author meant `runs`.\n5. **`withDocs` import in `es.config.ts`** — only needed on the eval, not in config, once `compare` moved off config."
+  }
+ }
+]

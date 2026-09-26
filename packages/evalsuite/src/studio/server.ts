@@ -7,6 +7,7 @@ import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
 import { attemptDebugDir, parseAttemptKey } from '../debug/files.ts'
+import { type AnalysisIndex, sortAnalyses } from '../view/analysis.ts'
 import {
   DEBUG_LOG,
   type DebugRequest,
@@ -220,6 +221,12 @@ export function createStudioApp(options: StudioServerOptions) {
         const body = files.get(path)
         if (body === undefined) return c.json([], 200, noStore)
         return c.json(body, 200, noStore)
+      }
+      if (target.kind === 'analysis') {
+        const { listAnalyses } = await import('../analysis/files.ts')
+        const entries = await listAnalyses(source.root, [source.historyDir], target.runId, true)
+        const index: AnalysisIndex = { runId: target.runId, entries: sortAnalyses(entries) }
+        return c.json(index, 200, noStore)
       }
       const file = await resolveFile(source, target)
       if (!file) return c.text('Not found', 404)

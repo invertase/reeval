@@ -15,6 +15,14 @@ export type CompareRow = {
    * `status`, `base` and `head` are over the cells both have.
    */
   cells?: { added: string[]; removed: string[] }
+  /** Cells in both runs, with each side's lift (variants) and effort. */
+  perCell?: CompareCell[]
+}
+
+export type CompareCell = {
+  key: string
+  base: Pick<HistoryCell, 'lift' | 'effort' | 'pass' | 'fail'>
+  head: Pick<HistoryCell, 'lift' | 'effort' | 'pass' | 'fail'>
 }
 
 export type StackChange = {
@@ -201,6 +209,21 @@ function sharedScope(b: ComparableEval, h: ComparableEval) {
   }
 }
 
+/** Cells in both runs that have something to compare: a lift or effort on either side. */
+function compareCells(base: ComparableEval, head: ComparableEval): CompareCell[] {
+  const pick = (c: ComparableEval['cells'][number]) => ({
+    ...(c.lift ? { lift: c.lift } : {}),
+    effort: c.effort ?? null,
+    pass: c.pass,
+    fail: c.fail,
+  })
+  return (head.cells ?? []).flatMap((h) => {
+    const b = base.cells?.find((c) => c.key === h.key)
+    if (!b || !(b.lift || h.lift || (b.effort && h.effort))) return []
+    return [{ key: h.key, base: pick(b), head: pick(h) }]
+  })
+}
+
 export function compare(base: Comparable, head: Comparable): CompareRow[] {
   const graderChanged = stackChanges(base, head).some((c) => c.outsideFingerprint)
   const ids = [...new Set([...head.evals.map((e) => e.id), ...base.evals.map((e) => e.id)])]
@@ -213,6 +236,8 @@ export function compare(base: Comparable, head: Comparable): CompareRow[] {
     const row: Omit<CompareRow, 'status'> = scoped
       ? { id, ...scoped }
       : { id, base: b.outcome, head: h.outcome }
+    const perCell = compareCells(b, h)
+    if (perCell.length) row.perCell = perCell
     if (row.base === 'infra_error' || row.head === 'infra_error') return { ...row, status: 'infra' }
     if (b.fingerprint !== h.fingerprint && !scoped) {
       return { ...row, status: 'drift', changes: whyChanged(b, h) }

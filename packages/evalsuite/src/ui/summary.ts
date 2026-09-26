@@ -1,6 +1,7 @@
 import { gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
+import { cellContrast, effortLabel } from '../view/effort.ts'
 import type { Colors } from './colors.ts'
 import type { EsEvent, EvalResult } from './events.ts'
 import { attemptOutcome, failureLines, formatDuration, mark, type Outcome } from './format.ts'
@@ -96,6 +97,8 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     const rows = [
       `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  ${pct(cell.passRate)}${note}${infra}`,
     ]
+    const effort = cellContrast(e, cell.key)
+    if (effort) rows.push(`${indent}  ${c.dim(`effort: ${effortLabel(effort)}`)}`)
     if (cell.overrides.length) {
       rows.push(`${indent}  ${c.dim(`overrides: ${cell.overrides.join(', ')}`)}`)
     }

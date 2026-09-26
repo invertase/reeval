@@ -1,9 +1,16 @@
 import { formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
-import { type CompareRow, type CompareStatus, cellsChanged, stackChanges } from '../view/compare.ts'
+import {
+  type CompareCell,
+  type CompareRow,
+  type CompareStatus,
+  cellsChanged,
+  stackChanges,
+} from '../view/compare.ts'
+import { effortChangeLabel } from '../view/effort.ts'
 import { warnings } from './state.ts'
 import { cellCounts, OUTCOME_MARK, repeatsVerdict, stateRows, summaryCounts } from './summary.ts'
-import type { HistoryEntry, RunRecord } from './types.ts'
+import type { HistoryCell, HistoryEntry, RunRecord } from './types.ts'
 
 export {
   type CompareRow,
@@ -186,6 +193,8 @@ export function formatCompare(
   const tally = `${count('regressed')} regressed · ${count('fixed')} fixed · ${count('drift')} not comparable · ${count('same')} same`
   const changes = stackChanges(base, head)
   const changeText = changes.map((c) => `${c.label} ${c.base} → ${c.head}`).join('; ')
+  const esc = (s: string) => s.replace(/\|/g, '\\|')
+  const cells = sorted.flatMap((r) => (r.perCell ?? []).map((c) => ({ row: r, cell: c })))
   if (md) {
     return [
       `### ES: ${head.runId} vs ${base.runId}`,
@@ -197,9 +206,20 @@ export function formatCompare(
       '|---|---|---|---|',
       ...sorted.map(
         (r) =>
-          `| ${r.id.replace(/\|/g, '\\|')} | ${mark(r.base)} | ${mark(r.head)} | ${STATUS_LABEL[r.status]}${why(r)} |`,
+          `| ${esc(r.id)} | ${mark(r.base)} | ${mark(r.head)} | ${STATUS_LABEL[r.status]}${why(r)} |`,
       ),
       '',
+      ...(cells.length
+        ? [
+            '| Eval | Cell | Lift, base → head | Effort, base → head |',
+            '|---|---|---|---|',
+            ...cells.map(
+              ({ row, cell }) =>
+                `| ${esc(row.id)} | ${esc(cell.key)} | ${liftChange(cell)} | ${effortChange(cell)} |`,
+            ),
+            '',
+          ]
+        : []),
     ].join('\n')
   }
   return [
@@ -207,12 +227,22 @@ export function formatCompare(
     tally,
     ...(changes.length ? [`stack changed: ${changeText}`] : []),
     '',
-    ...sorted.map(
-      (r) =>
-        `  ${mark(r.base)} → ${mark(r.head)}  ${STATUS_LABEL[r.status].padEnd(24)}  ${r.id}${why(r)}`,
-    ),
+    ...sorted.flatMap((r) => [
+      `  ${mark(r.base)} → ${mark(r.head)}  ${STATUS_LABEL[r.status].padEnd(24)}  ${r.id}${why(r)}`,
+      ...(r.perCell ?? []).map(
+        (c) =>
+          `      ${c.key}  ${[c.base.lift || c.head.lift ? `lift ${liftChange(c)}` : '', effortChange(c)].filter(Boolean).join(' · ')}`,
+      ),
+    ]),
   ].join('\n')
 }
+
+const liftShort = (l: NonNullable<HistoryCell['lift']> | undefined) =>
+  l ? `${signed(l.points)} (${signed(l.lo)}…${signed(l.hi)})${l.withinNoise ? ' noise' : ''}` : '–'
+const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
+const liftChange = (c: CompareCell) => `${liftShort(c.base.lift)} → ${liftShort(c.head.lift)}`
+const effortChange = (c: CompareCell) =>
+  c.base.effort && c.head.effort ? effortChangeLabel(c.base.effort, c.head.effort) : 'effort –'
 
 export function formatShow(run: RunRecord): string {
   const rows = stateRows(run)

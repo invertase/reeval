@@ -1,4 +1,5 @@
 import type { HistoryEntry, RunRecord } from '../history/types.ts'
+import { cellEffort } from './effort.ts'
 
 /** The derived header of one run: what listings, indexes and comparisons need without the record. */
 export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
@@ -63,6 +64,7 @@ export function runHeader(record: RunRecord, recorded: boolean): HistoryEntry {
         skipped: c.skipped,
         passRate: c.passRate,
         outcome: c.outcome,
+        effort: cellEffort(e, c.key),
         ...(c.lift
           ? {
               lift: {

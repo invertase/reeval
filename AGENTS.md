@@ -52,7 +52,10 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`), Claude Code (`@ai-sdk/harness-claude-code`) and Antigravity (`@evalsuite/harness-antigravity`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/debug` | Local debug data: each attempt's trace on the worker (`attempt.ts`: debug.log, requests, the capped trace buffer, reached through async context), docker commands into it (`docker.ts`), and `.es/debug`'s layout, retention and `es clean` (`files.ts`) |
-| `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models |
+| `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models, effort (`effort.ts`) and the analysis document (`analysis.ts`) |
+| `packages/evalsuite/src/history/facts.ts` | The derived facts behind `es query effort`, `factor_effects`, `flaky_cells` and `drift`, computed at sync |
+| `packages/evalsuite/src/analysis` | `es analyze`: the digest, the schema and prompt, the model call, validation, rendering, and the cache and saved files |
+| `packages/evalsuite/src/cli-spec.ts` | Every command and flag as data: `es` parses from it and `es analyze` checks verify commands against it |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures) and `plan/` (plan snapshots) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
@@ -720,6 +723,9 @@ es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.
                           (default dir: .es/checkouts/<run>)
 es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db)
                           --json --schema --rebuild
+es analyze [run]          One LLM reading of a run (vs its nearest recorded ancestor) over a
+                          digest of its facts, with citations and commands checked (see Analysis)
+                          --vs <run> --eval <filter> --save --context --dry-run --json --md --no-cache
 es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
                           --port <n> (4984) --host <addr> --open --no-scratch --no-token
 es studio build           Write the studio as a static site: --out <dir> (studio-dist)
@@ -792,7 +798,9 @@ one attempt's lines even when several run at once. Prefixes are coloured when co
 
 Plain output ends with a summary: the evals as a file › group tree with outcome, duration,
 lowest judge score and turns (or, for evals with several attempts, the pass count and rate and
-a row per cell with its pass rate, its role, and each variant's lift over its control); then the failing attempts grouped
+a row per cell with its pass rate, its role, and each variant's lift over its control, with its
+effort under it: median tool calls and agent time against the control's, and the rank test's
+verdict, e.g. `effort: tools 5 vs 43 (×0.11), agent 21s vs 46s (×0.47): too few attempts to test`); then the failing attempts grouped
 by kind (judge verdicts, assertions with Vitest's diff and code frame, timeouts, the tail of
 infra errors, cancelled), each with its artifact directory; then totals and the results path.
 Cost appears when the harness reports it (Cursor doesn't). The [README](./README.md#run-it) has
@@ -979,17 +987,86 @@ The views answer the common questions:
 | View | One row per |
 |---|---|
 | `lift` | variant cell per run: its control, both sides' counts, points, the 95% interval (`lo`, `hi`), `within_noise` |
-| `flaky_cells` | cell and fingerprint whose attempts disagreed within a run: how often, first and last seen |
-| `drift` | run where a cell's fingerprint changed from its previous run, with the parts that changed (`sources`, `harness`, `environment`, `image`, `agent_cli`, `judge`, `context`) |
+| `effort` | cell per run: `n`, median and quartiles of tool calls and agent seconds, file edits; for a variant, its control's medians, `tools_ratio`, the exact Mann–Whitney `tools_p`, `separated` and a `verdict` (below) |
+| `factor_effects` | contrast of one factor (`environment`, `harness`, `model`; `sandbox` too when not measured) by evidence `tier`: `controlled` (two cells in one run and eval), `pooled` (the same contrast over comparable runs, per eval and then across evals as strata), `observed` (a cell between two runs where fingerprint parts changed; `confounded` when several did) or `not_measured` (one level). Pass counts, `points`/`lo`/`hi` (Newcombe), `pass_verdict`, per-stratum `tools_ratios`, `consistent` strata and `effort_verdict` |
+| `skill_reads` | attempt and skill its environment placed: `read_line`, the transcript line of its first tool call on `skills/<name>/`, and how many |
+| `flaky_cells` | cell with mixed outcomes pooled over comparable runs (fingerprints equal once agent runtime state is left out): counts, a Wilson interval, `verdict` `flaky` from 6 counted attempts, else `insufficient`, and a `cause` (`infra`, `judge` when a failing score is within 0.1 of its threshold, else `agent`) |
+| `drift` | run where a cell's fingerprint changed from its previous run, with the parts that changed (`sources`, `harness`, `environment`, `image`, `agent_cli`, `judge`, `context`), the context paths that differ, and `noise = 1` when only an agent CLI's own runtime state changed (then `real_changed` is null) |
 | `failing_attempts` | failed attempt and skill of its environment (joined by digest), with its harness, model and error |
 | `eval_trend` | eval per run: outcome, pass rate, branch, PR and fingerprint |
 | `verdict_flips` | judge question per cell whose pass rate changed from its previous run |
 
 The tables (`runs`, `evals`, `cells`, `attempts`, `judgements`, `environments`, `env_skills`,
 `artifacts`) mirror the record, and join on `run_id`, `eval_key`, `cell_key` and
-`environment_digest`. Rows print as an aligned table, or as JSON with `--json`; the sync
+`environment_digest`. `attempts.last_text` is the final message (2 KB), `judgements.input_path`
+the judge input's artifact path, `cells.comparable` the fingerprint results pool on,
+`attempt_context` each attempt's context files (`runtime = 1` for a CLI's own state), and
+`tool_calls` every tool call in each kept transcript (`line` in `transcript.jsonl`, `tool`,
+`target`, `ok`). `effort`, `factor_effects`, `flaky_cells` and `drift` are computed in TypeScript
+at sync (SQLite has no rank test) and every verdict is a fixed rule: a pass-rate effect needs the
+95% interval to exclude 0; an effort effect (`fewer` or `more`) needs p < 0.05, and pooled across
+evals, the same verdict in at least 2/3 of strata; `insufficient` means the attempt counts can't
+reach p < 0.05 at all (2 against 2 can't, 4 against 4 can). Rows print as an aligned table, or as JSON with `--json`; the sync
 summary goes to stderr, so output pipes cleanly. `--rebuild` rebuilds the database from the
 records.
+
+### Analysis
+
+`es analyze` explains a run in plain words: what happened, what the numbers mean, why, and what
+to change. The facts come from ES (the views above, computed deterministically); one structured
+LLM call explains and ranks them, and ES checks the answer before showing it.
+
+```bash
+es analyze                      # latest vs its nearest recorded ancestor
+es analyze latest --vs latest~2 --eval fix-config
+es analyze --dry-run            # the digest's size and the cache key; no call
+es analyze --context            # the digest and rules as Markdown, for your own coding agent (no key)
+es analyze latest --save        # also write it into the run's history folder, to commit
+```
+
+1. **Digest** (digest version 1): the runs, an attempts table with short ids
+   (`r2/fix-config/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects
+   by tier, skill reads, saturation, the judge's scores, failures, flaky cells, drift, the compare)
+   and evidence chosen by rule (`E1…`: each failing attempt's final message and judge question
+   and failing check tails, a failed verdict's passing twin, and the first tool calls of the
+   median attempts of a contrasting cell pair), with transcript lines as `L<n>`. It's capped at
+   `analysis.maxInputTokens` (default 20000, as characters ÷ 4) by dropping evidence, lowest
+   priority first. The verdict rules go with it: the model is told the verdicts, not asked.
+2. **Call**: `generateText` with a schema (TL;DR, what happened, results, why, anomalies, at most 5
+   actions with target, change, expected effect, verify command, impact and effort, confidence),
+   temperature 0.2, prompt version `analysis-v1`.
+3. **Validation**: a claim, anomaly or action with no citation that names something in the digest
+   (a fact, evidence item, `E<n>:L<line>` the evidence shows, attempt id, or
+   `<attempt id>:check<n>`) is dropped, and so is one whose quote isn't in its cited evidence.
+   Numbers no cited fact holds are flagged. Each verify command must parse as ES's CLI, with only
+   that command's flags (`src/cli-spec.ts`, which `es` parses its own arguments from); one that
+   doesn't is rejected and shown as such. The counts are in the footer and in `validation`.
+4. **Storage**: every analysis is cached in `.es/analysis/<key>.json` (gitignored), keyed by the
+   scope, the digest's hash, the prompt version and the model; the same inputs never call the
+   model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<UTC stamp>_<author>_<hash8>.json`
+   and a `.md` twin into the history folder, create-only and after the secret scan: the record
+   is never touched, two teammates who save never conflict, and a second save of the same
+   analysis is refused. Only recorded runs can be saved into.
+
+```ts
+export default defineConfig({
+  judge: { model: 'typesafe-ai/jev-1.13.0' },
+  analysis: {
+    model: 'google/gemini-3.8-flash', // a language model; default: the judge's, when it is one
+    instructions: 'Fewer tool calls count as a win. The skill under test is es-good.',
+    maxInputTokens: 20_000,         // the digest's cap
+    maxOutputTokens: 8_000,         // the answer's cap
+  },
+})
+```
+
+The model is routed like the judge: `GOOGLE_GENERATIVE_AI_API_KEY` for `google/*` goes direct,
+else `AI_GATEWAY_API_KEY` (or `VERCEL_OIDC_TOKEN`) through the AI Gateway. Evaluation models
+(`typesafe-ai/*`) score yes/no questions and can't write an analysis, so they exit 2, as does a
+missing key; both messages point at `--context`. `fakeAnalysis({ output })` from
+`evalsuite/judge` answers with canned output (or `output(digest)`) through the same parsing and
+validation, for tests. ES has no prices, so the caps are tokens, not dollars: `maxInputTokens`
+bounds the digest and `maxOutputTokens` the answer, and the footer shows the tokens used and no cost.
 
 ### Transcripts
 
@@ -1016,8 +1093,10 @@ diff, checks, judge) and activity counts, and `summary.md` quotes each eval's la
 ### Studio
 
 `es studio` opens the history in a browser: runs (commit, branch, author or CI, pass counts, cost,
-duration, drift), a run's eval tree with per-cell pass rates, roles and lift, one eval across runs, a
-compare of two runs, and each attempt's transcript, diff, checks, judge input and state. It
+duration, drift), a run's eval tree with per-cell pass rates, roles, lift and effort, one eval
+across runs, a compare of two runs (each cell's lift and effort, base → head), each attempt's
+transcript, diff, checks, judge input and state, and a run's **Analysis** tab: its saved
+analyses and, in `es studio`, cached ones, read-only, with citations linking to attempts. It
 listens on `127.0.0.1:4984` (or the next free port) and prints a URL with a session token; new
 runs appear as they're recorded, and unrecorded runs from `.es/runs/` are labelled scratch.
 A run's `drift` badge compares each cell with the last run that had it (its fingerprint, image,
@@ -1035,7 +1114,8 @@ a static build never includes it, and runs without local data (another machine's
 show no tab.
 
 Both modes read one file layout: `studio.json`, `data/index/<YYYY-MM>.json` run headers,
-`data/runs/<runId>.json` records and `data/runs/<runId>/…` artifacts.
+`data/runs/<runId>.json` records, `data/runs/<runId>/…` artifacts and `data/analysis/<runId>.json`
+analyses (saved ones only in a static build).
 
 ### What a record captures
 

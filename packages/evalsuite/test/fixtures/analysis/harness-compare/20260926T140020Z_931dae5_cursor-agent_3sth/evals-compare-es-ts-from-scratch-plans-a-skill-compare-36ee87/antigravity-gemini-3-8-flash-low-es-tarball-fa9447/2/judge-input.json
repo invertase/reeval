@@ -1,0 +1,10 @@
+[
+ {
+  "question": "Pass only if the house-style variant is made with defineEnvironment and skill.local, compare is set on the group or eval (not in es.config.ts), runs is 2, and the eval checks the greeting with a deterministic assertion.",
+  "model": "google/gemini-3.8-flash",
+  "state": {
+   "task": "ES (Eval Suite) is an eval runner for coding agents: npm package @invertase/foobar, CLI `es`. This version isn't on the npm registry: install it from the tarball /opt/es/invertase-foobar.tgz. There's no Docker and no API key in here, so use ES's fake harness, fake sandbox and fake judge. This folder is empty. Set up ES and write evals/greet.es.ts: one eval that measures whether a skill helps an agent greet people in our house style. It runs twice per cell, comparing no skill against a variant environment named house-style that gives the agent the local skill skills/house-style (write its SKILL…",
+   "output": "ES has been set up with the fake harness, fake sandbox, and fake judge.\n\n### Summary of Changes\n\n1. **Package Installation**: Initialized `package.json` and installed `@invertase/foobar` from `/opt/es/invertase-foobar.tgz`.\n2. **Configuration ([es.config.ts](file:///es/workspace/es.config.ts))**: Configured ES using `fakeHarness`, `fakeSandbox`, and `fakeJudge`.\n3. **Skill Definition ([skills/house-style/SKILL.md](file:///es/workspace/skills/house-style/SKILL.md))**: Created the `house-style` skill instructing the agent that greetings are `\"Ahoy, <name>!\"`.\n4. **Eval Suite ([evals/greet.es.ts](file:///es/workspace/evals/greet.es.ts))**: Defined `house-style` environment pointing to the local skill and created an eval running twice per cell (`runs: 2`) comparing no skill against the `house-style` variant.\n\n### Verification\n\nRunning `npx es run --dry-run` confirms:\n```\nplan  1 eval · 2 cells · 4 attempts · ~4s serial (~1s at concurrency 4)\neval                                      harnesses  variants  runs  attempts  notes\nevals/greet.es.ts › greet in house style  1          1         2     4\n```\n"
+  }
+ }
+]

@@ -5,6 +5,7 @@ import { createRequire } from 'node:module'
 import { join, relative, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
+import { parseOptions } from './cli-spec.ts'
 import {
   hostCapacity,
   loadConfig,
@@ -29,7 +30,15 @@ import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
 import { runOutcome } from './view/model.ts'
 
-const HISTORY_COMMANDS = { record: 1, history: 1, show: 1, compare: 1, checkout: 1, query: 1 }
+const HISTORY_COMMANDS = {
+  record: 1,
+  history: 1,
+  show: 1,
+  compare: 1,
+  checkout: 1,
+  query: 1,
+  analyze: 1,
+}
 
 const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
 
@@ -75,9 +84,18 @@ Usage:
   es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
                             (default dir: .es/checkouts/<run>)
   es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
-                            rebuilt from the records); views: lift, flaky_cells, drift,
-                            failing_attempts, eval_trend, verdict_flips. No argument lists them
+                            rebuilt from the records); views: lift, effort, factor_effects,
+                            skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
+                            verdict_flips. No argument lists them
     --json                  Rows as JSON; --schema every table and column; --rebuild from scratch
+  es analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
+                            nearest recorded ancestor), citations and commands checked; cached
+                            in .es/analysis (model: config.analysis.model)
+    --vs <run>              The run to compare with; --eval <filter> only matching evals
+    --save                  Also write it into the run's history folder: <run>/analysis/
+    --context               Print the digest and rules for your own coding agent (no key, no call)
+    --dry-run               Print the digest's size and the cache key, without calling the model
+    --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again
   es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
     --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
     --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
@@ -103,47 +121,7 @@ const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COL
 let interrupted = false
 
 function parse(argv: string[]) {
-  return parseArgs({
-    args: argv,
-    allowPositionals: true,
-    options: {
-      config: { type: 'string', default: 'es.config.ts' },
-      help: { type: 'boolean', short: 'h' },
-      version: { type: 'boolean' },
-      verbose: { type: 'boolean', short: 'v', multiple: true },
-      trace: { type: 'boolean' },
-      keep: { type: 'string' },
-      json: { type: 'boolean' },
-      md: { type: 'boolean' },
-      all: { type: 'boolean' },
-      record: { type: 'boolean' },
-      artifacts: { type: 'string' },
-      'allow-incomplete': { type: 'boolean' },
-      'skip-secret-scan': { type: 'boolean' },
-      limit: { type: 'string' },
-      'fail-on-regression': { type: 'boolean' },
-      runs: { type: 'string' },
-      profile: { type: 'string' },
-      'dry-run': { type: 'boolean' },
-      force: { type: 'boolean' },
-      concurrency: { type: 'string' },
-      ui: { type: 'string' },
-      'log-order': { type: 'string' },
-      'log-prefix': { type: 'string' },
-      'output-logs': { type: 'string' },
-      tag: { type: 'string', multiple: true },
-      port: { type: 'string' },
-      host: { type: 'string' },
-      open: { type: 'boolean' },
-      out: { type: 'string' },
-      scratch: { type: 'boolean' },
-      'no-scratch': { type: 'boolean' },
-      'no-token': { type: 'boolean' },
-      'no-artifacts': { type: 'boolean' },
-      schema: { type: 'boolean' },
-      rebuild: { type: 'boolean' },
-    },
-  })
+  return parseArgs({ args: argv, allowPositionals: true, options: parseOptions() })
 }
 
 async function run(argv: string[]): Promise<number> {
@@ -188,6 +166,11 @@ async function run(argv: string[]): Promise<number> {
       case 'query': {
         const { queryCommand } = await import('./query.ts')
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
+      }
+      case 'analyze': {
+        loadEnvFiles(process.cwd())
+        const { analyzeCommand } = await import('./analysis/command.ts')
+        return analyzeCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
     }
   }

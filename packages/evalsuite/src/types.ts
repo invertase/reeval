@@ -521,6 +521,25 @@ export type Profile = {
   tags?: string[]
 }
 
+/** A canned analysis for tests; see `fakeAnalysis()` in `evalsuite/judge`. */
+export type FakeAnalysisModel = {
+  kind: 'fake-analysis'
+  /** The model's structured answer, or a function of the digest it was given. */
+  output: unknown | ((digest: unknown) => unknown)
+}
+
+/** `es analyze`: a language model (not an evaluation model) and what matters in this project. */
+export type AnalysisConfig = {
+  /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
+  model?: string | FakeAnalysisModel
+  /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is es-good." */
+  instructions?: string
+  /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
+  maxInputTokens?: number
+  /** The most tokens the model may answer with (default 8000). ES has no prices, so tokens are the cap. */
+  maxOutputTokens?: number
+}
+
 export type EsConfig = {
   include?: string[]
   harness?: HarnessDescriptor | HarnessDescriptor[]
@@ -549,6 +568,7 @@ export type EsConfig = {
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
+  analysis?: AnalysisConfig
 }
 
 /** What a `defineConfig` callback gets: the environment helpers plus the run's context. */
@@ -598,6 +618,7 @@ export type ResolvedConfig = {
   defaultProfile: { ci?: string; local?: string }
   secrets: { unbrokered: 'warn' | 'error' }
   debug: { keep: number; traceBufferBytes: number }
+  analysis: AnalysisConfig & { maxInputTokens: number; maxOutputTokens: number }
 }
 
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'

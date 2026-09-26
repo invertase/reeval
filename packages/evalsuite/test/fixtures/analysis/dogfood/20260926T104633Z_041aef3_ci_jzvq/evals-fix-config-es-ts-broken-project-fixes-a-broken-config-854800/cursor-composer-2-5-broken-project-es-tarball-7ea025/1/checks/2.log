@@ -1,0 +1,39 @@
+[answers#1 control]  +0:00 turn 1 done 5ms · 0 tool calls, 1 file edit
+[answers#1 with-docs]  +0:00 turn 1 done 10ms · 0 tool calls, 1 file edit
+[answers#3 control]  +0:00 cleaning up
+[answers#2 control]  +0:00 cleaning up
+[answers#1 with-docs]  +0:00 cleaning up
+[answers#1 control]  +0:00 cleaning up
+[answers#2 control] ✓ evals/docs.es.ts › answers from the docs  91ms
+[answers#3 control] ✓ evals/docs.es.ts › answers from the docs  91ms
+[answers#1 with-docs] ✓ evals/docs.es.ts › answers from the docs  91ms
+[answers#2 with-docs] ▶ evals/docs.es.ts › answers from the docs
+[answers#2 with-docs]  +0:00 sandbox starting
+[answers#3 with-docs] ▶ evals/docs.es.ts › answers from the docs
+[answers#3 with-docs]  +0:00 sandbox starting
+[answers#1 control] ✓ evals/docs.es.ts › answers from the docs  99ms
+[answers#2 with-docs]  +0:00 sandbox ready 19ms
+[answers#2 with-docs]  +0:00 turn 1 started
+[answers#2 with-docs]  +0:00 turn 1 done 2ms · 0 tool calls, 1 file edit
+[answers#3 with-docs]  +0:00 sandbox ready 21ms
+[answers#3 with-docs]  +0:00 turn 1 started
+[answers#3 with-docs]  +0:00 turn 1 done 10ms · 0 tool calls, 1 file edit
+[answers#3 with-docs]  +0:00 cleaning up
+[answers#2 with-docs]  +0:00 cleaning up
+[answers#3 with-docs] ✓ evals/docs.es.ts › answers from the docs  64ms
+[answers#2 with-docs] ✓ evals/docs.es.ts › answers from the docs  69ms
+
+Summary
+ evals/docs.es.ts
+   ✓ answers from the docs      6/6  100%  6 attempts
+       fake/-/fake          control    3/3  100%
+       fake/with-docs/fake  variant    3/3  100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise
+
+Attempts  6 passed (6 attempts, 1 evals)
+Duration  896ms
+ Results  .es/runs/20260926T104717Z_nogit_root_94bw/summary.md
+--- stderr
+(node:1761) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1779) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)

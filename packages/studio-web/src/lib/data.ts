@@ -1,5 +1,7 @@
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  type AnalysisIndex,
+  analysisDataPath,
   artifactPath,
   type DebugView,
   debugApiPath,
@@ -72,6 +74,20 @@ export const artifactQuery = (runId: string, path: string | undefined) =>
     enabled: !!path,
     staleTime: Number.POSITIVE_INFINITY,
     retry: (count, error) => !(error instanceof NotFoundError) && count < 2,
+  })
+
+/** A run's analyses; none (not an error) when the run has no file for them. */
+export const analysisQuery = (runId: string) =>
+  queryOptions({
+    queryKey: ['record', 'analysis', runId],
+    queryFn: async (): Promise<AnalysisIndex> => {
+      try {
+        return await fetchJson<AnalysisIndex>(analysisDataPath(runId))
+      } catch (error) {
+        if (error instanceof NotFoundError) return { runId, entries: [] }
+        throw error
+      }
+    },
   })
 
 /** An attempt's local debug data; `null` when there is none, so the tab stays hidden. */

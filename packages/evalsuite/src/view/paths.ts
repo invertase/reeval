@@ -7,6 +7,7 @@
  *   data/index/<YYYY-MM>.json           run headers started that UTC month, newest first
  *   data/runs/<runId>.json              the record, byte for byte
  *   data/runs/<runId>/<artifact path>   artifacts, raw
+ *   data/analysis/<runId>.json          the run's saved analyses (and, live, cached ones)
  */
 
 export const RUN_ID = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}$/
@@ -28,6 +29,7 @@ export type DataTarget =
   | { kind: 'manifest' }
   | { kind: 'shard'; id: string }
   | { kind: 'record'; runId: string }
+  | { kind: 'analysis'; runId: string }
   | { kind: 'artifact'; runId: string; segments: string[] }
 
 /**
@@ -44,6 +46,10 @@ export function parseDataPath(path: string): DataTarget | null {
   if (area === 'index' && rest.length === 0 && first.endsWith('.json')) {
     const id = first.slice(0, -5)
     return SHARD.test(id) ? { kind: 'shard', id } : null
+  }
+  if (area === 'analysis' && rest.length === 0 && first.endsWith('.json')) {
+    const runId = first.slice(0, -5)
+    return RUN_ID.test(runId) ? { kind: 'analysis', runId } : null
   }
   if (area !== 'runs') return null
   if (rest.length === 0) {

@@ -8,6 +8,7 @@ import type {
 } from '../history/types.ts'
 import type { Outcome, TranscriptEvent, TurnStatus } from '../types.ts'
 import {
+  type CompareCell,
   type CompareRow,
   type CompareStatus,
   cellsChanged,
@@ -15,6 +16,7 @@ import {
   type StackChange,
   stackChanges,
 } from './compare.ts'
+import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 
 // ── Index ────────────────────────────────────────────────────────────────────────────────────
@@ -272,6 +274,10 @@ export type CellRow = {
   liftInterval: { lo: number; hi: number; withinNoise: boolean } | null
   /** The interval's lower bound is below the compare's `minLift`. */
   belowMinLift: boolean
+  /** Median tool calls and agent time over the cell's counted attempts. */
+  effort: CellEffort | null
+  /** A variant's effort against its control, with the rank test's verdict. */
+  effortVsControl: EffortContrast | null
   attempts: AttemptRecord[]
 }
 
@@ -302,6 +308,8 @@ export function cellRows(e: EvalEntry): CellRow[] {
         }
       : null,
     belowMinLift: cell.lift?.minLift !== undefined && cell.lift.interval.lo < cell.lift.minLift,
+    effort: cellEffort(e, cell.key),
+    effortVsControl: cellContrast(e, cell.key),
     attempts: e.attempts.filter((a) => a.cell === cell.key),
   }))
 }
@@ -356,6 +364,8 @@ export type CompareViewRow = {
   /** Mean judge score per run; null without judgements or without the record. */
   baseScore: number | null
   headScore: number | null
+  /** Cells in both runs, with lift and effort on each side. */
+  perCell: CompareCell[]
 }
 
 const meanScore = (e: EvalEntry | undefined) => {
@@ -404,6 +414,7 @@ export function compareView(
       headPassRate: passRate(h),
       baseScore: meanScore(records.base?.evals.find((e) => e.id === row.id)),
       headScore: meanScore(records.head?.evals.find((e) => e.id === row.id)),
+      perCell: row.perCell ?? [],
     }
   })
   rows.sort((a, b) => COMPARE_ORDER.indexOf(a.status) - COMPARE_ORDER.indexOf(b.status))

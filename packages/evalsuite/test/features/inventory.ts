@@ -42,6 +42,7 @@ const harness = (name: string) => `evalsuite/test/harness.test.ts › ${name}`
 const docker = (name: string) => `evalsuite/test/docker.test.ts › ${name}`
 const debug = (name: string) => `evalsuite/test/debug.test.ts › ${name}`
 const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
+const analysis = (name: string) => `evalsuite/test/analysis.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 
@@ -614,6 +615,58 @@ export const inventory: InventoryFeature[] = [
     area: 'Records and studio',
     name: '`es query`',
     tests: ['evalsuite/test/query.test.ts › the projection matches the record'],
+  },
+  {
+    id: 'query.facts',
+    area: 'Records and studio',
+    name: '`es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context`',
+    tests: [
+      analysis('es-good cuts tool calls 3/3 evals at p = 0.029'),
+      analysis('harness contrasts are controlled within a run'),
+      analysis('a variant that makes the agent work harder is "more" tool calls'),
+    ],
+  },
+  {
+    id: 'query.noise',
+    area: 'Records and studio',
+    name: '`flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag',
+    tests: [
+      analysis('flaky: one failure in 4 comparable attempts is insufficient'),
+      analysis('drift: only Cursor runtime state changed, so it is noise'),
+      analysis('a real context file (a skill) that changed is drift, not noise'),
+      analysis('mixed outcomes over enough comparable attempts are flaky'),
+      'evalsuite/test/query.test.ts › drift names the changed part',
+    ],
+  },
+  {
+    id: 'effort',
+    area: 'Records and studio',
+    name: 'Effort (tool calls, agent time) next to lift in the `es run` summary, `summary.md`, `es compare` and the studio',
+    tests: [
+      analysis('the rank test is exact'),
+      analysis('es run, summary.md and es compare show each variant cell'),
+    ],
+  },
+  {
+    id: 'analyze',
+    area: 'Records and studio',
+    name: '`es analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation',
+    tests: [
+      analysis('the digest is facts with ids, evidence by rule'),
+      analysis('claims with invented citations or quotes are dropped'),
+      analysis('verify commands must parse as ES commands'),
+      analysis('the spec and es --help name the same commands and flags'),
+      analysis('without a language model or its key, it exits 2'),
+    ],
+  },
+  {
+    id: 'analyze.store',
+    area: 'Records and studio',
+    name: '`es analyze` caches in `.es/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them',
+    tests: [
+      analysis('a cached analysis makes no call; --no-cache does'),
+      analysis('--save writes two new files under <run>/analysis/ and nothing else'),
+    ],
   },
   {
     id: 'studio',
