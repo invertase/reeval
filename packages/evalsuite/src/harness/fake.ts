@@ -150,7 +150,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
         }
         if (descriptor.delayMs) {
           try {
-            await sleep(descriptor.delayMs, undefined, { signal })
+            await sleep(descriptor.delayMs, undefined, descriptor.ignoreAbort ? {} : { signal })
           } catch {
             return done('', 'aborted')
           }

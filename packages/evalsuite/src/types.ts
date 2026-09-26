@@ -170,6 +170,8 @@ export type FakeHarnessDescriptor = {
   text?: string
   /** Simulated turn length, honours the abort signal. */
   delayMs?: number
+  /** Sits out `delayMs` even after an abort, like an agent that doesn't stop when it's told to. */
+  ignoreAbort?: boolean
   /** Throw before the first turn starts, to simulate an infra failure. */
   failWith?: string
   /** A reasoning block at the start of every turn. */

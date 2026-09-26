@@ -135,7 +135,7 @@
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `es clean` | ✓ 2 | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 4 | — | — | — | — |
-| Eval timeouts, Ctrl-C and SIGTERM | ✓ 4 | — | — | — | — |
+| Eval timeouts, Ctrl-C and SIGTERM | ✓ 5 | — | — | — | — |
 | The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — |
 
 ## Known gaps
