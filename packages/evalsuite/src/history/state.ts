@@ -3,6 +3,7 @@ import { readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
+import { VERSION as ANTIGRAVITY_VERSION } from '@evalsuite/harness-antigravity'
 import { git } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
@@ -81,13 +82,16 @@ const PACKAGES = [
   '@ai-sdk/harness',
   '@ai-sdk/harness-cursor',
   '@ai-sdk/harness-claude-code',
-  '@evalsuite/harness-antigravity',
   '@ai-sdk/google',
   '@ai-sdk/typesafe-ai',
 ]
 
 export function packageVersions(engine: Record<string, string>): Record<string, string> {
-  const out: Record<string, string> = { ...engine }
+  // Vendored into dist, so the published package can't resolve its package.json.
+  const out: Record<string, string> = {
+    ...engine,
+    '@evalsuite/harness-antigravity': ANTIGRAVITY_VERSION,
+  }
   for (const name of PACKAGES) {
     try {
       out[name] = require(`${name}/package.json`).version

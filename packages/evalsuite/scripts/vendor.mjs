@@ -49,8 +49,12 @@ for await (const file of files(dist)) {
   let source = await readFile(file, 'utf8')
   const original = source
   for (const v of VENDORED) {
-    const specifier = new RegExp(`(['"])@evalsuite/${v.name}(/[a-z-]+)?\\1`, 'g')
-    source = source.replace(specifier, (match, quote, sub = '') => {
+    // Only module specifiers (`from '…'`, `import('…')`), not other strings that name the package.
+    const specifier = new RegExp(
+      `((?:\\bfrom|\\bimport)\\s*\\(?\\s*)(['"])@evalsuite/${v.name}(/[a-z-]+)?\\2`,
+      'g',
+    )
+    source = source.replace(specifier, (match, keyword, quote, sub = '') => {
       const target = v.subpaths[sub]
       if (!target) return match
       if (!file.startsWith(v.to)) rewritten.set(v.name, rewritten.get(v.name) + 1)
@@ -58,7 +62,7 @@ for await (const file of files(dist)) {
         .split(sep)
         .join('/')
       if (!path.startsWith('.')) path = `./${path}`
-      return `${quote}${path}${quote}`
+      return `${keyword}${quote}${path}${quote}`
     })
   }
   if (source !== original) await writeFile(file, source)
