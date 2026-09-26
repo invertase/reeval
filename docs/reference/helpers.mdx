@@ -46,6 +46,15 @@ Group and eval options are plain objects, so the helpers aren't available there:
 
 A secret is read from the host when an attempt starts. Its value is masked in everything ES writes, travels through the Docker CLI's environment rather than its arguments, and only its name is recorded.
 
+| ES masks | In |
+|---|---|
+| Declared secrets and secret-named host variables (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`) | The terminal, `.es/debug`, records, transcripts, history and the studio |
+| Their JSON-, URL- and base64-encoded forms | The same |
+| Any stretch of 8 or more of their characters, such as a key's last 12 | The same, for declared secrets of 12+ characters and token-like variables (16+ characters of letters, digits and `_.~+/=:-`, not a path or URL) |
+| Well-known token shapes (`AIza…`, `sk-…`, `ghp_…`, AWS keys, JWTs, private keys) | The same, even when they aren't set on the host |
+
+A stretch made only of lower-case letters, upper-case letters or digits isn't masked on its own, so words and numbers stay readable, nor is one with quotes, commas, colons, brackets or spaces, so a record's JSON stays whole. Still, don't print any part of a key to check for a leak: compare on the host, or pass the sandbox a hash.
+
 <Property name="secret(options?)" type="Secret">
   Reads the host variable with the same name as the key it's set under.
 </Property>

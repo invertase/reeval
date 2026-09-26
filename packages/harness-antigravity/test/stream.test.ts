@@ -155,6 +155,25 @@ describe('stream translation', () => {
     })
   })
 
+  test('a cached step: input_tokens excludes cache reads, so cacheRead can exceed it (CLI 1.2.11)', () => {
+    // A real step from the skill capture: 8127 of its 12796 prompt tokens came from the cache.
+    const u = toUsage({
+      input_tokens: 4669,
+      output_tokens: 211,
+      thinking_tokens: 125,
+      cache_read_tokens: 8127,
+      total_tokens: 4880,
+    })
+    assert.deepEqual(u.inputTokens, {
+      total: 12796,
+      noCache: 4669,
+      cacheRead: 8127,
+      cacheWrite: undefined,
+    })
+    assert.equal(u.outputTokens.total, 211)
+    assert.equal(u.outputTokens.reasoning, 125)
+  })
+
   test('an aborted turn finishes without an error, and end() after a result adds nothing', () => {
     const aborted = translate('', { exitCode: 137, aborted: true })
     assert.deepEqual(

@@ -333,9 +333,12 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
   const { config } = ctx
   const mode = setup.record
   const autoRecord = flags.record || mode === 'always' || (mode === 'ci' && inCI())
-  if (autoRecord && record.status === 'complete') {
+  // A run budget.duration stopped is recorded too, as status `budget`: it's what the budget
+  // allowed, and compare never takes an incomplete run as its base. An interrupted one isn't.
+  if (autoRecord && record.status !== 'interrupted') {
     const { record: recordCmd } = await import('./commands.ts')
-    console.log(await recordCmd(config, record.runId, flags))
+    const allow = record.status === 'budget' ? { 'allow-incomplete': true } : {}
+    console.log(await recordCmd(config, record.runId, { ...flags, ...allow }))
   }
 
   if (interrupted || engineRun.cancelled) return EXIT.interrupted

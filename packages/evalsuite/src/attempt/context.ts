@@ -19,6 +19,14 @@ const HOME_CONTEXT_PATHS = [
   '.gemini/config/rules',
   '.gemini/config/mcp_config.json',
   '.gemini/antigravity-cli/settings.json',
+  '.config/opencode/skills',
+  '.config/opencode/opencode.json',
+  '.config/opencode/opencode.jsonc',
+  '.config/opencode/AGENTS.md',
+  '.opencode/skills',
+  '.config/goose/skills',
+  '.config/goose/config.yaml',
+  '.config/goose/.goosehints',
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
@@ -42,6 +50,11 @@ const CONTEXT_PATHS = [
   '.agents/rules',
   '.agents/mcp_config.json',
   '.mcp.json',
+  '.opencode/skills',
+  'opencode.json',
+  'opencode.jsonc',
+  '.goosehints',
+  '.goose/skills',
 ]
 
 async function agentContext(box: Sandbox, signal: AbortSignal): Promise<EvalRecord['context']> {

@@ -38,6 +38,7 @@ Errors in an eval file are prefixed with the file (`es: evals/skill.es.ts: …`)
 | `The defineConfig callback in es.config.ts returned a Promise. …` | Make the callback synchronous. |
 | `Config file not found: nope.ts` | Check the `--config` path. |
 | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` | Use `ms`, `s`, `m` or `h`, or a number of milliseconds. |
+| `evaluate("e") is declared twice in this file. …` | Give each eval its own name. For `evaluate.for`, put `$key`, `%s` or `%#` in the name. |
 | `evaluate("x") got two functions. Options must be a plain object; …` | Options are a plain object. Put secrets in an environment or the config's `env`. |
 | `sandbox takes one sandbox, not a list (…). Different toolchains need different checks, so write a separate eval per sandbox.` | One sandbox per eval. |
 | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: [a, b]; the inherited environment is the control.` | Use `compare`. |
@@ -100,6 +101,7 @@ See [docker()](/reference/sandbox/docker).
 | `t.judge() has no model. …` | Set `judge.model` in the config, group, eval or call. |
 | `expected file greet.js to exist` | The agent didn't create it. Check the transcript. |
 | `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
+| `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |
 | `judge score 0.40 is below 0.8 for "…" (…)` | The judge said no. Read its input in the attempt's `judge-input.json`. |
 | `Eval timed out after 900s` | Raise `timeout`, or make the task smaller. |
 | `setup step 1/2 "npm ci" in environment base exited 1 after …` | Fix the setup step; its output is in the attempt's `setup.log`. An infra error. |

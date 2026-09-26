@@ -33,6 +33,8 @@ test('the packed package installs into a clean project and runs es', {
   assert.match(listing, /^package\/dist\/vendor\/sandbox-docker\/dist\/index\.js$/m)
   assert.match(listing, /^package\/dist\/vendor\/harness-antigravity\/dist\/index\.js$/m)
   assert.match(listing, /^package\/dist\/vendor\/harness-cursor-sdk\/dist\/index\.js$/m)
+  assert.match(listing, /^package\/dist\/vendor\/harness-opencode\/dist\/index\.js$/m)
+  assert.match(listing, /^package\/dist\/vendor\/harness-goose\/dist\/index\.js$/m)
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
 
   // sandbox-docker and harness-antigravity are vendored into dist, so nothing in the manifest

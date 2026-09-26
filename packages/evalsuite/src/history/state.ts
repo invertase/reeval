@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { VERSION as ANTIGRAVITY_VERSION } from '@evalsuite/harness-antigravity'
 import { VERSION as CURSOR_SDK_VERSION } from '@evalsuite/harness-cursor-sdk'
+import { VERSION as GOOSE_VERSION } from '@evalsuite/harness-goose'
+import { VERSION as OPENCODE_VERSION } from '@evalsuite/harness-opencode'
 import { git } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
@@ -91,6 +93,8 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
   const out: Record<string, string> = {
     ...engine,
     '@evalsuite/harness-antigravity': ANTIGRAVITY_VERSION,
+    '@evalsuite/harness-opencode': OPENCODE_VERSION,
+    '@evalsuite/harness-goose': GOOSE_VERSION,
     '@evalsuite/harness-cursor-sdk': CURSOR_SDK_VERSION,
   }
   for (const name of PACKAGES) {

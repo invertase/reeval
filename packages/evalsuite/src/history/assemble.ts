@@ -20,6 +20,7 @@ import type {
   HarnessDescriptor,
   Outcome,
   RunContext,
+  TranscriptEvent,
   WebEventType,
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
@@ -45,15 +46,23 @@ import {
 
 /** Final messages are cut at this size in the record; `transcript.jsonl` keeps them whole. */
 const TURN_TEXT_LIMIT = 8 * 1024
+const TURN_ERROR_LIMIT = 1024
 
-/** Tokens across every turn that reported them; USD stays null, since ES prices no models. */
+/** A turn's first error event, such as the provider's "Credit balance is too low". */
+function turnError(transcript: TranscriptEvent[] | undefined): string | null {
+  const found = transcript?.find((e) => e.type === 'error')
+  if (found?.type !== 'error') return null
+  const message = found.message.trim()
+  return message.length > TURN_ERROR_LIMIT ? `${message.slice(0, TURN_ERROR_LIMIT)}…` : message
+}
+
+/** Tokens across every turn that reported them. */
 function costOf(attempts: AttemptRecord[]): Cost {
   const usage = sumUsage(attempts.map((a) => a.usage))
   if (!usage) {
-    return { usd: null, inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
+    return { inputTokens: null, outputTokens: null, usage: null, source: 'unreported' }
   }
   return {
-    usd: null,
     inputTokens: promptTokens(usage),
     outputTokens: usage.output,
     usage,
@@ -480,6 +489,7 @@ function attemptEvidence(
       usage: t.usage ?? null,
       model: t.model ?? null,
       unreported: t.unreported ?? [],
+      error: turnError(t.transcript),
       text:
         t.text.length > TURN_TEXT_LIMIT
           ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`

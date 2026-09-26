@@ -1,7 +1,13 @@
 import { type AttemptSpec, runAttempt, setupAllowance } from './attempt/index.ts'
 import { parseDuration } from './config.ts'
 import { unenforceable } from './egress.ts'
-import { getRunContext, registerGroup, registerTest, type TestMode } from './engine/runtime.ts'
+import {
+  collectingFile,
+  getRunContext,
+  registerGroup,
+  registerTest,
+  type TestMode,
+} from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import { UsageError } from './errors.ts'
 import { attemptId, evalId, relativeFile } from './ids.ts'
@@ -119,9 +125,23 @@ function configLevel(config: ResolvedConfig): Resolved {
   }
 }
 
-function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): void {
+/** The evals declared so far, by file and name path, so a second one with the same id is refused. */
+const declared = new Set<string>()
+
+function checkUnique(where: string, groups: string[], name: string, hint: string): void {
+  const key = `${collectingFile() ?? ''}\0${[...groups, name].join('\0')}`
+  if (declared.has(key)) {
+    throw new UsageError(
+      `${where} is declared twice in this file. Each eval needs its own name, or its attempts are merged into one eval.${hint}`,
+    )
+  }
+  declared.add(key)
+}
+
+function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hint = ''): void {
   const groups = groupStack.map((g) => g.name)
   const where = `evaluate("${[...groups, name].join(' › ')}")`
+  checkUnique(where, groups, name, hint)
   checkOptions(own, where)
   const ctx = getRunContext()
   const levels: Level[] = [
@@ -261,8 +281,9 @@ const evalFor =
       a as EvalOptions,
       b as EvalOptions,
     )
+    const hint = ` For evaluate.for, put $key, %s or %# in the name ("${name}") so each case's name differs.`
     cases.forEach((item, i) => {
-      register('run', formatName(name, item, i), own, (t) => fn(t, item))
+      register('run', formatName(name, item, i), own, (t) => fn(t, item), hint)
     })
   }
 

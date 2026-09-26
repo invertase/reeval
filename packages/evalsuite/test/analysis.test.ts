@@ -310,7 +310,7 @@ evaluate('greets', { compare: [skilled], runs: 2 }, async (t) => {
     assert.equal(first.code, 0, first.stdout)
     assert.match(
       first.stdout,
-      /skilled.*lift \+100 pts[^\n]*\n\s+effort: tools \d+ vs \d+ \(×[\d.–]+\), agent \d+s vs \d+s \(×[\d.–]+\): too few attempts to test/,
+      /skilled.*lift \+100 pts[^\n]*\n\s+effort: tools \d+ vs \d+ \(×[\d.–]+\), agent [\d.]+s vs [\d.]+s \(×[\d.–]+\): too few attempts to test/,
     )
     const { read } = readRun(p.dir)
     assert.match(read('summary.md'), /effort tools \d+ vs \d+/)
@@ -357,6 +357,52 @@ describe('es CLI spec', () => {
     for (const [c, why] of bad) assert.match(checkCommand(c, tables) ?? '', why, c)
   })
 
+  test('es run and es image build verify commands must select an eval of the run', () => {
+    const evals = [
+      {
+        file: 'evals/skill.es.ts',
+        name: 'house greeting greets',
+        tags: ['skill'],
+        cells: ['fake/-', 'fake/with-skill'],
+      },
+      {
+        file: 'evals/hello.es.ts',
+        name: 'greet module creates',
+        tags: ['smoke'],
+        cells: ['fake/-'],
+      },
+    ]
+    const ok = [
+      'es run --tag skill',
+      'es run --tag !skill',
+      'es run evals/skill.es.ts --runs 6',
+      'es run greets',
+      'es run with-skill --tag skill',
+      'es image build hello',
+      'es query effort',
+    ]
+    for (const c of ok) assert.equal(checkCommand(c, ['effort'], evals), null, c)
+    const bad: Array<[string, RegExp]> = [
+      [
+        'es run --runs 6 --tag nosuchtag',
+        /es run --tag nosuchtag: no eval in the run has the tag nosuchtag \(tags: skill, smoke\)/,
+      ],
+      [
+        'es run nosuchname',
+        /es run: filter "nosuchname" matches no eval file, eval name or cell in the run/,
+      ],
+      [
+        'es run hello.es.ts --tag skill',
+        /es run hello\.es\.ts --tag skill selects no eval in the run/,
+      ],
+      ['es run --tag=nosuchtag', /es run --tag nosuchtag: no eval/],
+      ['es image build nosuchname', /es image build: filter "nosuchname" matches no eval/],
+      ['es run --record && es run --tag nope', /--tag nope: no eval/],
+    ]
+    for (const [c, why] of bad) assert.match(checkCommand(c, [], evals) ?? '', why, c)
+    assert.equal(checkCommand('es run --tag nosuchtag'), null, 'without the run, only the syntax')
+  })
+
   test('the spec and es --help name the same commands and flags', async () => {
     const p = await project('cli-spec', { 'es.config.ts': fakeConfig() })
     const help = (await runCli(p.dir, ['--help'])).stdout
@@ -399,7 +445,7 @@ const FAKE = `analysis: {
           actions: [
             action('npx es compare r1 r2 --include-efficiency'),
             action('es query efficiency'),
-            action('es eval fix-config --debug-judge'),
+            action('es run --runs 6 --tag nosuchtag'),
             action('es query effort'),
             action('es run --record', ['F999']),
           ],
@@ -492,6 +538,10 @@ describe('es analyze', () => {
       'the action citing only F999 is dropped',
     )
     assert.match(a.actions[0].verifyProblem, /--include-efficiency isn't an ES flag/)
+    assert.match(
+      a.actions[2].verifyProblem,
+      /es run --runs 6 --tag nosuchtag: es run --tag nosuchtag: no eval in the run has the tag nosuchtag/,
+    )
     const v = doc.validation
     assert.deepEqual([v.dropped, v.commands, v.invalidCommands.length], [4, 4, 3])
     assert.deepEqual(

@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
 const config = (extra: string, harness = 'fakeHarness({})') => `
@@ -444,6 +444,14 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
     assert.deepEqual(run.budget, { duration: '1s' })
     const outcomes = evals[0]?.attempts.map((a) => a.outcome) ?? []
     assert.ok(outcomes.includes('pass') && outcomes.includes('skipped'), outcomes.join(','))
+    assert.deepEqual(recordedRuns(p.dir), [], 'not recorded without --record or record: always')
+
+    // With --record, it's recorded as status budget (compare only takes complete runs as a base).
+    const recorded = await runCli(p.dir, ['run', '--record'])
+    assert.equal(recorded.code, 1, recorded.stdout + recorded.stderr)
+    assert.match(recorded.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    const history = readRun(p.dir, { history: 'evals/.history' })
+    assert.equal(history.run.status, 'budget')
   })
 })
 
@@ -530,6 +538,16 @@ describe('common mistakes', () => {
       /Steps in defineEnvironment\("e"\) are strings or \{ run, timeout\?, cwd\? \} objects \(got "dir"\)/,
     ],
     [
+      'two evals with the same name',
+      `evaluate('e', async () => {}); evaluate('e', { runs: 2 }, async () => {})`,
+      /evaluate\("e"\) is declared twice in this file\. Each eval needs its own name, or its attempts are merged into one eval\./,
+    ],
+    [
+      'evaluate.for cases with the same name',
+      `evaluate.for([{ a: 1, b: 2 }, { a: 1, b: 3 }])('adds $a', async () => {})`,
+      /evaluate\("adds 1"\) is declared twice in this file\. .* For evaluate\.for, put \$key, %s or %# in the name \("adds \$a"\) so each case's name differs\./,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,
@@ -567,7 +585,7 @@ describe('common mistakes', () => {
     [
       'a fake agent layout ES does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity' \(got "codex"\)/,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose' \(got "codex"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',
@@ -577,12 +595,12 @@ describe('common mistakes', () => {
     [
       'a fake agent script step with two actions',
       `evaluate('e', { harness: fakeHarness({ script: [[{ exec: 'ls', reply: 'x' } as never]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \}, \{ reply: string \} or \{ mcp: '<server>\/<tool>' \}/,
+      /fakeHarness\(\{ script \}\) steps are \{ exec: string \}, \{ write: \{ path: content \} \}, \{ reply: string \}, \{ mcp: '<server>\/<tool>' \} or \{ error: string \}/,
     ],
     [
       'a fake agent MCP step without a tool',
       `evaluate('e', { harness: fakeHarness({ script: [[{ mcp: 'stamp' }]] }) }, async () => {})`,
-      /fakeHarness\(\{ script \}\) steps are .+ or \{ mcp: '<server>\/<tool>' \} \(got \{"mcp":"stamp"\}\)/,
+      /fakeHarness\(\{ script \}\) steps are .+ \{ mcp: '<server>\/<tool>' \} or \{ error: string \} \(got \{"mcp":"stamp"\}\)/,
     ],
     [
       'an empty hosts list',

@@ -99,7 +99,7 @@ A real `error` event, from a Claude Code attempt on an account without credit:
 
 ## Tokens and the served model
 
-Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()` and `antigravity()` do), each turn in the run record, and each `Turn` from `t.send()`, has `usage` and `model`. These fields are from a real Cursor turn in the record:
+Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()`, `claudeCode()` and `antigravity()` do), each turn in the run record, and each `Turn` from `t.send()`, has `usage` and `model`. These fields are from a real Cursor turn in the record:
 
 ```text
 {"status": "completed", "durationMs": 6918, "usage": {"input": 32307, "output": 600, "cacheRead": 31328, "cacheWrite": 0, "reasoning": null}, "model": "composer-2.5[fast=true]"}
@@ -113,7 +113,7 @@ Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()
   The model the harness says served the turn. Cursor's includes its parameters, such as `composer-2.5[fast=true]`. It can differ from the model you asked for.
 </Property>
 
-Each attempt sums its turns' `usage`, and the run's `cost` has the total, with `usd` always `null`: ES prices no models. `es query`'s `attempts` table has the same numbers as `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`.
+Each attempt sums its turns' `usage`, and the run's `cost` has the total; ES prices no models, so there's no USD. `es query`'s `attempts` table has the same numbers as `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`, and the studio shows them for each run and attempt.
 
 ## Large outputs
 

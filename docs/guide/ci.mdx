@@ -100,7 +100,7 @@ jobs:
           retention-days: 14
 ```
 
-Ubuntu runners have Docker running, so `es image build` and `es run` work as they do locally. `es run` fails the job when a gated cell fails. `es compare` then diffs the run against the nearest recorded run in the branch's git history, and `--fail-on-regression` fails the job if any eval regressed.
+Ubuntu runners have Docker running, so `es image build` and `es run` work as they do locally. `es run` fails the job when a gated cell fails. `es compare` then diffs the run against the nearest recorded run in the branch's git history, and `--fail-on-regression` fails the job if any eval regressed or a new eval fails. With no recorded run to compare with, every eval is new.
 
 <Info>
   `fetch-depth: 0` gives `es compare` the git history it needs to find that ancestor. In a shallow clone it falls back to the previous run by time.

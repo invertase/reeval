@@ -10,6 +10,8 @@ import { describe, test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { AntigravityStreamTranslator } from '@evalsuite/harness-antigravity'
 import { CursorSdkStreamTranslator } from '@evalsuite/harness-cursor-sdk'
+import { GooseStreamTranslator } from '@evalsuite/harness-goose'
+import { OpenCodeStreamTranslator } from '@evalsuite/harness-opencode'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { testDir } from './support/fixture.ts'
@@ -36,8 +38,15 @@ const edits = (es: TranscriptEvent[]) => es.flatMap((e) => (e.type === 'file-edi
 /** What each captured behaviour's stream must still say once normalised: robust signals only. */
 const signals: Record<string, (es: TranscriptEvent[]) => void> = {
   skill(es) {
+    // It read the file, or loaded it with its skill tool (OpenCode's `skill`, Goose's
+    // `load_skill`).
     assert.ok(
-      tools(es).some((t) => text(t.input).includes('contract-probe/SKILL.md')),
+      tools(es).some(
+        (t) =>
+          text(t.input).includes('contract-probe/SKILL.md') ||
+          ((t.tool === 'skill' || t.tool === 'load_skill') &&
+            text(t.input).includes('"contract-probe"')),
+      ),
       'the agent read the skill',
     )
     assert.ok(edits(es).some((e) => e.path === 'skill-proof.txt'))
@@ -60,8 +69,8 @@ const harnesses = existsSync(root)
       .map((d) => d.name)
   : []
 
-test('there are captures for Cursor and Antigravity', () => {
-  assert.deepEqual(harnesses.sort(), ['antigravity', 'cursor'])
+test('there are captures for Cursor, Antigravity, OpenCode and Goose', () => {
+  assert.deepEqual(harnesses.sort(), ['antigravity', 'cursor', 'goose', 'opencode'])
 })
 
 for (const harness of harnesses) {
@@ -155,6 +164,68 @@ for (const harness of Object.keys(translators))
     })
   })
 
+// OpenCode's ACP events become parts inside @ai-sdk/harness-acp's bridge, so only the adapter's
+// own step replays: the names it gives calls the bridge couldn't name.
+describe('replay: the OpenCode adapter, from the captured parts', () => {
+  /** The captured parts as the bridge sends them: calls it couldn't name are `acp_tool_<id>`. */
+  const fromBridge = (lines: Line[], named: Set<string>) =>
+    lines.map((l) =>
+      (l.part.type === 'tool-call' || l.part.type === 'tool-result') &&
+      named.has(String(l.part.toolName))
+        ? { ...l.part, toolName: `acp_tool_${l.part.toolCallId}` }
+        : l.part,
+    )
+  const names = (parts: Array<{ type: string; [k: string]: unknown }>) =>
+    parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+
+  for (const [file, named, mcp] of [
+    ['edit-and-run.raw.jsonl', 'bash', []],
+    ['mcp.raw.jsonl', 'mcp__stamp__house_stamp', ['stamp']],
+  ] as const) {
+    test(`${file}: ${named} is named again from OpenCode's first update`, () => {
+      const lines = parse(read('opencode', file))
+      const captured = names(lines.map((l) => l.part))
+      assert.ok(captured.includes(named), `${named} is in the capture`)
+      const t = new OpenCodeStreamTranslator({ mcpServers: mcp })
+      assert.deepEqual(names(fromBridge(lines, new Set([named])).map((p) => t.push(p))), captured)
+    })
+  }
+
+  test('twin: without its first update, the call keeps the generic name', () => {
+    const lines = parse(read('opencode', 'edit-and-run.raw.jsonl')).filter(
+      (l) =>
+        !(
+          l.part.type === 'raw' &&
+          (l.part.rawValue as { sessionUpdate?: string })?.sessionUpdate === 'tool_call'
+        ),
+    )
+    const t = new OpenCodeStreamTranslator()
+    const out = names(fromBridge(lines, new Set(['bash'])).map((p) => t.push(p)))
+    assert.ok(
+      out.some((n) => String(n).startsWith('acp_tool_')),
+      JSON.stringify(out),
+    )
+  })
+})
+
+describe('replay: the Goose adapter, from the captured parts', () => {
+  test('mcp.raw.jsonl: the MCP call is named again from its tool_call metadata', () => {
+    const lines = parse(read('goose', 'mcp.raw.jsonl'))
+    const named = 'mcp__stamp__house_stamp'
+    const fromBridge = lines.map((l) =>
+      (l.part.type === 'tool-call' || l.part.type === 'tool-result') && l.part.toolName === named
+        ? { ...l.part, toolName: `acp_tool_${l.part.toolCallId}` }
+        : l.part,
+    )
+    const calls = (parts: Array<{ type: string; [k: string]: unknown }>) =>
+      parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+    const t = new GooseStreamTranslator({ mcpServers: ['stamp'] })
+    assert.deepEqual(calls(fromBridge.map((p) => t.push(p))), [named])
+    const twin = new GooseStreamTranslator()
+    assert.notDeepEqual(calls(fromBridge.map((p) => twin.push(p))), [named])
+  })
+})
+
 /** Changes to each harness's native stream that must each read as a format change. */
 const formatChanges: Record<string, Array<[string, string]>> = {
   antigravity: [
@@ -169,6 +240,17 @@ const formatChanges: Record<string, Array<[string, string]>> = {
     ['"type":"tool_call"', '"type":"tool_use"'],
     ['"call_id"', '"callId"'],
     ['"status":"completed"', '"status":"done"'],
+  ],
+  goose: [
+    ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
+    ['"stopReason"', '"stop_reason"'],
+    ['"status":"completed"', '"status":"done"'],
+  ],
+  opencode: [
+    ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
+    ['"stopReason"', '"stop_reason"'],
+    ['"kind":"execute"', '"kind":"shell"'],
+    ['"status":"in_progress"', '"status":"running"'],
   ],
 }
 

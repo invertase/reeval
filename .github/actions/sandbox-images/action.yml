@@ -1,6 +1,6 @@
 name: Sandbox images
 description: >
-  Loads ES's sandbox image for every baked harness (Cursor's, Claude Code's, Antigravity's) from
+  Loads ES's sandbox image for every baked harness (Cursor's, Claude Code's, Antigravity's, OpenCode's, Goose's) from
   the Actions cache, or builds them and caches them as one zstd tarball. Needs pnpm build first.
 runs:
   using: composite
@@ -20,7 +20,7 @@ runs:
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/es-sandbox-images.tar.zst
-        key: es-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'packages/harness-antigravity/package.json', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
+        key: es-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'packages/harness-antigravity/package.json', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
     - if: steps.cache.outputs.cache-hit == 'true'
       shell: bash
       run: zstd -dc "$RUNNER_TEMP/es-sandbox-images.tar.zst" | docker load
