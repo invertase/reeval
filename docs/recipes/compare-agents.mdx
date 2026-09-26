@@ -1,0 +1,164 @@
+---
+title: Compare agents
+description: Run one suite on Cursor, Claude Code and Antigravity at once and read the results per agent.
+---
+
+**Goal:** see how different coding agents do on the same evals, side by side.
+
+A [harness](/guide/harnesses) list makes each agent its own [cell](/concepts/matrix). The evals don't change: every agent gets the same prompt, a fresh sandbox of its own and the same checks.
+
+## The files
+
+```ts title="evals/harnesses.ts"
+import { antigravity, claudeCode, cursor } from '{{ pkg }}/harness'
+
+export const composer = cursor({ model: 'composer-2.5' })
+export const claude = claudeCode({ model: 'claude-sonnet-5' })
+export const agy = antigravity({ model: 'gemini-3.8-flash-medium' })
+```
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
+import { agy, claude, composer } from './evals/harnesses.ts'
+
+export default defineConfig({
+  harness: [composer, claude, agy],
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash' },
+  gate: { passRate: 0.5 },
+  runs: 2,
+})
+```
+
+The eval is `examples/hello/evals/hello.es.ts`, unchanged. Each harness has an id, a key and an image of its own:
+
+| Harness | Id (in cell keys and filters) | Key in `.env.local` | Sandbox image |
+|---|---|---|---|
+| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `evalsuite-sandbox:cursor-1.0.37` |
+| `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `evalsuite-sandbox:claude-code-1.0.128` |
+| `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `evalsuite-sandbox:antigravity-0.1.0` |
+
+`claudeCode()` and `antigravity()` need a `model`. Each key stays on the host and is swapped in by the egress gateway only on that agent's API endpoints (see [Credential brokering](/concepts/credential-brokering)).
+
+## Build the images and check the plan
+
+```bash
+npx es image build --dry-run
+```
+
+```text
+images  3 sandbox images (nothing built: --dry-run)
+docker · 2 evals
+  base  evalsuite-sandbox:cursor-1.0.37  (rebuild: the harness bootstrap)
+docker · claude-code · 2 evals
+  base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)
+docker · antigravity · 2 evals
+  base  evalsuite-sandbox:antigravity-0.1.0  (rebuild: the harness bootstrap)
+```
+
+```bash
+npx es image build
+npx es run --dry-run
+```
+
+```text
+plan  2 evals · 6 cells · 12 attempts · ~36m 00s serial (~9m 00s at concurrency 4)
+eval                                                              harnesses  variants  runs  attempts  notes
+evals/hello.es.ts › greet module › creates a tested greet module  3          —         2     6
+evals/hello.es.ts › greet module › adds a default name in a…      3          —         2     6
+```
+
+A filter that names a harness runs only its cells, and ES asks only for that harness's key:
+
+```bash
+npx es run antigravity
+```
+
+```text
+plan  2 evals · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 4)
+es: Missing credentials: GEMINI_API_KEY. Set them in the environment or .env.local.
+```
+
+## Real runs, one agent at a time
+
+These captures ran `examples/hello` with one harness each. Cursor passed both evals:
+
+```text
+[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  15s
+[creates#1 cursor]  +0:00 sandbox ready 2s
+[creates#1 cursor]  +0:01 turn 1 done 10s · 2 tool calls, 2 file edits
+[creates#1 cursor]  +0:12 $ node --test  exit 0 156ms
+[creates#1 cursor]  +0:12 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+…
+   Evals  2 passed (2)
+Duration  20s
+```
+
+The Claude Code run shows what an agent-side failure looks like. Its turns ended in `error` after a second, with no tool calls:
+
+```text
+[creates#1 claude-code] ✗ evals/hello.es.ts › greet module › creates a tested greet module  3s
+[creates#1 claude-code]  +0:00 sandbox ready 2s
+[creates#1 claude-code]  +0:01 turn 1 error 1s · 0 tool calls, 0 file edits
+[creates#1 claude-code]  Error: expected file greet.js to exist
+…
+   Evals  2 failed (2)
+```
+
+The attempt's transcript says why: `{"type":"error","message":"Credit balance is too low"}`. The key was valid and brokered (the `-v` trace shows `POST https://api.anthropic.com/v1/messages → 400`), but the account had no credit. Check `transcript.jsonl` or `es run -v` when a turn errors this fast.
+
+## Read the per-cell table
+
+With several harnesses and a `compare`, the summary has one row per harness and cell. This is from a real 36-attempt run of the [dogfood suite](/recipes/case-study-dogfood) on Cursor and Antigravity (two skills, `runs: 2`):
+
+```text
+     ✗ plans a skill compare                     8/12   75%  12 attempts
+         cursor:composer-2.5/-/es-tarball                     control    2/2  100%
+         cursor:composer-2.5/es-weak/es-tarball               variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/es-good/es-tarball               variant    2/2  100%   lift +0 pts (95% −66…+66, 2/2 vs 2/2), within noise   gate passRate 0.5
+         antigravity:gemini-3.8-flash-low/-/es-tarball        control    0/2    0%   not gated
+         antigravity:gemini-3.8-flash-low/es-weak/es-tarball  variant    0/2    0%   lift +0 pts (95% −66…+66, 0/2 vs 0/2), within noise   gate passRate 0.5
+         antigravity:gemini-3.8-flash-low/es-good/es-tarball  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
+```
+
+- Lift is always against the control **on the same harness**. Cursor's control already passed, so its lift is +0; Antigravity's didn't, so the good skill shows +100.
+- The eval fails because one gated cell (`antigravity … es-weak`, 0/2) is below its gate.
+- Cell keys are `<harness>/<environment>/<sandbox>`, so `es run antigravity` or `es query … WHERE harness LIKE 'antigravity%'` picks one agent.
+
+For a total per agent in one run, ask the history:
+
+```bash
+npx es query "SELECT c.harness, SUM(c.pass)||'/'||SUM(c.pass+c.fail+c.infra_error) AS passed, round(100.0*SUM(c.pass)/SUM(c.pass+c.fail+c.infra_error)) AS pct FROM cells c WHERE run_id='20260926T140020Z_931dae5_cursor-agent_3sth' GROUP BY c.harness"
+```
+
+```text
+harness                           passed  pct
+antigravity:gemini-3.8-flash-low  14/18   78
+cursor:composer-2.5               18/18   100
+```
+
+Antigravity's four failures were all judge verdicts on one eval: without the good skill, it checked the greeting with another LLM judge where the question asked for a deterministic assertion.
+
+<Info>
+  A harness is an agent CLI and a model together. Cursor with composer against Antigravity with Gemini can't tell you whether the CLI or the model made the difference; compare two models on one harness for that.
+</Info>
+
+## Variations
+
+- **Two models on one harness:** `harness: [cursor({ model: 'composer-2.5' }), cursor({ model: 'composer-2', id: 'fast' })]`. Give same-kind harnesses distinct ids.
+- **Add an agent to one group:** `{ harness: (inherited) => [...inherited, claude] }` extends the list instead of replacing it.
+- **One config per agent:** `examples/hello` keeps `es.claude.config.ts` and `es.antigravity.config.ts` and runs `es run --config es.claude.config.ts`. Separate configs make separate runs, so use a harness list when you want one table.
+- **Keep PRs cheap:** a `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly.
+- **Rate limits:** `claudeCode({ model, maxConcurrent: 2 })` caps that agent's attempts at once.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Harnesses" icon="terminal" href="/guide/harnesses">
+    Each agent's options, rules and skill locations.
+  </Card>
+  <Card title="The matrix" icon="layer-group" href="/concepts/matrix">
+    How harnesses, variants and runs multiply into attempts.
+  </Card>
+</CardGroup>

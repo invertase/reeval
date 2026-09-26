@@ -1,0 +1,203 @@
+---
+title: PR gate in GitHub Actions
+description: Run your evals on every pull request, post the results to the job summary and fail the check when an eval regresses.
+---
+
+**Goal:** every pull request that touches evals, skills or the config runs the real agent in Docker, and the check fails when an eval that passed on the base branch now fails.
+
+<Warning>
+  This workflow passes [actionlint](https://github.com/rhysd/actionlint), and each `es` command in it was run locally, but the workflow as a whole hasn't run in GitHub Actions. Check the action versions against your organisation's pins before you rely on it.
+</Warning>
+
+## The files
+
+A `pr` profile keeps pull request runs cheap: one attempt per cell and no variants. `defaultProfile` picks it whenever `CI` is set.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { cursor } from '{{ pkg }}/harness'
+import { docker } from '{{ pkg }}/sandbox'
+
+export default defineConfig({
+  harness: cursor({ model: 'composer-2.5' }),
+  sandbox: docker(),
+  judge: { model: 'google/gemini-3.8-flash' },
+  defaultProfile: { ci: 'pr' },
+  profiles: {
+    pr: {
+      limit: { runs: 1, compare: false },
+      budget: { attempts: 20 },
+    },
+  },
+})
+```
+
+```yaml title=".github/workflows/evals.yml"
+name: evals
+
+on:
+  pull_request:
+    paths: ['evals/**', 'skills/**', 'es.config.ts', 'package-lock.json']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    # Forks get no secrets, so their PRs can't run real agents.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # Eval code runs on the host with the keys, so the job keeps no git token.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Restore sandbox images
+        id: images
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/es-images.tar
+          key: >-
+            es-images-${{ hashFiles('package-lock.json', 'es.config.ts',
+            'docker/**') }}
+      - name: Load sandbox images
+        if: steps.images.outputs.cache-hit == 'true'
+        run: docker load -i "$RUNNER_TEMP/es-images.tar"
+      - name: Build sandbox images
+        if: steps.images.outputs.cache-hit != 'true'
+        run: |
+          npx es image build --profile pr
+          images=$(docker images --format '{{.Repository}}:{{.Tag}}' \
+            | grep '^evalsuite-')
+          docker save -o "$RUNNER_TEMP/es-images.tar" $images
+
+      - name: Run evals
+        env:
+          CI: 1
+          CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_AI_KEY }}
+        run: |
+          set +e
+          npx es run --profile pr
+          code=$?
+          # 1 is a failing eval: the compare decides. 2 and 3 are errors.
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+
+      - name: Compare with the base branch
+        run: |
+          set +e
+          npx es compare --md --fail-on-regression > compare.md
+          code=$?
+          cat compare.md >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -eq 2 ]; then
+            echo "::notice::No recorded run to compare with yet"
+            exit 0
+          fi
+          exit "$code"
+
+      - name: Upload runs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: es-runs-${{ github.run_id }}
+          path: .es/runs
+          include-hidden-files: true
+          retention-days: 14
+```
+
+## What each step does
+
+| Step | Why |
+|---|---|
+| `if:` on the job | A fork's pull request gets no secrets, so the job is skipped rather than failing on missing keys |
+| `persist-credentials: false` | Eval files are code that runs on the host next to your keys; the job keeps no git token |
+| `fetch-depth: 0` | `es compare` walks the commit's ancestors to find the base run; a shallow clone has none |
+| Image cache | `es image build` bakes the agent's CLI into ES's image. The tag follows the installed package, so the lockfile is in the key. `install` and `dockerfile` images that change later build on first use |
+| Run step | Exit 1 (an eval failed) doesn't end the job, so a failure that already failed on the base doesn't block the PR. Exit 2 (config) and 3 (infra) do |
+| Compare step | Writes the Markdown table to the job summary and exits 1 on a regression |
+
+Add `CURSOR_API_KEY` and `GOOGLE_AI_KEY` under **Settings › Secrets and variables › Actions**. Keys never enter the sandbox; see [Secrets and egress](/guide/secrets-and-egress).
+
+## What the run prints
+
+Under GitHub Actions, `es run` wraps each attempt in a collapsible group and appends its own `summary.md` to the job summary. This is a real Cursor run of `examples/hello` with `GITHUB_ACTIONS=true CI=1`:
+
+```text
+plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~35s serial (~18s at concurrency 4) · budget 20 attempts ✓
+es 0.0.1 · 1 eval file · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+…
+::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  14s
+[creates#1 cursor]  +0:00 sandbox ready 2s
+[creates#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 2 file edits
+[creates#1 cursor]  +0:11 $ node --test  exit 0 131ms
+[creates#1 cursor]  +0:11 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
+::endgroup::
+…
+   Evals  2 passed (2)
+Duration  19s
+ Results  .es/runs/20260926T170711Z_bd6205e_ci_rx1r/summary.md
+recorded evals/.history/20260926T170711Z_bd6205e_ci_rx1r.json + 9 artifact files in evals/.history/20260926T170711Z_bd6205e_ci_rx1r/ (50.1 KB). Commit it with git.
+```
+
+Because `CI` is set, the run is recorded into `evals/.history` on the runner. Nothing commits it from a pull request; the upload step keeps `.es/runs` for 14 days.
+
+## What a regression looks like
+
+This output came from two recorded runs of the fake harness with `flakeRate: 0.5`, not a real agent, so that one eval flipped from pass to fail:
+
+```bash
+npx es compare --md --fail-on-regression
+```
+
+```text
+### ES: 20260926T172540Z_nogit_ci_rw73 vs 20260926T172538Z_nogit_ci_hz13
+
+Base 20260926T172538Z_nogit_ci_hz13 (no-git) → head 20260926T172540Z_nogit_ci_rw73 (no-git). 1 regressed · 0 fixed · 0 not comparable · 0 same.
+
+| Eval | Base | Head | Change |
+|---|---|---|---|
+| evals/hello.es.ts › greet module › creates a tested greet module | ✓ | ✗ | regressed |
+```
+
+The command exits 1, so the step and the check fail. In the job summary the table renders as a table. Only `regressed` rows fail the check: a new eval that fails shows as `new`, and a changed eval as `not comparable`.
+
+## The first run
+
+`es compare` needs a recorded run on an ancestor of the PR's commit. Until one exists it exits 2:
+
+```text
+es: No earlier recorded run to compare 20260926T172508Z_nogit_ci_br2m with
+```
+
+The compare step turns that into a notice. To give pull requests a base, commit runs to `evals/.history` on your main branch; [Nightly matrix and Pages](/recipes/nightly-pages) does it every night.
+
+## Variations
+
+- **Gate on the run too:** drop the `set +e` lines so any failing eval fails the check, whatever the base did.
+- **Only some evals:** `npx es run --profile pr --tag smoke` or a filter such as `npx es run hello`; `es image build` takes the same filters.
+- **More harnesses:** add their keys as secrets and env entries; ES checks only the keys of the harnesses the profile keeps.
+- **A fixed base:** `npx es compare <base-run> latest --md` compares with a named run instead of the nearest ancestor.
+- **Pin actions by SHA:** ES's own workflows pin `actions/checkout`, `actions/cache` and `actions/upload-artifact` to commit SHAs with the version in a comment.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="Nightly matrix and Pages" icon="globe" href="/recipes/nightly-pages">
+    Record a base every night and publish the studio.
+  </Card>
+  <Card title="Compare runs" icon="code-compare" href="/guide/compare">
+    How the base is chosen and what each change means.
+  </Card>
+</CardGroup>
