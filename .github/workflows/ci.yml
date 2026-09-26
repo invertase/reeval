@@ -1,5 +1,6 @@
-# ES's own gate: lint, typecheck, build, and the test tiers as parallel jobs. The packages' tests
-# run dist/, so every test job builds first (about 2 s). The real-agent tier is in real.yml.
+# ES's own gate: lint, typecheck and the test tiers as parallel jobs. The packages' tests run
+# dist/, so every test job builds first (about 2 s). The real-agent tier is in real.yml.
+# release.yml calls this on the release commit and publishes the tarball the pack job uploads.
 name: ci
 
 on:
@@ -7,12 +8,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # github.workflow is the caller's when release.yml calls this, so the release's run doesn't
+  # share a group with main's own run and can't be replaced by the next push's.
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   # Superseded PR pushes are cancelled; every commit on main gets a full run.
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
@@ -39,22 +43,6 @@ jobs:
       # evalsuite and examples/hello resolve their workspace dependencies' types from dist/.
       - run: pnpm build
       - run: pnpm typecheck
-
-  build:
-    name: build
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      - run: pnpm build
-      - run: pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/pack"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: package
-          path: ${{ runner.temp }}/pack/*.tgz
-          retention-days: 7
 
   unit:
     name: unit and plan (node ${{ matrix.node || 'engines' }})
@@ -142,13 +130,21 @@ jobs:
       # The release job's npm. npm 10.9 (Node 22's) crashes installing the tarball (edgesOut).
       - run: npm install --global npm@^11.5.1
       - run: pnpm build
+      # pnpm pack rewrites workspace: ranges. On a release commit, release.yml publishes this.
+      - run: pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/package"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package
+          path: ${{ runner.temp }}/package/*.tgz
+          if-no-files-found: error
+          retention-days: 7
       - working-directory: packages/evalsuite
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
-      # What release.yml publishes, without publishing it. npm's dry run still refuses a version
-      # that's already published, so this packs a throwaway prerelease of it.
+      # npm's dry run still refuses a version that's already published, so this dry-runs a
+      # throwaway prerelease of it.
       - name: npm publish --dry-run
         working-directory: packages/evalsuite
         run: |
           npm version --no-git-tag-version "$(node -p "require('./package.json').version")-ci.$GITHUB_RUN_ID"
-          pnpm pack --pack-destination "$RUNNER_TEMP/pack"
-          npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/pack/*.tgz
+          pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"
+          npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/dry-run/*.tgz
