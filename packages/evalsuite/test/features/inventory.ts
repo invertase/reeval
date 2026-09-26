@@ -337,14 +337,20 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'files.workspace',
     area: 'Environments',
-    name: '`files` in the workspace, and `file()`',
-    tests: [options('skills, MCP, rules, files, setup steps and secrets reach the sandbox')],
+    name: '`files` in the workspace, and `file()`; paths that leave it are refused',
+    tests: [
+      options('skills, MCP, rules, files, setup steps and secrets reach the sandbox'),
+      options('a file path that climbs out of the workspace exits 2 with a fix'),
+      options('an absolute file path exits 2 with a fix'),
+      options('a Windows-style file path exits 2 with a fix'),
+    ],
   },
   {
     id: 'files.home',
     area: 'Environments',
     name: '`files` under `~/`',
     fixtures: ['env/files-home'],
+    tests: [options('a file path that climbs out of the home directory exits 2 with a fix')],
   },
   {
     id: 'files.binary',

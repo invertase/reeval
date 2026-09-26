@@ -50,7 +50,7 @@
 | `mcp.sse` | ✓ 2 | ✓ 1 | — | — | — |
 | `secret.template` in MCP headers | ✓ 2 | — | — | — | — |
 | `rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose and pi, `CLAUDE.md` for Claude Code | ✓ 1 | — | ● 7 | ● 7 | ● 2 |
-| `files` in the workspace, and `file()` | ✓ 1 | — | — | — | — |
+| `files` in the workspace, and `file()`; paths that leave it are refused | ✓ 1 | — | — | — | — |
 | `files` under `~/` | — | — | ● 1 | ● 1 | — |
 | `files` from `file()` are copied as bytes | — | — | ● 1 | ● 1 | — |
 | `env` variables, `secret.fromEnv` and `optional` | ✓ 1 | — | ● 1 | ● 1 | — |

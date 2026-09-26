@@ -517,8 +517,19 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     }
   }
   for (const [path, value] of Object.entries(s.files ?? {})) {
+    const key = `files[${JSON.stringify(path)}] in ${where}`
+    if (path.includes('\\')) {
+      throw new DefinitionError(`${key}: use forward slashes (${path.replaceAll('\\', '/')})`)
+    }
+    const rest = path.startsWith('~/') ? path.slice(2) : path
+    // On the fake sandbox a file is written on the host, so it must stay in the sandbox's dirs.
+    if (!rest || isAbsolute(rest) || rest.split('/').includes('..')) {
+      throw new DefinitionError(
+        `${key}: paths are relative to the workspace, or start with ~/ for the home directory, and never use ..`,
+      )
+    }
     if (typeof value !== 'string' && !isHostFile(value)) {
-      throw new DefinitionError(`files["${path}"] in ${where} must be a string or file(path)`)
+      throw new DefinitionError(`${key} must be a string or file(path)`)
     }
   }
   if (s.rules !== undefined && typeof s.rules !== 'string' && !isHostFile(s.rules)) {
