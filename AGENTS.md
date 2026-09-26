@@ -584,9 +584,14 @@ evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (
 ```
 
 - **Policies:** `'allow-all'` (the default), `'deny-all'`, or `{ allow: [hosts] }`, where
-  `*.example.com` matches subdomains (not `example.com` itself). Hosts are names or IPv4
-  addresses, without a scheme or port. `DEFAULT_EGRESS_ALLOW` is the package registries and
-  GitHub (`registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`,
+  `*.example.com` matches subdomains (not `example.com` itself, and never an IP address). Hosts
+  are names or IPv4 addresses, without a scheme or port; a pattern needs a domain (`*.com` is
+  refused). A name a `*.` pattern matches that resolves to a private address (`10/8`,
+  `172.16/12`, `192.168/16`, `100.64/10`, `fc00::/7`) is refused, so a DNS record under the
+  pattern's domain can't reach the worker's network; list such a host by name. The allowlist is
+  by name, checked at `CONNECT` or the plain-HTTP URL: an HTTPS tunnel to an allowed host that
+  shares a CDN with others isn't inspected, so the TLS inside can name another.
+  `DEFAULT_EGRESS_ALLOW` is the package registries and GitHub (`registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`,
   `*.githubusercontent.com`, `pypi.org`, `files.pythonhosted.org`).
 - **Cascade:** each level replaces the one before: config, profile defaults, the environment
   (an `extend` child's replaces its parent's, listed in `overrides`), groups, then the eval. A
@@ -598,7 +603,7 @@ evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (
   but what the harness, its secrets and its MCP servers need", and an agent still works under it.
 - **Refused, not failed:** a request to any other host gets a `403` from the gateway (`blocked
   by the ES egress policy: api.example.net isn't in the allowlist`) and the attempt goes on; the
-  checks decide. The refusal is recorded.
+  checks decide. The refusal is recorded, as is a name that doesn't resolve (a `502`).
 - **Where it's enforced:** each sandbox provider declares what it can enforce and whether it
   records traffic. A policy the sandbox can't enforce stops `es run` (and `--dry-run`) with exit 2
   before anything starts, naming the eval, the policy and the sandbox.
