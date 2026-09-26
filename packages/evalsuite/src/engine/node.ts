@@ -64,12 +64,13 @@ export const vitestVersion: string = require('vitest/package.json').version
 export const engineVersions = { vitest: vitestVersion }
 const packageName: string = require('../../package.json').name
 
+const esDistDir = fileURLToPath(new URL('../../dist/', import.meta.url))
 // ES's own frames (src/ via source maps, or dist/) are noise in an eval's stack trace.
-const esDirs = ['../../src/', '../../dist/'].map((p) => fileURLToPath(new URL(p, import.meta.url)))
+const esDirs = [fileURLToPath(new URL('../../src/', import.meta.url)), esDistDir]
 // Workers load ES's built modules natively, as they do from node_modules once ES is installed.
 // From a workspace checkout Vitest would otherwise transform them under their own file URLs,
 // which V8 coverage can't map back to the files.
-const esDist = new RegExp(`^${esDirs[1]?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
+const esDist = new RegExp(`^${esDistDir.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)
 
 const silentLogger = {
   hasWarned: false,
