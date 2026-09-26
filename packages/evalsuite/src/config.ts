@@ -32,6 +32,7 @@ const CONFIG_KEYS = [
   'runs',
   'gate',
   'env',
+  'egress',
   'judge',
   'timeout',
   'concurrency',
@@ -50,6 +51,7 @@ const DEFAULTS_KEYS = [
   'runs',
   'gate',
   'env',
+  'egress',
   'judge',
   'timeout',
 ]
@@ -295,6 +297,7 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     runs: user.runs ?? 1,
     gate: user.gate,
     env: user.env ?? {},
+    ...(user.egress !== undefined ? { egress: user.egress } : {}),
     budget: checkBudget(user.budget, 'budget'),
     profiles,
     defaultProfile,

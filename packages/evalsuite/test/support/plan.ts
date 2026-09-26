@@ -77,6 +77,9 @@ export function renderPlan(plan: PlanDocument): string {
           c.minLift === undefined ? '' : `minLift ${c.minLift}`,
           ...(i === 0 ? e.notes : []),
           c.brokered.length ? `brokered: ${c.brokered.join('; ')}` : '',
+          c.egress.policy === 'allow-all'
+            ? ''
+            : `egress ${JSON.stringify(c.egress.policy)}${c.egress.auto.length ? ` + ${c.egress.auto.join(', ')}` : ''}`,
         ]
           .filter(Boolean)
           .join(' · '),

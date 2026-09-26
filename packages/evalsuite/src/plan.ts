@@ -9,6 +9,7 @@ import type {
   CellGate,
   Duration,
   EvalPlan,
+  PlannedEgress,
   ResolvedProfile,
   SandboxDescriptor,
 } from './types.ts'
@@ -169,6 +170,7 @@ export function planTable(plan: RunPlan): string[] {
       p.skip ? `skipped: ${p.skip}` : '',
       ...p.notes,
       p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
+      p.egress.length ? `egress: ${p.egress.join('; ')}` : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -188,6 +190,7 @@ export type PlanCell = Cell & {
   runs: number
   /** Secrets its attempts broker, as `NAME → host, host`. */
   brokered: string[]
+  egress: PlannedEgress
 }
 
 export type PlanEval = {
@@ -257,6 +260,7 @@ export function planDocument(
         ...(attempt.minLift !== undefined ? { minLift: attempt.minLift } : {}),
         runs: 1,
         brokered: attempt.brokered,
+        egress: attempt.egress,
       })
     }
   }

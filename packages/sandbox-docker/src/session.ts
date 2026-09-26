@@ -6,6 +6,7 @@ import type { HarnessV1NetworkSandboxSession, HarnessV1SandboxProvider } from '@
 import { docker, dockerOk, removeContainerDetached, sweepLabelDetached } from './docker-cli.ts'
 import { type Gateway, type GatewayOptions, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
+import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
 import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
 import { shellQuote as q } from './process.ts'
@@ -35,6 +36,8 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
   readonly egress?: EgressStatus
   /** With the gateway: the brokered secrets, each swapped in only on HTTPS to its own hosts. */
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
+  /** With the gateway: the hosts the sandbox contacted and was refused so far. */
+  traffic?(): EgressTraffic
 }
 
 /** Set on every exec, so a kill can find the command's whole process tree in the container. */
@@ -212,11 +215,12 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
         },
       }
     : {}
-  const substituting: Pick<DockerSession, 'setSubstitutions'> = gateway
+  const substituting: Pick<DockerSession, 'setSubstitutions' | 'traffic'> = gateway
     ? {
         async setSubstitutions(subs) {
           gateway?.setSubstitutions(subs)
         },
+        traffic: () => (gateway as Gateway).traffic(),
       }
     : {}
 

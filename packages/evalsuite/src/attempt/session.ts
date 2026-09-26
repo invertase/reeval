@@ -62,6 +62,7 @@ export async function startSession(
     image: a.image,
     brokering: brokeringFor(spec.harness),
     substitutions: env.substitutions,
+    egress: spec.egress,
   })
   a.sandbox = box
   a.phases = brokerPhases(box, env.substitutions)

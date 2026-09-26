@@ -1,9 +1,13 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import type { EgressCapabilities } from '@evalsuite/sandbox-docker'
 import { run } from '@evalsuite/sandbox-docker/process'
 import type { FakeSandboxDescriptor } from '../types.ts'
 import type { Sandbox } from './types.ts'
+
+/** Commands run on the host's own network, so the fake sandbox can neither restrict nor see it. */
+export const FAKE_EGRESS: EgressCapabilities = { enforce: 'none', record: false }
 
 /**
  * A temp directory on the host. Commands run unisolated on the host shell, so this is

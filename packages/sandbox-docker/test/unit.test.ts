@@ -197,6 +197,33 @@ describe('network policy', () => {
     assert.ok(hostAllowed(defaultAllowedHosts('cursor'), 'raw.githubusercontent.com'))
   })
 
+  test('a wildcard never matches an IP address, in any form', () => {
+    for (const host of ['10.1.2.3', '1.2.3', '[::ffff:10.1.2.3]', '[fd00::1.2.3]']) {
+      assert.equal(hostAllowed(['*.2.3', '*.1.2.3', '*.3'], host), false, host)
+    }
+    // Twin: an address listed as it is matches.
+    assert.ok(hostAllowed(['10.1.2.3'], '10.1.2.3'))
+  })
+
+  test('a name only a wildcard matches may not resolve to a private address', async () => {
+    const rebound = async (host: string) =>
+      host.endsWith('.rebind.example') ? [host.startsWith('v6') ? 'fd00::1' : '10.0.0.5'] : []
+    const check = createPolicyCheck(
+      { mode: 'custom', allowedHosts: ['*.rebind.example', 'intranet.rebind.example'] },
+      { lookup: rebound },
+    )
+    for (const host of ['a.rebind.example', 'v6.rebind.example']) {
+      const verdict = await check(host)
+      assert.equal(verdict.allowed, false, host)
+      assert.match(!verdict.allowed ? verdict.reason : '', /private address/)
+    }
+    // Twin: a host listed by name is trusted to resolve where it does.
+    assert.deepEqual(await check('intranet.rebind.example'), {
+      allowed: true,
+      address: '10.0.0.5',
+    })
+  })
+
   test("each harness's default allowlist has its own hosts and not the others'", () => {
     const cursor = defaultAllowedHosts('cursor')
     const claude = defaultAllowedHosts('claude-code')
@@ -256,6 +283,33 @@ describe('network policy', () => {
       const loose = createPolicyCheck(policy, { lookup: resolve, allowLoopback: true })
       for (const host of DENIED) assert.equal((await loose(host)).allowed, true, host)
     }
+  })
+
+  test('an unlisted host is refused before any DNS lookup', async () => {
+    const asked: string[] = []
+    const counting = async (host: string) => {
+      asked.push(host)
+      return lookup(host)
+    }
+    const check = createPolicyCheck(
+      { mode: 'custom', allowedHosts: ['github.com'] },
+      { lookup: counting },
+    )
+    const verdict = await check('unresolvable.invalid')
+    assert.deepEqual(verdict, {
+      allowed: false,
+      status: 403,
+      reason: "unresolvable.invalid isn't in the allowlist",
+    })
+    assert.deepEqual(asked, [])
+    // Twin: a listed host is looked up, and so is any host when the policy allows CIDRs.
+    assert.equal((await check('github.com')).allowed, true)
+    const cidrs = createPolicyCheck(
+      { mode: 'custom', allowedCIDRs: ['10.0.0.0/8'] },
+      { lookup: counting },
+    )
+    assert.equal((await cidrs('internal.corp')).allowed, true)
+    assert.deepEqual(asked, ['github.com', 'internal.corp'])
   })
 
   test('deny-all denies everything', async () => {

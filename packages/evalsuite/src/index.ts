@@ -1,5 +1,6 @@
 // `evalsuite`: the core authoring API. Harnesses, sandboxes and judges live in subpaths.
 export { defineConfig } from './config.ts'
+export { DEFAULT_EGRESS_ALLOW } from './egress.ts'
 export { expect } from './engine/runtime.ts'
 export { DEFAULT_SKILL_EXCLUDE, defineEnvironment } from './environment.ts'
 export { evaluate, group } from './evaluate.ts'
@@ -12,6 +13,8 @@ export type {
   ConfigHelpers,
   Diff,
   Duration,
+  EgressPolicy,
+  EgressRecord,
   Environment,
   EnvironmentHelpers,
   EnvironmentInput,

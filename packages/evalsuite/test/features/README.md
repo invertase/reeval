@@ -76,6 +76,12 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 - The fake agent writes **harness-placed skills** to `~/.agents/skills/<name>/`, where the Cursor
   adapter puts them. Whether Cursor itself reads them from there is a question for the Docker
   and real-agent tiers.
+- **Egress fixtures** (`egress/*`) list only `docker` (and `real`): the fake sandbox can't
+  enforce a policy, so a restricted one makes its plan exit 2. For a host to reach,
+  `features.test.ts` starts a listener on the host at a non-loopback address (the gateway never
+  reaches loopback) that answers `es-egress-ok`; a row passes `hostEnv: egressEnv` to give the
+  fixture `ES_EGRESS_HOST` (its address) and `ES_EGRESS_TARGET` (address and port). The row's
+  `record` checks the attempt's `egress` from outside.
 - **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
   agent's image, so a fixture under `harness/` covers what a real harness receives. List the

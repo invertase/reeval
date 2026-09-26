@@ -300,9 +300,19 @@ export type InstallStep = string | { run: string; timeout?: Duration }
 /** Runs in every attempt before the agent starts, with secrets, outside the eval timeout. */
 export type SetupStep = { run: string; timeout?: Duration; cwd?: string }
 
+/**
+ * Where the sandbox may connect: anywhere (`'allow-all'`, the default), nowhere (`'deny-all'`), or
+ * only the listed hosts (`'*.example.com'` matches subdomains). Under a restricted policy the
+ * harness's own hosts, brokered secrets' `hosts` and MCP servers' hosts are allowed too; any
+ * other request gets a refusal, and the attempt goes on.
+ */
+export type EgressPolicy = 'allow-all' | 'deny-all' | { allow: readonly string[] }
+
 /** What an eval runs in: the declarative, phased spec of one environment. */
 export type EnvironmentSpec = {
   env?: EnvVars
+  /** Replaces the inherited policy; an `extend` child's replaces its parent's. */
+  egress?: EgressPolicy
   /** Workspace-relative, or `~/` for home. */
   files?: Record<string, string | HostFile>
   /** Project rules, written where the harness's agent reads them: `AGENTS.md`, or `CLAUDE.md` for Claude Code. */
@@ -437,6 +447,11 @@ export type EvalOptions = {
   gate?: GatePolicy
   /** Variables and secrets for the sandbox, merged by name down the cascade. */
   env?: EnvVars
+  /**
+   * Where the sandbox may connect. Replaces the inherited policy: config, profile defaults, the
+   * environment, then groups and the eval.
+   */
+  egress?: EgressPolicy
   judge?: JudgeOptions
   /** Per attempt. */
   timeout?: Duration
@@ -467,6 +482,7 @@ export type ProfileDefaults = {
   runs?: number
   gate?: GatePolicy
   env?: EnvVars
+  egress?: EgressPolicy
   judge?: ConfigJudgeOptions
   timeout?: Duration
 }
@@ -501,6 +517,7 @@ export type EsConfig = {
   /** How each cell's attempts decide its outcome; default `'all'`. */
   gate?: GatePolicy
   env?: EnvVars
+  egress?: EgressPolicy
   judge?: ConfigJudgeOptions
   timeout?: Duration
   /** How many attempts run at once. `--concurrency` and `ES_CONCURRENCY` override it. */
@@ -551,6 +568,7 @@ export type ResolvedConfig = {
   /** Unset means `'all'`; kept unset so the plan can hint when `runs > 1`. */
   gate: GatePolicy | undefined
   env: EnvVars
+  egress?: EgressPolicy
   judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
@@ -623,6 +641,28 @@ export type EnvironmentRecord = {
   brokered: string[]
   /** Optional secrets whose host variable was unset, so they weren't injected. */
   unset: string[]
+  /** The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`. */
+  egress: EgressPolicy
+}
+
+/**
+ * An attempt's network traffic. `allowed` is every host a restricted policy let through, its own
+ * and the automatic ones; null under `allow-all`. `recorded` is false when the sandbox can't see
+ * the traffic, and then `contacted` and `blocked` are empty. Bytes are counted between the
+ * sandbox and the egress gateway, TLS included.
+ */
+export type EgressRecord = {
+  policy: EgressPolicy
+  allowed: string[] | null
+  recorded: boolean
+  contacted: Array<{
+    host: string
+    port: number
+    connections: number
+    sent: number
+    received: number
+  }>
+  blocked: Array<{ host: string; port: number; connections: number; reason: string }>
 }
 
 /** The image an attempt's container started from, and how ES made it. */
@@ -671,6 +711,7 @@ export type EvalRecord = {
   env?: { vars: string[]; secrets: string[]; brokered: string[] }
   /** The environment's setup steps as they ran, output redacted later. */
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
+  egress?: EgressRecord
 }
 
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */
@@ -689,7 +730,12 @@ export type EvalPlan = {
   warnings: string[]
   /** Secrets any of its attempts brokers, as `NAME → host, host`. */
   brokered: string[]
+  /** Each distinct restricted egress policy its attempts run under, as the plan prints it. */
+  egress: string[]
 }
+
+/** An attempt's egress policy, and the hosts a restricted one allows on top of its own. */
+export type PlannedEgress = { policy: EgressPolicy; auto: string[] }
 
 /** Set when an attempt is registered, so the reporter has it even for skipped attempts. */
 export type AttemptMeta = {
@@ -708,6 +754,7 @@ export type AttemptMeta = {
   minLift?: number
   /** The secrets this attempt brokers, as `NAME → host, host`. */
   brokered: string[]
+  egress: PlannedEgress
   plan: EvalPlan
 }
 

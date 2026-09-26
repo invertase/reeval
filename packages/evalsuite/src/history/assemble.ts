@@ -406,6 +406,7 @@ async function addAttempt(
     imageId: record?.image?.id ?? null,
     env: record?.env ?? { vars: [], secrets: [], brokered: [] },
     context,
+    egress: record?.egress ?? null,
     outcome,
     error,
     durationMs: e.durationMs,

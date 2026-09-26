@@ -7,18 +7,27 @@ export type NetworkPolicy = HarnessV1NetworkPolicy
 
 export type Lookup = (host: string) => Promise<string[]>
 
+/**
+ * What a sandbox provider can do about egress. `enforce`: nothing (`none`), `allow-all` or
+ * `deny-all` only (`all-or-nothing`), or a host allowlist too (`allowlist`). `record`: whether
+ * it reports the hosts the sandbox contacted and was refused.
+ */
+export type EgressCapabilities = {
+  enforce: 'none' | 'all-or-nothing' | 'allowlist'
+  record: boolean
+}
+
+/** The Docker sandbox enforces every policy through its egress gateway, and records what passes. */
+export const DOCKER_EGRESS: EgressCapabilities = { enforce: 'allowlist', record: true }
+
 /** The hosts each harness's CLI talks to at runtime. */
 export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   cursor: ['api2.cursor.sh', '*.cursor.sh', 'cursor.com', '*.cursor.com'],
   'claude-code': ['api.anthropic.com', '*.anthropic.com'],
 }
 
-/**
- * The harness's own hosts plus the package registries and GitHub, for a restricted policy that
- * still installs. Only that harness's hosts: a Cursor attempt can't reach Anthropic.
- */
-export const defaultAllowedHosts = (harness: BakedHarness) => [
-  ...HARNESS_HOSTS[harness],
+/** The package registries and GitHub, for a restricted policy that still installs. */
+export const PACKAGE_HOSTS: readonly string[] = Object.freeze([
   'registry.npmjs.org',
   'registry.yarnpkg.com',
   'github.com',
@@ -26,6 +35,15 @@ export const defaultAllowedHosts = (harness: BakedHarness) => [
   '*.githubusercontent.com',
   'pypi.org',
   'files.pythonhosted.org',
+])
+
+/**
+ * The harness's own hosts plus `PACKAGE_HOSTS`. Only that harness's hosts: a Cursor attempt
+ * can't reach Anthropic.
+ */
+export const defaultAllowedHosts = (harness: BakedHarness) => [
+  ...HARNESS_HOSTS[harness],
+  ...PACKAGE_HOSTS,
 ]
 
 /**
@@ -69,14 +87,32 @@ const normalise = (host: string) =>
     .replace(/\.$/, '')
     .replace(/^\[|\]$/g, '')
 
-/** `*.example.com` matches any subdomain of example.com, not example.com itself. */
-export function hostAllowed(patterns: readonly string[], host: string): boolean {
+/**
+ * Private, carrier-grade NAT and unique-local ranges: a name matched only by a `*.` pattern
+ * mustn't resolve into them, or anyone who can add a DNS record under the pattern's domain
+ * reaches the worker's LAN.
+ */
+const PRIVATE = blockList([
+  '10.0.0.0/8',
+  '100.64.0.0/10',
+  '172.16.0.0/12',
+  '192.168.0.0/16',
+  'fc00::/7',
+])
+
+/** How `host` matches: listed as it is, only by a `*.` pattern (never an IP address), or not. */
+function hostMatch(patterns: readonly string[], host: string): 'exact' | 'wildcard' | undefined {
   const h = normalise(host)
-  return patterns.some((pattern) => {
-    const p = normalise(pattern)
-    return p.startsWith('*.') ? h.endsWith(p.slice(1)) : h === p
-  })
+  const ps = patterns.map(normalise)
+  if (ps.includes(h)) return 'exact'
+  // No top-level domain is numeric: such a host is an IP address, maybe in a short form like 10.1.
+  if (isIP(h) || /(?:^|\.)\d+$/.test(h)) return undefined
+  return ps.some((p) => p.startsWith('*.') && h.endsWith(p.slice(1))) ? 'wildcard' : undefined
 }
+
+/** `*.example.com` matches any subdomain of example.com, not example.com itself or an IP. */
+export const hostAllowed = (patterns: readonly string[], host: string) =>
+  hostMatch(patterns, host) !== undefined
 
 const defaultLookup: Lookup = async (host) =>
   (await dnsLookup(host, { all: true, verbatim: true })).map((a) => a.address)
@@ -99,6 +135,11 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     if (policy.mode === 'deny-all') {
       return { allowed: false, status: 403, reason: 'the policy denies all egress' }
     }
+    // Refused before any DNS lookup, so an unlisted host is never resolved on the agent's behalf.
+    const listed = hostMatch(custom?.allowedHosts ?? [], host)
+    if (custom && !listed && !custom.allowedCIDRs?.length) {
+      return { allowed: false, status: 403, reason: `${host} isn't in the allowlist` }
+    }
     let addresses: string[]
     try {
       addresses = isIP(host) ? [host] : await lookup(host)
@@ -118,7 +159,14 @@ export function createPolicyCheck(policy: NetworkPolicy, options: PolicyOptions 
     if (addresses.some((a) => inList(deniedCidrs, a))) {
       return { allowed: false, status: 403, reason: `${host} is in a denied range` }
     }
-    if (hostAllowed(custom.allowedHosts ?? [], host)) return { allowed: true, address: first }
+    if (listed === 'wildcard' && addresses.some((a) => inList(PRIVATE, a))) {
+      return {
+        allowed: false,
+        status: 403,
+        reason: `${host} resolves to a private address, which a *. pattern doesn't allow; list the host itself`,
+      }
+    }
+    if (listed) return { allowed: true, address: first }
     if (custom.allowedCIDRs?.length && addresses.every((a) => inList(allowedCidrs, a))) {
       return { allowed: true, address: first }
     }

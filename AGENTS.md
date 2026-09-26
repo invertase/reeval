@@ -48,6 +48,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`; `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
+| `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
 | `packages/evalsuite/src/harness` | The Cursor (`@ai-sdk/harness-cursor`) and Claude Code (`@ai-sdk/harness-claude-code`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models |
@@ -213,7 +214,7 @@ judge's keys; a brokered secret that goes in a header fails its attempt the same
 
 | Import | Exports |
 |---|---|
-| `@invertase/foobar` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment`, `DEFAULT_SKILL_EXCLUDE` and the types |
+| `@invertase/foobar` | `group`, `evaluate`, `expect`, `defineConfig`, `defineEnvironment`, `DEFAULT_SKILL_EXCLUDE`, `DEFAULT_EGRESS_ALLOW` and the types |
 | `@invertase/foobar/harness` | `cursor()`, `claudeCode()`, `fakeHarness()` |
 | `@invertase/foobar/sandbox` | `docker()`, `fakeSandbox()` |
 | `@invertase/foobar/judge` | `fakeJudge()`, `RECOMMENDED_JUDGE_MODEL`, `DEFAULT_THRESHOLD` and the judge types |
@@ -264,6 +265,7 @@ defaults → outer group → inner group → eval:
 | `sandbox` | replace | Where it runs and what's baked into its image: one `docker()`, `docker({ install: […] })`, `docker({ dockerfile: './Dockerfile' })`, … |
 | `runs` | replace | Attempts per cell (default 1); `es run --runs n` overrides every level |
 | `env` | merge by name | Variables for the sandbox; strings, or `secret.fromEnv(…)` from a callback |
+| `egress` | replace | Where the sandbox may connect: `'allow-all'` (default), `'deny-all'` or `{ allow: [hosts] }`; an environment's sits between the profile defaults and groups (see [Egress](#egress)) |
 | `judge` | merge by field | `{ model, threshold, providerOptions }`; no default model |
 | `timeout` | replace | Per attempt, e.g. `'10m'`; image builds and setup steps don't count |
 | `tags` | union | Filter with `es run --tag slow` or `--tag '!slow'` |
@@ -288,7 +290,7 @@ It's declarative: pass a spec, or a
 callback that destructures the typed helpers it needs (`secret`, `skill`, `mcp`, `file`):
 
 ```ts
-import { defineEnvironment } from '@invertase/foobar'
+import { DEFAULT_EGRESS_ALLOW, defineEnvironment } from '@invertase/foobar'
 
 export const genkitBase = defineEnvironment('genkit-base', ({ secret }) => ({
   env: { GOOGLE_GENAI_API_KEY: secret.fromEnv('GOOGLE_GENERATIVE_AI_API_KEY') },
@@ -302,6 +304,7 @@ export const genkitSkill = genkitBase.extend('genkit-skill', ({ file, mcp, skill
   rules: file('../rules/house.md'),                       // AGENTS.md (CLAUDE.md for Claude Code)
   files: { 'docs/api.md': file('../docs/api.md'), '~/.npmrc': 'fund=false\n' },
   setup: [{ run: 'npm ci', timeout: '5m' }],            // every attempt, before the agent starts
+  egress: { allow: [...DEFAULT_EGRESS_ALLOW] },          // registries and GitHub, plus the automatic hosts
 }))
 ```
 
@@ -533,8 +536,8 @@ env: {
  URL-encoded and base64 (standard and URL-safe, at any byte offset) forms. Other encodings,
  hex for one, aren't masked.
 
-The harness's own key (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`) never enters the container. Each
-real-agent attempt starts an egress gateway: the container's HTTP(S) proxy is a small forwarder
+The harness's own key (`CURSOR_API_KEY`, `ANTHROPIC_API_KEY`) never enters the container. Every
+Docker attempt starts an egress gateway (see [Egress](#egress)): the container's HTTP(S) proxy is a small forwarder
 that sends every connection over `docker exec` to ES, which decrypts only the harness's API host
 (`api2.cursor.sh`, `api.anthropic.com`; with a CA made for that attempt, whose key stays in
 memory) and swaps the placeholder the agent sees (`aisdkhc_…`) for the real key, but only on the
@@ -564,6 +567,71 @@ on requests to `cursor.sh` and its subdomains, including the agent's long-lived 
 responses are scrubbed in headers only, since scrubbing a body holds back bytes and would stall
 those streams; an exchange response the gateway can't read (compressed, over 1 MB, not JSON) is a
 502, so real tokens never go through.
+
+### Egress
+
+`egress` says where the sandbox may connect. It's an option on the config, a profile's
+`defaults`, a group or an eval, and a field of `defineEnvironment`:
+
+```ts
+import { DEFAULT_EGRESS_ALLOW, defineEnvironment } from '@invertase/foobar'
+
+export const offline = defineEnvironment('offline', { egress: 'deny-all' })
+export const installs = defineEnvironment('installs', {
+  egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'api.example.com', '*.example.org'] },
+})
+evaluate('works offline', { environment: installs, egress: 'deny-all' }, async (t) => { … })
+```
+
+- **Policies:** `'allow-all'` (the default), `'deny-all'`, or `{ allow: [hosts] }`, where
+  `*.example.com` matches subdomains (not `example.com` itself, and never an IP address). Hosts
+  are names or IPv4 addresses, without a scheme or port; a pattern needs a domain (`*.com` is
+  refused). A name a `*.` pattern matches that resolves to a private address (`10/8`,
+  `172.16/12`, `192.168/16`, `100.64/10`, `fc00::/7`) is refused, so a DNS record under the
+  pattern's domain can't reach the worker's network; list such a host by name. The allowlist is
+  by name, checked at `CONNECT` or the plain-HTTP URL: an HTTPS tunnel to an allowed host that
+  shares a CDN with others isn't inspected, so the TLS inside can name another.
+  `DEFAULT_EGRESS_ALLOW` is the package registries and GitHub (`registry.npmjs.org`, `registry.yarnpkg.com`, `github.com`, `*.github.com`,
+  `*.githubusercontent.com`, `pypi.org`, `files.pythonhosted.org`).
+- **Cascade:** each level replaces the one before: config, profile defaults, the environment
+  (an `extend` child's replaces its parent's, listed in `overrides`), groups, then the eval. A
+  `compare` variant's own policy applies to its cell.
+- **Automatic hosts:** a restricted policy also allows what the attempt itself needs: the
+  harness's API (`api2.cursor.sh`, `*.cursor.sh`, `cursor.com`, `*.cursor.com` for Cursor;
+  `api.anthropic.com`, `*.anthropic.com` for Claude Code; a fake agent's `layout`'s), every
+  brokered secret's `hosts`, and each MCP `http`/`sse` server's host. So `'deny-all'` is "nothing
+  but what the harness, its secrets and its MCP servers need", and an agent still works under it.
+- **Refused, not failed:** a request to any other host gets a `403` from the gateway (`blocked
+  by the ES egress policy: api.example.net isn't in the allowlist`) and the attempt goes on; the
+  checks decide. The refusal is recorded, as is a name that doesn't resolve (a `502`).
+- **Where it's enforced:** each sandbox provider declares what it can enforce and whether it
+  records traffic. A policy the sandbox can't enforce stops `es run` (and `--dry-run`) with exit 2
+  before anything starts, naming the eval, the policy and the sandbox.
+
+  | Sandbox | Enforces | Records |
+  |---|---|---|
+  | `docker()` | `allow-all`, `deny-all` and allowlists | yes |
+  | `fakeSandbox()` | nothing (commands run on the host): `allow-all` only | no |
+
+- **Docker:** under a restricted policy the container is detached from every network before
+  anything but `sleep` runs, so the gateway's proxy is its only way out; a client that ignores the
+  proxy variables gets no connection at all. An unlisted host is refused before any DNS lookup.
+  The host's loopback and link-local addresses (cloud metadata) are refused under every policy.
+  Under `allow-all` the container keeps its network, and only proxy-aware clients (curl, npm,
+  pip, git, Node with `NODE_USE_ENV_PROXY`, the agents' CLIs) show up in the record. An image the
+  gateway can't start in (no `node`) runs under `allow-all` unrecorded when nothing is brokered,
+  and is an infra error under a restricted policy.
+- **Plan:** each eval's restricted policies are in its notes, with their automatic hosts
+  (`egress: deny-all + auto: api2.cursor.sh, *.cursor.sh, cursor.com, *.cursor.com`), and each
+  cell of `--dry-run --json` has `egress: { policy, auto }`.
+- **Fingerprint:** a restricted policy is part of the environment digest (host order doesn't
+  matter); `allow-all` leaves the digest as it was without the option.
+- **Record:** each attempt has `egress: { policy, allowed, recorded, contacted, blocked }`:
+  `allowed` is every host a restricted policy let through (null under `allow-all`),
+  `contacted` each `host:port` reached with its connections and bytes `sent` and `received`
+  (between the sandbox and the gateway, TLS included), and `blocked` each refused `host:port`
+  with its connections and the reason. `recorded: false` (the fake sandbox) leaves both empty.
+  The studio's attempt page shows it.
 
 ## Judges
 
@@ -884,10 +952,11 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   harness config, environment, image, agent CLI, judge and agent context), so `es compare` can
   say which part changed: `not comparable: evals/helpers.ts changed`.
 - **Attempts:** each attempt's key (unique in the run), cell, run number, start order and time,
-  image id (details in the stack), variable and secret names, turns (text cut at 8 KB; the
+  image id (details in the stack), variable and secret names, egress (the policy, and the hosts
+  contacted and refused, with bytes), turns (text cut at 8 KB; the
   whole message is in `transcript.jsonl`) and verdicts, each with a key that follows the same
   question across runs.
-- **Environments:** each environment's digest, parent and overrides, setup steps,
+- **Environments:** each environment's digest, parent and overrides, egress policy, setup steps,
   skills (source, hash, git commit, placement), MCP server names, files, and variable and
   secret names (and optional ones that were unset).
 - **Stack:** every sandbox image's tag, content-addressed id and registry digests, with its

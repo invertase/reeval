@@ -1,5 +1,6 @@
 import { type AttemptSpec, runAttempt, setupAllowance } from './attempt/index.ts'
 import { parseDuration } from './config.ts'
+import { unenforceable } from './egress.ts'
 import { getRunContext, registerGroup, registerTest, type TestMode } from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import { UsageError } from './errors.ts'
@@ -105,6 +106,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     runs: config.runs,
     gate: config.gate,
     env: config.env,
+    egress: config.egress !== undefined ? { inherited: config.egress } : {},
     judge: config.judge,
     timeout: undefined,
     tags: [],
@@ -135,6 +137,10 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
     const [first] = unbrokered(resolved.env, plannedAttempts)
     if (first) throw new UsageError(unbrokeredError(first, where))
   }
+  for (const planned of plannedAttempts) {
+    const why = unenforceable(planned.egress, planned.sandbox, where)
+    if (why) throw new UsageError(why)
+  }
   const plan = evalPlan(resolvedEval, plannedAttempts)
   if (resolvedEval.skip) {
     const [first] = expand(resolved)
@@ -150,6 +156,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       sandbox: first.sandbox,
       gate: 'none',
       brokered: [],
+      egress: first.egress,
       plan,
     }
     registerTest(
@@ -174,6 +181,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       gate: planned.gate,
       ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
       brokered: brokeredIn(resolved.env, planned),
+      egress: planned.egress,
       plan,
     }
     const spec: AttemptSpec = {

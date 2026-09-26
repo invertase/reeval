@@ -10,7 +10,7 @@ import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
-import { recordFailure, writeRecord } from './record.ts'
+import { recordEgress, recordFailure, writeRecord } from './record.ts'
 import { startSession } from './session.ts'
 import { type AttemptSpec, createAttempt, evalTimer } from './state.ts'
 import { turnSender } from './turns.ts'
@@ -88,6 +88,7 @@ export async function runAttempt(
     if (sandbox) a.report({ kind: 'cleanup' })
     testSignal.removeEventListener('abort', destroy)
     await a.session?.close().catch(() => {})
+    recordEgress(a, sandbox)
     await sandbox?.destroy()
     setMeta(await writeRecord(a, stagingDir, id))
   }
