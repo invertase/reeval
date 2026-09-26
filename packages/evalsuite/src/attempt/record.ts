@@ -59,6 +59,7 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
     const hosts = expectedBlocked.map((h) => `${h.host}:${h.port} ×${h.connections}`).join(', ')
     debugLog('gateway', `expected blocks, not logged per request: ${hosts} · ${expected.why}`)
   }
+  a.record.servedModels = sandbox?.servedModels?.() ?? null
 }
 
 /** Phase 6: writes the attempt's record, redacted, and returns what the runner reports. */

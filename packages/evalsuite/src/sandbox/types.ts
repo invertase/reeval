@@ -17,6 +17,11 @@ export interface Sandbox {
   setSubstitutions?(subs: readonly Substitution[]): Promise<void>
   /** When the sandbox records egress: the hosts contacted and refused so far. */
   traffic?(): EgressTraffic
+  /**
+   * When the harness's requests name their model: each model its brokered requests asked for so
+   * far, in first-seen order.
+   */
+  servedModels?(): string[]
   /** Idempotent, never throws. */
   destroy(): Promise<void>
 }

@@ -94,7 +94,6 @@ const withTurns = (run: RunRecord) =>
 
 type TurnRecord = AttemptRecord['turns'][number] & {
   usage?: { input: number; output: number; cacheRead: number } | null
-  model?: string | null
 }
 
 const behaviours: Behaviour[] = [
@@ -194,11 +193,19 @@ const behaviours: Behaviour[] = [
   {
     name: 'served model recorded',
     check(ran, row) {
-      const turns = withTurns(ran.run).flatMap((a) => a.turns as TurnRecord[])
-      assert.ok(turns.length > 0, 'no turns ran')
-      for (const t of turns) {
-        if (!row.servedModel) continue
-        assert.match(t.model ?? '', row.servedModel, `turn: ${JSON.stringify(t).slice(0, 300)}`)
+      const attempts = withTurns(ran.run)
+      assert.ok(attempts.length > 0, 'no turns ran')
+      for (const a of attempts) {
+        const served = a.servedModels
+        if (!row.servedModel) {
+          assert.equal(served, null, `${row.id} can't say, so the record says it's unknown`)
+          continue
+        }
+        const pattern = row.servedModel
+        assert.ok(
+          served?.some((m) => pattern.test(m)),
+          `${a.key}: served ${JSON.stringify(served)}, expected one to match ${pattern}`,
+        )
       }
     },
   },

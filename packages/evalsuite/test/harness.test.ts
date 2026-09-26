@@ -197,6 +197,20 @@ describe('the Claude Code harness', () => {
 })
 
 describe('the Antigravity harness', () => {
+  test('its brokered requests name the served model; the others can’t say', () => {
+    const served = brokeringFor(antigravity({ model: 'gemini-3.8-flash-low' }))?.servedModel
+    const host = 'generativelanguage.googleapis.com'
+    const path = (m: string) => `/v1beta/models/${m}:streamGenerateContent`
+    assert.equal(
+      served?.({ method: 'POST', host, path: path('gemini-3.8-flash') }),
+      'gemini-3.8-flash',
+    )
+    assert.equal(served?.({ method: 'POST', host: 'example.com', path: path('x') }), undefined)
+    assert.equal(served?.({ method: 'POST', host, path: '/v1beta/models' }), undefined)
+    assert.equal(brokeringFor(cursor({ model: 'composer-2.5' }))?.servedModel, undefined)
+    assert.equal(brokeringFor(claudeCode({ model: 'sonnet' }))?.servedModel, undefined)
+  })
+
   test('is plain data with its own cell id, and needs a model', () => {
     const h = antigravity({ model: 'gemini-3.8-flash-medium' })
     assert.deepEqual(h, { kind: 'antigravity', model: 'gemini-3.8-flash-medium' })

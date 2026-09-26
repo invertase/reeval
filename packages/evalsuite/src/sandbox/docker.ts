@@ -80,6 +80,19 @@ export async function createDockerSandbox(
   ]
   const debug = attemptDebug()
   const policy = networkPolicy(options.egress)
+  const served = new Set<string>()
+  const servedModel = brokering?.servedModel
+  const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
+  const onEvent = (event: EgressEvent) => {
+    logEvent?.(event)
+    if (!servedModel || event.type === 'dns' || event.credentials.length === 0) return
+    const model = servedModel({
+      method: event.method,
+      host: event.host,
+      path: URL.canParse(event.url) ? new URL(event.url).pathname : event.url,
+    })
+    if (model) served.add(model)
+  }
   const started = performance.now()
   const network = await createDockerSession({
     image,
@@ -91,7 +104,7 @@ export async function createDockerSandbox(
     egress: {
       policy,
       log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
-      onEvent: gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? []),
+      onEvent,
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
         console.warn(
           `warning: the egress gateway sent ${method} ${url} with ${name}'s placeholder in the ${where}, where it isn't substituted: add '${where}' to its in (now ${JSON.stringify(places)}) if the API takes it there`,
@@ -146,6 +159,7 @@ export async function createDockerSandbox(
       }),
     readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
     ...(network.traffic && network.egress?.active && { traffic: network.traffic }),
+    ...(servedModel && { servedModels: () => [...served] }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),

@@ -801,6 +801,8 @@ export type EvalRecord = {
   /** The environment's setup steps as they ran, output redacted later. */
   setup?: Array<{ run: string; exitCode: number | null; durationMs: number; output: string }>
   egress?: EgressRecord
+  /** See `AttemptRecord.servedModels`. */
+  servedModels?: string[] | null
 }
 
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */
