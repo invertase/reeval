@@ -27,6 +27,7 @@ import {
   type RequestTransformation,
 } from '../src/egress/rules.ts'
 import { DEFAULT_IMAGE, HARNESS_PACKAGES, harnessLabel, imageFor } from '../src/image.ts'
+import { type DockerCommand, onDockerCommand, traceDocker } from '../src/trace.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const PLACEHOLDER = `aisdkhc_${'A'.repeat(43)}`
@@ -648,5 +649,44 @@ describe('image recipes', () => {
     assert.notEqual(installLayerTag({ id: 'sha256:b' }, steps), tag)
     assert.notEqual(installLayerTag({ id: 'sha256:a' }, [...steps, { run: 'true' }]), tag)
     assert.equal(installLayerTag({ id: 'sha256:a' }, [{ run: 'apt-get install -y jq' }]), tag)
+  })
+})
+
+describe('docker command traces', () => {
+  test('each command is reported with its output, binary as a byte count, long args clipped', () => {
+    const seen: DockerCommand[] = []
+    onDockerCommand((c) => seen.push(c))
+    try {
+      const at = Date.now()
+      traceDocker(['version'], at, {
+        exitCode: 0,
+        stdout: Buffer.from('29.8.1\n'),
+        stderr: '',
+        stdin: 3,
+      })
+      traceDocker(['exec', 'c1', 'cat', '--', '/f'], at, {
+        exitCode: 0,
+        stdout: Buffer.from([0, 255, 1]),
+      })
+      traceDocker(['exec', 'c1', 'node', '-e', 'x'.repeat(400)], at, { error: new Error('killed') })
+    } finally {
+      onDockerCommand(undefined)
+    }
+    traceDocker(['ps'], Date.now(), { exitCode: 0 })
+    assert.deepEqual(
+      seen.map(({ ms: _, ...c }) => c),
+      [
+        { args: ['version'], exitCode: 0, stdout: '29.8.1\n', stderr: '', stdin: 3 },
+        { args: ['exec', 'c1', 'cat', '--', '/f'], exitCode: 0, stdout: '<3 bytes>', stderr: '' },
+        {
+          args: ['exec', 'c1', 'node', '-e', `${'x'.repeat(300)}… (100 more)`],
+          exitCode: null,
+          stdout: '',
+          stderr: '',
+          error: 'killed',
+        },
+      ],
+      'nothing once the listener is gone',
+    )
   })
 })

@@ -1,4 +1,6 @@
+import { debugLog, debugTrace } from '../debug/attempt.ts'
 import type { Sandbox } from '../sandbox/index.ts'
+import { clip, formatDuration } from '../text.ts'
 import type { Attempt } from './state.ts'
 
 /** Runs a check or setup step with the checks' brokered secrets swapped in (see brokerPhases). */
@@ -29,6 +31,16 @@ export function createChecks(a: Attempt) {
     )
     const durationMs = Math.round(performance.now() - start)
     a.record.checks.push({ command, ...r, durationMs })
+    debugLog(
+      'check',
+      `$ ${clip(command, 160)} → exit ${r.exitCode} · ${formatDuration(durationMs)}`,
+    )
+    debugTrace(
+      'check',
+      'output',
+      { command, ...r, durationMs },
+      `check output: ${clip(command, 80)}`,
+    )
     a.report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
     return r
   }

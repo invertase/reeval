@@ -690,6 +690,21 @@ ${body}
       /config\.secrets\.unbrokered is 'warn' or 'error' \(got "deny"\)/,
     ],
     [
+      'keeping no debug runs',
+      `debug: { keep: 0 },`,
+      /config\.debug\.keep must be a whole number of at least 1 \(got 0\)/,
+    ],
+    [
+      'a trace buffer size as text',
+      `debug: { traceBufferMb: '8MB' as never },`,
+      /config\.debug\.traceBufferMb must be a number of megabytes above 0 \(got 8MB\)/,
+    ],
+    [
+      'a debug folder option',
+      `debug: { dir: '/tmp/debug' } as never,`,
+      /Unknown option "dir" in config\.debug\. Use keep, traceBufferMb\./,
+    ],
+    [
       'control reuse',
       `profiles: { pr: { reuse: 'control' } },`,
       /Unknown option "reuse" in profiles\.pr\. Reusing control results from \.history isn’t built yet/,

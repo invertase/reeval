@@ -1,13 +1,18 @@
 // One attempt's lifecycle, a phase per module: resolve the environment (environment.ts), start
 // the session (session.ts), run turns (turns.ts), run checks and the judge (checks.ts, judge.ts),
 // tear down, and write the record (record.ts). They share one `Attempt` (state.ts).
+import { relative } from 'node:path'
+import { AttemptDebug, withDebug } from '../debug/attempt.ts'
+import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
 import type { HarnessSession } from '../harness/types.ts'
-import { attemptId, evalId, relativeFile } from '../ids.ts'
+import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import type { Sandbox } from '../sandbox/index.ts'
+import { formatDuration } from '../text.ts'
 import type { EvalContext, EvalFn } from '../types.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
+import { tracePlan } from './debug.ts'
 import { prepareEnvironment } from './environment.ts'
 import { judgeCaller } from './judge.ts'
 import { recordEgress, recordFailure, writeRecord } from './record.ts'
@@ -18,14 +23,33 @@ import { turnSender } from './turns.ts'
 export type { AttemptSpec } from './state.ts'
 export { setupAllowance } from './state.ts'
 
-export async function runAttempt(
+const TRACE_BUFFER_DEFAULT = 8 * 2 ** 20
+
+export async function runAttempt(spec: AttemptSpec, fn: EvalFn, handle: TestHandle): Promise<void> {
+  const ctx = getRunContext()
+  const { config, runId } = ctx
+  const verbosity = ctx.verbosity ?? 0
+  const id = evalId(relativeFile(config.root, handle.file), [...spec.groups, spec.name])
+  const debug = new AttemptDebug({
+    dir: attemptDebugDir(config.root, runId, id, spec.cell.key, spec.n),
+    verbosity,
+    traceLimit: config.debug?.traceBufferBytes ?? TRACE_BUFFER_DEFAULT,
+    ...(verbosity > 0 ? { emit: handle.debug } : {}),
+  })
+  return withDebug(debug, () => attemptBody(spec, fn, handle, id, debug))
+}
+
+async function attemptBody(
   spec: AttemptSpec,
   fn: EvalFn,
-  { file, signal: testSignal, setMeta, progress }: TestHandle,
+  { signal: testSignal, setMeta, progress }: TestHandle,
+  id: string,
+  debug: AttemptDebug,
 ): Promise<void> {
   const setupStart = performance.now()
-  const { runId, stagingDir, config } = getRunContext()
-  const id = evalId(relativeFile(config.root, file), [...spec.groups, spec.name])
+  const ctx = getRunContext()
+  const { runId, stagingDir, config } = ctx
+  tracePlan(debug, spec, ctx)
   // The environment and image are prepared on the test's signal; the eval timer starts after.
   const a = createAttempt(spec, testSignal, progress)
   let timer: AbortSignal | undefined
@@ -87,9 +111,27 @@ export async function runAttempt(
     if (sandbox && !a.signal.aborted) await takeContext(sandbox, AbortSignal.timeout(30_000))
     if (sandbox) a.report({ kind: 'cleanup' })
     testSignal.removeEventListener('abort', destroy)
+    const teardown = performance.now()
     await a.session?.close().catch(() => {})
+    if (a.session) debug.log('teardown', 'harness session closed')
     recordEgress(a, sandbox)
     await sandbox?.destroy()
+    if (sandbox) {
+      debug.log(
+        'teardown',
+        `sandbox destroyed (${formatDuration(performance.now() - teardown)} for teardown)`,
+      )
+    }
+    const { record } = a
+    const error = record.error ? ` · ${record.error.kind}: ${record.error.message}` : ''
+    debug.log('teardown', `outcome ${record.outcome}${error}`)
+    const rel = (path: string) => relative(config.root, path) || '.'
+    const scratch = `.es/runs/${runId}`
+    debug.log(
+      'teardown',
+      `record ${scratch}.json · artifacts ${scratch}/${evalSlug(id)}/${evalSlug(spec.cell.key)}/${spec.n} · debug ${rel(debug.dir)}`,
+    )
     setMeta(await writeRecord(a, stagingDir, id))
+    await debug.finish(debug.verbosity === 2 || record.outcome !== 'pass')
   }
 }

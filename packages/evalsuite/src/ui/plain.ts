@@ -4,6 +4,7 @@ import { type Colors, colors, stripAnsi } from './colors.ts'
 import type { AttemptRef, EsEvent, EvalResult, OutputStream, Progress, Renderer } from './events.ts'
 import {
   attemptAxes,
+  debugLines,
   failureLines,
   formatDuration,
   mark,
@@ -27,9 +28,12 @@ export type RendererOptions = {
   now?: () => number
   /** Off in tests, which call `tick()` themselves. */
   timers?: boolean
+  /** `-v` (1) or `-vv` (2); `-vv` shows debug lines' times to the millisecond. */
+  verbosity?: 0 | 1 | 2
 }
 
-type Line = { at: number; text: string; kind?: Progress['kind'] }
+/** `debug` lines carry their own timestamp instead of an offset. */
+type Line = { at: number; text: string; kind?: Progress['kind']; debug?: boolean }
 
 /** In a grouped block, an end line replaces its start line and keeps its start time. */
 const STARTS: Partial<Record<Progress['kind'], Progress['kind']>> = {
@@ -103,7 +107,9 @@ export class PlainRenderer implements Renderer {
   }
 
   #detail(a: Attempt, line: Line, prefixed: boolean) {
-    const body = `  ${this.#c.dim(offset(line.at - a.startedAt))} ${line.text}`
+    const body = line.debug
+      ? `  ${line.text}`
+      : `  ${this.#c.dim(offset(line.at - a.startedAt))} ${line.text}`
     return prefixed ? `${this.#prefix(a)}${body}` : body.slice(1)
   }
 
@@ -157,6 +163,14 @@ export class PlainRenderer implements Renderer {
           a.lines.splice(open, 1)
         }
         this.#add(a, line)
+        return
+      }
+      case 'debug': {
+        const a = this.#running.get(e.key)
+        if (!a) return
+        for (const text of debugLines(c, e.line, this.#o.verbosity === 2)) {
+          this.#add(a, { at: e.line.at, text, debug: true })
+        }
         return
       }
       case 'log': {

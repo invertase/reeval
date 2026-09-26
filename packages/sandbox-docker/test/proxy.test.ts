@@ -13,6 +13,7 @@ import { link } from '../src/egress/mux.ts'
 import type { NetworkPolicy } from '../src/egress/policy.ts'
 import {
   createEgressProxy,
+  type EgressEvent,
   type EgressProxy,
   type EgressProxyOptions,
 } from '../src/egress/proxy.ts'
@@ -132,7 +133,7 @@ async function startProxy(
   policy: NetworkPolicy = { mode: 'allow-all' },
   extra: Pick<
     EgressProxyOptions,
-    'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens'
+    'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens' | 'onEvent'
   > = {},
   /** Hand each connection over as a plain Duplex, as the gateway's mux streams are. */
   asMux = false,
@@ -758,6 +759,108 @@ describe('brokered secrets through the proxy', () => {
         gw.lines.join('\n'),
       )
       assert.doesNotMatch(gw.lines.join('\n'), new RegExp(`${SECRET}|${HOLDER}`))
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('reports each request once done, with bytes and names, and each DNS decision', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(
+      { mode: 'custom', allowedHosts: [HOST, OTHER] },
+      { onEvent: (e) => events.push(e) },
+      true,
+    )
+    const settled = async (n: number) => {
+      for (let i = 0; i < 100 && events.filter((e) => e.type === 'request').length < n; i++) {
+        await new Promise((r) => setTimeout(r, 20))
+      }
+      return events.filter((e) => e.type === 'request')
+    }
+    try {
+      gw.proxy.setSubstitutions([sub()])
+      const r = await viaProxy(gw, HOST, h1.port, {
+        method: 'POST',
+        path: '/echo',
+        headers: { authorization: `Bearer ${HOLDER}` },
+        body: 'hello',
+      })
+      assert.equal(r.status, 200)
+      const [decrypted] = await settled(1)
+      assert.deepEqual(
+        { ...decrypted, ms: 0, requestHeaders: undefined, responseHeaders: undefined },
+        {
+          type: 'request',
+          method: 'POST',
+          url: `https://${HOST}/echo`,
+          host: HOST,
+          port: h1.port,
+          via: 'decrypted',
+          allowed: true,
+          sent: 5,
+          received: Buffer.byteLength(r.body),
+          substituted: ['GEMINI_API_KEY'],
+          credentials: [],
+          ms: 0,
+          status: 200,
+          requestHeaders: undefined,
+          responseHeaders: undefined,
+        },
+      )
+      // Headers as the sandbox sent and got them: the placeholder, never the value.
+      assert.equal(
+        decrypted?.type === 'request' && decrypted.requestHeaders?.authorization,
+        `Bearer ${HOLDER}`,
+      )
+      assert.equal(
+        decrypted?.type === 'request' && decrypted.responseHeaders?.['x-echo-authorization'],
+        `Bearer ${HOLDER}`,
+      )
+      assert.equal(JSON.stringify(events).includes(SECRET), false)
+
+      // Another allowed host is tunnelled, and reported when the tunnel closes.
+      const tunnel = await connect(gw, OTHER, other.port)
+      assert.ok(tunnel.ok)
+      await new Promise<void>((resolve, reject) => {
+        const req = https.request(
+          {
+            host: OTHER,
+            port: other.port,
+            path: '/',
+            createConnection: () =>
+              tls.connect({ socket: tunnel.socket, servername: OTHER, ca: upstreamCa.cert }),
+          },
+          (res) => {
+            res.resume()
+            res.on('end', resolve)
+          },
+        )
+        req.once('error', reject)
+        req.end()
+      })
+      tunnel.socket.destroy()
+      assert.equal((await connect(gw, 'elsewhere.test', 443)).ok, false)
+      const [, tunnelled, refused] = await settled(3)
+      assert.equal(tunnelled?.type === 'request' && tunnelled.via, 'tunnel')
+      assert.ok(tunnelled?.type === 'request' && tunnelled.sent > 0 && tunnelled.received > 0)
+      assert.deepEqual(
+        refused?.type === 'request' && [
+          refused.method,
+          refused.url,
+          refused.allowed,
+          refused.status,
+          refused.reason,
+        ],
+        ['CONNECT', 'elsewhere.test:443', false, 403, "elsewhere.test isn't in the allowlist"],
+      )
+      assert.deepEqual(
+        events.filter((e) => e.type === 'dns').map((e) => [e.host, e.allowed]),
+        [
+          [HOST, true],
+          [OTHER, true],
+          ['elsewhere.test', false],
+        ],
+      )
     } finally {
       gw.close()
     }

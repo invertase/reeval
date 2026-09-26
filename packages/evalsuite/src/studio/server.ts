@@ -1,14 +1,24 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { extname, join, resolve, sep } from 'node:path'
 import { Readable } from 'node:stream'
 import { type Context, Hono } from 'hono'
 import { getCookie, setCookie } from 'hono/cookie'
 import { streamSSE } from 'hono/streaming'
+import { attemptDebugDir, parseAttemptKey } from '../debug/files.ts'
+import {
+  DEBUG_LOG,
+  type DebugRequest,
+  type DebugView,
+  parseDebugLog,
+  parseNdjson,
+  REQUESTS_FILE,
+  TRACE_FILE,
+} from '../view/debug.ts'
 import type { StudioInfo } from '../view/model.ts'
 import { indexFiles } from '../view/model.ts'
-import { artifactType, parseDataPath } from '../view/paths.ts'
+import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
 import { listHeaders, resolveFile, type StudioSource } from './source.ts'
 
 export const COOKIE = 'es_studio_token'
@@ -152,6 +162,38 @@ export function createStudioApp(options: StudioServerOptions) {
     })
   })
 
+  // Local debug data from .es/debug: only here, never in a static build.
+  const debugDir = (runId: string, key: string | undefined) => {
+    const attempt = key ? parseAttemptKey(key) : null
+    if (!RUN_ID.test(runId) || !attempt) return null
+    return attemptDebugDir(source.root, runId, attempt.evalId, attempt.cell, attempt.n)
+  }
+  const readText = (path: string) => readFile(path, 'utf8').catch(() => null)
+  app.get('/api/debug/:runId', async (c) => {
+    const dir = debugDir(c.req.param('runId'), c.req.query('attempt'))
+    const log = dir && (await readText(join(dir, DEBUG_LOG)))
+    // Most attempts have none (recorded elsewhere, or cleaned): that's an answer, not an error.
+    if (!dir || log === null) return c.json(null, 200, { 'Cache-Control': 'no-cache' })
+    const view: DebugView = {
+      lines: parseDebugLog(log),
+      requests: parseNdjson<DebugRequest>((await readText(join(dir, REQUESTS_FILE))) ?? ''),
+      trace: (await stat(join(dir, TRACE_FILE)).catch(() => null))?.isFile() ?? false,
+    }
+    return c.json(view, 200, { 'Cache-Control': 'no-cache' })
+  })
+  app.get('/api/debug/:runId/trace', async (c) => {
+    const dir = debugDir(c.req.param('runId'), c.req.query('attempt'))
+    const file = dir && join(dir, TRACE_FILE)
+    if (!file || !(await stat(file).catch(() => null))?.isFile()) {
+      return c.text('No trace for this attempt', 404)
+    }
+    return sendFile(c, file, {
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Security-Policy': 'sandbox',
+    })
+  })
+
   app.get('*', async (c) => {
     const path = requestPath(c.req.url)
     if (path === null) return c.text('Bad path', 400)
@@ -164,7 +206,12 @@ export function createStudioApp(options: StudioServerOptions) {
           es: options.es,
           project: options.project,
           generatedAt: new Date().toISOString(),
-          features: { live: !!options.subscribe, scratch: source.scratch, artifacts: true },
+          features: {
+            live: !!options.subscribe,
+            scratch: source.scratch,
+            artifacts: true,
+            debug: true,
+          },
         }
         return c.json(info, 200, noStore)
       }

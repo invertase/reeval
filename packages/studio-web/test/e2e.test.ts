@@ -124,6 +124,11 @@ describe('studio in a browser', () => {
     await page.getByText('What the judge saw').waitFor()
     await page.getByRole('tab', { name: /^State/ }).click()
     await page.getByText('Package versions').waitFor()
+    assert.equal(
+      await page.getByRole('tab', { name: 'Debug' }).count(),
+      0,
+      'no debug data in a build',
+    )
 
     await page.getByRole('link', { name: 'Compare' }).click()
     await page.getByText('Regressed').first().waitFor()
@@ -132,6 +137,12 @@ describe('studio in a browser', () => {
 
   test('es studio needs its token, then shows new runs as they land', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
+    // Only the run made below has local debug data.
+    const cleaned = spawnSync(process.execPath, [cli, 'clean', '--config', config], {
+      cwd: demo,
+      encoding: 'utf8',
+    })
+    assert.equal(cleaned.status, 0, cleaned.stderr)
     const child = spawn(process.execPath, [cli, 'studio', '--config', config, '--port', '47412'], {
       env: { ...process.env, NO_COLOR: '1' },
     })
@@ -165,6 +176,27 @@ describe('studio in a browser', () => {
     await page.waitForFunction(() => document.querySelectorAll('tbody tr').length === 6, null, {
       timeout: 10_000,
     })
+
+    // An attempt of the new run has a Debug tab: its phase timeline, from .es/debug.
+    await page.locator('tbody tr').first().click()
+    await page.waitForSelector('h2')
+    await page.locator('a[href*="/attempts/"]').first().click()
+    await page.getByRole('tab', { name: 'Debug' }).click()
+    await page.getByText('Phase timeline').waitFor()
+    await page.getByRole('button', { name: /^plan/ }).first().click()
+    await page.locator('pre', { hasText: 'config es.demo.config.ts · no profile' }).waitFor()
+    await page.getByText('Network requests').waitFor()
+
+    // An older run's attempt has none, so no tab.
+    await page.goBack()
+    await page.goBack()
+    await page.locator('tbody tr').nth(2).click()
+    await page.waitForSelector('h2')
+    const checked = page.waitForResponse((r) => r.url().includes('/api/debug/'))
+    await page.locator('a[href*="/attempts/"]').first().click()
+    assert.equal(await (await checked).text(), 'null')
+    await page.getByRole('tab', { name: /^State/ }).waitFor()
+    assert.equal(await page.getByRole('tab', { name: 'Debug' }).count(), 0)
     assert.deepEqual(errors, [])
   })
 })

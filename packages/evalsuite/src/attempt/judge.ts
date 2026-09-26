@@ -1,7 +1,9 @@
+import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { type JudgeState, judgeModelName, runJudge } from '../judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../judge/patch.ts'
 import type { RetriedError } from '../judge/retry.ts'
 import { withLease } from '../scheduler/client.ts'
+import { clip, formatDuration } from '../text.ts'
 import type { EvalContext, JSONValue, JudgeInput, Turn } from '../types.ts'
 import type { Attempt } from './state.ts'
 
@@ -42,6 +44,8 @@ export function judgeCaller(a: Attempt): EvalContext['judge'] {
     const start = performance.now()
     const ms = () => Math.round(performance.now() - start)
     a.report({ kind: 'judge-start', question })
+    debugLog('judge', `asking ${input.model}: ${JSON.stringify(clip(question, 160))}`)
+    debugTrace('judge', 'prompt', input, 'judge prompt')
     const { maxConcurrent, ...judgeOptions } = options
     const provider = judgeModelName(model).split('/')[0]
     try {
@@ -60,6 +64,11 @@ export function judgeCaller(a: Attempt): EvalContext['judge'] {
       )
       a.record.judgements.push(retries.length ? { ...verdict, retries } : verdict)
       const { score, threshold } = verdict
+      debugLog(
+        'judge',
+        `${verdict.resolvedModel ?? verdict.model} · ${formatDuration(ms())} · score ${score.toFixed(2)} ${score >= threshold ? '≥' : '<'} ${threshold} · ${verdict.verdict}${retries.length ? ` · ${retries.length} retries` : ''} · reason: P(yes) ${score.toFixed(2)} is ${score >= threshold ? 'at or above' : 'below'} the ${threshold} threshold`,
+      )
+      debugTrace('judge', 'response', { verdict, retries }, 'judge response')
       a.report({
         kind: 'judge-end',
         question,
@@ -74,6 +83,8 @@ export function judgeCaller(a: Attempt): EvalContext['judge'] {
       const { retries } = error as Partial<RetriedError>
       input.error = error instanceof Error ? error.message : String(error)
       if (retries?.length) input.retries = retries
+      debugLog('judge', `${input.model} · ${formatDuration(ms())} · error: ${input.error}`)
+      debugTrace('judge', 'error', { error: input.error, retries }, 'judge error')
       a.report({
         kind: 'judge-end',
         question,

@@ -42,6 +42,7 @@ const CONFIG_KEYS = [
   'profiles',
   'defaultProfile',
   'secrets',
+  'debug',
 ]
 const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
 const DEFAULTS_KEYS = [
@@ -310,7 +311,31 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
     record,
     history: { dir: historyDir, artifacts },
     secrets: checkSecrets(user.secrets),
+    debug: checkDebug(user.debug),
   }
+}
+
+/** Runs whose local debug data `.es/debug` keeps, and the trace buffer per attempt. */
+export const DEBUG_DEFAULTS = { keep: 20, traceBufferMb: 8 } as const
+
+function checkDebug(debug: EsConfig['debug']): ResolvedConfig['debug'] {
+  if (debug === undefined) {
+    return { keep: DEBUG_DEFAULTS.keep, traceBufferBytes: DEBUG_DEFAULTS.traceBufferMb * 2 ** 20 }
+  }
+  if (typeof debug !== 'object' || debug === null) {
+    throw new UsageError('config.debug must be an object like { keep: 20, traceBufferMb: 8 }')
+  }
+  unknownKey(debug, ['keep', 'traceBufferMb'], 'config.debug')
+  const { keep = DEBUG_DEFAULTS.keep, traceBufferMb = DEBUG_DEFAULTS.traceBufferMb } = debug
+  if (!(Number.isInteger(keep) && keep >= 1)) {
+    throw new UsageError(`config.debug.keep must be a whole number of at least 1 (got ${keep})`)
+  }
+  if (!(typeof traceBufferMb === 'number' && traceBufferMb > 0)) {
+    throw new UsageError(
+      `config.debug.traceBufferMb must be a number of megabytes above 0 (got ${traceBufferMb})`,
+    )
+  }
+  return { keep, traceBufferBytes: Math.round(traceBufferMb * 2 ** 20) }
 }
 
 function checkSecrets(secrets: EsConfig['secrets']): ResolvedConfig['secrets'] {

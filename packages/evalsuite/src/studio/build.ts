@@ -62,7 +62,7 @@ export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
     es: options.es,
     project: options.project,
     generatedAt,
-    features: { live: false, scratch: source.scratch, artifacts: options.artifacts },
+    features: { live: false, scratch: source.scratch, artifacts: options.artifacts, debug: false },
   }
   await writeFile(join(out, studioPath), `${JSON.stringify(info, null, 2)}\n`)
   for (const [path, body] of indexFiles(headers, generatedAt)) {

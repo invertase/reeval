@@ -14,16 +14,17 @@ import { OutcomeBadge, OutcomeIcon } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { recordQuery } from '@/lib/data'
+import { debugQuery, recordQuery, useStudio } from '@/lib/data'
 import { plural, shortRunId } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Checks } from './checks'
+import { Debug } from './debug'
 import { Diff } from './diff'
 import { Judge } from './judge'
 import { State } from './state'
 import { Transcript } from './transcript'
 
-export const TABS = ['transcript', 'diff', 'checks', 'judge', 'state'] as const
+export const TABS = ['transcript', 'diff', 'checks', 'judge', 'state', 'debug'] as const
 export type Tab = (typeof TABS)[number]
 
 const route = getRouteApi('/runs/$runId/evals/$slug/attempts/$attempt')
@@ -75,6 +76,11 @@ export function AttemptPage() {
   const { tab = 'transcript' } = route.useSearch()
   const navigate = useNavigate({ from: '/runs/$runId/evals/$slug/attempts/$attempt' })
   const { data: record, error, isPending } = useQuery(recordQuery(runId))
+  const { data: studio } = useStudio()
+  const found = record && findEval(record, slug)
+  const key = (found && findAttempt(found, attemptId)?.key) ?? ''
+  // Only `es studio` serves .es/debug, and only for attempts that wrote it.
+  const { data: debug } = useQuery(debugQuery(runId, key, !!studio?.features.debug && !!key))
 
   if (error) return <ErrorState error={error} />
   if (isPending) {
@@ -267,6 +273,7 @@ export function AttemptPage() {
             ) : null}
           </TabsTrigger>
           <TabsTrigger value="state">State</TabsTrigger>
+          {debug ? <TabsTrigger value="debug">Debug</TabsTrigger> : null}
         </TabsList>
         <div className="mt-4">
           <TabsContent value="transcript">
@@ -288,6 +295,11 @@ export function AttemptPage() {
           <TabsContent value="state">
             <State record={record} attempt={attempt} />
           </TabsContent>
+          {debug ? (
+            <TabsContent value="debug">
+              <Debug runId={runId} attemptKey={attempt.key} view={debug} />
+            </TabsContent>
+          ) : null}
         </div>
       </Tabs>
     </div>

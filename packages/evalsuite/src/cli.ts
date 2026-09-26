@@ -58,6 +58,13 @@ Usage:
     --log-prefix <prefix>   task or none: the [eval#n harness] prefix on detail lines
                             (default task, none inside GitHub Actions groups)
     --output-logs <level>   full, errors-only or none: whose detail lines print (default full)
+    -v, --verbose           Print each attempt's phase trace as it happens: plan, image,
+                            container, environment, brokering, turns and tool calls, checks,
+                            judge calls, gateway requests and teardown
+    -vv, --trace            Also raw payloads, docker commands, headers and DNS decisions, and
+                            keep every attempt's trace.ndjson (else only failing attempts')
+                            Either way each attempt's debug.log is in .es/debug/<run>/ (local only)
+  es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
   es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
                             --artifacts all|failures|none --allow-incomplete --skip-secret-scan
   es history [filter]       Pass/fail per recorded eval over recent runs
@@ -102,7 +109,10 @@ function parse(argv: string[]) {
     options: {
       config: { type: 'string', default: 'es.config.ts' },
       help: { type: 'boolean', short: 'h' },
-      version: { type: 'boolean', short: 'v' },
+      version: { type: 'boolean' },
+      verbose: { type: 'boolean', short: 'v', multiple: true },
+      trace: { type: 'boolean' },
+      keep: { type: 'string' },
       json: { type: 'boolean' },
       md: { type: 'boolean' },
       all: { type: 'boolean' },
@@ -181,8 +191,37 @@ async function run(argv: string[]): Promise<number> {
       }
     }
   }
+  if (command === 'clean') return cleanCommand(values)
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
   return runCommand(values, filters)
+}
+
+/** `es clean`: removes local debug data, all of it or all but the newest `--keep` runs. */
+async function cleanCommand(flags: Flags): Promise<number> {
+  const config = await loadConfig(flags.config, 'clean')
+  let keep = 0
+  if (flags.keep !== undefined) {
+    keep = Number(flags.keep)
+    if (!(Number.isInteger(keep) && keep >= 0)) {
+      throw new UsageError(`--keep must be a whole number (got ${flags.keep})`)
+    }
+  }
+  const { debugRoot, pruneDebug } = await import('./debug/files.ts')
+  const { formatBytes } = await import('./view/debug.ts')
+  const { runs, bytes } = await pruneDebug(config.root, keep)
+  const where = relative(process.cwd(), debugRoot(config.root)) || '.'
+  console.log(
+    runs.length
+      ? `Removed debug data for ${runs.length} run${runs.length === 1 ? '' : 's'} (${formatBytes(bytes)}) from ${where}`
+      : `No debug data to remove in ${where}`,
+  )
+  return EXIT.ok
+}
+
+/** `-v` is 1 and `-vv` (or `--trace`) is 2. */
+function verbosityOf(flags: Flags): 0 | 1 | 2 {
+  if (flags.trace) return 2
+  return Math.min(2, flags.verbose?.length ?? 0) as 0 | 1 | 2
 }
 
 type Flags = ReturnType<typeof parse>['values']
@@ -247,6 +286,7 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
     // The JSON plan is the only output of `--dry-run --json`.
     out: setup.json ? { write: () => true } : process.stdout,
     output: setup.output,
+    verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
     attemptDir: (id, cell, n) =>
       relative(
@@ -288,6 +328,8 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
     runner: runnerInfo(),
   })
   const { record } = run
+  const { pruneDebug } = await import('./debug/files.ts')
+  await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
   renderer.onEvent({
     type: 'run-end',
@@ -368,6 +410,8 @@ async function prepareRun(flags: Flags) {
     dryRun: !!flags['dry-run'],
     json: !!flags.json,
     force: !!flags.force,
+    verbosity: verbosityOf(flags),
+    configFile: relative(config.root, resolve(flags.config)) || flags.config,
   }
 }
 
@@ -389,6 +433,8 @@ async function startRun({
   runs,
   tags,
   concurrency,
+  verbosity,
+  configFile,
 }: Prepared): Promise<StartedRun> {
   const startedAt = new Date()
   const git = await gitInfo(config.root, [config.history.dir])
@@ -419,6 +465,8 @@ async function startRun({
     tags,
     concurrency,
     profile,
+    verbosity,
+    configFile,
     startedAt,
     git,
     worktreePatch: patch,
@@ -447,7 +495,7 @@ async function executeRun(
   filters: string[],
   renderer: ReturnType<typeof createRenderer>,
 ) {
-  const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
+  const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
   const { runEngine } = await import('./engine/node.ts')
   const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
     './plan.ts'
@@ -538,7 +586,17 @@ async function executeRun(
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
       // an environment's `extend` method doesn't cross to the workers.
       run: JSON.parse(
-        JSON.stringify({ runId, stagingDir, config, runs, tags, concurrency, profile }),
+        JSON.stringify({
+          runId,
+          stagingDir,
+          config,
+          runs,
+          tags,
+          concurrency,
+          profile,
+          verbosity,
+          configFile,
+        }),
       ),
       filters,
       onPlan,

@@ -8,6 +8,7 @@ import type { Limits, Rank } from '../scheduler/core.ts'
 import type { SchedulerAddress } from '../scheduler/protocol.ts'
 import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
+import type { DebugLine } from '../view/debug.ts'
 import { budgetMarker, cancelMarker } from './cancel.ts'
 
 declare module 'vitest' {
@@ -29,6 +30,7 @@ declare module 'vitest' {
   interface TestArtifactRegistry {
     'es:progress': { type: 'es:progress'; progress: Progress }
     'es:start': { type: 'es:start'; at: number }
+    'es:debug': { type: 'es:debug'; line: DebugLine }
   }
 }
 
@@ -55,6 +57,8 @@ export type TestHandle = {
   setMeta(meta: EvalMeta): void
   /** Streams a progress event to the main process as it happens. Never throws. */
   progress(progress: Progress): void
+  /** Streams a debug line to the main process (for `-v`). Never throws. */
+  debug(line: DebugLine): void
 }
 
 export type TestMode = 'run' | 'skip' | 'only' | 'todo'
@@ -116,6 +120,9 @@ export function registerTest(
         },
         progress: (progress) => {
           recordArtifact(ctx.task, { type: 'es:progress', progress }).catch(() => {})
+        },
+        debug: (line) => {
+          recordArtifact(ctx.task, { type: 'es:debug', line }).catch(() => {})
         },
       }),
     )

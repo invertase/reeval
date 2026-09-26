@@ -17,6 +17,10 @@ export type AttemptSpec = PlannedAttempt & {
   timeoutMs: number
   env: EnvVars
   judge: JudgeOptions
+  /** Which level set each option; unset means the config or its default. */
+  sources: Partial<Record<string, string>>
+  /** What the profile's limit changed. */
+  notes: string[]
 }
 
 /**

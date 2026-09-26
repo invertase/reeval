@@ -111,6 +111,7 @@ function configLevel(config: ResolvedConfig): Resolved {
     timeout: undefined,
     tags: [],
     pin: [],
+    sources: {},
   }
 }
 
@@ -191,6 +192,8 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn): v
       timeoutMs,
       env: resolved.env,
       judge: resolved.judge,
+      sources: resolved.sources ?? {},
+      notes: resolvedEval.notes,
     }
     const cell = cells.indexOf(planned.cell.key)
     registerTest(

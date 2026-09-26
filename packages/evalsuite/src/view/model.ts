@@ -35,7 +35,8 @@ export type StudioInfo = {
   es: string
   project: string
   generatedAt: string
-  features: { live: boolean; scratch: boolean; artifacts: boolean }
+  /** `debug`: local debug data (`.es/debug`) can be read; never in a static build. */
+  features: { live: boolean; scratch: boolean; artifacts: boolean; debug: boolean }
 }
 
 /** Splits `file › group › … › name` back into its parts. */
