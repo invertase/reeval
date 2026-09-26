@@ -99,7 +99,7 @@
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
 | Recording, merges across branches, rebases and `es checkout` | ✓ 3 | — | — | — | — |
-| `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 2 | — | — | — | — |
+| `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 3 | — | — | — | — |
 | `es compare --fail-on-regression` **(gap)** | — | — | — | — | — |
 | `es query` | ✓ 1 | — | — | — | — |
 | `es studio` and `es studio build` | ✓ 2 | — | — | — | — |

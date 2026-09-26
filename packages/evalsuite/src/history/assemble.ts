@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fingerprintedContext } from '../attempt/context.ts'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
 import { NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
@@ -391,7 +392,7 @@ async function addAttempt(
       image: record?.image?.id ?? null,
       agentCli: record?.image?.agentCli ?? null,
       judge,
-      context: sha256(JSON.stringify(context)),
+      context: sha256(JSON.stringify(fingerprintedContext(context, e.attempt?.harness))),
     }
     cellRecord.fingerprintParts = parts
     cellRecord.fingerprint = fingerprintOf(parts)

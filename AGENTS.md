@@ -981,8 +981,10 @@ Enough to understand or reproduce the run later, shown by `es show` and in `summ
   model, the model ids the provider reported, and a judge version; the skills, rules and MCP
   config the agent could see in its sandbox, by content hash (taken once after the first turn, or
   at teardown with no turn, since adapters write harness skills when a turn starts; it includes
-  each adapter's own home, `~/.ai-sdk-harness/.harness-bootstrap/<agent>/implementation/home`);
-  ES and Node versions.
+  each adapter's own home, `~/.ai-sdk-harness/.harness-bootstrap/<agent>/implementation/home`).
+  Files the agent's CLI rewrites every session (Cursor's `~/.cursor/cli-config.json` and
+  `~/.cursor/skills-cursor/.sync-manifest.json`, listed per harness in `RUNTIME_STATE` in
+  `harness/agents.ts`) are listed but left out of the context fingerprint; ES and Node versions.
 - **What it can't pin down,** listed per record: sampled agent output, provider-side model
   updates, network-dependent results such as web search and package registries, and locally
   built images.

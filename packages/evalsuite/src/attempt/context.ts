@@ -1,5 +1,6 @@
+import { runtimeStateOf } from '../harness/agents.ts'
 import type { Sandbox } from '../sandbox/index.ts'
-import type { EvalRecord } from '../types.ts'
+import type { EvalRecord, HarnessDescriptor } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 /** Under the home directory, and under each adapter's own home, which an installed CLI runs with. */
@@ -22,6 +23,7 @@ const HOME_CONTEXT_PATHS = [
 ]
 /** Where the AI SDK adapters install their CLI; the CLI's `$HOME` is `home` under it. */
 const ADAPTER_HOMES = '"$HOME"/.ai-sdk-harness/.harness-bootstrap/*/implementation/home'
+const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implementation\/home\//
 
 /**
  * Skills, rules and MCP config the agent could load, with content hashes (never contents).
@@ -74,4 +76,20 @@ export function contextTaker(a: Attempt) {
     taken = true
     a.record.context = await agentContext(box, signal)
   }
+}
+
+/**
+ * The context files that count towards the fingerprint: all of them but the CLI's own runtime
+ * state (under `~/` or the adapter's home), which it rewrites every session.
+ */
+export function fingerprintedContext(
+  context: NonNullable<EvalRecord['context']>,
+  harness: HarnessDescriptor | undefined,
+): NonNullable<EvalRecord['context']> {
+  const state = new Set(harness ? runtimeStateOf(harness) : [])
+  if (state.size === 0) return context
+  return context.filter((c) => {
+    const home = c.path.startsWith('~/') ? c.path.replace(ADAPTER_HOME, '~/').slice(2) : null
+    return home === null || !state.has(home)
+  })
 }
