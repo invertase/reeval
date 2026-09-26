@@ -416,6 +416,37 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
   })
 
   test(
+    'SIGTERM to the process group mid-turn exits 130 and leaves no container',
+    docker,
+    async () => {
+      const p = await project('docker-sigterm', {
+        'es.config.ts': config('{ delayMs: 60_000 }'),
+        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
+`,
+      })
+      let started = 0
+      const r = await runCli(p.dir, ['run'], {
+        ...slow,
+        onOutput: (stdout, pid) => {
+          started = stdout.match(/\] {2}\+\d+:\d\d turn 1 started$/gm)?.length ?? 0
+          if (started < 2) return false
+          process.kill(-pid, 'SIGTERM')
+          return true
+        },
+      })
+      assert.equal(r.code, 130, r.stdout + r.stderr)
+      const runId = readdirSync(join(p.dir, '.es/runs'))
+        .find((f) => f.endsWith('.json'))
+        ?.replace(/\.json$/, '')
+      assert.ok(runId, 'the run was written')
+      assert.equal(liveContainers(runId), '')
+      // The canary: both attempts had a container when the signal came.
+      assert.equal(started, 2)
+    },
+  )
+
+  test(
     'Cursor attempts broker the key; without brokering the attempt fails closed',
     docker,
     async () => {

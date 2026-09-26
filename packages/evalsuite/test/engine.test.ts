@@ -843,10 +843,17 @@ evaluate('fine', async () => {})
   })
 
   for (const [target, signal] of [
-    ['the CLI only', (pid: number) => process.kill(pid, 'SIGINT')],
-    ['the process group, like a terminal', (pid: number) => process.kill(-pid, 'SIGINT')],
+    ['Ctrl-C mid-turn to the CLI only', (pid: number) => process.kill(pid, 'SIGINT')],
+    [
+      'Ctrl-C mid-turn to the process group, like a terminal',
+      (pid: number) => process.kill(-pid, 'SIGINT'),
+    ],
+    [
+      'SIGTERM mid-turn to the CLI, like docker stop',
+      (pid: number) => process.kill(pid, 'SIGTERM'),
+    ],
   ] as const) {
-    test(`Ctrl-C mid-turn to ${target} exits 130, records the run and destroys the sandbox`, async () => {
+    test(`${target} exits 130, records the run and destroys the sandbox`, async () => {
       const p = await project('sigint', {
         'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
         'evals/agent.es.ts': agentEval(''),

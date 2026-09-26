@@ -17,7 +17,7 @@ es: Unknown option "harnesses" in es.config.ts. Did you mean "harness"?
 | Preflight: credentials, Docker, images, budget | 2 | Nothing ran. Set the key, start Docker, build the image, or narrow the run. |
 | During an attempt: a check fails | 1 | The agent's work didn't pass. That's a result, not a bug. |
 | During an attempt: ES or the sandbox fails | 3 | An infra error: the attempt couldn't be judged. It doesn't count as a pass or a fail. |
-| Ctrl-C | 130 | Running attempts are cancelled. |
+| Ctrl-C or `SIGTERM` | 130 | Running attempts are cancelled. |
 
 Errors in an eval file are prefixed with the file (`es: evals/skill.es.ts: …`). See [es run](/reference/cli/run) for exit codes in full.
 

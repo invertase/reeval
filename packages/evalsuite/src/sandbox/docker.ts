@@ -3,6 +3,7 @@ import type { HarnessV1NetworkSandboxSession } from '@ai-sdk/harness'
 import {
   createDockerSession,
   DEFAULT_IMAGE,
+  docker,
   type EgressEvent,
   imageInfo,
   LABEL,
@@ -17,6 +18,16 @@ import { allowedHosts, egressLabel } from '../egress.ts'
 import type { DockerSandboxDescriptor, PlannedEgress } from '../types.ts'
 import type { SandboxOptions } from './index.ts'
 import { InfraError, type Sandbox } from './types.ts'
+
+/**
+ * Removes every container still labelled with the run: a worker killed by the signal that
+ * cancelled the run (SIGTERM to the process group) never destroys its sandboxes.
+ */
+export async function removeRunContainers(runId: string): Promise<void> {
+  const r = await docker(['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`]).catch(() => null)
+  const ids = r?.exitCode === 0 ? r.stdout.toString('utf8').split(/\s+/).filter(Boolean) : []
+  if (ids.length) await docker(['rm', '-f', ...ids]).catch(() => {})
+}
 
 /** A Docker sandbox also exposes its harness session, so the harness drives the same container. */
 export type DockerSandbox = Sandbox & { readonly network: HarnessV1NetworkSandboxSession }

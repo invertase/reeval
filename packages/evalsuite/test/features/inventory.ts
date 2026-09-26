@@ -980,10 +980,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'cancel',
     area: 'CLI and runner',
-    name: 'Eval timeouts and Ctrl-C',
+    name: 'Eval timeouts, Ctrl-C and SIGTERM',
     tests: [
       'evalsuite/test/concurrency.test.ts › Ctrl-C cancels running attempts',
       engine('a timeout aborts the agent and destroys the sandbox'),
+      engine('exits 130, records the run and destroys the sandbox'),
+      docker('SIGTERM to the process group mid-turn exits 130 and leaves no container'),
     ],
   },
   {
