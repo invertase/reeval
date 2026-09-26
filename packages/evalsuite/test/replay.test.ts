@@ -197,3 +197,58 @@ for (const harness of Object.keys(formatChanges))
       }
     })
   })
+
+describe('replay: Cursor web calls, streamed and recovered', () => {
+  // A real two-turn capture where SDK 1.0.32 streamed no web calls and the runner recovered them
+  // from Agent.messages.list(); its first turn only (up to the first result line).
+  const capture = readFileSync(
+    join(testDir, '../../harness-cursor-sdk/test/fixtures/web-recovered.ndjson'),
+    'utf8',
+  )
+  const firstTurn = capture.split('\n').filter(Boolean)
+  firstTurn.splice(firstTurn.findIndex((l) => JSON.parse(l).type === 'result') + 1)
+  const recovered = firstTurn.filter((l) => JSON.parse(l).recovered)
+
+  /** The turn as if the SDK streamed the web calls too, before the runner's recovered copies. */
+  const upstreamFixed = (id: (callId: string) => string, keepMarker = true) => {
+    const streamed = recovered.map((l) => {
+      const { recovered: _, ...line } = JSON.parse(l)
+      return JSON.stringify({ ...line, event: { ...line.event, call_id: id(line.event.call_id) } })
+    })
+    const usage = firstTurn.findIndex((l) => JSON.parse(l).event?.type === 'usage')
+    const lines = [...firstTurn.slice(0, usage), ...streamed, ...firstTurn.slice(usage)]
+    return keepMarker
+      ? lines
+      : lines.map((l) => JSON.stringify({ ...JSON.parse(l), recovered: undefined }))
+  }
+  const webCalls = (lines: string[]) => {
+    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    return lines
+      .flatMap((l) => t.push(l))
+      .flatMap((p) => (p.type === 'tool-call' ? [p.toolName] : []))
+      .filter((n) => n === 'webFetch' || n === 'webSearch')
+      .sort()
+  }
+
+  test('today: the stream has none, the recovered calls are each reported once', () => {
+    assert.ok(recovered.length > 0, 'the capture has recovered calls')
+    assert.deepEqual(webCalls(firstTurn), ['webFetch', 'webSearch'])
+  })
+
+  test('upstream fixed, same ids: each web call once, not twice', () => {
+    assert.deepEqual(webCalls(upstreamFixed((id) => id)), ['webFetch', 'webSearch'])
+  })
+
+  test('upstream fixed, other ids: each web call once, matched by tool and target', () => {
+    assert.deepEqual(webCalls(upstreamFixed((id) => `${id}-streamed`)), ['webFetch', 'webSearch'])
+  })
+
+  test('twin: without the recovered marker, the same lines count twice', () => {
+    assert.deepEqual(webCalls(upstreamFixed((id) => `${id}-streamed`, false)), [
+      'webFetch',
+      'webFetch',
+      'webSearch',
+      'webSearch',
+    ])
+  })
+})
