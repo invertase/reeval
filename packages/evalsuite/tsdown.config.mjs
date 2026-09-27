@@ -78,11 +78,8 @@ export default defineConfig({
     judge: 'src/judge.ts',
     'view/index': 'src/view/index.ts',
     cli: 'src/cli.ts',
-    // The engine forks this for each eval file (src/engine/pool.ts).
+    // The engine forks this for each eval file, by path (src/engine/pool.ts).
     worker: 'src/engine/worker-entry.ts',
-    // Vitest loads these two by path (src/engine/vitest.ts), for ES_ENGINE=vitest.
-    setup: 'src/setup.ts',
-    'worker-signals': 'src/engine/worker-signals.ts',
   },
   platform: 'node',
   fixedExtension: false,

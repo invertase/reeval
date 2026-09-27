@@ -19,7 +19,7 @@ import {
   selectProfile,
   UsageError,
 } from './config.ts'
-import { budgetMarker } from './engine/cancel.ts'
+import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
@@ -675,10 +675,8 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code !== 'EPIPE') throw error
 })
 
-let settled = false
 // An error nothing awaited, from ES or from code the config runs, ends the run as an infra error.
 const crash = (error: unknown) => {
-  settled = true
   console.error(red(`es: ${redactSecrets(error instanceof Error ? error.message : String(error))}`))
   if (process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
   process.exit(EXIT.infra)
@@ -686,17 +684,8 @@ const crash = (error: unknown) => {
 process.on('unhandledRejection', crash)
 process.on('uncaughtException', crash)
 
-// A Ctrl-C to the whole process group can kill a Vitest worker while Node is still booting it,
-// before it can ignore SIGINT. Vitest then never settles and the event loop simply drains.
-process.on('beforeExit', () => {
-  if (settled) return
-  console.error(red('es: interrupted before the evals could start; nothing was recorded'))
-  process.exit(interrupted ? stopCode : EXIT.infra)
-})
-
 run(process.argv.slice(2)).then(
   (code) => {
-    settled = true
     process.exitCode = code
   },
   (error: unknown) => {
@@ -705,7 +694,6 @@ run(process.argv.slice(2)).then(
       error instanceof UsageError ||
       EXPECTED_ERRORS.includes(name) ||
       name === 'PreflightInfraError'
-    settled = true
     console.error(red(`es: ${redactSecrets((error as Error).message)}`))
     if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
     process.exitCode = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage

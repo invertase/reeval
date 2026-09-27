@@ -1,14 +1,14 @@
-// The side-by-side comparison of ES's engine with the Vitest engine it replaces
+// The replay of the side-by-side comparison of ES's engine with the Vitest engine it replaced
 // (packages/evalsuite/test/support/differential.ts). Every `es` the suites run is captured,
-// normalised, and compared by test file and call.
+// normalised, and compared by test file and call with what the Vitest engine did, which
+// test/differential/vitest/ holds.
 //
-//   node --experimental-strip-types scripts/differential.mjs record <es|vitest> <dir>   run the suites on that engine into <dir>
-//   node scripts/differential.mjs compare <expected> <actual> [--vitest]
-//                                                   fail on any difference not in INTENDED;
-//                                                   --vitest for a live Vitest run (below)
+//   node --experimental-strip-types scripts/differential.mjs record <dir>   run the suites into <dir>
+//   node --experimental-strip-types scripts/differential.mjs compare <expected> <actual>
+//                                    fail on any difference not in INTENDED
 //
-// test/differential/vitest/ holds the Vitest engine's captures: the replay the new engine is held
-// to once Vitest is gone. `record vitest` then `compare` against it shows they're still current.
+// A deliberate change to what `es` prints or records updates the captures it touches (by hand,
+// or `record` then copy the files), with the change named in the PR.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -59,33 +59,28 @@ const INTENDED = [
   },
 ]
 
-/** An attempt's progress line, which the Vitest engine could drop (see `compare`). */
+/** An attempt's progress line, which the Vitest engine could drop (see `onlyProgressMissing`). */
 const PROGRESS = /\] {2}\+<t> /
 
 const [command, ...args] = process.argv.slice(2)
-if (command === 'record') process.exit(record(args[0], resolve(args[1])))
-else if (command === 'compare')
-  process.exit(compare(resolve(args[0]), resolve(args[1]), args.includes('--vitest')))
+if (command === 'record') process.exit(record(resolve(args[0])))
+else if (command === 'compare') process.exit(compare(resolve(args[0]), resolve(args[1])))
 else {
-  console.error(
-    'usage: node scripts/differential.mjs record <es|vitest> <dir> | compare <expected> <actual>',
-  )
+  console.error('usage: node scripts/differential.mjs record <dir> | compare <expected> <actual>')
   process.exit(2)
 }
 
-function record(engine, dir) {
+function record(dir) {
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
   const env = { ...process.env, ES_DIFFERENTIAL_DIR: dir, ES_FIXTURE_TIERS: 'fake' }
-  if (engine === 'vitest') env.ES_ENGINE = 'vitest'
-  else delete env.ES_ENGINE
   const tests = spawnSync(
     process.execPath,
     ['--test', '--test-timeout=600000', '--experimental-strip-types', '--no-warnings', ...SUITES],
     { cwd: pkg, env, stdio: ['ignore', 'ignore', 'inherit'] },
   )
-  // A test may fail on the other engine (it asserts the new behaviour); its captures still count.
-  console.log(`differential: recorded ${engine} into ${dir} (tests exited ${tests.status})`)
+  // A failing test is the unit jobs' to report; a run it didn't reach shows up in `compare`.
+  console.log(`differential: recorded into ${dir} (tests exited ${tests.status})`)
   return 0
 }
 
@@ -104,9 +99,9 @@ function load(dir) {
 
 /**
  * The Vitest engine sent progress over an async RPC, so an attempt's line that landed after its
- * result was sometimes dropped: the captures (and, with `vitest`, a live Vitest run) may lack a
- * progress line that ES's engine, which keeps them in order, prints. `fewer` may lack progress
- * lines that `more` has once each; every other line must match.
+ * result was sometimes dropped: the captures may lack a progress line that ES's engine, which
+ * keeps them in order, prints. `fewer` may lack progress lines that `more` has once each; every
+ * other line must match.
  */
 function onlyProgressMissing(fewer, more) {
   const rest = [...more]
@@ -118,7 +113,7 @@ function onlyProgressMissing(fewer, more) {
   return rest.every((line) => PROGRESS.test(line) && more.filter((m) => m === line).length === 1)
 }
 
-function compare(expectedDir, actualDir, vitest = false) {
+function compare(expectedDir, actualDir) {
   const expected = load(expectedDir)
   const actual = load(actualDir)
   const problems = []
@@ -131,8 +126,8 @@ function compare(expectedDir, actualDir, vitest = false) {
     for (const key of new Set([...e.keys(), ...a.keys()])) {
       const left = e.get(key) ?? []
       const right = a.get(key) ?? []
-      // A run only the new side has comes from a test that stops earlier on the old engine (it
-      // asserts the new behaviour); a run the new side lacks is a regression.
+      // A run only the new side has comes from a test that stopped earlier on the Vitest engine
+      // (it asserts the new behaviour); a run the new side lacks is a regression.
       if (right.length < left.length) {
         problems.push(`${name} ${key}: ran ${left.length} time(s), now ${right.length}`)
         continue
@@ -142,10 +137,8 @@ function compare(expectedDir, actualDir, vitest = false) {
         (i) => i.fields,
       )
       const fields = ['code', 'live', 'summary', 'stderr', 'record']
-      const live = (l, r) =>
-        isDeepStrictEqual(l.live, r.live) ||
-        (vitest ? onlyProgressMissing(r.live, l.live) : onlyProgressMissing(l.live, r.live))
-      const equal = (f, l, r) => (f === 'live' ? live(l, r) : isDeepStrictEqual(l[f], r[f]))
+      const equal = (f, l, r) =>
+        isDeepStrictEqual(l[f], r[f]) || (f === 'live' && onlyProgressMissing(l.live, r.live))
       const same = (l, r) => fields.every((f) => allowed.includes(f) || equal(f, l, r))
       // Runs with the same key (concurrent tests of one project) may finish in either order.
       const unused = [...right]

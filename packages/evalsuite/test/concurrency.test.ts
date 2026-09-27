@@ -3,9 +3,8 @@ import { chmodSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { acquire, useScheduler } from '../src/scheduler/client.ts'
+import { acquire, useSchedulerChannel } from '../src/scheduler/client.ts'
 import { type Rank, type Request, Scheduler } from '../src/scheduler/core.ts'
-import { startSchedulerServer } from '../src/scheduler/server.ts'
 import { fakeConfig, liveSandboxes, project, readRun, runCli } from './helpers.ts'
 
 const rank = (evalId: string, n: number, cell = 0, order = 0): Rank => ({
@@ -82,10 +81,15 @@ describe('scheduler', () => {
     assert.equal(s.waiting, 0)
   })
 
-  test('workers get leases over the socket; an abort drops a waiting request', async () => {
-    const server = await startSchedulerServer()
-    useScheduler(server.address)
-    try {
+  test('workers get leases over their channel; an abort drops a waiting request', async () => {
+    // The main process's side, as the engine runs it: requests in, grants out.
+    const scheduler = new Scheduler((r) => grant(r.id))
+    const grant = useSchedulerChannel((m) =>
+      m.t === 'request'
+        ? scheduler.request({ id: m.id, owner: '1', limits: m.limits })
+        : scheduler.release(m.id),
+    )
+    {
       const first = await acquire({ x: 1 })
       let second = false
       const waiting = acquire({ x: 1 }).then((lease) => {
@@ -101,9 +105,7 @@ describe('scheduler', () => {
       first.release()
       ;(await waiting).release()
       assert.equal(second, true)
-    } finally {
-      useScheduler(undefined)
-      await server.close()
+      assert.equal(scheduler.held, 0)
     }
   })
 })

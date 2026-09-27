@@ -1,5 +1,5 @@
 // Code coverage across every process the tests start. NODE_V8_COVERAGE is inherited, so the test
-// runner, each spawned `es` CLI, its Vitest workers and the egress gateway (in the CLI and the
+// runner, each spawned `es` CLI, its workers and the egress gateway (in the CLI and the
 // workers) all write V8 coverage into one directory, and c8 merges it, mapping dist/ back to src/
 // through the build's source maps. The bundled @invertase/foobar maps its inlined @evalsuite/*
 // code back to each package's own src/. Report-only: there's no threshold.
@@ -44,6 +44,7 @@ const ours = new RegExp(`^${repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/(
  * tests can't reach takes a `c8 ignore` comment that says why.
  */
 const ENGINE = [
+  'budget',
   'collector',
   'errors',
   'expect',
@@ -258,7 +259,7 @@ function markdown(summary) {
   return [
     '## Code coverage',
     '',
-    'Every process the tests start (the test runner, `es`, its Vitest workers and the egress',
+    'Every process the tests start (the test runner, `es`, its workers and the egress',
     'gateway), merged, mapped to `src/`. Report-only: no threshold. Code inside Docker',
     'containers, the browser (studio-web) and the packed-install test is not counted.',
     '',

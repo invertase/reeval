@@ -1,5 +1,5 @@
 // Grants leases on named resources, each with a limit. The main process runs one of these for
-// the whole run, so limits hold across Vitest workers; see ./server.ts and ./client.ts.
+// the whole run, so limits hold across the eval files' workers; see ../engine/node.ts and ./client.ts.
 
 /** Where an attempt sits in the run, for ordering. Requests without one are served first come. */
 export type Rank = {

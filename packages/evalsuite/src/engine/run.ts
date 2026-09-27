@@ -9,7 +9,7 @@ import { acquire, type Lease } from '../scheduler/client.ts'
 import type { EvalMeta } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
 import type { DebugLine } from '../view/debug.ts'
-import { budgetMarker } from './cancel.ts'
+import { budgetMarker } from './budget.ts'
 import type { CollectedTest } from './collector.ts'
 import type { SerializedError } from './errors.ts'
 import {

@@ -15,9 +15,7 @@ Under the hood ES runs eval files on its own small engine (`src/engine`): it fin
 loads each with [jiti](https://github.com/unjs/jiti) in a fresh worker process of its own (once
 to collect the plan, once to run), and hands out the scheduler's leases to the workers over
 Node's IPC channel. `expect` is Vitest's standalone `@vitest/expect`, and errors print with
-diffs from `@vitest/utils`, pinned to the same version. The Vitest engine it replaces is still
-there behind `ES_ENGINE=vitest` for the side-by-side comparison, until the stack's last PR
-removes it.
+diffs from `@vitest/utils`. Neither Vitest nor Vite is a dependency.
 
 The package is published as `@invertase/foobar`. That's a placeholder until the final name is
 chosen. Code, docs and examples import from `@invertase/foobar` and its subpaths `/harness`,
@@ -48,29 +46,25 @@ its files import `evalsuite`.
   [feature contract](./packages/evalsuite/test/features/README.md) asks for: a plan case if it
   changes the matrix, and a one-check fixture with a canary if it changes what happens inside an
   attempt, in every tier it touches. A feature isn't done until they pass.
-- Vitest stays a hidden engine, on a patch range (`~5.0.x`), and only
-  `packages/evalsuite/src/engine` imports it. `pnpm-lock.yaml` pins the version our CI runs.
-  Keep the range on vitest's latest minor: vitest's peer range on `@vitest/browser-webdriverio`
-  pulls in the newest vitest, and npm before 11.6 (Node 22's npm 10.9) crashes installing the
-  package when that isn't the vitest the range resolves to (npm/cli#8261). A patch range
-  follows vitest's patches, but a new vitest minor breaks it again until we move the range. CI's
-  `packed install (npm 10.9)` leg catches it.
-- `vite` is one of ES's `dependencies`, in vitest's peer range for it: vitest 5 requires it as a
-  peer, and Yarn (and pnpm without `auto-install-peers`) don't install peers. The pack test's Yarn
-  and strict pnpm installs catch a missing one.
+- `@vitest/expect` and `@vitest/utils` are pinned to exactly the same version, and only
+  `packages/evalsuite/src/engine` imports them (`test/manifest.test.ts` and `test/engine.test.ts`
+  hold both). `@vitest/utils` is Vitest's internal package and isn't semver-safe alone, so bump
+  them together. Everything `es` loads is one of the package's own `dependencies`: Yarn and pnpm
+  without `auto-install-peers` don't install peers, and the pack test's Yarn 1, Yarn Berry
+  Plug'n'Play and strict pnpm installs catch a missing one.
 
 ## Repository layout
 
 | Path | What it is |
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
-| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, `worker-entry.ts`), the IPC messages (`protocol.ts`), `expect` (`expect.ts`) and error printing (`errors.ts`); and, until it's removed, the Vitest engine (`vitest.ts`, `vitest-runtime.ts`), the only code that imports `vitest` |
+| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, `worker-entry.ts`), the IPC messages (`protocol.ts`), `expect` (`expect.ts`), error printing (`errors.ts`) and the budget marker (`budget.ts`). The only code that imports `@vitest/*` |
 | `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
 | `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
 | `packages/evalsuite/src/harness` | The Cursor (`@evalsuite/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`), Antigravity (`@evalsuite/harness-antigravity`), OpenCode (`@evalsuite/harness-opencode`), Goose (`@evalsuite/harness-goose`), pi (`@evalsuite/harness-pi`) and Codex (`@evalsuite/harness-codex`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, the responses that name the served model, rules file, skill directories, MCP shape), and a fake harness |
-| `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
+| `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers |
 | `packages/evalsuite/src/debug` | Local debug data: each attempt's trace on the worker (`attempt.ts`: debug.log, requests, the capped trace buffer, reached through async context), docker commands into it (`docker.ts`), and `.es/debug`'s layout, retention and `es clean` (`files.ts`) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models, effort (`effort.ts`) and the analysis document (`analysis.ts`) |
 | `packages/evalsuite/src/history/facts.ts` | The derived facts behind `es query effort`, `factor_effects`, `flaky_cells` and `drift`, computed at sync |
@@ -109,7 +103,7 @@ pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
 `devDependencies`, from its `src/`, so a new one needs only that entry. The published code may
 import only the package's `dependencies`, so an inlined package's runtime dependencies must be
 among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
-files (`dist/setup.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
+files (`dist/worker.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
 module's `import.meta.url`; the build fails if a chunk below `dist/`'s top level uses it.
 An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, `harness-pi`'s
 `assets/` lockfile) ship at the
@@ -215,12 +209,14 @@ their tests and fails below 100% of lines, branches and functions for each file 
 list. A new engine file joins that list with its tests; a line no test can reach needs a
 `/* c8 ignore */` comment saying why.
 
-**The side-by-side comparison.** `node scripts/differential.mjs record <es|vitest> <dir>` runs
-the suites that start `es` (the feature fixtures, plan snapshots, the example, the engine and
-history tests) on one engine, capturing every run's exit code, output and record, normalised
-(`test/support/differential.ts`); `compare <expected> <actual>` fails on any difference that
-isn't in its `INTENDED` list, each with its reason. `test/differential/vitest/` holds the Vitest
-engine's captures, which CI's `engine differential` job holds ES's engine to. Which features
+**The replay.** Before Vitest was removed, ES's engine ran side by side with it on every suite
+that starts `es`. `test/differential/vitest/` keeps what the Vitest engine did, and CI's
+`engine differential` job holds ES's engine to it: `node --experimental-strip-types
+scripts/differential.mjs record <dir>` runs those suites (the feature fixtures, plan snapshots,
+the example, the engine and history tests), capturing every run's exit code, output and record,
+normalised (`test/support/differential.ts`), and `compare <expected> <actual>` fails on any
+difference that isn't in its `INTENDED` list, each with its reason. A deliberate change to what
+`es` prints or records updates the captures it touches, named in the PR. Which features
 have fixtures on which tier is a separate, generated matrix:
 [`test/features/COVERAGE.md`](./packages/evalsuite/test/features/COVERAGE.md).
 

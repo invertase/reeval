@@ -26,7 +26,7 @@ import { colors } from './ui/colors.ts'
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
 export type Check = {
-  /** The area: node, npm, config, docker, image, key, judge, egress or gitignore. */
+  /** The area: node, config, docker, image, key, judge, egress or gitignore. */
   id: string
   status: CheckStatus
   summary: string
@@ -37,7 +37,6 @@ export type Check = {
 export type DoctorDeps = {
   env: NodeJS.ProcessEnv
   nodeVersion: string
-  npmVersion: () => Promise<string | null>
   dockerAvailable: () => Promise<boolean>
   dockerCapacity: () => Promise<{ cpus: number; memoryBytes: number } | null>
   /** Whether the image is in the local Docker. */
@@ -68,10 +67,6 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
   return {
     env,
     nodeVersion: process.versions.node,
-    npmVersion: async () => {
-      const r = await run('npm', ['--version'])
-      return r.code === 0 ? r.stdout.trim() : null
-    },
     dockerAvailable: async () => (await sandbox()).dockerAvailable(),
     dockerCapacity: async () => (await sandbox()).dockerCapacity(),
     imageExists: async (ref) => !!(await (await sandbox()).imageInfo(ref)),
@@ -119,20 +114,6 @@ export function checkNode(nodeVersion: string): Check {
         status: 'fail',
         summary: `${nodeVersion}, but ES needs ${engines}`,
         fix: `install Node ${min.join('.')} or later (https://nodejs.org)`,
-      }
-}
-
-export function checkNpm(npmVersion: string | null): Check {
-  if (!npmVersion) {
-    return { id: 'npm', status: 'skip', summary: 'npm not found (pnpm and yarn need none)' }
-  }
-  return newer(npmVersion, [11, 6])
-    ? { id: 'npm', status: 'ok', summary: npmVersion }
-    : {
-        id: 'npm',
-        status: 'warn',
-        summary: `${npmVersion}; npm ≥ 11.6 is recommended (older npm can crash installing ES with an edgesOut error)`,
-        fix: 'npm i -g npm@latest',
       }
 }
 
@@ -494,7 +475,7 @@ export async function doctor(
   flags: Flags,
   deps: DoctorDeps,
 ): Promise<{ report: DoctorReport; config?: ResolvedConfig; missingImages: string[] }> {
-  const checks: Check[] = [checkNode(deps.nodeVersion), checkNpm(await deps.npmVersion())]
+  const checks: Check[] = [checkNode(deps.nodeVersion)]
   const configPath = configPathFor(flags.config)
   let config: ResolvedConfig | undefined
   let missingImages: string[] = []

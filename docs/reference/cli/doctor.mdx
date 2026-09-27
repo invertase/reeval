@@ -31,8 +31,6 @@ A real run in a project from `es init --yes`, before Docker was started or a key
 ```text
 es doctor · es.config.ts
 ✓ node       22.14.0 (ES needs >=22.13)
-! npm        10.9.7; npm ≥ 11.6 is recommended (older npm can crash installing ES with an edgesOut error)
-             fix: npm i -g npm@latest
 ✓ config     es.config.ts: harness cursor:composer-2.5, sandbox docker, profiles fake, pr, nightly
 ✗ docker     isn't running, and the config's sandboxes need it
              fix: start Docker Desktop, or the Docker service (sudo systemctl start docker)
@@ -43,7 +41,7 @@ es doctor · es.config.ts
 ✓ egress     allow-all: the agents reach any host (the default); evals and environments may set their own
 ✓ gitignore  .env* and .es/ are ignored
 
-2 problems, 1 warning. Fix them and run es doctor again.
+2 problems, 0 warnings. Fix them and run es doctor again.
 ```
 
 `✓` passed, `!` is a warning (exit 0), `✗` is a problem (exit 1), and `-` was skipped.
@@ -53,7 +51,6 @@ es doctor · es.config.ts
 | Check | Problem (`✗`) | Warning (`!`) |
 |---|---|---|
 | `node` | Older than the package's `engines` | |
-| `npm` | | Older than 11.6 (skipped without npm) |
 | `config` | No `es.config.*` here or above, or it doesn't load | |
 | `docker` | Not running, when a sandbox in the config or a profile is `docker()` | Under 4 GB of memory, one attempt's default limit |
 | `image` | ES's sandbox image for a configured harness isn't built, or a `docker({ image })` isn't in Docker | Images for this harness from another ES version |

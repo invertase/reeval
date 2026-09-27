@@ -48,8 +48,6 @@ const PASSTHROUGH = [
   'DOCKER_CERT_PATH',
   'DOCKER_TLS_VERIFY',
   'ES_DEBUG',
-  // ES_ENGINE=vitest runs the suites on the Vitest engine, for the side-by-side comparison.
-  'ES_ENGINE',
 ]
 
 /** The environment every spawned process in the tests starts from. */

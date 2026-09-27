@@ -14,7 +14,6 @@ import {
   checkJudge,
   checkKeys,
   checkNode,
-  checkNpm,
   type DoctorDeps,
   probeKey,
 } from '../src/doctor.ts'
@@ -25,7 +24,6 @@ const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
 const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   env: {},
   nodeVersion: '22.13.0',
-  npmVersion: async () => '11.6.2',
   dockerAvailable: async () => true,
   dockerCapacity: async () => ({ cpus: 8, memoryBytes: 16 * 1024 ** 3 }),
   imageExists: async () => true,
@@ -53,19 +51,13 @@ const noSecret = (checks: Check[]) =>
   assert.doesNotMatch(JSON.stringify(checks), new RegExp(SECRET.slice(8)))
 
 describe('es doctor checks', () => {
-  test('node against engines, npm against 11.6', () => {
+  test('node against engines', () => {
     assert.equal(checkNode('22.13.0').status, 'ok')
     assert.equal(checkNode('24.1.0').status, 'ok')
     const old = checkNode('22.12.9')
     assert.equal(old.status, 'fail')
     assert.match(old.summary, /22\.12\.9, but ES needs >=22\.13/)
     assert.equal(checkNode('20.19.0').status, 'fail')
-    assert.equal(checkNpm('11.6.0').status, 'ok')
-    assert.equal(checkNpm('12.0.0').status, 'ok')
-    const npm = checkNpm('10.9.2')
-    assert.equal(npm.status, 'warn')
-    assert.equal(npm.fix, 'npm i -g npm@latest')
-    assert.equal(checkNpm(null).status, 'skip')
   })
 
   test('docker: skipped without a Docker sandbox, fails when down, warns on little memory', async () => {
@@ -314,7 +306,7 @@ describe('es doctor', () => {
     assert.equal(report.healthy, true)
     assert.deepEqual(
       [...new Set(report.checks.map((c: Check) => c.id))],
-      ['node', 'npm', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
+      ['node', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
     )
   })
 

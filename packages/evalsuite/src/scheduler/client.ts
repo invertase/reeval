@@ -1,9 +1,11 @@
-// Worker side of the scheduler. Without a server address (outside `es run`), leases come from
-// an in-process scheduler with the same rules.
-import { connect, type Socket } from 'node:net'
-import { InfraError } from '../sandbox/types.ts'
+// Worker side of the scheduler: in an eval file's worker, over its IPC channel to the run's
+// scheduler (useSchedulerChannel); anywhere else, an in-process scheduler with the same rules.
 import { type Limits, type Rank, Scheduler } from './core.ts'
-import { type ClientMessage, lines, type SchedulerAddress, type ServerMessage } from './protocol.ts'
+
+/** What a worker sends the run's scheduler (ES's engine, over the worker's IPC channel). */
+export type ClientMessage =
+  | { t: 'request'; id: string; limits: Limits; rank?: Rank }
+  | { t: 'release'; id: string }
 
 export type Lease = { release(): void }
 
@@ -29,48 +31,6 @@ class LocalTransport implements Transport {
   release(id: string) {
     this.#pending.delete(id)
     this.#scheduler.release(id)
-  }
-}
-
-class SocketTransport implements Transport {
-  readonly #pending = new Map<string, Pending>()
-  readonly #socket: Socket
-  #closed: Error | undefined
-
-  constructor(address: SchedulerAddress) {
-    this.#socket = connect({ host: '127.0.0.1', port: address.port })
-    this.#socket.setNoDelay(true)
-    this.#socket.unref()
-    this.#socket.on('error', (error) => this.#fail(error))
-    this.#socket.on('close', () => this.#fail(new Error('the connection closed')))
-    lines(this.#socket, (message: ServerMessage) => {
-      if (message.t !== 'grant') return
-      const pending = this.#pending.get(message.id)
-      this.#pending.delete(message.id)
-      pending?.resolve()
-    })
-    this.#send({ t: 'hello', token: address.token })
-  }
-
-  #fail(error: Error) {
-    this.#closed ??= new InfraError(`Lost the ES scheduler: ${error.message}`)
-    for (const pending of this.#pending.values()) pending.reject(this.#closed)
-    this.#pending.clear()
-  }
-
-  #send(message: ClientMessage) {
-    if (!this.#socket.destroyed) this.#socket.write(`${JSON.stringify(message)}\n`)
-  }
-
-  request(id: string, limits: Limits, rank: Rank | undefined, pending: Pending) {
-    if (this.#closed) return pending.reject(this.#closed)
-    this.#pending.set(id, pending)
-    this.#send({ t: 'request', id, limits, ...(rank ? { rank } : {}) })
-  }
-
-  release(id: string) {
-    this.#pending.delete(id)
-    this.#send({ t: 'release', id })
   }
 }
 
@@ -100,21 +60,12 @@ class ChannelTransport implements Transport {
   }
 }
 
-let address: SchedulerAddress | undefined
 let transport: Transport | undefined
 let ids = 0
-
-/** Points this process at the run's scheduler; called once per worker before any eval runs. */
-export function useScheduler(at: SchedulerAddress | undefined): void {
-  if (at?.port === address?.port && at?.token === address?.token) return
-  address = at
-  transport = undefined
-}
 
 /** Points this process at the run's scheduler over `send`; returns what delivers its grants. */
 export function useSchedulerChannel(send: (message: ClientMessage) => void): (id: string) => void {
   const channel = new ChannelTransport(send)
-  address = undefined
   transport = channel
   return (id) => channel.grant(id)
 }
@@ -129,7 +80,7 @@ export function acquire(
 ): Promise<Lease> {
   const { rank, signal } = options
   if (signal?.aborted) return Promise.reject(signal.reason)
-  transport ??= address ? new SocketTransport(address) : new LocalTransport()
+  transport ??= new LocalTransport()
   const via = transport
   const id = String(++ids)
   let released = false
