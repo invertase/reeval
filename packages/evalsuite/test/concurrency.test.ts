@@ -184,8 +184,11 @@ describe('concurrency', () => {
       run.evals.map((e) => e.id),
       ['evals/a.es.ts › a', 'evals/b.es.ts › b'],
     )
+    // A queued attempt that counted its wait would take about the whole run. Where starting a
+    // sandbox is slow (Windows), one round alone passes 3 s, so the bound is the run's span.
+    const bound = Math.max(3000, wall(trace))
     for (const a of run.evals.flatMap((e) => e.attempts)) {
-      assert.ok(a.durationMs < 3000, `attempt ${a.id} took ${a.durationMs}ms, queue time included`)
+      assert.ok(a.durationMs < bound, `attempt ${a.id} took ${a.durationMs}ms, queue time included`)
     }
   })
 
