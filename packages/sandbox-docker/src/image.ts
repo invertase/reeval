@@ -48,6 +48,14 @@ export const LABEL = {
   harness: 'dev.evalsuite.harness',
 } as const
 
+/**
+ * The user the agent, setup steps and checks run as, which every image ES builds creates. Image
+ * builds (`install`, Dockerfiles) stay root.
+ */
+export const SANDBOX_USER = 'es'
+/** {@link SANDBOX_USER}'s home. */
+export const SANDBOX_HOME = `/home/${SANDBOX_USER}`
+
 /** The container's default working directory, as seen by the harness. */
 export const SANDBOX_ROOT = '/es'
 /** The agent's working directory, relative to {@link SANDBOX_ROOT}. */

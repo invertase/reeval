@@ -202,7 +202,11 @@ docker()                                             // ES's Node image with the
 docker({ install: ['npm i -g firebase-tools@14'] })  // baked once as a cached layer; no secrets
 docker({ from: 'python:3.12-slim' })                 // Debian/Ubuntu base; ES adds Node + agent
 docker({ dockerfile: './sandbox/Dockerfile' })       // ARG ES_BASE / FROM ${ES_BASE} to layer on ES's
+docker({ memory: '8g', cpus: 4, pids: 4096 })        // limits; defaults 4g (no swap), 2, 1024
+docker({ root: true })                               // opt in: apt-get at run time (default: user es)
 ```
+
+The agent, setup and `t.exec` run as `es` (home `/home/es`) with no capabilities; builds run as root.
 
 One sandbox per eval (a list is an error). `npx es image build` builds every image the plan needs.
 

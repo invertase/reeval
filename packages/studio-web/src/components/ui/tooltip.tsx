@@ -1,3 +1,4 @@
+// Modified from shadcn/ui (https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import type * as React from 'react'
 import { cn } from '@/lib/utils'

@@ -1,7 +1,7 @@
 // Session behaviours in a real container (test-strategy §11.1–11.2): what an abort or kill leaves
 // running, and what a create leaves behind.
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import http from 'node:http'
 import { after, describe, test } from 'node:test'
 import { PROXY_PORT } from '../src/egress/gateway.ts'
@@ -134,11 +134,20 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
           () => false,
         ),
       )
-      // The forwarder is the one process whose command line has the proxy port.
-      const killed = await s.run({
-        command: `pkill -KILL -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}'`,
-      })
-      assert.equal(killed.exitCode, 0, 'pkill found the forwarder')
+      // The forwarder is the one process whose command line has the proxy port. It runs as root,
+      // out of the sandbox user's reach, so kill it as root.
+      const pattern = `[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}`
+      const killed = spawnSync('docker', [
+        'exec',
+        '--user',
+        '0:0',
+        s.id,
+        'pkill',
+        '-KILL',
+        '-f',
+        pattern,
+      ])
+      assert.equal(killed.status, 0, 'pkill found the forwarder')
       await eventually(
         'the session reports the gateway stopped',
         async () => s.egress?.active === false,

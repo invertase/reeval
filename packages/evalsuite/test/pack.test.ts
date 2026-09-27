@@ -39,14 +39,51 @@ test('the packed package installs into a clean project and runs es', {
   assert.match(listing, /^package\/docker\/Dockerfile$/m)
   assert.match(listing, /^package\/assets\/pnpm-lock\.yaml$/m)
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
+  assert.doesNotMatch(listing, /^package\/dist\/studio-app\/third-party\.json$/m)
 
   // The @evalsuite/* packages are bundled into dist, so nothing in the manifest points at the
   // workspace.
-  const manifest = JSON.parse(listingPackage(dir, tarball))
+  const manifest = JSON.parse(extract(dir, tarball, 'package.json'))
   const pkg = manifest.name as string
   assert.equal(manifest.license, 'Apache-2.0')
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
   assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@evalsuite/')))
+
+  // THIRD_PARTY_NOTICES.md: the third-party code inlined into the tarball, each package with
+  // its licence text, and none of the dependencies npm installs.
+  assert.match(listing, /^package\/THIRD_PARTY_NOTICES\.md$/m)
+  const notices = extract(dir, tarball, 'THIRD_PARTY_NOTICES.md')
+  const sections = notices.split(/^## /m).slice(1)
+  const listed = sections.map((s) => s.slice(0, s.indexOf('\n')))
+  for (const inlined of [
+    /^@ai-sdk\/harness-claude-code@/, // dist and dist/bridge
+    /^react@/,
+    /^react-dom@/,
+    /^@radix-ui\/react-select@/,
+    /^@tanstack\/react-router@/,
+    /^lucide-react@/,
+    /^tailwindcss@/, // through the studio's CSS
+    /^shadcn\/ui$/,
+  ])
+    assert.ok(
+      listed.some((name) => inlined.test(name)),
+      `${inlined} in ${listed.join(', ')}`,
+    )
+  assert.ok(listed.length > 30, listed.join(', '))
+  for (const section of sections) {
+    assert.match(section, /^- Licence: \S+/m, section.slice(0, 200))
+    assert.match(section, /^```+text\n[\s\S]*(Copyright|Permission)/m, section.slice(0, 200))
+  }
+  // A dependency can still be inlined into the bridge, which the sandbox runs from its own files.
+  const inlinedInto = (name: string) =>
+    sections
+      .find((s) => s.startsWith(`${name}\n`))
+      ?.match(/^- Inlined into: (.*)$/m)?.[1]
+      ?.split(', ')
+  for (const dep of Object.keys(manifest.dependencies))
+    for (const name of listed.filter((n) => n.startsWith(`${dep}@`)))
+      assert.ok(!inlinedInto(name)?.includes('dist'), `${dep} is a dependency, not inlined`)
+  assert.match(extract(dir, tarball, 'dist/bridge/index.mjs'), /^\/\/ Modified by Invertase/)
 
   const app = join(dir, 'app')
   await mkdir(join(app, 'evals'), { recursive: true })
@@ -166,8 +203,8 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), sandbo
   }
 })
 
-function listingPackage(dir: string, tarball: string): string {
-  return spawnSync('tar', ['xzf', join(dir, tarball), '-O', 'package/package.json'], {
+function extract(dir: string, tarball: string, file: string): string {
+  return spawnSync('tar', ['xzf', join(dir, tarball), '-O', `package/${file}`], {
     encoding: 'utf8',
   }).stdout
 }

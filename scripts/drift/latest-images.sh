@@ -32,7 +32,7 @@ for pair in $images; do
   pinned=$(label "$image")
   version=${pinned##* }
   new_label=""
-  bootstrap=/root/.ai-sdk-harness/.harness-bootstrap
+  bootstrap=/home/es/.ai-sdk-harness/.harness-bootstrap
   case "$harness" in
     antigravity)
       latest=${ES_DRIFT_ANTIGRAVITY_VERSION:-}
@@ -61,7 +61,7 @@ node -p \"JSON.parse(require('fs').readFileSync('node_modules/@cursor/sdk/packag
 cd $bootstrap/opencode/implementation
 printf 'allowBuilds:\\n  %s: true\\n' \"'opencode-ai@$latest'\" > pnpm-workspace.yaml
 pnpm add --save-exact --store-dir $bootstrap/opencode/.pnpm-store opencode-ai@$latest >/dev/null
-cd /root/.config/opencode
+cd /home/es/.config/opencode
 printf '{\"dependencies\":{\"@opencode-ai/plugin\":\"%s\"}}\\n' $latest > package.json
 rm -rf node_modules package-lock.json
 npm install --no-fund --no-audit --ignore-scripts --loglevel=error
@@ -101,7 +101,8 @@ expect \"$latest\" \"\$($bootstrap/pi/node_modules/.bin/pi --version)\""
   echo "swapping $harness $pinned → $latest in $image"
   context=$(mktemp -d)
   printf '%s\n%s\n' "$expect_fn" "$swap" > "$context/swap.sh"
-  printf 'FROM %s\nCOPY swap.sh /tmp/swap.sh\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nLABEL dev.evalsuite.agent-version=%s\n' \
+  # As the sandbox user, who owns the bootstraps and runs them; the image stays root for builds.
+  printf 'FROM %s\nCOPY --chown=es swap.sh /tmp/swap.sh\nUSER es\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nUSER root\nLABEL dev.evalsuite.agent-version=%s\n' \
     "$image" "\"$new_label\"" > "$context/Dockerfile"
   docker build -q -t "$image" "$context" >/dev/null
   rm -rf "$context"

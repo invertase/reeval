@@ -612,6 +612,19 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'sandbox/unprivileged',
+    tiers: ['docker'],
+    env: 'plain',
+    canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
+  },
+  {
+    dir: 'sandbox/limits',
+    tiers: ['docker'],
+    env: 'plain',
+    canary:
+      /expected '4294967296\\n\d+ 100000\\n1024\\n' to be '536870912\\n100000 100000\\n256\\n'/,
+  },
+  {
     dir: 'env/files-home',
     tiers: ['fake', 'docker'],
     env: 'home-files',

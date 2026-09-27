@@ -45,8 +45,9 @@ export function imageTargets(
   for (const { id, sandbox, ...use } of uses) {
     if (sandbox.kind !== 'docker') continue
     const harness = imageHarness(use.harness)
-    const { maxConcurrent: _, id: __, ...image } = sandbox
-    const key = JSON.stringify({ harness, image })
+    // What's in the image, not the limits or user the container runs with.
+    const { image, from, dockerfile, install } = sandbox
+    const key = JSON.stringify({ harness, image: { image, from, dockerfile, install } })
     const target = targets.get(key) ?? {
       id: harness === 'cursor' ? sandboxId(sandbox) : `${sandboxId(sandbox)} · ${harness}`,
       harness,

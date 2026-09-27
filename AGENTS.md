@@ -103,6 +103,20 @@ An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, 
 root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `@invertase/foobar`'s `files` and `.gitignore`.
 
+**Third-party notices.** The build writes `packages/evalsuite/THIRD_PARTY_NOTICES.md`, which ships
+in the tarball: every third-party package whose code the tarball inlines (tsdown's bundle, the
+Claude Code bridge in `dist/bridge/`, and the studio app, including the CSS that Tailwind
+inlines), with its version, licence text and any NOTICE file, plus the shadcn/ui files in
+`studio-web`. `scripts/third-party.mjs` drives it, using
+[rollup-plugin-license](https://github.com/mjeanroy/rollup-plugin-license) in both the tsdown
+and Vite builds. Runtime `dependencies` aren't listed, because npm installs them. The build fails
+when bundled code's licence isn't in `ALLOWED` (MIT, ISC, BSD, Apache-2.0 and similar permissive
+licences; no GPL family, and no missing licence), or when a package that needs its licence text
+to ship has no LICENSE file. For a package whose tarball leaves its LICENSE out, add the licence
+from its repository under `scripts/third-party-licenses/`. A file copied from shadcn/ui starts
+with a `Modified from shadcn/ui` line, which is how the notices find it
+(`studio-web/src/components/ui/LICENSE` has shadcn/ui's licence).
+
 **Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.128 carries a pnpm patch
 (`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model.
 A patch reaches only this workspace, so `@invertase/foobar` lists the adapter in `devDependencies`
