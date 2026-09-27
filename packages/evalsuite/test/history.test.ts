@@ -314,7 +314,9 @@ describe('recording runs into evals/.history', () => {
       ['package-lock.json'],
     )
     assert.deepEqual(run.stack.images, [])
-    assert.ok(run.stack.packages.ai && run.stack.packages.vitest)
+    assert.ok(
+      run.stack.packages.ai && run.stack.packages['@vitest/expect'] && run.stack.packages.jiti,
+    )
     assert.match(run.stack.judge.version, /^[0-9a-f]{12}$/)
     assert.equal('reproducibility' in run, false)
     assert.deepEqual(run.stack.fingerprintScope.length > 0, true)

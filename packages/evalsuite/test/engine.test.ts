@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { vitestMismatch } from '../src/engine/node.ts'
+import { vitestMismatch } from '../src/engine/vitest.ts'
 import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const math = (value: number) => `
@@ -121,7 +121,7 @@ export default defineConfig({
     [
       'has a syntax error',
       `evaluate('f' async () => {})`,
-      /evals\/bad\.es\.ts: Transform failed[\s\S]*Expected `,` or `\)`/,
+      /evals\/bad\.es\.ts: Unexpected token, expected "," \(evals\/bad\.es\.ts:2:14\)\n.*\n.*\n {3}\| {14}\^/,
     ],
   ] as const) {
     test(`an eval file that ${what} exits 2 naming it, next to a good file`, async () => {
@@ -443,6 +443,174 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
       assert.match(warning, new RegExp(`this es \\(${ours.replaceAll('.', '\\.')} at `))
       assert.match(warning, /won't register/)
     }
+  })
+
+  test('eval files mix TypeScript, ESM, CommonJS and JSON, with extensionless, circular imports and top-level await', async () => {
+    const p = await project('module-mix', {
+      'es.config.ts': fakeConfig(),
+      'evals/mix.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { a, fromB } from './circ-a'
+import cjs, { named } from './lib.cjs'
+import data from './data.json'
+import { m } from './mod.mts'
+enum Color { Red = 1 }
+const waited = await new Promise<string>((r) => setTimeout(() => r('tla'), 5))
+evaluate('mixed', async () => {
+  expect({ a, b: fromB(), cjs: cjs.kind, named, data, m, color: Color.Red, waited }).toEqual({
+    a: 'A', b: 'B sees A', cjs: 'cjs', named: 'N', data: { k: 1 }, m: 'mts', color: 1, waited: 'tla',
+  })
+})
+`,
+      'evals/circ-a.ts':
+        "import { b } from './circ-b'\nexport const a = 'A'\nexport function fromB() { return b() }\n",
+      'evals/circ-b.ts':
+        "import { a } from './circ-a'\nexport function b() { return 'B sees ' + a }\n",
+      'evals/lib.cjs': "module.exports = { named: 'N', kind: 'cjs' }\n",
+      'evals/data.json': '{ "k": 1 }\n',
+      'evals/mod.mts': "export const m: string = 'mts'\n",
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.equal(readRun(p.dir).evals[0]?.outcome, 'pass')
+  })
+
+  test('each eval file runs in a process of its own: module state and globals never cross files', async () => {
+    const body = (name: string) => `import { evaluate, expect } from 'evalsuite'
+import { state } from './shared'
+state.n++
+;(globalThis as Record<string, unknown>)['${name}'] = true
+evaluate('${name}', async () => {
+  expect(state.n).toBe(1)
+  expect(Object.keys(globalThis).filter((k) => k === 'a' || k === 'b')).toEqual(['${name}'])
+})
+`
+    const p = await project('isolation', {
+      'es.config.ts': fakeConfig(),
+      'evals/shared.ts': 'export const state = { n: 0 }\n',
+      'evals/a.es.ts': body('a'),
+      'evals/b.es.ts': body('b'),
+    })
+    const r = await runCli(p.dir, ['run', '--concurrency', '1'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+  })
+
+  test("a tsconfig that isn't JSON fails every eval file loudly; comments and trailing commas are fine", async () => {
+    const p = await project('tsconfig-json', {
+      'es.config.ts': fakeConfig(),
+      'tsconfig.json': '{ bad json',
+      'evals/a.es.ts': math(1),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /evals\/a\.es\.ts: .*Failed to load tsconfig 'tsconfig\.json'/)
+    await writeFile(
+      join(p.dir, 'tsconfig.json'),
+      '{\n  // ok\n  "compilerOptions": { "strict": true, },\n}\n',
+    )
+    const fine = await runCli(p.dir)
+    assert.equal(fine.code, 0, fine.stdout + fine.stderr)
+  })
+
+  test('.only narrows only the file it is in', async () => {
+    const p = await project('only-per-file', {
+      'es.config.ts': fakeConfig(),
+      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('a kept', async () => {})
+evaluate.only('a focused', async () => {})
+`,
+      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('b runs', async () => {})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
+      [
+        ['evals/a.es.ts › a kept', 'skipped'],
+        ['evals/a.es.ts › a focused', 'pass'],
+        ['evals/b.es.ts › b runs', 'pass'],
+      ],
+    )
+  })
+
+  test("an uncaught exception or unhandled rejection in an eval's worker fails the run; the other evals still finish", async () => {
+    const p = await project('worker-uncaught', {
+      'es.config.ts': fakeConfig(),
+      'evals/stray.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('throws later', async () => {
+  setTimeout(() => { throw new Error('stray throw') }, 0)
+  void Promise.reject(new Error('stray rejection'))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+})
+evaluate('fine', async () => {})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /stray throw/)
+    assert.match(r.stdout, /stray rejection/)
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => e.outcome),
+      ['pass', 'pass'],
+    )
+  })
+
+  test('a worker killed mid-attempt fails its attempts, names the file, and the run goes on', async () => {
+    const p = await project('worker-killed', {
+      'es.config.ts': fakeConfig(),
+      'evals/dies.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('killed', async (t) => {
+  await t.sandbox()
+  process.kill(process.pid, 'SIGKILL')
+})
+`,
+      'evals/lives.es.ts': math(1),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /The worker running evals\/dies\.es\.ts exited unexpectedly \(signal SIGKILL\)/,
+    )
+    assert.deepEqual(
+      readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
+      [
+        ['evals/dies.es.ts › killed', 'fail'],
+        ['evals/lives.es.ts › math', 'pass'],
+      ],
+    )
+  })
+
+  test('a worker that runs out of memory fails its attempts too', async () => {
+    const p = await project('worker-oom', {
+      'es.config.ts': fakeConfig(),
+      'evals/oom.es.ts': `import { evaluate } from 'evalsuite'
+import { setFlagsFromString } from 'node:v8'
+evaluate('grows', async () => {
+  setFlagsFromString('--max-old-space-size=32')
+  const hoard: string[][] = []
+  for (;;) hoard.push(new Array(1e6).fill('x'.repeat(8)))
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], { timeoutMs: 120_000 })
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /The worker running evals\/oom\.es\.ts exited unexpectedly/)
+    assert.equal(readRun(p.dir).evals[0]?.outcome, 'fail')
+  })
+
+  test('a name declared twice in one file is a usage error naming it', async () => {
+    const p = await project('duplicate-name', {
+      'es.config.ts': fakeConfig(),
+      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('same', async () => {})
+evaluate('same', async () => {})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /evals\/d\.es\.ts: evaluate\("same"\) is declared twice in this file/)
   })
 
   test('only the engine module imports vitest', () => {
@@ -1224,6 +1392,48 @@ process.on('SIGUSR2', () => {
     assert.match(r.stderr, /es: main process boom with /)
     assert.doesNotMatch(r.stdout + r.stderr, new RegExp(secret))
   })
+
+  for (const [how, stop, code] of [
+    ['crashes (exit 3)', (pid: number) => process.kill(pid, 'SIGUSR2'), 3],
+    ['is killed (SIGKILL)', (pid: number) => process.kill(pid, 'SIGKILL'), null],
+  ] as const) {
+    test(`when the main process ${how} mid-turn, its worker cancels, destroys the sandbox and exits`, async () => {
+      const p = await project('main-gone', {
+        'es.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
+process.on('SIGUSR2', () => { Promise.reject(new Error('main process boom')) })
+`,
+        'evals/agent.es.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'evalsuite'
+evaluate('agent eval', async (t) => {
+  writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
+  await t.send('write hello.txt')
+})
+`,
+      })
+      const r = await runCli(p.dir, ['run'], {
+        onOutput: (stdout, pid) => {
+          if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
+          stop(pid)
+          return true
+        },
+      })
+      assert.equal(r.code, code, r.stdout + r.stderr)
+      const worker = Number(readFileSync(join(p.dir, 'worker.pid'), 'utf8'))
+      const alive = () => {
+        try {
+          process.kill(worker, 0)
+          return true
+        } catch {
+          return false
+        }
+      }
+      const deadline = Date.now() + 15_000
+      while ((alive() || liveSandboxes(p).length) && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      assert.equal(alive(), false, 'the worker exited')
+      assert.deepEqual(liveSandboxes(p), [], 'the sandbox was destroyed')
+    })
+  }
 
   test('Ctrl-C while the worker boots still cancels the attempt before it starts', async () => {
     const p = await project('sigint-early', {

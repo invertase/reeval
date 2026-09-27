@@ -182,6 +182,26 @@ jobs:
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
 
+  # ES's engine against the Vitest engine's captured runs (scripts/differential.mjs). Recording
+  # Vitest live first shows the captures are still what it does.
+  engine-differential:
+    name: engine differential
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - name: the captures are the Vitest engine's
+        run: |
+          node --experimental-strip-types --no-warnings scripts/differential.mjs record vitest "$RUNNER_TEMP/vitest"
+          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/vitest"
+      - name: ES's engine does the same
+        run: |
+          node --experimental-strip-types --no-warnings scripts/differential.mjs record es "$RUNNER_TEMP/es"
+          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
+
   coverage:
     name: coverage
     needs: [unit, features, docker, studio]

@@ -74,6 +74,32 @@ class SocketTransport implements Transport {
   }
 }
 
+/** Over the worker's IPC channel to ES's own engine: requests out, grants back. */
+class ChannelTransport implements Transport {
+  readonly #pending = new Map<string, Pending>()
+  readonly #send: (message: ClientMessage) => void
+
+  constructor(send: (message: ClientMessage) => void) {
+    this.#send = send
+  }
+
+  grant(id: string) {
+    const pending = this.#pending.get(id)
+    this.#pending.delete(id)
+    pending?.resolve()
+  }
+
+  request(id: string, limits: Limits, rank: Rank | undefined, pending: Pending) {
+    this.#pending.set(id, pending)
+    this.#send({ t: 'request', id, limits, ...(rank ? { rank } : {}) })
+  }
+
+  release(id: string) {
+    this.#pending.delete(id)
+    this.#send({ t: 'release', id })
+  }
+}
+
 let address: SchedulerAddress | undefined
 let transport: Transport | undefined
 let ids = 0
@@ -83,6 +109,14 @@ export function useScheduler(at: SchedulerAddress | undefined): void {
   if (at?.port === address?.port && at?.token === address?.token) return
   address = at
   transport = undefined
+}
+
+/** Points this process at the run's scheduler over `send`; returns what delivers its grants. */
+export function useSchedulerChannel(send: (message: ClientMessage) => void): (id: string) => void {
+  const channel = new ChannelTransport(send)
+  address = undefined
+  transport = channel
+  return (id) => channel.grant(id)
 }
 
 /**

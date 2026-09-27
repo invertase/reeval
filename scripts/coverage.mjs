@@ -44,11 +44,32 @@ const ours = new RegExp(`^${repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/(
  * tests can't reach takes a `c8 ignore` comment that says why.
  */
 const ENGINE = [
-  'packages/evalsuite/src/engine/errors.ts',
-  'packages/evalsuite/src/engine/expect.ts',
+  'collector',
+  'errors',
+  'expect',
+  'files',
+  'loader',
+  'node',
+  'pool',
+  'protocol',
+  'run',
+  'runtime',
+  'worker',
+  'worker-entry',
+].map((name) => `packages/evalsuite/src/engine/${name}.ts`)
+/** The tests that cover it, run from packages/evalsuite: its unit tests, and the CLI end to end. */
+const ENGINE_TESTS = [
+  'test/engine-collector.test.ts',
+  'test/engine-errors.test.ts',
+  'test/engine-expect.test.ts',
+  'test/engine-loader.test.ts',
+  'test/engine-node.test.ts',
+  'test/engine-pool.test.ts',
+  'test/engine-run.test.ts',
+  'test/engine-runtime.test.ts',
+  'test/engine-worker.test.ts',
+  'test/engine.test.ts',
 ]
-/** The tests that cover it, run from packages/evalsuite. */
-const ENGINE_TESTS = ['test/engine-errors.test.ts', 'test/engine-expect.test.ts']
 
 const [command, ...args] = process.argv.slice(2)
 if (command === 'run') process.exit(run(args))
