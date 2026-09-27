@@ -57,7 +57,7 @@
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | — |
 | `secrets: { unbrokered }` and the unbrokered warning | ✓ 3 | — | — | — | — |
-| Secrets masked in everything ES writes | ✓ 4 | — | ● 1 | ● 1 | — |
+| Secrets masked in everything ES writes | ✓ 5 | — | ● 1 | ● 1 | — |
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — |
 | `extend`, overrides and the environment digest | ✓ 2 | — | ● 1 | ● 1 | — |
