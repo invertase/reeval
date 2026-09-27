@@ -70,7 +70,8 @@ const CHANGE_TOOLS: Record<string, string> = { add: 'write', update: 'edit', del
  * Turns one `codex exec --json` process's NDJSON into harness stream parts. Codex reports a turn,
  * not its model calls: `turn.completed` is one `finish-step` with the turn's tokens and the
  * `finish`. A top-level `error` before it is a call Codex retries ("Reconnecting... n/5"), so it's
- * a failed step, not the turn's end; `turn.failed` ends the turn with an error part.
+ * a failed step, not the turn's end, unless `turn.failed` follows it: Codex announces the failure
+ * that ends the turn with an `error` too, and that call wasn't retried.
  */
 export class CodexStreamTranslator {
   threadId: string | undefined
@@ -81,6 +82,8 @@ export class CodexStreamTranslator {
   private readonly blocks = new Map<string, { type: 'text' | 'reasoning'; text: string }>()
   /** Tool calls by id whose call went out, so a result isn't sent without one. */
   private readonly calls = new Set<string>()
+  /** The last top-level `error`, a retry unless the next event is `turn.failed`. */
+  private pendingError: string | undefined
 
   constructor(options: { workDir: string }) {
     this.workDir = options.workDir
@@ -107,6 +110,7 @@ export class CodexStreamTranslator {
     if (this.finished) return []
     const parts: HarnessV1StreamPart[] = []
     this.start(parts)
+    this.flushError(parts)
     this.closeBlocks(parts)
     if (!options.aborted) {
       const detail = options.stderr?.trim()
@@ -122,6 +126,8 @@ export class CodexStreamTranslator {
   }
 
   private translate(e: CodexEvent, parts: HarnessV1StreamPart[]) {
+    if (e.type === 'turn.failed') this.pendingError = undefined
+    else this.flushError(parts)
     switch (e.type) {
       case 'thread.started':
         this.threadId = e.thread_id ?? this.threadId
@@ -136,11 +142,7 @@ export class CodexStreamTranslator {
         return
       case 'error':
         this.start(parts)
-        parts.push({
-          type: 'finish-step',
-          finishReason: { unified: 'error', raw: e.message ?? 'error' },
-          usage: toUsage(undefined),
-        })
+        this.pendingError = e.message ?? 'error'
         return
       case 'turn.completed':
         this.start(parts)
@@ -216,6 +218,16 @@ export class CodexStreamTranslator {
         return
       }
     }
+  }
+
+  private flushError(parts: HarnessV1StreamPart[]) {
+    if (this.pendingError === undefined) return
+    parts.push({
+      type: 'finish-step',
+      finishReason: { unified: 'error', raw: this.pendingError },
+      usage: toUsage(undefined),
+    })
+    this.pendingError = undefined
   }
 
   private relative(path: string) {

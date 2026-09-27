@@ -59,7 +59,11 @@ test("a refused key: each retry a failed step, then the turn's error and an erro
   const retries = parts.filter(
     (p) => p.type === 'finish-step' && p.finishReason.unified === 'error',
   )
-  assert.ok(retries.length >= 5, `${retries.length} retries`)
+  assert.deepEqual(
+    retries.map((p) => p.type === 'finish-step' && p.finishReason.raw?.slice(0, 18)),
+    [1, 2, 3, 4, 5].map((n) => `Reconnecting... ${n}/`),
+    'the error announcing the failed turn is no retry',
+  )
   const errors = parts.filter((p) => p.type === 'error')
   assert.equal(errors.length, 1)
   assert.match(String((errors[0] as { error: Error }).error.message), /401 Unauthorized/)
