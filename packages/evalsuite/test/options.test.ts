@@ -1434,21 +1434,35 @@ evaluate('fake', { sandbox: (await import('evalsuite/sandbox')).fakeSandbox() },
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const out = r.stdout
     assert.match(out, /^images {2}4 sandbox images \(nothing built: --dry-run\)$/m)
+    // Each step's standing depends on what this machine has built, so only its shape is checked.
+    const st = '[✓+~✗] '
     assert.match(
       out,
-      /^docker \+ install · 2 evals\n {2}base +evalsuite-sandbox:cursor-[\d.]+ +\(rebuild: the harness bootstrap\)\n {2}install 2 commands +evalsuite-install:<base id \+ commands> +\(build unless cached\)$/m,
+      new RegExp(
+        `^docker \\+ install · 2 evals\\n {2}${st}base +evalsuite-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +evalsuite-install:<base id \\+ commands> +\\(`,
+        'm',
+      ),
     )
     assert.match(
       out,
-      /^docker:tools · 1 eval\n {2}dockerfile docker\/tools\/Dockerfile +evalsuite-dockerfile:tools-<context \+ ES image id> +\(docker build \(layer cache\), tagged by content hash\)\n {2}harness +evalsuite-dockerfile:tools-<context \+ ES image id> +\(inherited: FROM \$\{ES_BASE\}, which is evalsuite-sandbox:cursor-[\d.]+\)$/m,
+      new RegExp(
+        `^docker:tools · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +evalsuite-dockerfile:tools-<context \\+ ES image id> +\\(.+\\)\\n {2}${st}harness +evalsuite-dockerfile:tools-<context \\+ ES image id> +\\(`,
+        'm',
+      ),
     )
     assert.match(
       out,
-      /^docker:py\.Dockerfile · 1 eval\n {2}dockerfile evals\/py\.Dockerfile +evalsuite-dockerfile:py-dockerfile-[0-9a-f]{16} .*\n {2}harness +evalsuite-sandbox:cursor-[\d.]+-evalsuite-dockerfile-py-dockerfile-.+ +\(rebuild: Node, git and the harness bootstrap on top\)$/m,
+      new RegExp(
+        `^docker:py\\.Dockerfile · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +evalsuite-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +evalsuite-sandbox:cursor-[\\d.]+-evalsuite-dockerfile-py-dockerfile-`,
+        'm',
+      ),
     )
     assert.match(
       out,
-      /^docker:python:3\.12-slim · 1 eval\n {2}from python:3\.12-slim +evalsuite-sandbox:cursor-[\d.]+-python-3-12-slim-[0-9a-f]{8}/m,
+      new RegExp(
+        `^docker:python:3\\.12-slim · 1 eval\\n {2}${st}from python:3\\.12-slim +evalsuite-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
+        'm',
+      ),
     )
     assert.doesNotMatch(out, /fake/)
     const runs = join(p.dir, '.es', 'runs')

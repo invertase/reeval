@@ -1214,6 +1214,80 @@ evaluate('repeated', { runs: 4 }, async (t) => {
     assert.match(summary, /✗ repeated +3\/4 +75% {2}4 attempts\n/)
   })
 
+  test("a harness whose session never becomes ready is an infra error, once retried; its sandbox goes, other evals don't wait", async () => {
+    const p = await project('start-hangs', {
+      'es.config.ts': fakeConfig(),
+      'evals/hang.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+evaluate('stuck start', { harness: fakeHarness({ startHangs: true, startTimeout: '1s' }) }, async (t) => {
+  await t.send('go')
+})
+evaluate('fine', async () => expect(1).toBe(1))
+`,
+    })
+    const started = Date.now()
+    const r = await runCli(p.dir, ['run', '--concurrency', '1'], { timeoutMs: 30_000 })
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    assert.ok(Date.now() - started < 20_000, `took ${Date.now() - started}ms`)
+    const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    assert.equal(byName['stuck start']?.outcome, 'infra_error')
+    assert.deepEqual(byName['stuck start']?.error, {
+      kind: 'infra',
+      message: 'fake: session did not become ready within 1s (tried twice)',
+    })
+    assert.deepEqual(
+      byName['stuck start']?.trial.startRetries?.map((s) => s.error),
+      ['fake: session did not become ready within 1s'],
+    )
+    assert.equal(byName.fine?.outcome, 'pass', 'the other eval ran')
+    assert.deepEqual(liveSandboxes(p), [], 'sandbox destroyed')
+  })
+
+  test('a session that hangs once becomes ready on its retry, recorded; one that starts at once is not retried', async () => {
+    const p = await project('start-hangs-once', {
+      'es.config.ts': fakeConfig(),
+      'evals/once.es.ts': `import { evaluate } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+evaluate('recovers', { harness: fakeHarness({ id: 'flaky', startHangs: 1, startTimeout: '1s' }) }, async (t) => {
+  await t.send('go')
+})
+evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) }, async (t) => {
+  await t.send('go')
+})
+`,
+    })
+    const r = await runCli(p.dir, ['run'], { timeoutMs: 30_000 })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    assert.equal(byName.recovers?.outcome, 'pass')
+    assert.deepEqual(
+      byName.recovers?.trial.startRetries?.map((s) => s.error),
+      ['fake: session did not become ready within 1s'],
+    )
+    assert.equal(byName.canary?.outcome, 'pass')
+    assert.equal(byName.canary?.trial.startRetries, undefined, 'the canary: no retry')
+    assert.deepEqual(liveSandboxes(p), [])
+  })
+
+  test('startTimeout must be a duration', async () => {
+    const p = await project('start-timeout-bad', {
+      'es.config.ts': fakeConfig({ harness: "{ startTimeout: 'soon' }" }),
+      'evals/math.es.ts': math(1),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /startTimeout of harness in es\.config\.ts: Invalid duration "soon"/)
+
+    // An operational limit, like maxConcurrent: results with and without it stay comparable.
+    const fingerprint = async (harness: string) => {
+      await writeFile(join(p.dir, 'es.config.ts'), fakeConfig({ harness }))
+      const run = await runCli(p.dir)
+      assert.equal(run.code, 0, run.stdout + run.stderr)
+      return readRun(p.dir).evals[0]?.cells[0]?.fingerprint
+    }
+    assert.equal(await fingerprint("{ startTimeout: '5s' }"), await fingerprint('{}'))
+  })
+
   test('a harness failure is an infra error and exits 3', async () => {
     const p = await project('infra', {
       'es.config.ts': fakeConfig({ harness: `{ failWith: 'agent CLI failed to start' }` }),

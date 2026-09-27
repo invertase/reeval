@@ -240,6 +240,12 @@
             }
           ]
         },
+        "startRetries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StartRetry"
+          }
+        },
         "timings": {
           "$ref": "#/$defs/PhaseTimings"
         },
@@ -1734,6 +1740,25 @@
                   }
                 ]
               },
+              "from": {
+                "type": "object",
+                "properties": {
+                  "digest": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "ref": {
+                    "type": "string"
+                  }
+                },
+                "required": ["digest", "ref"]
+              },
               "id": {
                 "type": "string"
               },
@@ -1811,6 +1836,18 @@
         "os",
         "packages"
       ]
+    },
+    "StartRetry": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "waitedMs": {
+          "type": "number"
+        }
+      },
+      "required": ["error", "waitedMs"]
     },
     "TokenUsage": {
       "type": "object",

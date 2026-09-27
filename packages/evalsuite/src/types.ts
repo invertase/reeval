@@ -176,6 +176,8 @@ export type FakeHarnessDescriptor = {
   ignoreAbort?: boolean
   /** Throw before the first turn starts, to simulate an infra failure. */
   failWith?: string
+  /** The first this many session starts of an attempt never become ready, even when aborted (`true`: every one). */
+  startHangs?: number | true
   /** A reasoning block at the start of every turn. */
   reasoning?: string
   /**
@@ -196,6 +198,11 @@ export type FakeHarnessDescriptor = {
   script?: FakeScriptStep[][]
   /** The most attempts on this harness kind at once, across the run. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
   /**
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
@@ -235,6 +242,11 @@ export type CursorHarnessDescriptor = {
   id?: string
   /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /** Claude Code through `@ai-sdk/harness-claude-code`, made by `claudeCode()`. */
 export type ClaudeCodeHarnessDescriptor = {
@@ -245,6 +257,11 @@ export type ClaudeCodeHarnessDescriptor = {
   id?: string
   /** The most Claude Code attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /** The Antigravity CLI through `@evalsuite/harness-antigravity`, made by `antigravity()`. */
 export type AntigravityHarnessDescriptor = {
@@ -255,6 +272,11 @@ export type AntigravityHarnessDescriptor = {
   id?: string
   /** The most Antigravity attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /**
  * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
@@ -268,6 +290,11 @@ export type OpenCodeHarnessDescriptor = {
   id?: string
   /** The most OpenCode attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /**
  * Goose through `@evalsuite/harness-goose` (`goose acp`), made by `goose()`. It runs Google models
@@ -281,6 +308,11 @@ export type GooseHarnessDescriptor = {
   id?: string
   /** The most Goose attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /**
  * pi through `@evalsuite/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
@@ -294,6 +326,11 @@ export type PiHarnessDescriptor = {
   id?: string
   /** The most pi attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /**
  * OpenAI's Codex CLI through `@evalsuite/harness-codex` (`codex exec --json`), made by `codex()`.
@@ -307,6 +344,11 @@ export type CodexHarnessDescriptor = {
   id?: string
   /** The most Codex attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
+  /**
+   * How long the harness's session may take to become ready (its bootstrap and first session)
+   * before the attempt is an infra error, after one retry; default 90s.
+   */
+  startTimeout?: Duration
 }
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
@@ -871,6 +913,11 @@ export type AttemptImage = {
   install: string[]
   /** `docker({ dockerfile })`: the path from the project root and the build context's hash. */
   dockerfile: { path: string; sha256: string } | null
+  /**
+   * `docker({ from })`: the base as written and the digest the image was built on (a local-only
+   * base's image id); `es image build` rebuilds it when the tag has moved since.
+   */
+  from?: { ref: string; digest: string | null }
 }
 
 /** What one judge call saw, and for a call that failed, why and what was retried first. */
@@ -880,6 +927,14 @@ export type JudgeInput = {
   state: { [key: string]: JSONValue }
   error?: string
   retries?: JudgeRetry[]
+}
+
+/** A harness session start that timed out and was started again. */
+export type StartRetry = {
+  /** `<harness kind>: session did not become ready within <startTimeout>`. */
+  error: string
+  /** How long it waited before giving up on that start. */
+  waitedMs: number
 }
 
 /** Full per-attempt payload, written to disk by the worker. */
@@ -894,6 +949,8 @@ export type EvalRecord = {
   checks: Array<{ command: string; durationMs: number } & ExecResult>
   /** With `retries` when transient provider errors were retried on the way to the verdict. */
   judgements: Array<Verdict & { retries?: JudgeRetry[] }>
+  /** Session starts that didn't become ready in time and were started again. */
+  startRetries?: StartRetry[]
   timings: PhaseTimings
   /** Skills, rules and MCP config visible to the agent, by content hash. */
   context?: Array<{ path: string; sha256: string }>

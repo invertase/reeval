@@ -100,18 +100,20 @@ npx es image build --dry-run
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  ✓ base  evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
 docker + install · 1 eval
-  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
-  install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
+  ✓ base               evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + install 1 command  evalsuite-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  + from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
 docker:sqlite · 1 eval
-  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
-  harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
+  + dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-<context + ES image id>  (to build: not built yet (evalsuite-dockerfile:sqlite-6030a60be3d263ca))
+  ✓ harness                              evalsuite-dockerfile:sqlite-<context + ES image id>  (ready: evalsuite-sandbox:cursor-0.1.0 built (e04d443bc8e2))
 ```
 
-`es image build` builds every image the planned evals need, per harness. Filters, `--tag` and `--profile` apply, as for `es run`. You don't have to run it first: `es run` builds whatever is missing before any attempt starts, three at a time, once each.
+Each step says how it stands: `✓` ready, `+` to build, `~` stale, `✗` missing. `es image build` builds what's missing or stale, three at a time, and reports every image that failed (exit 3). Filters, `--tag` and `--profile` apply, as for `es run`. You don't have to run it first: `es run` builds whatever is missing before any attempt starts, and `es run --dry-run` ends with the same check, one line per image.
+
+A `from` tag such as `node:22` is looked up once, and ES builds on the digest it names then. Later runs reuse that build even when the tag moves; `--dry-run` says when it has, and `es image build` rebuilds it. Pin a digest (`node:22@sha256:…`) to never move, or run `es image build --force` to rebuild and pull everything.
 
 ## When an image fails
 

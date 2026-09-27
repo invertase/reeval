@@ -612,6 +612,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'image.from-digest',
+    area: 'Sandbox',
+    name: '`from` digests: recorded, kept by `es run`, flagged by `--dry-run` and rebuilt by `es image build` when the tag moves',
+    tests: [docker('a from tag that moves upstream')],
+  },
+  {
+    id: 'run.dry-run-images',
+    area: 'CLI and runner',
+    name: '`es run --dry-run` checks each sandbox image: ready, to build, stale or missing',
+    tests: [docker('es image build builds every image, reports every failure and exits 3')],
+  },
+  {
     id: 'image.failures',
     area: 'Sandbox',
     name: 'Image build failures: the headline first, ENOSPC and exit 137 named, transient errors retried',
@@ -637,8 +649,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'image.build',
     area: 'Sandbox',
-    name: '`es image build` and `--dry-run`',
-    tests: [options('es image build --dry-run lists every image')],
+    name: '`es image build` (every image, every failure, exit 3, `--force`) and its `--dry-run`',
+    tests: [
+      options('es image build --dry-run lists every image'),
+      docker('es image build builds every image, reports every failure and exits 3'),
+    ],
   },
   {
     id: 'egress',
@@ -1146,6 +1161,16 @@ export const inventory: InventoryFeature[] = [
       engine('.only narrows only the file it is in'),
       engine('a name declared twice in one file is a usage error naming it'),
       "evalsuite/test/pack.test.ts › the packed package installs with Yarn Berry's Plug'n'Play and runs es",
+    ],
+  },
+  {
+    id: 'harness.start-timeout',
+    area: 'CLI and runner',
+    name: "A harness session that doesn't become ready within `startTimeout` (default 90s) is retried once, then an infra error; its sandbox goes and the other attempts carry on",
+    tests: [
+      engine('never becomes ready is an infra error, once retried'),
+      engine('a session that hangs once becomes ready on its retry, recorded'),
+      engine('startTimeout must be a duration'),
     ],
   },
   {

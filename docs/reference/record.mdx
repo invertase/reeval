@@ -475,6 +475,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="judgements" type="JudgementRecord[]"></Property>
 
+<Property name="startRetries" type="StartRetry[]" optional>
+  Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
+</Property>
+
 <Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef}>"></Property>
 
 <Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">
@@ -645,6 +649,10 @@ The image an attempt's container started from, and how ES made it.
 
 <Property name="dockerfile" type="{path: string; sha256: string} | null">
   `docker({ dockerfile })`: the path from the project root and the build context's hash.
+</Property>
+
+<Property name="from" type="{ref: string; digest: string | null}" optional>
+  `docker({ from })`: the base as written and the digest the image was built on (a local-only base's image id); `es image build` rebuilds it when the tag has moved since.
 </Property>
 
 ### PhaseTimings

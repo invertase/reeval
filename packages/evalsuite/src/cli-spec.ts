@@ -252,13 +252,17 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: '',
     sub: {
       build: {
-        flags: ['dry-run'],
+        flags: ['dry-run', 'force'],
         positionals: Number.POSITIVE_INFINITY,
         help: `
   es image build [filter...]
                             Build every image the evals' Docker sandboxes need, per harness: ES's
-                            image (bakes in its CLI), from and dockerfile images, install layers
-    --dry-run               List the images and how each is made, without building`,
+                            image (bakes in its CLI), from and dockerfile images, install layers.
+                            Builds what's missing or stale (a from tag that moved upstream), three
+                            at a time, and reports every failure; exit 3 if any image failed
+    --force                 Rebuild every image, pulling each base again
+    --dry-run               List the images, how each is made and how each stands, building
+                            nothing (a from tag is looked up in its registry, not pulled)`,
       },
     },
   },

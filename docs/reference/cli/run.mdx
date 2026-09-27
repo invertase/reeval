@@ -71,13 +71,23 @@ The estimate is the median of each eval's recent attempts on that harness (the l
 plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
 ```
 
-`--dry-run` adds a row per eval and stops. `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document. Neither needs credentials or Docker.
+`--dry-run` adds a row per eval, then, when Docker is running, a line per sandbox image saying whether it's ready, to build, stale or missing (a `from` tag is looked up in its registry, never pulled), and stops with exit 0. `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document, with each image step's `status` and `detail`. Neither needs credentials, and Docker is optional.
+
+```text
+images  4 sandbox images: 1 ready, 3 to build
+  ✓ docker            ready
+  + docker + install  to build: install 1 command, not built yet
+  + python            to build: from python:3.12-slim, on python:3.12-slim (f77ac9e44ae9)
+  …
+```
 
 A sandbox that runs as root or with capabilities added back gets a line under the plan, one per config, profile, group or eval that set it. See [Privilege warnings](/reference/sandbox/docker#privilege-warnings).
 
 ## Before any attempt starts
 
-`es run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running and the images exist. Each failure exits 2 without writing a run.
+`es run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running. Each failure exits 2 without writing a run.
+
+Then it prepares every sandbox image the plan needs, three at a time, once each: see [Sandbox providers](/reference/sandbox/providers). One the config sets that can't be prepared stops the run there, exit 3 (2 for a missing `docker({ image })`); one a group or eval sets fails only the attempts that need it.
 
 `es run` loads `.env.local`, then `.env`, from the config's directory, not the current one: variables already set in your shell win, then `.env.local`, then `.env`. The config and the evals both see them.
 

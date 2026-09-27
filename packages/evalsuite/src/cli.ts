@@ -253,13 +253,39 @@ async function imageBuildCommand(
     for (const line of await imagePlanLines(targets, root)) console.log(line)
     return EXIT.ok
   }
-  const built = await buildImages(targets, root, (line) => console.log(dim(line)))
-  for (const { id, image } of built) {
-    console.log(
-      green(`${id}: ${image.ref}`) + dim(` ${image.id.replace(/^sha256:/, '').slice(0, 12)}`),
-    )
+  const { PrepareError } = await import('./sandbox/provider.ts')
+  let built: Awaited<ReturnType<typeof buildImages>>
+  try {
+    built = await buildImages(targets, root, {
+      log: (line) => console.log(dim(line)),
+      force: !!flags.force,
+    })
+  } catch (error) {
+    if (error instanceof PrepareError && error.failure.usage) throw new UsageError(error.message)
+    throw error
   }
-  return EXIT.ok
+  // Every image, failed or not, so one broken image doesn't hide the state of the others.
+  for (const b of built) {
+    if (b.ok) {
+      const id = b.image.id.replace(/^sha256:/, '').slice(0, 12)
+      console.log(`${green('✓')} ${green(`${b.id}: ${b.image.ref}`)}${dim(` ${id}`)}`)
+      continue
+    }
+    const uses = b.evals ? ` (${b.evals} eval${b.evals === 1 ? '' : 's'})` : ''
+    const [headline = '', ...rest] = b.failure.message.split('\n')
+    console.log(`${red('✗')} ${red(`${b.id}${uses}: ${headline}`)}`)
+    for (const line of rest) console.log(`  ${line}`)
+  }
+  const failed = built.filter((b) => !b.ok)
+  const n = built.length
+  console.log(
+    failed.length
+      ? red(`${failed.length} of ${n} image${n === 1 ? '' : 's'} failed to build`)
+      : dim(`${n} image${n === 1 ? '' : 's'} ready`),
+  )
+  if (!failed.length) return EXIT.ok
+  // A missing docker({ image }) is fixed in the config; anything else is the build's.
+  return failed.every((b) => !b.ok && b.failure.usage) ? EXIT.usage : EXIT.infra
 }
 
 /** `es run`: check, plan, run the engine, then write the run and pick the exit code. */
@@ -554,6 +580,13 @@ async function executeRun(
     if (setup.dryRun) {
       const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
       lines.push(...planTable(plan, todos))
+      const { imageStatusLines } = await import('./sandbox/images.ts')
+      const { dockerAvailable } = await import('@evalsuite/sandbox-docker')
+      if (targets.length && (await dockerAvailable())) {
+        lines.push(...(await imageStatusLines(targets, config.root)))
+      } else if (targets.length) {
+        lines.push('images  not checked: Docker is not running')
+      }
     }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
