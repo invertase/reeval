@@ -21,8 +21,12 @@ site; its Reference tab has every option, flag and error).
    (or a tarball: `npm i -D /path/to/invertase-foobar.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm ≥ 11.6 recommended (older npm, e.g. Node 22's 10.9, can crash with
    an `edgesOut` error: `npm i -g npm@latest`; pnpm and yarn are unaffected).
-2. Write `es.config.ts` at the project root and evals in `evals/**/*.es.ts` (the default
-   `include`). Gitignore `.es/` and `.env*`.
+2. `npx es init --harness <cursor|claude-code|antigravity|opencode|goose|pi|none>` (it only
+   asks in a terminal) writes `es.config.ts` (the agent, plus `fake`, `pr` and `nightly`
+   profiles), `evals/greet.es.ts`, the `.gitignore` entries (`.es/`, `.env*`) and an `eval`
+   script; `npx es run --profile fake` passes with no keys. It never overwrites a file that
+   differs without `--force`. Or write `es.config.ts` and `evals/**/*.es.ts` (the default
+   `include`) yourself.
 3. `npx es run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
 4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` next
