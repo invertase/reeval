@@ -1,8 +1,8 @@
 import { evaluate, expect } from 'evalsuite'
 import { greeting } from './env.ts'
 
-// Must fail: OpenCode's workspace skills don't go to .agents/skills, which it reads only without
-// OPENCODE_DISABLE_EXTERNAL_SKILLS.
+// Must fail: ES doesn't put OpenCode's workspace skills in .agents/skills, though OpenCode 2 reads
+// that too.
 evaluate('canary', { environment: greeting }, async (t) => {
   await t.sandbox()
   const dir = '.agents/skills/house-greeting'

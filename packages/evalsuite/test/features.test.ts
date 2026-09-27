@@ -910,7 +910,7 @@ export const features: Feature[] = [
     record: ({ run }) => {
       const [image] = run.stack.images
       assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
-      assert.equal(image?.agentCli, OPENCODE_CLI_VERSION)
+      assert.equal(image?.agentCli, `opencode v${OPENCODE_CLI_VERSION}`)
     },
   },
   {

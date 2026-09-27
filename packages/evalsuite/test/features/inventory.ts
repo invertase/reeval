@@ -331,7 +331,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['egress/cascade'],
     tests: [
       'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
-      'evalsuite/test/plan.test.ts › an mcp.sse server on Goose, pi or Codex exits 2 at plan time',
+      'evalsuite/test/plan.test.ts › an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time',
     ],
   },
   {
@@ -764,7 +764,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.opencode',
     area: 'Harnesses',
-    name: '`opencode()`: OpenCode over ACP on a brokered Gemini key, its image, rules, skills and tool names',
+    name: '`opencode()`: OpenCode 2 over ACP on a brokered Gemini key, its image, config, rules, skills, tool names and Code Mode MCP calls',
     fixtures: [
       'harness/opencode-rules',
       'harness/opencode-workspace-skills',
@@ -777,6 +777,17 @@ export const inventory: InventoryFeature[] = [
       harness("the key is swapped in on OpenCode's model endpoint only"),
       harness("OpenCode's edits and writes are file edits, relative to the workspace"),
       opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
+      opencodeAdapter('stream', "a tool's output is its content's text, with its metadata"),
+      opencodeAdapter(
+        'stream',
+        'each MCP call an execute call made follows it, named mcp__<server>__<tool>',
+      ),
+      opencodeAdapter(
+        'unit',
+        'the config turns off updates, sharing and the tools an eval has no use for',
+      ),
+      opencodeAdapter('unit', "session titles run on the turn's model, not a second one"),
+      opencodeAdapter('unit', 'the musl builds are left out of the install, and only those'),
     ],
   },
   {

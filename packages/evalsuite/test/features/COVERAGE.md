@@ -96,7 +96,7 @@
 | Real Cursor, end to end | — | — | ● 1 | ● 2 | ● 5 |
 | `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 2 | ● 3 | — |
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — |
-| `opencode()`: OpenCode over ACP on a brokered Gemini key, its image, rules, skills and tool names | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — |
+| `opencode()`: OpenCode 2 over ACP on a brokered Gemini key, its image, config, rules, skills, tool names and Code Mode MCP calls | ✓ 9 | ✓ 1 | ● 3 | ● 4 | — |
 | `goose()`: Goose over ACP on a brokered Gemini key, its image, rules, skills, MCP extensions and tool names | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — |
 | `pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens; MCP refused | ✓ 4 | ✓ 1 | ● 3 | ● 4 | — |
 | `codex()`: Codex in the sandbox (`codex exec --json`) on a brokered OpenAI key, with per-turn tokens, and the served model and effort from the gateway | ✓ 7 | ✓ 1 | ● 3 | ● 4 | — |

@@ -37,7 +37,8 @@ function contentText(content: unknown): string | undefined {
 }
 
 /**
- * Fixes up one OpenCode turn's parts from `@ai-sdk/harness-acp`:
+ * Fixes up one OpenCode turn's parts from `@ai-sdk/harness-acp`'s bridge (a tool result's value
+ * is its `result`, a failure's marked `isError`):
  *
  * - A tool's output is `{ output, metadata }`: OpenCode sends the text only in the call's
  *   `content`, and `harness-acp` passes on its `rawOutput`, `{ metadata }`.
@@ -68,9 +69,7 @@ export class OpenCodeStreamTranslator {
       return [part]
     }
     if (part.type === 'finish') return [{ ...part, totalUsage: NO_USAGE }]
-    if (part.type !== 'tool-call' && part.type !== 'tool-result' && part.type !== 'tool-error') {
-      return [part]
-    }
+    if (part.type !== 'tool-call' && part.type !== 'tool-result') return [part]
     const id = typeof part.toolCallId === 'string' ? part.toolCallId : ''
     let out = part
     if (typeof part.toolName === 'string' && part.toolName.startsWith('acp_tool_')) {
@@ -79,9 +78,9 @@ export class OpenCodeStreamTranslator {
     }
     if (part.type !== 'tool-result') return [out]
     const text = this.texts.get(id)
-    const output = record(out.output)
-    if (text !== undefined && typeof output.output !== 'string') {
-      out = { ...out, output: { ...output, output: text } }
+    const result = record(out.result)
+    if (text !== undefined && typeof result.output !== 'string') {
+      out = { ...out, result: { ...result, output: text } }
     }
     return out.toolName === 'execute' ? [out, ...this.mcpCalls(id)] : [out]
   }
@@ -108,12 +107,17 @@ export class OpenCodeStreamTranslator {
       if (!server) return []
       const toolName = `mcp__${server}__${tool.slice(namespaceOf(server).length + 1)}`
       const toolCallId = `${id}/${i}`
-      const call_ = { type: 'tool-call', toolCallId, toolName, input: {}, providerExecuted: true }
       return [
-        call_,
+        { type: 'tool-call', toolCallId, toolName, input: '{}', providerExecuted: true },
         status === 'completed'
-          ? { type: 'tool-result', toolCallId, toolName, output: { status } }
-          : { type: 'tool-error', toolCallId, toolName, error: `${tool}: ${String(status)}` },
+          ? { type: 'tool-result', toolCallId, toolName, result: { status } }
+          : {
+              type: 'tool-result',
+              toolCallId,
+              toolName,
+              result: { error: `${tool}: ${String(status)}` },
+              isError: true,
+            },
       ]
     })
   }

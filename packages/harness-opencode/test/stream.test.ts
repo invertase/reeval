@@ -23,7 +23,7 @@ const call = (
     type: 'raw',
     rawValue: { sessionUpdate: 'tool_call_update', toolCallId: id, title: laterTitle },
   },
-  { type: 'tool-call', toolCallId: id, toolName, input },
+  { type: 'tool-call', toolCallId: id, toolName, input: JSON.stringify(input) },
   {
     type: 'raw',
     rawValue: {
@@ -38,16 +38,12 @@ const call = (
     type: 'tool-result',
     toolCallId: id,
     toolName,
-    output: done.rawOutput ?? { metadata: { truncated: false } },
+    result: done.rawOutput ?? { metadata: { truncated: false } },
   },
 ]
 
 const names = (parts: Part[]) =>
-  parts.flatMap((p) =>
-    p.type === 'tool-call' || p.type === 'tool-result' || p.type === 'tool-error'
-      ? [p.toolName]
-      : [],
-  )
+  parts.flatMap((p) => (p.type === 'tool-call' || p.type === 'tool-result' ? [p.toolName] : []))
 
 const LAST_CALL = { inputTokens: { total: 8559 }, outputTokens: { total: 25 } }
 const turn = (parts: Part[], mcpServers?: string[]) => {
@@ -95,7 +91,7 @@ test("a tool's output is its content's text, with its metadata", () => {
     ),
   )
   const result = out.find((p) => p.type === 'tool-result')
-  assert.deepEqual(result?.output, {
+  assert.deepEqual(result?.result, {
     output: '(no output)\nExited with code 3',
     metadata: { status: 'completed', exit: 3, truncated: false },
   })
@@ -104,7 +100,7 @@ test("a tool's output is its content's text, with its metadata", () => {
 test('twin: a result with no content keeps its raw output', () => {
   const [a, b, c, , e] = call('s1', 'shell', 'true', { command: 'true' })
   const out = turn([a, b, c, e] as Part[])
-  assert.deepEqual(out.find((p) => p.type === 'tool-result')?.output, {
+  assert.deepEqual(out.find((p) => p.type === 'tool-result')?.result, {
     metadata: { truncated: false },
   })
 })
@@ -142,12 +138,12 @@ test('each MCP call an execute call made follows it, named mcp__<server>__<tool>
   ])
   const inner = out.filter((p) => String(p.toolCallId).startsWith('e1/'))
   assert.deepEqual(
-    inner.map((p) => [p.type, p.toolCallId]),
+    inner.map((p) => [p.type, p.toolCallId, p.isError ?? false]),
     [
-      ['tool-call', 'e1/0'],
-      ['tool-result', 'e1/0'],
-      ['tool-call', 'e1/2'],
-      ['tool-error', 'e1/2'],
+      ['tool-call', 'e1/0', false],
+      ['tool-result', 'e1/0', false],
+      ['tool-call', 'e1/2', false],
+      ['tool-result', 'e1/2', true],
     ],
   )
 })
@@ -182,7 +178,7 @@ test('a call harness-acp already named is left alone', () => {
     type: 'raw',
     rawValue: { sessionUpdate: 'tool_call', toolCallId: 'r1', title: 'shell' },
   })
-  const part = { type: 'tool-call', toolCallId: 'r1', toolName: 'read', input: {} }
+  const part = { type: 'tool-call', toolCallId: 'r1', toolName: 'read', input: '{}' }
   assert.deepEqual(t.push(part), [part])
 })
 
