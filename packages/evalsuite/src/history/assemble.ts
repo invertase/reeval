@@ -280,7 +280,8 @@ class Seen {
   readonly resolvedJudges = new Set<string>()
   readonly images = new Map<string, Stack['images'][number]>()
   readonly environments = new Map<string, EnvironmentRecord>()
-  readonly harnesses = new Map<string, Stack['harnesses'][number]>()
+  readonly harnesses = new Map<string, Omit<Stack['harnesses'][number], 'resolvedModels'>>()
+  readonly resolvedHarnesses = new Map<string, Set<string>>()
   /** Registry digests found by the preflight, by image id. */
   readonly digests: Map<string, string[]>
 
@@ -305,6 +306,9 @@ class Seen {
       const h = e.attempt.harness
       this.harnesses.set(cell.harness, { id: cell.harness, kind: h.kind, model: harnessModel(h) })
     }
+    const resolved = this.resolvedHarnesses.get(cell.harness) ?? new Set<string>()
+    for (const t of record?.turns ?? []) if (t.model) resolved.add(t.model)
+    this.resolvedHarnesses.set(cell.harness, resolved)
   }
 
   entry(e: EngineEval, sources: Source[]): EvalEntry {
@@ -633,7 +637,9 @@ function stackOf(input: AssembleInput, seen: Seen, judgeModel: string | null): S
     arch: process.arch,
     images: [...seen.images.values()].sort(byName((i) => i.ref)),
     packages,
-    harnesses: [...seen.harnesses.values()].sort(byName((h) => h.id)),
+    harnesses: [...seen.harnesses.values()]
+      .map((h) => ({ ...h, resolvedModels: [...(seen.resolvedHarnesses.get(h.id) ?? [])].sort() }))
+      .sort(byName((h) => h.id)),
     judge: {
       model: judgeModel,
       resolvedModels: [...seen.resolvedJudges].sort(),

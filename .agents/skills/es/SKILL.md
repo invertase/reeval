@@ -52,7 +52,8 @@ export default defineConfig({
 ```
 
 - Harnesses (`@invertase/foobar/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
-  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant),
+  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
+  the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
   `gemini-3.8-flash-medium`), `opencode({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini

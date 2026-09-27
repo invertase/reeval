@@ -60,6 +60,10 @@ npx es run --config es.fake.config.ts
   A `reasoning` event at the start of every turn.
 </Property>
 
+<Property name="servedModel" type="string" optional>
+  The model the agent reports serving each turn, as a real harness reports its resolved variant (`composer-2.5[fast=true]`). It lands in each turn's `model` and the stack's `resolvedModels`. Unset, the agent reports none.
+</Property>
+
 <Property name="tools" type="Array<{ tool, input, output, ok? }>" optional>
   `tool` events the agent reports on every turn, before writing files. `ok` defaults to `true`.
 </Property>
