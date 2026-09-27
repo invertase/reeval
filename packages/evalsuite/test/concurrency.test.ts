@@ -295,17 +295,18 @@ for (const name of ['a', 'b']) {
     const p = await project('conc-queue-time', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 1200 }' }),
       'evals/trace.ts': TRACE,
-      // Four at concurrency 1: the last waits 3.6 s or more, over its 3 s timeout if it counted.
-      'evals/a.es.ts': tracedEval('a', "{ runs: 4, timeout: '3s' }"),
+      'evals/a.es.ts': tracedEval('a', "{ runs: 3, timeout: '2s' }"),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '1'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
+    // The third waited 2.4 s or more, so passing under its 2 s timeout means the wait didn't count.
     assert.deepEqual(
       attempts.map((a) => a.outcome),
-      ['pass', 'pass', 'pass', 'pass'],
+      ['pass', 'pass', 'pass'],
     )
-    for (const a of attempts) assert.ok(a.durationMs < 3000, `${a.id}: ${a.durationMs}ms`)
+    // Its own time is one turn plus the sandbox (slow to start on Windows), not the 2.4 s wait too.
+    for (const a of attempts) assert.ok(a.durationMs < 2 * 1200, `${a.id}: ${a.durationMs}ms`)
     assert.match(r.stdout, /\[eval#3 fake\] ▶/)
   })
 
