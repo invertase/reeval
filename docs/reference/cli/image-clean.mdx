@@ -51,6 +51,8 @@ Without a config file it builds ES's Cursor image only. `es run` still builds `f
 
 ```text
 es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
+  --images                Also remove the Docker images ES built that nothing tags any more,
+                          and the intermediate -base tags of from builds
 ```
 
 [//]: # (/generated:cli-help:clean)

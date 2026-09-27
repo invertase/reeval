@@ -1,10 +1,24 @@
 // `@evalsuite/sandbox-docker`: a local Docker sandbox for AI SDK harnesses, with an egress gateway
 // that brokers credentials and enforces a network policy.
 export {
+  causeLine,
+  type FailureCause,
+  failureCause,
+  ImageBuildError,
+  type ImageFailure,
+  type ImageStage,
+  isTransient,
+  parseBuildOutput,
+  RETRY_DELAYS,
+  retryTransient,
+} from './build-failure.ts'
+export {
+  type BuildOutput,
   buildDockerfile,
   buildImage,
   buildInstallLayer,
   contextFiles,
+  contextHash,
   DOCKER_CONTEXT,
   dockerfileTag,
   dockerignoreMatcher,
@@ -13,6 +27,8 @@ export {
   type InstallStep,
   installLayerTag,
   installScript,
+  pruneImages,
+  usesEsBase,
 } from './build-image.ts'
 export {
   type DockerResult,

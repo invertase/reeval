@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import {
@@ -73,6 +73,23 @@ const harnessImage = (harness: Parameters<typeof imageFor>[0]) => {
   return {
     skip: !built && !requireDocker && `needs Docker and ${imageFor(harness)}`,
     timeout: 300_000,
+  }
+}
+/** A `docker` shim on PATH that counts ES's `docker build` calls. */
+function countBuilds(dir: string) {
+  const shim = join(dir, 'bin')
+  const log = join(dir, 'builds.log')
+  mkdirSync(shim, { recursive: true })
+  const real = execFileSync('sh', ['-c', 'command -v docker'], { encoding: 'utf8' }).trim()
+  writeFileSync(
+    join(shim, 'docker'),
+    `#!/bin/sh\n[ "$1" = build ] && echo build >> '${log}'\nexec '${real}' "$@"\n`,
+    { mode: 0o755 },
+  )
+  return {
+    env: { PATH: `${shim}:${process.env.PATH}` },
+    count: () => (existsSync(log) ? readFileSync(log, 'utf8').split('\n').length - 1 : 0),
+    reset: () => rmSync(log, { force: true }),
   }
 }
 const gooseImage = harnessImage('goose')
@@ -241,27 +258,168 @@ evaluate('stays unprivileged', async (t) => {
     },
   )
 
-  test('a failing install command names itself and is an infra error', docker, async () => {
-    const p = await project('docker-install-fail', {
-      'es.config.ts': config('{}'),
-      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+  test(
+    'a failing install command names itself and is an infra error, headline first',
+    docker,
+    async () => {
+      const p = await project('docker-install-fail', {
+        'es.config.ts': config('{}'),
+        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
 import { docker } from 'evalsuite/sandbox'
 evaluate('broken', { sandbox: docker({ install: ['echo one', 'exit 9', 'echo never'] }) }, async (t) => {
   await t.send('x')
 })
 `,
-    })
-    const r = await runCli(p.dir, ['run'], slow)
-    assert.equal(r.code, 3, r.stdout + r.stderr)
-    assert.match(
-      r.stdout + r.stderr,
-      /Building the install layer \(3 commands\) failed: install 2\/3 exited 9: exit 9/,
-    )
-    assert.match(
-      r.stdout + r.stderr,
-      /full log: .+\.es\/cache\/images\/evalsuite-install-[0-9a-f]{16}\.log/,
-    )
-  })
+      })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(
+        r.stdout,
+        /^ +Building the install layer \(3 commands\) failed: install 2\/3 exited 9: exit 9$/m,
+      )
+      assert.match(r.stdout, /^ {2}\s*\| one$/m, "the step's own output")
+      assert.match(r.stdout, /full log: \.es\/cache\/images\/evalsuite-install-[0-9a-f]{16}\.log/)
+      assert.doesNotMatch(r.stdout, /RUN echo [A-Za-z0-9+/=]{16}/, 'no base64 Dockerfile')
+      assert.doesNotMatch(r.stdout, /earlier lines/)
+    },
+  )
+
+  test(
+    'ENOSPC and exit 137 in install are named in the headline; canary: a plain exit is not',
+    docker,
+    async () => {
+      const p = await project('docker-install-causes', {
+        'es.config.ts': config('{}'),
+        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+const body = async (t) => { await t.sandbox() }
+evaluate('disk', { sandbox: docker({ install: ['echo filling && dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'] }) }, body)
+evaluate('oom', { sandbox: docker({ install: ['echo dying && kill -9 $$'] }) }, body)
+evaluate('plain', { sandbox: docker({ install: ['echo plain && exit 4'] }) }, body)
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      const { evals } = readRun(p.dir)
+      const message = (name: string) =>
+        evals.find((e) => e.name === name)?.trial.error?.message ?? ''
+      assert.match(message('disk'), /^out of disk space \(ENOSPC\)/m)
+      assert.match(
+        message('disk'),
+        /\| dd: error writing '\/dev\/shm\/fill': No space left on device/,
+      )
+      assert.match(message('oom'), /install 1\/1 exited 137/)
+      assert.match(message('oom'), /^killed \(exit 137\): usually out of memory/m)
+      assert.match(message('plain'), /install 1\/1 exited 4/)
+      assert.doesNotMatch(message('plain'), /ENOSPC|exit 137/)
+      assert.match(r.stdout, /out of disk space \(ENOSPC\)/)
+    },
+  )
+
+  test(
+    'a Dockerfile syntax error, and a from that is not Debian, say so first',
+    docker,
+    async () => {
+      const p = await project('docker-bad-images', {
+        'es.config.ts': config('{}'),
+        'evals/bad.Dockerfile': 'FROM debian:bookworm-slim\nCOPYY a b\n',
+        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('syntax', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }, async (t) => { await t.sandbox() })
+evaluate('alpine', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { await t.sandbox() })
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { timeoutMs: 600_000 })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      const { evals } = readRun(p.dir)
+      const message = (name: string) =>
+        evals.find((e) => e.name === name)?.trial.error?.message ?? ''
+      assert.match(
+        message('syntax').split('\n')[0] ?? '',
+        /^Building evals\/bad\.Dockerfile failed: dockerfile parse error on line 2: unknown instruction: COPYY/,
+      )
+      assert.match(
+        message('alpine').split('\n')[0] ?? '',
+        /^Building the toolchain layer FROM alpine:3\.20 failed: ES needs a Debian or Ubuntu based image/,
+      )
+      // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes.
+      assert.doesNotMatch(r.stdout, /\x1b\[/, 'no raw ANSI from BuildKit warnings')
+    },
+  )
+
+  test(
+    'a registry that cannot be reached is retried, bounded; canary: a failing RUN is built once',
+    docker,
+    async () => {
+      const p = await project('docker-retry', {
+        'es.config.ts': config('{}'),
+        'evals/run.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
+        'evals/net.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('net', { sandbox: docker({ from: 'registry.invalid.example:5000/es/none:1' }) }, async (t) => { await t.sandbox() })
+`,
+        'evals/run.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (t) => { await t.sandbox() })
+`,
+      })
+      const counter = countBuilds(p.dir)
+      const net = await runCli(p.dir, ['run', 'net'], { env: counter.env, ...slow })
+      assert.equal(net.code, 3, net.stdout + net.stderr)
+      assert.equal(counter.count(), 3, 'one try and two retries')
+      assert.match(readRun(p.dir).evals[0]?.trial.error?.message ?? '', /no such host/)
+      counter.reset()
+      const run = await runCli(p.dir, ['run', 'run'], { env: counter.env, ...slow })
+      assert.equal(run.code, 3, run.stdout + run.stderr)
+      assert.equal(counter.count(), 1, 'a deterministic failure is not retried')
+      assert.match(readRun(p.dir).evals[0]?.trial.error?.message ?? '', /a RUN step exited 42/)
+    },
+  )
+
+  test(
+    'es clean --images removes the images ES left dangling; canary: an image ES did not build stays',
+    docker,
+    async () => {
+      const p = await project('docker-clean-images', { 'es.config.ts': config('{}') })
+      const nonce = `${Date.now()}-${process.pid}`
+      // A commit over an existing tag leaves the old image dangling, as rebuilding ES's image did.
+      const container = execFileSync('docker', ['create', 'debian:bookworm-slim', 'true'], {
+        encoding: 'utf8',
+      }).trim()
+      const commit = (ours: boolean, n: number) =>
+        execFileSync(
+          'docker',
+          [
+            'commit',
+            '--change',
+            `LABEL ${ours ? LABEL.harness : 'es.test.other'}="${nonce}-${n}"`,
+            container,
+            `es-clean-test-${ours ? 'ours' : 'theirs'}:${nonce}`,
+          ],
+          { encoding: 'utf8' },
+        ).trim()
+      const ours = commit(true, 1)
+      commit(true, 2)
+      const theirs = commit(false, 1)
+      commit(false, 2)
+      execFileSync('docker', ['rm', container], { stdio: 'ignore' })
+      const exists = (id: string) =>
+        spawnSync('docker', ['image', 'inspect', id], { stdio: 'ignore' }).status === 0
+      try {
+        assert.ok(exists(ours) && exists(theirs), 'both replaced images are dangling')
+        const r = await runCli(p.dir, ['clean', '--images'])
+        assert.equal(r.code, 0, r.stdout + r.stderr)
+        assert.match(r.stdout, /Removed \d+ images? ES built that nothing uses/)
+        assert.equal(exists(ours), false, "ES's dangling image is removed")
+        assert.equal(exists(theirs), true, "an image ES didn't build is left alone")
+      } finally {
+        execFileSync('sh', [
+          '-c',
+          `docker rmi -f ${theirs} es-clean-test-ours:${nonce} es-clean-test-theirs:${nonce} >/dev/null 2>&1 || true`,
+        ])
+      }
+    },
+  )
 
   test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`
@@ -442,6 +600,8 @@ evaluate('canary', { sandbox: bookworm }, async (t) => {
       assert.equal(image?.base, ref)
       assert.equal(image?.dockerfile, null)
       assert.match(image?.agentCli ?? '', /\d/, 'the harness is baked on')
+      const base = spawnSync('docker', ['image', 'inspect', `${ref}-base`], { stdio: 'ignore' })
+      assert.notEqual(base.status, 0, 'the intermediate -base tag is removed')
       assert.deepEqual(
         byName.bakes?.cells.map((c) => c.key),
         ['fake/-/docker:debian:bookworm-slim'],

@@ -11,6 +11,7 @@ export const FLAGS = {
   verbose: { type: 'boolean', short: 'v', multiple: true },
   trace: { type: 'boolean' },
   keep: { type: 'string' },
+  images: { type: 'boolean' },
   json: { type: 'boolean' },
   md: { type: 'boolean' },
   all: { type: 'boolean' },
@@ -143,10 +144,12 @@ export const COMMANDS: Record<string, CommandSpec> = {
                             Either way each attempt's debug.log is in .es/debug/<run>/ (local only)`,
   },
   clean: {
-    flags: ['keep'],
+    flags: ['keep', 'images'],
     positionals: 0,
     help: `
-  es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs`,
+  es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
+    --images                Also remove the Docker images ES built that nothing tags any more,
+                            and the intermediate -base tags of from builds`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan'],

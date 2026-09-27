@@ -646,9 +646,16 @@ describe('image recipes', () => {
     const named = join(dir, 'python.Dockerfile')
     writeFileSync(named, 'FROM python:3.12-slim\n')
     assert.match(dockerfileTag(named, 'cursor').tag, /^evalsuite-dockerfile:python-dockerfile-/)
-    assert.notEqual(
+    assert.equal(
       dockerfileTag(file, 'claude-code').tag,
       dockerfileTag(file, 'cursor').tag,
+      'a Dockerfile without ES_BASE builds the same for every harness (each gets its CLI baked on)',
+    )
+    const onEs = join(dir, 'es.Dockerfile')
+    writeFileSync(onEs, 'ARG ES_BASE\nFROM $ES_BASE\n')
+    assert.notEqual(
+      dockerfileTag(onEs, 'claude-code', 'sha256:a').tag,
+      dockerfileTag(onEs, 'cursor', 'sha256:a').tag,
       "ES_BASE is the harness's image, so each harness builds its own",
     )
   })

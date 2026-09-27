@@ -144,11 +144,12 @@ export function capLines(text: string, max: number): string[] {
   return [...lines.slice(0, max), `(+${lines.length - max} more lines)`]
 }
 
-/** The last lines of a message: infra errors put the cause at the end. */
+/** An infra error's headline, then its last lines: the cause is at the end. */
 export function tailLines(text: string, max: number): string[] {
   const lines = text.replace(/\s+$/, '').split('\n')
   if (lines.length <= max) return lines
-  return [`(${lines.length - max} earlier lines)`, ...lines.slice(-max)]
+  const rest = Math.max(1, max - 1)
+  return [lines[0] ?? '', `(${lines.length - 1 - rest} more lines)`, ...lines.slice(-rest)]
 }
 
 /**
