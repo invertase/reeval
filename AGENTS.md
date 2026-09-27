@@ -183,10 +183,10 @@ the header swap, searches `env`, `/proc` and the filesystem for the key, and che
 policy leaves no route out. ES's Docker tests build real `install` layers and Dockerfiles (one
 `FROM ${ES_BASE}`, one on a Debian base that gets the harness baked on, for Cursor and for Claude
 Code) and check the cache and the record, and start real Claude Code and Antigravity with a
-made-up key to check brokering end to end. With `GEMINI_API_KEY` set, one more runs the real
-Antigravity CLI (it edits the workspace, answers from its rules and a home skill, and a script it
-runs sees only the placeholder); without the key it skips and says why, unless `ES_TEST_REAL=1`,
-when it fails. The Docker tests skip unless Docker is running and the sandbox images have
+made-up key to check brokering end to end. With a Gemini API key in `GEMINI_API_KEY` or
+`GOOGLE_GENERATIVE_AI_API_KEY`, one more runs the real Antigravity CLI (it edits the workspace,
+answers from its rules and a home skill, and a script it runs sees only the placeholder); without
+either it skips and says why, unless `ES_TEST_REAL=1`, when it fails naming both. The Docker tests skip unless Docker is running and the sandbox images have
 been built (Cursor's, and each other harness's for its own: `es image build` in a project whose
 config uses it, such as `examples/hello` with `--config es.claude.config.ts`,
 `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts`, `es.pi.config.ts` or
