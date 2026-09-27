@@ -117,6 +117,7 @@ describe('stream translation', () => {
     assert.match(String(fetchResult?.markdown), /104\.238\.50\.251/)
     assert.equal((searchResult?.references as unknown[] | undefined)?.length, 2)
     const finish = parts.at(-1)
+    assert.equal(finish?.type, 'finish')
     assert.equal(
       finish?.type === 'finish' && 'unreportedTools' in (finish.harnessMetadata?.cursorSdk ?? {}),
       false,
