@@ -67,6 +67,8 @@ The type definitions are in `packages/evalsuite/src/history/types.ts`; the envir
 
 `runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
 
+An attempt's `error` is `{ kind, message, prepare? }`. `prepare` is set when its sandbox couldn't be prepared before the run: `{ class, stage, ref, cause, log, setBy }`, with `class` one of `config`, `transient` or `resource`, and the same on every attempt that needed that sandbox (see [Sandbox providers](/reference/sandbox/providers)). Such an attempt never started, so it has no artifacts directory.
+
 [//]: # (generated:record-types)
 
 ### RunRecord
@@ -453,7 +455,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="outcome" type="Outcome"></Property>
 
-<Property name="error" type="{kind: ErrorKind; message: string} | null"></Property>
+<Property name="error" type="AttemptError | null"></Property>
 
 <Property name="durationMs" type="number"></Property>
 

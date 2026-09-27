@@ -28,7 +28,7 @@ export class ImageBuildError extends Error {
 }
 
 /** Most of the failing step's own output lines a headline shows. */
-export const OUTPUT_LINES = 12
+export const OUTPUT_LINES = 8
 
 // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes.
 const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')

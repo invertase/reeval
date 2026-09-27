@@ -7,6 +7,7 @@ import { expectedBlockedFor } from '../harness/agents.ts'
 import { attemptKey, recordFileName } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import { InfraError, type Sandbox } from '../sandbox/index.ts'
+import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, TranscriptEvent } from '../types.ts'
 import type { Attempt } from './state.ts'
@@ -33,6 +34,10 @@ export function recordFailure(a: Attempt, error: unknown, timedOut: boolean): vo
     ? { kind: 'timeout', message: 'The eval timed out' }
     : classify(error, a.signal)
   record.error.message = capMiddle(record.error.message)
+  if (error instanceof PrepareError && !timedOut) {
+    const { class: kind, stage, ref, cause, log, setBy } = error.failure
+    record.error.prepare = { class: kind, stage, ref, cause, log, setBy: setBy ?? [] }
+  }
   const judgeFailed = a.judgeErrored || record.judgements.some((j) => j.verdict !== 'pass')
   if (record.error.kind === 'assertion' && judgeFailed) record.error.kind = 'judge'
   record.outcome = record.error.kind === 'infra' ? 'infra_error' : 'fail'
@@ -83,6 +88,9 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
       question: clip(j.question, 200),
     })),
     turnErrors: turnErrors(record.turns.map((t) => t.transcript)),
+    ...(record.error?.prepare
+      ? { prepare: { ref: record.error.prepare.ref, stage: record.error.prepare.stage } }
+      : {}),
   }
 }
 

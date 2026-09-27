@@ -4,7 +4,7 @@ import type { AttemptMeta } from '../types.ts'
 import { type DebugLine, debugTime } from '../view/debug.ts'
 import type { Colors } from './colors.ts'
 import { stripAnsi } from './colors.ts'
-import type { EvalResult, Progress } from './events.ts'
+import type { EsEvent, EvalResult, Progress } from './events.ts'
 
 export { formatDuration }
 
@@ -178,6 +178,13 @@ function failureBody(
   options: { max: number; reasons?: Array<string | null> },
 ): string[] {
   if (outcome === 'infra_error') {
+    // Its sandbox's failure was printed in full before the run; each attempt names it.
+    if (e.meta?.prepare) {
+      const lines = message.trimEnd().split('\n')
+      return [c.yellow('infra error'), lines[0] ?? '', lines.at(-1) ?? ''].filter(
+        (l, i, all) => all.indexOf(l) === i,
+      )
+    }
     return [`${c.yellow('infra error')}`, ...tailLines(message, options.max)]
   }
   const failed = (e.meta?.judgements ?? []).filter((j) => j.verdict !== 'pass')
@@ -193,4 +200,28 @@ function failureBody(
   return capLines(text.replace(/^\n+/, ''), options.max).map((l) =>
     c.enabled && body === message ? c.red(l) : l,
   )
+}
+
+/** Preflight's lines: which sandboxes it prepares, the slow ones when ready, and each failure. */
+export function prepareLines(
+  c: Colors,
+  e: Extract<EsEvent, { type: 'prepare' }>,
+  max: number,
+): string[] {
+  if (e.state === 'start') {
+    const n = e.targets.length
+    const names = e.targets.map((t) => t.label).join(', ')
+    return [c.dim(`preparing ${n} sandbox${n === 1 ? '' : 'es'}: ${names}`)]
+  }
+  const { outcome } = e
+  if (outcome.ok) {
+    return outcome.ms >= 1000
+      ? [c.dim(`${c.green('✓')} ${outcome.target.label} ready ${formatDuration(outcome.ms)}`)]
+      : []
+  }
+  const who = outcome.target.setBy.join(', ')
+  return [
+    `${c.red('✗')} ${outcome.target.label} failed to prepare ${c.dim(`(set by ${who}; only its attempts fail)`)}`,
+    ...tailLines(outcome.failure.message, max).map((l) => `  ${c.yellow(l)}`),
+  ]
 }

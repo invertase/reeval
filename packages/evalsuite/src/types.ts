@@ -748,6 +748,24 @@ export type ResolvedConfig = {
 export type Outcome = 'pass' | 'fail' | 'infra_error' | 'skipped'
 export type ErrorKind = 'assertion' | 'timeout' | 'aborted' | 'infra' | 'judge'
 
+/**
+ * The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that
+ * needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or
+ * `install`), what was being made, the class (`config`, `transient` after the retries, or
+ * `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.
+ */
+export type PrepareFailureRecord = {
+  class: 'config' | 'transient' | 'resource'
+  stage: string
+  ref: string | null
+  cause: 'enospc' | 'oom' | null
+  log: string | null
+  setBy: string[]
+}
+
+/** Why an attempt failed; `prepare` when its sandbox couldn't be prepared. */
+export type AttemptError = { kind: ErrorKind; message: string; prepare?: PrepareFailureRecord }
+
 export type TurnRecord = Pick<
   Turn,
   | 'prompt'
@@ -867,7 +885,7 @@ export type EvalRecord = {
   /** When the worker began the attempt (its scheduler lease), for start order across the run. */
   startedAt?: string
   outcome: Exclude<Outcome, 'skipped'>
-  error: { kind: ErrorKind; message: string } | null
+  error: AttemptError | null
   turns: TurnRecord[]
   /** Workspace changes over the whole eval. */
   diff: Diff | null
@@ -944,6 +962,8 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
+  /** The levels that set its sandbox and harness: `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
+  setBy: { sandbox: string; harness: string }
   /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
   gate: CellGate
   /** Set on variant attempts whose compare has a `minLift`. */
@@ -966,6 +986,8 @@ export type EvalMeta = {
   judgements: Array<Pick<Verdict, 'verdict' | 'score' | 'threshold'> & { question: string }>
   /** Each turn that ended in an error, as `turn 2 error: <message>`, so a failure shows why. */
   turnErrors?: string[]
+  /** Its sandbox couldn't be prepared: reported once per sandbox, and it has no artifacts. */
+  prepare?: { ref: string | null; stage: string }
 }
 
 export type RunContext = {

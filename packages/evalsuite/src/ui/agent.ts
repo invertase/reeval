@@ -11,6 +11,7 @@ import {
   failureLines,
   formatDuration,
   outcomeOf,
+  prepareLines,
 } from './format.ts'
 import { type AttemptDir, failingAttempts, resultFor } from './summary.ts'
 import { Tagger } from './tags.ts'
@@ -68,7 +69,8 @@ export class AgentRenderer implements Renderer {
       this.#write('  console:')
       for (const line of capLines(logs.join('\n'), MAX_LINES)) this.#write(`    ${line}`)
     }
-    this.#write(`  record: ${this.#o.attemptDir(result.id, cell, n)}`)
+    // Its sandbox never started, so there's no attempt directory to point at.
+    if (!result.meta?.prepare) this.#write(`  record: ${this.#o.attemptDir(result.id, cell, n)}`)
   }
 
   onEvent(e: EsEvent): void {
@@ -107,6 +109,9 @@ export class AgentRenderer implements Renderer {
         this.#failure(e.result, attempt?.cell.key ?? '', attempt?.n ?? 1)
         return
       }
+      case 'prepare':
+        for (const line of prepareLines(this.#c, e, MAX_LINES)) this.#write(line)
+        return
       case 'notice':
         if (e.level !== 'info') this.#write(e.text)
         return

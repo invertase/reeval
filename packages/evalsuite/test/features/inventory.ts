@@ -45,6 +45,8 @@ const engine = (name: string) => `evalsuite/test/engine.test.ts › ${name}`
 const secrets = (name: string) => `evalsuite/test/secrets.test.ts › ${name}`
 const harness = (name: string) => `evalsuite/test/harness.test.ts › ${name}`
 const docker = (name: string) => `evalsuite/test/docker.test.ts › ${name}`
+const prepareContract = (name: string) =>
+  `evalsuite/test/sandbox-prepare-contract.test.ts › ${name}`
 const debug = (name: string) => `evalsuite/test/debug.test.ts › ${name}`
 const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `evalsuite/test/analysis.test.ts › ${name}`
@@ -584,6 +586,29 @@ export const inventory: InventoryFeature[] = [
     tests: [
       options('es image build --dry-run lists every image'),
       docker('from: a toolchain image gets Node, git and the harness baked on'),
+    ],
+  },
+  {
+    id: 'sandbox.prepare',
+    area: 'Sandbox',
+    name: 'Preflight: every sandbox prepared before any attempt; a failure fails only its cells, or stops the run from the config',
+    tests: [
+      docker('an eval-level image that fails fails only its cells, each once, built once'),
+      docker('a config-level image that fails stops the run before any attempt'),
+      docker('two sandboxes on one failing from build it once'),
+    ],
+  },
+  {
+    id: 'sandbox.prepare-contract',
+    area: 'Sandbox',
+    name: 'The sandbox provider prepare contract: check, key, prepare, classify (a scripted provider and Docker)',
+    tests: [
+      prepareContract('bad credentials fail the check'),
+      prepareContract('a transient failure is retried, bounded, and stays transient'),
+      prepareContract('canary: a deterministic failure is tried once'),
+      prepareContract('out of memory and out of disk are resource failures, named'),
+      prepareContract('a config-level sandbox that fails stops the run'),
+      prepareContract('a flaky step is retried until it passes'),
     ],
   },
   {

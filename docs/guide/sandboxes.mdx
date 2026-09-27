@@ -111,7 +111,33 @@ docker:sqlite · 1 eval
   harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
 ```
 
-`es image build` builds every image the planned evals need, per harness. Without it, `es run` builds `from`, `dockerfile` and `install` images on first use, once, while other attempts wait. Filters, `--tag` and `--profile` apply, as for `es run`.
+`es image build` builds every image the planned evals need, per harness. Filters, `--tag` and `--profile` apply, as for `es run`. You don't have to run it first: `es run` builds whatever is missing before any attempt starts, three at a time, once each.
+
+## When an image fails
+
+```bash
+npx es run --ui plain
+```
+
+```text
+plan  2 evals · 2 cells · 2 attempts · ~2s serial (~1s at concurrency 4)
+preparing 2 sandboxes: docker, docker + install
+✗ docker + install failed to prepare (set by evaluate("summarises a JSON file with jq"); only its attempts fail)
+  Building the install layer (1 command) failed: install 1/1 exited 100: apt-get update && apt-get install -y jqq
+    | Reading package lists...
+    | Building dependency tree...
+    | Reading state information...
+    | E: Unable to locate package jqq
+  (full log: .es/cache/images/evalsuite-install-a2eeb3bf29b33bdd.log)
+…
+[greets#1 fake] ✓ evals/greet.es.ts › greets  1s
+…
+   Evals  1 passed · 1 infra error (2)
+```
+
+An image that fails fails only the attempts that need it, once each: they're infra errors that name the image and the level that set it, and everything else runs. When the config (or a profile) sets the failing sandbox, every eval needs it, so `es run` stops before any attempt with exit 3 (exit 2 for a missing `docker({ image })`).
+
+The headline says which step failed and why, then the step's own last lines and the build log. Out of disk space and exit 137 (out of memory) are named. Network and registry errors are retried twice; a failing `install` or `RUN` step isn't, since it would fail the same way. The attempt's record has the failure in `error.prepare`.
 
 ## Run them
 

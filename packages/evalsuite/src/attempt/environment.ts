@@ -1,18 +1,20 @@
 import { attemptDebug, debugLog } from '../debug/attempt.ts'
 import { resolveEnvironment } from '../environment/resolve.ts'
 import { layoutOf } from '../harness/index.ts'
-import { formatDuration } from '../text.ts'
+import { InfraError } from '../sandbox/types.ts'
+import type { AttemptImage } from '../types.ts'
 import { traceEnvironment } from './debug.ts'
 import type { Attempt } from './state.ts'
 
 /**
  * Phase 1: resolves the attempt's environment (files, skills, secrets and their placeholders)
- * and prepares the image a Docker sandbox starts from. Runs on the test's signal, before the eval
- * timer starts, since an image build can take minutes.
+ * and finds the image a Docker sandbox starts from, which preflight prepared. Runs on the test's
+ * signal, before the eval timer starts.
  */
 export async function prepareEnvironment(
   a: Attempt,
   root: string,
+  runId: string,
   where: string,
   signal: AbortSignal,
 ): Promise<void> {
@@ -39,15 +41,20 @@ export async function prepareEnvironment(
   if (debug) traceEnvironment(debug, spec, env)
   record.image = null
   if (spec.sandbox.kind === 'docker') {
-    const { imageHarness, prepareImage } = await import('../sandbox/prepare.ts')
-    const harness = imageHarness(spec.harness)
-    const start = performance.now()
-    record.image = await prepareImage(spec.sandbox, harness, root, signal)
+    const { preparedFor } = await import('../sandbox/preflight.ts')
+    const { dockerProvider } = await import('../sandbox/providers.ts')
+    signal.throwIfAborted()
+    // Preflight prepared every image before the run: an attempt only looks its image up.
+    const prepared = preparedFor(root, runId, dockerProvider(), spec.sandbox, spec.harness)
+    if (!prepared) {
+      throw new InfraError(`The sandbox image for ${where} wasn't prepared before the run started`)
+    }
+    record.image = prepared as unknown as AttemptImage
     a.image = record.image.ref
     const { ref, id, base, install, agentCli } = record.image
     debugLog(
       'image',
-      `ready ${ref} (${id.replace(/^sha256:/, '').slice(0, 12)}) in ${formatDuration(performance.now() - start)}${ref !== base ? ` · on ${base}` : ''}${agentCli ? ` · agent CLI ${agentCli}` : ''}${install.length ? ` · install: ${install.join(' && ')}` : ''}`,
+      `ready ${ref} (${id.replace(/^sha256:/, '').slice(0, 12)}) · prepared before the run${ref !== base ? ` · on ${base}` : ''}${agentCli ? ` · agent CLI ${agentCli}` : ''}${install.length ? ` · install: ${install.join(' && ')}` : ''}`,
     )
   } else {
     debugLog('image', `none: the ${spec.sandbox.kind} sandbox runs on the host`)

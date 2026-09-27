@@ -602,7 +602,7 @@ export const unbrokeredWarning = (s: UnbrokeredSecret) =>
 export const unbrokeredError = (s: UnbrokeredSecret, where: string, configFile: string) =>
   `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerHint(s)}.`
 
-const levelOf = (where: string): SandboxWarning['level'] =>
+export const levelOf = (where: string): SandboxWarning['level'] =>
   where.startsWith('evaluate(')
     ? 'eval'
     : where.startsWith('group(')

@@ -187,6 +187,7 @@
       "pages": [
         { "title": "docker()", "href": "/reference/sandbox/docker" },
         { "title": "fakeSandbox()", "href": "/reference/sandbox/fake" },
+        { "title": "Sandbox providers", "href": "/reference/sandbox/providers" },
         { "title": "Egress", "href": "/reference/egress" }
       ]
     },

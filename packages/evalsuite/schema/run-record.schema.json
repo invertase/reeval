@@ -7,6 +7,21 @@
     "ArtifactLevel": {
       "enum": ["all", "failures", "none"]
     },
+    "AttemptError": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ErrorKind"
+        },
+        "message": {
+          "type": "string"
+        },
+        "prepare": {
+          "$ref": "#/$defs/PrepareFailureRecord"
+        }
+      },
+      "required": ["kind", "message"]
+    },
     "AttemptFiles": {
       "type": "object",
       "properties": {
@@ -154,19 +169,10 @@
         "error": {
           "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/AttemptError"
             },
             {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "$ref": "#/$defs/ErrorKind"
-                },
-                "message": {
-                  "type": "string"
-                }
-              },
-              "required": ["kind", "message"]
+              "type": "null"
             }
           ]
         },
@@ -1135,6 +1141,54 @@
         }
       },
       "required": ["agentMs", "checksMs", "diffMs", "judgeMs", "setupMs"]
+    },
+    "PrepareFailureRecord": {
+      "type": "object",
+      "properties": {
+        "cause": {
+          "anyOf": [
+            {
+              "enum": ["enospc", "oom"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "class": {
+          "enum": ["config", "resource", "transient"]
+        },
+        "log": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "setBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": ["cause", "class", "log", "ref", "setBy", "stage"]
     },
     "RunnerInfo": {
       "anyOf": [

@@ -91,8 +91,9 @@ See [Profiles and budgets](/reference/profiles).
 | Message | Fix |
 |---|---|
 | `Docker is not running. Start Docker and try again.` | Start Docker. |
-| `Sandbox image evalsuite-sandbox:cursor-0.1.0 not found. Build it once with: es image build` | Run `es image build`. |
-| `Sandbox image … not found. docker({ image }) is used as is, so pull or build it first.` | Pull or build your image, or use `from` or `dockerfile` so ES builds it. |
+| `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` | Pull or build your image, or use `from` or `dockerfile` so ES builds it. |
+| `… The sandbox <id> is set by es.config.ts for every eval, so nothing ran.` | The config's sandbox failed to prepare (exit 3); fix the failure above it. |
+| `✗ <sandbox> failed to prepare (set by …; only its attempts fail)` | A group's or eval's sandbox failed; its attempts are infra errors with this headline. |
 | `Building the toolchain layer FROM … failed: ES needs a Debian or Ubuntu based image (glibc and apt-get)` | Use a Debian or Ubuntu base for `from` or `dockerfile`. |
 | `Building the install layer (N commands) failed: …` | Fix the failing `install` command; its last lines follow, and the build log is in `.es/cache/images/`. |
 | `Building <Dockerfile> failed: …` | Fix the Dockerfile; the failing step's last lines follow. |

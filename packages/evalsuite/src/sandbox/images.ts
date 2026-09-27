@@ -1,13 +1,13 @@
 // `es image build`: every image the planned attempts' Docker sandboxes need, built or listed.
 import {
   type BakedHarness,
-  buildImage,
   dockerAvailable,
   dockerfileTag,
   ES_BASE_ARG,
   harnessImageFor,
   imageFor,
   imageInfo,
+  retryTransient,
 } from '@evalsuite/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import { sandboxId } from '../options.ts'
@@ -18,11 +18,11 @@ import type {
   SandboxDescriptor,
 } from '../types.ts'
 import {
+  createBuilds,
   imageHarness,
   installSteps,
   prepareImage,
   projectPath,
-  type Rebuild,
   usesEsBase,
 } from './prepare.ts'
 
@@ -91,7 +91,10 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       action: 'rebuild: Node, git and the harness bootstrap on top',
     })
   } else if (sandbox.dockerfile) {
-    const { tag } = dockerfileTag(sandbox.dockerfile, harness)
+    // Its tag hashes ES's image id, which is this machine's, so the plan names it by kind.
+    const onEs = usesEsBase(sandbox.dockerfile)
+    const { tag: hashed } = dockerfileTag(sandbox.dockerfile, harness)
+    const tag = onEs ? hashed.replace(/-[0-9a-f]{16}$/, '-<context + ES image id>') : hashed
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
       ref: tag,
@@ -170,18 +173,16 @@ export async function buildImages(
       )
     }
   }
-  const rebuild: Rebuild = { done: new Set() }
-  for (const harness of esImages(targets)) {
-    await buildImage(log, { harness })
-    rebuild.done.add(imageFor(harness))
-  }
+  // Harness images for `from` and Dockerfiles are rebuilt once each; ES's own image when its
+  // base changed; install layers when their base or commands did.
+  const builds = createBuilds({ log, force: true, retry: (step) => retryTransient(step) })
   const signal = new AbortController().signal
   const built: Array<ImageTarget & { image: AttemptImage }> = []
   for (const target of targets) {
     log(`Preparing ${target.id}`)
     built.push({
       ...target,
-      image: await prepareImage(target.sandbox, target.harness, root, signal, { log, rebuild }),
+      image: await prepareImage(target.sandbox, target.harness, root, signal, builds),
     })
   }
   return built

@@ -486,6 +486,7 @@ async function executeRun(
   )
   let plan: RunPlan | undefined
   let sandboxVersions: SandboxVersions = { images: [] }
+  let preflightStop: Error | undefined
   let reached = false
   let budgetTimer: NodeJS.Timeout | undefined
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
@@ -552,7 +553,27 @@ async function executeRun(
         `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
     }
-    sandboxVersions = await preflight(targets)
+    try {
+      sandboxVersions = await preflight(
+        planned
+          .filter((p) => !p.attempt.plan.skip)
+          .map((p) => ({
+            harness: p.attempt.harness,
+            sandbox: p.attempt.sandbox,
+            setBy: p.attempt.setBy,
+          })),
+        {
+          root: config.root,
+          runId,
+          onEvent: (e) => renderer.onEvent({ type: 'prepare', at: Date.now(), ...e }),
+        },
+      )
+    } catch (error) {
+      // Thrown from here, the engine would report it as its own error; stop it cleanly instead.
+      if ((error as Error).name !== 'PreflightInfraError') throw error
+      preflightStop = error as Error
+      return false
+    }
     return true
   }
   // budget.duration counts from the first attempt's start, not from collecting the files.
@@ -634,7 +655,10 @@ async function executeRun(
     })
   } finally {
     clearTimeout(budgetTimer)
+    const { removePrepared } = await import('./sandbox/preflight.ts')
+    removePrepared(config.root, runId)
   }
+  if (preflightStop) throw preflightStop
   if (engineRun.noFiles && !filters.length && !tags.length) {
     throw new UsageError(
       `No eval files match ${config.include.join(', ')} (config.include) in ${config.root}. Name eval files to match it, or set include in ${config.file}.`,
@@ -677,10 +701,13 @@ run(process.argv.slice(2)).then(
   },
   (error: unknown) => {
     const name = (error as Error).name
-    const expected = error instanceof UsageError || EXPECTED_ERRORS.includes(name)
+    const expected =
+      error instanceof UsageError ||
+      EXPECTED_ERRORS.includes(name) ||
+      name === 'PreflightInfraError'
     settled = true
     console.error(red(`es: ${redactSecrets((error as Error).message)}`))
     if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
-    process.exitCode = EXIT.usage
+    process.exitCode = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
   },
 )
