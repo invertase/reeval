@@ -208,6 +208,7 @@ docker({ root: true })                               // opt in: apt-get at run t
 ```
 
 The agent, setup and `t.exec` run as `es` (home `/home/es`) with no capabilities; builds run as root.
+`root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
 
 One sandbox per eval (a list is an error). `npx es image build` builds every image the plan needs.
 

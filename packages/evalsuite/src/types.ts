@@ -890,10 +890,30 @@ export type EvalPlan = {
   skip?: string
   /** Warnings about the eval's setup, e.g. a moving git ref. */
   warnings: string[]
+  /** Its sandbox runs as root or with capabilities added back; empty for a skipped eval. */
+  sandboxWarnings: SandboxWarning[]
   /** Secrets any of its attempts brokers, as `NAME → host, host`. */
   brokered: string[]
   /** Each distinct restricted egress policy its attempts run under, as the plan prints it. */
   egress: string[]
+}
+
+/**
+ * A sandbox with more privilege than the default `es` user: `docker({ root: true })`, or
+ * `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.
+ */
+export type SandboxWarning = {
+  kind: 'root' | 'capabilities'
+  /** Which level set the sandbox. */
+  level: 'config' | 'profile' | 'group' | 'eval'
+  /** That level as ES names it: `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`. */
+  where: string
+  /** The eval file that sets it, for a group or eval; null for the config or a profile. */
+  file: string | null
+  /** The capabilities added back, for `capabilities`. */
+  capabilities?: string[]
+  /** The line ES prints, after `WARNING: ` (root) or `warning: ` (capabilities). */
+  message: string
 }
 
 /** An attempt's egress policy, and the hosts a restricted one allows on top of its own. */

@@ -32,6 +32,7 @@ import type {
   PlannedEgress,
   ResolvedProfile,
   SandboxDescriptor,
+  SandboxWarning,
 } from './types.ts'
 
 const KNOWN = [
@@ -601,8 +602,58 @@ export const unbrokeredWarning = (s: UnbrokeredSecret) =>
 export const unbrokeredError = (s: UnbrokeredSecret, where: string, configFile: string) =>
   `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerHint(s)}.`
 
+const levelOf = (where: string): SandboxWarning['level'] =>
+  where.startsWith('evaluate(')
+    ? 'eval'
+    : where.startsWith('group(')
+      ? 'group'
+      : where.startsWith('profiles.')
+        ? 'profile'
+        : 'config'
+
+/**
+ * A warning per privilege the eval's Docker sandbox adds, naming the level that set it: the
+ * config when no profile, group or eval did.
+ */
+export function sandboxWarnings(
+  resolved: Resolved,
+  origin: { configFile: string; file: string | null },
+): SandboxWarning[] {
+  const { sandbox } = resolved
+  if (sandbox.kind !== 'docker') return []
+  const where = resolved.sources?.sandbox ?? origin.configFile
+  const level = levelOf(where)
+  const file = level === 'eval' || level === 'group' ? origin.file : null
+  const out: SandboxWarning[] = []
+  if (sandbox.root) {
+    out.push({
+      kind: 'root',
+      level,
+      where,
+      file,
+      message: `running as root in the sandbox: ${where} (docker({ root: true }))`,
+    })
+  }
+  if (sandbox.capabilities?.length) {
+    const list = sandbox.capabilities.map((c) => `'${c}'`).join(', ')
+    out.push({
+      kind: 'capabilities',
+      level,
+      where,
+      file,
+      capabilities: [...sandbox.capabilities],
+      message: `extra capabilities in the sandbox: ${where} (docker({ capabilities: [${list}] }))`,
+    })
+  }
+  return out
+}
+
 /** The plan row for an eval. */
-export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan {
+export function evalPlan(
+  r: ResolvedEval,
+  attempts: PlannedAttempt[],
+  origin: { configFile: string; file: string | null },
+): EvalPlan {
   const { resolved, notes, skip } = r
   return {
     harnesses: skip ? 0 : resolved.harness.length,
@@ -618,6 +669,7 @@ export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan 
       ...environmentWarnings(attempts),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
     ],
+    sandboxWarnings: skip ? [] : sandboxWarnings(resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
     egress: [...new Set(attempts.map((a) => egressLabel(a.egress)).filter(Boolean))],
   }

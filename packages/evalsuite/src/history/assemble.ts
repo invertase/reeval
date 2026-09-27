@@ -728,6 +728,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       cells: input.plan.cells,
       attempts: input.plan.attempts,
       estimateMs: Math.round(input.plan.estimateMs),
+      sandboxWarnings: input.plan.sandboxWarnings,
     },
     budget: Object.keys(input.plan.budget).length ? input.plan.budget : null,
     config: {

@@ -548,6 +548,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'docker.privilege-warnings',
+    area: 'Sandbox',
+    name: 'Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them',
+    plan: ['privileges/levels', 'privileges/profile'],
+    tests: [
+      'evalsuite/test/plan.test.ts › are structured in the JSON plan, one per level that set the sandbox',
+      'evalsuite/test/plan.test.ts › print in the text plan, the agent output and as GitHub annotations',
+      'evalsuite/test/plan.test.ts › canary: an eval without root gets no warning, so the check fails',
+      docker('a root sandbox warns at the start of es run, in the record and in summary.md'),
+    ],
+  },
+  {
     id: 'docker.limits',
     area: 'Sandbox',
     name: '`docker({ memory, cpus, pids })` and their defaults',

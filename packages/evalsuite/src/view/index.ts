@@ -10,7 +10,7 @@ export type {
   RunRecord,
   StackSummary,
 } from '../history/types.ts'
-export type { Outcome, TranscriptEvent } from '../types.ts'
+export type { Outcome, SandboxWarning, TranscriptEvent } from '../types.ts'
 export * from './analysis.ts'
 export * from './compare.ts'
 export * from './debug.ts'

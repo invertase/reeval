@@ -93,6 +93,10 @@ export function renderPlan(plan: PlanDocument): string {
   ])
   return [
     head.join(' · '),
+    ...plan.sandboxWarnings.map(
+      (w) =>
+        `${w.kind === 'root' ? 'WARNING' : 'warning'}: ${w.message} [${w.level}${w.file ? ` ${w.file}` : ''}]`,
+    ),
     ...plan.warnings.map((w) => `warning: ${w}`),
     ...plan.hints.map((h) => `hint: ${h}`),
     ...table(rows),

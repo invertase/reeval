@@ -167,6 +167,13 @@ The agent runs code you didn't write, so each container is locked down by defaul
 - **Root at run time**, for example an agent that has to `apt-get install` during the task. Use `docker({ root: true })`. The agent, setup and checks then run as root with only the capabilities `apt-get` needs (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Prefer baking packages in with `install`, which needs no opt-in.
 - **A specific capability**, such as `NET_RAW` for `ping`. Use `docker({ capabilities: ['NET_RAW'] })`.
 
+Either one is printed at the start of every run that uses it, naming where it was set, and kept in the run record:
+
+```text
+WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))
+warning: extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))
+```
+
 Everything else works as the `es` user: `npm i`, `pip install` (as a user install), `git`, `curl`, and `npm i -g`, which goes to `~/.local`, on `PATH`.
 
 ## One sandbox per eval

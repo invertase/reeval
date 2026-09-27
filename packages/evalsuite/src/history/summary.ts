@@ -156,6 +156,7 @@ export function renderSummary(run: RunRecord): string {
     '',
     `Plan: ${run.profile ? `profile ${run.profile.name} (${run.profile.reason}) · ` : ''}${run.plan.evals} evals · ${run.plan.cells} cells · ${run.plan.attempts} attempts${run.budget ? ` · budget ${[run.budget.attempts !== undefined ? `${run.budget.attempts} attempts` : '', run.budget.duration ?? ''].filter(Boolean).join(', ')}` : ''}`,
     '',
+    ...run.plan.sandboxWarnings.map((w) => `> **Warning:** ${w.message}\n`),
     '## State',
     '',
     '| | |',

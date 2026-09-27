@@ -232,6 +232,7 @@ const RECORD_TYPES = [
   'GitInfo',
   'Stack',
   'RunSummary',
+  'SandboxWarning',
   'Cost',
   'EvalEntry',
   'CellRecord',

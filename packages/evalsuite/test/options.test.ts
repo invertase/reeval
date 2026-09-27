@@ -65,7 +65,13 @@ group('g', { runs: 2 }, () => {
       run.stack.harnesses.map((h) => h.id),
       ['bad', 'good'],
     )
-    assert.deepEqual(run.plan, { evals: 1, cells: 2, attempts: 4, estimateMs: run.plan.estimateMs })
+    assert.deepEqual(run.plan, {
+      evals: 1,
+      cells: 2,
+      attempts: 4,
+      estimateMs: run.plan.estimateMs,
+      sandboxWarnings: [],
+    })
     const [e] = evals
     assert.equal(e?.outcome, 'fail')
     assert.equal(e?.passRate, 0.5)
