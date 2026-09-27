@@ -756,7 +756,7 @@ function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation[
         : null,
     unhandledErrors: invocation.unhandledErrors.map((e) => redactSecrets(e)),
   })
-  const broke = kind === 'crash' || code === EXIT.infra
+  const broke = kind === 'crash' || code === EXIT.infra || invocation.unhandledErrors.length > 0
   const quiet =
     !!process.env.ES_NO_REPORT_HINT ||
     command === 'report' ||

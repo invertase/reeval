@@ -425,6 +425,21 @@ describe('es report: the failure hint', () => {
         `${args.join(' ')} ${JSON.stringify(env)}`,
       )
     }
+    // An error the engine caught outside any eval gets it too, and es report has it.
+    const stray = await project('report-hint-stray', {
+      'es.config.ts': fakeConfig(),
+      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+setTimeout(() => Promise.reject(new Error('stray rejection')), 0)
+evaluate('waits', async () => { await new Promise((r) => setTimeout(r, 500)) })
+`,
+      '.es/.keep': '',
+    })
+    const unhandled = await runCli(stray.dir, ['run'])
+    assert.equal(unhandled.code, 1, unhandled.stdout + unhandled.stderr)
+    assert.match(unhandled.stderr, hint)
+    const report = await runCli(stray.dir, ['report', '--json'])
+    const logged = (JSON.parse(report.stdout) as ReportBundle).invocation?.unhandledErrors ?? []
+    assert.match(logged.join('\n'), /stray rejection/)
     // Usage errors and passing runs are the user's to fix, not ES's.
     const usage = await runCli(p.dir, ['run', '--runs', 'x'], { env: p.env })
     assert.equal(usage.code, 2)

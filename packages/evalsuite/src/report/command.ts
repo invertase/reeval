@@ -1,5 +1,6 @@
 // `es report [run]`: collects a redacted bug report, prints its summary and writes it locally.
 // It uploads nothing: `--issue` opens a pre-filled issue, or files one with gh once you say yes.
+import { execFile } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir, release } from 'node:os'
 import { basename, dirname, extname, join, relative, resolve } from 'node:path'
@@ -30,7 +31,15 @@ export async function defaultReportDeps(): Promise<ReportDeps> {
     release: release(),
     arch: process.arch,
     nodeVersion: process.versions.node,
-    npmVersion: doctorDeps.npmVersion,
+    npmVersion: () =>
+      new Promise((done) =>
+        execFile(
+          'npm',
+          ['--version'],
+          { shell: process.platform === 'win32', timeout: 20_000 },
+          (error, stdout) => done(error ? null : String(stdout).trim()),
+        ),
+      ),
     doctor: async (flags) => (await doctor(flags, doctorDeps)).report,
     agent: detectAgent().name ?? null,
     now: () => new Date(),

@@ -102,7 +102,7 @@ With [`gh`](https://cli.github.com) installed, it asks first, then files the iss
 hint: if this looks like a bug in ES, es report collects a redacted report to file (ES_NO_REPORT_HINT=1 hides this)
 ```
 
-After an infra error (exit 3), a crash or an error ES didn't expect, `es` prints this line on stderr. It doesn't in agent output, with `--json`, or with `ES_NO_REPORT_HINT=1`.
+After an infra error (exit 3), a crash, an error ES didn't expect, or an error a run reports that no eval owned, `es` prints this line on stderr. It doesn't in agent output, with `--json`, or with `ES_NO_REPORT_HINT=1`.
 
 ## Related
 
