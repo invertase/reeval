@@ -860,6 +860,26 @@ evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
     assert.match(set.stdout, warning)
   })
 
+  test("secrets: { unbrokered: 'error' } refuses an optional secret whether or not it's set", async () => {
+    const p = await project('unbrokered-optional-strict', {
+      'es.config.ts': fakeConfig({ extra: "secrets: { unbrokered: 'error' }," }),
+      'evals/o.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+const maybe = defineEnvironment('maybe', ({ secret }) => ({
+  env: { SENTRY_TOKEN: secret.fromEnv('ES_TEST_MAYBE_TOKEN', { optional: true }) },
+}))
+evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
+`,
+    })
+    const refused =
+      /SENTRY_TOKEN in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error'/
+    for (const env of [{}, { ES_TEST_MAYBE_TOKEN: 'set-on-this-host' }]) {
+      const r = await runCli(p.dir, ['run', '--dry-run'], { env })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, refused)
+    }
+  })
+
   test('a Docker secret without hosts warns once in the plan', async () => {
     const p = await project('unbrokered', {
       'es.config.ts': fakeConfig(),

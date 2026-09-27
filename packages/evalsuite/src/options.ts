@@ -566,14 +566,13 @@ export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): Unbrokered
   const out = new Map<string, UnbrokeredSecret>()
   for (const a of attempts) {
     if (a.sandbox.kind !== 'docker') continue
-    for (const s of unbrokeredSecrets(env, a.environment.layers)) {
-      // An unset optional secret never reaches the sandbox.
-      if (s.optional && !process.env[s.from]) continue
-      out.set(s.label, s)
-    }
+    for (const s of unbrokeredSecrets(env, a.environment.layers)) out.set(s.label, s)
   }
   return [...out.values()]
 }
+
+/** An optional secret whose host variable isn't set never reaches the sandbox, so it gets no warning. */
+const reachesSandbox = (s: UnbrokeredSecret) => !s.optional || Boolean(process.env[s.from])
 
 /** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret an attempt brokers. */
 export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
@@ -617,7 +616,7 @@ export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan 
     ...(skip ? { skip } : {}),
     warnings: [
       ...environmentWarnings(attempts),
-      ...unbrokered(r.resolved.env, attempts).map(unbrokeredWarning),
+      ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
     ],
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
     egress: [...new Set(attempts.map((a) => egressLabel(a.egress)).filter(Boolean))],
