@@ -102,7 +102,7 @@ evaluate('hi', async (t) => {
         return
       }
       const refused = await project('docker-agy-no-broker', {
-        'es.config.ts': agyConfig("docker({ image: 'busybox:1.37' })"),
+        'es.config.ts': agyConfig("docker({ image: 'busybox:1.37', root: true })"),
         'evals/d.es.ts': eval_,
       })
       const b = await runCli(refused.dir, ['run'], { env })

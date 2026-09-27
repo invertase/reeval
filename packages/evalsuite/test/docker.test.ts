@@ -411,6 +411,8 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
         [
           'run',
           '--rm',
+          '--user',
+          'es',
           '--entrypoint',
           'sh',
           ref,
@@ -541,7 +543,7 @@ evaluate('hi', async (t) => { await t.send('hi') })
       // No node in the image, so the gateway can't start: by default that's an infra error, and
       // the key never enters the container.
       const refused = await project('docker-no-broker', {
-        'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37' })"),
+        'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37', root: true })"),
         'evals/d.es.ts': eval_,
       })
       const b = await runCli(refused.dir, ['run'], { env })
@@ -575,7 +577,7 @@ evaluate('hi', async (t) => { await t.send('hi') })
       execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
       const value = 'es-docker-user-secret-5e4d3c2b1a'
       const p = await project('docker-secret-no-broker', {
-        'es.config.ts': config('{}').replace('docker()', "docker({ image: 'busybox:1.37' })"),
+        'es.config.ts': config('{}').replace('docker()', "docker({ image: 'busybox:1.37', root: true })"),
         'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
 const keys = defineEnvironment('keys', ({ secret }) => ({
   env: { GEMINI_API_KEY: secret.fromEnv('ES_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
@@ -813,7 +815,7 @@ evaluate('calls out', async (t) => {
         'docker {4}\\$ docker image inspect ',
         'docker {4}\\$ docker run --detach --rm --init .* → exit 0 · \\d+ms$',
         'docker {4}\\$ docker network disconnect --force ',
-        'docker {4}\\$ docker exec --interactive [0-9a-f]{64} node -e ',
+        'docker {4}\\$ docker exec --interactive --user 0:0 [0-9a-f]{64} node -e ',
         'docker {4}\\$ docker rm -f [0-9a-f]{64} → exit 0',
         'gateway {3}dns example\\.com → ',
         'gateway {3}dns blocked\\.invalid refused: ',
@@ -967,7 +969,7 @@ evaluate('hi', async (t) => {
         return
       }
       const refused = await project('docker-claude-no-broker', {
-        'es.config.ts': claudeConfig("docker({ image: 'busybox:1.37' })"),
+        'es.config.ts': claudeConfig("docker({ image: 'busybox:1.37', root: true })"),
         'evals/d.es.ts': eval_,
       })
       const b = await runCli(refused.dir, ['run'], { env })
