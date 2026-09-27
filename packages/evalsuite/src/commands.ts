@@ -172,11 +172,15 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
 }
 
 /**
- * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new eval that
- * fails, since nothing earlier vouches for it.
+ * What `--fail-on-regression` fails on: an eval that went from pass to fail, and a new or
+ * changed (not comparable) eval that fails, since nothing earlier vouches for it.
  */
 export const regressions = (rows: CompareRow[]) =>
-  rows.filter((r) => r.status === 'regressed' || (r.status === 'added' && r.head === 'fail'))
+  rows.filter(
+    (r) =>
+      r.status === 'regressed' ||
+      ((r.status === 'added' || r.status === 'drift') && r.head === 'fail'),
+  )
 
 /** Recreates the state a run executed in: its commit, plus its uncommitted changes if any. */
 export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number> {

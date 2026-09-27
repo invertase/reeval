@@ -73,7 +73,7 @@ A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git conf
 | Code | When |
 |---|---|
 | 0 | Every gated cell passed. Failing controls under `compare.gate: 'variants'` don't count. Also `--dry-run`, and `es compare` without `--fail-on-regression`. |
-| 1 | A gated attempt failed, a variant fell below its `minLift`, `budget.duration` stopped the run, or `es compare --fail-on-regression` found a regression or a failing new eval. |
+| 1 | A gated attempt failed, a variant fell below its `minLift`, `budget.duration` stopped the run, or `es compare --fail-on-regression` found a regression, or a failing new or not comparable eval. |
 | 2 | A usage, config or credentials error. That includes an unknown command, flag, option or profile, a filter or tag that matches no eval, a plan over `budget.attempts` without `--force`, `.only` in CI, Docker not running, a missing image, a bad run reference and a refused record. None of these writes a run. |
 | 3 | An infrastructure error (sandbox, harness or setup step) and no failures. A run with both a failure and an infra error exits 1. |
 | 130 | Interrupted with Ctrl-C or `SIGTERM` (`docker stop`, a cancelled CI job). Sandboxes are destroyed and the run is saved as `interrupted`. A second signal forces the exit. |

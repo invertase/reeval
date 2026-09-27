@@ -58,7 +58,7 @@ Under a cell both runs share, a line shows how its median effort moved. Effort d
 | `infra error` | Either side had an infra error |
 | `new`, `removed` | The eval is in only one of the runs |
 
-When two runs ran different cells of an eval (one was filtered to a harness, say), ES compares the cells both ran and lists the rest, as in the `cells added` above, where the base run had Antigravity only. With no cell in common, it's not comparable. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` eval that fails.
+When two runs ran different cells of an eval (one was filtered to a harness, say), ES compares the cells both ran and lists the rest, as in the `cells added` above, where the base run had Antigravity only. With no cell in common, it's not comparable. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or not comparable eval that fails.
 
 ## Drift
 
