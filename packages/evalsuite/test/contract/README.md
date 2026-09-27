@@ -16,7 +16,7 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 | deny-all plus auto hosts works | under `egress: 'deny-all'` the turn completes, and a `curl` to example.com gets a 403 at CONNECT | no turn: the same `curl` isn't a 200 | `egress`: the harness's automatic hosts allowed, its API contacted, example.com:443 refused and recorded |
 | served model recorded | — | — | every attempt's `servedModels` names the model (null for a harness whose requests don't say) |
 | nothing silently unreported | — | — | every turn's `unreported` is empty: no harness fell back to flagging events it couldn't report (the Cursor SDK's web calls, when recovering them fails or finds a stored shape it doesn't know) |
-| native stream format unchanged | — | — | every native event in the raw transcripts matches `../replay/formats/<harness>.json`, plus, on an ACP harness, every status, tool kind and stop reason ACP defines (a failed tool call is the model's doing, not a format change) |
+| native stream format unchanged | — | — | every native event in the raw transcripts matches `../replay/formats/<harness>.json`, plus, on an ACP harness, every status, tool kind and stop reason ACP defines (a failed tool call is the model's doing, not a format change), and on pi every stop reason its one-shot loop ends a call with and a failed call's `errorMessage` (a provider's 503 is not a format change) |
 | clean teardown | — | — | the run is `complete` and no container with its label is left |
 
 The key scanner ([`scan.mjs`](./scan.mjs)) is given only the sha256, length and a rolling hash of
@@ -68,7 +68,7 @@ fake or phrase differently:
 | key | a hash scan of the container, after a real turn | a grep for the key would need the key in the container |
 | egress | the CONNECT status the `curl` wrote, and the gateway's record | the agent's account of what happened |
 | tokens, served model | the record's numbers and ids, by shape (> 0, a pattern) | exact counts change every run |
-| stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons) | which values a run shows is the model's doing: a stray write outside the workspace makes a tool call `failed` |
+| stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons; pi's stop reasons and `errorMessage`) | which values a run shows is the model's or the provider's doing: a stray write outside the workspace makes a tool call `failed`, a Gemini 503 makes pi's call `error` |
 | e2e | exit codes, JSON from `es compare`/`es query`, files on disk | the CLI's text output changes with the run |
 
 Prompts name the exact action and ask for one short turn. The e2e eval allows a trailing period in

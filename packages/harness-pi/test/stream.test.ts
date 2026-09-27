@@ -53,6 +53,19 @@ test("a failed model call (pi's stopReason 'error', exit 0) is an error part and
   assert.equal((finish as { finishReason?: { unified?: string } })?.finishReason?.unified, 'error')
 })
 
+test("each stop reason pi ends a call with is that step's finish reason, pi's own kept raw", () => {
+  const lastStep = (stopReason: string) => {
+    const lines = fixture('edit-and-run').map((l) =>
+      l.replaceAll('"stopReason":"stop"', `"stopReason":"${stopReason}"`),
+    )
+    const steps = translate(lines).parts.filter((p) => p.type === 'finish-step')
+    return (steps.at(-1) as { finishReason?: unknown })?.finishReason
+  }
+  assert.deepEqual(lastStep('stop'), { unified: 'stop', raw: 'stop' })
+  assert.deepEqual(lastStep('length'), { unified: 'length', raw: 'length' })
+  assert.deepEqual(lastStep('aborted'), { unified: 'other', raw: 'aborted' })
+})
+
 test('twin: a process that dies before agent_end is an error, not a clean finish', () => {
   const lines = fixture('edit-and-run')
   const cut = lines.findIndex((l) => l.includes('"type":"agent_end"'))

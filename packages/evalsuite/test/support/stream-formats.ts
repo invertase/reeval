@@ -22,6 +22,11 @@ type Format = {
    * refusal) is the model's doing, so learning them from runs made the check depend on the model.
    */
   defined?: Record<string, readonly string[]>
+  /**
+   * Keys the CLI's protocol defines for one outcome only, by signature (`<kind> .<key>`), for the
+   * same reason: pi's `errorMessage` is there only when the provider fails a call.
+   */
+  optional?: readonly string[]
 }
 
 // ACP's ToolCallStatus, ToolKind and StopReason: every value @ai-sdk/harness-acp's bridge handles.
@@ -51,6 +56,20 @@ const ACP_DEFINED = {
     'cancelled',
   ],
 }
+
+// pi's assistant messages: pi-ai's StopReason, but `deferred` (pi's one-shot `-p` loop never defers
+// a call) and `pending` (only while a message streams), and a failed call's `errorMessage`. A
+// contract run shows `error` only when the provider fails a call (a 503), `length` and `aborted`
+// only when the model runs out of tokens or ES stops the turn.
+const PI_MESSAGES = ['message_start/assistant', 'message_end/assistant', 'turn_end/assistant']
+const PI_STOP = ['stop', 'toolUse', 'length', 'aborted', 'error']
+const PI_DEFINED = Object.fromEntries(
+  PI_MESSAGES.map((kind) => [
+    `${kind} .message.stopReason`,
+    kind === 'message_start/assistant' ? ['pending', ...PI_STOP] : PI_STOP,
+  ]),
+)
+const PI_OPTIONAL = PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`)
 
 const FORMATS: Record<string, Format> = {
   antigravity: {
@@ -143,6 +162,8 @@ const FORMATS: Record<string, Format> = {
     ],
     values: ['stopReason', 'role', 'api', 'provider'],
     lists: [],
+    defined: PI_DEFINED,
+    optional: PI_OPTIONAL,
   },
 }
 
@@ -198,13 +219,14 @@ export function signatures(harness: string, events: Record<string, unknown>[]): 
 
 const formatsFile = (harness: string) => join(testDir, 'replay', 'formats', `${harness}.json`)
 
-/** The signatures of every value the harness's protocol defines. */
+/** The signatures of every value and outcome-only key the harness's protocol defines. */
 const definedSignatures = (harness: string): Set<string> =>
-  new Set(
-    Object.entries(FORMATS[harness]?.defined ?? {}).flatMap(([at, values]) =>
+  new Set([
+    ...Object.entries(FORMATS[harness]?.defined ?? {}).flatMap(([at, values]) =>
       values.map((v) => `${at}=${v}`),
     ),
-  )
+    ...(FORMATS[harness]?.optional ?? []),
+  ])
 
 const committedSignatures = (harness: string): string[] =>
   existsSync(formatsFile(harness))
