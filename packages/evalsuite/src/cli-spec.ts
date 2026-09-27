@@ -1,5 +1,6 @@
-// ES's CLI as data: every command, subcommand and flag. `es` parses its arguments from it, and
-// `es analyze` checks each suggested verify command against it, so a model can't invent a flag.
+// ES's CLI as data: every command, subcommand, flag and help line. `es` builds its parser
+// (`cli-parse.ts`) and its `--help` from it, and `es analyze` checks each suggested verify
+// command against it, so a model can't invent a flag.
 
 export type FlagSpec = { type: 'string' | 'boolean'; short?: string; multiple?: boolean }
 
@@ -48,10 +49,23 @@ export const FLAGS = {
 
 export type FlagName = keyof typeof FLAGS
 
-type CommandSpec = {
+type FlagValue<S extends FlagSpec> = S extends { type: 'string' }
+  ? S extends { multiple: true }
+    ? string[]
+    : string
+  : S extends { multiple: true }
+    ? boolean[]
+    : boolean
+
+/** The parsed flags, keyed by their spec name (`dry-run`, `no-cache`); unset flags are absent. */
+export type Flags = { -readonly [K in FlagName]?: FlagValue<(typeof FLAGS)[K]> }
+
+export type CommandSpec = {
   flags: FlagName[]
   /** How many positional arguments it takes; `Infinity` for filters or SQL. */
   positionals: number
+  /** Its lines in `es --help`, the first naming the command; empty when it has none. */
+  help: string
   sub?: Record<string, Omit<CommandSpec, 'sub'>>
 }
 
@@ -73,37 +87,158 @@ const RUN_FLAGS: FlagName[] = [
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
-  run: { flags: RUN_FLAGS, positionals: Number.POSITIVE_INFINITY },
-  clean: { flags: ['keep'], positionals: 0 },
+  run: {
+    flags: RUN_FLAGS,
+    positionals: Number.POSITIVE_INFINITY,
+    help: `
+  es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+    --profile <name>        Size the run with a profile from es.config.ts (also ES_PROFILE;
+                            default: defaultProfile.ci in CI, else defaultProfile.local)
+    --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0;
+                            with --json, as one JSON document (every cell, and what's excluded)
+    --force                 Run even when the plan is over budget.attempts
+    --runs <n>              Attempts per cell, overriding the config, groups and evals
+    --concurrency <n>       Attempts running at once across evals and cells (default 8, at
+                            most one per CPU and GB of Docker memory; also ES_CONCURRENCY)
+    --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
+    --record                Also record the run into the history folder (see config.record)
+    --ui <mode>             live, plain or agent (default: agent under a coding agent, plain
+                            in CI or when piped, else live; live prints plain for now)
+    --log-order <order>     stream (every line as it happens) or grouped (each attempt as one
+                            block when it ends); default grouped in CI, else stream
+    --log-prefix <prefix>   task or none: the [eval#n harness] prefix on detail lines
+                            (default task, none inside GitHub Actions groups)
+    --output-logs <level>   full, errors-only or none: whose detail lines print (default full)
+    -v, --verbose           Print each attempt's phase trace as it happens: plan, image,
+                            container, environment, brokering, turns and tool calls, checks,
+                            judge calls, gateway requests and teardown
+    -vv, --trace            Also raw payloads, docker commands, headers and DNS decisions, and
+                            keep every attempt's trace.ndjson (else only failing attempts')
+                            Either way each attempt's debug.log is in .es/debug/<run>/ (local only)`,
+  },
+  clean: {
+    flags: ['keep'],
+    positionals: 0,
+    help: `
+  es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs`,
+  },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan'],
     positionals: Number.POSITIVE_INFINITY,
+    help: `
+  es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
+                            --artifacts all|failures|none --allow-incomplete --skip-secret-scan`,
   },
-  history: { flags: ['limit', 'all', 'json'], positionals: Number.POSITIVE_INFINITY },
-  show: { flags: ['json', 'md'], positionals: 1 },
-  compare: { flags: ['md', 'json', 'fail-on-regression'], positionals: 2 },
-  checkout: { flags: [], positionals: 2 },
-  query: { flags: ['json', 'schema', 'rebuild'], positionals: Number.POSITIVE_INFINITY },
+  history: {
+    flags: ['limit', 'all', 'json'],
+    positionals: Number.POSITIVE_INFINITY,
+    help: `
+  es history [filter]       Pass/fail per recorded eval over recent runs
+                            --limit <n> --all (include unrecorded runs) --json`,
+  },
+  show: {
+    flags: ['json', 'md'],
+    positionals: 1,
+    help: `
+  es show [run]             One run: table, --md (summary.md) or --json (the record)`,
+  },
+  compare: {
+    flags: ['md', 'json', 'fail-on-regression'],
+    positionals: 2,
+    help: `
+  es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
+                            --md --json --fail-on-regression`,
+  },
+  checkout: {
+    flags: [],
+    positionals: 2,
+    help: `
+  es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
+                            (default dir: .es/checkouts/<run>)`,
+  },
+  query: {
+    flags: ['json', 'schema', 'rebuild'],
+    positionals: Number.POSITIVE_INFINITY,
+    help: `
+  es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
+                            rebuilt from the records); views: lift, effort, factor_effects,
+                            skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
+                            verdict_flips. No argument lists them
+    --json                  Rows as JSON; --schema every table and column; --rebuild from scratch`,
+  },
   analyze: {
     flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
     positionals: 1,
+    help: `
+  es analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
+                            nearest recorded ancestor), citations and commands checked; cached
+                            in .es/analysis (model: config.analysis.model)
+    --vs <run>              The run to compare with; --eval <filter> only matching evals
+    --save                  Also write it into the run's history folder: <run>/analysis/
+    --context               Print the digest and rules for your own coding agent (no key, no call)
+    --dry-run               Print the digest's size and the cache key, without calling the model
+    --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again`,
   },
   studio: {
     flags: ['port', 'host', 'open', 'no-scratch', 'no-token'],
     positionals: 0,
-    sub: { build: { flags: ['out', 'scratch', 'no-artifacts'], positionals: 0 } },
+    help: `
+  es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
+    --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
+    --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
+    --no-token              Skip the session token (for scripts; anyone local can then read it)`,
+    sub: {
+      build: {
+        flags: ['out', 'scratch', 'no-artifacts'],
+        positionals: 0,
+        help: `
+  es studio build           Write the studio as a static site for Pages, Netlify or any host
+    --out <dir>             Output folder (default studio-dist beside the config); --scratch
+                            adds unrecorded runs
+    --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs`,
+      },
+    },
   },
   image: {
     flags: [],
     positionals: 0,
-    sub: { build: { flags: ['dry-run'], positionals: Number.POSITIVE_INFINITY } },
+    help: '',
+    sub: {
+      build: {
+        flags: ['dry-run'],
+        positionals: Number.POSITIVE_INFINITY,
+        help: `
+  es image build [filter...]
+                            Build every image the evals' Docker sandboxes need, per harness: ES's
+                            image (bakes in its CLI), from and dockerfile images, install layers
+    --dry-run               List the images and how each is made, without building`,
+      },
+    },
   },
 }
 
-const GLOBAL: FlagName[] = ['config', 'help', 'version']
+/** Flags every command takes; without `--config`, `es` finds the nearest config. */
+export const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
-/** `parseArgs` options for every flag; without `--config`, `es` finds the nearest config. */
-export const parseOptions = () => FLAGS
+/** `es --help`: every command's help lines, in the order of `COMMANDS`. */
+export function helpText(version: string): string {
+  const commands = Object.values(COMMANDS).flatMap((spec) => [
+    spec.help,
+    ...Object.values(spec.sub ?? {}).map((sub) => sub.help),
+  ])
+  return `es ${version} — eval runner for coding agents
+
+Usage:${commands.join('')}
+  es --version
+  es --help
+
+Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
+Options: --config <path> (default: the nearest es.config.ts, or .mts, .cts, .js, .mjs or .cjs,
+in the current directory or above)
+Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
+143 terminated (SIGTERM)
+`
+}
 
 /** Splits a command line on whitespace, honouring single and double quotes. */
 export function shellWords(line: string): string[] | null {

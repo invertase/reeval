@@ -67,7 +67,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models, effort (`effort.ts`) and the analysis document (`analysis.ts`) |
 | `packages/evalsuite/src/history/facts.ts` | The derived facts behind `es query effort`, `factor_effects`, `flaky_cells` and `drift`, computed at sync |
 | `packages/evalsuite/src/analysis` | `es analyze`: the digest, the schema and prompt, the model call, validation, rendering, and the cache and saved files |
-| `packages/evalsuite/src/cli-spec.ts` | Every command and flag as data: `es` parses from it and `es analyze` checks verify commands against it |
+| `packages/evalsuite/src/cli-spec.ts` | Every command, flag and help line as data: `cli-parse.ts` builds `es`'s [commander](https://github.com/tj/commander.js) parser from it, `es --help` (and so the docs' CLI help) is its help lines, and `es analyze` checks verify commands against it. A new flag or command goes here, then `test/cli.test.ts` parses it and `ES_UPDATE_SNAPSHOTS=1` refreshes the help golden file |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents) and `replay/` (captured real streams and each CLI's known stream format) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
