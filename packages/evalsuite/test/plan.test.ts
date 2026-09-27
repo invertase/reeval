@@ -21,6 +21,7 @@ export const cases: PlanCase[] = [
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },
   { dir: 'selection', name: 'only-local', args: [] },
   { dir: 'selection', name: 'tags', args: ['--tag', 'slow', '--tag', '!flaky'] },
+  { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
   { dir: 'images', name: 'install-from-dockerfile', args: [] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },

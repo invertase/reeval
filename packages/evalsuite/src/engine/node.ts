@@ -18,7 +18,7 @@ import {
 } from 'vitest/node'
 import { inCI } from '../env.ts'
 import { UsageError } from '../errors.ts'
-import { attemptKey, evalId, relativeFile } from '../ids.ts'
+import { attemptId, attemptKey, evalId, relativeFile } from '../ids.ts'
 import { DIST_DIR, PACKAGE_DIR } from '../root.ts'
 import { type SchedulerServer, startSchedulerServer } from '../scheduler/server.ts'
 import { capMiddle } from '../text.ts'
@@ -249,7 +249,7 @@ function collectPlan(
   let matched = 0
   for (const test of tests) {
     const e = toEngineEval(root, test)
-    for (const f of unmatched) if (nameText(e).includes(f)) unmatched.delete(f)
+    for (const f of unmatched) if (matchesFilter(e, f)) unmatched.delete(f)
     if (!matchesName(e)) continue
     matched++
     const { attempt } = e
@@ -262,9 +262,10 @@ function collectPlan(
   return { planned, excluded: [...excluded.values()], matched, unmatched: [...unmatched] }
 }
 
-/** What a name or cell filter matches: the groups, the eval's name and `[cell#n]`. */
-const nameText = (e: EngineEval) =>
-  [...e.group, e.name, e.attempt ? `[${e.attempt.cell.key}#${e.attempt.n}]` : ''].join(' ')
+/** A name or cell filter matches part of the eval id (`file › group › name`) or `cell#n`. */
+const matchesFilter = (e: EngineEval, filter: string) =>
+  e.id.includes(filter) ||
+  (!!e.attempt && attemptId(e.attempt.cell.key, e.attempt.n).includes(filter))
 
 export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const { config } = options.run
@@ -366,9 +367,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const stdout = new Capture()
   const stderr = new Capture()
   let vitest: Vitest | undefined
-  let namePattern: RegExp | undefined
   const nameFilters: string[] = []
-  const matchesName = (e: EngineEval) => !namePattern || namePattern.test(nameText(e))
+  const matchesName = (e: EngineEval) =>
+    nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))
   const signals = ['SIGINT', 'SIGTERM'] as const
   const ownListeners = new Set(signals.flatMap((signal) => process.listeners(signal)))
   const { concurrency } = options.run
@@ -425,27 +426,39 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       if ((await vitest.globTestSpecifications([f])).length) pathFilters.push(f)
       else nameFilters.push(f)
     }
-    const specs = await vitest.globTestSpecifications(pathFilters)
-    if (nameFilters.length) {
-      const escaped = nameFilters.map((f) => f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      namePattern = new RegExp(escaped.join('|'))
-      vitest.setGlobalTestNamePattern(namePattern)
-    }
+    let specs = await vitest.globTestSpecifications(pathFilters)
     if (specs.length === 0)
       return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
 
-    if (options.onPlan) {
+    if (options.onPlan || nameFilters.length) {
       collecting = true
       const collected = await vitest.collectTests(specs)
       collecting = false
+      // Vitest matches a name pattern against its own ` > `-joined names, not ES's eval ids, so
+      // the run gets the ids of the tests ES's filters picked instead.
+      if (nameFilters.length) {
+        const picked = new Map<string, string[]>()
+        for (const module of collected.testModules) {
+          const ids = [...module.children.allTests()]
+            .filter((test) => matchesName(toEngineEval(config.root, test)))
+            .map((test) => test.id)
+          if (ids.length) picked.set(module.moduleId, ids)
+        }
+        specs = specs.flatMap((spec) => {
+          const testIds = picked.get(spec.moduleId)
+          return testIds ? [spec.project.createSpecification(spec.moduleId, { testIds })] : []
+        })
+      }
       const plan = collectPlan(config.root, collected.testModules, matchesName, nameFilters)
       // When no part matched anything, the run's own "no evals matched" says so.
       if (plan.unmatched.length === options.filters.length) plan.unmatched = []
-      if (!(await options.onPlan(plan))) {
+      if (options.onPlan && !(await options.onPlan(plan))) {
         return { evals: [], unhandledErrors: [], cancelled: false, noFiles: false, stopped: true }
       }
     }
 
+    if (specs.length === 0)
+      return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
     scheduler = await startSchedulerServer({ gatherFiles: Math.min(specs.length, workers) })
     vitest.provide('es:scheduler', scheduler.address)
 

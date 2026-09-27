@@ -203,7 +203,7 @@ export const inventory: InventoryFeature[] = [
     id: 'selection.filters',
     area: 'Config and selection',
     name: 'Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2',
-    plan: ['compare/mixed-filter'],
+    plan: ['compare/mixed-filter', 'selection/group-and-eval-filter'],
     tests: [
       engine('filters match paths, then eval names'),
       engine('a path filter and a cell filter together run only that cell of that file'),

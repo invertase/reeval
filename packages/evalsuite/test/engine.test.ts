@@ -185,12 +185,18 @@ evaluate('top level', async () => {})
     )
     assert.equal(evals[0]?.error?.kind, 'timeout')
 
-    const filtered = await runCli(p.dir, ['run', 'outer fast'])
-    assert.equal(filtered.code, 0, filtered.stdout)
+    const filtered = await runCli(p.dir, ['run', 'outer › fast'])
+    assert.equal(filtered.code, 0, filtered.stdout + filtered.stderr)
     assert.deepEqual(
-      readRun(p.dir).evals.map((e) => e.name),
-      ['fast'],
+      readRun(p.dir).evals.map((e) => [e.name, e.outcome]),
+      [['fast', 'pass']],
     )
+
+    const { runId } = readRun(p.dir).run
+    const spaced = await runCli(p.dir, ['run', 'outer fast'])
+    assert.equal(spaced.code, 2, spaced.stdout + spaced.stderr)
+    assert.match(spaced.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts with filter "outer fast"/)
+    assert.equal(readRun(p.dir).run.runId, runId, 'no run written')
   })
 
   test('skip is reported as skipped', async () => {
