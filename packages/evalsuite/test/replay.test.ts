@@ -327,6 +327,145 @@ for (const [harness, outcomes] of [
       })
   })
 
+/** A harness package's own capture of its CLI's native NDJSON (its test/fixtures/). */
+const packageCapture = (pkg: string, name: string) =>
+  readFileSync(new URL(`../../${pkg}/test/fixtures/${name}`, import.meta.url), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as Record<string, unknown>)
+
+/** The signatures in `events` that the harness's format doesn't know. */
+const unknownSignatures = (harness: string, events: Record<string, unknown>[]) => {
+  const known = new Set(knownSignatures(harness))
+  return signatures(harness, events).filter((s) => !known.has(s))
+}
+
+/** The edit-and-run capture with each replacement made; each must change it. */
+function substituted(harness: string, ...replacements: Array<[RegExp | string, string]>) {
+  const base = read(harness, 'edit-and-run.raw.jsonl')
+  let changed = base
+  for (const [from, to] of replacements) {
+    const next = changed.replaceAll(from, to)
+    assert.notEqual(next, changed, `${from} is in the capture`)
+    changed = next
+  }
+  return nativeEvents(changed)
+}
+
+/** One raw-transcript line carrying `value` as the CLI's native event. */
+const rawLine = (value: unknown) =>
+  JSON.stringify({ turn: 0, ms: 1, part: { type: 'raw', rawValue: value } })
+
+describe("replay: the Cursor runner's format holds every failure it can report", () => {
+  // Real runner output (SDK 1.0.32): a rejected key, a turn ES cancelled, and web calls the runner
+  // recovered from the stored conversation.
+  for (const file of ['bad-key.ndjson', 'cancelled.ndjson', 'web-recovered.ndjson'])
+    test(`${file} is not a format change`, () => {
+      assert.deepEqual(unknownSignatures('cursor', packageCapture('harness-cursor-sdk', file)), [])
+    })
+
+  for (const status of ['CREATING', 'ERROR', 'CANCELLED', 'EXPIRED'])
+    test(`a status event's ${status} is not a format change`, () => {
+      const events = substituted('cursor', ['"status":"FINISHED"', `"status":"${status}"`])
+      assert.deepEqual(unknownSignatures('cursor', events), [])
+    })
+
+  test("a status event's message, a failed run's error and a truncated tool call are not", () => {
+    const events = substituted(
+      'cursor',
+      ['"status":"FINISHED"', '"status":"ERROR","message":"the run failed"'],
+      [
+        '"status":"finished"',
+        '"status":"error","error":{"message":"overloaded","code":"unavailable"}',
+      ],
+      ['"status":"completed"', '"status":"error","truncated":{"args":true,"result":true}'],
+    )
+    assert.deepEqual(unknownSignatures('cursor', events), [])
+  })
+
+  test("the runner's own failure lines: an error mid-turn and web calls it couldn't recover", () => {
+    const capture = `${read('cursor', 'edit-and-run.raw.jsonl')}${[
+      rawLine({ type: 'unreported', turn: 1, tools: ['webSearch'], message: 'store locked' }),
+      rawLine({
+        type: 'error',
+        turn: 1,
+        message: 'boom',
+        name: 'ConnectError',
+        code: 'unavailable',
+        status: 503,
+      }),
+    ].join('\n')}\n`
+    assert.deepEqual(unknownSignatures('cursor', nativeEvents(capture)), [])
+  })
+
+  test('twin: a status, run status or tool status the SDK does not define is a format change', () => {
+    for (const [from, to] of [
+      ['"status":"FINISHED"', '"status":"PAUSED"'],
+      ['"status":"finished"', '"status":"expired"'],
+      ['"status":"completed"', '"status":"failed"'],
+    ] as const)
+      assert.notDeepEqual(unknownSignatures('cursor', substituted('cursor', [from, to])), [], to)
+  })
+})
+
+describe("replay: Antigravity's format holds every failure agy reports", () => {
+  // agy 1.2.11 against a Gemini endpoint that refused each call (400, 429, 503), or dropped the
+  // stream after the first chunk: one error_message step per try, then an ERROR result.
+  for (const file of [
+    'provider-400.ndjson',
+    'provider-429.ndjson',
+    'provider-503.ndjson',
+    'provider-dropped-mid-stream.ndjson',
+  ])
+    test(`${file} is not a format change`, () => {
+      const events = packageCapture('harness-antigravity', file)
+      assert.ok(events.some((e) => JSON.stringify(e).includes('"step_type":"error_message"')))
+      assert.deepEqual(unknownSignatures('antigravity', events), [])
+    })
+
+  for (const state of ['ERROR', 'CANCELED', 'CANCELLED'])
+    test(`a tool step's ${state} is not a format change`, () => {
+      const events = substituted('antigravity', [
+        /"state":"DONE","step_type":"tool"/g,
+        `"state":"${state}","step_type":"tool"`,
+      ])
+      assert.deepEqual(unknownSignatures('antigravity', events), [])
+    })
+
+  test("a failed tool's error and a failed turn's ERROR result are not", () => {
+    const events = substituted(
+      'antigravity',
+      [
+        /"state":"DONE","step_type":"tool",([^{]*)"tool_info":\{/g,
+        '"state":"ERROR","step_type":"tool",$1"tool_info":{"error":{"type":"tool","message":"denied"},',
+      ],
+      ['"status":"SUCCESS"', '"status":"ERROR","error":"agent executor error: Error 503"'],
+    )
+    assert.deepEqual(unknownSignatures('antigravity', events), [])
+  })
+
+  test("twin: a state or step type agy's failures don't use is a format change", () => {
+    const events = packageCapture('harness-antigravity', 'provider-503.ndjson')
+    const renamed = JSON.parse(
+      JSON.stringify(events).replaceAll(
+        '"step_type":"error_message"',
+        '"step_type":"error_notice"',
+      ),
+    ) as Record<string, unknown>[]
+    assert.notDeepEqual(unknownSignatures('antigravity', renamed), [])
+    const aborted = substituted('antigravity', [
+      /"state":"DONE","step_type":"tool"/g,
+      '"state":"ABORTED","step_type":"tool"',
+    ])
+    assert.notDeepEqual(unknownSignatures('antigravity', aborted), [])
+    const onReply = substituted('antigravity', [
+      /"state":"DONE","step_type":"agent_response"/g,
+      '"state":"ERROR","step_type":"agent_response"',
+    ])
+    assert.notDeepEqual(unknownSignatures('antigravity', onReply), [])
+  })
+})
+
 describe("replay: pi's format holds every stop reason pi defines, and a failed call's error", () => {
   const known = new Set(knownSignatures('pi'))
   const unknownIn = (events: Record<string, unknown>[]) =>
@@ -342,14 +481,7 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
   })
 
   test("pi 0.87.1's whole failed turn (a bad key): message_start, message_end and turn_end", () => {
-    const lines = readFileSync(
-      new URL('../../harness-pi/test/fixtures/bad-key.ndjson', import.meta.url),
-      'utf8',
-    )
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => JSON.parse(l) as Record<string, unknown>)
-    assert.deepEqual(unknownIn(lines), [])
+    assert.deepEqual(unknownIn(packageCapture('harness-pi', 'bad-key.ndjson')), [])
   })
 
   for (const to of ['length', 'aborted', 'error'])

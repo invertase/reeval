@@ -57,7 +57,7 @@ export type CursorSdkRunnerLine =
   /** The runner couldn't recover these tools' calls from the stored conversation this turn. */
   | { type: 'unreported'; turn?: number; tools: string[]; message?: string }
   | ({ type: 'result' } & CursorSdkResult)
-  | { type: 'error'; message: string; name?: string; code?: string; status?: number }
+  | { type: 'error'; turn?: number; message: string; name?: string; code?: string; status?: number }
 
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
 

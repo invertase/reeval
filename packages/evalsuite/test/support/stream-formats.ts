@@ -23,8 +23,9 @@ type Format = {
    */
   defined?: Record<string, readonly string[]>
   /**
-   * Keys the CLI's protocol defines for one outcome only, by signature (`<kind> .<key>`), for the
-   * same reason: pi's `errorMessage` is there only when the provider fails a call.
+   * Keys and events the CLI's protocol defines for one outcome only, by signature (`<kind> .<key>`),
+   * for the same reason: a provider's refusal (pi's `errorMessage`, agy's `error_message` steps) or
+   * a cancelled turn shows them, whatever the CLI's version.
    */
   optional?: readonly string[]
 }
@@ -71,6 +72,59 @@ const PI_DEFINED = Object.fromEntries(
 )
 const PI_OPTIONAL = PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`)
 
+// The Cursor runner's lines, as CursorSdkRunnerLine types them, and the SDK's (1.0.32) own values:
+// SDKStatusMessage's status and message, SDKToolUseMessage's status and truncated, RunResult's
+// status and error. A run ES cancels streams CANCELLED; a failed one ERROR with the error; a turn
+// that throws (a rejected key) is the runner's `error` line; `unreported` and `recovered` come only
+// with web calls.
+const CURSOR_DEFINED = {
+  'event/status .event.status': [
+    'CREATING',
+    'RUNNING',
+    'FINISHED',
+    'ERROR',
+    'CANCELLED',
+    'EXPIRED',
+  ],
+  'event/tool_call .event.status': ['running', 'completed', 'error'],
+  'result .status': ['finished', 'error', 'cancelled'],
+}
+const CURSOR_OPTIONAL = [
+  'event/status .event.message',
+  'event/tool_call .event.truncated',
+  'event/tool_call .event.truncated.args',
+  'event/tool_call .event.truncated.result',
+  'event/tool_call .recovered',
+  'event/tool_call .event.started_at_ms',
+  'event/tool_call .event.completed_at_ms',
+  'result .error',
+  'result .error.message',
+  'result .error.code',
+  ...['type', 'turn', 'message', 'name', 'code', 'status'].map((k) => `error .${k}`),
+  ...['type', 'turn', 'tools', 'message'].map((k) => `unreported .${k}`),
+]
+
+// agy's (1.2.11) states for a tool step, the ones the adapter ends a call on, and its result
+// statuses. A call the provider refuses (4xx, 429, 5xx) or drops mid-stream is an `error_message`
+// step per try, then an ERROR result with its error; a failed tool is ERROR or CANCELED (or
+// CANCELLED) with `tool_info.error`.
+const AGY_ERROR_STEP = 'step_update/error_message'
+const ANTIGRAVITY_DEFINED = {
+  'step_update/tool .step_update.state': ['ACTIVE', 'DONE', 'ERROR', 'CANCELED', 'CANCELLED'],
+  [`${AGY_ERROR_STEP} .step_update.state`]: ['DONE'],
+  'result .result.status': ['SUCCESS', 'ERROR'],
+}
+const ANTIGRAVITY_OPTIONAL = [
+  ...['', '.conversation_id', '.step_index', '.state', '.step_type', '.duration_seconds'].map(
+    (k) => `${AGY_ERROR_STEP} .step_update${k}`,
+  ),
+  `${AGY_ERROR_STEP} .event`,
+  'result .result.error',
+  'step_update/tool .step_update.tool_info.error',
+  'step_update/tool .step_update.tool_info.error.message',
+  'step_update/tool .step_update.tool_info.error.type',
+]
+
 const FORMATS: Record<string, Format> = {
   antigravity: {
     kind: (e) => {
@@ -81,6 +135,8 @@ const FORMATS: Record<string, Format> = {
     opaque: ['parameters', 'output', 'structured_output'],
     values: ['state', 'status', 'permission_mode'],
     lists: ['tools'],
+    defined: ANTIGRAVITY_DEFINED,
+    optional: ANTIGRAVITY_OPTIONAL,
   },
   // The Cursor SDK harness's runner lines: `init`, `event` (the SDK's own messages), `result`.
   cursor: {
@@ -92,6 +148,8 @@ const FORMATS: Record<string, Format> = {
     opaque: ['args', 'value', 'params', 'result'],
     values: ['status', 'role'],
     lists: [],
+    defined: CURSOR_DEFINED,
+    optional: CURSOR_OPTIONAL,
   },
   // OpenCode's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
   opencode: {
