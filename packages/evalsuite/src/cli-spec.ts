@@ -45,6 +45,8 @@ export const FLAGS = {
   save: { type: 'boolean' },
   context: { type: 'boolean' },
   'no-cache': { type: 'boolean' },
+  yes: { type: 'boolean', short: 'y' },
+  harness: { type: 'string' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -87,6 +89,18 @@ const RUN_FLAGS: FlagName[] = [
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
+  init: {
+    flags: ['harness', 'yes', 'force', 'dry-run'],
+    positionals: 1,
+    help: `
+  es init [dir]             Scaffold a project in dir (default: here): es.config.ts, a passing
+                            eval, .gitignore entries and a package.json script; asks which agent
+    --harness <name>        cursor, claude-code, antigravity, opencode, goose, pi or none (fake
+                            agent only); the config's harness, with a fake profile for no keys
+    -y, --yes               Don't ask: take the defaults (--harness cursor)
+    --force                 Overwrite es.config.ts and the eval when they differ
+    --dry-run               Print what it would create or change, and write nothing`,
+  },
   run: {
     flags: RUN_FLAGS,
     positionals: Number.POSITIVE_INFINITY,

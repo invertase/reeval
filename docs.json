@@ -199,6 +199,7 @@
       "tab": "reference",
       "pages": [
         { "title": "Overview and exit codes", "href": "/reference/cli" },
+        { "title": "es init", "href": "/reference/cli/init" },
         { "title": "es run", "href": "/reference/cli/run" },
         { "title": "es record", "href": "/reference/cli/record" },
         { "title": "es history, show, compare", "href": "/reference/cli/history" },

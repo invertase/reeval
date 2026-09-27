@@ -70,6 +70,15 @@ async function run(argv: string[]): Promise<number> {
     console.log(HELP)
     return values.help ? EXIT.ok : EXIT.usage
   }
+  if (command === 'init') {
+    const { initCommand } = await import('./init.ts')
+    return initCommand(values, filters, {
+      out: (s) => console.log(s),
+      input: process.stdin,
+      output: process.stdout,
+      cwd: process.cwd(),
+    })
+  }
   const configPath = configPathFor(values.config)
   if (command === 'image') {
     if (filters[0] !== 'build') {
