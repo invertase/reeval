@@ -13,6 +13,15 @@ npm i -D @invertase/foobar   # placeholder name; the CLI is `es`
 
 You need Node 22.13 or later and, for real runs, a running Docker.
 
+| Platform | Fake agent and sandbox | Real runs (Docker sandbox) |
+|---|---|---|
+| Linux | ✓ | ✓ Docker Engine or Docker Desktop |
+| macOS | ✓ | ✓ Docker Desktop, OrbStack or Colima |
+| Windows | ✓ with [Git for Windows](https://git-scm.com/download/win) (its `sh`) | ✓ Docker Desktop on the WSL 2 backend, running Linux containers |
+
+`es doctor` checks Docker for your platform and names the fix. CI runs every tier on Linux and
+everything but the Docker tier on Windows and macOS.
+
 ## A minimal eval
 
 ```ts

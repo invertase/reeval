@@ -216,7 +216,7 @@ describe('concurrency', () => {
   test('--dry-run sizes the default concurrency from the Docker VM, as a real run does', async () => {
     const p = await project('conc-docker-vm', {
       'es.config.ts': fakeConfig().replace(
-        "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),",
+        "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),",
         "sandbox: (await import('evalsuite/sandbox')).docker(),",
       ),
       'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('go') })\n`,
@@ -241,7 +241,7 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig({
   harness: fakeHarness({ delayMs: 400 }),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname, maxConcurrent: 2 }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }),
   judge: { model: fakeJudge({ score: 0.9 }), maxConcurrent: 1 },
 })
 `,
@@ -305,8 +305,11 @@ for (const name of ['a', 'b']) {
       attempts.map((a) => a.outcome),
       ['pass', 'pass', 'pass'],
     )
-    // Its own time is one turn plus the sandbox (slow to start on Windows), not the 2.4 s wait too.
-    for (const a of attempts) assert.ok(a.durationMs < 2 * 1200, `${a.id}: ${a.durationMs}ms`)
+    // Each takes its own turn and sandbox (slow on Windows), not the wait: the third, 2.4 s queued,
+    // stays within one turn of the fastest.
+    const fastest = Math.min(...attempts.map((a) => a.durationMs))
+    for (const a of attempts)
+      assert.ok(a.durationMs < fastest + 1200, `${a.id}: ${a.durationMs}ms, fastest ${fastest}ms`)
     assert.match(r.stdout, /\[eval#3 fake\] ▶/)
   })
 

@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { baseEnv, pkgRoot, tempDir } from './helpers.ts'
+import { baseEnv, pkgRoot, spawnTool, tempDir } from './helpers.ts'
 
 const repoRoot = join(pkgRoot, '../..')
 const workspacePackages = new Set(
@@ -25,7 +25,7 @@ const DEP_FIELDS = [
 
 test('the packed manifest names nothing that only exists in this workspace', () => {
   const dir = tempDir('manifest')
-  const packed = spawnSync('pnpm', ['pack', '--pack-destination', dir], {
+  const packed = spawnTool('pnpm', ['pack', '--pack-destination', dir], {
     cwd: pkgRoot,
     env: baseEnv,
     encoding: 'utf8',

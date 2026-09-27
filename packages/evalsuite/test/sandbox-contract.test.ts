@@ -2,6 +2,9 @@
 // if exec, readFile, writeFile or `~/` were broken, a fixture's own checks could lie.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
 import { DEFAULT_IMAGE } from '@evalsuite/sandbox-docker'
 import { createSandbox, type Sandbox } from '../src/sandbox/index.ts'
@@ -27,6 +30,28 @@ const kinds: Array<{ name: string; descriptor: () => SandboxDescriptor; skip: st
   },
 ]
 
+/**
+ * The shell's `dir` (a quoted shell word) is the host's `path`: the same string, except that
+ * Windows' sh spells host paths its own way (`/tmp/…`), so there it's the same directory.
+ */
+async function sameDir(s: Sandbox, dir: string, path: string, cwd?: string) {
+  if (process.platform !== 'win32' || path.startsWith('/')) {
+    assert.equal((await s.exec(`printf %s ${dir}`, { cwd })).stdout, path)
+    return
+  }
+  const marker = `es-contract-${randomUUID()}`
+  writeFileSync(join(path, marker), '')
+  try {
+    assert.equal(
+      (await s.exec(`test -f ${dir}/${marker}`, { cwd })).exitCode,
+      0,
+      `${dir} is ${path}`,
+    )
+  } finally {
+    rmSync(join(path, marker))
+  }
+}
+
 for (const kind of kinds) {
   describe(`sandbox contract: ${kind.name}`, { skip: kind.skip, timeout: 120_000 }, () => {
     let box: Sandbox | undefined
@@ -48,7 +73,7 @@ for (const kind of kinds) {
       await s.writeFile('~/.config/es/h.txt', 'home\n')
       assert.equal((await s.exec('cat nested/dir/w.txt')).stdout, 'workspace\n')
       assert.equal((await s.exec('cat ~/.config/es/h.txt')).stdout, 'home\n')
-      assert.equal((await s.exec('printf %s "$HOME"')).stdout, s.home)
+      await sameDir(s, '"$HOME"', s.home)
     })
 
     test('exec writes, then readFile reads it, in the workspace and in ~/', async () => {
@@ -64,9 +89,9 @@ for (const kind of kinds) {
       const s = await sandbox()
       const failed = await s.exec('echo out; echo err >&2; exit 7')
       assert.deepEqual(failed, { exitCode: 7, stdout: 'out\n', stderr: 'err\n' })
-      assert.equal((await s.exec('pwd')).stdout.trim(), s.workdir)
+      await sameDir(s, '"$PWD"', s.workdir)
       await s.exec('mkdir -p sub')
-      assert.equal((await s.exec('pwd', { cwd: 'sub' })).stdout.trim(), `${s.workdir}/sub`)
+      await sameDir(s, '"$PWD"', `${s.workdir}/sub`, 'sub')
       assert.equal((await s.exec('printf %s "$ES_CONTRACT_VAR"')).stdout, 'from-the-sandbox')
       const over = await s.exec('printf %s "$ES_CONTRACT_VAR"', {
         env: { ES_CONTRACT_VAR: 'from-the-command' },

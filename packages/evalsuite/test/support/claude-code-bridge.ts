@@ -4,6 +4,7 @@
 // test/replay.test.ts runs the bridge ES ships; scripts/drift/claude-code-patch.mjs runs the newest
 // upstream one.
 import { spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -114,7 +115,10 @@ export async function replayBridge(options: {
         })
       })
     } finally {
+      // Windows can't remove a directory a live process still has open.
+      const exited = child.exitCode === null && child.signalCode === null && once(child, 'exit')
       child.kill('SIGKILL')
+      await exited
     }
   } finally {
     rmSync(dir, { recursive: true, force: true })

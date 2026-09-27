@@ -76,10 +76,10 @@ describe('verbosity', () => {
     )
     assert.match(r.stdout, / plan {6}environment traced \(evaluate\("traces every phase"\)\)$/m)
     assert.match(r.stdout, / env {7}file notes\.md \(6 bytes\)$/m)
-    assert.match(r.stdout, / env {7}setup 1\/1 \$ echo set-up > setup\.txt → exit 0 · \d+ms$/m)
+    assert.match(r.stdout, / env {7}setup 1\/1 \$ echo set-up > setup\.txt → exit 0 · \d+m?s$/m)
     assert.match(r.stdout, / harness {3}tool shell called: \$ echo from-the-agent$/m)
-    assert.match(r.stdout, / check {5}\$ test -f out\.txt → exit 0 · \d+ms$/m)
-    assert.match(r.stdout, / judge {5}fake · \d+ms · score 0\.90 ≥ 0\.8 · pass · reason: /m)
+    assert.match(r.stdout, / check {5}\$ test -f out\.txt → exit 0 · \d+m?s$/m)
+    assert.match(r.stdout, / judge {5}fake · \d+m?s · score 0\.90 ≥ 0\.8 · pass · reason: /m)
     assert.match(
       r.stdout,
       / teardown {2}record \.es\/runs\/\S+\.json · artifacts .* · debug \.es\/debug\//m,

@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 /** The record corpus: real recorded runs every reader is tested against. */
@@ -58,7 +58,7 @@ export function corpus(): {
       const path = join(dir, e.name)
       if (e.isDirectory()) walk(path)
       else if (e.name === 'transcript.jsonl') transcripts.push(path)
-      else if (e.name.endsWith('.json') && dir.endsWith('/analysis')) {
+      else if (e.name.endsWith('.json') && basename(dir) === 'analysis') {
         analyses.push({ file: path, value: JSON.parse(readFileSync(path, 'utf8')) })
       }
     }

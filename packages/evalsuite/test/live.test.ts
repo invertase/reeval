@@ -592,9 +592,12 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
     }
     assert.equal(runs[0]?.state, 'running')
     // Its process group; Windows has none, so its process tree.
-    if (process.platform === 'win32')
-      execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
-    else process.kill(-(child.pid as number), 'SIGKILL')
+    if (process.platform === 'win32') {
+      // taskkill exits 128 when part of the tree is already gone; the exit below is what counts.
+      try {
+        execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+      } catch {}
+    } else process.kill(-(child.pid as number), 'SIGKILL')
     await new Promise((resolve) => child.on('exit', resolve))
     runs = await listLive(source)
     assert.equal(runs.length, 1)

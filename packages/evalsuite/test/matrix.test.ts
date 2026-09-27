@@ -5,6 +5,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import type { InventoryFeature } from './features/inventory.ts'
 import { pkgRoot } from './helpers.ts'
 import { buildMatrix, renderMarkdown, type Sources } from './support/matrix.ts'
@@ -19,7 +20,7 @@ const report = (): Report =>
         '--experimental-strip-types',
         '--no-warnings',
         '--import',
-        join(pkgRoot, 'test/support/tables-only.mjs'),
+        pathToFileURL(join(pkgRoot, 'test/support/tables-only.mjs')).href,
         join(pkgRoot, 'test/support/feature-matrix.ts'),
         '--json',
       ],

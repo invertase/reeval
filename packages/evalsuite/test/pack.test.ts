@@ -3,29 +3,33 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, posix } from 'node:path'
+import { join, posix, sep } from 'node:path'
 import { test } from 'node:test'
 import { VERSION } from '@evalsuite/harness-antigravity'
 import { VERSION as CURSOR_VERSION } from '@evalsuite/harness-cursor-sdk'
-import { baseEnv, fakeConfig, pkgRoot, readRun, tempDir } from './helpers.ts'
+import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
 
 const sh = (cmd: string, cwd: string, args: string[], timeout = 120_000) =>
-  spawnSync(cmd, args, { cwd, env: baseEnv, encoding: 'utf8', timeout })
+  spawnTool(cmd, args, { cwd, env: baseEnv, encoding: 'utf8', timeout })
 
 const hasTools =
   sh('pnpm', pkgRoot, ['--version']).status === 0 &&
   sh('npm', pkgRoot, ['ping'], 15_000).status === 0
+/** In CI a missing tool fails the tests that need it rather than skipping them. */
+const noTools = !hasTools && !process.env.CI && 'needs pnpm, npm and the registry'
 const hasYarn = sh('yarn', tmpdir(), ['--version']).status === 0
 const hasCorepack = sh('corepack', tmpdir(), ['--version']).status === 0
 /** Yarn Berry, through corepack, without its download prompt. */
 const berry = (cwd: string, args: string[], timeout = 240_000) =>
-  spawnSync('corepack', ['yarn', ...args], {
+  spawnTool('corepack', ['yarn', ...args], {
     cwd,
     env: { ...baseEnv, COREPACK_ENABLE_DOWNLOAD_PROMPT: '0' },
     encoding: 'utf8',
     timeout,
   })
-const hasDocker = sh('docker', pkgRoot, ['info']).status === 0
+// Linux containers: Windows runners' Docker runs Windows containers only, which ES refuses.
+const hasDocker =
+  sh('docker', pkgRoot, ['info', '--format', '{{.OSType}}']).stdout?.trim() === 'linux'
 
 /** Packs the package into a fresh directory. */
 function pack() {
@@ -91,7 +95,7 @@ const installers = [
 
 for (const installer of installers) {
   test(`the packed package installs with ${installer.name} and runs es`, {
-    skip: (!hasTools && 'needs pnpm, npm and the registry') || installer.skip,
+    skip: noTools || installer.skip,
     timeout: 600_000,
   }, async () => {
     const { dir, tarball, manifest, pkg } = pack()
@@ -108,7 +112,7 @@ for (const installer of installers) {
 
 // A project's own Vitest, another major for its own unit tests, is never loaded or run by es.
 test("the packed package runs beside the project's own, different vitest", {
-  skip: !hasTools && 'needs pnpm, npm and the registry',
+  skip: noTools,
   timeout: 600_000,
 }, async () => {
   const { dir, tarball, pkg } = pack()
@@ -142,9 +146,7 @@ test("the packed package runs beside the project's own, different vitest", {
 // .pnp.cjs, and ES asks to be unplugged so its files (the worker, Docker's build context) are
 // on disk rather than inside Yarn's zip cache.
 test("the packed package installs with Yarn Berry's Plug'n'Play and runs es", {
-  skip:
-    (!hasTools && 'needs pnpm, npm and the registry') ||
-    (!hasCorepack && !process.env.CI && 'needs corepack'),
+  skip: noTools || (!hasCorepack && !process.env.CI && 'needs corepack'),
   timeout: 600_000,
 }, async () => {
   const { dir, tarball, manifest, pkg } = pack()
@@ -172,7 +174,7 @@ test("the packed package installs with Yarn Berry's Plug'n'Play and runs es", {
 })
 
 test('the packed package installs into a clean project and runs es', {
-  skip: !hasTools && 'needs pnpm, npm and the registry',
+  skip: noTools,
   timeout: 900_000,
 }, async () => {
   const { dir, tarball, manifest, pkg } = pack()
@@ -258,7 +260,9 @@ test('the packed package installs into a clean project and runs es', {
   // package's dependencies alone. cli and worker run on import, and so do the chunks only they
   // reach, which import them.
   const dist = join(app, 'node_modules', pkg, 'dist')
-  const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' })
+  const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' }).map((f) =>
+    f.replaceAll(sep, '/'),
+  )
   const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f) && !f.startsWith('studio-app/'))
   const source = (file: string) => readFileSync(join(dist, file), 'utf8')
   for (const file of code)
@@ -339,7 +343,9 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), sandbo
 })
 
 function extract(dir: string, tarball: string, file: string): string {
-  return spawnSync('tar', ['xzf', join(dir, tarball), '-O', `package/${file}`], {
+  // Relative to `dir`: GNU tar reads a `C:` in a Windows path as a remote host.
+  return spawnSync('tar', ['xzf', tarball, '-O', `package/${file}`], {
+    cwd: dir,
     encoding: 'utf8',
   }).stdout
 }

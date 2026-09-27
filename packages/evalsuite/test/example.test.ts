@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { cpSync, readFileSync } from 'node:fs'
 import { mkdir, symlink } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { isAbsolute, join, relative } from 'node:path'
 import { test } from 'node:test'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 
@@ -9,7 +9,9 @@ const example = join(pkgRoot, '../../examples/hello')
 
 test('examples/hello copied out of the repo runs on the fake harness', async () => {
   const dir = tempDir('hello-copy')
-  assert.ok(relative(join(pkgRoot, '../..'), dir).startsWith('..'), 'the copy is outside the repo')
+  // Another drive, on Windows, is outside too: relative() is then absolute.
+  const fromRepo = relative(join(pkgRoot, '../..'), dir)
+  assert.ok(fromRepo.startsWith('..') || isAbsolute(fromRepo), 'the copy is outside the repo')
   cpSync(example, dir, {
     recursive: true,
     filter: (src) => !/[/\\](node_modules|\.es)([/\\]|$)/.test(src.slice(example.length)),
