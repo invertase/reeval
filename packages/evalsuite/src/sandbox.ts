@@ -2,9 +2,15 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { parseDuration } from './duration.ts'
 import { callerDir } from './environment.ts'
 import { UsageError } from './errors.ts'
-import type { DockerSandboxDescriptor, FakeSandboxDescriptor, InstallStep } from './types.ts'
+import type {
+  DockerSandboxDescriptor,
+  Duration,
+  FakeSandboxDescriptor,
+  InstallStep,
+} from './types.ts'
 
 export type DockerOptions = Omit<DockerSandboxDescriptor, 'kind' | 'dockerfile'> & {
   /** Relative to the file that calls `docker()`, or an absolute path or `URL`. */
@@ -36,14 +42,11 @@ function checkInstall(install: unknown): InstallStep[] {
         `docker({ install }) commands are strings or { run, timeout? } objects (got ${JSON.stringify(step)})`,
       )
     }
-    const valid =
-      timeout === undefined ||
-      typeof timeout === 'number' ||
-      (typeof timeout === 'string' && /^\d+(?:\.\d+)?(?:ms|s|m|h)$/.test(timeout))
-    if (!valid) {
-      throw new UsageError(
-        `Invalid timeout "${String(timeout)}" for docker({ install }) command "${run}". Use e.g. "90s" or "15m".`,
-      )
+    if (timeout === undefined) continue
+    try {
+      parseDuration(timeout as Duration)
+    } catch (error) {
+      throw new UsageError(`docker({ install }) command "${run}": ${(error as Error).message}`)
     }
   }
   return structuredClone(install)

@@ -62,7 +62,10 @@ export const installSteps = (sandbox: DockerSandboxDescriptor): InstallStep[] =>
   (sandbox.install ?? []).map((step) =>
     typeof step === 'string'
       ? { run: step }
-      : { run: step.run, ...(step.timeout ? { timeoutMs: parseDuration(step.timeout) } : {}) },
+      : {
+          run: step.run,
+          ...(step.timeout !== undefined ? { timeoutMs: parseDuration(step.timeout) } : {}),
+        },
   )
 
 /** Whether the Dockerfile starts from ES's sandbox image, which then has to exist first. */
