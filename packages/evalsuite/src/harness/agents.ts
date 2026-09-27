@@ -199,6 +199,20 @@ export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Recor
   )
 }
 
+/** OpenCode's ACP `session/new` shape; 2.0.18 has no SSE transport (`mcpCapabilities.sse`). */
+export function opencodeMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, unknown> {
+  for (const [name, s] of Object.entries(servers)) {
+    if (s.transport === 'sse') {
+      throw new InfraError(
+        `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+      )
+    }
+  }
+  return acpMcpServers(servers)
+}
+
 /** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
 export function gooseMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -251,8 +265,8 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
   },
-  // With OPENCODE_DISABLE_CLAUDE_CODE and OPENCODE_DISABLE_EXTERNAL_SKILLS, 1.18.32 reads only its
-  // own skill directories (not .claude/skills or .agents/skills), and AGENTS.md but not CLAUDE.md.
+  // 2.0.18 reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
+  // the workspace and the home directory; nothing turns that off.
   opencode: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
@@ -374,13 +388,14 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'OpenCode',
     factory: 'opencode',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 1.18.32 sends the key on (its model, and the same model for titles).
+    // The only request 2.0.18 sends the key on (its model, and the same model for titles).
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers }) =>
+    mcpServers: opencodeMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth,
+        model: descriptor.model,
         ...(mcpServers ? { mcpServers } : {}),
         requireCredentialBrokering: true,
       }),
@@ -457,9 +472,9 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
- * Why a harness's agent can't take the environment's MCP servers (pi takes none, Goose no
- * `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt starts;
- * undefined when it can.
+ * Why a harness's agent can't take the environment's MCP servers (pi takes none; Goose, OpenCode
+ * and Codex no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
+ * starts; undefined when it can.
  */
 export function refusedMcp(
   harness: HarnessDescriptor,

@@ -95,7 +95,10 @@ const NOTES = [
     h.kind === 'opencode' &&
     !h.web.search &&
     h.web.fetch &&
-    `Web fetch only: OpenCode offers ${code('websearch')} only on its own provider or with Exa or Parallel enabled, and ES runs it on ${code('google')} with neither.`,
+    `Web fetch only: OpenCode's ${code('websearch')} needs a search integration the sandbox doesn't have, so ES turns it off.`,
+  (h) =>
+    h.kind === 'opencode' &&
+    `Its model calls MCP tools from JavaScript through its ${code('execute')} tool (Code Mode); ES records each call it made as ${code('mcp__<server>__<tool>')}, without its input or output.`,
   (h) =>
     h.agent.modelResponses &&
     `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.4-mini-2026-03-17[effort=medium]')}): its CLI doesn't report them.`,

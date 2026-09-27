@@ -99,8 +99,13 @@ describe('the JSON plan', { concurrency: true }, () => {
     assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
   })
 
-  test('an mcp.sse server on Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
+  test('an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
     for (const [factory, model, refusal] of [
+      [
+        'opencode',
+        'gemini-3.8-flash',
+        /evaluate\("streams"\) on opencode:gemini-3\.8-flash: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
+      ],
       [
         'goose',
         'gemini-3.8-flash',

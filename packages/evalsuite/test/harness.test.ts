@@ -422,20 +422,14 @@ describe('mcp.sse', () => {
     assert.deepEqual(mcp, {
       events: { transport: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } },
     })
-    const acp = {
-      events: {
-        type: 'sse',
-        url: 'http://events.example/sse',
-        headers: [{ name: 'A', value: 'b' }],
-      },
-    }
     const expected: Record<AgentKind, unknown> = {
       cursor: { events: { type: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } } },
       'claude-code': {
         events: { type: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } },
       },
       antigravity: { events: { serverUrl: 'http://events.example/sse', headers: { A: 'b' } } },
-      opencode: acp,
+      opencode:
+        /^InfraError: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       goose:
         /^InfraError: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       pi: /^InfraError: pi has no MCP client, so it can't use the events MCP server$/,
@@ -1088,18 +1082,22 @@ describe('OpenCode transcripts', () => {
       ms: 20,
       part: { type: 'tool-result', toolCallId: id, output },
     })
-    // OpenCode 1.18.32's own outputs (ACP rawOutput).
+    // OpenCode 2.0.18's outputs: its content's text, with its ACP rawOutput's metadata.
     const events = normaliseStream(
       [
-        call('w', 'write', { filePath: '/es/workspace/b.txt', content: 'bee\nsting\n' }),
-        result('w', { output: 'Wrote file successfully.', metadata: { exists: false } }),
-        call('o', 'write', { filePath: 'b.txt', content: 'bee\n' }),
-        result('o', { output: 'Wrote file successfully.', metadata: { exists: true } }),
-        call('e', 'edit', { filePath: '/es/workspace/src/a.ts', oldString: 'a', newString: 'b' }),
+        call('w', 'write', { path: '/es/workspace/b.txt', content: 'bee\nsting\n' }),
+        result('w', { output: 'Created file successfully: b.txt', metadata: {} }),
+        call('o', 'write', { path: 'b.txt', content: 'bee\n' }),
+        result('o', { output: 'Wrote file successfully: b.txt', metadata: {} }),
+        call('e', 'edit', { path: '/es/workspace/src/a.ts', oldString: 'a', newString: 'b' }),
         result('e', {
-          output: 'Edit applied successfully.',
-          metadata: { filediff: { file: '/es/workspace/src/a.ts', additions: 2, deletions: 1 } },
+          output: 'Edited src/a.ts (1 replacement)',
+          metadata: {
+            files: [{ file: 'src/a.ts', status: 'modified', additions: 2, deletions: 1 }],
+          },
         }),
+        call('x', 'edit', { path: 'c.ts', oldString: 'a', newString: 'b' }),
+        result('x', { output: 'Edited c.ts', metadata: {} }),
       ],
       0,
     )
@@ -1109,6 +1107,7 @@ describe('OpenCode transcripts', () => {
         ['b.txt', 'create', 2, 0],
         ['b.txt', 'modify', null, null],
         ['src/a.ts', 'modify', 2, 1],
+        ['c.ts', 'modify', null, null],
       ],
     )
   })

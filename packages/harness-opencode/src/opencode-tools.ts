@@ -11,33 +11,34 @@ const native = (title: string, toolUseKind?: 'readonly' | 'edit' | 'bash'): Buil
 })
 
 /*
- * Captured from OpenCode 1.18.32's ACP `tool_call` updates. `@ai-sdk/harness-acp` names a call
- * when it first has input, when OpenCode's title is still the tool's name, except for `bash`,
- * whose title is already the command: that one is matched by its `command` input instead.
- * read, write and edit take `filePath`, not the common `file_path`, so they aren't common tools.
- * There's no websearch: OpenCode offers it only on its own provider or with Exa or Parallel
- * enabled, and the adapter runs it on `google` with neither.
+ * Captured from OpenCode 2.0.18's ACP `tool_call` updates. `@ai-sdk/harness-acp` names a call
+ * when it first has input, when OpenCode's title is still the tool's name, except for `shell`,
+ * whose title is already the command by then: that one is matched by its `command` input.
+ * read, write and edit take `path`, not the common `file_path`, so they aren't common tools.
+ * `execute` runs JavaScript that calls the Code Mode tools, MCP servers' among them; the
+ * translator reports each MCP call it made. websearch, question and the browser tools are off
+ * (see OPENCODE_DENIED_TOOLS).
  */
 export const OPENCODE_BUILTIN_TOOLS = {
   bash: {
     ...commonTool('bash', {
-      nativeName: 'bash',
+      nativeName: 'shell',
       toolUseKind: 'bash',
-      inputSchema: z.looseObject({ command: z.string(), description: z.string().optional() }),
+      inputSchema: z.looseObject({ command: z.string(), workdir: z.string().optional() }),
     }),
-    title: 'bash',
+    title: 'shell',
   },
   read: {
     ...tool({
       title: 'read',
-      inputSchema: z.looseObject({ filePath: z.string(), offset: z.number().optional() }),
+      inputSchema: z.looseObject({ path: z.string(), offset: z.number().optional() }),
     }),
     toolUseKind: 'readonly',
   },
   write: {
     ...tool({
       title: 'write',
-      inputSchema: z.looseObject({ filePath: z.string(), content: z.string() }),
+      inputSchema: z.looseObject({ path: z.string(), content: z.string() }),
     }),
     toolUseKind: 'edit',
   },
@@ -45,7 +46,7 @@ export const OPENCODE_BUILTIN_TOOLS = {
     ...tool({
       title: 'edit',
       inputSchema: z.looseObject({
-        filePath: z.string(),
+        path: z.string(),
         oldString: z.string(),
         newString: z.string(),
       }),
@@ -73,9 +74,9 @@ export const OPENCODE_BUILTIN_TOOLS = {
     nativeName: 'webfetch',
     toolUseKind: 'readonly',
   },
-  todowrite: native('todowrite'),
-  task: native('task'),
   skill: native('skill', 'readonly'),
+  subagent: native('subagent'),
+  execute: native('execute'),
 } as const satisfies Record<string, BuiltinTool>
 
 export type OpenCodeBuiltinTools = typeof OPENCODE_BUILTIN_TOOLS

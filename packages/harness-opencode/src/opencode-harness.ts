@@ -13,8 +13,8 @@ import { OpenCodeStreamTranslator } from './opencode-stream.ts'
 import { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-tools.ts'
 
 export const OPENCODE_HARNESS_ID = 'opencode'
-/** The `opencode-ai` release the bootstrap installs (pinned in `opencode-install.ts`). */
-export const OPENCODE_CLI_VERSION = '1.18.32'
+/** The `@opencode/cli` release the bootstrap installs (pinned in `opencode-install.ts`). */
+export const OPENCODE_CLI_VERSION = '2.0.18'
 /** The only credential the adapter uses: a Gemini API key, for OpenCode's `google` provider. */
 export const OPENCODE_CREDENTIAL_ENV = 'GOOGLE_GENERATIVE_AI_API_KEY'
 export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
@@ -22,33 +22,56 @@ export const GEMINI_API_URL = 'https://generativelanguage.googleapis.com'
 export const GEMINI_API_KEY_HEADER = 'x-goog-api-key'
 /** Where harness-placed skills go, under the sandbox home: OpenCode's own global directory. */
 export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
-/** The repo skill directory OpenCode reads (with the Claude Code and `.agents` ones turned off). */
+/**
+ * OpenCode's own repo skill directory. It also reads `.claude/skills` and `.agents/skills`, in
+ * the repo and the home directory, and 2.0.18 has no setting that turns that off.
+ */
 export const OPENCODE_WORKSPACE_SKILLS_DIR = '.opencode/skills'
 
 /**
- * Installs the plugin runtime OpenCode otherwise installs into `~/.config/opencode` from npm on
- * every start (`@opencode-ai/plugin`, 63 MB at 1.18.32). An image that ran it starts offline.
+ * The tools OpenCode offers that can't work in an eval, which the config turns off: `websearch`
+ * needs a search integration (without one every call is "Web search cancelled"), `question`
+ * waits for a person to answer, and `browser` drives a desktop browser.
  */
-export const OPENCODE_WARM_COMMAND = `mkdir -p "$HOME/.config/opencode" && cd "$HOME/.config/opencode" && printf '{"dependencies":{"@opencode-ai/plugin":"%s"}}\\n' ${OPENCODE_CLI_VERSION} > package.json && npm install --no-fund --no-audit --ignore-scripts --loglevel=error`
+export const OPENCODE_DENIED_TOOLS = ['websearch', 'question', 'browser'] as const
 
 /**
- * Keeps each run to what the eval set up: no self-update, share links, model-catalog fetch, LSP
- * downloads or default plugins, and none of the Claude Code or `.agents` files OpenCode would
- * otherwise also read (CLAUDE.md, `.claude/skills`, `~/.agents/skills`).
+ * The config OpenCode runs with, as `OPENCODE_CONFIG_CONTENT` (2.0.18 no longer reads the
+ * `OPENCODE_DISABLE_*` variables for these): no self-update or share links, every tool allowed
+ * without asking but {@link OPENCODE_DENIED_TOOLS}, and session titles on the run's own model
+ * (OpenCode's default is a second one, `gemini-flash-lite-latest`). An eval's own
+ * `opencode.json` still loads, under it.
  */
-export const OPENCODE_QUIET_ENV = {
+export function openCodeConfig(model?: string) {
+  return {
+    update: 'disable',
+    share: 'disabled',
+    permissions: [
+      { action: '*', resource: '*', effect: 'allow' },
+      ...OPENCODE_DENIED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' })),
+    ],
+    ...(model ? { agents: { title: { model: googleModel(model) } } } : {}),
+  }
+}
+
+/**
+ * The environment `opencode acp` runs with: its config, and no self-update or model-catalog
+ * fetch (it uses the catalog built into the release).
+ */
+export const openCodeEnv = (model?: string) => ({
   OPENCODE_DISABLE_AUTOUPDATE: '1',
-  OPENCODE_DISABLE_SHARE: '1',
   OPENCODE_DISABLE_MODELS_FETCH: '1',
-  OPENCODE_DISABLE_LSP_DOWNLOAD: '1',
-  OPENCODE_DISABLE_DEFAULT_PLUGINS: '1',
-  OPENCODE_DISABLE_CLAUDE_CODE: '1',
-  OPENCODE_DISABLE_EXTERNAL_SKILLS: '1',
-} as const
+  OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig(model)),
+})
 
 export type OpenCodeHarnessSettings = {
   /** `{ GOOGLE_GENERATIVE_AI_API_KEY }`, the only key used. The host environment is never read. */
   readonly auth: HarnessV1AuthenticationEnvironment
+  /**
+   * The Gemini model id the turns run on, which OpenCode also titles the session with. Without
+   * it, OpenCode titles it with its own small model, a second model in the requests.
+   */
+  readonly model?: string
   /** ACP `session/new` MCP servers, keyed by name. */
   readonly mcpServers?: Record<string, unknown>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
@@ -57,7 +80,7 @@ export type OpenCodeHarnessSettings = {
 
 /**
  * The model-request endpoint OpenCode sends the key on, `POST /v1beta/models/<model>:
- * streamGenerateContent` (checked with 1.18.32, for the main model and the title model). A
+ * streamGenerateContent` (checked with 2.0.18, for the main model and the title model). A
  * gateway that enforces it refuses the key anywhere else.
  */
 export const OPENCODE_ENDPOINTS = [
@@ -74,8 +97,10 @@ export const OPENCODE_ENDPOINTS = [
  * `@ai-sdk/harness-opencode` brokers only Anthropic, OpenAI and a few other providers' keys, so
  * this is ES's own thin config over `@ai-sdk/harness-acp`.
  *
- * OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's, so turns
- * report no usage here rather than an undercount (see {@link OpenCodeStreamTranslator}).
+ * OpenCode ignores its config's `model` over ACP (a session starts on its own default), so each
+ * turn sets the session's `model` config option. Its ACP `PromptResponse.usage` is its last
+ * model call's, not the turn's, so turns report no usage here rather than an undercount (see
+ * {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
   if (
@@ -99,7 +124,7 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     executable: 'opencode',
     args: ['acp'],
     auth: settings.auth,
-    env: OPENCODE_QUIET_ENV,
+    env: openCodeEnv(settings.model),
     credentialEnv: [OPENCODE_CREDENTIAL_ENV],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[OPENCODE_CREDENTIAL_ENV]
@@ -151,7 +176,9 @@ function translated(session: Session, mcpServers: readonly string[]): Session {
     return run({
       ...options,
       ...(options.model ? { model: googleModel(options.model) } : {}),
-      emit: (part: Parameters<Emit>[0]) => options.emit(translator.push(part)),
+      emit: (part: Parameters<Emit>[0]) => {
+        for (const out of translator.push(part)) options.emit(out)
+      },
     } as never)
   }
   return new Proxy(session, {
