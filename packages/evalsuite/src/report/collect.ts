@@ -13,7 +13,7 @@ import { SECRET_NAME } from '../redact.ts'
 import { PACKAGE_VERSION } from '../root.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { readInvocations } from './invocations.ts'
-import { registerEnvFileValues, type Scrubber, scrubber, secretCount } from './scrub.ts'
+import { masks, registerEnvFileValues, type Scrubber, scrubber } from './scrub.ts'
 import type { TarEntry } from './tar.ts'
 import type { CliInvocation, ReportAttempt, ReportBundle } from './types.ts'
 
@@ -117,7 +117,7 @@ function filesIn(dir: string): string[] {
   if (!existsSync(dir)) return []
   return readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((e) => e.isFile())
-    .map((e) => relative(dir, join(e.parentPath, e.name)))
+    .map((e) => relative(dir, join(e.parentPath, e.name)).replaceAll('\\', '/'))
     .sort()
 }
 
@@ -209,6 +209,7 @@ export async function collectReport(
   let runError: string | null = null
   const ref = refs[0] ?? (flags.last && invocation?.runId ? invocation.runId : 'latest')
   const attachments: TarEntry[] = []
+  const attachedMasks = { before: 0, after: 0 }
   if (config) {
     const found = await findRun(config, ref)
     if ('error' in found) runError = found.error
@@ -236,11 +237,13 @@ export async function collectReport(
           if (bytes + size > MAX_ATTACHED_BYTES) continue
           bytes += size
           const text = readFileSync(path, 'utf8')
+          const kept = file.endsWith('trace.ndjson') ? withoutConfig(text) : text
+          const scrubbed = scrub.text(kept)
+          attachedMasks.before += masks(kept)
+          attachedMasks.after += masks(scrubbed)
           attachments.push({
             path: relative(join(root, '.es', 'debug'), path).replaceAll('\\', '/'),
-            data: Buffer.from(
-              scrub.text(file.endsWith('trace.ndjson') ? withoutConfig(text) : text),
-            ),
+            data: Buffer.from(scrubbed),
           })
         }
       }
@@ -268,10 +271,13 @@ export async function collectReport(
     configError,
     run,
     runError,
-    redaction: { masked: 0, paths: scrub.paths },
+    redaction: { masked: 0, upstream: 0, paths: scrub.paths },
   }
-  const masked = secretCount(JSON.stringify(raw), deps.env)
   const bundle = scrub.value(raw)
-  bundle.redaction = { masked, paths: scrub.paths }
+  // Counted as markers, so values ES masked before the report read them (in the record, the
+  // debug logs, the command log) count as well as the ones the report masks itself.
+  const upstream = masks(JSON.stringify(raw)) + attachedMasks.before
+  const masked = masks(JSON.stringify(bundle)) + attachedMasks.after
+  bundle.redaction = { masked, upstream, paths: scrub.paths }
   return { bundle, attachments, root, scrub }
 }

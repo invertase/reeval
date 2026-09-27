@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { COMMANDS, FLAGS, type FlagName } from '../cli-spec.ts'
-import { countSecrets, redactSecrets, registerSecret } from '../redact.ts'
+import { REDACTED, redactSecrets, registerSecret } from '../redact.ts'
 
 export type Scrubber = {
   /** Masks secrets as records are masked, then the project root and the home directory. */
@@ -23,13 +23,38 @@ const variants = (path: string | undefined) => {
   return [...out].sort((a, b) => b.length - a.length)
 }
 
+/**
+ * The home directory as Windows' 8.3 short name (`C:\\Users\\RUNNER~1`), which TEMP often spells it
+ * with: TEMP's long form is under the home, and TEMP ends as that does.
+ */
+export function shortHome(
+  home: string | undefined,
+  temp: string | undefined,
+  long: (path: string) => string = realpathSync.native,
+): string | undefined {
+  if (!home || !temp) return undefined
+  let full: string
+  try {
+    full = long(temp)
+  } catch {
+    return undefined
+  }
+  const lower = (p: string) => p.toLowerCase().replace(/[\\/]+$/, '')
+  if (!lower(full).startsWith(lower(home))) return undefined
+  const suffix = full.replace(/[\\/]+$/, '').slice(home.replace(/[\\/]+$/, '').length)
+  if (!suffix || !lower(temp).endsWith(suffix.toLowerCase())) return undefined
+  const short = temp.replace(/[\\/]+$/, '').slice(0, -suffix.length)
+  return lower(short) === lower(home) ? undefined : short
+}
+
 export function scrubber(options: {
   env: NodeJS.ProcessEnv
   home?: string
   project?: string
 }): Scrubber {
   const project = variants(options.project)
-  const home = variants(options.home)
+  const short = shortHome(options.home, options.env.TEMP ?? options.env.TMP)
+  const home = [...variants(options.home), ...variants(short)].sort((a, b) => b.length - a.length)
   const replace = (text: string, froms: string[], to: string) => {
     let out = text
     for (const from of froms) out = out.replaceAll(from, to)
@@ -48,8 +73,8 @@ export function scrubber(options: {
   return { text, value, paths: ['~', ...(project.length ? ['<project>'] : [])] }
 }
 
-/** How many secrets `text` holds before masking: the report's "N values masked". */
-export const secretCount = (text: string, env: NodeJS.ProcessEnv) => countSecrets(text, env)
+/** How many masked values `text` shows. */
+export const masks = (text: string) => text.split(REDACTED).length - 1
 
 /**
  * Registers every value in a `.env.local` or `.env` as a secret, whatever its name: a report is

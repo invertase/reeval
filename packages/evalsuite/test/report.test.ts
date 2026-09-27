@@ -5,8 +5,9 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, delimiter, dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { readInvocations } from '../src/report/invocations.ts'
 import {
   FIELDS,
@@ -16,7 +17,7 @@ import {
   issueUrl,
   MAX_URL,
 } from '../src/report/issue.ts'
-import { commandOf, redactArgv, scrubber } from '../src/report/scrub.ts'
+import { commandOf, redactArgv, scrubber, shortHome } from '../src/report/scrub.ts'
 import { tarGz } from '../src/report/tar.ts'
 import type { ReportBundle } from '../src/report/types.ts'
 import { fakeConfig, pkgRoot, project, runCli, tempDir } from './helpers.ts'
@@ -27,7 +28,7 @@ const UNNAMED = 'hunter2-webhook-q8w7e6r5t4y3' // in .env.local under an innocen
 const TOKEN = `ghp_${'R3p0rtT0k3n'.repeat(4)}` // a token shape, set nowhere
 const FRAGMENT = NAMED.slice(-12) // a stretch of a secret on its own
 
-const NO_NETWORK = join(pkgRoot, 'test/support/no-network.mjs')
+const NO_NETWORK = pathToFileURL(join(pkgRoot, 'test/support/no-network.mjs')).href
 
 /** Every seed found in `text`, by name. */
 function leaks(text: string, paths: Record<string, string> = {}): string[] {
@@ -50,7 +51,8 @@ function allText(dir: string): string {
     const path = join(entry.parentPath, entry.name)
     if (path.endsWith('.tar.gz')) {
       const into = tempDir('untar')
-      execFileSync('tar', ['-xzf', path, '-C', into])
+      // The archive by its name: GNU tar reads a `C:` in a Windows path as a remote host.
+      execFileSync('tar', ['-xzf', basename(path), '-C', into], { cwd: dirname(path) })
       text += allText(into)
     } else text += readFileSync(path, 'utf8')
   }
@@ -70,11 +72,27 @@ evaluate('agent eval', async (t) => { await t.send('go') })
 `,
     '.env.local': `WEBHOOK=${UNNAMED}\n`,
   })
-  const env = { HOME: home, MY_API_KEY: NAMED }
+  // USERPROFILE: Windows' home directory, which os.homedir() reads there.
+  const env = { HOME: home, USERPROFILE: home, MY_API_KEY: NAMED }
   return { ...p, home, env }
 }
 
 describe('es report: redaction', () => {
+  test("Windows' 8.3 short home, as TEMP spells it, is masked too", () => {
+    const long = (p: string) => p.replace('RUNNER~1', 'runneradmin')
+    const temp = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp'
+    assert.equal(shortHome('C:\\Users\\runneradmin', temp, long), 'C:\\Users\\RUNNER~1')
+    assert.equal(
+      shortHome('C:\\Users\\runneradmin', 'C:\\Users\\runneradmin\\Temp', long),
+      undefined,
+    )
+    assert.equal(shortHome('C:\\Users\\bob', temp, long), undefined, 'TEMP is under no one else')
+    assert.equal(shortHome('/home/alice', undefined, long), undefined)
+    const s = scrubber({ env: { TEMP: temp }, home: 'C:\\Users\\runneradmin' })
+    // Where the machine can't expand the short name (not Windows), the long form is still masked.
+    assert.equal(s.text('at C:\\Users\\runneradmin\\x'), 'at ~\\x')
+  })
+
   test('argv keeps commands and flag names, never values or arguments', () => {
     assert.deepEqual(redactArgv(['run', '--profile', 'secret-profile', 'greet', '-vv', '--json']), [
       'run',
@@ -184,7 +202,6 @@ describe('es report: the bundle', () => {
     ])
     assert.ok(Array.isArray((bundle.doctor as { checks: unknown[] }).checks))
     assert.ok(bundle.env.includes('MY_API_KEY'))
-    assert.ok(bundle.redaction.masked >= 1)
     assert.deepEqual(bundle.redaction.paths, ['~', '<project>'])
     // The config's values stay out, even from the attached trace.
     const written = allText(out)
@@ -197,7 +214,51 @@ describe('es report: the bundle', () => {
     assert.match(r.stdout, /\ncommand +es run --profile <value> <arg> → exit 3/)
     assert.match(r.stdout, /\nfailing +evals\/agent\.es\.ts › agent eval # .*\(infra\)/)
     assert.match(r.stdout, /\nlogs +2 debug files attached/)
+
+    // The count is every masked value the report holds: the key ES masked in the record and
+    // logs before the report read them, plus the .env value only the report masks.
+    const { masked, upstream } = bundle.redaction
+    const markers = (text: string) => text.split('[REDACTED]').length - 1
+    const tar = tempDir('report-count')
+    execFileSync('tar', ['-xzf', join(out, 'report-logs.tar.gz'), '-C', tar])
+    assert.equal(
+      masked,
+      markers(readFileSync(join(out, 'report.json'), 'utf8')) + markers(allText(tar)),
+    )
+    assert.ok(upstream >= 1 && upstream < masked, `${upstream} of ${masked}`)
+    assert.match(
+      r.stdout,
+      new RegExp(
+        `\\nredacted +${masked} secret values masked, ${upstream} of them already by ES's records and logs;`,
+      ),
+    )
     assert.match(r.stdout, /Nothing was uploaded/)
+  })
+
+  test('values ES masked before the report read them count, though the report masks none', async () => {
+    const p = await project('report-upstream', {
+      'es.config.ts': fakeConfig({
+        harness: `{ failWith: 'agent failed: key ' + process.env.MY_API_KEY }`,
+      }),
+      'evals/agent.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('agent eval', async (t) => { await t.send('go') })
+`,
+    })
+    const env = { MY_API_KEY: NAMED }
+    assert.equal((await runCli(p.dir, ['run'], { env })).code, 3)
+    const r = await runCli(p.dir, ['report', '--json'], { env })
+    const bundle: ReportBundle = JSON.parse(r.stdout)
+    assert.match(bundle.run?.failures[0]?.error?.message ?? '', /key \[REDACTED\]$/)
+    const { masked, upstream } = bundle.redaction
+    assert.ok(masked >= 1, `masked ${masked}`)
+    assert.equal(upstream, masked)
+    const plain = await runCli(p.dir, ['report'], { env })
+    assert.match(
+      plain.stdout,
+      new RegExp(
+        `\\nredacted +${masked} secret values? masked, all already by ES's records and logs;`,
+      ),
+    )
   })
 
   test('--out formats, the default folder, and --json writing nothing', async () => {
@@ -368,12 +429,18 @@ describe('es report: filing an issue', () => {
     await runCli(p.dir, ['run'], { env: p.env })
     const bin = tempDir('report-gh-bin')
     const log = join(bin, 'gh.log')
+    // Node behind an sh and a .cmd wrapper, so it runs on every OS.
     writeFileSync(
-      join(bin, 'gh'),
-      `#!/bin/sh\necho "$@" >> "${log}"\n[ "$1" = issue ] && echo https://github.com/invertase/evalsuite/issues/42\nexit 0\n`,
+      join(bin, 'gh.js'),
+      `const args = process.argv.slice(2)
+require('node:fs').appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
+if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/issues/42')
+`,
     )
+    writeFileSync(join(bin, 'gh'), `#!/bin/sh\nexec node "$(dirname "$0")/gh.js" "$@"\n`)
     chmodSync(join(bin, 'gh'), 0o755)
-    const env = { ...p.env, PATH: `${bin}:${process.env.PATH}` }
+    writeFileSync(join(bin, 'gh.cmd'), '@node "%~dp0gh.js" %*\r\n')
+    const env = { ...p.env, PATH: `${bin}${delimiter}${process.env.PATH}` }
     const r = await runCli(p.dir, ['report', '--issue', '--yes'], { env })
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /Filed https:\/\/github\.com\/invertase\/evalsuite\/issues\/42/)
@@ -468,7 +535,7 @@ describe('es report: the logs archive', () => {
       ]),
     )
     const into = tempDir('untar')
-    execFileSync('tar', ['-xzf', archive, '-C', into])
+    execFileSync('tar', ['-xzf', basename(archive), '-C', into], { cwd: dirname(archive) })
     assert.equal(readFileSync(join(into, 'run/one.log'), 'utf8'), 'one\n')
     assert.equal(readFileSync(join(into, long), 'utf8').length, 1300)
   })
