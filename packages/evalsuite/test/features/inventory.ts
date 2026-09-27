@@ -980,6 +980,17 @@ export const inventory: InventoryFeature[] = [
       engine('a failure with megabytes of output prints and records a bounded tail'),
     ],
   },
+  {
+    id: 'expect',
+    area: 'Judges and matchers',
+    name: "Vitest's `expect` from `@vitest/expect`: matchers, diffs, `soft`, `poll`, `assertions`",
+    tests: [
+      engine('a failing assertion exits 1'),
+      engine('expect.soft, expect.poll and expect.assertions work inside an attempt'),
+      "evalsuite/test/engine-expect.test.ts › Vitest's matchers, asymmetric matchers, .not and diffs work unchanged",
+      'evalsuite/test/engine-errors.test.ts › message, diff, the stack with a code frame at the first project frame',
+    ],
+  },
 
   // Records and studio
   {

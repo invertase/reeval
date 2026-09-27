@@ -13,6 +13,8 @@ LLM judge, prints a pass/fail summary and writes a result JSON file.
 
 Under the hood ES embeds [Vitest](https://vitest.dev) as a hidden engine for discovery,
 timeouts, abort signals and reporting. You never import it, configure it or see its output.
+`expect` comes from Vitest's standalone `@vitest/expect` (`src/engine/expect.ts`), and errors
+print through ES's own formatter (`src/engine/errors.ts`), with diffs from `@vitest/utils`.
 
 The package is published as `@invertase/foobar`. That's a placeholder until the final name is
 chosen. Code, docs and examples import from `@invertase/foobar` and its subpaths `/harness`,
@@ -204,7 +206,11 @@ That's the test runner, each `es` CLI, its Vitest workers and the egress gateway
 them. It writes `coverage/report/` (`index.html`, `lcov.info` and `summary.md`) and is report-only,
 with no threshold. It doesn't count code inside Docker containers (the gateway's forwarder, the
 harness CLIs), the studio app in the browser, or the packed-install test, which runs an installed
-copy outside the repo. Without Docker, the Docker-only code reads as uncovered. Which features
+copy outside the repo. Without Docker, the Docker-only code reads as uncovered. The engine's own
+files are the exception: `node scripts/coverage.mjs engine` (CI's `engine coverage` job) runs
+their tests and fails below 100% of lines, branches and functions for each file in its `ENGINE`
+list. A new engine file joins that list with its tests; a line no test can reach needs a
+`/* c8 ignore */` comment saying why. Which features
 have fixtures on which tier is a separate, generated matrix:
 [`test/features/COVERAGE.md`](./packages/evalsuite/test/features/COVERAGE.md).
 
@@ -215,7 +221,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
+| `ci.yml` | `lint` (`biome ci`), `typecheck`, `engine coverage` (100% of the engine's files), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |

@@ -7,6 +7,8 @@
 //   node scripts/coverage.mjs run [cmd...]   cmd (default: every package's tests) with coverage on, then report
 //   node scripts/coverage.mjs prune <dir>    shrink a raw directory to one file of this repo's code
 //   node scripts/coverage.mjs report [dir…]  copy raw dirs into coverage/raw and write the reports
+//   node scripts/coverage.mjs engine         the engine's tests, failing below 100% of ENGINE's
+//                                            lines, branches and functions (CI's `engine coverage` job)
 //
 // Reports, in coverage/report/: index.html, lcov.info, coverage-summary.json and summary.md (the
 // Markdown the CI job summary shows).
@@ -37,12 +39,26 @@ const PACKAGES = readdirSync(join(root, 'packages')).filter(
 /** Where the executed code comes from: built dist/ (mapped to src/) and src/ run directly by tests. */
 const ours = new RegExp(`^${repo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/[^/]+/(dist|src)/`)
 
+/**
+ * The engine's own code, held to 100% of lines, branches and functions by its tests alone. A line the
+ * tests can't reach takes a `c8 ignore` comment that says why.
+ */
+const ENGINE = [
+  'packages/evalsuite/src/engine/errors.ts',
+  'packages/evalsuite/src/engine/expect.ts',
+]
+/** The tests that cover it, run from packages/evalsuite. */
+const ENGINE_TESTS = ['test/engine-errors.test.ts', 'test/engine-expect.test.ts']
+
 const [command, ...args] = process.argv.slice(2)
 if (command === 'run') process.exit(run(args))
+else if (command === 'engine') process.exit(engine())
 else if (command === 'prune') prune(resolve(args[0] ?? raw))
 else if (command === 'report') report(args.map((a) => resolve(a)))
 else {
-  console.error('usage: node scripts/coverage.mjs run [cmd...] | prune <dir> | report [dir...]')
+  console.error(
+    'usage: node scripts/coverage.mjs run [cmd...] | prune <dir> | report [dir...] | engine',
+  )
   process.exit(2)
 }
 
@@ -58,6 +74,56 @@ function run(cmd) {
   report([])
   if (tests.status !== 0) console.error(`\ncoverage: the tests failed (exit ${tests.status})`)
   return tests.status ?? 1
+}
+
+function engine() {
+  const dir = join(out, 'engine')
+  rmSync(dir, { recursive: true, force: true })
+  mkdirSync(join(dir, 'raw'), { recursive: true })
+  const tests = spawnSync(
+    process.execPath,
+    [
+      '--test',
+      '--test-timeout=600000',
+      '--experimental-strip-types',
+      '--no-warnings',
+      ...ENGINE_TESTS,
+    ],
+    {
+      cwd: join(root, 'packages/evalsuite'),
+      stdio: 'inherit',
+      env: { ...process.env, NODE_V8_COVERAGE: join(dir, 'raw') },
+    },
+  )
+  if (tests.status !== 0) {
+    console.error(`\nengine coverage: the tests failed (exit ${tests.status})`)
+    return tests.status ?? 1
+  }
+  const c8 = spawnSync(
+    'pnpm',
+    [
+      'exec',
+      'c8',
+      'report',
+      '--temp-directory',
+      join(dir, 'raw'),
+      '--reports-dir',
+      join(dir, 'report'),
+      '--reporter=text',
+      '--reporter=json-summary',
+      '--exclude-after-remap',
+      '--all',
+      '--src=packages/evalsuite/src/engine',
+      ...ENGINE.map((file) => `--include=${file}`),
+      '--check-coverage',
+      '--lines=100',
+      '--branches=100',
+      '--functions=100',
+      '--per-file',
+    ],
+    { cwd: root, stdio: 'inherit' },
+  )
+  return c8.status ?? 1
 }
 
 /**

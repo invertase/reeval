@@ -1021,6 +1021,44 @@ evaluate('huge diff', async (t) => {
     assert.doesNotMatch(out, /Summary[\s\S]*\n\s*error: /, 'no stray error after the summary')
   })
 
+  test('expect.soft, expect.poll and expect.assertions work inside an attempt', async () => {
+    const p = await project('expect-extras', {
+      'es.config.ts': fakeConfig(),
+      'evals/x.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('soft', async () => {
+  expect.soft(1).toBe(2)
+  expect(3).toBe(3)
+})
+evaluate('counted', async () => {
+  expect.assertions(2)
+  expect(1).toBe(1)
+})
+evaluate('polled', async () => {
+  let n = 0
+  await expect.poll(() => ++n, { interval: 5 }).toBe(3)
+  expect(n).toBe(3)
+  expect.assertions(2)
+})
+evaluate('asserted nothing', async () => {
+  expect.hasAssertions()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const byName = Object.fromEntries(readRun(p.dir).evals.map((e) => [e.name, e]))
+    assert.equal(byName.soft?.outcome, 'fail')
+    assert.match(byName.soft?.error?.message ?? '', /expected 1 to be 2/)
+    assert.equal(byName.counted?.outcome, 'fail')
+    assert.match(
+      byName.counted?.error?.message ?? '',
+      /expected number of assertions to be 2, but got 1/,
+    )
+    assert.equal(byName['asserted nothing']?.outcome, 'fail')
+    // The canary: a poll that reaches its value, with the right count, passes.
+    assert.equal(byName.polled?.outcome, 'pass', r.stdout)
+  })
+
   test('an eval with not-gated cells labels its pass rate gated; an all-gated one does not', async () => {
     const p = await project('gated-label', {
       'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
