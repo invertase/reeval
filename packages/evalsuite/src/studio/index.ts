@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { getRequestListener, serve } from '@hono/node-server'
 import { scratchDir } from '../history/files.ts'
 import { DIST_DIR } from '../root.ts'
-import { allowedHosts, createStudioApp, newToken } from './server.ts'
+import { watchLive } from './live.ts'
+import { allowedHosts, createStudioApp, newToken, type StudioEvent } from './server.ts'
 import type { StudioSource } from './source.ts'
 import { watchRuns } from './watch.ts'
 
@@ -36,13 +37,19 @@ function listen(app: ReturnType<typeof createStudioApp>, host: string, port: num
 export async function startStudio(options: StartOptions) {
   const { source, host } = options
   const token = options.token ? newToken() : null
-  const listeners = new Set<() => void>()
-  const stopWatching = watchRuns(
+  const listeners = new Set<(event: StudioEvent) => void>()
+  const send = (event: StudioEvent) => {
+    for (const l of listeners) l(event)
+  }
+  const stopRuns = watchRuns(
     source.scratch ? [source.historyDir, scratchDir(source.root)] : [source.historyDir],
-    () => {
-      for (const l of listeners) l()
-    },
+    () => send({ type: 'history.changed' }),
   )
+  const stopLive = watchLive(source, (runs) => send({ type: 'run.progress', runs }))
+  const stopWatching = () => {
+    stopRuns()
+    stopLive()
+  }
   for (let port = options.port; port < options.port + 20; port++) {
     const app = createStudioApp({
       source,
