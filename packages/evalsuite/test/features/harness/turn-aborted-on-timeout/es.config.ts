@@ -8,7 +8,7 @@ export default defineConfig({
   harness:
     process.env.ES_FIXTURE_HARNESS === 'cursor'
       ? cursor({ model: process.env.ES_REAL_MODEL ?? 'composer-2.5' })
-      : fakeHarness({ delayMs: 60_000 }),
+      : fakeHarness({ delayMs: 10_000 }),
   sandbox:
     process.env.ES_FIXTURE_SANDBOX === 'docker'
       ? docker()

@@ -891,7 +891,7 @@ export const features: Feature[] = [
       outcome: 'fail',
       error: { kind: 'timeout', message: /^The eval timed out$/ },
     },
-    canary: /expected undefined to be 'aborted'/,
+    canary: /expected 'completed' to be 'aborted'/,
     record: ({ run }) => assert.equal(landed(run)?.turns[0]?.status, 'aborted'),
   },
   {

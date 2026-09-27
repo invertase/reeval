@@ -654,10 +654,7 @@ const HOST_CREDENTIALS = [
  * host has `env` set (which the adapter must not read).
  */
 async function adapterRules(kind: AgentKind, env: Record<string, string>) {
-  const saved = { ...process.env }
-  for (const name of HOST_CREDENTIALS) delete process.env[name]
-  Object.assign(process.env, env)
-  try {
+  return withHostEnv(env, async () => {
     const agent = AGENTS[kind]
     const adapter = await agent.adapter({
       auth: agentAuth(agent),
@@ -669,6 +666,16 @@ async function adapterRules(kind: AgentKind, env: Record<string, string>) {
       /stopped by the test/,
     )
     return rules
+  })
+}
+
+/** Runs `fn` with only `env`'s host credentials set, then restores the host's. */
+async function withHostEnv<T>(env: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  const saved = { ...process.env }
+  for (const name of HOST_CREDENTIALS) delete process.env[name]
+  Object.assign(process.env, env)
+  try {
+    return await fn()
   } finally {
     for (const name of HOST_CREDENTIALS) delete process.env[name]
     Object.assign(process.env, saved)
@@ -818,8 +825,7 @@ describe('credential brokering per agent', () => {
   })
 
   test("Antigravity fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    process.env.GEMINI_API_KEY = 'AIza-real'
-    try {
+    await withHostEnv({ GEMINI_API_KEY: 'AIza-real' }, async () => {
       const agent = AGENTS.antigravity
       const adapter = await agent.adapter({ auth: agentAuth(agent) })
       const { session } = recordingSession()
@@ -839,9 +845,7 @@ describe('credential brokering per agent', () => {
         /can't broker GEMINI_API_KEY/,
       )
       assert.equal(spawned, false)
-    } finally {
-      delete process.env.GEMINI_API_KEY
-    }
+    })
   })
 
   test("OpenCode's adapter brokers only GOOGLE_GENERATIVE_AI_API_KEY to the Gemini API, whatever else the host has", async () => {
@@ -891,8 +895,7 @@ describe('credential brokering per agent', () => {
   })
 
   test("OpenCode fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-real'
-    try {
+    await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const agent = AGENTS.opencode
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
@@ -915,9 +918,7 @@ describe('credential brokering per agent', () => {
         /can't broker GOOGLE_GENERATIVE_AI_API_KEY/,
       )
       assert.equal(ran, false)
-    } finally {
-      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY
-    }
+    })
   })
 
   test("Goose's adapter brokers only the Gemini key, as GOOGLE_API_KEY, to the Gemini API", async () => {
@@ -934,8 +935,7 @@ describe('credential brokering per agent', () => {
   })
 
   test("Goose fails closed on a sandbox that can't broker: the key never goes in", async () => {
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'AIza-real'
-    try {
+    await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
       const agent = AGENTS.goose
       const adapter = await agent.adapter({
         auth: agentAuth(agent),
@@ -958,9 +958,7 @@ describe('credential brokering per agent', () => {
         /can't broker GOOGLE_API_KEY/,
       )
       assert.equal(ran, false)
-    } finally {
-      delete process.env.GOOGLE_GENERATIVE_AI_API_KEY
-    }
+    })
   })
 
   test("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API", async () => {

@@ -494,7 +494,7 @@ evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
 `,
       })
       let started = 0
-      const r = await runCli(p.dir, ['run'], {
+      const r = await runCli(p.dir, ['run', '--concurrency', '2'], {
         ...slow,
         onOutput: (stdout, pid) => {
           started = stdout.match(/\] {2}\+\d+:\d\d turn 1 started$/gm)?.length ?? 0
