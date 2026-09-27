@@ -8,6 +8,7 @@ import type {
   FileChange,
   Outcome,
   PhaseTimings,
+  SandboxWarning,
   TokenUsage,
   TurnStatus,
   WebEventType,
@@ -297,8 +298,17 @@ export type RunRecord = {
       harness?: string[]
     }
   } | null
-  /** What the run planned before it started. */
-  plan: { evals: number; cells: number; attempts: number; estimateMs: number }
+  /**
+   * What the run planned before it started, and each level whose sandbox ran as root or with
+   * capabilities added back.
+   */
+  plan: {
+    evals: number
+    cells: number
+    attempts: number
+    estimateMs: number
+    sandboxWarnings: SandboxWarning[]
+  }
   budget: { attempts?: number; duration?: string | number } | null
   config: {
     sandbox: string

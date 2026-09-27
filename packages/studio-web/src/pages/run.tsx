@@ -14,6 +14,7 @@ import {
   isUngatedMiss,
   type RunRecord,
   runOutcome,
+  type SandboxWarning,
   shortSha,
   type TreeNode,
   VERDICT_TEXT,
@@ -29,6 +30,7 @@ import {
   GitCompareArrows,
   History,
   ListFilter,
+  ShieldAlert,
   User,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -91,6 +93,34 @@ export function RunHeader({ record, children }: { record: RunRecord; children?: 
         </div>
       </div>
       {children}
+    </div>
+  )
+}
+
+/** Sandboxes that ran as root or with capabilities added back, one line per level that set them. */
+function SandboxWarnings({ warnings }: { warnings: SandboxWarning[] }) {
+  if (warnings.length === 0) return null
+  const root = warnings.some((w) => w.kind === 'root')
+  return (
+    <div
+      role="alert"
+      className={cn(
+        'flex gap-3 rounded-xl border p-4 text-sm',
+        root ? 'border-fail/40 bg-fail/5' : 'border-infra/40 bg-infra/5',
+      )}
+    >
+      <ShieldAlert className={cn('mt-0.5 size-4 shrink-0', root ? 'text-fail' : 'text-infra')} />
+      <ul className="min-w-0 space-y-1">
+        {warnings.map((w) => (
+          <li key={`${w.file}\0${w.message}`} className="break-words">
+            <span className={cn('font-semibold', w.kind === 'root' ? 'text-fail' : 'text-infra')}>
+              {w.kind === 'root' ? 'Root' : 'Capabilities'}
+            </span>{' '}
+            <span className="font-mono text-xs">{w.message}</span>
+            {w.file ? <span className="text-muted-foreground"> · {w.file}</span> : null}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -443,6 +473,8 @@ export function RunPage() {
           {record.git ? <CopyButton value={`es checkout ${runId}`} label="es checkout" /> : null}
         </div>
       </RunHeader>
+
+      <SandboxWarnings warnings={record.plan.sandboxWarnings} />
 
       <div className="rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm">

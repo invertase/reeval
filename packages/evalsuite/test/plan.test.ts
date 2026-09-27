@@ -32,6 +32,8 @@ export const cases: PlanCase[] = [
   { dir: 'secrets', name: 'brokered', args: [] },
   { dir: 'egress', name: 'cascade', args: [] },
   { dir: 'egress', name: 'profile-defaults', args: ['--profile', 'locked', 'evals/cascade.es.ts'] },
+  { dir: 'privileges', name: 'levels', args: [] },
+  { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
 ]
 
 describe('plan snapshots', { concurrency: true }, () => {
@@ -52,6 +54,7 @@ describe('the JSON plan', { concurrency: true }, () => {
       'concurrency',
       'estimateMs',
       'warnings',
+      'sandboxWarnings',
       'hints',
       'evals',
       'excluded',
@@ -210,5 +213,88 @@ evaluate('uses tools', { environment: tools }, async () => {})
     const r = await runCli(p.dir, ['run', '--json'])
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(r.stderr, /es run --json only prints the plan: add --dry-run/)
+  })
+})
+
+/** The root warning `es run` prints for the privileges fixture's eval-level sandbox. */
+const ROOT_LINE =
+  'WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
+
+function assertRootWarning(output: string): void {
+  assert.ok(output.split('\n').includes(ROOT_LINE), `no root warning in:\n${output}`)
+}
+
+describe('sandbox privilege warnings', { concurrency: true }, () => {
+  test('are structured in the JSON plan, one per level that set the sandbox', async () => {
+    const plan = await planJson({ dir: 'privileges', args: [] })
+    assert.deepEqual(plan.sandboxWarnings, [
+      {
+        kind: 'capabilities',
+        level: 'config',
+        where: 'es.config.ts',
+        file: null,
+        capabilities: ['NET_RAW'],
+        message: "extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))",
+      },
+      {
+        kind: 'root',
+        level: 'group',
+        where: 'group("system packages")',
+        file: 'evals/p.es.ts',
+        message: 'running as root in the sandbox: group("system packages") (docker({ root: true }))',
+      },
+      {
+        kind: 'root',
+        level: 'eval',
+        where: 'evaluate("installs deps")',
+        file: 'evals/p.es.ts',
+        message: 'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))',
+      },
+      {
+        kind: 'capabilities',
+        level: 'eval',
+        where: 'evaluate("installs deps")',
+        file: 'evals/p.es.ts',
+        capabilities: ['NET_ADMIN'],
+        message:
+          "extra capabilities in the sandbox: evaluate(\"installs deps\") (docker({ capabilities: ['NET_ADMIN'] }))",
+      },
+    ])
+  })
+
+  test('print in the text plan, the agent output and as GitHub annotations', async () => {
+    const p = await fixture('plan/privileges')
+    const plain = await runCli(p.dir, ['run', '--dry-run', '--ui', 'plain'])
+    assert.equal(plain.code, 0, plain.stdout + plain.stderr)
+    assertRootWarning(plain.stdout)
+    assert.match(
+      plain.stdout,
+      /^warning: extra capabilities in the sandbox: es\.config\.ts \(docker\(\{ capabilities: \['NET_RAW'\] \}\)\)$/m,
+    )
+    assert.doesNotMatch(plain.stdout, /^::warning/m, 'no annotations outside GitHub Actions')
+    const agent = await runCli(p.dir, ['run', '--dry-run', '--ui', 'agent'])
+    assertRootWarning(agent.stdout)
+    const gh = await runCli(p.dir, ['run', '--dry-run', '--ui', 'plain'], {
+      env: { GITHUB_ACTIONS: 'true' },
+    })
+    assertRootWarning(gh.stdout)
+    assert.match(
+      gh.stdout,
+      /^::warning file=evals\/p\.es\.ts,title=Sandbox runs as root::running as root in the sandbox: evaluate\("installs deps"\) \(docker\(\{ root: true \}\)\)$/m,
+    )
+    assert.match(
+      gh.stdout,
+      /^::warning title=Sandbox has extra capabilities::extra capabilities in the sandbox: es\.config\.ts/m,
+    )
+  })
+
+  test('canary: an eval without root gets no warning, so the check fails', async () => {
+    const p = await fixture('plan/privileges')
+    const r = await runCli(p.dir, ['run', '--dry-run', '--ui', 'plain', 'stays unprivileged'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.throws(() => assertRootWarning(r.stdout), /no root warning/)
+    assert.doesNotMatch(r.stdout, /WARNING|warning:/)
+    const plan = await planJson({ dir: 'privileges', args: ['stays unprivileged'] })
+    assert.deepEqual(plan.sandboxWarnings, [])
   })
 })

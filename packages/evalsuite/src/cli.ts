@@ -487,7 +487,12 @@ async function executeRun(
     }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
-    renderer.onEvent({ type: 'plan', at: Date.now(), lines })
+    renderer.onEvent({
+      type: 'plan',
+      at: Date.now(),
+      lines,
+      sandboxWarnings: plan.sandboxWarnings,
+    })
     if (setup.dryRun) return false
     checkAttemptBudget(plan, setup.force, config.file)
     const missing = missingCredentials(config, process.env, {

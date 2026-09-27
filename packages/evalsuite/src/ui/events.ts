@@ -1,7 +1,7 @@
 // The terminal output's view of a run. Nothing in ui/ may import Vitest: the engine translates
 // its reporter hooks into these events.
 import type { RunRecord } from '../history/types.ts'
-import type { AttemptMeta, EvalMeta, TurnStatus } from '../types.ts'
+import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
 import type { DebugLine } from '../view/debug.ts'
 
 /** One attempt's result. `id` is the eval's; `key` is unique per attempt. */
@@ -78,8 +78,11 @@ export type EsEvent =
       /** How many attempts run at once. */
       concurrency: number
     }
-  /** The plan line (and, for `--dry-run`, its table and warnings), before anything runs. */
-  | { type: 'plan'; at: number; lines: string[] }
+  /**
+   * The plan line (and, for `--dry-run`, its table), its warnings and hints, before anything runs;
+   * then each sandbox that runs as root or with capabilities added back.
+   */
+  | { type: 'plan'; at: number; lines: string[]; sandboxWarnings?: SandboxWarning[] }
   /** Every attempt in a file, once it's collected (skipped ones too, so tags are stable). */
   | { type: 'collected'; at: number; file: string; evals: CollectedEval[] }
   | ({ type: 'eval-start'; at: number } & AttemptRef)

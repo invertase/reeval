@@ -1,3 +1,5 @@
+import type { SandboxWarning } from './types.ts'
+
 /** `850ms`, `42s`, `3m 05s`: the CLI's and summary.md's durations. */
 export function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`
@@ -23,3 +25,7 @@ export function capMiddle(text: string, max = FAILURE_CAP): string {
   const tail = max - head
   return `${text.slice(0, head)}\n[… ${text.length - head - tail} characters cut …]\n${text.slice(-tail)}`
 }
+
+/** How a sandbox warning prints: root in capitals, added capabilities softer. */
+export const sandboxWarningLine = (w: SandboxWarning) =>
+  `${w.kind === 'root' ? 'WARNING' : 'warning'}: ${w.message}`

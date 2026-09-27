@@ -1,5 +1,7 @@
 // Append-only output for CI, pipes and `| tee`. Lines are never rewritten. Modelled on
 // Turborepo's stream and grouped log orders.
+import { sandboxWarningLine } from '../text.ts'
+import type { SandboxWarning } from '../types.ts'
 import { type Colors, colors, stripAnsi } from './colors.ts'
 import type { AttemptRef, EsEvent, EvalResult, OutputStream, Progress, Renderer } from './events.ts'
 import {
@@ -141,6 +143,7 @@ export class PlainRenderer implements Renderer {
         for (const [i, line] of e.lines.entries()) {
           this.#write(line.startsWith('warning:') ? c.yellow(line) : i === 0 ? line : c.dim(line))
         }
+        for (const w of e.sandboxWarnings ?? []) this.#sandboxWarning(w)
         return
       case 'collected':
         this.#tags.addFile(e.evals)
@@ -204,6 +207,16 @@ export class PlainRenderer implements Renderer {
         for (const line of renderSummary(c, e, this.#o.attemptDir)) this.#write(line)
         return
     }
+  }
+
+  #sandboxWarning(w: SandboxWarning) {
+    const c = this.#c
+    const line = sandboxWarningLine(w)
+    this.#write(w.kind === 'root' ? c.bold(c.red(line)) : c.yellow(line))
+    if (!this.#o.output.githubActions) return
+    const file = w.file ? `file=${ghEscape(w.file, true)},` : ''
+    const title = w.kind === 'root' ? 'Sandbox runs as root' : 'Sandbox has extra capabilities'
+    this.#write(`::warning ${file}title=${ghEscape(title, true)}::${ghEscape(w.message)}`)
   }
 
   #end(result: EvalResult, at: number) {

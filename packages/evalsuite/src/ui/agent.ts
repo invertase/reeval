@@ -1,6 +1,7 @@
 // For coding agents running `es run`: they read every line back into context, so print only
 // failures (and, as MISS, ungated cells' expected misses), each with where its detail lives, in
 // a stable greppable vocabulary.
+import { sandboxWarningLine } from '../text.ts'
 import { colors } from './colors.ts'
 import type { EsEvent, EvalResult, OutputStream, Renderer } from './events.ts'
 import {
@@ -74,6 +75,7 @@ export class AgentRenderer implements Renderer {
     switch (e.type) {
       case 'plan':
         for (const line of e.lines) this.#write(line)
+        for (const w of e.sandboxWarnings ?? []) this.#write(sandboxWarningLine(w))
         return
       case 'run-start':
         this.#write(`es run: ${e.files} eval file${e.files === 1 ? '' : 's'}`)

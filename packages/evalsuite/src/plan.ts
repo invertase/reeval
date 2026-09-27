@@ -12,6 +12,7 @@ import type {
   PlannedEgress,
   ResolvedProfile,
   SandboxDescriptor,
+  SandboxWarning,
 } from './types.ts'
 
 /** With no history for a harness, an attempt is assumed to take this long (the fake agent: 1s). */
@@ -33,6 +34,8 @@ export type RunPlan = {
   concurrency: number
   budget: Budget
   warnings: string[]
+  /** One per level whose sandbox runs as root or with capabilities added back. */
+  sandboxWarnings: SandboxWarning[]
   /** Advice that doesn't stop the run, e.g. about the default gate. */
   hints: string[]
   sandboxes: SandboxDescriptor[]
@@ -89,6 +92,7 @@ export async function buildPlan(options: {
   const rows = new Map<string, PlanRow>()
   const cells = new Set<string>()
   const warnings = new Set<string>()
+  const sandboxWarnings = new Map<string, SandboxWarning>()
   const sandboxes = new Map<string, SandboxDescriptor>()
   const kinds = new Set<string>()
   const harnesses = new Set<string>()
@@ -100,6 +104,9 @@ export async function buildPlan(options: {
     if (!rows.has(id)) rows.set(id, { id, plan: attempt.plan })
     for (const w of attempt.plan.warnings) warnings.add(w)
     if (attempt.plan.skip) continue
+    for (const w of attempt.plan.sandboxWarnings) {
+      sandboxWarnings.set(`${w.file}\0${w.message}`, w)
+    }
     attempts++
     cells.add(`${id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
@@ -133,6 +140,9 @@ export async function buildPlan(options: {
     concurrency: options.concurrency,
     budget: options.budget,
     warnings: [...warnings],
+    sandboxWarnings: [...sandboxWarnings.values()].sort(
+      (a, b) => Number(a.kind !== 'root') - Number(b.kind !== 'root'),
+    ),
     hints: gateHint([...rows.values()]),
     sandboxes: [...sandboxes.values()],
     harnessKinds: [...kinds],
@@ -250,6 +260,8 @@ export type PlanDocument = {
   concurrency: number
   estimateMs: number
   warnings: string[]
+  /** Sandboxes that run as root or with capabilities added back, one per level that set them. */
+  sandboxWarnings: SandboxWarning[]
   hints: string[]
   evals: PlanEval[]
   excluded: ExcludedEval[]
@@ -309,6 +321,7 @@ export function planDocument(
     concurrency: plan.concurrency,
     estimateMs: plan.estimateMs,
     warnings: plan.warnings,
+    sandboxWarnings: plan.sandboxWarnings,
     hints: plan.hints,
     evals: [...evals.values()],
     excluded,

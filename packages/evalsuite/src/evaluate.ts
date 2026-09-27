@@ -180,7 +180,11 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
     const mcp = refusedMcp(planned.harness, planned.environment.layers)
     if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
   }
-  const plan = evalPlan(resolvedEval, plannedAttempts)
+  const file = collectingFile()
+  const plan = evalPlan(resolvedEval, plannedAttempts, {
+    configFile: ctx.config.file,
+    file: file ? relativeFile(ctx.config.root, file) : null,
+  })
   if (resolvedEval.skip) {
     const [first] = expand(resolved)
     if (!first) return
