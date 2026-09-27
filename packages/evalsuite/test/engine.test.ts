@@ -353,6 +353,17 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     )
   })
 
+  test('es that runs out of things to wait on, unfinished, exits 3 and says so, never 0', async () => {
+    // A config that awaits a promise nothing will settle: Node's loop empties with the run unfinished.
+    const p = await project('drained', {
+      'es.config.ts': `${fakeConfig()}\nawait new Promise(() => {})\n`,
+      'evals/a.es.ts': math(1),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    assert.match(r.stderr, /es: stopped before it finished: nothing was left for it to wait on/)
+  })
+
   test('usage errors exit 2', async () => {
     const empty = await project('empty', { 'es.config.ts': fakeConfig() })
     const none = await runCli(empty.dir)

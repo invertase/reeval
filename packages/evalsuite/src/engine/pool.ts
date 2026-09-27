@@ -31,9 +31,19 @@ export const forkWorker: Spawn = (entry, cwd) => {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     serialization: 'advanced',
   })
-  // 'close', not 'exit': on Windows 'exit' can come before the worker's last IPC messages.
+  // Done once it has exited and its last messages are in. On Windows 'exit' can come first; they
+  // all arrive before 'disconnect', which Windows doesn't always send, so at most a second later.
+  // Not 'close', which also waits for stdout and stderr: pipes a process it started may hold.
+  const disconnected = new Promise<void>((resolve) => child.once('disconnect', resolve))
   const exited = new Promise<Exit>((resolve) =>
-    child.once('close', (code, signal) => resolve({ code, signal })),
+    child.once('exit', (code, signal) => {
+      const done = () => {
+        clearTimeout(grace)
+        resolve({ code, signal })
+      }
+      const grace = setTimeout(done, 1000)
+      void disconnected.then(done)
+    }),
   )
   // A message sent after the worker exited has nowhere to go; its exit is handled instead.
   child.on('error', () => {})
