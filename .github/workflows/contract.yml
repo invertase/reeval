@@ -27,7 +27,7 @@ jobs:
     env:
       ES_TEST_REAL: '1'
       ES_TEST_REQUIRE_DOCKER: '1'
-      # Every real row; one without its key skips and says why.
+      # Every real row; one without its key fails, naming the variable.
       ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,goose,pi
       # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all six rows,
       # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
@@ -64,9 +64,8 @@ jobs:
       - name: the stored conversation @cursor/sdk declares
         working-directory: packages/evalsuite
         run: node --test --experimental-strip-types --no-warnings test/cursor-sdk-shape.test.ts
-      # Real Cursor: without its key there's nothing to run (real.yml's gate says so).
-      - if: env.CURSOR_API_KEY != ''
-        name: real-tier fixtures on Cursor (web fetch recovery included)
+      # Real Cursor: without its key each fixture fails, naming CURSOR_API_KEY.
+      - name: real-tier fixtures on Cursor (web fetch recovery included)
         working-directory: packages/evalsuite
         env:
           ES_FIXTURE_TIERS: real
