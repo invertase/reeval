@@ -3,12 +3,14 @@
 import assert from 'node:assert/strict'
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import {
+  cpSync,
   createReadStream,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs'
 import { rm } from 'node:fs/promises'
@@ -217,6 +219,32 @@ describe('studio in a browser', () => {
 
     await page.getByRole('link', { name: 'Compare' }).click()
     await page.getByText('Regressed').first().waitFor()
+    assert.deepEqual(errors, [])
+  })
+
+  test('a run recorded before newer record fields renders its run, State and transcript', async (t) => {
+    if (!browser) return t.skip('no Chrome or Chromium found')
+    const project = join(demo, 'before-100')
+    cpSync(join(repo, 'packages/evalsuite/test/fixtures/records/before-100'), project, {
+      recursive: true,
+    })
+    mkdirSync(join(project, 'node_modules'), { recursive: true })
+    symlinkSync(join(repo, 'packages/evalsuite'), join(project, 'node_modules/evalsuite'), 'dir')
+    const out = join(project, 'site')
+    const built = spawnSync(process.execPath, [cli, 'studio', 'build', '--out', out], {
+      cwd: project,
+      encoding: 'utf8',
+    })
+    assert.equal(built.status, 0, built.stderr)
+    const { page, errors } = await open(await host(out))
+    await page.locator('tbody tr').first().click()
+    await page.waitForSelector('h2')
+    assert.equal(await page.getByRole('alert').count(), 0, 'no sandbox warnings')
+    await page.getByText('writes greet.js').first().waitFor()
+    await page.locator('a[href*="/attempts/"]').first().click()
+    await page.getByText('Turn 1', { exact: true }).waitFor()
+    await page.getByRole('tab', { name: /^State/ }).click()
+    await page.getByText('Package versions').waitFor()
     assert.deepEqual(errors, [])
   })
 

@@ -1,0 +1,328 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260927T151935Z_facb81b_cursor-agent_07sv",
+  "status": "complete",
+  "startedAt": "2026-09-27T15:19:35.703Z",
+  "endedAt": "2026-09-27T15:19:36.443Z",
+  "durationMs": 740,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "facb81bea2e0b05784e52830c44b5e157c99eb1d",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-27T15:19:35+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "5c7602959760"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "22.14.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "vitest": "5.0.2",
+      "@evalsuite/harness-antigravity": "0.1.0",
+      "@evalsuite/harness-opencode": "0.1.0",
+      "@evalsuite/harness-goose": "0.1.0",
+      "@evalsuite/harness-pi": "0.1.0",
+      "@evalsuite/harness-cursor-sdk": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/harness-claude-code": "1.0.128",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "0e2a4839495b"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 1000
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 900000,
+    "concurrency": 4,
+    "configHash": "8698dd2e430e590327c16d3737fb978be920d2cadc31d8ebe645f5081b7a80ab"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 2,
+    "attempts": 2,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 1
+  },
+  "evals": [
+    {
+      "id": "evals/greet.es.ts › writes greet.js",
+      "key": "evals/greet.es.ts › writes greet.js",
+      "slug": "evals-greet-es-ts-writes-greet-js-4857ff",
+      "file": "evals/greet.es.ts",
+      "group": [],
+      "name": "writes greet.js",
+      "tags": [],
+      "fingerprint": "15d995016e42f24bb9834685883ac49b6e1fbdeea4dc1490171144767e21cda7",
+      "sources": [
+        {
+          "path": "evals/greet.es.ts",
+          "sha256": "db38cb29f8a5008d7c40871bc10d5b8e7e02c001e4e03d8243444d08c7be1fbe"
+        }
+      ],
+      "outcome": "pass",
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "6a83f837ee63fd13e64cbd2aba835f27c19759b3066d60756b8c91b6cb91ed4c",
+          "fingerprintParts": {
+            "sources": "dd11eaa562c4c5e4bf644bf1017cfc797e2ac06f0283fd8c912915c835f6aa76",
+            "harness": "212e70969febb260226c677e769949177677c33d66e3dad95d5e77fa9a0a6f8f",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.es.ts › writes greet.js # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-27T15:19:36.403Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 39,
+          "turns": [
+            {
+              "prompt": "Write greet.js",
+              "status": "completed",
+              "startedAt": "2026-09-27T15:19:36.420Z",
+              "durationMs": 1,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 15,
+            "agentMs": 1,
+            "diffMs": 9,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "greet.js",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-es-ts-writes-greet-js-4857ff/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "b6296bc0f651c07f5bc8f9c3ca7627b409436bfc4d039fa37db6cfcdff2242d8",
+              "bytes": 575
+            },
+            "diff": {
+              "path": "evals-greet-es-ts-writes-greet-js-4857ff/fake-fake-70e87d/1/diff.patch",
+              "sha256": "533def09d463c4fbb72dda8a5eb0c2862f72ab9a3e5e163a2f9cc654e27c921f",
+              "bytes": 164
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet.es.ts › greets in French",
+      "key": "evals/greet.es.ts › greets in French",
+      "slug": "evals-greet-es-ts-greets-in-french-276c4c",
+      "file": "evals/greet.es.ts",
+      "group": [],
+      "name": "greets in French",
+      "tags": [],
+      "fingerprint": "891bd7bc152ac9ce0a37f33a20fbd33a0a7df20c8ff1fbcfbcf23926c9a66a1d",
+      "sources": [
+        {
+          "path": "evals/greet.es.ts",
+          "sha256": "db38cb29f8a5008d7c40871bc10d5b8e7e02c001e4e03d8243444d08c7be1fbe"
+        }
+      ],
+      "outcome": "skipped",
+      "passRate": null,
+      "cells": [
+        {
+          "key": "unknown",
+          "harness": "unknown",
+          "environment": "unknown",
+          "sandbox": "unknown",
+          "role": "control",
+          "fingerprint": "b54bb96aa2f89217de4db6eb745da8fc1d44274c7ee5f9e89d912aaf0494b5cd",
+          "fingerprintParts": {
+            "sources": "dd11eaa562c4c5e4bf644bf1017cfc797e2ac06f0283fd8c912915c835f6aa76",
+            "harness": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "environment": null,
+            "image": null,
+            "agentCli": null,
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "unknown",
+          "model": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": null,
+          "outcome": "skipped"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet.es.ts › greets in French # unknown#1",
+          "id": "unknown#1",
+          "cell": "unknown",
+          "n": 1,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 0,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}

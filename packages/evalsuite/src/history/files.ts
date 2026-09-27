@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import { runHeader } from '../view/header.ts'
+import { readableRecord } from '../view/record.ts'
 import { renderSummary } from './summary.ts'
 import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
@@ -36,7 +37,7 @@ export const encodeRecord = (record: RunRecord) =>
 export function parseRecord(bytes: Uint8Array, where: string): RunRecord {
   const value = JSON.parse(Buffer.from(bytes).toString('utf8')) as RunRecord
   if (value?.kind !== 'es-run') throw new HistoryError(`${where} is not an ES run record`)
-  return value
+  return readableRecord(value)
 }
 
 export async function readRecord(path: string): Promise<RunRecord> {

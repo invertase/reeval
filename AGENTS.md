@@ -26,7 +26,9 @@ its files import `evalsuite`.
   schemas, APIs, CLI flags and file layouts freely, and delete files or restart designs when
   that's simpler. Don't write migrations, compatibility shims, deprecation paths or readers for
   old formats. This holds until the first public release, or until the team says real users
-  depend on it.
+  depend on it. One exception: a field added to the run record reads as its empty value in
+  records written before it (`readableRecord` in `src/view/record.ts`, which every record reader
+  goes through), with a test against `test/fixtures/records/before-100` or a newer old record.
 - **Schema v1.** Don't bump schema versions. Keep every schema at version 1 and change it in
   place, and delete old records or data that no longer fit. Versioning starts at the first
   public release.

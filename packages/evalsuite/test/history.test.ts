@@ -5,8 +5,12 @@ import { appendFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { fingerprintOf } from '../src/history/assemble.ts'
+import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
+import { harnessLabel } from '../src/view/model.ts'
+import { readableRecord } from '../src/view/record.ts'
 import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
+import { fixture, testDir } from './support/fixture.ts'
 
 const GIT_ENV = {
   ...baseEnv,
@@ -636,5 +640,86 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
       readRun(p.dir).run.evals.map((e) => e.id),
       ['evals/parent.es.ts › parent'],
     )
+  })
+})
+
+describe('records from before a field existed', () => {
+  const OLD = 'fixtures/records/before-100'
+  const oldRun = '20260927T151935Z_facb81b_cursor-agent_07sv'
+  const raw = (): RunRecord =>
+    JSON.parse(readFileSync(join(testDir, OLD, HISTORY, `${oldRun}.json`), 'utf8'))
+
+  test('the fixture predates plan.sandboxWarnings, harnesses[].resolvedModels and evals[].todo', () => {
+    const r = raw()
+    assert.equal('sandboxWarnings' in r.plan, false)
+    assert.equal(
+      r.stack.harnesses.some((h) => 'resolvedModels' in h),
+      false,
+    )
+    assert.equal(
+      r.evals.some((e) => 'todo' in e),
+      false,
+    )
+  })
+
+  test('plan.sandboxWarnings: a record without it reads as none, and summary.md renders', () => {
+    const r = raw()
+    assert.deepEqual(readableRecord(r).plan.sandboxWarnings, [])
+    assert.doesNotMatch(renderSummary(readableRecord(raw())), /running as root/)
+  })
+
+  test('stack.harnesses[].resolvedModels: a record without it reads as none, and the harness label renders', () => {
+    const r = readableRecord(raw())
+    assert.deepEqual(
+      r.stack.harnesses.map((h) => h.resolvedModels),
+      [[]],
+    )
+    assert.equal(
+      harnessLabel(r.stack.harnesses[0] as RunRecord['stack']['harnesses'][number]),
+      'fake',
+    )
+  })
+
+  test('evals[].todo: a record without it reads as not todo, and summary.md renders', () => {
+    const r = readableRecord(raw())
+    assert.deepEqual(
+      r.evals.map((e) => e.todo),
+      [false, false],
+    )
+    assert.match(renderSummary(r), /\| ✓ \| evals\/greet\.es\.ts › writes greet\.js \|/)
+  })
+
+  test('a newer record keeps what it has', () => {
+    const r = raw()
+    r.plan.sandboxWarnings = [
+      { kind: 'root', level: 'config', where: 'es.config.ts', file: null, message: 'm' },
+    ]
+    r.evals[1] = { ...(r.evals[1] as RunRecord['evals'][number]), todo: true }
+    const read = readableRecord(r)
+    assert.equal(read.plan.sandboxWarnings.length, 1)
+    assert.equal(read.evals[1]?.todo, true)
+  })
+
+  test('es show, show --md, history, query and compare read it next to a new run', async () => {
+    const p = await fixture(OLD)
+    const ok = async (args: string[]) => {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 0, `es ${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      return r.stdout
+    }
+    assert.match(await ok(['show', oldRun]), /writes greet\.js/)
+    assert.match(await ok(['show', oldRun, '--md']), /# ES run 20260927T151935Z/)
+    assert.match(await ok(['show', oldRun, '--json']), /"sandboxWarnings": \[\]/)
+    await ok(['run', '--record', '--ui', 'plain'])
+    const runs = recordedRuns(p.dir)
+    assert.equal(runs.length, 2)
+    assert.match(await ok(['history']), /writes greet\.js/)
+    assert.match(await ok(['query', 'select count(*) as n from evals']), /^n\n4$/m)
+    assert.match(await ok(['query', 'eval_trend']), /writes greet\.js/)
+    assert.match(
+      await ok(['compare', oldRun, runs[1] as string]),
+      /✓ → ✓ .* evals\/greet\.es\.ts › writes greet\.js/,
+    )
+    await ok(['studio', 'build', '--out', join(p.dir, 'site')])
   })
 })
