@@ -20,6 +20,12 @@ const BUNDLED = 'es:ca-bundle'
 
 const READY_TIMEOUT_MS = 15_000
 
+/**
+ * The gateway's side of the container runs as root, whoever the sandbox runs as: the sandbox user
+ * can't signal, trace or replace the forwarder, or change the CA it installed.
+ */
+const AS_ROOT = ['--user', '0:0']
+
 export type GatewayOptions = Omit<EgressProxyOptions, 'ca'>
 
 export type Gateway = {
@@ -43,10 +49,11 @@ const installCa = (containerId: string, cert: string, signal?: AbortSignal) =>
     [
       'exec',
       '--interactive',
+      ...AS_ROOT,
       containerId,
       'sh',
       '-c',
-      `mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
+      `umask 022 && mkdir -p "$(dirname ${CA_PATH})" && cat > ${CA_PATH} && { command -v update-ca-certificates >/dev/null && update-ca-certificates >/dev/null 2>&1 && grep -q "$(sed -n 2p ${CA_PATH})" ${CA_BUNDLE} && echo ${BUNDLED}; true; }`,
     ],
     { input: cert, signal },
   )
@@ -67,7 +74,15 @@ export async function startGateway(
   }
   const bundled = installed.stdout.toString('utf8').includes(BUNDLED)
   const proxy = createEgressProxy({ ...options, ca })
-  const args = ['exec', '--interactive', containerId, 'node', '-e', forwarderScript(PROXY_PORT)]
+  const args = [
+    'exec',
+    '--interactive',
+    ...AS_ROOT,
+    containerId,
+    'node',
+    '-e',
+    forwarderScript(PROXY_PORT),
+  ]
   const startedAt = Date.now()
   // Own process group, like every docker call: ES handles Ctrl-C and tears the gateway down.
   const child = spawn('docker', args, { stdio: 'pipe', detached: true })

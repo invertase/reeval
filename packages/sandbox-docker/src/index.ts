@@ -63,15 +63,20 @@ export {
   imageFor,
   isBakedHarness,
   LABEL,
+  SANDBOX_HOME,
   SANDBOX_ROOT,
+  SANDBOX_USER,
   WORKSPACE_DIR,
 } from './image.ts'
 export {
   createDockerSession,
+  DEFAULT_LIMITS,
   type DockerSession,
   dockerSandboxProvider,
   type EgressOptions,
   type EgressStatus,
+  ROOT_CAPABILITIES,
+  type SandboxLimits,
   type SessionOptions,
 } from './session.ts'
 export { type DockerCommand, onDockerCommand } from './trace.ts'

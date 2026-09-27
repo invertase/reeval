@@ -3,12 +3,18 @@ import { randomBytes } from 'node:crypto'
 import { posix } from 'node:path'
 import { Readable } from 'node:stream'
 import type { HarnessV1NetworkSandboxSession, HarnessV1SandboxProvider } from '@ai-sdk/harness'
-import { docker, dockerOk, removeContainerDetached, sweepLabelDetached } from './docker-cli.ts'
+import {
+  docker,
+  dockerCapacity,
+  dockerOk,
+  removeContainerDetached,
+  sweepLabelDetached,
+} from './docker-cli.ts'
 import { type Gateway, type GatewayOptions, startGateway } from './egress/gateway.ts'
 import { isRestricted, type NetworkPolicy } from './egress/policy.ts'
 import type { EgressTraffic } from './egress/proxy.ts'
 import type { Substitution } from './egress/substitution.ts'
-import { BRIDGE_PORT, LABEL, SANDBOX_ROOT } from './image.ts'
+import { BRIDGE_PORT, LABEL, SANDBOX_HOME, SANDBOX_ROOT, SANDBOX_USER } from './image.ts'
 import { shellQuote as q } from './process.ts'
 import { traceDocker } from './trace.ts'
 
@@ -17,6 +23,21 @@ export type EgressOptions = Omit<GatewayOptions, 'policy'> & {
   /** Defaults to `allow-all`. Anything else detaches the container from every Docker network. */
   policy?: NetworkPolicy
 }
+
+/** A container's resource limits. */
+export type SandboxLimits = {
+  /** Memory, with no swap on top, as Docker takes it: bytes, or a number with `k`, `m` or `g`. */
+  memory: string | number
+  /** CPUs, fractional ones allowed; capped at what the Docker host has. */
+  cpus: number
+  /** Processes and threads at once. */
+  pids: number
+}
+
+export const DEFAULT_LIMITS: SandboxLimits = { memory: '4g', cpus: 2, pids: 1024 }
+
+/** What `root` adds back: what `apt-get` (and its `_apt` sandbox) and `dpkg` need as root. */
+export const ROOT_CAPABILITIES = ['CHOWN', 'DAC_OVERRIDE', 'FOWNER', 'SETUID', 'SETGID'] as const
 
 export type SessionOptions = {
   image: string
@@ -27,7 +48,54 @@ export type SessionOptions = {
   lifetimeMs?: number
   abortSignal?: AbortSignal
   egress?: EgressOptions | boolean
+  /**
+   * Every process as root with {@link ROOT_CAPABILITIES}, instead of {@link SANDBOX_USER} with
+   * none. For evals that install packages at run time.
+   */
+  root?: boolean
+  /** Capabilities to add back (`NET_RAW`, …); every other one is dropped. */
+  capabilities?: readonly string[]
+  /** Each unset one is {@link DEFAULT_LIMITS}'. */
+  limits?: Partial<SandboxLimits>
 }
+
+let hostCpus: Promise<number | undefined> | undefined
+/** Docker refuses `--cpus` above the host's count, so cap it there. */
+async function cpuLimit(cpus: number): Promise<string> {
+  hostCpus ??= dockerCapacity().then(
+    (c) => c?.cpus,
+    () => undefined,
+  )
+  const available = await hostCpus
+  return String(available ? Math.min(cpus, available) : cpus)
+}
+
+/** The `docker run` flags that confine the container: its user, capabilities and limits. */
+export async function confinementArgs(options: SessionOptions): Promise<string[]> {
+  const limits = { ...DEFAULT_LIMITS, ...options.limits }
+  const caps = [...(options.root ? ROOT_CAPABILITIES : []), ...(options.capabilities ?? [])]
+  return [
+    '--user',
+    options.root ? '0:0' : SANDBOX_USER,
+    '--cap-drop',
+    'ALL',
+    ...[...new Set(caps)].flatMap((c) => ['--cap-add', c]),
+    '--security-opt',
+    'no-new-privileges',
+    '--memory',
+    String(limits.memory),
+    '--memory-swap',
+    String(limits.memory),
+    '--pids-limit',
+    String(limits.pids),
+    '--cpus',
+    await cpuLimit(limits.cpus),
+  ]
+}
+
+/** Runtime `npm i -g` goes to the sandbox user's own prefix, whose `bin` the images put on PATH. */
+const userEnv = (options: SessionOptions): Record<string, string> =>
+  options.root ? {} : { NPM_CONFIG_PREFIX: `${SANDBOX_HOME}/.local` }
 
 /** Whether the gateway runs. When it doesn't, the session has no request-transformation methods. */
 export type EgressStatus = { active: true } | { active: false; reason: string }
@@ -60,14 +128,16 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
   const labels = { [LABEL.managed]: 'true', [LABEL.session]: nonce, ...options.labels }
   const lifetime = Math.ceil((options.lifetimeMs ?? 24 * 3_600_000) / 1000)
   const signal = options.abortSignal
+  const env = { ...userEnv(options), ...options.env }
   const id = await dockerOk(
     [
       'run',
       '--detach',
       '--rm',
       '--init',
+      ...(await confinementArgs(options)),
       ...Object.entries(labels).flatMap(([k, v]) => ['--label', `${k}=${v}`]),
-      ...Object.keys(options.env ?? {}).flatMap((k) => ['--env', k]),
+      ...Object.keys(env).flatMap((k) => ['--env', k]),
       '--publish',
       `127.0.0.1::${BRIDGE_PORT}`,
       '--workdir',
@@ -77,9 +147,15 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
       options.image,
       String(lifetime),
     ],
-    { signal, env: options.env },
+    { signal, env },
   ).catch((error) => {
     if (signal?.aborted) sweepLabelDetached(`${LABEL.session}=${nonce}`)
+    if (/unable to find user/i.test((error as Error).message)) {
+      sweepLabelDetached(`${LABEL.session}=${nonce}`)
+      throw new Error(
+        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images ES builds have one: rebuild it (es image build), or start from ES's image or docker({ from }). An eval that needs root at run time can opt in with docker({ root: true }).`,
+      )
+    }
     throw error
   })
   let gateway: Gateway | undefined
