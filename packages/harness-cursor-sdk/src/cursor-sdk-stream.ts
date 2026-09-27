@@ -60,6 +60,10 @@ export type CursorSdkRunnerLine =
   | { type: 'error'; message: string; name?: string; code?: string; status?: number }
 
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
+
+/** Parts that are a step's content, as opposed to the stream's framing. */
+const isContent = (part: HarnessV1StreamPart) =>
+  !['raw', 'stream-start', 'finish', 'finish-step', 'error'].includes(part.type)
 type FinishReason = Extract<HarnessV1StreamPart, { type: 'finish' }>['finishReason']
 
 /** Maps the SDK's counts onto the AI SDK's usage shape, keeping the original under `raw`. */
@@ -145,6 +149,8 @@ export class CursorSdkStreamTranslator {
    * recovers after it, and HarnessAgent refuses content after a step's `finish-step`.
    */
   private stepUsage: CursorSdkUsage | undefined
+  /** Whether the open step has content, which HarnessAgent needs closed before `finish`. */
+  private stepHasContent = false
   /** Built-in tools this turn may have used with no `tool_call` reported. */
   private unreportedTools: string[] = []
 
@@ -199,6 +205,7 @@ export class CursorSdkStreamTranslator {
         break
     }
     parts.push({ type: 'raw', rawValue: parsed })
+    if (parts.some(isContent)) this.stepHasContent = true
     return parts
   }
 
@@ -404,13 +411,17 @@ export class CursorSdkStreamTranslator {
   /** The turn's one step, with the `usage` event's counts, else the result's when it has them. */
   private closeStep(parts: HarnessV1StreamPart[], resultUsage?: CursorSdkUsage) {
     const usage = this.stepUsage ?? resultUsage
-    if (!usage) return
+    // A turn cut short has content and no usage yet: its step still has to close.
+    if (!usage && !this.stepHasContent && !parts.some(isContent)) return
     parts.push({
       type: 'finish-step',
-      finishReason: { unified: 'stop', raw: this.stepUsage ? 'turn-ended' : 'result' },
+      finishReason: usage
+        ? { unified: 'stop', raw: this.stepUsage ? 'turn-ended' : 'result' }
+        : { unified: 'other', raw: 'interrupted' },
       usage: toUsage(usage),
     })
     this.stepUsage = undefined
+    this.stepHasContent = false
   }
 
   /** A turn that ended before its result never had its web calls recovered. */

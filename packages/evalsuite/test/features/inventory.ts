@@ -718,6 +718,15 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.turn-aborted',
+    area: 'Harnesses',
+    name: 'A turn the timeout cuts off is recorded as `aborted`',
+    fixtures: ['harness/turn-aborted-on-timeout'],
+    tests: [
+      'harness-cursor-sdk/test/stream.test.ts › an aborted turn with content closes its step before it finishes',
+    ],
+  },
+  {
     id: 'harness.transcripts',
     area: 'Harnesses',
     name: 'Transcripts, normalised per harness',

@@ -191,6 +191,7 @@ describe('stream translation', () => {
         'text-end',
         'tool-call',
         'tool-result',
+        'finish-step',
         'finish',
       ],
     )
@@ -248,11 +249,13 @@ describe('stream translation', () => {
       event({ type: 'tool_call', call_id: 'c', name: 'shell', status: 'running', args: {} }),
       { exitCode: 137, stderr: 'Killed' },
     )
+    // HarnessAgent refuses a `finish` while the step has content, and would report that instead
+    // of this error: the step is closed first.
     assert.deepEqual(
       parts.map((p) => p.type),
-      ['stream-start', 'tool-call', 'tool-result', 'error', 'finish'],
+      ['stream-start', 'tool-call', 'tool-result', 'finish-step', 'error', 'finish'],
     )
-    const error = parts[3]
+    const error = parts[4]
     assert.match(
       String(error?.type === 'error' && (error.error as Error).message),
       /code 137.*Killed/,
@@ -265,6 +268,20 @@ describe('stream translation', () => {
       parts.map((p) => p.type),
       ['stream-start', 'finish'],
     )
+  })
+
+  test('an aborted turn with content closes its step before it finishes', () => {
+    const { parts } = translate(
+      [
+        event({ type: 'assistant', message: { content: [{ type: 'text', text: 'Writing' }] } }),
+        event({ type: 'tool_call', call_id: 'c', name: 'shell', status: 'running', args: {} }),
+      ].join('\n'),
+      { exitCode: 130, aborted: true },
+    )
+    const types = parts.map((p) => p.type)
+    assert.equal(types.at(-1), 'finish')
+    assert.equal(types.at(-2), 'finish-step')
+    assert.ok(types.includes('tool-call'), types.join())
   })
 
   test('non-JSON lines pass through as raw', () => {

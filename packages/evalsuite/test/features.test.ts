@@ -884,6 +884,17 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/turn-aborted-on-timeout',
+    tiers: ['fake', 'docker', 'real'],
+    env: 'plain',
+    lands: {
+      outcome: 'fail',
+      error: { kind: 'timeout', message: /^The eval timed out$/ },
+    },
+    canary: /expected undefined to be 'aborted'/,
+    record: ({ run }) => assert.equal(landed(run)?.turns[0]?.status, 'aborted'),
+  },
+  {
     dir: 'env/setup-order',
     tiers: ['fake', 'docker'],
     env: 'ordered',
