@@ -23,7 +23,7 @@ export function analysisModelName(config: ResolvedConfig): string | FakeAnalysis
   const judge = config.judge.model
   if (typeof judge === 'string' && !judge.startsWith('typesafe-ai/')) return judge
   throw new UsageError(
-    `es analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in es.config.ts${
+    `es analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${
       typeof judge === 'string' || isFakeJudge(judge)
         ? ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't write an analysis)`
         : ''

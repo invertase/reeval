@@ -598,8 +598,8 @@ export const unbrokeredWarning = (s: UnbrokeredSecret) =>
     ? `${s.label} reaches the checks (t.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, ${brokerHint(s)}.`
     : `${s.label} is in the sandbox as its real value. To give the agent only a placeholder, ${brokerHint(s)}.`
 
-export const unbrokeredError = (s: UnbrokeredSecret, where: string) =>
-  `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in es.config.ts. To broker it, ${brokerHint(s)}.`
+export const unbrokeredError = (s: UnbrokeredSecret, where: string, configFile: string) =>
+  `${s.label} in ${where} isn't brokered, and secrets.unbrokered is 'error' in ${configFile}. To broker it, ${brokerHint(s)}.`
 
 /** The plan row for an eval. */
 export function evalPlan(r: ResolvedEval, attempts: PlannedAttempt[]): EvalPlan {

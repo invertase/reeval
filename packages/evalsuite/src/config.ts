@@ -73,6 +73,8 @@ export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map(
   (ext) => `es.config.${ext}`,
 )
 
+const DEFAULT_CONFIG_FILE = 'es.config.ts'
+
 /**
  * The nearest config file in `from` or a directory above it, up to the filesystem root, the way
  * Vitest and ESLint find theirs. A git or workspace root doesn't stop the search: a nested
@@ -104,7 +106,7 @@ export async function loadConfig(
   command = 'run',
   profile: string | undefined = undefined,
 ): Promise<ResolvedConfig> {
-  if (path === undefined) return resolveConfig({}, process.cwd())
+  if (path === undefined) return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
   const root = dirname(path)
   const configPath = configLabel(path)
   let user: EsConfig = {}
@@ -136,7 +138,7 @@ export async function loadConfig(
   } else {
     throw new UsageError(`Config file not found: ${configPath}`)
   }
-  return resolveConfig(user, root)
+  return resolveConfig(user, root, configPath)
 }
 
 const GLOB = /[*?[\]{}!]/
@@ -264,7 +266,7 @@ export function selectProfile(
   if (!profile) {
     const names = Object.keys(config.profiles)
     throw new UsageError(
-      `Unknown profile "${name}". ${names.length ? `Profiles in es.config.ts: ${names.join(', ')}.` : 'es.config.ts defines no profiles.'}`,
+      `Unknown profile "${name}". ${names.length ? `Profiles in ${config.file}: ${names.join(', ')}.` : `${config.file} defines no profiles.`}`,
     )
   }
   return {
@@ -279,13 +281,17 @@ export function selectProfile(
   }
 }
 
-export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
+export function resolveConfig(
+  user: EsConfig,
+  root: string,
+  file: string = DEFAULT_CONFIG_FILE,
+): ResolvedConfig {
   if ('compare' in user) {
     throw new UsageError(
-      "compare can't be set in es.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.",
+      `compare can't be set in ${file}: it would multiply every eval. Put it on the group or eval that asks the question.`,
     )
   }
-  checkOptions(user, 'es.config.ts', CONFIG_KEYS)
+  checkOptions(user, file, CONFIG_KEYS)
   const include = user.include ?? ['evals/**/*.es.ts']
   if (!Array.isArray(include) || include.some((p) => typeof p !== 'string')) {
     throw new UsageError('config.include must be an array of glob strings')
@@ -302,14 +308,14 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   const harness = user.harness === undefined ? [DEFAULT_HARNESS] : [user.harness].flat()
   if (harness.length === 0) {
     throw new UsageError(
-      `harness is an empty list in es.config.ts. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
+      `harness is an empty list in ${file}. Give at least one, e.g. harness: ${HARNESS_EXAMPLE}`,
     )
   }
-  checkHarnesses(harness, 'es.config.ts')
+  checkHarnesses(harness, file)
   const profiles: Record<string, Profile> = {}
   if (user.profiles !== undefined) {
     if (typeof user.profiles !== 'object' || user.profiles === null) {
-      throw new UsageError('profiles in es.config.ts must be an object of named profiles')
+      throw new UsageError(`profiles in ${file} must be an object of named profiles`)
     }
     for (const [name, profile] of Object.entries(user.profiles)) {
       profiles[name] = checkProfile(name, profile)
@@ -326,6 +332,7 @@ export function resolveConfig(user: EsConfig, root: string): ResolvedConfig {
   }
   return {
     root,
+    file,
     include,
     harness,
     sandbox: user.sandbox ?? docker(),

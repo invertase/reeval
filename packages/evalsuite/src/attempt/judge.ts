@@ -1,4 +1,5 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
+import { getRunContext } from '../engine/runtime.ts'
 import { type JudgeState, judgeModelName, runJudge } from '../judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../judge/patch.ts'
 import type { RetriedError } from '../judge/retry.ts'
@@ -7,8 +8,8 @@ import { clip, formatDuration } from '../text.ts'
 import type { EvalContext, JSONValue, JudgeInput, Turn } from '../types.ts'
 import type { Attempt } from './state.ts'
 
-const NO_JUDGE_MODEL =
-  "t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in es.config.ts, " +
+const noJudgeModel = (configFile: string) =>
+  `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in ${configFile}, ` +
   'on the group or eval, or pass { model } to this call.'
 
 const isTurn = (value: unknown): value is Turn =>
@@ -48,7 +49,7 @@ export function judgeCaller(a: Attempt): EvalContext['judge'] {
     const { model } = options
     if (model === undefined) {
       a.judgeErrored = true
-      throw new Error(NO_JUDGE_MODEL)
+      throw new Error(noJudgeModel(getRunContext().config.file))
     }
     const state = judgeState(subject, on === undefined || isTurn(on) ? undefined : on)
     const input: JudgeInput = { question, model: judgeModelName(model), state }

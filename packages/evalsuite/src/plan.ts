@@ -317,10 +317,10 @@ export function planDocument(
 }
 
 /** Exit 2 before anything starts when the plan is over `budget.attempts` (unless `--force`). */
-export function checkAttemptBudget(plan: RunPlan, force: boolean): void {
+export function checkAttemptBudget(plan: RunPlan, force: boolean, configFile: string): void {
   const cap = plan.budget.attempts
   if (cap === undefined || plan.attempts <= cap || force) return
-  const where = plan.profile ? `profile ${plan.profile.name}` : 'es.config.ts'
+  const where = plan.profile ? `profile ${plan.profile.name}` : configFile
   throw new UsageError(
     `this run plans ${plan.attempts} attempts, over budget.attempts ${cap} (${where}). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)`,
   )
