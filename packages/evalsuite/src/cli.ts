@@ -541,7 +541,10 @@ async function executeRun(
       return false
     }
     const lines = [planLine(plan)]
-    if (setup.dryRun) lines.push(...planTable(plan))
+    if (setup.dryRun) {
+      const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
+      lines.push(...planTable(plan, todos))
+    }
     lines.push(...plan.warnings.map((w) => `warning: ${w}`))
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
     renderer.onEvent({ type: 'plan', at: Date.now(), lines })

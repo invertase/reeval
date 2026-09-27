@@ -174,7 +174,13 @@ export function renderSummary(run: RunRecord): string {
   ]
   for (const e of run.evals) {
     const a = e.attempts[0]
-    const time = e.attempts.length > 1 ? cellCounts(e) : a ? formatDuration(a.durationMs) : ''
+    const time = e.todo
+      ? 'todo'
+      : e.attempts.length > 1
+        ? cellCounts(e)
+        : a
+          ? formatDuration(a.durationMs)
+          : ''
     lines.push(`| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`)
   }
   // Failures first, but passes get the same detail: why something passed matters too.

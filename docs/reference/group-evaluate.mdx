@@ -84,11 +84,11 @@ group(name, fn, options)
 |---|---|
 | `evaluate.skip(name, …)` | Declares the eval but doesn't run it; it counts as skipped. |
 | `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
-| `evaluate.todo(name)` | A placeholder with no body; it counts as skipped. |
+| `evaluate.todo(name)` | A placeholder with no body. It's one entry marked todo: a `todo` row in `--dry-run` (and `mode: 'todo'` under `excluded` in `--json`), `todo` in the summary and `summary.md`, `todo: true` with outcome `skipped` in the record, and Todo in the studio. It counts as skipped. |
 | `evaluate.for(cases)(name, …)` | One eval per case. The body gets `(t, item)`. |
 | `group.skip(name, …)` | Skips every eval in the group, nested groups included; each counts as skipped. |
 | `group.only(name, …)` | Runs only this group's evals within its file. |
-| `group.todo(name)` | A placeholder group. It has no evals, so it adds nothing to the plan or the record. |
+| `group.todo(name)` | A placeholder group, shown exactly as `evaluate.todo(name)` is: one todo entry, with the id `file › …groups › name`. |
 
 `.only` is refused when `CI` is set, so a forgotten `.only` can't shrink a CI run: `evaluate.only isn't allowed in CI` (or `group.only`).
 

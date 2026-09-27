@@ -236,11 +236,58 @@ evaluate('kept', async () => {})
       [
         ['evals/g.es.ts › parked › inside', 'skipped'],
         ['evals/g.es.ts › parked › nested › deeper', 'skipped'],
+        ['evals/g.es.ts › someday', 'skipped'],
         ['evals/g.es.ts › kept', 'pass'],
       ],
-      'a todo group has no evals, so it adds none',
     )
-    assert.equal(run.summary.skipped, 2)
+    assert.equal(run.summary.skipped, 3)
+  })
+
+  test('group.todo shows as todo, like evaluate.todo: the plan, the summary and the record', async () => {
+    const p = await project('group-todo', {
+      'es.config.ts': fakeConfig(),
+      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+evaluate('kept', async () => {})
+evaluate.todo('later')
+group.todo('someday')
+group('area', () => {
+  group.todo('nested someday')
+})
+`,
+    })
+    const todos = [
+      'evals/g.es.ts › later',
+      'evals/g.es.ts › someday',
+      'evals/g.es.ts › area › nested someday',
+    ]
+
+    const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
+    assert.equal(json.code, 0, json.stdout + json.stderr)
+    assert.deepEqual(
+      JSON.parse(json.stdout).excluded,
+      todos.map((id) => ({ id, mode: 'todo' })),
+    )
+    const text = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(text.code, 0, text.stdout + text.stderr)
+    for (const id of todos) assert.match(text.stdout, new RegExp(`^${id} .* todo$`, 'm'), id)
+    assert.doesNotMatch(text.stdout, /^evals\/g\.es\.ts › kept .* todo$/m, 'canary: kept runs')
+
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const summary = r.stdout.slice(r.stdout.indexOf('\nSummary'))
+    for (const name of ['later', 'someday', 'nested someday'])
+      assert.match(summary, new RegExp(`↓ ${name} +todo$`, 'm'), name)
+    const { run, read } = readRun(p.dir)
+    assert.deepEqual(
+      run.evals.map((e) => [e.id, e.outcome, e.todo]),
+      [
+        ['evals/g.es.ts › kept', 'pass', false],
+        ['evals/g.es.ts › later', 'skipped', true],
+        ['evals/g.es.ts › someday', 'skipped', true],
+        ['evals/g.es.ts › area › nested someday', 'skipped', true],
+      ],
+    )
+    assert.match(read('summary.md'), /\| ↓ \| evals\/g\.es\.ts › someday \| todo \|/)
   })
 
   test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {

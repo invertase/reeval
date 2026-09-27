@@ -261,6 +261,10 @@ The tokens the run used, as the harnesses count them; ES prices nothing.
   Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.
 </Property>
 
+<Property name="todo" type="boolean">
+  A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`.
+</Property>
+
 <Property name="passRate" type="number | null">
   pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded.
 </Property>

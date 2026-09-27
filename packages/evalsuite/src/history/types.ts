@@ -171,6 +171,8 @@ export type EvalEntry = {
    * all were, else `pass`. An ungated cell's failures don't fail the eval.
    */
   outcome: Outcome
+  /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
+  todo: boolean
   /** pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded. */
   passRate: number | null
   cells: CellRecord[]

@@ -322,6 +322,7 @@ class Seen {
         fingerprint: '',
         sources,
         outcome: 'skipped',
+        todo: e.todo === true,
         passRate: null,
         cells: [],
         attempts: [],

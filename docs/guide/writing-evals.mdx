@@ -158,10 +158,10 @@ Summary
      ✓ writes a module            57ms  1 turn
      ✓ passes its own tests      121ms  1 turn
      ↓ greets in French        skipped
-     ↓ greets a list of names  skipped
+     ↓ greets a list of names  todo
 ```
 
-`.skip` keeps an eval without running it, and `.todo(name)` notes one to write. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
+`.skip` keeps an eval without running it, and `.todo(name)` notes one to write, shown as todo in the plan, the summary, the record and the studio. `.only` runs only the marked evals in a file while you work on them; it's an error when `CI` is set, so it can't slip into a pipeline. `group` has all three too.
 
 ## Next
 
