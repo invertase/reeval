@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { stripVTControlCharacters } from 'node:util'
-import { codeFrame, esFrames, formatError } from '../src/engine/errors.ts'
+import { codeFrame, comparable, esFrames, formatError } from '../src/engine/errors.ts'
 import { tempDir } from './helpers.ts'
 
 const root = tempDir('errors')
@@ -126,6 +126,12 @@ describe('formatError', () => {
       plain({ name: 'E', message: 'm', cause: { message: 'plain' } }),
       'E: m\nCaused by: plain',
     )
+  })
+
+  test('frames compare with forward slashes, and on Windows in any case', () => {
+    assert.equal(comparable('C:\\Es\\dist\\x.js', true), 'c:/es/dist/x.js')
+    assert.equal(comparable('/Es/dist\\x.js', false), '/Es/dist/x.js')
+    assert.equal(comparable('/p/x.js'), '/p/x.js')
   })
 
   test('esFrames names src/ and dist/, with or without a trailing separator', () => {

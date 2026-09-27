@@ -43,9 +43,9 @@ export const esFrames = (packageDir: string) => [
 ]
 
 /** A path as frames are compared: forward slashes (parsed frames say C:/… on Windows), any case there. */
-const comparable = (path: string) => {
+export const comparable = (path: string, windows = process.platform === 'win32') => {
   const slashed = path.replaceAll('\\', '/')
-  return process.platform === 'win32' ? slashed.toLowerCase() : slashed
+  return windows ? slashed.toLowerCase() : slashed
 }
 
 /** Loaders and assertion libraries ES runs eval files through; never the eval's own frames. */

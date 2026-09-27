@@ -60,9 +60,8 @@ describe('findEvalFiles and filterFiles', () => {
     assert.deepEqual(filterFiles(files, ['/p/evals/sub'], root), ['/p/evals/sub/skill.es.ts'])
     assert.deepEqual(filterFiles(files, ['evals/sub/'], root), ['/p/evals/sub/skill.es.ts'])
     assert.deepEqual(filterFiles(files, ['nope', 'x.es'], root), ['/p/other/x.es.ts'])
-    // On Windows, a path typed with backslashes picks the same files.
-    if (sep === '\\')
-      assert.deepEqual(filterFiles(files, ['evals\\sub\\'], root), ['/p/evals/sub/skill.es.ts'])
+    // Typed with backslashes, as on Windows, it picks the same files.
+    assert.deepEqual(filterFiles(files, ['evals\\sub\\'], root), ['/p/evals/sub/skill.es.ts'])
     const cwd = process.cwd()
     process.chdir(tempDir('cwd'))
     try {

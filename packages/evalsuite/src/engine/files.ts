@@ -1,5 +1,5 @@
 // Which files are eval files, and which of them a path filter picks, as Vitest decided both.
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { glob } from 'tinyglobby'
 import { attemptId, relativeFile } from '../ids.ts'
 
@@ -28,7 +28,7 @@ export async function findEvalFiles(
 export function filterFiles(files: readonly string[], filters: readonly string[], root: string) {
   if (filters.length === 0) return [...files]
   // Compared with forward slashes, so `evals/a` picks `evals\a.es.ts` on Windows, as does `evals\a`.
-  const slashed = (path: string) => (sep === '\\' ? path.replaceAll('\\', '/') : path)
+  const slashed = (path: string) => path.replaceAll('\\', '/')
   return files.filter((file) => {
     const rel = relativeFile(root, file).toLocaleLowerCase()
     return filters.some((f) => {
