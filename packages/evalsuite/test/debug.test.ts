@@ -315,6 +315,32 @@ evaluate('prints the dsn', { environment: env }, async (t) => {
     }
   })
 
+  test("a secret in an error that stops the run is masked, config's and an eval file's", async () => {
+    const KEY = 'es-fatal-7c1d9ab04e4f2a6b8c9d0e'
+    const p = await project('debug-redact-fatal', {
+      'es.config.ts': fakeConfig().replace(
+        'export default',
+        `if (process.env.ES_FATAL_WHERE === 'config') throw new Error('config refused ' + process.env.ES_FATAL_API_KEY)\nexport default`,
+      ),
+      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
+if (process.env.ES_FATAL_WHERE === 'eval') throw new Error(\`eval refused \${process.env.ES_FATAL_API_KEY}\`)
+evaluate('e', async () => {})
+`,
+    })
+    for (const where of ['config', 'eval']) {
+      for (const debug of [{}, { ES_DEBUG: '1' }]) {
+        const r = await runCli(p.dir, ['run'], {
+          env: { ES_FATAL_WHERE: where, ES_FATAL_API_KEY: KEY, ...debug },
+        })
+        const screen = r.stdout + r.stderr
+        assert.equal(r.code, 2, screen)
+        assert.equal(screen.includes(KEY.slice(-12)), false, `${where}: ${screen}`)
+        // The canary: the error is on screen, with the key masked where it was.
+        assert.match(screen, new RegExp(`${where} refused \\[REDACTED\\]`), screen)
+      }
+    }
+  })
+
   test("a key's tail is masked on screen, in debug.log, trace.ndjson and the transcript", async () => {
     const KEY = 'crsr_debug_7f3Kq9ZpL2mXw8Rt4VbN6yHc'
     const tail = KEY.slice(-12)

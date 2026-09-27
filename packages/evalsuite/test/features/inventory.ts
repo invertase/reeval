@@ -410,6 +410,7 @@ export const inventory: InventoryFeature[] = [
       debug(
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
       ),
+      debug("a secret in an error that stops the run is masked, config's and an eval file's"),
     ],
   },
   {

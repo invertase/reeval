@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join, relative, resolve } from 'node:path'
-import { parseArgs } from 'node:util'
+import { inspect, parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseOptions } from './cli-spec.ts'
 import {
@@ -25,7 +25,7 @@ import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
-import { registerSecret } from './redact.ts'
+import { redactSecrets, registerSecret } from './redact.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -680,8 +680,8 @@ run(process.argv.slice(2)).then(
       (error as { code?: string }).code?.startsWith('ERR_PARSE_ARGS') ||
       EXPECTED_ERRORS.includes(name)
     settled = true
-    console.error(red(`es: ${(error as Error).message}`))
-    if (!expected && process.env.ES_DEBUG) console.error(error)
+    console.error(red(`es: ${redactSecrets((error as Error).message)}`))
+    if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
     process.exitCode = EXIT.usage
   },
 )
