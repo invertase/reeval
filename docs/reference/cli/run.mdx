@@ -76,7 +76,7 @@ plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57
 
 `es run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running and the images exist. Each failure exits 2 without writing a run.
 
-`es run` loads `.env.local`, then `.env`, from the current directory: `.env.local` wins over `.env`, and variables already set in your shell win over both. The config and the evals both see them.
+`es run` loads `.env.local`, then `.env`, from the config's directory, not the current one: variables already set in your shell win, then `.env.local`, then `.env`. The config and the evals both see them.
 
 ## Output flags
 
