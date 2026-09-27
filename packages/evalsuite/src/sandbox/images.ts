@@ -8,6 +8,7 @@ import {
   imageFor,
   imageInfo,
   installLayerTag,
+  isTransient,
   LABEL,
   resolveFrom,
 } from '@evalsuite/sandbox-docker'
@@ -86,9 +87,11 @@ const short = (digest: string) => digest.replace(/^sha256:/, '').slice(0, 12)
 async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'status' | 'detail'>> {
   const [cached, now] = await Promise.all([imageInfo(ref), resolveFrom(from)])
   if (!cached) {
-    return 'error' in now
-      ? { status: 'missing', detail: `doesn't resolve: ${now.error}` }
-      : { status: 'build', detail: `on ${from} (${short(now.digest)})` }
+    if (!('error' in now)) return { status: 'build', detail: `on ${from} (${short(now.digest)})` }
+    // A registry that's down or rate-limiting says nothing about whether the tag exists.
+    return isTransient(now.error)
+      ? { status: 'build', detail: `${from} couldn't be checked: ${now.error}` }
+      : { status: 'missing', detail: `doesn't resolve: ${now.error}` }
   }
   const was = cached.labels[LABEL.fromDigest]
   if ('error' in now) return { status: 'ready', detail: `built; ${from} couldn't be checked` }

@@ -239,7 +239,11 @@ export async function resolveFrom(
   if (typeof digest === 'string' && digest.startsWith('sha256:')) return { digest, local: false }
   const local = await imageInfo(from)
   if (local) return { digest: local.id, local: true }
-  const error = remote?.stderr.trim().replace(/^ERROR: /, '') || `${from} doesn't resolve`
+  const error =
+    remote?.stderr
+      .trim()
+      .replace(/^ERROR: /, '')
+      .replace(/\s+/g, ' ') || `${from} doesn't resolve`
   return { error }
 }
 
