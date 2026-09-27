@@ -179,9 +179,7 @@ test('the packed package installs into a clean project and runs es', {
   const listing = sh('tar', dir, ['tzf', tarball]).stdout
   assert.match(listing, /^package\/LICENSE$/m)
   assert.match(listing, /^package\/dist\/cli\.js$/m)
-  assert.match(listing, /^package\/dist\/setup\.js$/m)
   assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
-  assert.match(listing, /^package\/dist\/worker-signals\.js$/m)
   assert.match(listing, /^package\/dist\/worker\.js$/m)
   for (const entry of ['index', 'harness', 'sandbox', 'judge', 'view/index']) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
@@ -257,8 +255,8 @@ test('the packed package installs into a clean project and runs es', {
   assert.equal(readRun(app).run.stack.packages['@evalsuite/harness-antigravity'], VERSION)
 
   // Nothing that ships imports an @evalsuite/* package, and every chunk loads with the installed
-  // package's dependencies alone. cli, setup and worker-signals run on import, and so do the
-  // chunks only the CLI reaches, which import cli.js.
+  // package's dependencies alone. cli and worker run on import, and so do the chunks only they
+  // reach, which import them.
   const dist = join(app, 'node_modules', pkg, 'dist')
   const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' })
   const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f) && !f.startsWith('studio-app/'))
@@ -270,7 +268,7 @@ test('the packed package installs into a clean project and runs es', {
       posix.join(posix.dirname(file), m[1] as string),
     )
   const runsOnImport = (file: string, seen = new Set<string>()): boolean =>
-    ['cli.js', 'setup.js', 'worker-signals.js'].includes(file) ||
+    ['cli.js', 'worker.js'].includes(file) ||
     imports(file).some((f) => !seen.has(f) && seen.add(f) && runsOnImport(f, seen))
   const chunks = code.filter((f) => f.endsWith('.js') && !runsOnImport(f))
   assert.ok(chunks.includes('index.js') && chunks.length > 10, chunks.join(', '))
@@ -281,8 +279,8 @@ test('the packed package installs into a clean project and runs es', {
   ])
   assert.equal(loaded.status, 0, loaded.stderr)
 
-  // What users and Vitest load (every export, setup.js and worker-signals.js) never reaches
-  // cli.js, whose import runs the CLI, following import() as well as static imports.
+  // What users and ES's workers load (every export, and worker.js) never reaches cli.js, whose
+  // import runs the CLI, following import() as well as static imports.
   const reached = (entry: string, dynamic = true) => {
     const via = new Map<string, string | null>([[entry, null]])
     const pattern = dynamic
@@ -300,8 +298,7 @@ test('the packed package installs into a clean project and runs es', {
     ...Object.values(manifest.exports as Record<string, string | { default: string }>).flatMap(
       (target) => (typeof target === 'string' ? [] : [target.default.replace(/^\.\/dist\//, '')]),
     ),
-    'setup.js',
-    'worker-signals.js',
+    'worker.js',
   ]
   assert.ok(entries.includes('harness.js') && entries.includes('view/index.js'), entries.join())
   for (const entry of entries) {

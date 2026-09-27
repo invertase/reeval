@@ -45,14 +45,10 @@ const packageName: string = require(join(PACKAGE_DIR, 'package.json')).name
 const versionOf = (name: string): string => require(`${name}/package.json`).version
 
 /** What runs eval files, for the record. */
-export const engineVersions: Record<string, string> =
-  /* c8 ignore start -- ES_ENGINE=vitest, the side-by-side comparison's engine; engine 3/3 removes it */
-  process.env.ES_ENGINE === 'vitest'
-    ? { vitest: versionOf('vitest') }
-    : /* c8 ignore stop */ {
-        '@vitest/expect': versionOf('@vitest/expect'),
-        jiti: versionOf('jiti'),
-      }
+export const engineVersions: Record<string, string> = {
+  '@vitest/expect': versionOf('@vitest/expect'),
+  jiti: versionOf('jiti'),
+}
 
 const onlyInCi = (file: string) =>
   `evaluate.only/group.only in ${file} isn't allowed in CI (CI is set). Remove it, or run with CI=false.`
@@ -63,8 +59,6 @@ export async function runEngine(
   options: EngineOptions,
   spawn: Spawn = forkWorker,
 ): Promise<EngineRun> {
-  /* c8 ignore next -- ES_ENGINE=vitest, the side-by-side comparison's engine; engine 3/3 removes it */
-  if (process.env.ES_ENGINE === 'vitest') return (await import('./vitest.ts')).runEngine(options)
   const { config, concurrency } = options.run
   const root = config.root
   const files = await findEvalFiles(root, config.include, [

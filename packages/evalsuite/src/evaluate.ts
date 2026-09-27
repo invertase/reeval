@@ -39,10 +39,10 @@ import type {
 
 export type { EvalOptions, GroupOptions }
 
-/** Lets ES's own eval timer fire before Vitest's, so the message and cleanup are ours. */
+/** Lets the attempt's own eval timer fire before the engine's backstop, so the message and cleanup are its own. */
 const GRACE_MS = 5_000
 
-// The groups enclosing the code being collected. Vitest may run a nested group's callback
+// The groups enclosing the code being collected. The collector runs a nested group's callback
 // after its parent's callback has returned, so each group captures its parents when declared.
 let groupStack: { name: string; options: GroupOptions }[] = []
 
@@ -72,7 +72,7 @@ type GroupFn = {
   (name: string, options: GroupOptions, fn: () => void): void
 }
 
-/** Vitest rejects `test.only` in CI but skips everything around a `describe.only`; ES rejects both. */
+/** `evaluate.only` and `group.only` are refused in CI, where they'd silently skip the rest. */
 function checkOnly(mode: TestMode, what: string): void {
   if (mode !== 'only' || !inCI()) return
   const error = new Error(`${what}.only isn't allowed in CI`)

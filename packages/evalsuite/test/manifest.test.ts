@@ -58,11 +58,11 @@ test('the packed manifest names nothing that only exists in this workspace', () 
     }
   }
 
-  // A patch range lets consumers' npm resolve vitest and @vitest/browser-webdriverio's peer to
-  // one version (npm/cli#8261); the workspace runs the version the lockfile pins.
-  const installed = JSON.parse(
-    readFileSync(join(pkgRoot, 'node_modules/vitest/package.json'), 'utf8'),
-  ).version
-  const [major, minor] = installed.split('.')
-  assert.match(manifest.dependencies.vitest, new RegExp(`^~${major}\\.${minor}\\.\\d+$`))
+  // @vitest/utils is internal to Vitest and not semver-safe alone: it moves only with
+  // @vitest/expect, pinned to exactly the same version. Neither Vitest nor Vite ships.
+  const { dependencies } = manifest
+  assert.match(dependencies['@vitest/expect'], /^\d+\.\d+\.\d+$/)
+  assert.equal(dependencies['@vitest/utils'], dependencies['@vitest/expect'])
+  assert.equal(dependencies.vitest, undefined)
+  assert.equal(dependencies.vite, undefined)
 })

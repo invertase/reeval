@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { mkdir, writeFile } from 'node:fs/promises'
+import { writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { vitestMismatch } from '../src/engine/vitest.ts'
-import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
+import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 const math = (value: number) => `
 import { evaluate, expect } from 'evalsuite'
@@ -394,57 +393,6 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     )
   })
 
-  test('an evalsuite on another copy of vitest is reported', async () => {
-    const dir = tempDir('other-evalsuite')
-    const manifest = (name: string) =>
-      JSON.stringify({ name, exports: { './package.json': './package.json' } })
-    const vitest = join(dir, 'node_modules/evalsuite/node_modules/vitest')
-    await mkdir(vitest, { recursive: true })
-    await writeFile(join(dir, 'node_modules/evalsuite/package.json'), manifest('evalsuite'))
-    await writeFile(join(vitest, 'package.json'), manifest('vitest'))
-    assert.match(vitestMismatch(dir) ?? '', /uses another copy of vitest/)
-    assert.equal(vitestMismatch((await project('same-evalsuite', {})).dir), undefined)
-
-    const { name } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
-    const published = tempDir('other-published')
-    const publishedVitest = join(published, 'node_modules', name, 'node_modules/vitest')
-    await mkdir(publishedVitest, { recursive: true })
-    await writeFile(join(published, 'node_modules', name, 'package.json'), manifest(name))
-    await writeFile(join(publishedVitest, 'package.json'), manifest('vitest'))
-    assert.match(vitestMismatch(published) ?? '', /uses another copy of vitest/)
-  })
-
-  test('another copy of vitest is reported even when its version is in range', async () => {
-    const ours = JSON.parse(
-      readFileSync(join(pkgRoot, 'node_modules/vitest/package.json'), 'utf8'),
-    ).version
-    const [major, minor] = ours.split('.')
-    for (const version of [ours, `${major}.${minor}.999`]) {
-      const dir = tempDir(`in-range-${version}`)
-      const vitest = join(dir, 'node_modules/evalsuite/node_modules/vitest')
-      await mkdir(vitest, { recursive: true })
-      await writeFile(
-        join(dir, 'node_modules/evalsuite/package.json'),
-        JSON.stringify({ name: 'evalsuite', exports: { './package.json': './package.json' } }),
-      )
-      await writeFile(
-        join(vitest, 'package.json'),
-        JSON.stringify({
-          name: 'vitest',
-          version,
-          exports: { './package.json': './package.json' },
-        }),
-      )
-      const warning = vitestMismatch(dir) ?? ''
-      assert.match(
-        warning,
-        new RegExp(`another copy of vitest \\(${version.replaceAll('.', '\\.')} at `),
-      )
-      assert.match(warning, new RegExp(`this es \\(${ours.replaceAll('.', '\\.')} at `))
-      assert.match(warning, /won't register/)
-    }
-  })
-
   test('eval files mix TypeScript, ESM, CommonJS and JSON, with extensionless, circular imports and top-level await', async () => {
     const p = await project('module-mix', {
       'es.config.ts': fakeConfig(),
@@ -613,17 +561,22 @@ evaluate('same', async () => {})
     assert.match(r.stderr, /evals\/d\.es\.ts: evaluate\("same"\) is declared twice in this file/)
   })
 
-  test('only the engine module imports vitest', () => {
+  test('nothing ES ships imports vitest or vite; only engine/ imports @vitest/*', () => {
     const src = join(pkgRoot, 'src')
-    const offenders = readdirSync(src, { recursive: true, withFileTypes: true })
+    const files = readdirSync(src, { recursive: true, withFileTypes: true })
       .filter((entry) => entry.isFile())
       .map((entry) => join(entry.parentPath, entry.name))
-      .filter(
-        (path) =>
-          !path.includes('/src/engine/') &&
-          /['"]vitest(\/[^'"]*)?['"]/.test(readFileSync(path, 'utf8')),
-      )
-    assert.deepEqual(offenders, [])
+    const importing = (pattern: RegExp) =>
+      files
+        .filter((path) => pattern.test(readFileSync(path, 'utf8')))
+        .map((p) => p.slice(src.length + 1))
+    assert.deepEqual(importing(/from ['"](vitest|vite)(\/[^'"]*)?['"]/), [])
+    const vitestParts = importing(/from ['"]@vitest\//)
+    assert.ok(vitestParts.length > 0, 'the canary: the engine does import @vitest/expect')
+    assert.deepEqual(
+      vitestParts.filter((p) => !p.startsWith('engine/')),
+      [],
+    )
   })
 })
 

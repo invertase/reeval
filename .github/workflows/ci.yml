@@ -182,8 +182,8 @@ jobs:
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
 
-  # ES's engine against the Vitest engine's captured runs (scripts/differential.mjs). Recording
-  # Vitest live first shows the captures are still what it does.
+  # ES's engine against the Vitest engine's captured runs (scripts/differential.mjs): the replay
+  # of the side-by-side comparison made before Vitest was removed.
   engine-differential:
     name: engine differential
     runs-on: ubuntu-24.04
@@ -193,21 +193,15 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - name: the captures are the Vitest engine's
+      - name: ES's engine does what the Vitest engine did
         run: |
-          node --experimental-strip-types --no-warnings scripts/differential.mjs record vitest "$RUNNER_TEMP/vitest"
-          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/vitest" --vitest
-      - name: ES's engine does the same
-        run: |
-          node --experimental-strip-types --no-warnings scripts/differential.mjs record es "$RUNNER_TEMP/es"
+          node --experimental-strip-types --no-warnings scripts/differential.mjs record "$RUNNER_TEMP/es"
           node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: differential-captures
-          path: |
-            ${{ runner.temp }}/es
-            ${{ runner.temp }}/vitest
+          path: ${{ runner.temp }}/es
           retention-days: 7
 
   coverage:
@@ -240,9 +234,9 @@ jobs:
           path: coverage/report
           retention-days: 14
 
-  # Installs the tarball with Node 22's npm 10.9 and with npm 11. npm before 11.6 crashes
-  # ("reading 'edgesOut'", npm/cli#8261) when vitest's peer set pulls in a newer vitest than
-  # the one the ~5.0.x range resolves to, so this leg fails once vitest ships a new minor.
+  # Installs the tarball with Node 22's npm 10.9 and with npm 11. npm before 11.6 crashed
+  # ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which ES no longer depends on;
+  # this leg keeps it that way.
   pack:
     name: packed install (npm ${{ matrix.npm }})
     runs-on: ubuntu-24.04
