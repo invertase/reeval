@@ -60,7 +60,9 @@ function ModeBadge() {
             Live
           </span>
         </TooltipTrigger>
-        <TooltipContent>Watching the history folder: new runs appear as they land.</TooltipContent>
+        <TooltipContent>
+          Watching the history folder: runs show here while they run, and stay once they land.
+        </TooltipContent>
       </Tooltip>
     )
   }
