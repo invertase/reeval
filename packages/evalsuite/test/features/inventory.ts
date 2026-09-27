@@ -831,6 +831,7 @@ export const inventory: InventoryFeature[] = [
     name: '`es compare --fail-on-regression`',
     tests: [
       'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a regression and on a failing new eval',
+      'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a failing eval that changed (not comparable)',
     ],
   },
   {

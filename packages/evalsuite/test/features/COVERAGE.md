@@ -112,7 +112,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|
 | Recording, merges across branches, rebases and `es checkout` | ✓ 3 | — | — | — | — |
 | `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 5 | — | — | — | ◐ 2 (2 without a canary) |
-| `es compare --fail-on-regression` | ✓ 1 | — | — | — | — |
+| `es compare --fail-on-regression` | ✓ 2 | — | — | — | — |
 | `es query` | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
 | `es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
