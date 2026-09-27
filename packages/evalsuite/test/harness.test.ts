@@ -12,6 +12,7 @@ import {
   ANTIGRAVITY_HOME_SKILLS_DIR,
   ANTIGRAVITY_WORKSPACE_RULES_FILE,
   ANTIGRAVITY_WORKSPACE_SKILLS_DIR,
+  AntigravityStreamTranslator,
   antigravityEndpoints,
   toUsage as antigravityUsage,
 } from '@evalsuite/harness-antigravity'
@@ -67,6 +68,7 @@ import {
 } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
+import type { TranscriptEvent } from '../src/types.ts'
 import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
@@ -1310,8 +1312,61 @@ async function turnThrough(
   for await (const part of result.fullStream) {
     stream.push({ ms: stream.length, part: part as StampedPart['part'] })
   }
-  return { usage: tokenUsage(await result.totalUsage), served, stream }
+  try {
+    return { usage: tokenUsage(await result.totalUsage), served, stream, text: await result.text }
+  } catch {
+    // A harness's `error` part fails the turn, as it fails ES's; `stream` has it.
+    return { usage: null, served, stream, text: null }
+  }
 }
+
+describe("agy's retried model calls, through HarnessAgent and the normaliser", () => {
+  /** A captured agy 1.2.11 turn through today's translator, with `edit` made to its NDJSON first. */
+  const agyParts = (name: string, edit = (ndjson: string) => ndjson) => {
+    const ndjson = readFileSync(
+      new URL(`../../harness-antigravity/test/fixtures/${name}`, import.meta.url),
+      'utf8',
+    )
+    const t = new AntigravityStreamTranslator({ turn: 1 })
+    return [
+      ...edit(ndjson)
+        .split('\n')
+        .flatMap((l) => t.push(l)),
+      ...t.end({ exitCode: 0 }),
+    ]
+  }
+  const of = <T extends TranscriptEvent['type']>(events: TranscriptEvent[], type: T) =>
+    events.filter((e): e is Extract<TranscriptEvent, { type: T }> => e.type === type)
+
+  test("a retry that answered: the turn's text and transcript hold its reply once, the retry an error", async () => {
+    // agy ends this real turn ERROR ("The stream was interrupted") though the retry answered; as
+    // SUCCESS, the turn's text is what ES records for it.
+    const parts = agyParts('provider-retried.ndjson', (s) =>
+      s.replace('"status":"ERROR"', '"status":"SUCCESS"'),
+    )
+    const { text, stream } = await turnThrough(parts)
+    assert.equal(text, 'FINAL-ATTEMPT reply, whole.\n')
+    const events = normaliseStream(stream, 0)
+    assert.deepEqual(
+      of(events, 'text').map((e) => e.text),
+      ['FINAL-ATTEMPT reply, whole.\n'],
+    )
+    assert.deepEqual(
+      of(events, 'error').map((e) => e.message),
+      ['A step failed (error_message), and the turn went on'],
+    )
+  })
+
+  test("every call dropped mid-reply: nine retries and agy's error, no partial reply", async () => {
+    const { text, stream } = await turnThrough(agyParts('provider-dropped-mid-stream.ndjson'))
+    assert.equal(text, null)
+    const events = normaliseStream(stream, 0)
+    assert.deepEqual(of(events, 'text'), [])
+    const errors = of(events, 'error').map((e) => e.message)
+    assert.equal(errors.filter((m) => m.includes('error_message')).length, 9)
+    assert.match(errors.at(-1) ?? '', /network issue connecting to the server/)
+  })
+})
 
 describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normaliser', () => {
   const WEB = new Set(['webSearch', 'webFetch'])

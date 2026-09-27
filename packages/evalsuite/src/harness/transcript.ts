@@ -365,6 +365,14 @@ export function normaliseStream(parts: StampedPart[], startedAt: number): Transc
       case 'error':
         out.push({ at: ms, event: { ...stamp(ms), type: 'error', message: errorText(part.error) } })
         break
+      // A step that failed while the turn carried on: a model call the harness retried (agy's
+      // `error_message` steps). An `error` part would end the turn.
+      case 'finish-step':
+        if (part.finishReason === 'error') {
+          const message = `A step failed (${str(part.rawFinishReason) || 'error'}), and the turn went on`
+          out.push({ at: ms, event: { ...stamp(ms), type: 'error', message } })
+        }
+        break
     }
   }
   // Calls still open when the turn ended (aborted, or the harness never reported a result).
