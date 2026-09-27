@@ -1,0 +1,29 @@
+name: Bug report
+description: Something in ES broke. Run `es report --issue` to fill this in.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        `es report --issue` fills in the report below from your project, redacted: versions, `es doctor`, the config's shape, the last command's error and the run's failures. Review it before you submit.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what ES did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: es report
+      description: The summary from `es report`. Attach `report.md` (and `report-logs.tar.gz`, if there is one) from the folder it names, for the rest.
+    validations:
+      required: false
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: The smallest eval and config that shows it, if you have one.
+    validations:
+      required: false

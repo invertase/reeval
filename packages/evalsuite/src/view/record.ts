@@ -5,6 +5,7 @@
 
 import type { RunRecord } from '../history/types.ts'
 import { SCHEMA_VERSION } from '../history/types.ts'
+import type { CliInvocation } from '../report/types.ts'
 import type { AnalysisDoc } from './analysis.ts'
 import type { DebugRequest } from './debug.ts'
 import type { TranscriptLine } from './model.ts'
@@ -16,6 +17,7 @@ export type ShapeName =
   | 'analysis'
   | 'debug-request'
   | 'live-progress'
+  | 'cli-invocation'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -34,6 +36,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   analysis: [],
   'debug-request': [],
   'live-progress': [],
+  'cli-invocation': [],
 }
 
 /**
@@ -127,3 +130,7 @@ export const readableAnalysis = (doc: AnalysisDoc, what = 'This analysis'): Anal
 /** A gateway request line from `.es/debug` as the studio sees it. */
 export const readableDebugRequest = (request: DebugRequest): DebugRequest =>
   fillDefaults('debug-request', request)
+
+/** A line of `.es/cli.jsonl` as `es report` sees it. */
+export const readableCliInvocation = (entry: CliInvocation): CliInvocation =>
+  fillDefaults('cli-invocation', entry)

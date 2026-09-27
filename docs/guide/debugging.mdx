@@ -145,6 +145,8 @@ ES_DEBUG=1 npx es run hello
 
 `ES_DEBUG=1` is for when ES misbehaves rather than the agent. It streams the output of the test engine ES runs your evals in, plus the Docker sandbox and image build logs, to stderr. It also prints the stack for unexpected errors.
 
+If ES itself is at fault, `npx es report --issue` collects a redacted report (versions, `es doctor`, the last error and the run's debug logs), writes it locally for you to review, and opens a pre-filled issue: see [es report](/reference/cli/report).
+
 ## Clean up
 
 ```bash
