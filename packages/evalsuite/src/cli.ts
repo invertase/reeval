@@ -667,6 +667,16 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
 })
 
 let settled = false
+// An error nothing awaited, from ES or from code the config runs, ends the run as an infra error.
+const crash = (error: unknown) => {
+  settled = true
+  console.error(red(`es: ${redactSecrets(error instanceof Error ? error.message : String(error))}`))
+  if (process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
+  process.exit(EXIT.infra)
+}
+process.on('unhandledRejection', crash)
+process.on('uncaughtException', crash)
+
 // A Ctrl-C to the whole process group can kill a Vitest worker while Node is still booting it,
 // before it can ignore SIGINT. Vitest then never settles and the event loop simply drains.
 process.on('beforeExit', () => {

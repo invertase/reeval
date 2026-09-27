@@ -131,7 +131,7 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Exit codes 0, 1, 2, 3, 130 and 143 | ✓ 4 | — | — | — | — |
+| Exit codes 0, 1, 2, 3, 130 and 143 | ✓ 5 | — | — | — | — |
 | Exit code precedence (a failure and an infra error in one run) | ✓ 1 | — | — | — | — |
 | Output modes, renderers and GitHub Actions groups | ✓ 4 | — | — | — | — |
 | `--log-order`, `--log-prefix` and `--output-logs` through `es run` | ✓ 1 | — | — | — | — |
