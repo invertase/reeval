@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { X509Certificate } from 'node:crypto'
+import { createHash, X509Certificate } from 'node:crypto'
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -551,13 +551,43 @@ describe('package boundary', () => {
   test('each harness has its own image, tagged and labelled with its adapter version', () => {
     const { cursor, 'claude-code': claude } = HARNESS_PACKAGES
     assert.equal(imageFor('cursor'), `evalsuite-sandbox:cursor-${cursor.version}`)
-    assert.equal(imageFor('claude-code'), `evalsuite-sandbox:claude-code-${claude.version}`)
+    assert.equal(
+      imageFor('claude-code'),
+      `evalsuite-sandbox:claude-code-${claude.version}-patch.${claude.patch}`,
+    )
     assert.equal(DEFAULT_IMAGE, imageFor('cursor'))
-    assert.equal(harnessLabel('claude-code'), `@ai-sdk/harness-claude-code@${claude.version}`)
+    assert.equal(
+      harnessLabel('claude-code'),
+      `@ai-sdk/harness-claude-code@${claude.version}-patch.${claude.patch}`,
+    )
     assert.equal(
       imageFor('antigravity'),
       `evalsuite-sandbox:antigravity-${HARNESS_PACKAGES.antigravity.version}`,
     )
+  })
+
+  test("a patched adapter's image is tagged with its patch, and only a patched one", () => {
+    // The bootstrap bakes the patched bridge, so a changed patch must change the tag.
+    const workspace = join(root, '../..')
+    const patched = new Map(
+      [
+        ...readFileSync(join(workspace, 'pnpm-workspace.yaml'), 'utf8').matchAll(
+          /^ {2}'?(@?[^@'\s]+)@([^':\s]+)'?: (\S+)$/gm,
+        ),
+      ].map(([, name, version, file]) => [`${name}@${version}`, file as string]),
+    )
+    for (const { name, version, patch } of Object.values(HARNESS_PACKAGES)) {
+      const file = patched.get(`${name}@${version}`)
+      if (!file) {
+        assert.equal(patch, undefined, `${name} has a patch but no patchedDependencies entry`)
+        continue
+      }
+      const sha = createHash('sha256')
+        .update(readFileSync(join(workspace, file)))
+        .digest('hex')
+      assert.equal(patch, sha.slice(0, 8), `${name}'s patch is ${file}: set its patch to it`)
+    }
+    assert.ok(patched.has(`@ai-sdk/harness-claude-code@${HARNESS_PACKAGES['claude-code'].version}`))
   })
 })
 

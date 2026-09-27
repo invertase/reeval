@@ -25,7 +25,7 @@ Without a config file, every key takes its default. The option keys (`harness`, 
 
 `es` loads `es.config.ts` from the current directory, or the file you pass with `--config`. A missing `es.config.ts` means all defaults; a missing `--config` file is an error (`Config file not found: nope.ts`).
 
-The config's directory is the project root: `include` globs and helper paths (`skill.local`, `file`) resolve against it. ES also loads `.env.local`, then `.env`, from the current directory; a variable already set in the environment wins.
+The config's directory is the project root: `include` globs and helper paths (`skill.local`, `file`) resolve against it. ES also loads `.env.local`, then `.env`, from it, not from the current directory, so `es run --config ../es.config.ts` from a subdirectory reads the project's files. Precedence: the shell, then `.env.local`, then `.env`.
 
 The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `es.config.ts must default-export defineConfig({...})`.
 
@@ -114,7 +114,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="record" type="'manual' | 'ci' | 'always'">
-  When `es run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `es record`. Default `'ci'`. A run stopped by `budget.duration` is recorded too, with status `budget`; an interrupted one never is.
+  When `es run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `es record`. Default `'ci'`. A run stopped by `budget.duration` is recorded too, with status `budget`, and `es compare` never takes it as a base; an interrupted one never is. With `manual`, `es record` needs `--allow-incomplete` for it.
 </Property>
 
 <Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }">

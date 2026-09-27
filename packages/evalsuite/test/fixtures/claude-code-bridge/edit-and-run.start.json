@@ -1,0 +1,16 @@
+{
+  "type": "start",
+  "prompt": "In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: echo contract-$((6*7)). Then stop.",
+  "tools": [],
+  "model": "claude-haiku-4-5",
+  "env": {
+    "ANTHROPIC_API_KEY": "aisdkhc_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "IS_SANDBOX": "1",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "thinking": {
+    "type": "adaptive",
+    "display": "summarized"
+  },
+  "permissionMode": "allow-all"
+}

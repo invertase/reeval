@@ -27,8 +27,15 @@ export type HarnessRow = {
   mcp?: false
   /** Whether it reports token usage for each turn; checked either way. */
   tokens: boolean
+  /** Why a real harness reports none, for the harness matrix in the README and docs. */
+  tokensWhy?: string
   /** What every turn's `model` (the model the harness says served it) looks like; null: none. */
   servedModel: RegExp | null
+  /**
+   * Why the turns don't record the model `servedModel` expects yet, while the contract's check of
+   * it fails on real runs; the harness matrix shows it as missing. Delete it with the fix.
+   */
+  servedModelGap?: string
   /**
    * What `servedModels` (the models its API requests named, seen by the gateway) must include;
    * null when its requests don't name one, so the record says it's unknown.
@@ -97,8 +104,9 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.
     tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
     servedModel: null,
     wireModel: /^gemini-3\.8-flash$/,
   },
@@ -114,8 +122,9 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.
     tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
     servedModel: null,
     wireModel: /^gemini-3\.8-flash$/,
   },
@@ -155,15 +164,16 @@ const imageBuilt = (ref: string) => {
 
 /**
  * Why a row doesn't run here, or false. Real rows run only with `ES_TEST_REAL=1` (they spend
- * money) and their key, and skip without it, saying so; `ES_CONTRACT_HARNESSES=cursor,…` picks
- * rows. A missing image fails instead under `ES_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
+ * money), and skip without it, saying so; asked for, a row without its key runs and fails in
+ * `reserveAttempts`, naming the variable. `ES_CONTRACT_HARNESSES=cursor,…` picks rows. A missing
+ * image fails instead under `ES_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
  */
 export function skipRow(row: HarnessRow): string | false {
   const only = process.env.ES_CONTRACT_HARNESSES?.split(',')
   if (only && !only.includes(row.id)) return `ES_CONTRACT_HARNESSES=${only.join(',')}`
   if (row.key) {
     if (process.env.ES_TEST_REAL !== '1') return 'set ES_TEST_REAL=1 to run real agents'
-    if (!keyOf(row)) return `${row.key.from.join(' or ')} isn't set, so ${row.id} can't run`
+    if (!keyOf(row)) return false
   }
   if (process.env.ES_TEST_REQUIRE_DOCKER === '1') return false
   if (!imageBuilt(imageFor(row.image)))
@@ -212,9 +222,16 @@ export function scanTargets(value: string): string {
  * The hard cap on real attempts across every suite of one CI job: each real row reserves what it
  * may start in `ES_REAL_LEDGER` (a file, one number per line) before it runs, and fails without
  * starting anything when that would take the job over `ES_REAL_ATTEMPT_BUDGET`. Unset, no cap
- * (local runs); each es run's own `budget.attempts` still holds.
+ * (local runs); each es run's own `budget.attempts` still holds. A real row without its key fails
+ * here, before anything starts: asking for real agents (`ES_TEST_REAL=1`) and getting a skip would
+ * pass a nightly that tested nothing.
  */
 export function reserveAttempts(row: HarnessRow, attempts: number, what: string): void {
+  if (row.key && !keyOf(row)) {
+    throw new Error(
+      `${row.key.from.join(' or ')} isn't set, and ES_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of ES_CONTRACT_HARNESSES`,
+    )
+  }
   const budget = Number(process.env.ES_REAL_ATTEMPT_BUDGET)
   const ledger = process.env.ES_REAL_LEDGER
   if (!row.key || !budget || !ledger) return

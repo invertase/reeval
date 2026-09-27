@@ -177,7 +177,8 @@ export function planLine(plan: RunPlan): string {
 }
 
 /** One row per eval: what it runs, and what the profile changed. */
-export function planTable(plan: RunPlan): string[] {
+/** The `--dry-run` table: one row per planned eval, then one per placeholder in `todos`. */
+export function planTable(plan: RunPlan, todos: readonly string[] = []): string[] {
   const header = ['eval', 'harnesses', 'variants', 'runs', 'attempts', 'notes']
   const rows = plan.rows.map(({ id, plan: p }) => [
     clip(id, 64),
@@ -198,6 +199,7 @@ export function planTable(plan: RunPlan): string[] {
       .filter(Boolean)
       .join(' · '),
   ])
+  for (const id of todos) rows.push([clip(id, 64), '—', '—', '0', '0', 'todo'])
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)))
   const line = (cols: string[]) =>
     cols

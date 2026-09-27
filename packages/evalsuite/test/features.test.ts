@@ -1010,7 +1010,6 @@ function fixtureTests(tiers: Tier[]) {
       const timeout = { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, async () => {
         if (tier === 'real') {
-          assert.ok(process.env.CURSOR_API_KEY, 'the real tier needs CURSOR_API_KEY')
           reserveAttempts(cursorRow, 2, `fixture ${f.dir}`)
         }
         const p = await fixture(`features/${f.dir}`)

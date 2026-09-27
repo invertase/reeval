@@ -24,11 +24,13 @@ const agyImage = {
   skip: !agyImageBuilt && !requireDocker && `needs Docker and ${imageFor('antigravity')}`,
   timeout: 300_000,
 }
-// The real-agent run needs a real key, so it skips without one even when Docker is required.
+// The real-agent run needs a real key: without one it skips, even when Docker is required, unless
+// ES_TEST_REAL=1 asks for real agents, when it fails naming the key.
 const realAgy = {
-  skip: !process.env.GEMINI_API_KEY
-    ? 'needs GEMINI_API_KEY (a Gemini API key) for a real Antigravity run'
-    : agyImage.skip,
+  skip:
+    !process.env.GEMINI_API_KEY && process.env.ES_TEST_REAL !== '1'
+      ? 'needs GEMINI_API_KEY (a Gemini API key) for a real Antigravity run'
+      : agyImage.skip,
   timeout: 600_000,
 }
 
@@ -122,6 +124,7 @@ evaluate('hi', async (t) => {
     realAgy,
     async () => {
       const key = process.env.GEMINI_API_KEY ?? ''
+      assert.ok(key, "GEMINI_API_KEY isn't set, and ES_TEST_REAL=1 asks for a real Antigravity run")
       const p = await project('docker-agy-real', {
         'es.config.ts': `
 import { defineConfig } from 'evalsuite'

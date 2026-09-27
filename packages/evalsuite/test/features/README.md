@@ -91,7 +91,8 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 
 A fixture that lists `real` also runs on real Cursor in Docker: its `es.config.ts` picks
 `cursor({ model: process.env.ES_REAL_MODEL ?? 'composer-2.5' })` when `ES_FIXTURE_HARNESS=cursor`.
-The tier is skipped unless `ES_TEST_REAL=1`, and then needs `CURSOR_API_KEY`. Its fixtures run one
+The tier is skipped unless `ES_TEST_REAL=1`, and then needs `CURSOR_API_KEY`: without it each fixture
+fails, naming the variable. Its fixtures run one
 at a time, at `--concurrency 1`, and spend money, so keep them cheap:
 
 - One short turn per eval, with a prompt that names the exact action ("run `cat …` once").

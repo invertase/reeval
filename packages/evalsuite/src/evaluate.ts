@@ -10,7 +10,7 @@ import {
 } from './engine/runtime.ts'
 import { inCI } from './env.ts'
 import { UsageError } from './errors.ts'
-import { refusedSse } from './harness/agents.ts'
+import { refusedMcp } from './harness/agents.ts'
 import { attemptId, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
@@ -102,8 +102,17 @@ export const group: GroupFn & { skip: GroupFn; only: GroupFn; todo: (name: strin
   Object.assign(defineGroup('run'), {
     skip: defineGroup('skip'),
     only: defineGroup('only'),
-    todo: (name: string) => registerGroup(name, 'todo', () => {}),
+    todo: (name: string) => registerTodo(name),
   })
+
+/**
+ * A placeholder, `evaluate.todo` or `group.todo`: one eval entry that never runs, counted as
+ * skipped and shown as todo. The enclosing groups' tags filter it as they do an eval.
+ */
+function registerTodo(name: string) {
+  const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
+  if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
+}
 
 type EvaluateFn<F = EvalFn> = {
   (name: string, fn: F, options?: EvalOptions): void
@@ -168,8 +177,8 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
   for (const planned of plannedAttempts) {
     const why = unenforceable(planned.egress, planned.sandbox, where)
     if (why) throw new UsageError(why)
-    const sse = refusedSse(planned.harness, planned.environment.layers)
-    if (sse) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${sse}`)
+    const mcp = refusedMcp(planned.harness, planned.environment.layers)
+    if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
   }
   const plan = evalPlan(resolvedEval, plannedAttempts)
   if (resolvedEval.skip) {
@@ -302,10 +311,6 @@ export const evaluate: EvaluateFn & {
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
-  todo: (name: string) => {
-    const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
-    if (matchesTags(tags, getRunContext().tags))
-      registerTest(name, { mode: 'todo' }, async () => {})
-  },
+  todo: registerTodo,
   for: evalFor,
 })

@@ -176,6 +176,11 @@ export type FakeHarnessDescriptor = {
   failWith?: string
   /** A reasoning block at the start of every turn. */
   reasoning?: string
+  /**
+   * The model the fake agent says served each turn, as a real harness reports its resolved model
+   * and variant (`composer-2.5[fast=true]`); unset, it reports none.
+   */
+  servedModel?: string
   /** Tool calls the fake agent reports on every turn, before writing files. */
   tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean }>
   /** Files and message used instead when the environment gives the agent a skill. */

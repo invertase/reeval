@@ -1,6 +1,7 @@
 # The real-agent tier: real agents in Docker, nightly, on demand, and on PRs labelled
-# `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code)
-# and only with its secrets, skipping with a notice without them. One run at a time.
+# `real-agents`. It spends model credit, so it runs only in this repository (never a fork's code).
+# A missing secret fails the rows that need it, naming the variable: asked for, the real tier never
+# skips. One run at a time.
 #   contract (pinned)    the harness contract, the real-tier fixtures, the @cursor/sdk shape check
 #                        and the CLI end to end, on the pinned agent versions
 #   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
@@ -41,29 +42,21 @@ jobs:
         contains(github.event.pull_request.labels.*.name, 'real-agents')))
     runs-on: ubuntu-24.04
     timeout-minutes: 2
-    outputs:
-      enabled: ${{ steps.keys.outputs.enabled }}
     steps:
-      - id: keys
-        env:
+      # Annotates up front; the rows that need a missing key fail in the contract legs.
+      - env:
           HAS_CURSOR: ${{ secrets.CURSOR_API_KEY != '' }}
           HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
         run: |
-          [ "$HAS_CURSOR" = true ] || echo "::notice::No CURSOR_API_KEY repository secret: the Cursor rows are skipped"
-          [ "$HAS_GEMINI" = true ] || echo "::notice::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows are skipped"
-          [ "$HAS_ANTHROPIC" = true ] || echo "::notice::No ANTHROPIC_API_KEY repository secret: the Claude Code rows are skipped"
-          if [ "$HAS_CURSOR" = true ] || [ "$HAS_GEMINI" = true ] || [ "$HAS_ANTHROPIC" = true ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::The real tier is skipped: none of CURSOR_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY and ANTHROPIC_API_KEY is a repository secret"
-          fi
+          [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the example smoke fail"
+          [ "$HAS_GEMINI" = true ] || echo "::error::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows and the example smoke fail"
+          [ "$HAS_ANTHROPIC" = true ] || echo "::error::No ANTHROPIC_API_KEY repository secret: the Claude Code rows fail"
+          true
 
   pinned:
     name: contract (pinned)
     needs: gate
-    if: needs.gate.outputs.enabled == 'true'
     uses: ./.github/workflows/contract.yml
     with: { versions: pinned }
     secrets: inherit
@@ -73,7 +66,7 @@ jobs:
     needs: [gate, pinned]
     # After the pinned leg, pass or fail, so the two never spend at once.
     if: >-
-      !cancelled() && needs.gate.outputs.enabled == 'true' &&
+      !cancelled() && needs.gate.result == 'success' &&
       (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.latest))
     uses: ./.github/workflows/contract.yml
     with: { versions: latest }
@@ -83,7 +76,7 @@ jobs:
     name: real agents (Cursor)
     needs: [gate, latest]
     if: >-
-      !cancelled() && needs.gate.outputs.enabled == 'true' && github.event_name != 'pull_request'
+      !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
@@ -97,8 +90,8 @@ jobs:
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
       # The real-tier fixtures ran in the contract legs; this is examples/hello's smoke profile.
+      # Without either key, es run exits 2 naming it.
       - name: examples/hello smoke
-        if: env.CURSOR_API_KEY != '' && env.GOOGLE_GENERATIVE_AI_API_KEY != ''
         working-directory: examples/hello
         run: node ../../packages/evalsuite/dist/cli.js run --profile smoke
       - if: always()

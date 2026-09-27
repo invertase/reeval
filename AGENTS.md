@@ -72,9 +72,9 @@ its files import `evalsuite`.
 | `packages/harness-cursor-sdk` | `@evalsuite/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/harness-opencode` | `@evalsuite/harness-opencode`: OpenCode on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` can't broker a Google key). It names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and drops the turn's usage, which OpenCode's ACP server reports for its last model call only. The image bakes the plugin runtime OpenCode would otherwise fetch from npm on every start. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/harness-goose` | `@evalsuite/harness-goose`: Goose on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `goose acp` in the sandbox. Its bootstrap downloads the pinned release and checks its sha256, and gives Goose a private home. MCP servers go in Goose's `config.yaml` as enabled extensions (servers from ACP `session/new` start disabled). It names the tool calls `harness-acp` can't from Goose's `_meta.goose.toolCall`, and drops the turn's usage, which Goose's ACP server reports for its last model call only. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
-| `packages/harness-pi` | `@evalsuite/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in ES's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused. Private, and bundled into `@invertase/foobar` like `harness-antigravity`, with its `assets/` beside `dist/` |
+| `packages/harness-pi` | `@evalsuite/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in ES's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused at plan time. Private, and bundled into `@invertase/foobar` like `harness-antigravity`, with its `assets/` beside `dist/` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`. It's private: the build bundles it into `@invertase/foobar` and ships `docker/` beside `dist/` there, so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts`, `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` and `es.pi.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose and pi), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`) |
+| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts`, `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` and `es.pi.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose and pi), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`). Its `tsconfig.json` extends nothing, so the example runs when copied out of the repo (with `evalsuite` pointed at the published package); `test/example.test.ts` copies it to a temp directory and runs the fake config |
 
 ## Development
 
@@ -103,6 +103,17 @@ An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, 
 root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `@invertase/foobar`'s `files` and `.gitignore`.
 
+**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.128 carries a pnpm patch
+(`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model.
+A patch reaches only this workspace, so `@invertase/foobar` lists the adapter in `devDependencies`
+and tsdown inlines it with its bridge files (`dist/bridge/`), which its bootstrap writes into the
+sandbox. Its image tag and label carry the patch's hash (`HARNESS_PACKAGES`' `patch`, which a test
+holds to the file), so a changed patch rebuilds the image. Bumping the adapter fails `pnpm install`
+(`ERR_PNPM_UNUSED_PATCH`) until the patch is moved or dropped. `test/replay.test.ts` replays a real
+captured turn through the shipped bridge, and the drift leg's `scripts/drift/claude-code-patch.mjs`
+fails once the newest upstream reports the model unpatched (drop the patch) or the patch stops
+applying (rebase it with `pnpm patch`).
+
 In `packages/evalsuite`, the tests run `dist/cli.js`, so rebuild after changing `src/`:
 
 ```bash
@@ -125,7 +136,8 @@ nothing is left behind. Each behaviour is an eval, a canary that must fail and a
 record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness and checks `es
 compare` says "same", every `es query` view answers, `-v` and `.es/debug` have the trace, and `es
 studio build` builds the history. Both need `ES_TEST_REAL=1` (which `pnpm test:contract` sets) and
-each harness's key; a row without its key skips and says so. Their
+each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
+so narrow a local run with `ES_CONTRACT_HARNESSES`. Their
 `fake` rows run key-free in the Docker tier. `test/replay.test.ts` replays streams captured from
 real runs (`ES_UPDATE_CAPTURES=1` on a contract run refreshes them, `ES_UPDATE_FORMATS=1` accepts a
 new native format). No real-agent test retries: checks read files, exit codes, the record and
@@ -135,8 +147,8 @@ The real tier is skipped (with a reason) unless `ES_TEST_REAL=1`, which `pnpm te
 runs the fixtures that list `real` on Cursor in Docker, one at a time, on `composer-2.5` unless
 `ES_REAL_MODEL` names another. From the repo root, `pnpm smoke:real` is the nightly real-agent
 smoke: the real tier, then `examples/hello`'s `smoke` profile (the judge-free evals tagged
-`smoke`). It exits 0 with a note when `CURSOR_API_KEY` isn't set, and skips the example without
-`GOOGLE_GENERATIVE_AI_API_KEY`.
+`smoke`). It needs `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY`, and fails naming whichever
+isn't set. Without `ES_TEST_REAL=1`, the real tests skip as before.
 
 The engine and wrapper tests drive the real `es` CLI against generated projects with the fake
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
@@ -151,7 +163,8 @@ policy leaves no route out. ES's Docker tests build real `install` layers and Do
 Code) and check the cache and the record, and start real Claude Code and Antigravity with a
 made-up key to check brokering end to end. With `GEMINI_API_KEY` set, one more runs the real
 Antigravity CLI (it edits the workspace, answers from its rules and a home skill, and a script it
-runs sees only the placeholder); without the key it skips and says why. The Docker tests skip unless Docker is running and the sandbox images have
+runs sees only the placeholder); without the key it skips and says why, unless `ES_TEST_REAL=1`,
+when it fails. The Docker tests skip unless Docker is running and the sandbox images have
 been built (Cursor's, and each other harness's for its own: `es image build` in a project whose
 config uses it, such as `examples/hello` with `--config es.claude.config.ts`,
 `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` or `es.pi.config.ts`);
@@ -181,7 +194,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
-| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's), skipping with a notice without the `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` and `ANTHROPIC_API_KEY` secrets (each row needs its own): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `ANTHROPIC_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
@@ -249,6 +262,9 @@ npx @docs.page/cli check        # links, assets and frontmatter
 shows `{/* */}` as text and rejects `<!-- -->`): the CLI help per command (from `es --help`), the `es query` views and
 tables (from `es query --schema --json`), exit codes, the option keys and where each is accepted,
 and the record's fields (from `src/history/types.ts` and `src/types.ts` and their doc comments).
+It also writes the harness feature matrix (`scripts/harness-matrix.mjs`) into the Harnesses guide
+and `README.md`'s `readme:harness-matrix` block, from the harness catalog, each adapter's tool
+catalog and the contract rows in `test/support/harnesses.ts`, and fails when those disagree.
 `--check` also fails when an option key, `ES_*` variable or exit code in the code isn't named on
 its Reference page, when `es --help` misses a flag the CLI parses, when a sidebar link has no page
 (or a page no link), or when a page names the package literally. CI runs it in the `docs` job.
@@ -272,7 +288,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into ES's image for it,
-   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128`,
+   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128-patch.5d1c985c`,
    `antigravity-0.1.0`, `opencode-0.1.0`, `goose-0.1.0`, `pi-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.

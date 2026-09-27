@@ -453,6 +453,40 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
     const history = readRun(p.dir, { history: 'evals/.history' })
     assert.equal(history.run.status, 'budget')
   })
+
+  test('a budget-stopped run is auto-recorded in CI and by record: always, with status budget, and is never a compare base', async () => {
+    const files = (record: string) => ({
+      'es.config.ts': config(
+        `concurrency: 1, budget: { duration: '1s' },${record}`,
+        'fakeHarness({ delayMs: 700 })',
+      ),
+      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
+`,
+    })
+    const ci = await project('budget-record-ci', files(''))
+    const inCI = await runCli(ci.dir, ['run'], { env: { CI: '1' } })
+    assert.equal(inCI.code, 1, inCI.stdout + inCI.stderr)
+    assert.match(inCI.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    assert.equal(readRun(ci.dir, { history: 'evals/.history' }).run.status, 'budget')
+    const compared = await runCli(ci.dir, ['compare', '--json'])
+    assert.equal(JSON.parse(compared.stdout).base, null, 'a budget run is never the base')
+
+    const always = await project('budget-record-always', files(` record: 'always',`))
+    assert.equal((await runCli(always.dir)).code, 1)
+    const [runId] = recordedRuns(always.dir)
+    assert.ok(runId, 'recorded by record: always')
+    assert.equal(readRun(always.dir, { history: 'evals/.history' }).run.status, 'budget')
+
+    // Canary: record: 'manual' leaves it to es record, which refuses it without --allow-incomplete.
+    const manual = await project('budget-record-manual', files(` record: 'manual',`))
+    assert.equal((await runCli(manual.dir, ['run'], { env: { CI: '1' } })).code, 1)
+    assert.deepEqual(recordedRuns(manual.dir), [])
+    const refused = await runCli(manual.dir, ['record', 'latest'])
+    assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+    assert.equal((await runCli(manual.dir, ['record', 'latest', '--allow-incomplete'])).code, 0)
+    assert.equal(readRun(manual.dir, { history: 'evals/.history' }).run.status, 'budget')
+  })
 })
 
 describe('common mistakes', () => {

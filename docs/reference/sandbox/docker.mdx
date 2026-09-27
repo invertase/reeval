@@ -102,7 +102,7 @@ docker:sqlite · 1 eval
 | `install` | `evalsuite-install:<hash of base id and commands>` | The base or a command changes |
 | `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile, its context (less `.dockerignore`) or `ES_BASE` changes |
 
-Adapter versions: Cursor `0.1.0` (`@evalsuite/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128`, Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
+Adapter versions: Cursor `0.1.0` (`@evalsuite/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
 What ES adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `es` user, and the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.es/cache/images/<tag>.log`.
 

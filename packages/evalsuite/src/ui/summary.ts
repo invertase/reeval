@@ -63,6 +63,7 @@ const pct = (rate: number | null) =>
 
 function evalColumns(c: Colors, e: EvalEntry): string {
   const [attempt, ...more] = e.attempts
+  if (e.todo) return c.dim('todo')
   if (!attempt || e.outcome === 'skipped') return c.dim('skipped')
   if (more.length) {
     const pass = e.attempts.filter((a) => a.outcome === 'pass').length

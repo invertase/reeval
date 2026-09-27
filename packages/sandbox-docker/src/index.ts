@@ -52,6 +52,7 @@ export {
 export { placeholder, type SubstituteIn, type Substitution } from './egress/substitution.ts'
 export type { DerivedTokens } from './egress/tokens.ts'
 export {
+  adapterVersion,
   BAKED_HARNESSES,
   BASE_IMAGE,
   type BakedHarness,

@@ -36,7 +36,8 @@ Google one: a `google/…` model falls back to its Anthropic credentials. This p
 - **Quiet.** `OPENCODE_QUIET_ENV` turns off auto-update, share links, the model-catalog fetch, LSP
   downloads, default plugins and the Claude Code and `.agents` compatibility reads.
 - **Tools.** `OPENCODE_BUILTIN_TOOLS` maps OpenCode's tools to the common names (`bash`, `read`,
-  `write`, `edit`, `glob`, `grep`, `webFetch`, `webSearch`). A call `harness-acp` can't name is
+  `write`, `edit`, `glob`, `grep`, `webFetch`). There's no `webSearch`: OpenCode offers
+  `websearch` only on its own provider or with Exa or Parallel enabled. A call `harness-acp` can't name is
   named from OpenCode's first `tool_call` update, whose title is the tool's name; an MCP tool
   (`<server>_<tool>`) becomes `mcp__<server>__<tool>`.
 - **Usage.** None. OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's

@@ -32,11 +32,16 @@ import {
   signatures,
 } from './support/stream-formats.ts'
 
-type Ran = { cli: CliRun; run: RunRecord; runDir: string }
+type Ran = { cli: CliRun; run: RunRecord; runDir: string; project: string }
 /** Returns 'n/a' when the behaviour doesn't apply to the row. */
 type Check = (ran: Ran, row: HarnessRow) => void | 'n/a' | Promise<void>
 /** `canary`: whether the check includes a canary that must fail (a record-only check has none). */
 type Behaviour = { name: string; canary: boolean; check: Check }
+
+const evalsNamed = (run: RunRecord, name: RegExp) => run.evals.filter((e) => name.test(e.name))
+
+/** What a row's run starts: the MCP evals are left out on a harness with no MCP client. */
+const attemptsFor = (row: HarnessRow) => CONTRACT_ATTEMPTS - (row.mcp === false ? 2 : 0)
 
 const evalNamed = (run: RunRecord, name: string) => {
   const found = run.evals.find((e) => e.name === name)
@@ -126,16 +131,25 @@ export const behaviours: Behaviour[] = [
   {
     name: 'stdio MCP server started and called',
     canary: true,
-    check(ran, row) {
+    async check(ran, row) {
       if (row.mcp === false) {
-        // Fails closed: the attempt is refused, naming the server, rather than run without it.
-        const a = attempt(ran, row, 'mcp', 'stamped')
-        assert.equal(a.outcome, 'infra_error', detail(a))
+        // Refused at plan time, naming the eval, the harness and the server: nothing runs.
+        const plan = (file: string) =>
+          runCli(ran.project, ['run', '--dry-run', file], { env: rowEnv(row) })
+        const refused = await plan('evals/mcp.es.ts')
+        assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+        assert.equal(refused.stdout, '')
         assert.match(
-          a.error?.message ?? '',
-          /has no MCP client, so it can't use the stamp MCP server/,
+          refused.stderr,
+          new RegExp(
+            `evaluate\\("mcp"\\) on ${cellOf(row).replaceAll('.', '\\.')}: \\S+ has no MCP client, so it can't use the stamp MCP server`,
+          ),
         )
-        return 'refused'
+        // The twin: an eval without MCP servers plans on the same harness.
+        const plain = await plan('evals/rules.es.ts')
+        assert.equal(plain.code, 0, plain.stdout + plain.stderr)
+        assert.equal(evalsNamed(ran.run, /^mcp/).length, 0, 'the MCP evals were left out')
+        return 'refused at plan time'
       }
       checkAndCanary(ran, row, 'mcp', 'stamped', /expected '' to contain 'tools\/call'/)
       const env = ran.run.environments.find((e) => e.name === 'stamped')
@@ -220,6 +234,8 @@ export const behaviours: Behaviour[] = [
           const reported = t.model ?? null
           if (row.servedModel) assert.match(reported ?? '', row.servedModel, `${a.key}: turn model`)
           else assert.equal(reported, null, `${row.id} reports no model`)
+          const stack = ran.run.stack.harnesses.find((h) => h.id === cellOf(row))
+          if (reported) assert.ok(stack?.resolvedModels.includes(reported), `stack: ${reported}`)
         }
         const wire = row.wireModel
         if (!wire) assert.equal(a.servedModels, null, `${row.id}'s requests don't name a model`)
@@ -309,9 +325,11 @@ for (const row of harnesses) {
     let ran: Ran | undefined
     before(
       async () => {
-        reserveAttempts(row, CONTRACT_ATTEMPTS, 'contract')
+        reserveAttempts(row, attemptsFor(row), 'contract')
         const p = await fixture('contract')
-        const cli = await runCli(p.dir, ['run', '--concurrency', row.key ? '2' : '4'], {
+        const args = ['run', '--concurrency', row.key ? '2' : '4']
+        if (row.mcp === false) args.push('--tag', '!mcp')
+        const cli = await runCli(p.dir, args, {
           env: {
             ...rowEnv(row),
             // Kept for the format check and the replay captures; the files are small.
@@ -322,7 +340,7 @@ for (const row of harnesses) {
           timeoutMs: 25 * 60_000,
         })
         const { run, dir } = readRun(p.dir)
-        ran = { cli, run, runDir: dir }
+        ran = { cli, run, runDir: dir, project: p.dir }
         spent.set(row.id, withTurns(run).length)
         if (process.env.ES_UPDATE_CAPTURES === '1') capture(ran, row)
       },
@@ -332,7 +350,7 @@ for (const row of harnesses) {
     test('the run: every eval ran once, only the canaries failed (exit 1)', () => {
       assert.ok(ran)
       const out = `${ran.cli.stdout}\n${ran.cli.stderr}`
-      assert.equal(ran.run.evals.length, CONTRACT_ATTEMPTS, out)
+      assert.equal(ran.run.evals.length, attemptsFor(row), out)
       assert.equal(ran.cli.code, 1, out)
     })
     for (const b of behaviours) {

@@ -392,10 +392,11 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
- * Why a harness's agent can't take the environment's `mcp.sse` servers, in the agent's own words,
- * so the plan refuses them before any attempt starts; undefined when it can.
+ * Why a harness's agent can't take the environment's MCP servers (pi takes none, Goose no
+ * `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt starts;
+ * undefined when it can.
  */
-export function refusedSse(
+export function refusedMcp(
   harness: HarnessDescriptor,
   layers: readonly EnvironmentLayer[],
 ): string | undefined {
@@ -403,8 +404,10 @@ export function refusedSse(
   const servers = new Map<string, ResolvedMcpServer>()
   for (const { spec } of layers) {
     for (const [name, server] of Object.entries(spec.mcp ?? {})) {
-      if (server.transport === 'sse') servers.set(name, { ...server, headers: {} })
-      else servers.delete(name)
+      servers.set(
+        name,
+        server.transport === 'stdio' ? { ...server, env: {} } : { ...server, headers: {} },
+      )
     }
   }
   if (servers.size === 0) return undefined

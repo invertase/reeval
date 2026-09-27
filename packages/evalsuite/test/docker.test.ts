@@ -3,7 +3,13 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { DEFAULT_IMAGE, HARNESS_PACKAGES, imageFor, LABEL } from '@evalsuite/sandbox-docker'
+import {
+  DEFAULT_IMAGE,
+  HARNESS_PACKAGES,
+  harnessLabel,
+  imageFor,
+  LABEL,
+} from '@evalsuite/sandbox-docker'
 import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const dockerReady = (() => {
@@ -34,10 +40,14 @@ export default defineConfig({
 
 test('the pinned harness versions match the installed adapters', () => {
   const pkg = JSON.parse(readFileSync(`${pkgRoot}/package.json`, 'utf8'))
-  for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
-    // This repo's own adapters are bundled into dist, so they're pinned as dev dependencies.
+  for (const { name, version, patch } of Object.values(HARNESS_PACKAGES)) {
+    // This repo's own adapters and the patched upstream ones are bundled into dist, so they're
+    // pinned as dev dependencies.
     if (name.startsWith('@evalsuite/')) {
       assert.equal(pkg.devDependencies[name], `workspace:${version}`, name)
+    } else if (patch) {
+      assert.equal(pkg.devDependencies[name], version, name)
+      assert.equal(pkg.dependencies[name], undefined, name)
     } else assert.equal(pkg.dependencies[name], version, name)
   }
 })
@@ -441,10 +451,10 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       assert.match(toolsRef, /^evalsuite-dockerfile:tools-[0-9a-f]{16}$/, build.stdout)
       assert.match(
         debRef,
-        /^evalsuite-sandbox:claude-code-[\d.]+-evalsuite-dockerfile-deb-dockerfile-/,
+        /^evalsuite-sandbox:claude-code-[\d.]+(-patch\.[0-9a-f]{8})?-evalsuite-dockerfile-deb-dockerfile-/,
         build.stdout,
       )
-      const claudeLabel = `${HARNESS_PACKAGES['claude-code'].name}@${HARNESS_PACKAGES['claude-code'].version}`
+      const claudeLabel = harnessLabel('claude-code')
       for (const ref of [toolsRef, debRef]) {
         assert.equal(label(ref), claudeLabel, ref)
         assert.match(claudeCli(ref), /\/claude$/, ref)
@@ -477,7 +487,7 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
   })
 
   test(
-    'SIGTERM to the process group mid-turn exits 130 and leaves no container',
+    'SIGTERM to the process group mid-turn exits 143 and leaves no container',
     docker,
     async () => {
       const p = await project('docker-sigterm', {
@@ -496,7 +506,7 @@ evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
           return true
         },
       })
-      assert.equal(r.code, 130, r.stdout + r.stderr)
+      assert.equal(r.code, 143, r.stdout + r.stderr)
       const runId = readdirSync(join(p.dir, '.es/runs'))
         .find((f) => f.endsWith('.json'))
         ?.replace(/\.json$/, '')

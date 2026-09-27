@@ -75,7 +75,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'config.dotenv',
     area: 'Config and selection',
-    name: '`.env` and `.env.local` loading',
+    name: "`.env` and `.env.local` loading, from the config's directory",
     tests: [engine('.env.local wins over .env, the shell wins over both, and evals see them')],
   },
   {
@@ -161,6 +161,15 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'budget.recorded',
+    area: 'Records and studio',
+    name: 'Budget-stopped runs are recorded with status `budget`',
+    tests: [
+      options('budget.duration stops new attempts'),
+      options('a budget-stopped run is auto-recorded in CI and by record: always'),
+    ],
+  },
+  {
     id: 'selection.modes',
     area: 'Config and selection',
     name: '`evaluate.only`, `.skip`, `.todo` and `.for`; `group.only`',
@@ -176,10 +185,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'selection.group-skip',
     area: 'Config and selection',
-    name: '`group.skip` and `group.todo`',
+    name: '`group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio',
     plan: ['selection/only-local'],
     tests: [
       engine("a skipped group's evals, nested ones too, are recorded as skipped and never run"),
+      engine('group.todo shows as todo, like evaluate.todo'),
     ],
   },
   {
@@ -306,6 +316,14 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
       'evalsuite/test/plan.test.ts › an mcp.sse server on Goose or pi exits 2 at plan time',
+    ],
+  },
+  {
+    id: 'mcp.refused',
+    area: 'Environments',
+    name: 'MCP servers on a harness with no MCP client (pi) refused at plan time',
+    tests: [
+      'evalsuite/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
     ],
   },
   {
@@ -809,6 +827,13 @@ export const inventory: InventoryFeature[] = [
     tests: ['evalsuite/test/harness.test.ts › its brokered requests name the served model'],
     real: ['contract › served model recorded'],
   },
+  {
+    id: 'record.resolved-variant',
+    area: 'Harnesses',
+    name: "The model variant a harness resolved (`composer-2.5[fast=true]`), in the stack's `resolvedModels`, `-v`, `summary.md` and the studio",
+    tests: [engine('the resolved model variant is in the record, the stack, -v and summary.md')],
+    real: ['contract › served model recorded'],
+  },
 
   // Judges and matchers
   {
@@ -873,6 +898,7 @@ export const inventory: InventoryFeature[] = [
     name: '`es compare --fail-on-regression`',
     tests: [
       'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a regression and on a failing new eval',
+      'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a failing eval that changed (not comparable)',
     ],
   },
   {
@@ -965,12 +991,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'exit-codes',
     area: 'CLI and runner',
-    name: 'Exit codes 0, 1, 2, 3 and 130',
+    name: 'Exit codes 0, 1, 2, 3, 130 and 143',
     tests: [
       engine('a passing eval exits 0'),
       engine('a failing assertion exits 1'),
       engine('a harness failure is an infra error and exits 3'),
-      engine('exits 130, records the run'),
+      engine('records the run and destroys the sandbox'),
     ],
   },
   {
@@ -1073,8 +1099,8 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/concurrency.test.ts › Ctrl-C cancels running attempts',
       engine('a timeout aborts the agent and destroys the sandbox'),
       engine('a turn whose agent ignores the abort is cut off shortly after the timeout'),
-      engine('exits 130, records the run and destroys the sandbox'),
-      docker('SIGTERM to the process group mid-turn exits 130 and leaves no container'),
+      engine('records the run and destroys the sandbox'),
+      docker('SIGTERM to the process group mid-turn exits 143 and leaves no container'),
     ],
   },
   {

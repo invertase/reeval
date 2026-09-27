@@ -1,6 +1,7 @@
 import { clip, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
+import { harnessLabel } from '../view/model.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
 
@@ -111,10 +112,7 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
           .join('; ')
       : 'none (fake sandbox)',
   ])
-  rows.push([
-    'Harnesses',
-    env.harnesses.map((h) => `${h.id}${h.model ? ` (model ${h.model})` : ''}`).join(', ') || 'none',
-  ])
+  rows.push(['Harnesses', env.harnesses.map(harnessLabel).join(', ') || 'none'])
   rows.push([
     'Environments',
     run.environments
@@ -174,7 +172,13 @@ export function renderSummary(run: RunRecord): string {
   ]
   for (const e of run.evals) {
     const a = e.attempts[0]
-    const time = e.attempts.length > 1 ? cellCounts(e) : a ? formatDuration(a.durationMs) : ''
+    const time = e.todo
+      ? 'todo'
+      : e.attempts.length > 1
+        ? cellCounts(e)
+        : a
+          ? formatDuration(a.durationMs)
+          : ''
     lines.push(`| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`)
   }
   // Failures first, but passes get the same detail: why something passed matters too.

@@ -236,11 +236,58 @@ evaluate('kept', async () => {})
       [
         ['evals/g.es.ts › parked › inside', 'skipped'],
         ['evals/g.es.ts › parked › nested › deeper', 'skipped'],
+        ['evals/g.es.ts › someday', 'skipped'],
         ['evals/g.es.ts › kept', 'pass'],
       ],
-      'a todo group has no evals, so it adds none',
     )
-    assert.equal(run.summary.skipped, 2)
+    assert.equal(run.summary.skipped, 3)
+  })
+
+  test('group.todo shows as todo, like evaluate.todo: the plan, the summary and the record', async () => {
+    const p = await project('group-todo', {
+      'es.config.ts': fakeConfig(),
+      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+evaluate('kept', async () => {})
+evaluate.todo('later')
+group.todo('someday')
+group('area', () => {
+  group.todo('nested someday')
+})
+`,
+    })
+    const todos = [
+      'evals/g.es.ts › later',
+      'evals/g.es.ts › someday',
+      'evals/g.es.ts › area › nested someday',
+    ]
+
+    const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
+    assert.equal(json.code, 0, json.stdout + json.stderr)
+    assert.deepEqual(
+      JSON.parse(json.stdout).excluded,
+      todos.map((id) => ({ id, mode: 'todo' })),
+    )
+    const text = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(text.code, 0, text.stdout + text.stderr)
+    for (const id of todos) assert.match(text.stdout, new RegExp(`^${id} .* todo$`, 'm'), id)
+    assert.doesNotMatch(text.stdout, /^evals\/g\.es\.ts › kept .* todo$/m, 'canary: kept runs')
+
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const summary = r.stdout.slice(r.stdout.indexOf('\nSummary'))
+    for (const name of ['later', 'someday', 'nested someday'])
+      assert.match(summary, new RegExp(`↓ ${name} +todo$`, 'm'), name)
+    const { run, read } = readRun(p.dir)
+    assert.deepEqual(
+      run.evals.map((e) => [e.id, e.outcome, e.todo]),
+      [
+        ['evals/g.es.ts › kept', 'pass', false],
+        ['evals/g.es.ts › later', 'skipped', true],
+        ['evals/g.es.ts › someday', 'skipped', true],
+        ['evals/g.es.ts › area › nested someday', 'skipped', true],
+      ],
+    )
+    assert.match(read('summary.md'), /\| ↓ \| evals\/g\.es\.ts › someday \| todo \|/)
   })
 
   test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
@@ -268,6 +315,19 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     assert.equal(plan.code, 0, plan.stdout + plan.stderr)
     const cells = JSON.parse(plan.stdout).evals[0].cells.map((c: { key: string }) => c.key)
     assert.deepEqual(cells, ['from-local/-/fake', 'only-env/-/fake', 'from-shell/-/fake'])
+
+    await writeFile(join(p.dir, 'evals/.env.local'), 'ES_T_ENV=from-cwd\n')
+    const fromSub = await runCli(
+      join(p.dir, 'evals'),
+      ['run', '--config', '../es.config.ts', '--dry-run', '--json'],
+      { env },
+    )
+    assert.equal(fromSub.code, 0, fromSub.stdout + fromSub.stderr)
+    assert.deepEqual(
+      JSON.parse(fromSub.stdout).evals[0].cells.map((c: { key: string }) => c.key),
+      cells,
+      "run from a subdirectory, the env files still come from the config's directory",
+    )
 
     const sees = await runCli(p.dir, ['run', 'sees.es'], { env })
     assert.equal(sees.code, 0, sees.stdout + sees.stderr)
@@ -891,6 +951,38 @@ evaluate('huge diff', async (t) => {
     assert.match(agent.stdout, new RegExp(`\\n {2}turn 1 error: ${billing}\\n`))
   })
 
+  test('the resolved model variant is in the record, the stack, -v and summary.md', async () => {
+    const served = 'composer-2.5[fast=true]'
+    const p = await project('served-model', {
+      'es.config.ts': fakeConfig({ harness: `{ servedModel: '${served}' }` }),
+      'evals/agent.es.ts': agentEval(''),
+    })
+    const r = await runCli(p.dir, ['run', '-v'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      / harness {3}turn 1 completed in \S+ · .* · model composer-2\.5\[fast=true\]$/m,
+    )
+    const { run, read } = readRun(p.dir)
+    assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.model, served)
+    assert.deepEqual(run.stack.harnesses, [
+      { id: 'fake', kind: 'fake', model: null, resolvedModels: [served] },
+    ])
+    assert.match(
+      read('summary.md'),
+      /\| Harnesses \| fake \(served composer-2\.5\[fast=true\]\) \|/,
+    )
+
+    // Canary: a harness that reports no model shows none.
+    await writeFile(join(p.dir, 'es.config.ts'), fakeConfig())
+    const quiet = await runCli(p.dir, ['run', '-v'])
+    assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
+    assert.doesNotMatch(quiet.stdout, / · model /)
+    const again = readRun(p.dir)
+    assert.deepEqual(again.run.stack.harnesses[0]?.resolvedModels, [])
+    assert.match(again.read('summary.md'), /\| Harnesses \| fake \|/)
+  })
+
   test('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown', async () => {
     const p = await project('unawaited', {
       'es.config.ts': fakeConfig(),
@@ -1024,18 +1116,24 @@ evaluate('fine', async () => {})
     assert.deepEqual(liveSandboxes(p), [])
   })
 
-  for (const [target, signal] of [
-    ['Ctrl-C mid-turn to the CLI only', (pid: number) => process.kill(pid, 'SIGINT')],
+  for (const [target, signal, code] of [
     [
-      'Ctrl-C mid-turn to the process group, like a terminal',
-      (pid: number) => process.kill(-pid, 'SIGINT'),
+      'Ctrl-C mid-turn to the CLI only exits 130',
+      (pid: number) => process.kill(pid, 'SIGINT'),
+      130,
     ],
     [
-      'SIGTERM mid-turn to the CLI, like docker stop',
+      'Ctrl-C mid-turn to the process group, like a terminal, exits 130',
+      (pid: number) => process.kill(-pid, 'SIGINT'),
+      130,
+    ],
+    [
+      'SIGTERM mid-turn to the CLI, like docker stop, exits 143',
       (pid: number) => process.kill(pid, 'SIGTERM'),
+      143,
     ],
   ] as const) {
-    test(`${target} exits 130, records the run and destroys the sandbox`, async () => {
+    test(`${target}, records the run and destroys the sandbox`, async () => {
       const p = await project('sigint', {
         'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
         'evals/agent.es.ts': agentEval(''),
@@ -1049,7 +1147,7 @@ evaluate('fine', async () => {})
           return false
         },
       })
-      assert.equal(r.code, 130, r.stdout + r.stderr)
+      assert.equal(r.code, code, r.stdout + r.stderr)
       const { run, evals } = readRun(p.dir)
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')

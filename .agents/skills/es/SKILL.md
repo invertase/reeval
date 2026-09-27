@@ -25,8 +25,8 @@ site; its Reference tab has every option, flag and error).
    `include`). Gitignore `.es/` and `.env*`.
 3. `npx es run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
-4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` in
-   the directory you run from, then `npx es run`. Exit 0 means every gated cell passed.
+4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` next
+   to `es.config.ts` (not the directory you run from), then `npx es run`. Exit 0 means every gated cell passed.
 5. Read failures in the summary, then `.es/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx es run -v` prints a timestamped trace per attempt; `.es/debug/` keeps it.
@@ -52,7 +52,8 @@ export default defineConfig({
 ```
 
 - Harnesses (`@invertase/foobar/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
-  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant),
+  Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
+  the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
   `gemini-3.8-flash-medium`), `opencode({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini
@@ -238,7 +239,7 @@ es studio            es studio build --out site      es image build [--dry-run] 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
 (`es run skill antigravity`). Every command takes `--config <path>`. Exit codes: 0 pass (and
 `--dry-run`), 1 a gated failure, 2 usage/config error (including a filter that matches nothing),
-3 infra error, 130 Ctrl-C. Runs land in `.es/runs/`; `--record` (or `record: 'ci'` in CI) copies
+3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.es/runs/`; `--record` (or `record: 'ci'` in CI) copies
 them to `evals/.history/` to commit.
 
 ## Common mistakes (and the fix)
@@ -256,4 +257,4 @@ them to `evals/.history/` to commit.
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
 | Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.es.ts` under `evals/` |
-| `es run` from another directory | `Missing credentials: …` | Run from the directory with `.env.local` |
+| `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `es.config.ts` |

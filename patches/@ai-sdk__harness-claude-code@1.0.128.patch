@@ -1,0 +1,31 @@
+diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
+index b12b9f9205c92157e4b078ae8e7a6b9fdcc4a07d..017dae0e5c68ca10b5043a76b075fd2fc395562f 100644
+--- a/dist/bridge/index.mjs
++++ b/dist/bridge/index.mjs
+@@ -726,7 +726,7 @@ function createEmitStreamEvent({
+   let streamStarted = false;
+   return (msg) => {
+     const type = msg.type;
+-    if (!streamStarted) {
++    if (!streamStarted && type !== "command_lifecycle") {
+       const initModel = type === "system" && msg.subtype === "init" && typeof msg.model === "string" ? msg.model : void 0;
+       emit({
+         type: "stream-start",
+diff --git a/src/bridge/create-emit-stream-event.ts b/src/bridge/create-emit-stream-event.ts
+index fe6bc3ce96309c096cd0067fbd29efa60d07412a..b8b0263957a71370473a0ce7c87366ab099bbf47 100644
+--- a/src/bridge/create-emit-stream-event.ts
++++ b/src/bridge/create-emit-stream-event.ts
+@@ -146,8 +146,11 @@ export function createEmitStreamEvent({
+ 
+     // Emit `stream-start` once, on the first message, carrying the model the
+     // CLI resolved to (the `system`/`init` message reports it — this is the
+-    // default model when none was configured).
+-    if (!streamStarted) {
++    // default model when none was configured). The bridge's streaming input
++    // makes Claude Code acknowledge each user message with a
++    // `command_lifecycle` message, which can arrive before `system`/`init`,
++    // so it doesn't start the stream.
++    if (!streamStarted && type !== 'command_lifecycle') {
+       const initModel =
+         type === 'system' &&
+         msg.subtype === 'init' &&

@@ -171,6 +171,8 @@ export type EvalEntry = {
    * all were, else `pass`. An ungated cell's failures don't fail the eval.
    */
   outcome: Outcome
+  /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
+  todo: boolean
   /** pass / (pass + fail) over the gated cells' attempts; infra errors and skips excluded. */
   passRate: number | null
   cells: CellRecord[]
@@ -327,7 +329,23 @@ export type Stack = {
   images: Array<AttemptImage & { repoDigests: string[] }>
   /** Exact versions of the packages that run and grade the agent. */
   packages: Record<string, string>
-  harnesses: Array<{ id: string; kind: string; model: string | null }>
+  /**
+   * Each harness: its configured `model`, and `resolvedModels`, what it reported serving across
+   * the run's turns with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5`
+   * without `params`); empty when it reports none.
+   */
+  harnesses: Array<{
+    id: string
+    kind: string
+    /** The configured model, when the harness has one. */
+    model: string | null
+    /**
+     * The models the harness reported serving, across every turn in the run, with the variant it
+     * resolved (`composer-2.5[fast=true]` for `composer-2.5` with no `params`); empty when it
+     * reports none.
+     */
+    resolvedModels: string[]
+  }>
   judge: {
     /** The config's default model; groups, evals and calls may use others (see each verdict). */
     model: string | null
