@@ -48,10 +48,6 @@ rm -rf /tmp/agy /tmp/agy.tgz
 $bootstrap/antigravity/bin/agy --version"
       ;;
     cursor)
-      if ! docker run --rm --entrypoint test "$image" -d "$bootstrap/cursor-sdk"; then
-        rows+=("| cursor | $pinned | — | no SDK bootstrap in $image, nothing to swap |")
-        continue
-      fi
       latest=${ES_DRIFT_CURSOR_SDK_VERSION:-$(npm view @cursor/sdk version)}
       new_label="@cursor/sdk $latest"
       swap="set -eu
