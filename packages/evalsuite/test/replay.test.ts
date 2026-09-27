@@ -293,6 +293,40 @@ for (const harness of Object.keys(formatChanges))
     })
   })
 
+/**
+ * Values ACP defines that a contract run shows only when the model does something: a tool call
+ * that fails (a missing file, a bad edit), a turn cut short. Each is the same format, so a run
+ * that happens to show one must pass.
+ */
+const acpOutcomes: Array<[RegExp, string]> = [
+  [/"status":"completed"/g, '"status":"failed"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"max_tokens"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"max_turn_requests"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"refusal"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"cancelled"'],
+]
+/** Goose sends no `kind`, so a tool kind is OpenCode's only. */
+const acpKinds: Array<[RegExp, string]> = [
+  [/"kind":"[a-z_]+"/g, '"kind":"fetch"'],
+  [/"kind":"[a-z_]+"/g, '"kind":"switch_mode"'],
+]
+
+for (const [harness, outcomes] of [
+  ['opencode', [...acpOutcomes, ...acpKinds]],
+  ['goose', acpOutcomes],
+] as const)
+  describe(`replay: ${harness}'s format holds every value ACP defines`, () => {
+    const known = new Set(knownSignatures(harness))
+    for (const [from, to] of outcomes)
+      test(`${to} is not a format change`, () => {
+        const base = read(harness, 'edit-and-run.raw.jsonl')
+        const changed = base.replaceAll(from, to)
+        assert.notEqual(changed, base, `${from} is in the capture`)
+        const unknown = signatures(harness, nativeEvents(changed)).filter((s) => !known.has(s))
+        assert.deepEqual(unknown, [])
+      })
+  })
+
 describe('replay: the Claude Code bridge, from the SDK’s own messages', () => {
   // A real contract turn (edit and run, claude-haiku-4-5): the host's `start` and every message
   // the bridge's query() loop saw. Claude Code acknowledges the bridge's streamed user message

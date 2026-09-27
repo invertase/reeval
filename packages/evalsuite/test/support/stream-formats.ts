@@ -16,6 +16,40 @@ type Format = {
   values: string[]
   /** Lists whose string members are part of the format (the tools the CLI advertises). */
   lists: string[]
+  /**
+   * Every value the CLI's protocol defines for a value key, by signature (`<kind> .<key>`): all are
+   * the format, not only those a run happened to show. Which one a run shows (a failed tool call, a
+   * refusal) is the model's doing, so learning them from runs made the check depend on the model.
+   */
+  defined?: Record<string, readonly string[]>
+}
+
+// ACP's ToolCallStatus, ToolKind and StopReason: every value @ai-sdk/harness-acp's bridge handles.
+const ACP_STATUS = ['pending', 'in_progress', 'completed', 'failed']
+const ACP_KIND = [
+  'read',
+  'edit',
+  'delete',
+  'move',
+  'search',
+  'execute',
+  'think',
+  'fetch',
+  'switch_mode',
+  'other',
+]
+const ACP_DEFINED = {
+  'tool_call .status': ACP_STATUS,
+  'tool_call_update .status': ACP_STATUS,
+  'tool_call .kind': ACP_KIND,
+  'tool_call_update .kind': ACP_KIND,
+  'prompt-response .stopReason': [
+    'end_turn',
+    'max_tokens',
+    'max_turn_requests',
+    'refusal',
+    'cancelled',
+  ],
 }
 
 const FORMATS: Record<string, Format> = {
@@ -59,6 +93,7 @@ const FORMATS: Record<string, Format> = {
     ],
     values: ['status', 'kind', 'stopReason'],
     lists: [],
+    defined: ACP_DEFINED,
   }, // Goose's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
   goose: {
     kind: (e) =>
@@ -78,6 +113,7 @@ const FORMATS: Record<string, Format> = {
     ],
     values: ['status', 'kind', 'stopReason'],
     lists: [],
+    defined: ACP_DEFINED,
   },
   // pi's `--mode json` events, by `type` (and the assistant event inside `message_update`).
   pi: {
@@ -162,14 +198,28 @@ export function signatures(harness: string, events: Record<string, unknown>[]): 
 
 const formatsFile = (harness: string) => join(testDir, 'replay', 'formats', `${harness}.json`)
 
-export const knownSignatures = (harness: string): string[] =>
+/** The signatures of every value the harness's protocol defines. */
+const definedSignatures = (harness: string): Set<string> =>
+  new Set(
+    Object.entries(FORMATS[harness]?.defined ?? {}).flatMap(([at, values]) =>
+      values.map((v) => `${at}=${v}`),
+    ),
+  )
+
+const committedSignatures = (harness: string): string[] =>
   existsSync(formatsFile(harness))
     ? (JSON.parse(readFileSync(formatsFile(harness), 'utf8')) as string[])
     : []
 
-/** Adds `seen` to the known signatures (ES_UPDATE_FORMATS=1). */
+export const knownSignatures = (harness: string): string[] =>
+  [...new Set([...committedSignatures(harness), ...definedSignatures(harness)])].sort()
+
+/** Adds `seen` to the known signatures (ES_UPDATE_FORMATS=1); the protocol's values aren't kept. */
 export function learnSignatures(harness: string, seen: string[]): void {
-  const all = [...new Set([...knownSignatures(harness), ...seen])].sort()
+  const defined = definedSignatures(harness)
+  const all = [...new Set([...committedSignatures(harness), ...seen])]
+    .filter((s) => !defined.has(s))
+    .sort()
   writeFileSync(formatsFile(harness), `${JSON.stringify(all, null, 2)}\n`)
 }
 
