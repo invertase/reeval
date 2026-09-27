@@ -1107,6 +1107,10 @@ export const inventory: InventoryFeature[] = [
     id: 'pack',
     area: 'CLI and runner',
     name: 'The packed package installs into a clean project and runs',
-    tests: ['evalsuite/test/pack.test.ts › the packed package installs into a clean project'],
+    tests: [
+      'evalsuite/test/pack.test.ts › the packed package installs into a clean project',
+      'evalsuite/test/pack.test.ts › the packed package installs with yarn and runs es',
+      'evalsuite/test/pack.test.ts › the packed package installs with pnpm, strict about peers',
+    ],
   },
 ]
