@@ -82,7 +82,7 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| A refused harness key names its variable and how to fix it | ✓ 4 | — | — | — | — |
+| A refused harness key names its variable and how to fix it | ✓ 5 | — | — | — | — |
 | Real Cursor, end to end | — | — | ● 1 | ● 2 | ● 5 |
 | `claudeCode()`: its image, rules, skills and MCP shape | ✓ 1 | ✓ 1 | ● 2 | ● 3 | — |
 | `antigravity()`: its image, rules, skills, MCP shape and brokered Gemini key | ✓ 2 | ✓ 1 | ● 3 | ● 4 | — |
