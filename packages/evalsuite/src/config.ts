@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { createJiti } from 'jiti'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
@@ -68,13 +68,45 @@ export const defineConfig = <T extends ConfigInput>(config: T): T => config
 
 export { parseDuration }
 
+/** The file names `es` looks for in each directory, first match first, as Vitest orders its own. */
+export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map(
+  (ext) => `es.config.${ext}`,
+)
+
+/**
+ * The nearest config file in `from` or a directory above it, up to the filesystem root, the way
+ * Vitest and ESLint find theirs. A git or workspace root doesn't stop the search: a nested
+ * project's own config is nearer, so it wins.
+ */
+export function findConfig(from = process.cwd()): string | undefined {
+  for (let dir = resolve(from); ; dir = dirname(dir)) {
+    for (const name of CONFIG_FILES) {
+      const path = join(dir, name)
+      if (existsSync(path)) return path
+    }
+    if (dirname(dir) === dir) return undefined
+  }
+}
+
+/** The config a command reads: `--config` (from the current directory), else the nearest one. */
+export const configPathFor = (flag: string | undefined): string | undefined =>
+  flag === undefined ? findConfig() : resolve(flag)
+
+/** The config file as the user would type it from the current directory. */
+export const configLabel = (path: string): string => relative(process.cwd(), path) || path
+
+/**
+ * Loads the config at `path` (see `configPathFor`); its directory is the project root. Without a
+ * config file, every key takes its default and the current directory is the root.
+ */
 export async function loadConfig(
-  configPath: string,
+  path: string | undefined,
   command = 'run',
   profile: string | undefined = undefined,
 ): Promise<ResolvedConfig> {
-  const path = resolve(configPath)
+  if (path === undefined) return resolveConfig({}, process.cwd())
   const root = dirname(path)
+  const configPath = configLabel(path)
   let user: EsConfig = {}
   if (existsSync(path)) {
     const jiti = createJiti(import.meta.url, { moduleCache: false })
@@ -101,7 +133,7 @@ export async function loadConfig(
       throw new UsageError(`${configPath} must default-export defineConfig({...})`)
     }
     user = exported
-  } else if (configPath !== 'es.config.ts') {
+  } else {
     throw new UsageError(`Config file not found: ${configPath}`)
   }
   return resolveConfig(user, root)

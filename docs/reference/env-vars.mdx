@@ -3,7 +3,7 @@ title: Environment variables
 description: Every environment variable ES reads, and the flag each one stands in for.
 ---
 
-`es run` loads `.env.local`, then `.env`, from the config's directory: where `es.config.ts` (or the `--config` file) lives, not the current directory. Variables already set in your shell win over both files, and `.env.local` wins over `.env`. `es analyze` loads them the same way, for its model key; other commands don't read env files.
+`es run` loads `.env.local`, then `.env`, from the config's directory: where the `es.config.ts` ES found (or the `--config` file) lives, not the current directory. Variables already set in your shell win over both files, and `.env.local` wins over `.env`. `es analyze` loads them the same way, for its model key; other commands don't read env files.
 
 ```bash title=".env.local"
 CURSOR_API_KEY=...
