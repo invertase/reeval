@@ -73,6 +73,7 @@
     "@ai-sdk/typesafe-ai": "3.0.6",
     "@hono/node-server": "2.1.1",
     "ai": "7.0.114",
+    "commander": "15.0.0",
     "hono": "4.13.9",
     "jiti": "2.7.0",
     "std-env": "4.2.0",

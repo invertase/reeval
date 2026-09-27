@@ -22,6 +22,13 @@ npx es run --dry-run
 
 `es --help` prints the full help and exits 0. `es` with no command prints it and exits 2. `es --version` prints the version.
 
+A command takes only its own flags, after its name, plus the shared flags below anywhere. Another command's flag, a missing value or an extra argument exits 2:
+
+```text
+es: --port isn't an option of es run. Run es --help.
+es: es show takes at most 1 argument (got latest extra)
+```
+
 ## Shared flags
 
 <Property name="--config" type="string" optional>
