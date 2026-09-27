@@ -1184,6 +1184,36 @@ describe('sandbox images', () => {
       /Unknown docker\(\) option "steps"\. Did you mean "install"\?/,
     ],
     [
+      'user instead of root',
+      `docker({ user: 'root' } as never)`,
+      /Unknown docker\(\) option "user"\. Did you mean "root"\?/,
+    ],
+    [
+      'root that is not a boolean',
+      `docker({ root: 'yes' } as never)`,
+      /docker\(\{ root \}\) is true or false \(got "yes"\)/,
+    ],
+    [
+      'a capability that is not a name',
+      `docker({ capabilities: 'NET_RAW' } as never)`,
+      /docker\(\{ capabilities \}\) takes Linux capability names, e\.g\. capabilities: \['NET_RAW'\] \(got "NET_RAW"\)/,
+    ],
+    [
+      'a memory size docker does not take',
+      `docker({ memory: '4GB' })`,
+      /docker\(\{ memory \}\) takes a size such as '4g' or '512m', or bytes \(got "4GB"\)/,
+    ],
+    [
+      'zero CPUs',
+      `docker({ cpus: 0 })`,
+      /docker\(\{ cpus \}\) takes a number of CPUs above zero, e\.g\. 1\.5 \(got 0\)/,
+    ],
+    [
+      'a fractional process limit',
+      `docker({ pids: 10.5 })`,
+      /docker\(\{ pids \}\) takes a whole number of processes above zero \(got 10\.5\)/,
+    ],
+    [
       'secrets on the sandbox',
       `docker({ env: {} } as never)`,
       /Unknown docker\(\) option "env"\. The sandbox is what's baked into the image; variables and secrets belong in defineEnvironment\(\{ env \}\)\./,
