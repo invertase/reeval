@@ -172,7 +172,7 @@ async function run(argv: string[]): Promise<number> {
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
       case 'analyze': {
-        loadEnvFiles(process.cwd())
+        loadEnvFiles(values.config)
         const { analyzeCommand } = await import('./analysis/command.ts')
         return analyzeCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
@@ -374,7 +374,7 @@ async function prepareRun(flags: Flags) {
       'es run --json only prints the plan: add --dry-run. A run writes its record to .es/runs; read it with es show --json.',
     )
   }
-  loadEnvFiles(process.cwd())
+  loadEnvFiles(flags.config)
   const named = flags.profile ?? (process.env.ES_PROFILE || undefined)
   const config = await loadConfig(flags.config, 'run', named)
   const profile = selectProfile(config, flags.profile)

@@ -75,7 +75,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'config.dotenv',
     area: 'Config and selection',
-    name: '`.env` and `.env.local` loading',
+    name: "`.env` and `.env.local` loading, from the config's directory",
     tests: [engine('.env.local wins over .env, the shell wins over both, and evals see them')],
   },
   {

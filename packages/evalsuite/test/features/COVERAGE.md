@@ -17,7 +17,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|
 | `defineConfig` (object or function) and its defaults | ✓ 1 | ✓ 1 | — | — | — |
 | Config and option mistakes exit 2 with the fix | ✓ 2 | — | — | — | — |
-| `.env` and `.env.local` loading | ✓ 1 | — | — | — | — |
+| `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — |
 | `harness` lists × `runs`, and `--runs` | ✓ 2 | ✓ 2 | — | — | — |
 | Option cascade through groups and evals; harness edit functions | ✓ 2 | — | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 1 | — | — | — |
