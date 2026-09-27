@@ -391,6 +391,9 @@ export const inventory: InventoryFeature[] = [
     tests: [
       options('a Docker secret without hosts warns once in the plan'),
       options("an optional secret that isn't set gets no real-value warning"),
+      options(
+        "secrets: { unbrokered: 'error' } refuses an optional secret whether or not it's set",
+      ),
       secrets('lists env and MCP secrets the sandbox would get as real values'),
     ],
   },
@@ -403,6 +406,7 @@ export const inventory: InventoryFeature[] = [
       unit('redactSecrets masks secret-looking env values'),
       secrets('redacting encoded forms'),
       secrets('redacting fragments of a secret'),
+      secrets("every variable of a header's secret.template is a secret the run masks"),
       debug(
         "a declared secret under a plain name is masked in an eval's logs and failures on screen",
       ),
