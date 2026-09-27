@@ -79,7 +79,7 @@ function printError(
   let e = error as SerializedError
   if (e === null || (typeof e !== 'object' && typeof e !== 'function'))
     e = { message: String(error).split(/\n/g)[0], stack: String(error) }
-  const hide = options.hide.map(comparable)
+  const hide = options.hide.map((dir) => comparable(dir))
   const stacks = parseErrorStacktrace(e as Error, {
     frameFilter: (_error, frame) =>
       !hide.some((dir) => comparable(frame.file).startsWith(dir)) &&
