@@ -46,6 +46,22 @@ function finished(result: EvalResult): LiveStatus {
   return result.state === 'passed' ? 'pass' : 'fail'
 }
 
+/**
+ * Renames `from` over `to`. Windows refuses while a reader (`es studio`) has `to` open, for a
+ * moment: try again briefly rather than drop the update.
+ */
+export function replace(from: string, to: string, rename = renameSync): void {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return rename(from, to)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (attempt >= 20 || !(code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) throw error
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, attempt)
+    }
+  }
+}
+
 /** Writes the file at once, then on every change and heartbeat. Write errors never fail the run. */
 export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWriter {
   const now = options.now ?? (() => new Date())
@@ -89,7 +105,7 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
     if (stopped) return
     try {
       writeFileSync(tmp, JSON.stringify(read()))
-      renameSync(tmp, file)
+      replace(tmp, file)
     } catch {}
   }
 

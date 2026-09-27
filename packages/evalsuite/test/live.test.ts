@@ -1,7 +1,7 @@
 // Runs in progress: the progress file `es run` keeps in `.es/staging/<run>/live.json`, how the
 // studio reads it (killed runs, corrupt files, landed records), and what it serves and streams.
 import assert from 'node:assert/strict'
-import { spawn, spawnSync } from 'node:child_process'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
@@ -11,7 +11,7 @@ import { setTimeout as sleep } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import type { PlannedItem } from '../src/engine/types.ts'
 import { attemptKey, recordFileName } from '../src/ids.ts'
-import { writeLiveProgress } from '../src/live.ts'
+import { replace, writeLiveProgress } from '../src/live.ts'
 import { listLive, liveTranscript, stagingRoot } from '../src/studio/live.ts'
 import { createStudioApp, type StudioEvent } from '../src/studio/server.ts'
 import type { StudioSource } from '../src/studio/source.ts'
@@ -135,6 +135,28 @@ describe('the progress file', () => {
       live.remove()
     }
     assert.equal(existsSync(join(dir, LIVE_FILE)), false)
+  })
+
+  test("a rename Windows refuses while the file is open is tried again, and others aren't", () => {
+    const busy = (code: string, times: number) => {
+      let calls = 0
+      const rename = () => {
+        calls++
+        if (calls <= times) throw Object.assign(new Error(code), { code })
+      }
+      return { rename, calls: () => calls }
+    }
+    for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
+      const r = busy(code, 3)
+      replace('a', 'b', r.rename)
+      assert.equal(r.calls(), 4, code)
+    }
+    const gone = busy('ENOENT', 1)
+    assert.throws(() => replace('a', 'b', gone.rename), /ENOENT/)
+    assert.equal(gone.calls(), 1)
+    const stuck = busy('EPERM', 100)
+    assert.throws(() => replace('a', 'b', stuck.rename), /EPERM/)
+    assert.equal(stuck.calls(), 20)
   })
 
   test('is replaced whole: a reader polling it never sees a partial file', async () => {
@@ -569,7 +591,10 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
       runs = await listLive(source)
     }
     assert.equal(runs[0]?.state, 'running')
-    process.kill(-(child.pid as number), 'SIGKILL')
+    // Its process group; Windows has none, so its process tree.
+    if (process.platform === 'win32')
+      execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+    else process.kill(-(child.pid as number), 'SIGKILL')
     await new Promise((resolve) => child.on('exit', resolve))
     runs = await listLive(source)
     assert.equal(runs.length, 1)
