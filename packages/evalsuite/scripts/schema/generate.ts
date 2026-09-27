@@ -152,7 +152,9 @@ export function generate(shapes: PersistedShape[] = SHAPES): Map<string, ShapeSc
       if (!source) throw new Error(`${shape.file} isn't in packages/evalsuite's tsconfig`)
       const symbol = checker.getSymbolAtLocation(source)?.getExports().get(shape.type)
       if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
-      const gen = new Generator(checker, join(PACKAGE_DIR, 'src'))
+      // Declarations carry the checker's canonical path: lower case on a case-insensitive file
+      // system (macOS, Windows), with forward slashes.
+      const gen = new Generator(checker, api.toPath(join(PACKAGE_DIR, 'src')))
       const root = gen.schema(checker.getDeclaredTypeOfSymbol(symbol))
       const doc: ShapeSchema = {
         $schema: 'https://json-schema.org/draft/2020-12/schema',

@@ -87,7 +87,7 @@ import { fakeHarness } from 'evalsuite/harness'
 import { fakeSandbox } from 'evalsuite/sandbox'
 export default defineConfig({
   harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })
 `,
       'evals/scaffold.es.ts': math(1),
@@ -303,7 +303,7 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 const id = (name: string) => process.env[name] ?? 'unset'
 export default defineConfig({
   harness: [fakeHarness({ id: id('ES_T_BOTH') }), fakeHarness({ id: id('ES_T_ENV') }), fakeHarness({ id: id('ES_T_SHELL') })],
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })
 `,
       '.env': 'ES_T_BOTH=from-env\nES_T_ENV=only-env\nES_T_SHELL=from-env\n',

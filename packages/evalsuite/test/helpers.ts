@@ -1,4 +1,9 @@
-import { spawn } from 'node:child_process'
+import {
+  type SpawnSyncOptionsWithStringEncoding,
+  type SpawnSyncReturns,
+  spawn,
+  spawnSync,
+} from 'node:child_process'
 import {
   existsSync,
   mkdtempSync,
@@ -12,6 +17,7 @@ import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { killTree, windowsSpawn } from '@evalsuite/sandbox-docker/process'
 import type { AttemptRecord, EvalEntry, RunRecord, Stack } from '../src/history/types.ts'
 import { startCapture } from './support/differential.ts'
 
@@ -48,7 +54,37 @@ const PASSTHROUGH = [
   'DOCKER_CERT_PATH',
   'DOCKER_TLS_VERIFY',
   'ES_DEBUG',
+  // Windows: where programs, the user's profile and app data are, and how a shell finds commands.
+  'PATHEXT',
+  'ComSpec',
+  'windir',
+  'SystemDrive',
+  'ProgramFiles',
+  'ProgramFiles(x86)',
+  'ProgramData',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'APPDATA',
+  'LOCALAPPDATA',
 ]
+
+/**
+ * Runs a command-line tool by name. npm, pnpm, yarn, corepack and npx are `.cmd` scripts on
+ * Windows, which only cmd.exe runs, so there it goes the way ES's own `run` does.
+ */
+export function spawnTool(
+  cmd: string,
+  args: string[],
+  options: SpawnSyncOptionsWithStringEncoding,
+): SpawnSyncReturns<string> {
+  if (process.platform !== 'win32') return spawnSync(cmd, args, options)
+  const target = windowsSpawn(cmd, args, { ...process.env, ...options.env })
+  return spawnSync(target.file, target.args, {
+    ...options,
+    windowsVerbatimArguments: target.verbatim,
+  })
+}
 
 /** The environment every spawned process in the tests starts from. */
 export const baseEnv: NodeJS.ProcessEnv = {
@@ -80,7 +116,7 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig({
   harness: fakeHarness(${options.harness ?? '{}'}),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
   judge: ${options.judge ?? '{ model: fakeJudge({ score: 0.9 }) }'},
   ${options.extra ?? ''}
 })
@@ -116,7 +152,7 @@ export function runCli(
     let stderr = ''
     let watching = !!opts.onOutput
     const timer = setTimeout(() => {
-      if (child.pid) process.kill(-child.pid, 'SIGKILL')
+      if (child.pid) killTree(child.pid)
       reject(new Error(`es ${args.join(' ')} took over ${timeoutMs}ms\n${stdout}\n${stderr}`))
     }, timeoutMs)
     child.stdout.on('data', (d) => {

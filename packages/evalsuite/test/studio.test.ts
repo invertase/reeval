@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { before, describe, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
@@ -564,7 +564,7 @@ describe('studio server', () => {
 const filesIn = (root: string): string[] =>
   readdirSync(root, { recursive: true, withFileTypes: true })
     .filter((e) => e.isFile())
-    .map((e) => join(e.parentPath, e.name).slice(root.length + 1))
+    .map((e) => relative(root, join(e.parentPath, e.name)).replaceAll(sep, '/'))
     .sort()
 
 describe('es studio build', () => {

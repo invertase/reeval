@@ -28,7 +28,7 @@ import { OPENCODE_CLI_VERSION } from '@evalsuite/harness-opencode'
 import { PI_CLI_VERSION } from '@evalsuite/harness-pi'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
-import { liveSandboxes, readRun, runCli } from './helpers.ts'
+import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { harnesses, reserveAttempts } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
@@ -157,6 +157,16 @@ before(async () => {
 })
 after(() => registry.close())
 
+/** `npm pack` of `cwd` into `out`: the tarball's name. */
+function npmPack(cwd: string, out: string): string {
+  const r = spawnTool('npm', ['pack', '--silent', '--pack-destination', out], {
+    cwd,
+    encoding: 'utf8',
+  })
+  assert.equal(r.status, 0, r.stderr)
+  return r.stdout
+}
+
 /** Packs each `<dir>/<version>/` with `npm pack` into the local registry, oldest first. */
 function publish(dir: string) {
   const out = join(dir, '.packed')
@@ -164,13 +174,7 @@ function publish(dir: string) {
   for (const version of readdirSync(dir)
     .filter((v) => /^\d/.test(v))
     .sort()) {
-    const file = execFileSync('npm', ['pack', '--silent', '--pack-destination', out], {
-      cwd: join(dir, version),
-      encoding: 'utf8',
-    })
-      .trim()
-      .split('\n')
-      .at(-1) as string
+    const file = npmPack(join(dir, version), out).trim().split('\n').at(-1) as string
     const { name } = JSON.parse(readFileSync(join(dir, version, 'package.json'), 'utf8'))
     const versions = npmRegistry.packages.get(name) ?? new Map<string, Buffer>()
     versions.set(version, readFileSync(join(out, file)))
@@ -330,9 +334,7 @@ export const features: Feature[] = [
       const vendor = join(dir, 'vendor')
       mkdirSync(vendor)
       for (const version of ['1.2.3', '1.2.4']) {
-        execFileSync('npm', ['pack', '--silent', '--pack-destination', vendor], {
-          cwd: join(dir, 'packages', version),
-        })
+        npmPack(join(dir, 'packages', version), vendor)
       }
     },
     hostEnv: (dir) => ({ npm_config_cache: join(dir, '.npm-cache') }),

@@ -205,7 +205,7 @@ describe('concurrency', () => {
   test('--dry-run sizes the default concurrency from the Docker VM, as a real run does', async () => {
     const p = await project('conc-docker-vm', {
       'es.config.ts': fakeConfig().replace(
-        "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),",
+        "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),",
         "sandbox: (await import('evalsuite/sandbox')).docker(),",
       ),
       'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('go') })\n`,
@@ -227,7 +227,7 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig({
   harness: fakeHarness({ delayMs: 400 }),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname, maxConcurrent: 2 }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }),
   judge: { model: fakeJudge({ score: 0.9 }), maxConcurrent: 1 },
 })
 `,
