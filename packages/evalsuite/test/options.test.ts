@@ -563,6 +563,26 @@ describe('common mistakes', () => {
       /judge\.threshold must be between 0 and 1 \(got 2\) in group\("g"\)/,
     ],
     [
+      'a file path that climbs out of the workspace',
+      `defineEnvironment('e', { files: { '../../escape.txt': 'x' } })`,
+      /files\["\.\.\/\.\.\/escape\.txt"\] in defineEnvironment\("e"\): paths are relative to the workspace, or start with ~\/ for the home directory, and never use \.\./,
+    ],
+    [
+      'a file path that climbs out of the home directory',
+      `defineEnvironment('e', { files: { '~/../../x': 'x' } })`,
+      /files\["~\/\.\.\/\.\.\/x"\] in defineEnvironment\("e"\): paths .* never use \.\./,
+    ],
+    [
+      'an absolute file path',
+      `defineEnvironment('e', { files: { '/etc/hosts': 'x' } })`,
+      /files\["\/etc\/hosts"\] in defineEnvironment\("e"\): paths are relative to the workspace/,
+    ],
+    [
+      'a Windows-style file path',
+      `defineEnvironment('e', { files: { 'docs\\\\api.md': 'x' } })`,
+      /files\["docs\\\\api\.md"\] in defineEnvironment\("e"\): use forward slashes \(docs\/api\.md\)/,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,

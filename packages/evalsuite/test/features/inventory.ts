@@ -337,14 +337,18 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'files.workspace',
     area: 'Environments',
-    name: '`files` in the workspace, and `file()`',
-    tests: [options('skills, MCP, rules, files, setup steps and secrets reach the sandbox')],
+    name: '`files` in the workspace, and `file()`; paths that leave it are refused',
+    tests: [
+      options('skills, MCP, rules, files, setup steps and secrets reach the sandbox'),
+      options('common mistakes'),
+    ],
   },
   {
     id: 'files.home',
     area: 'Environments',
     name: '`files` under `~/`',
     fixtures: ['env/files-home'],
+    tests: [options('common mistakes')],
   },
   {
     id: 'files.binary',

@@ -59,7 +59,7 @@ It returns a frozen `Environment` with `name`, `layers` and an `extend` method.
 </Property>
 
 <Property name="files" type="Record<string, string | HostFile>" optional>
-  Files to write before the agent starts. Keys are workspace-relative paths, or `~/` paths in the sandbox's home. Values are the content, or `file(path)` for a host file, copied byte for byte.
+  Files to write before the agent starts. Keys are workspace-relative paths, or `~/` paths in the sandbox's home, with forward slashes; an absolute path or a `..` segment is refused. Values are the content, or `file(path)` for a host file, copied byte for byte.
 </Property>
 
 <Property name="rules" type="string | HostFile" optional>
