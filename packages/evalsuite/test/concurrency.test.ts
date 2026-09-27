@@ -305,8 +305,11 @@ for (const name of ['a', 'b']) {
       attempts.map((a) => a.outcome),
       ['pass', 'pass', 'pass'],
     )
-    // Its own time is one turn plus the sandbox (slow to start on Windows), not the 2.4 s wait too.
-    for (const a of attempts) assert.ok(a.durationMs < 2 * 1200, `${a.id}: ${a.durationMs}ms`)
+    // Each takes its own turn and sandbox (slow on Windows), not the wait: the third, 2.4 s queued,
+    // stays within one turn of the fastest.
+    const fastest = Math.min(...attempts.map((a) => a.durationMs))
+    for (const a of attempts)
+      assert.ok(a.durationMs < fastest + 1200, `${a.id}: ${a.durationMs}ms, fastest ${fastest}ms`)
     assert.match(r.stdout, /\[eval#3 fake\] ▶/)
   })
 
