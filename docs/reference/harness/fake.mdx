@@ -88,6 +88,14 @@ npx es run --config es.fake.config.ts
   The most fake attempts at once across the run.
 </Property>
 
+<Property name="startTimeout" type="Duration" optional>
+  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `fake: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+</Property>
+
+<Property name="startHangs" type="number | true" optional>
+  The first this many session starts of each attempt never become ready, even when aborted (`true`: every one), to test `startTimeout`.
+</Property>
+
 ## Script steps
 
 Each step is an object with exactly one key:

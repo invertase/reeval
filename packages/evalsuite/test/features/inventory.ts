@@ -1149,6 +1149,16 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'harness.start-timeout',
+    area: 'CLI and runner',
+    name: "A harness session that doesn't become ready within `startTimeout` (default 90s) is retried once, then an infra error; its sandbox goes and the other attempts carry on",
+    tests: [
+      engine('never becomes ready is an infra error, once retried'),
+      engine('a session that hangs once becomes ready on its retry, recorded'),
+      engine('startTimeout must be a duration'),
+    ],
+  },
+  {
     id: 'engine.failures',
     area: 'CLI and runner',
     name: 'A worker that dies, throws or runs out of memory fails its attempts; a CLI that crashes or is killed takes its workers and sandboxes with it',

@@ -1,5 +1,6 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
+import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
   type AppliedEnvironment,
@@ -264,6 +265,14 @@ export function checkHarnesses(list: unknown[], where: string): void {
       )
     }
     checkMaxConcurrent((item as HarnessDescriptor).maxConcurrent, `harness in ${where}`)
+    const { startTimeout } = item as HarnessDescriptor
+    if (startTimeout !== undefined) {
+      try {
+        parseDuration(startTimeout)
+      } catch (error) {
+        throw new UsageError(`startTimeout of harness in ${where}: ${(error as Error).message}`)
+      }
+    }
   }
 }
 

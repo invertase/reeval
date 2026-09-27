@@ -147,7 +147,12 @@ const passRateOf = (outcomes: Outcome[]) => {
 }
 
 /** Concurrency caps change how fast a run goes, not what it measures. */
-const withoutCaps = <T extends { maxConcurrent?: number }>({ maxConcurrent: _, ...rest }: T) => rest
+/** Without the operational limits (`maxConcurrent`, `startTimeout`), which don't change results. */
+const withoutCaps = <T extends { maxConcurrent?: number; startTimeout?: unknown }>({
+  maxConcurrent: _,
+  startTimeout: __,
+  ...rest
+}: T) => rest
 
 const harnessModel = (h: HarnessDescriptor) => (h.kind === 'fake' ? null : (h.model ?? null))
 
@@ -459,7 +464,15 @@ function attemptEvidence(
   out: Artifacts,
 ): Pick<
   AttemptRecord,
-  'turns' | 'usage' | 'timings' | 'activity' | 'judgements' | 'checks' | 'changedFiles' | 'files'
+  | 'turns'
+  | 'usage'
+  | 'timings'
+  | 'activity'
+  | 'judgements'
+  | 'startRetries'
+  | 'checks'
+  | 'changedFiles'
+  | 'files'
 > {
   const files: AttemptFiles = {}
   if (record?.setup?.length) {
@@ -506,6 +519,7 @@ function attemptEvidence(
       ? activity(record)
       : { tools: 0, fileEdits: 0, webSearches: 0, webFetches: 0, reasoningMs: 0 },
     judgements,
+    ...(record?.startRetries?.length ? { startRetries: record.startRetries } : {}),
     checks: (record?.checks ?? []).map((c, i) => ({
       command: c.command,
       exitCode: c.exitCode,

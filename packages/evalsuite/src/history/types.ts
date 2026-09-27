@@ -9,6 +9,7 @@ import type {
   Outcome,
   PhaseTimings,
   SandboxWarning,
+  StartRetry,
   TokenUsage,
   TurnStatus,
   WebEventType,
@@ -148,6 +149,8 @@ export type AttemptRecord = {
     reasoningMs: number
   }
   judgements: JudgementRecord[]
+  /** Harness session starts that didn't become ready within `startTimeout` and were started again (at most one). */
+  startRetries?: StartRetry[]
   checks: Array<{ command: string; exitCode: number; durationMs: number; log?: FileRef }>
   /** Files under a dependency directory (node_modules/, .venv/, …) collapse to one entry with `count`. */
   changedFiles: Array<FileChange & { count?: number }>
