@@ -8,6 +8,7 @@ import {
   imageInfo,
   LABEL,
   type NetworkPolicy,
+  SANDBOX_HOME,
   SANDBOX_ROOT,
   type Substitution,
   WORKSPACE_DIR,
@@ -105,9 +106,17 @@ export async function createDockerSandbox(
     if (model) served.add(model)
   }
   const started = performance.now()
+  const { root, capabilities, memory, cpus, pids } = descriptor
   const network = await createDockerSession({
     image,
     env: options.env,
+    ...(root !== undefined && { root }),
+    ...(capabilities && { capabilities }),
+    limits: {
+      ...(memory !== undefined && { memory }),
+      ...(cpus !== undefined && { cpus }),
+      ...(pids !== undefined && { pids }),
+    },
     labels: { [LABEL.run]: options.runId },
     lifetimeMs: options.timeoutMs,
     abortSignal: options.signal,
@@ -153,7 +162,7 @@ export async function createDockerSandbox(
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)
   await network.run({ command: `mkdir -p ${workdir}` })
-  const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || '/root'
+  const home = (await network.run({ command: 'printf %s "$HOME"' })).stdout || SANDBOX_HOME
   const resolve = (path: string) =>
     path.startsWith('~/') ? posix.join(home, path.slice(2)) : posix.resolve(workdir, path)
 
