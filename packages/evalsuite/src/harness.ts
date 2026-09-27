@@ -3,6 +3,7 @@ import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
   ClaudeCodeHarnessDescriptor,
+  CodexHarnessDescriptor,
   CursorHarnessDescriptor,
   FakeHarnessDescriptor,
   GooseHarnessDescriptor,
@@ -104,7 +105,21 @@ export const pi = (options: Omit<PiHarnessDescriptor, 'kind'>): PiHarnessDescrip
   return { kind: 'pi', ...options }
 }
 
-const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi']
+/**
+ * OpenAI's Codex CLI, with an OpenAI API key: `model` is an OpenAI model id, e.g. `gpt-5.4-mini`,
+ * required since the CLI's default changes under you. `id` names the cell; it defaults to
+ * `codex:<model>`.
+ */
+export const codex = (options: Omit<CodexHarnessDescriptor, 'kind'>): CodexHarnessDescriptor => {
+  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
+    throw new UsageError(
+      `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.4-mini' }) (got ${JSON.stringify(options?.model)})`,
+    )
+  }
+  return { kind: 'codex', ...options }
+}
+
+const LAYOUTS = ['cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex']
 
 const STEP_KEYS = ['exec', 'write', 'reply', 'mcp', 'error']
 

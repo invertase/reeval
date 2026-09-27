@@ -92,7 +92,7 @@ export async function createDockerSandbox(
   ]
   const debug = attemptDebug()
   const policy = networkPolicy(options.egress)
-  const served = new Set<string>()
+  const served: string[] = []
   const servedModel = brokering?.servedModel
   const logEvent = gatewayEvents(debug, brokering?.credential, options.expectedBlocked ?? [])
   const onEvent = (event: EgressEvent) => {
@@ -102,8 +102,10 @@ export async function createDockerSandbox(
       method: event.method,
       host: event.host,
       path: URL.canParse(event.url) ? new URL(event.url).pathname : event.url,
+      ...(event.responseModel ? { responseModel: event.responseModel } : {}),
+      ...(event.responseEffort ? { responseEffort: event.responseEffort } : {}),
     })
-    if (model) served.add(model)
+    if (model) served.push(model)
   }
   const started = performance.now()
   const { root, capabilities, memory, cpus, pids } = descriptor
@@ -131,6 +133,7 @@ export async function createDockerSandbox(
         ),
       ...(brokering && {
         endpoints: brokering.endpoints,
+        ...(brokering.modelResponses ? { modelResponses: brokering.modelResponses } : {}),
         ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
         onRefused: ({ method, url }) =>
           console.warn(
@@ -179,7 +182,10 @@ export async function createDockerSandbox(
       }),
     readFile: async (path) => (await network.readTextFile({ path: resolve(path) })) ?? null,
     ...(network.traffic && network.egress?.active && { traffic: network.traffic }),
-    ...(servedModel && { servedModels: () => [...served] }),
+    ...(servedModel && {
+      servedModels: () => [...new Set(served)],
+      servedRequests: () => [...served],
+    }),
     ...(network.setSubstitutions && {
       setSubstitutions: (subs: readonly Substitution[]) =>
         network.setSubstitutions?.(subs) ?? Promise.resolve(),

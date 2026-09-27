@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { VERSION as ANTIGRAVITY_VERSION } from '@evalsuite/harness-antigravity'
+import { VERSION as CODEX_VERSION } from '@evalsuite/harness-codex'
 import { VERSION as CURSOR_SDK_VERSION } from '@evalsuite/harness-cursor-sdk'
 import { VERSION as GOOSE_VERSION } from '@evalsuite/harness-goose'
 import { VERSION as OPENCODE_VERSION } from '@evalsuite/harness-opencode'
@@ -94,6 +95,7 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
     '@evalsuite/harness-pi': PI_VERSION,
     '@evalsuite/harness-cursor-sdk': CURSOR_SDK_VERSION,
     '@ai-sdk/harness-claude-code': adapterVersion('claude-code'),
+    '@evalsuite/harness-codex': CODEX_VERSION,
   }
   for (const name of PACKAGES) {
     try {

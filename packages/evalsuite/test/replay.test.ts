@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { AntigravityStreamTranslator } from '@evalsuite/harness-antigravity'
+import { CodexStreamTranslator } from '@evalsuite/harness-codex'
 import { CursorSdkStreamTranslator } from '@evalsuite/harness-cursor-sdk'
 import { GooseStreamTranslator } from '@evalsuite/harness-goose'
 import { OpenCodeStreamTranslator } from '@evalsuite/harness-opencode'
@@ -76,8 +77,8 @@ const harnesses = existsSync(root)
       .map((d) => d.name)
   : []
 
-test('there are captures for Cursor, Antigravity, OpenCode, Goose and pi', () => {
-  assert.deepEqual(harnesses.sort(), ['antigravity', 'cursor', 'goose', 'opencode', 'pi'])
+test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi and Codex', () => {
+  assert.deepEqual(harnesses.sort(), ['antigravity', 'codex', 'cursor', 'goose', 'opencode', 'pi'])
 })
 
 for (const harness of harnesses) {
@@ -107,6 +108,7 @@ const renamedTool: Record<string, [string, string]> = {
   antigravity: ['"run_command"', '"run_cmd_v2"'],
   cursor: ['"name":"shell"', '"name":"shell_v2"'],
   pi: ['"name":"bash"', '"name":"bash_v2"'],
+  codex: ['"type":"command_execution"', '"type":"shell_call"'],
 }
 
 /** Each harness's translator, fresh for one turn: the native events go back through it. */
@@ -114,6 +116,7 @@ const translators: Record<string, () => { push(line: string): HarnessV1StreamPar
   antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
   cursor: () => new CursorSdkStreamTranslator({ workDir: '/es/workspace' }),
   pi: () => new PiStreamTranslator(),
+  codex: () => new CodexStreamTranslator({ workDir: '/es/workspace' }),
 }
 
 for (const harness of Object.keys(translators))
@@ -253,6 +256,13 @@ const formatChanges: Record<string, Array<[string, string]>> = {
     ['"type":"message_end"', '"type":"message_done"'],
     ['"type":"toolcall_end"', '"type":"tool_call_end"'],
     ['"stopReason":"toolUse"', '"stopReason":"tool_use"'],
+  ],
+  codex: [
+    ['"type":"turn.completed"', '"type":"turn.done"'],
+    ['"type":"command_execution"', '"type":"shell_call"'],
+    ['"aggregated_output"', '"output"'],
+    ['"status":"completed"', '"status":"done"'],
+    ['"kind":"update"', '"kind":"modify"'],
   ],
   goose: [
     ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
@@ -597,5 +607,83 @@ describe('replay: Cursor web calls, streamed and recovered', () => {
       'webSearch',
       'webSearch',
     ])
+  })
+})
+
+describe("replay: Codex's format holds every item, status and failure codex exec defines", () => {
+  // Real codex exec 0.157.1 output: a refused key (each retry an `error`, then `turn.failed`), a
+  // command that exited non-zero (`failed`), a turn with reasoning summaries that added and
+  // deleted a file, and a page the model opened with its web tool.
+  for (const file of [
+    'bad-key.ndjson',
+    'failed-command.ndjson',
+    'plan-and-reasoning.ndjson',
+    'web.ndjson',
+  ])
+    test(`${file} is not a format change`, () => {
+      assert.deepEqual(unknownSignatures('codex', packageCapture('harness-codex', file)), [])
+    })
+
+  for (const status of ['in_progress', 'failed', 'declined'])
+    test(`a command's ${status} is not a format change`, () => {
+      const events = substituted('codex', [
+        /"type":"command_execution",([^}]*)"status":"completed"/g,
+        `"type":"command_execution",$1"status":"${status}"`,
+      ])
+      assert.deepEqual(unknownSignatures('codex', events), [])
+    })
+
+  test('a failed patch, a failed MCP call and every item type Codex defines are not', () => {
+    const item = (type: string, fields: Record<string, unknown>) =>
+      rawLine({ type: 'item.completed', item: { id: 'i', type, ...fields } })
+    const capture = `${read('codex', 'edit-and-run.raw.jsonl')}${[
+      item('file_change', { changes: [{ path: '/x', kind: 'delete' }], status: 'failed' }),
+      item('mcp_tool_call', {
+        server: 's',
+        tool: 't',
+        arguments: {},
+        result: null,
+        error: { message: 'no such tool' },
+        status: 'failed',
+      }),
+      item('reasoning', { text: 'thinking' }),
+      item('todo_list', { items: [{ text: 'a', completed: false }] }),
+      item('web_search', { query: 'q', action: { type: 'search', query: 'q' } }),
+      item('collab_tool_call', {
+        tool: 'spawn_agent',
+        sender_thread_id: 'a',
+        receiver_thread_ids: ['b'],
+        prompt: 'p',
+        agents_states: { b: { status: 'running', message: null } },
+        status: 'in_progress',
+      }),
+      item('error', { message: 'Falling back from WebSockets to HTTPS transport.' }),
+      rawLine({ type: 'error', message: 'Reconnecting... 1/5' }),
+      rawLine({ type: 'turn.failed', error: { message: 'unexpected status 401' } }),
+    ].join('\n')}\n`
+    assert.deepEqual(unknownSignatures('codex', nativeEvents(capture)), [])
+  })
+
+  test("twin: an item type, status or key codex exec doesn't define is a format change", () => {
+    const item = (fields: Record<string, unknown>) =>
+      nativeEvents(rawLine({ type: 'item.completed', item: { id: 'i', ...fields } }))
+    assert.notDeepEqual(unknownSignatures('codex', item({ type: 'image_view', path: '/x' })), [])
+    assert.notDeepEqual(
+      unknownSignatures(
+        'codex',
+        item({
+          type: 'command_execution',
+          command: 'x',
+          aggregated_output: '',
+          exit_code: 0,
+          status: 'timed_out',
+        }),
+      ),
+      [],
+    )
+    assert.notDeepEqual(
+      unknownSignatures('codex', item({ type: 'agent_message', text: 'x', phase: 'final' })),
+      [],
+    )
   })
 })

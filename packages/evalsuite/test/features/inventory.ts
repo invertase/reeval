@@ -56,6 +56,7 @@ const opencodeAdapter = (file: string, name: string) =>
   `harness-opencode/test/${file}.test.ts › ${name}`
 const gooseAdapter = (file: string, name: string) => `harness-goose/test/${file}.test.ts › ${name}`
 const piAdapter = (file: string, name: string) => `harness-pi/test/${file}.test.ts › ${name}`
+const codexAdapter = (file: string, name: string) => `harness-codex/test/${file}.test.ts › ${name}`
 
 export const inventory: InventoryFeature[] = [
   // Config and selection
@@ -236,6 +237,7 @@ export const inventory: InventoryFeature[] = [
       'harness/opencode-home-skills',
       'harness/goose-home-skills',
       'harness/pi-home-skills',
+      'harness/codex-home-skills',
     ],
     real: ['contract › skill placed where the agent reads it, and used'],
   },
@@ -252,6 +254,7 @@ export const inventory: InventoryFeature[] = [
       'harness/opencode-workspace-skills',
       'harness/goose-workspace-skills',
       'harness/pi-workspace-skills',
+      'harness/codex-workspace-skills',
     ],
   },
   {
@@ -326,7 +329,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['egress/cascade'],
     tests: [
       'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
-      'evalsuite/test/plan.test.ts › an mcp.sse server on Goose or pi exits 2 at plan time',
+      'evalsuite/test/plan.test.ts › an mcp.sse server on Goose, pi or Codex exits 2 at plan time',
     ],
   },
   {
@@ -349,7 +352,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'rules',
     area: 'Environments',
-    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose and pi, `CLAUDE.md` for Claude Code',
+    name: '`rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose, pi and Codex, `CLAUDE.md` for Claude Code',
     fixtures: [
       'env/rules',
       'harness/cursor-rules',
@@ -358,6 +361,7 @@ export const inventory: InventoryFeature[] = [
       'harness/opencode-rules',
       'harness/goose-rules',
       'harness/pi-rules',
+      'harness/codex-rules',
       'harness/cursor-rules-reach-agent',
     ],
     tests: [harness('rules win over a file at the same path')],
@@ -510,6 +514,7 @@ export const inventory: InventoryFeature[] = [
       'harness/opencode-dockerfile',
       'harness/goose-dockerfile',
       'harness/pi-dockerfile',
+      'harness/codex-dockerfile',
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
@@ -750,6 +755,42 @@ export const inventory: InventoryFeature[] = [
       piAdapter(
         'stream',
         'a real multi-call turn: tool calls, results, one step per model call and their summed tokens',
+      ),
+    ],
+  },
+  {
+    id: 'harness.codex',
+    area: 'Harnesses',
+    name: '`codex()`: Codex in the sandbox (`codex exec --json`) on a brokered OpenAI key, with per-turn tokens, and the served model and effort from the gateway',
+    fixtures: [
+      'harness/codex-rules',
+      'harness/codex-workspace-skills',
+      'harness/codex-home-skills',
+      'harness/codex-dockerfile',
+    ],
+    plan: ['codex/codex'],
+    tests: [
+      harness(
+        'Codex reads rules from AGENTS.md and skills from .agents/skills and ~/.agents/skills',
+      ),
+      harness(
+        "Codex's key is brokered to the Responses API only, whose response names the served model",
+      ),
+      harness("MCP servers go in Codex's config.toml shape; it has no SSE transport"),
+      harness(
+        "Codex's file changes are file edits: an added file is created, an updated one modified",
+      ),
+      codexAdapter(
+        'stream',
+        "a refused key: each retry a failed step, then the turn's error and an error finish",
+      ),
+      codexAdapter(
+        'unit',
+        "the config turns off analytics and plugins, and uses ES's HTTP provider on the key",
+      ),
+      sandboxDocker(
+        'proxy',
+        'asks for it uncompressed and records the model and effort, the body passed through whole',
       ),
     ],
   },

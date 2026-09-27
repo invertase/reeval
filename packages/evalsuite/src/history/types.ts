@@ -109,9 +109,11 @@ export type AttemptRecord = {
   /** The egress policy and, when the sandbox records it, the hosts contacted and refused; null if it never ran. */
   egress: EgressRecord | null
   /**
-   * The models the harness's own API requests asked for, as the egress gateway saw them (the
-   * served model, e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent
-   * uses on the side); null when its requests don't name one (Cursor) or nothing recorded them.
+   * The models the harness's own API calls were served by, as the egress gateway saw them: named
+   * in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent
+   * uses on the side) or, for Codex, in the response, with its effort
+   * (`gpt-5.4-mini-2026-03-17[effort=medium]`); null when neither names one (Cursor) or nothing
+   * recorded them.
    */
   servedModels: string[] | null
   outcome: Outcome

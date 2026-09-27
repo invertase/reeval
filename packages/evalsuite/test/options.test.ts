@@ -694,7 +694,7 @@ describe('common mistakes', () => {
     ],
     [
       'a harness kind ES does not know',
-      `evaluate('e', { harness: { kind: 'codex' } as never }, async () => {})`,
+      `evaluate('e', { harness: { kind: 'cline' } as never }, async () => {})`,
       /harness in evaluate\("e"\) must be like cursor\(\{ model: 'composer-2\.5' \}\) \(got an object with "kind"\)/,
     ],
     [
@@ -709,8 +709,8 @@ describe('common mistakes', () => {
     ],
     [
       'a fake agent layout ES does not know',
-      `evaluate('e', { harness: fakeHarness({ layout: 'codex' as never }) }, async () => {})`,
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi' \(got "codex"\)/,
+      `evaluate('e', { harness: fakeHarness({ layout: 'cline' as never }) }, async () => {})`,
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' \(got "cline"\)/,
     ],
     [
       'a fake agent script that is not one list per turn',

@@ -200,10 +200,10 @@ export type FakeHarnessDescriptor = {
    * Behave like this agent: its image, and where it reads rules and skills (`CLAUDE.md` and
    * `.claude/skills` for `claude-code`, `~/.gemini/config/skills` for `antigravity`,
    * `~/.config/opencode/skills` for `opencode`, Goose's private home for `goose`,
-   * `~/.pi/agent/skills` for `pi`). Defaults to the
+   * `~/.pi/agent/skills` for `pi`, `~/.agents/skills` for `codex`). Defaults to the
    * fake's own (`AGENTS.md`, `.agents/skills`) in Cursor's image.
    */
-  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi'
+  layout?: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'
 }
 /**
  * One action of a scripted fake agent. `exec` is reported as a `shell` tool call whose output is
@@ -295,6 +295,19 @@ export type PiHarnessDescriptor = {
   /** The most pi attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
 }
+/**
+ * OpenAI's Codex CLI through `@evalsuite/harness-codex` (`codex exec --json`), made by `codex()`.
+ * It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.
+ */
+export type CodexHarnessDescriptor = {
+  kind: 'codex'
+  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.4-mini`. */
+  model: string
+  /** Cell id; defaults to `codex:<model>`. */
+  id?: string
+  /** The most Codex attempts at once, across the run, e.g. for the key's rate limits. */
+  maxConcurrent?: number
+}
 /** A real coding agent, driven through its AI SDK harness adapter. */
 export type AgentHarnessDescriptor =
   | CursorHarnessDescriptor
@@ -303,6 +316,7 @@ export type AgentHarnessDescriptor =
   | OpenCodeHarnessDescriptor
   | GooseHarnessDescriptor
   | PiHarnessDescriptor
+  | CodexHarnessDescriptor
 export type HarnessDescriptor = FakeHarnessDescriptor | AgentHarnessDescriptor
 
 export type FakeSandboxDescriptor = {

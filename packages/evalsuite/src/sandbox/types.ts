@@ -18,10 +18,12 @@ export interface Sandbox {
   /** When the sandbox records egress: the hosts contacted and refused so far. */
   traffic?(): EgressTraffic
   /**
-   * When the harness's requests name their model: each model its brokered requests asked for so
-   * far, in first-seen order.
+   * When the harness's requests or their responses name the model: each model that served its
+   * brokered requests so far, in first-seen order.
    */
   servedModels?(): string[]
+  /** The same, one entry per brokered request that named its model, in order. */
+  servedRequests?(): string[]
   /** Idempotent, never throws. */
   destroy(): Promise<void>
 }

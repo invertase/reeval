@@ -9,7 +9,7 @@ description: >
 
 # ES (Eval Suite)
 
-ES runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose or pi) on a task
+ES runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex) on a task
 in a fresh Docker sandbox, then checks the result with deterministic assertions and an LLM judge.
 You write evals in TypeScript; `es run` runs them. The package is `@invertase/foobar` (a
 placeholder name) and the CLI is `es`. Full docs: the `docs/` folder of github.com/invertase/evalsuite (a docs.page
@@ -62,10 +62,11 @@ export default defineConfig({
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
   `gemini-3.8-flash-medium`), `opencode({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini
-  model id, e.g. `gemini-3.8-flash`), `goose({ model })` and `pi({ model })` (the same key and model ids; pi has no MCP) and
+  model id, e.g. `gemini-3.8-flash`), `goose({ model })` and `pi({ model })` (the same key and model ids; pi has no MCP),
+  `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.4-mini`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that ES's gateway swaps on the
-  harness's own endpoints. Cursor, Claude Code, Antigravity and pi report tokens, which ES records
+  harness's own endpoints. Cursor, Claude Code, Antigravity, pi and Codex report tokens, which ES records
   per turn, attempt and run (no prices); OpenCode's and Goose's can't be trusted, so it records none for them.
 - Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
@@ -93,7 +94,7 @@ export default defineConfig({
 
 `fakeHarness` also takes `withSkill: { files, text }` (used when the environment gives the agent
 a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 'server/tool' }`
-steps per turn), `layout: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi'`, `failWith`, `delayMs`,
+steps per turn), `layout: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'`, `failWith`, `delayMs`,
 `flakeRate`, `reasoning`, `tools` and `id`. Keep a fake config next to the real one and run it
 with `--config es.fake.config.ts`.
 
@@ -154,7 +155,7 @@ export const houseStyle = defineEnvironment('house-style', ({ skill }) => ({
 export const withDocs = houseStyle.extend('with-docs', ({ file, mcp }) => ({
   files: { 'docs/api.md': file('../docs/api.md') },  // written into the workspace
   rules: file('../rules/house.md'),                  // AGENTS.md (CLAUDE.md for Claude Code)
-  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose or pi)
+  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose, pi or Codex)
   setup: [{ run: 'npm ci', timeout: '5m' }],         // every attempt, before the agent
 }))
 ```

@@ -143,6 +143,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
         async send(prompt, turnSignal) {
           const startedAt = Date.now()
           const parts: StampedPart[] = []
+          const servedBefore = sandbox.servedRequests?.().length ?? 0
           servedModel = null
           finishMetadata = undefined
           let stepUsage: TokenUsage | null = null
@@ -155,7 +156,8 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             text,
             status,
             usage,
-            model: servedModel,
+            // An adapter that doesn't say takes the gateway's word: the turn's last brokered call.
+            model: servedModel ?? sandbox.servedRequests?.().slice(servedBefore).at(-1) ?? null,
             unreported: catalog.unreported?.(finishMetadata) ?? [],
             startedAt: new Date(startedAt).toISOString(),
             durationMs: Date.now() - startedAt,

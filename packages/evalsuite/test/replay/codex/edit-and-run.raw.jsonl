@@ -1,0 +1,32 @@
+{"turn":0,"ms":368,"part":{"type":"start"}}
+{"turn":0,"ms":685,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":686,"part":{"type":"raw","rawValue":{"type":"thread.started","thread_id":"01a0e35b-d529-7101-b37b-9f28fe5fb33f"}}}
+{"turn":0,"ms":728,"part":{"type":"raw","rawValue":{"type":"turn.started"}}}
+{"turn":0,"ms":2946,"part":{"type":"text-start","id":"item_0"}}
+{"turn":0,"ms":2946,"part":{"type":"text-delta","id":"item_0","text":"I’m going to update `notes.txt` in place, then I’ll run the exact shell command you gave once and stop right after."}}
+{"turn":0,"ms":2946,"part":{"type":"text-end","id":"item_0"}}
+{"turn":0,"ms":2946,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m going to update `notes.txt` in place, then I’ll run the exact shell command you gave once and stop right after."}}}}
+{"turn":0,"ms":3261,"part":{"type":"tool-call","toolCallId":"item_1","toolName":"bash","input":{"command":"/bin/bash -lc \"sed -n '1,120p' notes.txt\""},"providerExecuted":true,"title":"shell"}}
+{"turn":0,"ms":3261,"part":{"type":"raw","rawValue":{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,120p' notes.txt\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}}}
+{"turn":0,"ms":3262,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"sed -n '1,120p' notes.txt\"","aggregated_output":"status: draft\n","exit_code":0,"status":"completed"}}}}
+{"turn":0,"ms":4150,"part":{"type":"text-start","id":"item_2"}}
+{"turn":0,"ms":4150,"part":{"type":"text-delta","id":"item_2","text":"I found the target line, and I’m swapping `draft` to `final` now before I run your command."}}
+{"turn":0,"ms":4151,"part":{"type":"text-end","id":"item_2"}}
+{"turn":0,"ms":4151,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"I found the target line, and I’m swapping `draft` to `final` now before I run your command."}}}}
+{"turn":0,"ms":4374,"part":{"type":"tool-call","toolCallId":"item_3:0","toolName":"edit","input":{"path":"notes.txt"},"providerExecuted":true,"title":"apply_patch (update)"}}
+{"turn":0,"ms":4374,"part":{"type":"raw","rawValue":{"type":"item.started","item":{"id":"item_3","type":"file_change","changes":[{"path":"/es/workspace/notes.txt","kind":"update"}],"status":"in_progress"}}}}
+{"turn":0,"ms":4375,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_3","type":"file_change","changes":[{"path":"/es/workspace/notes.txt","kind":"update"}],"status":"completed"}}}}
+{"turn":0,"ms":6421,"part":{"type":"tool-call","toolCallId":"item_4","toolName":"bash","input":{"command":"/bin/bash -lc 'echo contract-$((6*7))'"},"providerExecuted":true,"title":"shell"}}
+{"turn":0,"ms":6422,"part":{"type":"raw","rawValue":{"type":"item.started","item":{"id":"item_4","type":"command_execution","command":"/bin/bash -lc 'echo contract-$((6*7))'","aggregated_output":"","exit_code":null,"status":"in_progress"}}}}
+{"turn":0,"ms":6423,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_4","type":"command_execution","command":"/bin/bash -lc 'echo contract-$((6*7))'","aggregated_output":"contract-42\n","exit_code":0,"status":"completed"}}}}
+{"turn":0,"ms":7585,"part":{"type":"text-start","id":"item_5"}}
+{"turn":0,"ms":7585,"part":{"type":"text-delta","id":"item_5","text":"Updated `notes.txt` from `draft` to `final`, then ran `echo contract-$((6*7))` once."}}
+{"turn":0,"ms":7585,"part":{"type":"text-end","id":"item_5"}}
+{"turn":0,"ms":7585,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_5","type":"agent_message","text":"Updated `notes.txt` from `draft` to `final`, then ran `echo contract-$((6*7))` once."}}}}
+{"turn":0,"ms":7613,"part":{"type":"tool-result","toolCallId":"item_1","toolName":"bash","output":"status: draft\n"}}
+{"turn":0,"ms":7613,"part":{"type":"tool-result","toolCallId":"item_3:0","toolName":"edit","output":{"kind":"update"}}}
+{"turn":0,"ms":7613,"part":{"type":"tool-result","toolCallId":"item_4","toolName":"bash","output":"contract-42\n"}}
+{"turn":0,"ms":7614,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":43016,"inputTokenDetails":{"noCacheTokens":11144,"cacheReadTokens":31872,"cacheWriteTokens":0},"outputTokens":357,"outputTokenDetails":{"textTokens":239,"reasoningTokens":118},"totalTokens":43373},"response":{"id":"0RGgRJviyl8ORF8w-0","timestamp":"2026-09-27T14:54:08.472Z","modelId":"gpt-5.4-mini","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":7614,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":7614,"part":{"type":"raw","rawValue":{"type":"turn.completed","usage":{"input_tokens":43016,"cached_input_tokens":31872,"cache_write_input_tokens":0,"output_tokens":357,"reasoning_output_tokens":118}}}}
+{"turn":0,"ms":7635,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":43016,"inputTokenDetails":{"noCacheTokens":11144,"cacheReadTokens":31872,"cacheWriteTokens":0},"outputTokens":357,"outputTokenDetails":{"textTokens":239,"reasoningTokens":118},"totalTokens":43373}}}

@@ -2,8 +2,8 @@
 # the real-tier feature fixtures (real Cursor, `harness/cursor-web-fetch` among them), the check that
 # @cursor/sdk still declares what the Cursor harness recovers web calls from, and (pinned only) the
 # CLI end to end. Called by real.yml only, which gates it on this repository and its secrets.
-# `versions: latest` first swaps the newest `agy`, @cursor/sdk, OpenCode, Goose and pi into the
-# pinned images
+# `versions: latest` first swaps the newest `agy`, @cursor/sdk, OpenCode, Goose, pi and Codex into
+# the pinned images
 # (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
 # to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
 # It also checks the newest @ai-sdk/harness-claude-code against ES's patch to the pinned one
@@ -31,15 +31,16 @@ jobs:
       ES_TEST_REAL: '1'
       ES_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key fails, naming the variable.
-      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,goose,pi
-      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all six rows,
+      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,goose,pi,codex
+      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all seven rows,
       # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
       # first, and fails rather than go over.
-      ES_REAL_ATTEMPT_BUDGET: '98'
+      ES_REAL_ATTEMPT_BUDGET: '112'
       ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

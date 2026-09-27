@@ -1,0 +1,24 @@
+{"turn":0,"ms":359,"part":{"type":"start"}}
+{"turn":0,"ms":623,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":624,"part":{"type":"raw","rawValue":{"type":"thread.started","thread_id":"01a0e35c-01f9-72f2-851d-aa220e74d8c9"}}}
+{"turn":0,"ms":658,"part":{"type":"raw","rawValue":{"type":"turn.started"}}}
+{"turn":0,"ms":1904,"part":{"type":"text-start","id":"item_0"}}
+{"turn":0,"ms":1904,"part":{"type":"text-delta","id":"item_0","text":"I’m locating the `stamp` MCP tool first, then I’ll call `house_stamp` exactly once and report its raw return value back to you."}}
+{"turn":0,"ms":1904,"part":{"type":"text-end","id":"item_0"}}
+{"turn":0,"ms":1904,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m locating the `stamp` MCP tool first, then I’ll call `house_stamp` exactly once and report its raw return value back to you."}}}}
+{"turn":0,"ms":2951,"part":{"type":"text-start","id":"item_1"}}
+{"turn":0,"ms":2951,"part":{"type":"text-delta","id":"item_1","text":"I found the `stamp` server tool. Calling `house_stamp` now and then I’ll echo exactly what it returns."}}
+{"turn":0,"ms":2952,"part":{"type":"text-end","id":"item_1"}}
+{"turn":0,"ms":2952,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I found the `stamp` server tool. Calling `house_stamp` now and then I’ll echo exactly what it returns."}}}}
+{"turn":0,"ms":3034,"part":{"type":"tool-call","toolCallId":"item_2","toolName":"mcp__stamp__house_stamp","input":{},"dynamic":true,"invalid":true,"error":{"name":"AI_NoSuchToolError","toolName":"mcp__stamp__house_stamp","availableTools":["bash","write","edit","delete","webSearch"]},"providerExecuted":true}}
+{"turn":0,"ms":3034,"part":{"type":"raw","rawValue":{"type":"item.started","item":{"id":"item_2","type":"mcp_tool_call","server":"stamp","tool":"house_stamp","arguments":{},"result":null,"error":null,"status":"in_progress"}}}}
+{"turn":0,"ms":3037,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_2","type":"mcp_tool_call","server":"stamp","tool":"house_stamp","arguments":{},"result":{"content":[{"type":"text","text":"STAMP-7Q"}],"structured_content":null},"error":null,"status":"completed"}}}}
+{"turn":0,"ms":4309,"part":{"type":"text-start","id":"item_3"}}
+{"turn":0,"ms":4309,"part":{"type":"text-delta","id":"item_3","text":"STAMP-7Q"}}
+{"turn":0,"ms":4310,"part":{"type":"text-end","id":"item_3"}}
+{"turn":0,"ms":4310,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"STAMP-7Q"}}}}
+{"turn":0,"ms":4348,"part":{"type":"tool-result","toolCallId":"item_2","toolName":"mcp__stamp__house_stamp","output":[{"type":"text","text":"STAMP-7Q"}]}}
+{"turn":0,"ms":4348,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":32879,"inputTokenDetails":{"noCacheTokens":11631,"cacheReadTokens":21248,"cacheWriteTokens":0},"outputTokens":181,"outputTokenDetails":{"textTokens":127,"reasoningTokens":54},"totalTokens":33060},"response":{"id":"kSTaJJyb9hEDADhw-0","timestamp":"2026-09-27T14:54:16.735Z","modelId":"gpt-5.4-mini","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":4348,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":4348,"part":{"type":"raw","rawValue":{"type":"turn.completed","usage":{"input_tokens":32879,"cached_input_tokens":21248,"cache_write_input_tokens":0,"output_tokens":181,"reasoning_output_tokens":54}}}}
+{"turn":0,"ms":4376,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":32879,"inputTokenDetails":{"noCacheTokens":11631,"cacheReadTokens":21248,"cacheWriteTokens":0},"outputTokens":181,"outputTokenDetails":{"textTokens":127,"reasoningTokens":54},"totalTokens":33060}}}

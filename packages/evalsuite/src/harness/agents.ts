@@ -57,6 +57,8 @@ export type Agent = Layout & {
    * requests don't say (Cursor's are protobuf), so the record says it's unknown.
    */
   servedModel?: ServedModel
+  /** Requests whose response body names the model that served them, for `servedModel`. */
+  modelResponses?: readonly EndpointMatch[]
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -87,6 +89,10 @@ export type ServedModel = (request: {
   method: string
   host: string
   path: string
+  /** What the response body said served it, on a `modelResponses` endpoint. */
+  responseModel?: string
+  /** The reasoning effort the response body said it ran at, on a `modelResponses` endpoint. */
+  responseEffort?: string
 }) => string | undefined
 
 /** A Gemini API key's only request: `POST /v1beta/models/<model>:streamGenerateContent`. */
@@ -120,6 +126,38 @@ const CURSOR_EXCHANGE = {
   path: { exact: '/auth/exchange_user_api_key' },
   method: ['POST'],
 } as const satisfies EndpointMatch
+
+/** What Codex sends the key on: the Responses API. */
+const OPENAI_ENDPOINTS = [
+  { host: 'api.openai.com', path: { exact: '/v1/responses' }, method: ['POST'] },
+] as const satisfies readonly EndpointMatch[]
+
+/**
+ * The model the Responses API says served a request, from its response: the dated snapshot, and
+ * the reasoning effort Codex resolved for it, e.g. `gpt-5.4-mini-2026-03-17[effort=medium]`.
+ */
+const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEffort }) =>
+  host === 'api.openai.com' && path === '/v1/responses' && responseModel
+    ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
+    : undefined
+
+/** Codex's `config.toml` `[mcp_servers]` shape. */
+export function codexMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]) => {
+      if (s.transport === 'sse') {
+        throw new InfraError(
+          `Codex has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      return s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: s.env ?? {} }]
+        : [name, { url: s.url, http_headers: s.headers ?? {} }]
+    }),
+  )
+}
 
 /** The `.mcp.json` shape. */
 export function claudeMcpServers(
@@ -234,6 +272,13 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.pi/skills',
     harnessSkillDir: '.pi/agent/skills',
+  },
+  // 0.157.1 reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
+  // ~/.codex and the workspace.
+  codex: {
+    rulesFile: 'AGENTS.md',
+    workspaceSkillDir: '.agents/skills',
+    harnessSkillDir: '.agents/skills',
   },
 }
 
@@ -381,6 +426,26 @@ export const AGENTS: Record<AgentKind, Agent> = {
         requireCredentialBrokering: true,
       }),
   },
+  codex: {
+    ...LAYOUTS.codex,
+    name: 'Codex',
+    factory: 'codex',
+    credential: 'OPENAI_API_KEY',
+    // The only request 0.157.1 sends the key on, on the adapter's provider (HTTP, not WebSockets),
+    // whose response names the dated model and the effort that served it.
+    endpoints: OPENAI_ENDPOINTS,
+    modelResponses: OPENAI_ENDPOINTS,
+    servedModel: openaiServedModel,
+    mcpServers: codexMcpServers,
+    adapter: async ({ auth, mcpServers }) =>
+      (await import('@evalsuite/harness-codex')).createCodex({
+        auth,
+        ...(mcpServers
+          ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }
+          : {}),
+        requireCredentialBrokering: true,
+      }),
+  },
 }
 
 /** The harness of a config that names none: Cursor, on Cursor's own model. */
@@ -477,16 +542,18 @@ export type Brokering = {
   endpoints: readonly EndpointMatch[]
   tokens?: DerivedTokens
   servedModel?: ServedModel
+  modelResponses?: readonly EndpointMatch[]
 }
 
 export function brokeringFor(h: HarnessDescriptor): Brokering | undefined {
   const agent = agentOf(h)
   if (!agent) return undefined
-  const { credential, endpoints, tokens, servedModel } = agent
+  const { credential, endpoints, tokens, servedModel, modelResponses } = agent
   return {
     credential,
     endpoints,
     ...(tokens ? { tokens: { name: credential, ...tokens } } : {}),
     ...(servedModel ? { servedModel } : {}),
+    ...(modelResponses ? { modelResponses } : {}),
   }
 }

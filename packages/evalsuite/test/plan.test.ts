@@ -28,6 +28,7 @@ export const cases: PlanCase[] = [
   { dir: 'opencode', name: 'opencode', args: [] },
   { dir: 'goose', name: 'goose', args: [] },
   { dir: 'pi', name: 'pi', args: [] },
+  { dir: 'codex', name: 'codex', args: [] },
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'secrets', name: 'brokered', args: [] },
   { dir: 'egress', name: 'cascade', args: [] },
@@ -99,7 +100,7 @@ describe('the JSON plan', { concurrency: true }, () => {
     assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
   })
 
-  test('an mcp.sse server on Goose or pi exits 2 at plan time, naming the eval and the server', async () => {
+  test('an mcp.sse server on Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
     for (const [factory, model, refusal] of [
       [
         'goose',
@@ -110,6 +111,11 @@ describe('the JSON plan', { concurrency: true }, () => {
         'pi',
         'gemini-3.8-flash',
         /evaluate\("streams"\) on pi:gemini-3\.8-flash: pi has no MCP client, so it can't use the events MCP server/,
+      ],
+      [
+        'codex',
+        'gpt-5.4-mini',
+        /evaluate\("streams"\) on codex:gpt-5\.4-mini: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
     ] as const) {
       const p = await project(`sse-${factory}`, {

@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"01a0e360-d49b-7972-9b24-c31c96e11030"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"item_0","type":"command_execution","command":"/bin/bash -lc 'ls /definitely-missing-dir .'","aggregated_output":"","exit_code":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_0","type":"command_execution","command":"/bin/bash -lc 'ls /definitely-missing-dir .'","aggregated_output":"ls: cannot access '/definitely-missing-dir': No such file or directory\n.:\n","exit_code":2,"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"done"}}
+{"type":"turn.completed","usage":{"input_tokens":21166,"cached_input_tokens":19200,"cache_write_input_tokens":0,"output_tokens":142,"reasoning_output_tokens":92}}

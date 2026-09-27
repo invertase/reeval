@@ -1,0 +1,106 @@
+---
+title: codex()
+description: The Codex harness, its options and id, its OpenAI API key, the tokens and served model it records, and the settings that keep it quiet.
+---
+
+`codex()` runs OpenAI's [Codex CLI](https://github.com/openai/codex) in the Docker sandbox, one `codex exec --json` process per turn, on an OpenAI API key. `model` is required.
+
+```ts title="es.config.ts"
+import { defineConfig } from '{{ pkg }}'
+import { codex } from '{{ pkg }}/harness'
+
+export default defineConfig({
+  harness: codex({ model: 'gpt-5.4-mini' }),
+})
+```
+
+## Options
+
+<Property name="model" type="string">
+  An OpenAI model id that runs on the Responses API, such as `gpt-5.4-mini`, without a provider. Required: Codex's own default changes between releases.
+</Property>
+
+<Property name="id" type="string" optional>
+  The harness's id in cell keys, filters and the record. Default `codex:<model>`.
+</Property>
+
+<Property name="maxConcurrent" type="number" optional>
+  The most Codex attempts at once across the run, for example for your key's rate limits.
+</Property>
+
+## At a glance
+
+| | |
+|---|---|
+| Import | `'{{ pkg }}/harness'` |
+| Credential | `OPENAI_API_KEY` (an OpenAI API key) |
+| Adapter | `@evalsuite/harness-codex` 0.1.0, bundled with ES |
+| CLI | `@openai/codex` 0.157.1, its native Linux build, checked against npm's sha512 |
+| Sandbox | `docker()` only |
+| Image | `evalsuite-sandbox:codex-0.1.0` |
+| Rules file | `AGENTS.md` |
+| Skills (default placement) | `~/.agents/skills` |
+| Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
+| Egress hosts added | `api.openai.com` |
+| Tokens | Reported for each turn, reasoning included |
+| Served model | The dated model and reasoning effort, from each API response |
+| MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
+
+Build its image once with `es image build` in a project whose config uses `codex()`. `gpt-5.4-mini` is cheap and passes the harness contract; pin the model you mean to measure.
+
+## Why not `@ai-sdk/harness-codex`
+
+That adapter runs Codex in the sandbox too, but its stream carries none of Codex's own events, so ES couldn't check Codex's output format or replay real runs. It also drops reasoning tokens, and the release that matches ES's `@ai-sdk/harness` pins Codex 0.155.0 behind `@openai/codex-sdk`. ES's adapter runs `codex exec --json`, which that SDK wraps, directly.
+
+## The key
+
+ES passes `OPENAI_API_KEY` to the adapter explicitly, and Codex gets a placeholder. The adapter gives Codex its own provider for the OpenAI API, with WebSockets off, so every model call is one HTTP request the gateway can read. The gateway swaps the real key in on that request only:
+
+| Host | Endpoint |
+|---|---|
+| `api.openai.com` | `POST /v1/responses` |
+
+The adapter refuses to run in a sandbox that can't broker the key.
+
+## Tokens and the served model
+
+Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens. Codex reports no cost, and ES prices no models.
+
+Codex doesn't say which model served a turn. The gateway reads it from each response instead: the Responses API names the dated model and the reasoning effort Codex asked for, so a turn on `gpt-5.4-mini` records `gpt-5.4-mini-2026-03-17[effort=medium]`. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+
+## Turns and settings
+
+Each turn runs `codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --model <model>`, and later turns add `resume <thread>`, so they continue the conversation. The Docker sandbox is the isolation, so Codex's own sandbox and approvals are off. The prompt is a command-line argument, so it must stay under 128 KiB. Instructions go to `~/.codex/AGENTS.md`, which Codex reads before the workspace's.
+
+The adapter writes `~/.codex/config.toml` with Codex's defaults but for what it sends besides model requests:
+
+| Setting | Stops |
+|---|---|
+| `analytics.enabled = false` | Analytics to `ab.chatgpt.com` |
+| `features.plugins = false` | The plugin sync from `github.com` and `chatgpt.com` |
+| `check_for_update_on_startup = false` | The update check (the TUI's; `exec` doesn't run it) |
+
+With them, a turn contacts only `api.openai.com`, so `egress: 'deny-all'` needs nothing else. Codex's web search and the pages it opens run on OpenAI's side: a restricted policy doesn't limit them, and each is a `web-search` or `web-fetch` event in the [transcript](/reference/transcript).
+
+## MCP
+
+MCP servers go in `config.toml` under `mcp_servers`: `mcp.stdio` as `command`, `args` and `env`, `mcp.http` as `url` and `http_headers`. Codex has no SSE transport, so an eval that gives it `mcp.sse` is refused at plan time, naming the server.
+
+## Errors
+
+| Situation | Message |
+|---|---|
+| No model, or one with a provider | `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.4-mini' }) (got …)` |
+| No key when the attempt starts | `OPENAI_API_KEY isn't set, so the Codex harness can't authenticate. Set it in the environment or .env.local.` |
+| OpenAI refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. unexpected status 401 Unauthorized: …` |
+| `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on codex:<model>: Codex has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| A non-Docker sandbox | `The Codex harness needs the Docker sandbox` |
+| Codex dies mid-turn | `codex exited with code <n> before ending the turn: …` |
+
+A refused key is retried five times by Codex before the turn fails; each retry is a `retry` event in the transcript.
+
+## Related
+
+- [Harnesses](/guide/harnesses)
+- [Secrets and egress](/guide/secrets-and-egress)
+- [Transcripts](/reference/transcript)
