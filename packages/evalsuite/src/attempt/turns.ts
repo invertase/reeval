@@ -8,7 +8,7 @@ import type { Diff, ExecResult, Turn } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 /** How long a turn gets to stop once its attempt is aborted, before ES stops waiting for it. */
-export const TURN_STOP_GRACE_MS = 3_000
+const TURN_STOP_GRACE_MS = 3_000
 
 /**
  * Resolves `grace` ms after `signal` aborts, with the turn as cut off; `cancel` drops the timer
