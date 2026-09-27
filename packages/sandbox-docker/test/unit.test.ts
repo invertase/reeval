@@ -698,7 +698,8 @@ describe('image recipes', () => {
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {
     const dir = tmp()
-    const out = join(dir, 'out.txt')
+    // Forward slashes: the script is for a Linux container, and Git Bash takes C:/… on Windows.
+    const out = join(dir, 'out.txt').replaceAll('\\', '/')
     const script = installScript([
       { run: `pwd >> ${out}` },
       { run: `echo "it's two" >> ${out}\necho line >> ${out}` },

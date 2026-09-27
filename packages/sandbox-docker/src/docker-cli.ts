@@ -39,7 +39,7 @@ export function removeContainerDetached(id: string): Promise<void> {
       traceDocker(args, startedAt, { exitCode })
       resolve()
     }
-    const child = spawn('docker', args, { detached: true, stdio: 'ignore' })
+    const child = spawn('docker', args, { detached: true, stdio: 'ignore', windowsHide: true })
     child.on('error', () => done(null))
     child.on('close', done)
   })
@@ -51,9 +51,22 @@ export function removeContainerDetached(id: string): Promise<void> {
  * container after the CLI dies, and its id never came back.
  */
 export function sweepLabelDetached(label: string, seconds = 15): void {
-  const filter = `label=${label}`.replaceAll("'", '')
-  const script = `for i in $(seq ${seconds}); do ids=$(docker ps -aq --filter '${filter}'); [ -n "$ids" ] && docker rm -f $ids >/dev/null 2>&1; sleep 1; done`
-  const child = spawn('sh', ['-c', script], { detached: true, stdio: 'ignore' })
+  // A Node script rather than a shell loop, so it runs where there's no sh (Windows).
+  const script = `const { execFileSync } = require('node:child_process')
+const [filter, seconds] = process.argv.slice(1)
+const o = { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true }
+for (let i = 0; i < Number(seconds); i++) {
+  try {
+    const ids = execFileSync('docker', ['ps', '-aq', '--filter', filter], o).split(/\\s+/).filter(Boolean)
+    if (ids.length) execFileSync('docker', ['rm', '-f', ...ids], o)
+  } catch {}
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000)
+}`
+  const child = spawn(process.execPath, ['-e', script, `label=${label}`, String(seconds)], {
+    detached: true,
+    stdio: 'ignore',
+    windowsHide: true,
+  })
   child.on('error', () => {})
   child.unref()
 }

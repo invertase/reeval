@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
 
@@ -13,7 +14,7 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig({
   harness: ${harness},
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   ${extra}
 })
@@ -1119,7 +1120,7 @@ import { fakeSandbox } from 'evalsuite/sandbox'
 import { fakeJudge } from 'evalsuite/judge'
 export default defineConfig(({ secret }) => ({
   harness: fakeHarness({}),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   env: { APP_TOKEN: secret.fromEnv('ES_TEST_HOST_TOKEN'), MODE: 'test' },
 }))
@@ -1252,7 +1253,7 @@ evaluate('x', { environment: broken, timeout: '1s' }, async (t) => { await t.sen
       `import { defineEnvironment, evaluate, expect } from 'evalsuite'
 const env = defineEnvironment('remote', ({ skill }) => ({
   skills: [
-    skill.git('file://${repo}', { ref: 'v1', path: 'skills', only: ['house-greeting'] }),
+    skill.git('${pathToFileURL(repo).href}', { ref: 'v1', path: 'skills', only: ['house-greeting'] }),
     skill.inline({ name: 'house-rules', description: 'Rules.', content: 'Be nice.' }, { placement: 'workspace' }),
   ],
 }))
@@ -1268,7 +1269,7 @@ evaluate('loads it', { environment: env }, async (t) => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const skills = readRun(p.dir).run.environments[0]?.skills
     assert.equal(skills?.[0]?.commit, sha)
-    assert.equal(skills?.[0]?.source, `file://${repo}#v1:skills`)
+    assert.equal(skills?.[0]?.source, `${pathToFileURL(repo).href}#v1:skills`)
     assert.deepEqual(
       skills?.map((s) => [s.name, s.placement]),
       [
@@ -1330,7 +1331,7 @@ describe('sandbox images', () => {
     [
       'a missing dockerfile',
       `docker({ dockerfile: './nope/Dockerfile' })`,
-      /docker\(\{ dockerfile: "\.\/nope\/Dockerfile" \}\): .+\/evals\/nope\/Dockerfile doesn't exist\. Paths are relative to the file that calls docker\(\)\./,
+      /docker\(\{ dockerfile: "\.\/nope\/Dockerfile" \}\): .+[/\\]evals[/\\]nope[/\\]Dockerfile doesn't exist\. Paths are relative to the file that calls docker\(\)\./,
     ],
     [
       'an empty install',
