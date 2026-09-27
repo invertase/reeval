@@ -148,7 +148,7 @@ its Reference page.
 - **Antigravity**: Its CLI always tries `play.googleapis.com` and `antigravity-unleash.goog`; a restricted egress policy refuses them and records them under the record's `egress.expectedBlocked`.
 - **OpenCode**: No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Served model from the gateway's requests only (the record's `servedModels`); each turn's `model` is null. Web fetch only: OpenCode offers `websearch` only on its own provider or with Exa or Parallel enabled, and ES runs it on `google` with neither.
 - **Goose**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). MCP servers go in its `config.yaml` as enabled extensions, not over ACP, where they start disabled. No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Served model from the gateway's requests only (the record's `servedModels`); each turn's `model` is null.
-- **pi**: No MCP client: an eval that gives it MCP servers is refused at plan time for `mcp.sse`, when the attempt starts otherwise.
+- **pi**: No MCP client: an eval that gives it MCP servers is refused at plan time (exit 2).
 
 [//]: # (/generated:readme:harness-matrix)
 

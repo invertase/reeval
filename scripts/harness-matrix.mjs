@@ -7,8 +7,7 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const src = join(root, 'packages/evalsuite/src')
-const agentsModule = await import(join(src, 'harness/agents.ts'))
-const { AGENTS, gooseMcpServers } = agentsModule
+const { AGENTS, gooseMcpServers, refusedMcp } = await import(join(src, 'harness/agents.ts'))
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
 const { harnesses } = await import(join(root, 'packages/evalsuite/test/support/harnesses.ts'))
 
@@ -20,10 +19,7 @@ const PROBE = {
 }
 
 /** Whether the agent takes an MCP server of each transport, and when ES refuses one it can't. */
-function mcpSupport(kind, agent, problems) {
-  // refusedMcp covers every transport; refusedSse, its predecessor, only mcp.sse.
-  const planRefusal = agentsModule.refusedMcp ?? agentsModule.refusedSse
-  if (!planRefusal) problems.push('agents.ts exports neither refusedMcp nor refusedSse')
+function mcpSupport(kind, agent) {
   const out = {}
   for (const transport of TRANSPORTS) {
     let refused = false
@@ -34,7 +30,7 @@ function mcpSupport(kind, agent, problems) {
       refused = true
     }
     const layers = [{ spec: { mcp: { probe: PROBE[transport] } } }]
-    const atPlan = refused && !!planRefusal?.({ kind, model: 'probe' }, layers)
+    const atPlan = refused && !!refusedMcp({ kind, model: 'probe' }, layers)
     out[transport] = { ok: !refused, atPlan }
   }
   return out
@@ -136,7 +132,7 @@ export async function harnessFacts() {
     }
     if (!row.tokens && !row.tokensWhy)
       problems.push(`${kind}: a contract row with tokens: false needs tokensWhy`)
-    const mcp = mcpSupport(kind, agent, problems)
+    const mcp = mcpSupport(kind, agent)
     if ((row.mcp !== false) !== mcp.stdio.ok) {
       problems.push(`${kind}: the contract row's mcp and the catalog disagree on stdio MCP servers`)
     }
