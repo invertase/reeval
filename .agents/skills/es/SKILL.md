@@ -9,10 +9,10 @@ description: >
 
 # ES (Eval Suite)
 
-ES runs a real coding agent (Cursor, Claude Code or Antigravity) on a task in a fresh Docker
-sandbox, then checks the result with deterministic assertions and an LLM judge. You write evals
-in TypeScript; `es run` runs them. The package is `@invertase/foobar` (a placeholder name) and
-the CLI is `es`. Full docs: the `docs/` folder of github.com/invertase/evalsuite (a docs.page
+ES runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose or pi) on a task
+in a fresh Docker sandbox, then checks the result with deterministic assertions and an LLM judge.
+You write evals in TypeScript; `es run` runs them. The package is `@invertase/foobar` (a
+placeholder name) and the CLI is `es`. Full docs: the `docs/` folder of github.com/invertase/evalsuite (a docs.page
 site; its Reference tab has every option, flag and error).
 
 ## Workflow
@@ -148,7 +148,7 @@ export const houseStyle = defineEnvironment('house-style', ({ skill }) => ({
 export const withDocs = houseStyle.extend('with-docs', ({ file, mcp }) => ({
   files: { 'docs/api.md': file('../docs/api.md') },  // written into the workspace
   rules: file('../rules/house.md'),                  // AGENTS.md (CLAUDE.md for Claude Code)
-  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url)
+  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose or pi)
   setup: [{ run: 'npm ci', timeout: '5m' }],         // every attempt, before the agent
 }))
 ```
@@ -248,8 +248,8 @@ them to `evals/.history/` to commit.
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `t.judge() has no model` | Set one, or `fakeJudge()` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
-| Forgetting `await` on `toHaveFile`/`toSucceed` | the check may not gate the attempt | `await expect(...)` |
+| Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
-| Test file named `*.test.ts` | not collected | `*.es.ts` under `evals/` |
+| Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.es.ts` under `evals/` |
 | `es run` from another directory | `Missing credentials: …` | Run from the directory with `.env.local` |

@@ -97,7 +97,7 @@ The same idea for `es analyze`: it answers with `output`, or `output(digest)` wh
 | No turn yet | `t.judge() has no turn to grade: call t.send() first` |
 | No provider prefix | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
 | A model object in the config | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
-| A bad threshold | `config.judge.threshold must be between 0 and 1`; on a group or eval, `judge.threshold must be between 0 and 1 (got 2) in group("g")`; on a call, `t.judge() threshold must be between 0 and 1 (got 2)` |
+| A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in es.config.ts`, or `in group("g")` on a group or eval; on a call, `t.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `t.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |

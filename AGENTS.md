@@ -117,7 +117,7 @@ ES_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the d
 
 **The harness contract** (`test/contract.test.ts`, [its README](./packages/evalsuite/test/contract/README.md))
 runs one ES project on each real harness (the rows in `test/support/harnesses.ts`: Cursor,
-Antigravity, Claude Code) and checks the same behaviours on each: a placed skill is used, rules are
+Antigravity, Claude Code, OpenCode, Goose and pi) and checks the same behaviours on each: a placed skill is used, rules are
 read, a stdio MCP server is called, a file edit and a command are in the transcript, tokens and the
 served model are recorded, the real key is nowhere in the container, `deny-all` with the automatic
 hosts works and a blocked host is refused and recorded, the native stream format is known, and

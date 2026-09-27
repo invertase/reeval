@@ -63,7 +63,7 @@ It returns a frozen `Environment` with `name`, `layers` and an `extend` method.
 </Property>
 
 <Property name="rules" type="string | HostFile" optional>
-  Project rules, as markdown or `file(path)`. They're written where the harness's agent reads them: `AGENTS.md` for Cursor and Antigravity, `CLAUDE.md` for Claude Code.
+  Project rules, as markdown or `file(path)`. They're written where the harness's agent reads them: `CLAUDE.md` for Claude Code, `AGENTS.md` for every other agent.
 </Property>
 
 <Property name="setup" type="Array<string | { run: string, timeout?: string | number, cwd?: string }>" optional>
