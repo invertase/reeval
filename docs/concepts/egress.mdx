@@ -50,6 +50,7 @@ A restricted policy always allows what the attempt itself needs, so an agent sti
 | Cursor | `api2.cursor.sh`, `*.cursor.sh` |
 | Claude Code | `api.anthropic.com`, `*.anthropic.com` |
 | Antigravity | `generativelanguage.googleapis.com` |
+| OpenCode, Goose, pi | `generativelanguage.googleapis.com` |
 | Brokered secrets | Each secret's `hosts` |
 | MCP servers | Each `http` or `sse` server's host |
 
@@ -64,6 +65,7 @@ Some CLIs contact hosts that nothing needs and no setting turns off. ES lists th
 | Antigravity | `play.googleapis.com`, `antigravity-unleash.goog` | Telemetry and feature flags, sent even with telemetry off |
 | Claude Code | None | ES runs it with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
 | Cursor | None | Its analytics go to `api2.cursor.sh`, an automatic host |
+| OpenCode, Goose, pi | None | They call only the Gemini API |
 
 These go to the record's `expectedBlocked` instead of `blocked`, and `-v` prints one `expected blocks, not logged per request: …` line at teardown instead of a line per request.
 

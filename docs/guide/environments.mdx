@@ -90,7 +90,7 @@ export const base = defineEnvironment('base', ({ file }) => ({
 }))
 ```
 
-`rules` lands where the harness's agent reads project rules: `AGENTS.md` for Cursor and Antigravity, `CLAUDE.md` for Claude Code. `files` maps workspace paths (or `~/` paths) to a string or a host `file()`, copied byte for byte. `env` sets variables in the sandbox.
+`rules` lands where the harness's agent reads project rules: `CLAUDE.md` for Claude Code, `AGENTS.md` for every other agent. `files` maps workspace paths (or `~/` paths) to a string or a host `file()`, copied byte for byte. `env` sets variables in the sandbox.
 
 ## Run setup steps
 

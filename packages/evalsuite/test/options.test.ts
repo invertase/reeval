@@ -778,6 +778,11 @@ ${body}
       /maxConcurrent must be a whole number of at least 1 \(got 0\) for harness in es\.config\.ts/,
     ],
     [
+      'a judge threshold as text in the config',
+      `judge: { model: fakeJudge({ score: 0.9 }), threshold: '0.8' as never },`,
+      /judge\.threshold must be between 0 and 1 \(got 0\.8\) in es\.config\.ts/,
+    ],
+    [
       'keeping no debug runs',
       `debug: { keep: 0 },`,
       /config\.debug\.keep must be a whole number of at least 1 \(got 0\)/,
