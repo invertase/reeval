@@ -854,7 +854,7 @@ evaluate('passes', async () => {})
     const [plan, ...out] = r.stdout.trimEnd().split('\n')
     assert.match(plan ?? '', /^plan {2}2 evals · 2 cells · 2 attempts · ~/)
     assert.equal(out[0], 'es run: 1 eval file')
-    assert.match(out[1] ?? '', /^FAIL evals\/agent\.es\.ts › agent eval \(\d+ms, judge\)$/)
+    assert.match(out[1] ?? '', /^FAIL evals\/agent\.es\.ts › agent eval \(\d+m?s, judge\)$/)
     assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
     assert.match(
       out[3] ?? '',
@@ -1081,7 +1081,7 @@ evaluate('huge diff', async (t) => {
     assert.equal(plain.code, 1, plain.stdout + plain.stderr)
     const summary = plain.stdout.slice(plain.stdout.indexOf('\nSummary'))
     assert.match(summary, new RegExp(`\\n {3}turn 1 error: ${billing}\\n`))
-    assert.match(plain.stdout, new RegExp(`turn 1 error: ${billing} \\d+ms · 0 tool calls`))
+    assert.match(plain.stdout, new RegExp(`turn 1 error: ${billing} \\d+m?s · 0 tool calls`))
     const { run, read } = readRun(p.dir)
     assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.error, billing)
     assert.match(read('summary.md'), new RegExp(`- Error: ${billing}`))

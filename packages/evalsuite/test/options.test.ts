@@ -1193,7 +1193,7 @@ evaluate('greets', { compare: [withSkill] }, async (t) => {
       brokered: [],
     })
     assert.ok(variant?.files.setupLog, 'setup steps write setup.log')
-    assert.match(readRun(p.dir).read(variant?.files.setupLog?.path ?? ''), /exit 0 after \d+ms/)
+    assert.match(readRun(p.dir).read(variant?.files.setupLog?.path ?? ''), /exit 0 after \d+m?s/)
     assert.notEqual(e?.cells[0]?.fingerprint, e?.cells[1]?.fingerprint)
     let leaks = ''
     try {
@@ -1228,7 +1228,7 @@ evaluate('x', { environment: broken, timeout: '1s' }, async (t) => { await t.sen
     assert.equal(f.code, 3, f.stdout + f.stderr)
     assert.match(
       f.stdout,
-      /setup step 2\/2 "echo nope >&2; exit 4" in environment broken exited 4 after \d+ms \(see setup\.log\):\n.*nope/,
+      /setup step 2\/2 "echo nope >&2; exit 4" in environment broken exited 4 after \d+m?s \(see setup\.log\):\n.*nope/,
     )
   })
 
