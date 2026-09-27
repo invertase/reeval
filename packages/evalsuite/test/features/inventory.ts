@@ -309,6 +309,14 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'mcp.refused',
+    area: 'Environments',
+    name: 'MCP servers on a harness with no MCP client (pi) refused at plan time',
+    tests: [
+      'evalsuite/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
+    ],
+  },
+  {
     id: 'secret.template',
     area: 'Environments',
     name: '`secret.template` in MCP headers',

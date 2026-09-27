@@ -134,6 +134,34 @@ evaluate('streams', { environment: events }, async () => {})
     }
   })
 
+  test('any MCP server on pi exits 2 at plan time; Goose takes stdio and http', async () => {
+    const config = (factory: string) => `import { defineConfig } from 'evalsuite'
+import { ${factory} } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }), sandbox: docker() })
+`
+    const evals = `import { defineEnvironment, evaluate } from 'evalsuite'
+const tools = defineEnvironment('tools', ({ mcp }) => ({
+  mcp: { local: mcp.stdio('node', ['server.mjs']), remote: mcp.http('https://mcp.example.com/mcp') },
+}))
+evaluate('uses tools', { environment: tools }, async () => {})
+`
+    const pi = await project('mcp-pi', { 'es.config.ts': config('pi'), 'evals/m.es.ts': evals })
+    const refused = await runCli(pi.dir, ['run', '--dry-run'])
+    assert.equal(refused.code, 2, refused.stdout + refused.stderr)
+    assert.match(
+      refused.stderr,
+      /evaluate\("uses tools"\) on pi:gemini-3\.8-flash: pi has no MCP client, so it can't use the local, remote MCP servers/,
+    )
+    // The twin: the same servers plan on a harness that has an MCP client.
+    const goose = await project('mcp-goose', {
+      'es.config.ts': config('goose'),
+      'evals/m.es.ts': evals,
+    })
+    const planned = await runCli(goose.dir, ['run', '--dry-run'])
+    assert.equal(planned.code, 0, planned.stdout + planned.stderr)
+  })
+
   test('the text plan names each restricted policy and its automatic hosts', async () => {
     const p = await fixture('plan/egress')
     const r = await runCli(p.dir, ['run', '--dry-run', 'evals/auto.es.ts'])
