@@ -39,6 +39,7 @@
     "@ai-sdk/harness": "1.0.124",
     "@ai-sdk/harness-claude-code": "1.0.128",
     "@evalsuite/harness-antigravity": "workspace:0.1.0",
+    "@evalsuite/harness-codex": "workspace:0.1.0",
     "@evalsuite/harness-cursor-sdk": "workspace:0.1.0",
     "@evalsuite/harness-goose": "workspace:0.1.0",
     "@evalsuite/harness-opencode": "workspace:0.1.0",

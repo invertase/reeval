@@ -22,6 +22,8 @@ export interface Sandbox {
    * far, in first-seen order.
    */
   servedModels?(): string[]
+  /** The same, one entry per brokered request that named its model, in order. */
+  servedRequests?(): string[]
   /** Idempotent, never throws. */
   destroy(): Promise<void>
 }

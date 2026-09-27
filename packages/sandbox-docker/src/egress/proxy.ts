@@ -64,6 +64,12 @@ export type EgressProxyOptions = {
    * with placeholders, and the real tokens are swapped back in on their hosts, in headers only.
    */
   derivedTokens?: readonly DerivedTokens[]
+  /**
+   * Requests whose response names the model that served them in its body (a `"model"` field, and
+   * a `"reasoning"` object's `"effort"`, as OpenAI's Responses API does): the gateway asks for it
+   * uncompressed and records them as the request's `responseModel` and `responseEffort`.
+   */
+  modelResponses?: readonly EndpointMatch[]
   /** Every DNS decision and, once each is done, every request and tunnel: for debug logs. */
   onEvent?: (event: EgressEvent) => void
 }
@@ -96,6 +102,10 @@ export type EgressRequestEvent = {
   requestHeaders?: Headers
   /** As the sandbox got them, scrubbed. */
   responseHeaders?: Headers
+  /** The model the response body says served it, on a `modelResponses` endpoint. */
+  responseModel?: string
+  /** The reasoning effort the response body says it ran at, on a `modelResponses` endpoint. */
+  responseEffort?: string
 }
 
 export type EgressEvent =
@@ -138,7 +148,13 @@ type RequestTracker = {
     fields: Partial<
       Pick<
         EgressRequestEvent,
-        'substituted' | 'credentials' | 'responseHeaders' | 'status' | 'reason'
+        | 'substituted'
+        | 'credentials'
+        | 'responseHeaders'
+        | 'status'
+        | 'reason'
+        | 'responseModel'
+        | 'responseEffort'
       >
     >,
   ): void
@@ -493,6 +509,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     refused?: { status: number; reason: string }
     /** Set when this is a token exchange, whose response gets placeholders for its tokens. */
     exchange?: DerivedTokens
+    /** Whether its response names the model that served it. */
+    readsModel?: boolean
   } {
     const named = String(headers[':authority'] ?? headers.host ?? '')
     const asked = parseAuthority(named, target.port).host
@@ -546,8 +564,16 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const exchange = derived.find((d) =>
       onEndpoint([d.endpoint], { host: target.host, method, path, headers: {} }),
     )
-    // Uncompressed responses, so the scrubber and the tokeniser can see what comes back.
-    if (scrubbedInBodies(own).length || exchange) delete substituted.headers['accept-encoding']
+    const readsModel = onEndpoint(options.modelResponses ?? [], {
+      host: target.host,
+      method,
+      path,
+      headers: {},
+    })
+    // Uncompressed responses, so the scrubber, the tokeniser and the model reader see them.
+    if (scrubbedInBodies(own).length || exchange || readsModel) {
+      delete substituted.headers['accept-encoding']
+    }
     const notes = [
       replaced.length ? `set ${replaced.join(', ')}` : '',
       substituted.names.length ? `substituted ${substituted.names.join(', ')}` : '',
@@ -561,6 +587,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       names: substituted.names,
       credentials: replaced,
       ...(exchange ? { exchange } : {}),
+      ...(readsModel ? { readsModel } : {}),
     }
   }
 
@@ -587,7 +614,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     up: Readable,
     own: Substitution[],
     t?: RequestTracker,
+    readsModel = false,
   ): Readable | Transform {
+    if (readsModel && t) readModel(up, t)
     const body = scrubbedInBodies(own).length && scrubs ? up.pipe(scrubber(own)) : up
     return t ? body.pipe(counter(t.received)) : body
   }
@@ -597,6 +626,32 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     if (!own.length || !scrubs) return out
     if (scrubbedInBodies(own).length) delete out['content-length']
     return scrubHeaders(own, out as Record<string, string>) as OutgoingHttpHeaders
+  }
+
+  /**
+   * How far into a response the gateway looks for the model that served it: OpenAI's first event
+   * echoes the request's instructions and tools before it.
+   */
+  const MODEL_WINDOW = 512 * 1024
+
+  /**
+   * Records the first `"model"` value in the response body, and the `"effort"` of the
+   * `"reasoning"` object after it, reading alongside its flow. Inside a JSON string the quotes are
+   * escaped, so text that merely mentions them doesn't match.
+   */
+  function readModel(up: Readable, t: RequestTracker) {
+    let seen = ''
+    const onData = (chunk: Buffer) => {
+      seen += chunk.toString('utf8')
+      const model = /"model"\s*:\s*"([^"\\]{1,200})"/.exec(seen)
+      const effort = model
+        ? /"reasoning"\s*:\s*\{[^{}]*?"effort"\s*:\s*"(\w{1,40})"/.exec(seen.slice(model.index))
+        : null
+      if (model) t.set({ responseModel: model[1] })
+      if (effort) t.set({ responseEffort: effort[1] })
+      if (effort || seen.length > MODEL_WINDOW) up.off('data', onData)
+    }
+    up.on('data', onData)
   }
 
   /** Most an exchange's response may be; it's a few hundred bytes of JSON. */
@@ -670,7 +725,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       via: 'decrypted',
       requestHeaders: plainHeaders(req.headers),
     })
-    const { headers, path, own, names, credentials, refused, exchange } = transformed(
+    const { headers, path, own, names, credentials, refused, exchange, readsModel } = transformed(
       target,
       method,
       req.url ?? '/',
@@ -701,7 +756,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         agent,
         ca,
       })
-      return forwardHttp1(body, res, upstream, own, exchange && { exchange, url }, t)
+      return forwardHttp1(body, res, upstream, own, exchange && { exchange, url }, t, readsModel)
     }
     const stream = session.request({
       ...headers,
@@ -723,7 +778,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       stream.once('trailers', (trailers) =>
         res.addTrailers(responseHeaders(trailers, own) as Record<string, string>),
       )
-      responseBody(stream, own, t).pipe(res)
+      responseBody(stream, own, t, readsModel).pipe(res)
     })
     body.pipe(stream)
     req.once('aborted', () => stream.close(http2.constants.NGHTTP2_CANCEL))
@@ -736,6 +791,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     own: Substitution[] = [],
     tokenise?: { exchange: DerivedTokens; url: string },
     t?: RequestTracker,
+    readsModel = false,
   ) {
     upstream.once('response', (up) => {
       if (tokenise) {
@@ -750,7 +806,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           res.addTrailers(responseHeaders(up.trailers, own) as Record<string, string>)
         }
       })
-      responseBody(up, own, t).pipe(res)
+      responseBody(up, own, t, readsModel).pipe(res)
     })
     upstream.once('error', (error) => {
       t?.set({ status: 502, reason: error.message })

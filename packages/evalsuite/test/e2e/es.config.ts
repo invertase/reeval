@@ -2,6 +2,7 @@ import { defineConfig } from 'evalsuite'
 import {
   antigravity,
   claudeCode,
+  codex,
   cursor,
   fakeHarness,
   goose,
@@ -29,6 +30,8 @@ const harness = () => {
       return goose({ model })
     case 'pi':
       return pi({ model })
+    case 'codex':
+      return codex({ model })
     default:
       return fakeHarness({ script: [[{ write: { 'hello.txt': 'hello from es\n' } }]] })
   }

@@ -99,6 +99,15 @@ const BOOTSTRAPS: Record<
     adapter: async () =>
       (await import('@evalsuite/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
   },
+  codex: {
+    name: 'Codex',
+    cli: 'codex',
+    // The bootstrap only installs the CLI; the key is never used.
+    adapter: async () =>
+      (await import('@evalsuite/harness-codex')).createCodex({
+        auth: { OPENAI_API_KEY: 'unused' },
+      }),
+  },
 }
 
 /**

@@ -125,6 +125,69 @@ const ANTIGRAVITY_OPTIONAL = [
   'step_update/tool .step_update.tool_info.error.type',
 ]
 
+// codex exec's (0.157.1) `--json` JSONL, as codex-rs/exec/src/exec_events.rs types it: every
+// event, item type, key and status it defines is the format, whichever a run shows. A command the
+// model ran that exited non-zero is `failed`; a turn that ends on a refused key is `error` events
+// (Codex retrying) and `turn.failed`; reasoning, to-do list, web search and sub-agent items come
+// with the model, the prompt and the features on.
+const CODEX_ITEM_KEYS: Record<string, readonly string[]> = {
+  agent_message: ['text'],
+  reasoning: ['text'],
+  command_execution: ['command', 'aggregated_output', 'exit_code', 'status'],
+  file_change: ['changes', 'changes[].path', 'changes[].kind', 'status'],
+  mcp_tool_call: ['server', 'tool', 'arguments', 'result', 'error', 'error.message', 'status'],
+  collab_tool_call: [
+    'tool',
+    'sender_thread_id',
+    'receiver_thread_ids',
+    'prompt',
+    'agents_states',
+    'status',
+  ],
+  web_search: ['query', 'action', 'results'],
+  todo_list: ['items'],
+  error: ['message'],
+}
+const CODEX_STATUS: Record<string, readonly string[]> = {
+  command_execution: ['in_progress', 'completed', 'failed', 'declined'],
+  file_change: ['in_progress', 'completed', 'failed'],
+  mcp_tool_call: ['in_progress', 'completed', 'failed'],
+  collab_tool_call: ['in_progress', 'completed', 'failed'],
+}
+const CODEX_ITEM_KINDS = ['item.started', 'item.updated', 'item.completed'].flatMap((event) =>
+  Object.keys(CODEX_ITEM_KEYS).map((item) => [`${event}/${item}`, item] as const),
+)
+const CODEX_DEFINED = Object.fromEntries(
+  CODEX_ITEM_KINDS.flatMap(([kind, item]) => [
+    ...(CODEX_STATUS[item] ? [[`${kind} .item.status`, CODEX_STATUS[item]]] : []),
+    ...(item === 'file_change'
+      ? [[`${kind} .item.changes[].kind`, ['add', 'delete', 'update']]]
+      : []),
+  ]),
+)
+const CODEX_OPTIONAL = [
+  ...['thread.started', 'turn.started', 'turn.completed', 'turn.failed', 'error'].map(
+    (kind) => `${kind} .type`,
+  ),
+  'thread.started .thread_id',
+  ...[
+    '',
+    '.input_tokens',
+    '.cached_input_tokens',
+    '.cache_write_input_tokens',
+    '.output_tokens',
+    '.reasoning_output_tokens',
+  ].map((k) => `turn.completed .usage${k}`),
+  'turn.failed .error',
+  'turn.failed .error.message',
+  'error .message',
+  ...CODEX_ITEM_KINDS.flatMap(([kind, item]) =>
+    ['', 'id', 'type', ...(CODEX_ITEM_KEYS[item] ?? [])]
+      .map((k) => `${kind} .item${k ? `.${k}` : ''}`)
+      .concat(`${kind} .type`),
+  ),
+]
+
 const FORMATS: Record<string, Format> = {
   antigravity: {
     kind: (e) => {
@@ -222,6 +285,29 @@ const FORMATS: Record<string, Format> = {
     lists: [],
     defined: PI_DEFINED,
     optional: PI_OPTIONAL,
+  },
+  // codex exec's `--json` events, by `type` (and an item event's `item.type`).
+  codex: {
+    kind: (e) => {
+      if (typeof e.type !== 'string') return undefined
+      const item = (e.item as { type?: unknown } | undefined)?.type
+      return typeof item === 'string' ? `${e.type}/${item}` : e.type
+    },
+    opaque: [
+      'arguments',
+      'result',
+      'text',
+      'aggregated_output',
+      'command',
+      'message',
+      'query',
+      'items',
+      'action',
+    ],
+    values: ['status', 'kind'],
+    lists: [],
+    defined: CODEX_DEFINED,
+    optional: CODEX_OPTIONAL,
   },
 }
 
