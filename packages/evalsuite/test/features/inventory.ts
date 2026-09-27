@@ -161,6 +161,15 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'budget.recorded',
+    area: 'Records and studio',
+    name: 'Budget-stopped runs are recorded with status `budget`',
+    tests: [
+      options('budget.duration stops new attempts'),
+      options('a budget-stopped run is auto-recorded in CI and by record: always'),
+    ],
+  },
+  {
     id: 'selection.modes',
     area: 'Config and selection',
     name: '`evaluate.only`, `.skip`, `.todo` and `.for`; `group.only`',
