@@ -577,7 +577,10 @@ evaluate('hi', async (t) => { await t.send('hi') })
       execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
       const value = 'es-docker-user-secret-5e4d3c2b1a'
       const p = await project('docker-secret-no-broker', {
-        'es.config.ts': config('{}').replace('docker()', "docker({ image: 'busybox:1.37', root: true })"),
+        'es.config.ts': config('{}').replace(
+          'docker()',
+          "docker({ image: 'busybox:1.37', root: true })",
+        ),
         'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
 const keys = defineEnvironment('keys', ({ secret }) => ({
   env: { GEMINI_API_KEY: secret.fromEnv('ES_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
