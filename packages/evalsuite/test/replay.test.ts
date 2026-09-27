@@ -612,9 +612,14 @@ describe('replay: Cursor web calls, streamed and recovered', () => {
 
 describe("replay: Codex's format holds every item, status and failure codex exec defines", () => {
   // Real codex exec 0.157.1 output: a refused key (each retry an `error`, then `turn.failed`), a
-  // command that exited non-zero (`failed`), and a turn with reasoning summaries that added and
-  // deleted a file.
-  for (const file of ['bad-key.ndjson', 'failed-command.ndjson', 'plan-and-reasoning.ndjson'])
+  // command that exited non-zero (`failed`), a turn with reasoning summaries that added and
+  // deleted a file, and a page the model opened with its web tool.
+  for (const file of [
+    'bad-key.ndjson',
+    'failed-command.ndjson',
+    'plan-and-reasoning.ndjson',
+    'web.ndjson',
+  ])
     test(`${file} is not a format change`, () => {
       assert.deepEqual(unknownSignatures('codex', packageCapture('harness-codex', file)), [])
     })

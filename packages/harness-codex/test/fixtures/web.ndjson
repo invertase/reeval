@@ -1,0 +1,7 @@
+{"type":"thread.started","thread_id":"01a0e36d-2074-75f0-97e9-9983fdd1b733"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m checking the page directly so we can return the exact title from the source, then I’ll answer with only that title."}}
+{"type":"item.started","item":{"id":"item_1","type":"web_search","id":"ws_02727e8c75788939016ab9327986ac87d299c97061843d92a5","query":"","action":{"type":"other"}}}
+{"type":"item.completed","item":{"id":"item_1","type":"web_search","id":"ws_02727e8c75788939016ab9327986ac87d299c97061843d92a5","query":"https://example.com/","action":{"type":"open_page","url":"https://example.com/"}}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Example Domain ([example.com](https://example.com/))"}}
+{"type":"turn.completed","usage":{"input_tokens":10839,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":245,"reasoning_output_tokens":192}}

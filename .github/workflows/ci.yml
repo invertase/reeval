@@ -98,6 +98,8 @@ jobs:
         run: pnpm --filter @evalsuite/harness-goose test
       - name: harness-pi
         run: pnpm --filter @evalsuite/harness-pi test
+      - name: harness-codex
+        run: pnpm --filter @evalsuite/harness-codex test
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: unit }

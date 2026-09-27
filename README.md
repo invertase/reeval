@@ -142,6 +142,7 @@ its Reference page.
 | [OpenCode](./docs/reference/harness/opencode.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | partial | ✗ | ✓ | `docker()` |
 | [Goose](./docs/reference/harness/goose.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | partial | ✗ | ✗ | `docker()` |
 | [pi](./docs/reference/harness/pi.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
+| [Codex](./docs/reference/harness/codex.mdx) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 
 - **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; ES recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
 - **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
@@ -149,6 +150,7 @@ its Reference page.
 - **OpenCode**: No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Served model from the gateway's requests only (the record's `servedModels`); each turn's `model` is null. Web fetch only: OpenCode offers `websearch` only on its own provider or with Exa or Parallel enabled, and ES runs it on `google` with neither.
 - **Goose**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). MCP servers go in its `config.yaml` as enabled extensions, not over ACP, where they start disabled. No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Served model from the gateway's requests only (the record's `servedModels`); each turn's `model` is null.
 - **pi**: No MCP client: an eval that gives it MCP servers is refused at plan time (exit 2).
+- **Codex**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). Served model and reasoning effort from each API response, which the gateway reads (e.g. `gpt-5.4-mini-2026-03-17[effort=medium]`): its CLI doesn't report them. Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.
 
 [//]: # (/generated:readme:harness-matrix)
 

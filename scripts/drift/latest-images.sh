@@ -10,9 +10,11 @@
 #   Goose: the newest aaif-goose/goose release's `goose`, in its private home (not verified,
 #     as for agy).
 #   pi: the newest @earendil-works/pi-coding-agent from npm, in its bootstrap directory.
+#   Codex: the newest @openai/codex native Linux build from npm, checked against npm's sha512 as
+#     the pinned one is, linked into its bootstrap's bin/.
 # ES_DRIFT_ANTIGRAVITY_VERSION, ES_DRIFT_CURSOR_SDK_VERSION, ES_DRIFT_OPENCODE_VERSION,
-# ES_DRIFT_GOOSE_VERSION (a tag, e.g. v1.51.0) and ES_DRIFT_PI_VERSION name a version instead of
-# the newest, e.g. to bisect a drift failure.
+# ES_DRIFT_GOOSE_VERSION (a tag, e.g. v1.51.0), ES_DRIFT_PI_VERSION and ES_DRIFT_CODEX_VERSION name
+# a version instead of the newest, e.g. to bisect a drift failure.
 # Prints what it swapped, and appends a table to $GITHUB_STEP_SUMMARY when it's set.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -87,6 +89,24 @@ expect \"$latest\" \"\$($bin/goose --version)\""
 cd $bootstrap/pi
 pnpm add --save-exact --ignore-scripts @earendil-works/pi-coding-agent@$latest >/dev/null
 expect \"$latest\" \"\$($bootstrap/pi/node_modules/.bin/pi --version)\""
+      ;;
+    codex)
+      latest=${ES_DRIFT_CODEX_VERSION:-$(npm view @openai/codex version)}
+      new_label="codex-cli $latest"
+      x64=$(npm view "@openai/codex@$latest-linux-x64" dist.integrity)
+      arm64=$(npm view "@openai/codex@$latest-linux-arm64" dist.integrity)
+      swap="set -eu
+case \"\$(uname -m)\" in
+  x86_64|amd64) arch=x64 triple=x86_64-unknown-linux-musl sri=$x64 ;;
+  aarch64|arm64) arch=arm64 triple=aarch64-unknown-linux-musl sri=$arm64 ;;
+esac
+cd $bootstrap/codex
+curl -fsSL --retry 3 -o codex.tgz https://registry.npmjs.org/@openai/codex/-/codex-$latest-linux-\$arch.tgz
+node -e 'const h = \"sha512-\" + require(\"crypto\").createHash(\"sha512\").update(require(\"fs\").readFileSync(\"codex.tgz\")).digest(\"base64\"); if (h !== process.argv[1]) process.exit(1)' \"\$sri\"
+rm -rf package && tar -xzf codex.tgz && rm codex.tgz
+ln -sf \"\$PWD/package/vendor/\$triple/bin/codex\" bin/codex
+ln -sf \"\$PWD/package/vendor/\$triple/codex-path/rg\" bin/rg
+expect \"$latest\" \"\$(bin/codex --version)\""
       ;;
     *)
       rows+=("| $harness | $pinned | — | not swapped: runs on the pinned CLI |")

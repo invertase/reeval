@@ -8,8 +8,8 @@ type BuiltinTool = HarnessV1BuiltinTool<any, any>
 /*
  * The tools Codex 0.157.1's `exec --json` items report, as the adapter names them: a
  * `command_execution` is `bash`, and each path of a `file_change` is `write` (added), `edit`
- * (updated) or `delete`, with the path relative to the workspace. A `web_search` is `webSearch`;
- * an `mcp_tool_call` is `mcp__<server>__<tool>`.
+ * (updated) or `delete`, with the path relative to the workspace. A `web_search` is `webSearch`,
+ * or `webFetch` when the model opened a page; an `mcp_tool_call` is `mcp__<server>__<tool>`.
  */
 export const CODEX_BUILTIN_TOOLS = {
   bash: {
@@ -39,6 +39,10 @@ export const CODEX_BUILTIN_TOOLS = {
       inputSchema: z.looseObject({ query: z.string() }),
     }),
     title: 'web_search',
+  },
+  webFetch: {
+    ...tool({ title: 'web_search (open_page)', inputSchema: z.looseObject({ url: z.string() }) }),
+    toolUseKind: 'readonly',
   },
 } as const satisfies Record<string, BuiltinTool>
 

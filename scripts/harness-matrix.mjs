@@ -97,6 +97,13 @@ const NOTES = [
     h.web.fetch &&
     `Web fetch only: OpenCode offers ${code('websearch')} only on its own provider or with Exa or Parallel enabled, and ES runs it on ${code('google')} with neither.`,
   (h) =>
+    h.agent.modelResponses &&
+    `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.4-mini-2026-03-17[effort=medium]')}): its CLI doesn't report them.`,
+  (h) =>
+    h.kind === 'codex' &&
+    h.web.search &&
+    `Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.`,
+  (h) =>
     h.agent.expectedBlocked &&
     `Its CLI always tries ${list(h.agent.expectedBlocked.hosts.map(code))}; a restricted egress policy refuses them and records them under the record's ${code('egress.expectedBlocked')}.`,
 ]

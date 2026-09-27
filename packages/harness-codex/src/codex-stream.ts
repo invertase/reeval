@@ -27,6 +27,7 @@ export type CodexItem = {
   result?: { content?: unknown; structured_content?: unknown } | null
   error?: { message?: string } | null
   query?: string
+  action?: { type?: string; query?: string; url?: string; pattern?: string }
   message?: string
 }
 
@@ -200,10 +201,20 @@ export class CodexStreamTranslator {
         }
         return
       }
-      case 'web_search':
-        this.call(parts, id, 'webSearch', { query: item.query ?? '' })
-        if (completed) this.result(parts, id, 'webSearch', {}, false)
+      // One item for each of the model's web actions, known once it completes: a search, or a page
+      // it opened or searched within, which is a fetch. Both run on OpenAI's side.
+      case 'web_search': {
+        if (!completed) return
+        const { type, url, query, pattern } = item.action ?? {}
+        if ((type === 'open_page' || type === 'find_in_page') && url) {
+          this.call(parts, id, 'webFetch', { url, ...(pattern ? { pattern } : {}) })
+          this.result(parts, id, 'webFetch', {}, false)
+        } else {
+          this.call(parts, id, 'webSearch', { query: query || item.query || '' })
+          this.result(parts, id, 'webSearch', {}, false)
+        }
         return
+      }
     }
   }
 

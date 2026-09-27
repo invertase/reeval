@@ -131,3 +131,26 @@ test("usage: input includes the cached tokens, output the reasoning ones, as Cod
     },
   )
 })
+
+test('a real web turn: the page Codex opened is a web fetch of its URL, known when the item completes', () => {
+  const { parts } = translate('web.ndjson')
+  const calls = parts.flatMap((p) =>
+    p.type === 'tool-call' ? [[p.toolName, JSON.parse(p.input)]] : [],
+  )
+  assert.deepEqual(calls, [['webFetch', { url: 'https://example.com/' }]])
+  const t = new CodexStreamTranslator({ workDir: '/es/workspace' })
+  const search = t.push(
+    JSON.stringify({
+      type: 'item.completed',
+      item: {
+        id: 'w',
+        type: 'web_search',
+        query: 'q',
+        action: { type: 'search', query: 'es evals' },
+      },
+    }),
+  )
+  const call = search.find((p) => p.type === 'tool-call')
+  assert.equal(call?.type === 'tool-call' && call.toolName, 'webSearch')
+  assert.deepEqual(call?.type === 'tool-call' && JSON.parse(call.input), { query: 'es evals' })
+})

@@ -159,7 +159,7 @@ warning: skill.git(github:acme/skills) uses moving ref "main": results aren't co
 </Property>
 
 <Property name="mcp.sse(url, options?)" type="McpServer">
-  A server-sent events server, with the same options as `mcp.http`. Cursor, Claude Code, Antigravity and OpenCode get it as an SSE server; Goose has no SSE transport, so a plan that gives it an `mcp.sse` server exits 2 before any attempt starts (`--dry-run` shows it). pi has no MCP client, so a plan that gives it any MCP server exits 2 the same way.
+  A server-sent events server, with the same options as `mcp.http`. Cursor, Claude Code, Antigravity and OpenCode get it as an SSE server; Goose and Codex have no SSE transport, so a plan that gives either an `mcp.sse` server exits 2 before any attempt starts (`--dry-run` shows it). pi has no MCP client, so a plan that gives it any MCP server exits 2 the same way.
 </Property>
 
 A secret in an HTTPS server's headers is brokered to that server's host unless it sets its own `hosts`, and the host is allowed through a restricted egress policy. The plan shows it:

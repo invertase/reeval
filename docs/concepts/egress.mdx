@@ -66,6 +66,7 @@ Some CLIs contact hosts that nothing needs and no setting turns off. ES lists th
 | Claude Code | None | ES runs it with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
 | Cursor | None | Its analytics go to `api2.cursor.sh`, an automatic host |
 | OpenCode, Goose, pi | None | They call only the Gemini API |
+| Codex | None | Its analytics and plugin sync are off, so it calls only the OpenAI API |
 
 These go to the record's `expectedBlocked` instead of `blocked`, and `-v` prints one `expected blocks, not logged per request: …` line at teardown instead of a line per request.
 

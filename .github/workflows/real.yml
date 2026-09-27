@@ -48,10 +48,12 @@ jobs:
           HAS_CURSOR: ${{ secrets.CURSOR_API_KEY != '' }}
           HAS_GEMINI: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY != '' }}
           HAS_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_OPENAI: ${{ secrets.OPENAI_API_KEY != '' }}
         run: |
           [ "$HAS_CURSOR" = true ] || echo "::error::No CURSOR_API_KEY repository secret: the Cursor rows and the example smoke fail"
           [ "$HAS_GEMINI" = true ] || echo "::error::No GOOGLE_GENERATIVE_AI_API_KEY repository secret: the Antigravity, OpenCode, Goose and pi rows and the example smoke fail"
           [ "$HAS_ANTHROPIC" = true ] || echo "::error::No ANTHROPIC_API_KEY repository secret: the Claude Code rows fail"
+          [ "$HAS_OPENAI" = true ] || echo "::error::No OPENAI_API_KEY repository secret: the Codex rows fail"
           true
 
   pinned:
