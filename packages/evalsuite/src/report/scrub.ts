@@ -1,7 +1,7 @@
 import { realpathSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { COMMANDS, FLAGS, type FlagName } from '../cli-spec.ts'
-import { countSecrets, redactSecrets, registerSecret } from '../redact.ts'
+import { REDACTED, redactSecrets, registerSecret } from '../redact.ts'
 
 export type Scrubber = {
   /** Masks secrets as records are masked, then the project root and the home directory. */
@@ -48,8 +48,8 @@ export function scrubber(options: {
   return { text, value, paths: ['~', ...(project.length ? ['<project>'] : [])] }
 }
 
-/** How many secrets `text` holds before masking: the report's "N values masked". */
-export const secretCount = (text: string, env: NodeJS.ProcessEnv) => countSecrets(text, env)
+/** How many masked values `text` shows. */
+export const masks = (text: string) => text.split(REDACTED).length - 1
 
 /**
  * Registers every value in a `.env.local` or `.env` as a secret, whatever its name: a report is

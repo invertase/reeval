@@ -184,7 +184,6 @@ describe('es report: the bundle', () => {
     ])
     assert.ok(Array.isArray((bundle.doctor as { checks: unknown[] }).checks))
     assert.ok(bundle.env.includes('MY_API_KEY'))
-    assert.ok(bundle.redaction.masked >= 1)
     assert.deepEqual(bundle.redaction.paths, ['~', '<project>'])
     // The config's values stay out, even from the attached trace.
     const written = allText(out)
@@ -197,7 +196,51 @@ describe('es report: the bundle', () => {
     assert.match(r.stdout, /\ncommand +es run --profile <value> <arg> → exit 3/)
     assert.match(r.stdout, /\nfailing +evals\/agent\.es\.ts › agent eval # .*\(infra\)/)
     assert.match(r.stdout, /\nlogs +2 debug files attached/)
+
+    // The count is every masked value the report holds: the key ES masked in the record and
+    // logs before the report read them, plus the .env value only the report masks.
+    const { masked, upstream } = bundle.redaction
+    const markers = (text: string) => text.split('[REDACTED]').length - 1
+    const tar = tempDir('report-count')
+    execFileSync('tar', ['-xzf', join(out, 'report-logs.tar.gz'), '-C', tar])
+    assert.equal(
+      masked,
+      markers(readFileSync(join(out, 'report.json'), 'utf8')) + markers(allText(tar)),
+    )
+    assert.ok(upstream >= 1 && upstream < masked, `${upstream} of ${masked}`)
+    assert.match(
+      r.stdout,
+      new RegExp(
+        `\\nredacted +${masked} secret values masked, ${upstream} of them already by ES's records and logs;`,
+      ),
+    )
     assert.match(r.stdout, /Nothing was uploaded/)
+  })
+
+  test('values ES masked before the report read them count, though the report masks none', async () => {
+    const p = await project('report-upstream', {
+      'es.config.ts': fakeConfig({
+        harness: `{ failWith: 'agent failed: key ' + process.env.MY_API_KEY }`,
+      }),
+      'evals/agent.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('agent eval', async (t) => { await t.send('go') })
+`,
+    })
+    const env = { MY_API_KEY: NAMED }
+    assert.equal((await runCli(p.dir, ['run'], { env })).code, 3)
+    const r = await runCli(p.dir, ['report', '--json'], { env })
+    const bundle: ReportBundle = JSON.parse(r.stdout)
+    assert.match(bundle.run?.failures[0]?.error?.message ?? '', /key \[REDACTED\]$/)
+    const { masked, upstream } = bundle.redaction
+    assert.ok(masked >= 1, `masked ${masked}`)
+    assert.equal(upstream, masked)
+    const plain = await runCli(p.dir, ['report'], { env })
+    assert.match(
+      plain.stdout,
+      new RegExp(
+        `\\nredacted +${masked} secret values? masked, all already by ES's records and logs;`,
+      ),
+    )
   })
 
   test('--out formats, the default folder, and --json writing nothing', async () => {

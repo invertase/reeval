@@ -74,5 +74,9 @@ export type ReportBundle = {
     moreFailures: number
   } | null
   runError: string | null
-  redaction: { masked: number; paths: string[] }
+  /**
+   * `masked` counts every masked value in the bundle and its attached logs; `upstream` how many
+   * of them ES had masked already, in the records and logs the report read.
+   */
+  redaction: { masked: number; upstream: number; paths: string[] }
 }
