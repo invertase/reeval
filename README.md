@@ -137,14 +137,14 @@ its Reference page.
 | Harness | Key | Key brokered | Rules file | Skills: workspace | Skills: home | MCP stdio | MCP http | MCP sse | Tokens | Served model | Web search events | Web fetch events | Sandbox |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | [Cursor](./docs/reference/harness/cursor.mdx) | `CURSOR_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
-| [Claude Code](./docs/reference/harness/claude-code.mdx) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
+| [Claude Code](./docs/reference/harness/claude-code.mdx) | `ANTHROPIC_API_KEY` | ✓ | `CLAUDE.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | `docker()` |
 | [Antigravity](./docs/reference/harness/antigravity.mdx) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 | [OpenCode](./docs/reference/harness/opencode.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | partial | ✗ | ✓ | `docker()` |
 | [Goose](./docs/reference/harness/goose.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | partial | ✗ | ✗ | `docker()` |
 | [pi](./docs/reference/harness/pi.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
 
 - **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; ES recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
-- **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
+- **Claude Code**: No served model recorded: the Claude Code adapter's stream doesn't carry the model yet, so each turn's `model` is null.
 - **Antigravity**: Its CLI always tries `play.googleapis.com` and `antigravity-unleash.goog`; a restricted egress policy refuses them and records them under the record's `egress.expectedBlocked`.
 - **OpenCode**: No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Served model from the gateway's requests only (the record's `servedModels`); each turn's `model` is null. Web fetch only: OpenCode offers `websearch` only on its own provider or with Exa or Parallel enabled, and ES runs it on `google` with neither.
 - **Goose**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). MCP servers go in its `config.yaml` as enabled extensions, not over ACP, where they start disabled. No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Served model from the gateway's requests only (the record's `servedModels`); each turn's `model` is null.

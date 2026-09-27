@@ -85,8 +85,10 @@ const NOTES = [
     !h.row.servedModel &&
     h.row.wireModel &&
     `Served model from the gateway's requests only (the record's ${code('servedModels')}); each turn's ${code('model')} is null.`,
+  (h) => h.row.servedModelGap && `No served model recorded: ${h.row.servedModelGap}`,
   (h) =>
     h.row.servedModel &&
+    !h.row.servedModelGap &&
     !h.row.wireModel &&
     `Served model as the harness reports it: its API requests don't name one, so the record's ${code('servedModels')} is null.`,
   (h) =>
@@ -181,7 +183,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
     yes(!!h.agent.harnessSkillDir),
     ...TRANSPORTS.map((t) => yes(h.mcp[t].ok)),
     yes(h.row.tokens),
-    h.row.servedModel ? '✓' : h.row.wireModel ? 'partial' : '✗',
+    h.row.servedModel && !h.row.servedModelGap ? '✓' : h.row.wireModel ? 'partial' : '✗',
     yes(h.web.search),
     yes(h.web.fetch),
     code('docker()'),

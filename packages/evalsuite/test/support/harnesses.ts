@@ -32,6 +32,11 @@ export type HarnessRow = {
   /** What every turn's `model` (the model the harness says served it) looks like; null: none. */
   servedModel: RegExp | null
   /**
+   * Why the turns don't record the model `servedModel` expects yet, while the contract's check of
+   * it fails on real runs; the harness matrix shows it as missing. Delete it with the fix.
+   */
+  servedModelGap?: string
+  /**
    * What `servedModels` (the models its API requests named, seen by the gateway) must include;
    * null when its requests don't name one, so the record says it's unknown.
    */
@@ -86,6 +91,8 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api.anthropic.com',
     tokens: true,
     servedModel: /^claude-haiku-4-5/,
+    servedModelGap:
+      "the Claude Code adapter's stream doesn't carry the model yet, so each turn's `model` is null.",
     wireModel: null,
   },
   {
