@@ -71,7 +71,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/analysis` | `es analyze`: the digest, the schema and prompt, the model call, validation, rendering, and the cache and saved files |
 | `packages/evalsuite/src/cli-spec.ts` | Every command, flag and help line as data: `cli-parse.ts` builds `es`'s [commander](https://github.com/tj/commander.js) parser from it, `es --help` (and so the docs' CLI help) is its help lines, and `es analyze` checks verify commands against it. A new flag or command goes here, then `test/cli.test.ts` parses it and `ES_UPDATE_SNAPSHOTS=1` refreshes the help golden file |
 | `packages/evalsuite/schema` | JSON Schema snapshots of every shape ES persists and reads back, generated from the types by `scripts/schema/` and checked in CI (`pnpm schema:check`) |
-| `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
+| `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE, runs in progress from `.es/staging` in `live.ts`) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents) and `replay/` (captured real streams and each CLI's known stream format) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
 | `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`; private, and bundled into `@invertase/foobar` like `sandbox-docker` |
@@ -269,8 +269,9 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 Every shape ES writes to disk and reads back later, maybe from an older or newer ES, is listed in
 `packages/evalsuite/scripts/schema/shapes.ts` and snapshotted as a JSON Schema generated from its
 TypeScript type in `packages/evalsuite/schema/`: the run record (`RunRecord`), transcript lines
-(`TranscriptLine`), analysis documents (`AnalysisDoc`) and `.es/debug` request lines
-(`DebugRequest`). Every reader goes through `src/view/record.ts` (`readableRecord`,
+(`TranscriptLine`), analysis documents (`AnalysisDoc`), `.es/debug` request lines
+(`DebugRequest`) and a running `es run`'s progress file, `.es/staging/<run>/live.json`
+(`LiveProgress`, read by `es studio`; never part of a record). Every reader goes through `src/view/record.ts` (`readableRecord`,
 `readableTranscriptLine`, `readableAnalysis`, `readableDebugRequest`).
 
 ```bash

@@ -8,5 +8,5 @@ export default defineConfig({
   sandbox:
     process.env.ES_FIXTURE_SANDBOX === 'docker'
       ? docker()
-      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })

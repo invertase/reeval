@@ -1,5 +1,6 @@
-import { basename, join, relative, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { UsageError } from '../errors.ts'
+import { fromCwd } from '../ids.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { APP_DIR, buildStudio, openBrowser, startStudio } from './index.ts'
 
@@ -21,7 +22,7 @@ const kb = (bytes: number) =>
 
 export async function studioCommand({ config, flags, version, build }: Args): Promise<number> {
   const project = basename(config.root)
-  const rel = (path: string) => relative(process.cwd(), path) || '.'
+  const rel = (path: string) => fromCwd(path) || '.'
   if (build) {
     const out = flags.out ? resolve(flags.out) : join(config.root, 'studio-dist')
     const artifacts = !flags['no-artifacts']

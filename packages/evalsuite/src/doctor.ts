@@ -2,7 +2,8 @@
 // every key it checks and never prints a key's value.
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
+import type { DockerState } from '@evalsuite/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
 import {
   badCharacterAt,
@@ -15,6 +16,7 @@ import {
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
 import { AGENTS, isAgentKind } from './harness/agents.ts'
+import { fromCwd } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
@@ -37,7 +39,8 @@ export type Check = {
 export type DoctorDeps = {
   env: NodeJS.ProcessEnv
   nodeVersion: string
-  dockerAvailable: () => Promise<boolean>
+  platform: NodeJS.Platform
+  dockerState: () => Promise<DockerState>
   dockerCapacity: () => Promise<{ cpus: number; memoryBytes: number } | null>
   /** Whether the image is in the local Docker. */
   imageExists: (ref: string) => Promise<boolean>
@@ -50,15 +53,11 @@ export type DoctorDeps = {
 
 const run = (command: string, args: string[], cwd?: string) =>
   new Promise<{ code: number; stdout: string }>((resolve) => {
-    execFile(
-      command,
-      args,
-      { cwd, shell: process.platform === 'win32', timeout: 20_000 },
-      (error, stdout) =>
-        resolve({
-          code: error ? (typeof error.code === 'number' ? error.code : -1) : 0,
-          stdout: String(stdout),
-        }),
+    execFile(command, args, { cwd, timeout: 20_000, windowsHide: true }, (error, stdout) =>
+      resolve({
+        code: error ? (typeof error.code === 'number' ? error.code : -1) : 0,
+        stdout: String(stdout),
+      }),
     )
   })
 
@@ -67,7 +66,8 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
   return {
     env,
     nodeVersion: process.versions.node,
-    dockerAvailable: async () => (await sandbox()).dockerAvailable(),
+    platform: process.platform,
+    dockerState: async () => (await sandbox()).dockerState(),
     dockerCapacity: async () => (await sandbox()).dockerCapacity(),
     imageExists: async (ref) => !!(await (await sandbox()).imageInfo(ref)),
     imageTags: async (repository) => {
@@ -146,10 +146,17 @@ export function describeConfig(config: ResolvedConfig): string {
 
 // ---- Docker --------------------------------------------------------------------------------
 
+const DOCKER_FIX: Partial<Record<NodeJS.Platform, string>> = {
+  linux: 'start Docker Desktop, or the Docker service (sudo systemctl start docker)',
+  darwin: 'start Docker Desktop (or another Docker engine, such as OrbStack or Colima)',
+  win32:
+    'install or start Docker Desktop with the WSL 2 backend and Linux containers (https://docs.docker.com/desktop/setup/install/windows-install/)',
+}
+
 export async function checkDocker(
   config: ResolvedConfig,
   deps: DoctorDeps,
-): Promise<{ checks: Check[]; running: boolean }> {
+): Promise<{ checks: Check[]; running: boolean; windowsContainers?: boolean }> {
   const docker = configuredUses(config).filter((u) => u.sandbox.kind === 'docker')
   if (!docker.length) {
     return {
@@ -157,14 +164,29 @@ export async function checkDocker(
       running: false,
     }
   }
-  if (!(await deps.dockerAvailable())) {
+  const state = await deps.dockerState()
+  if (state === 'windows-containers') {
+    return {
+      checks: [
+        {
+          id: 'docker',
+          status: 'fail',
+          summary: "is running Windows containers, but ES's sandboxes are Linux containers",
+          fix: 'switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers), on the WSL 2 backend',
+        },
+      ],
+      running: false,
+      windowsContainers: true,
+    }
+  }
+  if (state === 'down') {
     return {
       checks: [
         {
           id: 'docker',
           status: 'fail',
           summary: "isn't running, and the config's sandboxes need it",
-          fix: 'start Docker Desktop, or the Docker service (sudo systemctl start docker)',
+          fix: DOCKER_FIX[deps.platform] ?? DOCKER_FIX.linux,
         },
       ],
       running: false,
@@ -505,7 +527,7 @@ export async function doctor(
   }
   if (config) {
     loadEnvFiles(configPath)
-    const envFile = relative(process.cwd(), join(config.root, '.env.local')) || '.env.local'
+    const envFile = fromCwd(join(config.root, '.env.local')) || '.env.local'
     const docker = await checkDocker(config, deps)
     checks.push(...docker.checks)
     if (docker.running) {
@@ -513,7 +535,10 @@ export async function doctor(
       checks.push(...images.checks)
       missingImages = images.missing
     } else if (docker.checks[0]?.status === 'fail') {
-      checks.push({ id: 'image', status: 'skip', summary: "Docker isn't running" })
+      const why = docker.windowsContainers
+        ? 'Docker runs Windows containers'
+        : "Docker isn't running"
+      checks.push({ id: 'image', status: 'skip', summary: why })
     }
     const online = !!flags.online
     checks.push(...(await checkKeys(config, deps, online, envFile)))

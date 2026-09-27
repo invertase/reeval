@@ -15,13 +15,21 @@ es studio · scratch-guide · evals/.history/
 Ctrl-C to stop.
 ```
 
-Open the printed URL. New runs appear as they're recorded, and unrecorded runs from `.es/runs/` show too, labelled scratch (`--no-scratch` hides them). `--open` opens the browser for you.
+Open the printed URL. New runs appear as they're recorded, and unrecorded runs from `.es/runs/` show too, labelled scratch (`--no-scratch` hides them). A run that's still going shows at the top. `--open` opens the browser for you.
 
 ## Browse runs
 
 <Image src="/assets/studio/runs.png" alt="The studio's runs list, with commit, branch, pass counts, duration and drift badges" width={800} />
 
 The runs list shows each run's commit, branch, author (or CI), pass counts, tokens and duration. A `drift` badge means a cell's fingerprint changed since the last run that had it: its eval, image, agent CLI or environment.
+
+## Watch a run in progress
+
+<Image src="/assets/studio/live-run.png" alt="A run in progress: Running 2/4, a progress bar, two attempts passed and two still running" width={800} />
+
+Start `es run` with the studio open and the run appears at the top of the runs list with a `Running 2/4` badge and a progress bar. Its page lists every planned attempt, filling in with each outcome and duration as it finishes. A finished attempt opens its transcript straight away.
+
+When the record lands, the run's own page replaces the live one. A run that was killed, or stopped answering for 15 seconds, shows as `Stopped`, with what it finished. A static build never shows runs in progress.
 
 ## Read a run
 

@@ -10,6 +10,6 @@ export default defineConfig(({ file }) => ({
   sandbox:
     process.env.ES_FIXTURE_SANDBOX === 'docker'
       ? docker()
-      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
   environment: defineEnvironment('found', { files: { 'marker.txt': file('marker.txt') } }),
 }))

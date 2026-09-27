@@ -11,6 +11,7 @@ import { AttemptPage, TABS, type Tab } from '@/pages/attempt'
 import { ComparePage } from '@/pages/compare'
 import { EvalHistoryPage } from '@/pages/eval-history'
 import { EvalsPage } from '@/pages/evals'
+import { LiveAttemptPage, LiveRunPage } from '@/pages/live-run'
 import { NotFoundPage } from '@/pages/not-found'
 import { RunPage } from '@/pages/run'
 import { RunsPage } from '@/pages/runs'
@@ -64,6 +65,19 @@ const attemptRoute = createRoute({
   component: AttemptPage,
 })
 
+const liveRunRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/live/$runId',
+  component: LiveRunPage,
+})
+
+const liveAttemptRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/live/$runId/attempt',
+  validateSearch: (s: Record<string, unknown>): { key?: string } => ({ key: str(s.key) }),
+  component: LiveAttemptPage,
+})
+
 const evalsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/evals',
@@ -93,6 +107,8 @@ const routeTree = rootRoute.addChildren([
   runsRoute,
   runRoute,
   attemptRoute,
+  liveRunRoute,
+  liveAttemptRoute,
   evalsRoute,
   evalHistoryRoute,
   compareRoute,

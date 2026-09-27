@@ -1,5 +1,5 @@
 import { isIP } from 'node:net'
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
@@ -79,8 +79,10 @@ export function callerDir(): string | undefined {
       line,
     )
     if (!match?.[1]) continue
-    const file = match[1].startsWith('file://') ? fileURLToPath(match[1]) : match[1]
-    if (OWN_DIRS.some((d) => file.startsWith(d)) || file.includes('/node_modules/')) continue
+    // Native separators: transformed files' frames say C:/… on Windows.
+    const file = normalize(match[1].startsWith('file://') ? fileURLToPath(match[1]) : match[1])
+    if (OWN_DIRS.some((d) => file.startsWith(d)) || file.includes(`${sep}node_modules${sep}`))
+      continue
     return dirname(file)
   }
   return undefined

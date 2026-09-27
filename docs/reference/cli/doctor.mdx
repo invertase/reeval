@@ -52,12 +52,22 @@ es doctor · es.config.ts
 |---|---|---|
 | `node` | Older than the package's `engines` | |
 | `config` | No `es.config.*` here or above, or it doesn't load | |
-| `docker` | Not running, when a sandbox in the config or a profile is `docker()` | Under 4 GB of memory, one attempt's default limit |
+| `docker` | Not running, or running Windows containers, when a sandbox in the config or a profile is `docker()` | Under 4 GB of memory, one attempt's default limit |
 | `image` | ES's sandbox image for a configured harness isn't built, or a `docker({ image })` isn't in Docker | Images for this harness from another ES version |
 | `key` | A config harness's key isn't set, has whitespace in it, or (`--online`) its API rejects it | A key only a profile's harness needs isn't set; `--online` couldn't reach the API |
 | `judge` | The judge model's key isn't set | The same, for a profile's judge |
 | `egress` | A sandbox can't enforce its policy, such as a restricted policy on `fakeSandbox()` | |
 | `gitignore` | `.env*` isn't ignored | `.es/` isn't ignored |
+
+## Docker on each platform
+
+ES's sandboxes are Linux containers. The `docker` check's fix names what your platform needs:
+
+| Platform | Docker isn't running | Docker runs Windows containers |
+|---|---|---|
+| Linux | `start Docker Desktop, or the Docker service (sudo systemctl start docker)` | |
+| macOS | `start Docker Desktop (or another Docker engine, such as OrbStack or Colima)` | |
+| Windows | `install or start Docker Desktop with the WSL 2 backend and Linux containers (…)` | `switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers), on the WSL 2 backend` |
 
 Keys come from the environment and the `.env.local` and `.env` beside the config, as `es run` reads them. `es doctor` names each key but never prints its value, in text or JSON.
 

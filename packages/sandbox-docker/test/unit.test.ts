@@ -1,9 +1,16 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createHash, X509Certificate } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
@@ -14,7 +21,7 @@ import {
   installLayerTag,
   installScript,
 } from '../src/build-image.ts'
-import { isRegistryDigest } from '../src/docker-cli.ts'
+import { dockerState, isRegistryDigest } from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
@@ -50,6 +57,35 @@ const request = (over: Partial<OutboundRequest> = {}): OutboundRequest => ({
   path: '/auth/exchange_user_api_key',
   headers: { authorization: `Bearer ${PLACEHOLDER}`, 'content-type': 'application/json' },
   ...over,
+})
+
+test("dockerState: running, down, or Windows containers, from the CLI's own answer", async () => {
+  // A docker CLI that answers `info` with $FAKE_DOCKER_INFO, or fails without it; a Node script
+  // behind an sh and a .cmd wrapper, so it runs on every OS.
+  const bin = mkdtempSync(join(tmpdir(), 'es-docker-state-'))
+  writeFileSync(
+    join(bin, 'docker.js'),
+    'const out = process.env.FAKE_DOCKER_INFO; if (out === undefined) process.exit(1); console.log(out)\n',
+  )
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n`)
+  chmodSync(join(bin, 'docker'), 0o755)
+  writeFileSync(join(bin, 'docker.cmd'), '@node "%~dp0docker.js" %*\r\n')
+  const path = process.env.PATH
+  process.env.PATH = `${bin}${delimiter}${path}`
+  const state = async (info: string | undefined) => {
+    if (info === undefined) delete process.env.FAKE_DOCKER_INFO
+    else process.env.FAKE_DOCKER_INFO = info
+    return dockerState()
+  }
+  try {
+    assert.equal(await state('29.1.0 linux'), 'running')
+    assert.equal(await state('29.1.0 windows'), 'windows-containers')
+    assert.equal(await state(undefined), 'down', 'no daemon')
+    assert.equal(await state(''), 'down', 'a CLI that exits 0 without a daemon prints no version')
+  } finally {
+    process.env.PATH = path
+    delete process.env.FAKE_DOCKER_INFO
+  }
 })
 
 describe('request transformations', () => {
@@ -662,7 +698,8 @@ describe('image recipes', () => {
 
   test('install commands run in order from /, in one script, stopping at the first failure', () => {
     const dir = tmp()
-    const out = join(dir, 'out.txt')
+    // Forward slashes: the script is for a Linux container, and Git Bash takes C:/… on Windows.
+    const out = join(dir, 'out.txt').replaceAll('\\', '/')
     const script = installScript([
       { run: `pwd >> ${out}` },
       { run: `echo "it's two" >> ${out}\necho line >> ${out}` },

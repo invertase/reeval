@@ -204,21 +204,21 @@ async function callMcpTool(
   ].map((m) => q(JSON.stringify(m)))
   const command = [server.command, ...server.args].map(q).join(' ')
   // stdin stays open until the call's reply is out (or the server exits, or 30s pass): a server
-  // may drop requests it hasn't answered when stdin closes.
-  // A server may exit before reading (a crash): its requests then hit a pipe with no reader, so
-  // the client ignores SIGPIPE and drops the write's error, and still reports the server's stderr.
-  // `out` and `err` exist before the server starts, so the wait loop never reads a missing file.
+  // may drop requests it hasn't answered when stdin closes. A pipeline rather than a FIFO, which
+  // Git for Windows' sh can't hand to a native server.
+  // A server may exit before reading (a crash): the writer ignores SIGPIPE and drops the write's
+  // error, and the client still reports the server's stderr. Only the writer ignores SIGPIPE, so
+  // the server keeps its own handling. `out` exists before the server starts, so the wait loop
+  // never reads a missing file.
   const script = [
-    'd=$(mktemp -d) && mkfifo "$d/in" && : > "$d/out" && : > "$d/err" || exit 1',
-    `${command} < "$d/in" > "$d/out" 2> "$d/err" & pid=$!`,
-    // After the server starts, so it keeps its own SIGPIPE handling.
-    "trap '' PIPE",
-    'exec 3> "$d/in"',
-    `printf '%s\\n' ${messages.join(' ')} >&3 2>/dev/null`,
-    'i=0',
-    `while [ $i -lt 300 ] && kill -0 $pid 2>/dev/null && ! grep -Eq '"id": ?2[,}]' "$d/out"; do sleep 0.1; i=$((i + 1)); done`,
-    'exec 3>&-',
-    'wait $pid; code=$?',
+    'd=$(mktemp -d) && : > "$d/out" && : > "$d/err" || exit 1',
+    '{',
+    "  trap '' PIPE",
+    `  printf '%s\\n' ${messages.join(' ')} 2>/dev/null`,
+    '  i=0',
+    `  while [ $i -lt 300 ] && [ ! -f "$d/code" ] && ! grep -Eq '"id": ?2[,}]' "$d/out"; do sleep 0.1; i=$((i + 1)); done`,
+    `} | { ${command} > "$d/out" 2> "$d/err"; echo $? > "$d/code"; }`,
+    'code=$(cat "$d/code")',
     'cat "$d/out"; cat "$d/err" >&2; rm -rf "$d"; exit $code',
   ].join('\n')
   const r = await sandbox.exec(script, { signal, env: server.env })

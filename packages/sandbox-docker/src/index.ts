@@ -32,10 +32,12 @@ export {
 } from './build-image.ts'
 export {
   type DockerResult,
+  type DockerState,
   docker,
   dockerAvailable,
   dockerCapacity,
   dockerOk,
+  dockerState,
   type ImageInfo,
   imageInfo,
   isRegistryDigest,

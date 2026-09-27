@@ -46,4 +46,11 @@ export const SHAPES: PersistedShape[] = [
     type: 'DebugRequest',
     where: "One line of an attempt's .es/debug/…/requests.ndjson",
   },
+  {
+    name: 'live-progress',
+    file: 'src/view/live.ts',
+    type: 'LiveProgress',
+    where: "A running es run's progress: .es/staging/<run>/live.json, read by es studio",
+    versionField: 'schemaVersion',
+  },
 ]

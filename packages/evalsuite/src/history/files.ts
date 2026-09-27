@@ -11,9 +11,9 @@ import {
   unlink,
   writeFile,
 } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { RUN_ID, sha256 } from '../ids.ts'
+import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import { PACKAGE_VERSION } from '../root.ts'
 import { runHeader } from '../view/header.ts'
@@ -69,12 +69,12 @@ export function warnUnreadable(path: string, error: unknown): void {
   if (warnedUnreadable.has(path)) return
   warnedUnreadable.add(path)
   if (error instanceof NewerRecordError) {
-    process.stderr.write(`warning: skipped ${relative(process.cwd(), path)}: ${error.reason}\n`)
+    process.stderr.write(`warning: skipped ${fromCwd(path)}: ${error.reason}\n`)
     return
   }
   const why = error instanceof Error ? error.message : String(error)
   process.stderr.write(
-    `warning: skipped ${relative(process.cwd(), path)}: not a readable ES run record (${why}). Restore it from git, or delete it.\n`,
+    `warning: skipped ${fromCwd(path)}: not a readable ES run record (${why}). Restore it from git, or delete it.\n`,
   )
 }
 
@@ -150,7 +150,7 @@ export async function listRuns(
   const entries: HistoryEntry[] = []
   for (const name of names) {
     const path = join(dir, name)
-    const key = relative(root, path)
+    const key = relativeFile(root, path)
     const info = await stat(path)
     const hit = cache.files[key]
     if (hit && hit.size === info.size && hit.mtimeMs === info.mtimeMs) {

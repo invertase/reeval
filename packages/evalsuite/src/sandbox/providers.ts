@@ -1,6 +1,12 @@
 // The sandbox providers ES has, each meeting the prepare contract (provider.ts). Docker builds
 // images; the fake sandbox needs nothing.
-import { dockerAvailable, ImageBuildError, isTransient } from '@evalsuite/sandbox-docker'
+import {
+  type DockerState,
+  dockerState,
+  ImageBuildError,
+  isTransient,
+} from '@evalsuite/sandbox-docker'
+import { UsageError } from '../errors.ts'
 import type { DockerSandboxDescriptor, FakeSandboxDescriptor, HarnessDescriptor } from '../types.ts'
 import { PrepareError, type PrepareFailure, type SandboxProvider } from './provider.ts'
 
@@ -35,6 +41,25 @@ export function classifyDocker(error: unknown): PrepareFailure {
   }
 }
 
+/** Why Docker can't run a sandbox, as the fix a user needs; null when it can. */
+export function dockerProblem(
+  state: DockerState,
+  platform: NodeJS.Platform = process.platform,
+): string | null {
+  if (state === 'running') return null
+  if (state === 'windows-containers')
+    return "Docker is running Windows containers, but ES's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again."
+  return platform === 'win32'
+    ? 'Docker is not running. Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.'
+    : 'Docker is not running. Start Docker and try again.'
+}
+
+/** Throws a usage error unless Docker can run a sandbox. */
+export async function requireDocker(): Promise<void> {
+  const problem = dockerProblem(await dockerState())
+  if (problem) throw new UsageError(problem)
+}
+
 /** Docker: one image per key, each sub-image built once per provider (so once per run). */
 export function dockerProvider(
   options: { force?: boolean } = {},
@@ -43,7 +68,8 @@ export function dockerProvider(
   return {
     kind: 'docker',
     async check() {
-      if (await dockerAvailable()) return
+      const problem = dockerProblem(await dockerState())
+      if (!problem) return
       throw new PrepareError({
         class: 'config',
         stage: 'docker',
@@ -51,7 +77,7 @@ export function dockerProvider(
         cause: null,
         log: null,
         usage: true,
-        message: 'Docker is not running. Start Docker and try again.',
+        message: problem,
       })
     },
     key: dockerKey,

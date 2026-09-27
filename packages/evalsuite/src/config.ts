@@ -1,12 +1,13 @@
 import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { createJiti } from 'jiti'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { AGENTS, DEFAULT_HARNESS, HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
+import { fromCwd } from './ids.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkHarnesses, checkOptions } from './options.ts'
 import { docker } from './sandbox.ts'
@@ -95,7 +96,7 @@ export const configPathFor = (flag: string | undefined): string | undefined =>
   flag === undefined ? findConfig() : resolve(flag)
 
 /** The config file as the user would type it from the current directory. */
-export const configLabel = (path: string): string => relative(process.cwd(), path) || path
+export const configLabel = (path: string): string => fromCwd(path) || path
 
 /**
  * Loads the config at `path` (see `configPathFor`); its directory is the project root. Without a

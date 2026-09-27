@@ -1,0 +1,615 @@
+// Runs in progress: the progress file `es run` keeps in `.es/staging/<run>/live.json`, how the
+// studio reads it (killed runs, corrupt files, landed records), and what it serves and streams.
+import assert from 'node:assert/strict'
+import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { hostname, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { after, describe, test } from 'node:test'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { Worker } from 'node:worker_threads'
+import type { PlannedItem } from '../src/engine/types.ts'
+import { attemptKey, recordFileName } from '../src/ids.ts'
+import { replace, writeLiveProgress } from '../src/live.ts'
+import { listLive, liveTranscript, stagingRoot } from '../src/studio/live.ts'
+import { createStudioApp, type StudioEvent } from '../src/studio/server.ts'
+import type { StudioSource } from '../src/studio/source.ts'
+import type { EvalResult } from '../src/ui/events.ts'
+import {
+  LIVE_FILE,
+  type LiveIndex,
+  type LiveProgress,
+  type LiveRun,
+  liveApiPath,
+  liveTranscriptPath,
+  readableLiveProgress,
+} from '../src/view/index.ts'
+import { baseEnv, fakeConfig, pkgRoot, project } from './helpers.ts'
+
+const RUN = '20260927T180000Z_abc1234_elliot_k3f9'
+const cli = join(pkgRoot, 'dist/cli.js')
+
+const temps: string[] = []
+after(async () => {
+  for (const t of temps) await rm(t, { recursive: true, force: true })
+})
+const temp = async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'es-live-'))
+  temps.push(dir)
+  return dir
+}
+
+function planned(names: string[], runs = 1): PlannedItem[] {
+  return names.flatMap((name) =>
+    Array.from({ length: runs }, (_, i) => {
+      const id = `evals/a.es.ts › ${name}`
+      const cell = 'fake/default/fake'
+      return {
+        id,
+        key: attemptKey(id, cell, i + 1),
+        file: 'evals/a.es.ts',
+        attempt: { name, n: i + 1, cell: { key: cell }, plan: {} },
+      } as unknown as PlannedItem
+    }),
+  )
+}
+
+const result = (key: string, state: EvalResult['state'], outcome?: string) =>
+  ({
+    key,
+    state,
+    durationMs: 1234,
+    meta: outcome ? { outcome } : undefined,
+  }) as unknown as EvalResult
+
+const readLive = (dir: string) =>
+  JSON.parse(readFileSync(join(dir, LIVE_FILE), 'utf8')) as LiveProgress
+
+describe('the progress file', () => {
+  test('starts with every planned attempt queued, and counts each start and finish', async () => {
+    const dir = join(await temp(), 'staging', RUN)
+    const items = planned(['one', 'two'], 2)
+    const live = writeLiveProgress({ dir, runId: RUN, startedAt: new Date(0), planned: items })
+    try {
+      const first = readLive(dir)
+      assert.equal(first.schemaVersion, 1)
+      assert.equal(first.runId, RUN)
+      assert.equal(first.startedAt, '1970-01-01T00:00:00.000Z')
+      assert.equal(first.pid, process.pid)
+      assert.equal(first.host, hostname())
+      assert.equal(first.phase, 'running')
+      assert.equal(first.planned, 4)
+      assert.deepEqual(first.counts, {
+        done: 0,
+        passed: 0,
+        failed: 0,
+        errored: 0,
+        skipped: 0,
+        running: 0,
+      })
+      assert.deepEqual(
+        first.attempts.map((a) => [a.name, a.cell, a.n, a.status]),
+        [
+          ['one', 'fake/default/fake', 1, 'queued'],
+          ['one', 'fake/default/fake', 2, 'queued'],
+          ['two', 'fake/default/fake', 1, 'queued'],
+          ['two', 'fake/default/fake', 2, 'queued'],
+        ],
+      )
+      const [a, b, c, d] = items.map((i) => i.key) as [string, string, string, string]
+      live.start(a, Date.parse('2026-09-27T18:00:01Z'))
+      live.start(b, Date.now())
+      live.start(c, Date.now())
+      assert.equal(readLive(dir).counts.running, 3)
+      assert.equal(readLive(dir).attempts[0]?.startedAt, '2026-09-27T18:00:01.000Z')
+      live.end(result(a, 'passed', 'pass'))
+      live.end(result(b, 'failed', 'fail'))
+      live.end(result(c, 'failed', 'infra_error'))
+      live.end(result('not planned', 'passed'))
+      const after = readLive(dir)
+      assert.deepEqual(after.counts, {
+        done: 3,
+        passed: 1,
+        failed: 1,
+        errored: 1,
+        skipped: 0,
+        running: 0,
+      })
+      assert.deepEqual(
+        after.attempts.map((x) => [x.status, x.durationMs]),
+        [
+          ['pass', 1234],
+          ['fail', 1234],
+          ['infra_error', 1234],
+          ['queued', null],
+        ],
+      )
+      live.start(d, Date.now())
+      live.end(result(d, 'skipped'))
+      live.phase('finishing')
+      assert.equal(readLive(dir).phase, 'finishing')
+      assert.equal(readLive(dir).counts.done, 4)
+      assert.deepEqual(readdirSync(dir), [LIVE_FILE], 'no temp file is left behind')
+    } finally {
+      live.remove()
+    }
+    assert.equal(existsSync(join(dir, LIVE_FILE)), false)
+  })
+
+  test("a rename Windows refuses while the file is open is tried again, and others aren't", () => {
+    const busy = (code: string, times: number) => {
+      let calls = 0
+      const rename = () => {
+        calls++
+        if (calls <= times) throw Object.assign(new Error(code), { code })
+      }
+      return { rename, calls: () => calls }
+    }
+    for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
+      const r = busy(code, 3)
+      replace('a', 'b', r.rename)
+      assert.equal(r.calls(), 4, code)
+    }
+    const gone = busy('ENOENT', 1)
+    assert.throws(() => replace('a', 'b', gone.rename), /ENOENT/)
+    assert.equal(gone.calls(), 1)
+    const stuck = busy('EPERM', 100)
+    assert.throws(() => replace('a', 'b', stuck.rename), /EPERM/)
+    assert.equal(stuck.calls(), 20)
+  })
+
+  test('is replaced whole: a reader polling it never sees a partial file', async () => {
+    const dir = join(await temp(), RUN)
+    const items = planned(Array.from({ length: 200 }, (_, i) => `eval ${i}`))
+    const live = writeLiveProgress({ dir, runId: RUN, startedAt: new Date(), planned: items })
+    const reader = new Worker(
+      `const { readFileSync } = require('node:fs')
+       const { workerData, parentPort } = require('node:worker_threads')
+       let reads = 0, bad = 0
+       parentPort.on('message', () => parentPort.postMessage({ reads, bad }))
+       const loop = () => {
+         for (let i = 0; i < 50; i++) {
+           try { JSON.parse(readFileSync(workerData, 'utf8')); reads++ } catch { bad++ }
+         }
+         setImmediate(loop)
+       }
+       loop()`,
+      { eval: true, workerData: join(dir, LIVE_FILE) },
+    )
+    try {
+      for (const item of items) {
+        live.start(item.key, Date.now())
+        live.end(result(item.key, 'passed', 'pass'))
+        if (item.key.endsWith('0#1')) await sleep(1)
+      }
+      const stats = await new Promise<{ reads: number; bad: number }>((resolve) => {
+        reader.once('message', resolve)
+        reader.postMessage('stats')
+      })
+      assert.ok(stats.reads > 100, `the reader read ${stats.reads} times`)
+      assert.equal(stats.bad, 0)
+      assert.equal(readLive(dir).counts.passed, 200)
+    } finally {
+      await reader.terminate()
+      live.remove()
+    }
+  })
+
+  test('beats while the run is alive, and stop() freezes it', async () => {
+    const dir = join(await temp(), RUN)
+    let t = Date.parse('2026-09-27T18:00:00Z')
+    const live = writeLiveProgress({
+      dir,
+      runId: RUN,
+      startedAt: new Date(t),
+      planned: planned(['one']),
+      heartbeatMs: 20,
+      now: () => {
+        t += 1000
+        return new Date(t)
+      },
+    })
+    const beat = () => Date.parse(readLive(dir).heartbeatAt)
+    const first = beat()
+    await sleep(120)
+    assert.ok(beat() > first, 'the heartbeat moved on')
+    live.stop()
+    const frozen = beat()
+    await sleep(80)
+    assert.equal(beat(), frozen)
+    live.start(planned(['one'])[0]?.key as string, Date.now())
+    assert.equal(readLive(dir).counts.running, 0, 'nothing is written once stopped')
+  })
+
+  test('a planned attempt the plan skips starts skipped and counts as done', async () => {
+    const dir = join(await temp(), RUN)
+    const items = planned(['one', 'two'])
+    ;(items[1]?.attempt.plan as { skip?: string }).skip = 'no key'
+    const live = writeLiveProgress({ dir, runId: RUN, startedAt: new Date(), planned: items })
+    live.stop()
+    assert.deepEqual(
+      readLive(dir).attempts.map((a) => a.status),
+      ['queued', 'skipped'],
+    )
+    assert.equal(readLive(dir).counts.done, 1)
+  })
+})
+
+describe('reading a progress file', () => {
+  const valid = (): Record<string, unknown> => ({
+    schemaVersion: 1,
+    runId: RUN,
+    startedAt: '2026-09-27T18:00:00.000Z',
+    pid: 1,
+    host: 'h',
+    heartbeatAt: '2026-09-27T18:00:02.000Z',
+    phase: 'running',
+    planned: 99,
+    counts: { done: 99, passed: 99, failed: 0, errored: 0, skipped: 0, running: 0 },
+    attempts: [
+      {
+        key: 'k',
+        evalId: 'e',
+        name: 'n',
+        file: 'f',
+        cell: 'c',
+        n: 1,
+        status: 'pass',
+        startedAt: null,
+        durationMs: 5,
+      },
+    ],
+  })
+
+  test('recomputes counts from the attempts, and ignores unknown fields', () => {
+    const read = readableLiveProgress({ ...valid(), extra: { from: 'a newer ES' } })
+    assert.ok(read)
+    assert.equal(read.planned, 1)
+    assert.equal(read.counts.done, 1)
+    assert.equal(read.counts.passed, 1)
+  })
+
+  test('anything it cannot read is null, never a throw', () => {
+    const broken: unknown[] = [
+      null,
+      'live',
+      [],
+      { ...valid(), schemaVersion: 2 },
+      { ...valid(), schemaVersion: undefined },
+      { ...valid(), pid: 'one' },
+      { ...valid(), phase: 'paused' },
+      { ...valid(), attempts: 'none' },
+      { ...valid(), attempts: [{ key: 'k' }] },
+      { ...valid(), attempts: [{ ...(valid().attempts as object[])[0], status: 'bored' }] },
+      { ...valid(), startedAt: 7 },
+    ]
+    for (const b of broken) assert.equal(readableLiveProgress(b), null, JSON.stringify(b))
+  })
+})
+
+/** A project root with `.es/staging/<run>/live.json` for each progress given. */
+async function stagingProject(files: Record<string, string | LiveProgress>) {
+  const root = await temp()
+  for (const [runId, value] of Object.entries(files)) {
+    const dir = join(stagingRoot(root), runId)
+    await mkdir(join(dir, 'evals'), { recursive: true })
+    await writeFile(join(dir, LIVE_FILE), typeof value === 'string' ? value : JSON.stringify(value))
+  }
+  const source: StudioSource = { root, historyDir: join(root, 'evals/.history'), scratch: true }
+  return { root, source }
+}
+
+const progress = (runId: string, patch: Partial<LiveProgress> = {}): LiveProgress => ({
+  schemaVersion: 1,
+  runId,
+  startedAt: new Date(Date.now() - 5000).toISOString(),
+  pid: process.pid,
+  host: hostname(),
+  heartbeatAt: new Date().toISOString(),
+  phase: 'running',
+  planned: 2,
+  counts: { done: 1, passed: 1, failed: 0, errored: 0, skipped: 0, running: 1 },
+  attempts: [
+    {
+      key: attemptKey('evals/a.es.ts › one', 'fake/default/fake', 1),
+      evalId: 'evals/a.es.ts › one',
+      name: 'one',
+      file: 'evals/a.es.ts',
+      cell: 'fake/default/fake',
+      n: 1,
+      status: 'pass',
+      startedAt: new Date(Date.now() - 4000).toISOString(),
+      durationMs: 2000,
+    },
+    {
+      key: attemptKey('evals/a.es.ts › one', 'fake/default/fake', 2),
+      evalId: 'evals/a.es.ts › one',
+      name: 'one',
+      file: 'evals/a.es.ts',
+      cell: 'fake/default/fake',
+      n: 2,
+      status: 'running',
+      startedAt: new Date(Date.now() - 1000).toISOString(),
+      durationMs: null,
+    },
+  ],
+  ...patch,
+})
+
+/** A pid that was just alive and has exited. */
+function deadPid(): number {
+  const r = spawnSync(process.execPath, ['-e', 'console.log(process.pid)'], { encoding: 'utf8' })
+  return Number(r.stdout.trim())
+}
+
+const stamp = (n: number) => `20260927T18000${n}Z_abc1234_elliot_k3f9`
+
+describe('the studio reads live runs', () => {
+  test('running, stopped (process gone, or quiet), corrupt and landed runs', async () => {
+    const quiet = new Date(Date.now() - 60_000).toISOString()
+    const { root, source } = await stagingProject({
+      [stamp(1)]: progress(stamp(1)),
+      [stamp(2)]: progress(stamp(2), { pid: deadPid() }),
+      [stamp(3)]: progress(stamp(3), { host: 'another-host', heartbeatAt: quiet }),
+      [stamp(4)]: progress(stamp(4), { host: 'another-host', pid: 1 }),
+      [stamp(5)]: '{"schemaVersion":1,"runId":"2026092',
+      [stamp(6)]: progress(stamp(6), { phase: 'finishing' }),
+      [stamp(7)]: progress(stamp(7)),
+      [stamp(8)]: progress(stamp(9)),
+      'not-a-run': progress('not-a-run'),
+    })
+    await mkdir(join(root, '.es/runs'), { recursive: true })
+    await writeFile(join(root, '.es/runs', `${stamp(7)}.json`), '{}')
+    const runs = await listLive(source)
+    assert.deepEqual(
+      runs.map((r) => [r.runId, r.state]),
+      [
+        [stamp(6), 'finishing'],
+        [stamp(4), 'running'],
+        [stamp(3), 'stopped'],
+        [stamp(2), 'stopped'],
+        [stamp(1), 'running'],
+      ],
+    )
+    const run = runs.at(-1) as LiveRun
+    assert.equal('pid' in run || 'host' in run || 'heartbeatAt' in run, false)
+    assert.equal(run.counts.done, 1)
+    assert.deepEqual(await listLive({ ...source, scratch: false }), [])
+    // A quiet run on this host is stopped too, whatever its pid says.
+    assert.equal(
+      (await listLive(source, { now: Date.now() + 60_000 })).every((r) => r.state === 'stopped'),
+      true,
+    )
+  })
+
+  test('with no staging folder there are none', async () => {
+    const root = await temp()
+    assert.deepEqual(
+      await listLive({ root, historyDir: join(root, 'evals/.history'), scratch: true }),
+      [],
+    )
+  })
+})
+
+const HOST = '127.0.0.1:4984'
+
+describe('the studio serves and streams live runs', () => {
+  const secret = `sk-ant-${'x'.repeat(32)}`
+  async function setup() {
+    const { root, source } = await stagingProject({ [RUN]: progress(RUN) })
+    const done = progress(RUN).attempts[0]?.key as string
+    const staged = {
+      turns: [
+        {
+          startedAt: '2026-09-27T18:00:01.000Z',
+          durationMs: 2000,
+          status: 'ok',
+          prompt: 'write hello.txt',
+          transcript: [{ type: 'text', atMs: 5, text: `done, with ${secret}` }],
+        },
+      ],
+    }
+    await writeFile(
+      join(stagingRoot(root), RUN, 'evals', recordFileName(done)),
+      JSON.stringify(staged),
+    )
+    const listeners = new Set<(e: StudioEvent) => void>()
+    const app = createStudioApp({
+      source,
+      appDir: root,
+      es: 'test',
+      project: 'live',
+      token: null,
+      hosts: [],
+      subscribe: (l) => {
+        listeners.add(l)
+        return () => listeners.delete(l)
+      },
+    })
+    const send = (e: StudioEvent) => {
+      for (const l of listeners) l(e)
+    }
+    return { root, source, app, done, send, listeners }
+  }
+  const get = (app: ReturnType<typeof createStudioApp>, path: string) =>
+    app.request(`http://${HOST}/${path}`, { headers: { host: HOST } })
+
+  test('/api/live lists them; a finished attempt serves its redacted transcript', async () => {
+    const { root, app, done } = await setup()
+    const index = (await (await get(app, liveApiPath)).json()) as LiveIndex
+    assert.deepEqual(
+      index.runs.map((r) => [r.runId, r.state, r.counts.done, r.planned]),
+      [[RUN, 'running', 1, 2]],
+    )
+
+    const res = await get(app, liveTranscriptPath(RUN, done))
+    assert.equal(res.status, 200)
+    assert.equal(res.headers.get('content-security-policy'), 'sandbox')
+    const text = await res.text()
+    const lines = text
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+    assert.deepEqual(
+      lines.map((l) => l.type),
+      ['prompt', 'text', 'turn-end'],
+    )
+    assert.doesNotMatch(text, /sk-ant-x{32}/)
+    assert.match(text, /done, with/)
+
+    const running = progress(RUN).attempts[1]?.key as string
+    await writeFile(join(stagingRoot(root), RUN, 'evals', recordFileName(running)), '{}')
+    for (const path of [
+      liveTranscriptPath(RUN, running),
+      liveTranscriptPath(RUN, `${done}0`),
+      liveTranscriptPath(RUN, '../../../es.config.ts'),
+      liveTranscriptPath('not-a-run', done),
+      liveTranscriptPath(stamp(1), done),
+    ]) {
+      assert.equal((await get(app, path)).status, 404, path)
+    }
+  })
+
+  test("a staged record that's a symlink out of the run is never served", async () => {
+    const { root, source, done } = await setup()
+    const file = join(stagingRoot(root), RUN, 'evals', recordFileName(done))
+    const outside = join(root, 'outside.json')
+    await writeFile(outside, await readFile(file))
+    await rm(file)
+    await symlink(outside, file)
+    assert.equal(await liveTranscript(source, RUN, done), null)
+  })
+
+  test('/api/events streams run.progress with the runs, and history.changed', async () => {
+    const { app, send, listeners } = await setup()
+    const res = await get(app, 'api/events')
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader()
+    const decoder = new TextDecoder()
+    let text = ''
+    const until = async (pattern: RegExp) => {
+      while (!pattern.test(text)) {
+        const { value, done } = await reader.read()
+        if (done) throw new Error(`stream ended: ${text}`)
+        text += decoder.decode(value)
+      }
+    }
+    await until(/event: ready/)
+    send({ type: 'run.progress', runs: [{ ...progress(RUN), state: 'running' } as LiveRun] })
+    send({ type: 'history.changed' })
+    await until(/event: history\.changed/)
+    const progressEvent = /event: run\.progress\ndata: (.+)\n/.exec(text)
+    assert.ok(progressEvent, text)
+    const data = JSON.parse(progressEvent[1] as string) as LiveIndex
+    assert.equal(data.runs[0]?.runId, RUN)
+    await reader.cancel()
+    await sleep(20)
+    assert.equal(listeners.size, 0, 'a closed stream unsubscribes')
+  })
+})
+
+/** Each distinct `done/planned` a run's progress file showed, polled until the CLI exits. */
+async function watchRun(dir: string, args: string[], env: NodeJS.ProcessEnv = {}) {
+  const child = spawn(process.execPath, [cli, ...args], {
+    cwd: dir,
+    env: { ...baseEnv, ...env },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  })
+  let output = ''
+  child.stdout.on('data', (d) => (output += d))
+  child.stderr.on('data', (d) => (output += d))
+  const exited = new Promise<number | null>((resolve) => child.on('close', resolve))
+  const seen: string[] = []
+  let runId: string | undefined
+  let open = true
+  void exited.then(() => (open = false))
+  while (open) {
+    const staging = join(dir, '.es/staging')
+    const [name] = existsSync(staging) ? readdirSync(staging) : []
+    const file = name && join(staging, name, LIVE_FILE)
+    if (file && existsSync(file)) {
+      try {
+        const p = readableLiveProgress(JSON.parse(readFileSync(file, 'utf8')))
+        if (p) {
+          runId = p.runId
+          const step = `${p.counts.done}/${p.planned}${p.phase === 'running' ? '' : ` ${p.phase}`}`
+          if (seen.at(-1) !== step) seen.push(step)
+        }
+      } catch {}
+    }
+    await sleep(25)
+  }
+  return { code: await exited, seen, runId, output }
+}
+
+describe('es run keeps its progress file', () => {
+  const evalFile = `import { evaluate, expect } from 'evalsuite'
+evaluate('writes hello', { runs: 3 }, async (t) => {
+  await t.send('write hello.txt')
+  await expect(t.exec('test -f hello.txt')).toSucceed()
+})
+`
+  const agent = (delayMs: number) => `{ files: { 'hello.txt': 'hi\\n' }, delayMs: ${delayMs} }`
+
+  test('from 0/N to done, then the record replaces it', async () => {
+    const p = await project('live-run', {
+      'es.config.ts': fakeConfig({ harness: agent(400) }),
+      'evals/hello.es.ts': evalFile,
+    })
+    const r = await watchRun(p.dir, ['run', '--concurrency', '1'])
+    assert.equal(r.code, 0, r.output)
+    assert.equal(r.seen[0], '0/3')
+    assert.ok(r.seen.includes('1/3') && r.seen.includes('2/3'), r.seen.join(' '))
+    assert.match(r.seen.at(-1) as string, /^3\/3/)
+    assert.ok(r.runId)
+    assert.equal(existsSync(join(p.dir, '.es/staging', r.runId)), false, 'staging is gone')
+    assert.ok(existsSync(join(p.dir, '.es/runs', `${r.runId}.json`)), 'the record landed')
+    const source = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true }
+    assert.deepEqual(await listLive(source), [])
+    const record = readFileSync(join(p.dir, '.es/runs', `${r.runId}.json`), 'utf8')
+    assert.doesNotMatch(record, /"(queued|running)"/, 'nothing live reaches the record')
+  })
+
+  test('a killed run is shown as stopped, with what it had finished', async () => {
+    const p = await project('live-killed', {
+      'es.config.ts': fakeConfig({ harness: agent(300) }),
+      'evals/hello.es.ts': evalFile.replace(
+        "'writes hello', { runs: 3 }",
+        "'writes hello', { runs: 20 }",
+      ),
+    })
+    const child = spawn(process.execPath, [cli, 'run', '--concurrency', '1'], {
+      cwd: p.dir,
+      env: baseEnv,
+      detached: true,
+      stdio: 'ignore',
+    })
+    const source = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true }
+    let runs: LiveRun[] = []
+    for (let i = 0; i < 400 && !(runs[0]?.counts.done ?? 0); i++) {
+      await sleep(50)
+      runs = await listLive(source)
+    }
+    assert.equal(runs[0]?.state, 'running')
+    // Its process group; Windows has none, so its process tree.
+    if (process.platform === 'win32')
+      execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
+    else process.kill(-(child.pid as number), 'SIGKILL')
+    await new Promise((resolve) => child.on('exit', resolve))
+    runs = await listLive(source)
+    assert.equal(runs.length, 1)
+    assert.equal(runs[0]?.state, 'stopped')
+    assert.ok((runs[0]?.counts.done ?? 0) >= 1)
+    assert.ok((runs[0]?.counts.done ?? 0) < 20)
+  })
+
+  test('a run that stops at the plan leaves no progress file', async () => {
+    const p = await project('live-dry', {
+      'es.config.ts': fakeConfig({ harness: agent(0) }),
+      'evals/hello.es.ts': evalFile,
+    })
+    const r = await watchRun(p.dir, ['run', '--dry-run'])
+    assert.equal(r.code, 0, r.output)
+    assert.deepEqual(r.seen, [])
+  })
+})

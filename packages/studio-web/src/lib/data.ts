@@ -7,6 +7,9 @@ import {
   debugApiPath,
   type HistoryEntry,
   type IndexManifest,
+  type LiveIndex,
+  liveApiPath,
+  liveTranscriptPath,
   manifestPath,
   type RunRecord,
   readableRecord,
@@ -110,7 +113,34 @@ export const traceQuery = (runId: string, attemptKey: string, enabled: boolean) 
 
 export const useStudio = () => useQuery(studioQuery)
 
-/** In `es studio`, refetch the index (and records) when a run lands or is recorded. */
+/** Runs in progress; `es studio` only (a static build has none), kept current over SSE. */
+export const liveQuery = queryOptions({
+  queryKey: ['live'],
+  queryFn: () => fetchJson<LiveIndex>(liveApiPath),
+  staleTime: Number.POSITIVE_INFINITY,
+})
+
+export function useLiveRuns() {
+  const { data: studio } = useStudio()
+  const enabled = !!studio?.features.live
+  const query = useQuery({ ...liveQuery, enabled })
+  return { ...query, runs: enabled ? (query.data?.runs ?? []) : [] }
+}
+
+/** A finished attempt's transcript while its run is still going. */
+export const liveTranscriptQuery = (runId: string, attemptKey: string) =>
+  queryOptions({
+    queryKey: ['live-transcript', runId, attemptKey],
+    queryFn: () => fetchText(liveTranscriptPath(runId, attemptKey)),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
+
+/**
+ * In `es studio`, refetch the index (and records) when a run lands or is recorded, and take each
+ * live-run update as it comes. A run that left the live list has landed: the index is refetched
+ * before the list changes, so the real run takes its place without a gap.
+ */
 export function useLiveUpdates(enabled: boolean) {
   const client = useQueryClient()
   useEffect(() => {
@@ -119,6 +149,22 @@ export function useLiveUpdates(enabled: boolean) {
     events.addEventListener('history.changed', () => {
       void client.invalidateQueries({ queryKey: ['index'] })
       void client.invalidateQueries({ queryKey: ['record'] })
+    })
+    let queue = Promise.resolve()
+    events.addEventListener('run.progress', (event) => {
+      const next = JSON.parse((event as MessageEvent<string>).data) as LiveIndex
+      queue = queue.then(async () => {
+        const before = client.getQueryData<LiveIndex>(liveQuery.queryKey)?.runs ?? []
+        const ids = new Set(next.runs.map((r) => r.runId))
+        if (before.some((r) => !ids.has(r.runId))) {
+          await client.refetchQueries({ queryKey: ['index'] }).catch(() => {})
+        }
+        client.setQueryData(liveQuery.queryKey, next)
+      })
+    })
+    // Whatever moved while the stream was down.
+    events.addEventListener('ready', () => {
+      void client.invalidateQueries({ queryKey: liveQuery.queryKey })
     })
     return () => events.close()
   }, [enabled, client])
