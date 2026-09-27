@@ -1,3 +1,4 @@
+// Modified from shadcn/ui (https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.
 'use client'
 
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui'
