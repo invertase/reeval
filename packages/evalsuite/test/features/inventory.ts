@@ -544,8 +544,7 @@ export const inventory: InventoryFeature[] = [
       docker('Claude Code attempts broker the key on its endpoints'),
       'evalsuite/test/docker-antigravity.test.ts › Antigravity attempts broker the key on its model endpoint only',
       docker('Goose gets the key on the model list it fetches each turn'),
-      docker('opencode: Gemini refusing the key fails the turn and names the host variable'),
-      docker('pi: Gemini refusing the key fails the turn and names the host variable'),
+      docker('Gemini refusing the key fails the turn and names the host variable'),
     ],
   },
   {
