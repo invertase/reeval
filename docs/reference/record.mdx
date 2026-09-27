@@ -105,8 +105,8 @@ The type definitions are in `packages/evalsuite/src/history/types.ts`; the envir
   The profile the run was sized with, and why it was chosen.
 </Property>
 
-<Property name="plan" type="{evals: number; cells: number; attempts: number; estimateMs: number}">
-  What the run planned before it started.
+<Property name="plan" type="{evals: number; cells: number; attempts: number; estimateMs: number; sandboxWarnings: SandboxWarning[]}">
+  What the run planned before it started, and each level whose sandbox ran as root or with capabilities added back.
 </Property>
 
 <Property name="budget" type="{attempts?: number; duration?: string | number} | null"></Property>
@@ -212,6 +212,32 @@ Counts attempts, except `evals`.
 <Property name="infraError" type="number"></Property>
 
 <Property name="skipped" type="number"></Property>
+
+### SandboxWarning
+
+A sandbox with more privilege than the default `es` user: `docker({ root: true })`, or `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.
+
+<Property name="kind" type="'root' | 'capabilities'"></Property>
+
+<Property name="level" type="'config' | 'profile' | 'group' | 'eval'">
+  Which level set the sandbox.
+</Property>
+
+<Property name="where" type="string">
+  That level as ES names it: `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`.
+</Property>
+
+<Property name="file" type="string | null">
+  The eval file that sets it, for a group or eval; null for the config or a profile.
+</Property>
+
+<Property name="capabilities" type="string[]" optional>
+  The capabilities added back, for `capabilities`.
+</Property>
+
+<Property name="message" type="string">
+  The line ES prints, after `WARNING: ` (root) or `warning: ` (capabilities).
+</Property>
 
 ### Cost
 

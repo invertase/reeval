@@ -73,6 +73,8 @@ plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57
 
 `--dry-run` adds a row per eval and stops. `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document. Neither needs credentials or Docker.
 
+A sandbox that runs as root or with capabilities added back gets a line under the plan, one per config, profile, group or eval that set it. See [Privilege warnings](/reference/sandbox/docker#privilege-warnings).
+
 ## Before any attempt starts
 
 `es run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running and the images exist. Each failure exits 2 without writing a run.

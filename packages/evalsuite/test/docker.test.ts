@@ -10,6 +10,7 @@ import {
   imageFor,
   LABEL,
 } from '@evalsuite/sandbox-docker'
+import type { RunRecord } from '../src/history/types.ts'
 import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
 const dockerReady = (() => {
@@ -174,6 +175,69 @@ evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stri
       assert.equal(built(a), built(b), 'the second run reused the cached layer')
       assert.equal(b.evals[0]?.image?.id, image?.id)
       assert.equal(liveContainers(b.run.runId), '')
+    },
+  )
+
+  test(
+    'a root sandbox warns at the start of es run, in the record and in summary.md; canary: without root, nothing',
+    docker,
+    async () => {
+      const p = await project('docker-root-warning', {
+        'es.config.ts': config('{}'),
+        'evals/root.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('installs deps', { sandbox: docker({ root: true }) }, async (t) => {
+  await t.sandbox()
+  expect((await t.exec('id -u')).stdout.trim()).toBe('0')
+})
+`,
+        'evals/plain.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('stays unprivileged', async (t) => {
+  await t.sandbox()
+  expect((await t.exec('id -u')).stdout.trim()).toBe('10001')
+})
+`,
+      })
+      const message =
+        'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
+      const warned = (stdout: string, run: RunRecord, summary: string) => {
+        const lines = stdout.split('\n')
+        const at = lines.indexOf(`WARNING: ${message}`)
+        assert.ok(at >= 0, `no root warning in:\n${stdout}`)
+        assert.ok(
+          at < lines.findIndex((l) => l.includes('▶')),
+          'the warning comes before the first attempt starts',
+        )
+        assert.deepEqual(run.plan.sandboxWarnings, [
+          {
+            kind: 'root',
+            level: 'eval',
+            where: 'evaluate("installs deps")',
+            file: 'evals/root.es.ts',
+            message,
+          },
+        ])
+        assert.match(
+          summary,
+          /^> \*\*Warning:\*\* running as root in the sandbox: evaluate\("installs deps"\)/m,
+        )
+      }
+
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/root.es.ts'], slow)
+      assert.equal(r.code, 0, r.stdout + r.stderr)
+      const rooted = readRun(p.dir)
+      warned(r.stdout, rooted.run, rooted.read('summary.md'))
+
+      const canary = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/plain.es.ts'], slow)
+      assert.equal(canary.code, 0, canary.stdout + canary.stderr)
+      const plain = readRun(p.dir)
+      assert.notEqual(plain.run.runId, rooted.run.runId)
+      assert.throws(
+        () => warned(canary.stdout, plain.run, plain.read('summary.md')),
+        /no root warning/,
+      )
+      assert.deepEqual(plain.run.plan.sandboxWarnings, [])
+      assert.doesNotMatch(plain.read('summary.md'), /running as root/)
     },
   )
 

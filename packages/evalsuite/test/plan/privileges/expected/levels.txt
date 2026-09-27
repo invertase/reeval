@@ -1,7 +1,7 @@
 no profile · 7 evals · 7 cells · 7 attempts
-warning: extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] })) [config]
 WARNING: running as root in the sandbox: group("system packages") (docker({ root: true })) [group evals/p.es.ts]
 WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true })) [eval evals/p.es.ts]
+warning: extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] })) [config]
 warning: extra capabilities in the sandbox: evaluate("installs deps") (docker({ capabilities: ['NET_ADMIN'] })) [eval evals/p.es.ts]
 evals/p.es.ts › pings a host                     fake/-/docker  control  gated  ×1
 evals/p.es.ts › traces a route                   fake/-/docker  control  gated  ×1

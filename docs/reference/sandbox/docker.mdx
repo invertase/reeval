@@ -70,12 +70,31 @@ These set what the container runs with, not what's in its image, so changing the
 </Property>
 
 <Property name="root" type="boolean" optional>
-  Run the agent, setup steps and checks as root instead of the `es` user, with the capabilities `apt-get` needs added back (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Default `false`. For evals that install system packages during the attempt; baking them in with `install` needs no opt-in.
+  Run the agent, setup steps and checks as root instead of the `es` user, with the capabilities `apt-get` needs added back (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Default `false`. For evals that install system packages during the attempt; baking them in with `install` needs no opt-in. Every run that uses it prints a `WARNING:` line (see [Privilege warnings](#privilege-warnings)).
 </Property>
 
 <Property name="capabilities" type="string[]" optional>
-  Linux capabilities to add back, such as `['NET_RAW']`. Every other one is dropped. Default none.
+  Linux capabilities to add back, such as `['NET_RAW']`. Every other one is dropped. Default none. Every run that uses it prints a `warning:` line.
 </Property>
+
+## Privilege warnings
+
+`root` and `capabilities` stay opt-in, and ES says so whenever a run uses them:
+
+```text
+plan  2 evals · 2 cells · 2 attempts · ~2s serial (~1s at concurrency 4)
+WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))
+warning: extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))
+```
+
+There's one line per place that set the sandbox: the config file, a profile's `defaults`, a `group` or an `evaluate`, however many evals inherit it. A sandbox with both gets both lines.
+
+| Where | What you see |
+|---|---|
+| `es run` and `es run --dry-run` | The lines under the plan, before any attempt starts, in every `--ui` |
+| GitHub Actions | Also a `::warning` annotation each, on the eval file for a group or eval |
+| `es run --dry-run --json` | `sandboxWarnings`: `kind` (`root` or `capabilities`), `level` (`config`, `profile`, `group` or `eval`), `where`, `file`, `capabilities` and `message` |
+| The run record | The same list in `plan.sandboxWarnings`, shown in `summary.md` and on the studio's run page |
 
 ## Images and caching
 

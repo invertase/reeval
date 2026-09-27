@@ -229,26 +229,29 @@ describe('sandbox privilege warnings', { concurrency: true }, () => {
     const plan = await planJson({ dir: 'privileges', args: [] })
     assert.deepEqual(plan.sandboxWarnings, [
       {
-        kind: 'capabilities',
-        level: 'config',
-        where: 'es.config.ts',
-        file: null,
-        capabilities: ['NET_RAW'],
-        message: "extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))",
-      },
-      {
         kind: 'root',
         level: 'group',
         where: 'group("system packages")',
         file: 'evals/p.es.ts',
-        message: 'running as root in the sandbox: group("system packages") (docker({ root: true }))',
+        message:
+          'running as root in the sandbox: group("system packages") (docker({ root: true }))',
       },
       {
         kind: 'root',
         level: 'eval',
         where: 'evaluate("installs deps")',
         file: 'evals/p.es.ts',
-        message: 'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))',
+        message:
+          'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))',
+      },
+      {
+        kind: 'capabilities',
+        level: 'config',
+        where: 'es.config.ts',
+        file: null,
+        capabilities: ['NET_RAW'],
+        message:
+          "extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))",
       },
       {
         kind: 'capabilities',
@@ -257,7 +260,7 @@ describe('sandbox privilege warnings', { concurrency: true }, () => {
         file: 'evals/p.es.ts',
         capabilities: ['NET_ADMIN'],
         message:
-          "extra capabilities in the sandbox: evaluate(\"installs deps\") (docker({ capabilities: ['NET_ADMIN'] }))",
+          'extra capabilities in the sandbox: evaluate("installs deps") (docker({ capabilities: [\'NET_ADMIN\'] }))',
       },
     ])
   })
