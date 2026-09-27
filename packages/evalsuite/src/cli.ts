@@ -43,7 +43,7 @@ const HISTORY_COMMANDS = {
 
 const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuildError']
 
-const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130 } as const
+const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
 const version: string = createRequire(import.meta.url)('../package.json').version
 
@@ -113,13 +113,16 @@ Usage:
 
 Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
 Options: --config <path> (default ./es.config.ts)
-Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
+Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
+143 terminated (SIGTERM)
 `
 
 const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COLOR)
 
-/** Set by the first Ctrl-C of `es run`. */
+/** Set by the first Ctrl-C or SIGTERM of `es run`. */
 let interrupted = false
+/** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
+let stopCode: number = EXIT.interrupted
 
 function parse(argv: string[]) {
   return parseArgs({ args: argv, allowPositionals: true, options: parseOptions() })
@@ -346,7 +349,7 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
     console.log(await recordCmd(config, record.runId, { ...flags, ...allow }))
   }
 
-  if (interrupted || engineRun.cancelled) return EXIT.interrupted
+  if (interrupted || engineRun.cancelled) return stopCode
   if (engineRun.unhandledErrors.length > 0) return EXIT.failed
   // The studio shows the same outcome for the run.
   const outcome = runOutcome(record)
@@ -622,10 +625,11 @@ async function executeRun(
       },
       // SIGTERM (docker stop, a CI runner's cancel) cancels like Ctrl-C.
       onCancellable: (cancel) => {
-        const onSignal = () => {
+        const onSignal = (signal: NodeJS.Signals) => {
+          stopCode = signal === 'SIGTERM' ? EXIT.terminated : EXIT.interrupted
           if (interrupted) {
             renderer.close()
-            process.exit(EXIT.interrupted)
+            process.exit(stopCode)
           }
           interrupted = true
           renderer.onEvent({
@@ -665,7 +669,7 @@ let settled = false
 process.on('beforeExit', () => {
   if (settled) return
   console.error(red('es: interrupted before the evals could start; nothing was recorded'))
-  process.exit(interrupted ? EXIT.interrupted : EXIT.infra)
+  process.exit(interrupted ? stopCode : EXIT.infra)
 })
 
 run(process.argv.slice(2)).then(
