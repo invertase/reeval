@@ -53,7 +53,8 @@ function finished(result: EvalResult): LiveStatus {
 export function replace(from: string, to: string, rename = renameSync): void {
   for (let attempt = 1; ; attempt++) {
     try {
-      return rename(from, to)
+      rename(from, to)
+      return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (attempt >= 20 || !(code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) throw error
