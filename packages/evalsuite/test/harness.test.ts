@@ -1338,7 +1338,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
   const of = <T extends TranscriptEvent['type']>(events: TranscriptEvent[], type: T) =>
     events.filter((e): e is Extract<TranscriptEvent, { type: T }> => e.type === type)
 
-  test("a retry that answered: the turn's text and transcript hold its reply once, the retry an error", async () => {
+  test("a retry that answered: the turn's text and transcript hold its reply once, and a retry", async () => {
     // agy ends this real turn ERROR ("The stream was interrupted") though the retry answered; as
     // SUCCESS, the turn's text is what ES records for it.
     const parts = agyParts('provider-retried.ndjson', (s) =>
@@ -1352,19 +1352,35 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
       ['FINAL-ATTEMPT reply, whole.\n'],
     )
     assert.deepEqual(
-      of(events, 'error').map((e) => e.message),
-      ['A step failed (error_message), and the turn went on'],
+      of(events, 'retry').map((e) => e.message),
+      ['A model call failed (error_message), and the agent retried it'],
     )
+    // The retry isn't an error: the turn succeeded.
+    assert.deepEqual(of(events, 'error'), [])
   })
 
-  test("every call dropped mid-reply: nine retries and agy's error, no partial reply", async () => {
+  test("every call dropped mid-reply: eight retries and agy's error, no partial reply", async () => {
     const { text, stream } = await turnThrough(agyParts('provider-dropped-mid-stream.ndjson'))
     assert.equal(text, null)
     const events = normaliseStream(stream, 0)
     assert.deepEqual(of(events, 'text'), [])
-    const errors = of(events, 'error').map((e) => e.message)
-    assert.equal(errors.filter((m) => m.includes('error_message')).length, 9)
-    assert.match(errors.at(-1) ?? '', /network issue connecting to the server/)
+    assert.equal(of(events, 'retry').length, 8)
+    // The turn's error is still agy's, the first and only error event.
+    assert.deepEqual(
+      of(events, 'error').map((e) => e.message),
+      ['There was a network issue connecting to the server, please try again.'],
+    )
+  })
+
+  test("a call refused once (400) and not retried: the provider's error alone, no retry", async () => {
+    const events = normaliseStream((await turnThrough(agyParts('provider-400.ndjson'))).stream, 0)
+    assert.deepEqual(of(events, 'retry'), [])
+    assert.deepEqual(
+      of(events, 'error').map((e) => e.message),
+      [
+        'agent executor error: generating and executing: Error 400, Message: fake 400, Status: INVALID_ARGUMENT, Details: []',
+      ],
+    )
   })
 })
 

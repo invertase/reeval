@@ -317,14 +317,26 @@ describe("a model call agy retried: only the final attempt's reply is the turn's
   test("every call dropped mid-reply: no text at all, nor agy's concatenated response", () => {
     const { parts } = translate(fixture('provider-dropped-mid-stream.ndjson'), { exitCode: 3 })
     assert.equal(texts(parts), '')
-    assert.equal(retries(parts).length, 9)
-    assert.equal(parts.at(-1)?.type, 'finish')
+    // Nine failed calls: eight retried, and the last one agy gave up on, the result's error.
+    assert.equal(retries(parts).length, 8)
+    const last = parts.filter((p) => p.type === 'finish-step').at(-1)
+    assert.deepEqual(last?.type === 'finish-step' && last.finishReason, {
+      unified: 'other',
+      raw: 'error_message',
+    })
+    assert.equal(parts.filter((p) => p.type === 'error').length, 1)
   })
 
-  test('every call refused (503): each error_message step is a failed step', () => {
+  test('every call refused (503): eight retried calls, then the one agy gave up on', () => {
     const { parts } = translate(fixture('provider-503.ndjson'), { exitCode: 3 })
-    assert.equal(retries(parts).length, 9)
+    assert.equal(retries(parts).length, 8)
     assert.equal(texts(parts), '')
+  })
+
+  test('a call refused once (400) and not retried: no retry, only the error', () => {
+    const { parts } = translate(fixture('provider-400.ndjson'), { exitCode: 3 })
+    assert.equal(retries(parts).length, 0)
+    assert.equal(parts.filter((p) => p.type === 'error').length, 1)
   })
 
   test('twin: a reply followed by a tool step, not an error_message, is kept', () => {

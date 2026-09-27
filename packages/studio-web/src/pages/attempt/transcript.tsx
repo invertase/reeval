@@ -15,6 +15,7 @@ import {
   FilePlus,
   Globe,
   MessageSquare,
+  RotateCcw,
   Search,
   TerminalSquare,
   UserRound,
@@ -194,6 +195,13 @@ function EventRow({ e, open, toggle }: { e: EventLine; open: boolean; toggle: ()
           <span className="text-muted-foreground">Fetched</span>
           <span className="min-w-0 truncate font-mono text-xs">{e.url}</span>
           <span className="ml-auto shrink-0 text-xs text-muted-foreground">{dur}</span>
+        </div>
+      )
+    case 'retry':
+      return (
+        <div className="flex items-start gap-2 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground">
+          <RotateCcw className="mt-0.5 size-4 shrink-0" />
+          <span className="font-mono text-xs break-words whitespace-pre-wrap">{e.message}</span>
         </div>
       )
     case 'error':

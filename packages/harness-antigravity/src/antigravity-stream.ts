@@ -98,6 +98,11 @@ export class AntigravityStreamTranslator {
    * model call failed (agy retries it), so its partial text isn't the reply.
    */
   private reply: { index: number; deltas: string[]; usage?: AntigravityUsage } | undefined
+  /**
+   * A model call agy reported failed, held until it's known whether agy retried it (another step
+   * follows) or gave up (the result, whose error is the turn's).
+   */
+  private failure: { usage?: AntigravityUsage } | undefined
   private retried = false
   private openTools = new Map<
     number,
@@ -207,6 +212,7 @@ export class AntigravityStreamTranslator {
 
   private closeBlocks(parts: HarnessV1StreamPart[]) {
     this.settleReply(parts)
+    this.settleFailure(parts, false)
     this.flushStep(parts, 'stop')
   }
 
@@ -230,17 +236,30 @@ export class AntigravityStreamTranslator {
     }
   }
 
-  /** A model call agy reports failed: a failed step, with the tokens it spent, and no text. */
+  /** A model call agy reports failed (`error_message`): its partial text isn't the reply. */
   private failReply(parts: HarnessV1StreamPart[]) {
-    const r = this.reply
+    this.settleFailure(parts, true)
+    const usage = this.reply?.usage
     this.reply = undefined
+    this.failure = usage ? { usage } : {}
+  }
+
+  /**
+   * The held failure's step, with the tokens it spent: failed (`error`) if agy retried the call,
+   * else ended plainly, since the result's error already fails the turn.
+   */
+  private settleFailure(parts: HarnessV1StreamPart[], retried: boolean) {
+    const f = this.failure
+    if (!f) return
+    this.failure = undefined
     this.flushStep(parts, 'stop')
-    this.retried = true
-    if (r?.usage) this.stepUsage = true
+    if (retried) this.retried = true
+    if (!retried && !f.usage) return
+    if (f.usage) this.stepUsage = true
     parts.push({
       type: 'finish-step',
-      finishReason: { unified: 'error', raw: 'error_message' },
-      usage: toUsage(r?.usage),
+      finishReason: { unified: retried ? 'error' : 'other', raw: 'error_message' },
+      usage: toUsage(f.usage),
     })
   }
 
@@ -248,6 +267,7 @@ export class AntigravityStreamTranslator {
     const index = s.step_index ?? -1
     this.conversationId ??= s.conversation_id
     if (s.step_type === 'agent_response') {
+      this.settleFailure(parts, true)
       if (this.reply && this.reply.index !== index) this.settleReply(parts)
       this.reply ??= { index, deltas: [] }
       if (s.text_delta) this.reply.deltas.push(s.text_delta)
@@ -259,6 +279,7 @@ export class AntigravityStreamTranslator {
       return
     }
     this.settleReply(parts)
+    if (s.step_type !== 'user_input') this.settleFailure(parts, true)
     if (s.step_type === 'tool') {
       this.flushStep(parts, 'tool-calls')
       const info = s.tool_info ?? {}
@@ -295,8 +316,8 @@ export class AntigravityStreamTranslator {
   private result(parts: HarnessV1StreamPart[], r: AntigravityResult) {
     this.conversationId = r.conversation_id || this.conversationId
     this.settleReply(parts)
-    // After a retry, agy's `response` has every attempt's text run together.
-    if (!this.sawText && !this.retried && r.response) {
+    // After a failed call, agy's `response` has every attempt's text run together.
+    if (!this.sawText && !this.retried && !this.failure && r.response) {
       parts.push({ type: 'text-start', id: 'text-result' })
       parts.push({ type: 'text-delta', id: 'text-result', delta: r.response })
       parts.push({ type: 'text-end', id: 'text-result' })
