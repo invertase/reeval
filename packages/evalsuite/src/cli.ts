@@ -164,10 +164,9 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
       : `No debug data to remove in ${where}`,
   )
   if (flags.images) {
-    const { dockerAvailable, pruneImages } = await import('@evalsuite/sandbox-docker')
-    if (!(await dockerAvailable())) {
-      throw new UsageError('Docker is not running. Start Docker and try again.')
-    }
+    const { pruneImages } = await import('@evalsuite/sandbox-docker')
+    const { requireDocker } = await import('./sandbox/providers.ts')
+    await requireDocker()
     const removed = await pruneImages()
     console.log(
       removed

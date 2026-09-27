@@ -58,14 +58,23 @@ export function sweepLabelDetached(label: string, seconds = 15): void {
   child.unref()
 }
 
+/**
+ * Whether the daemon answers, and runs Linux containers. Docker Desktop on Windows can be switched
+ * to Windows containers (GitHub's Windows runners only have those), where no sandbox image runs.
+ */
+export type DockerState = 'running' | 'down' | 'windows-containers'
+
+export async function dockerState(): Promise<DockerState> {
+  const r = await docker(['info', '--format', '{{.ServerVersion}} {{.OSType}}']).catch(() => null)
+  const [version, os] = r?.exitCode === 0 ? r.stdout.toString('utf8').trim().split(/\s+/) : []
+  // Some CLI versions exit 0 without a daemon, printing no server version.
+  if (!version) return 'down'
+  return os === 'windows' ? 'windows-containers' : 'running'
+}
+
+/** Whether Docker is running Linux containers, as every sandbox needs. */
 export async function dockerAvailable(): Promise<boolean> {
-  try {
-    const r = await docker(['info', '--format', '{{.ServerVersion}}'])
-    // Some CLI versions exit 0 without a daemon, printing no server version.
-    return r.exitCode === 0 && r.stdout.toString('utf8').trim() !== ''
-  } catch {
-    return false
-  }
+  return (await dockerState()) === 'running'
 }
 
 /** CPUs and memory of the machine containers run on (the VM, under Docker Desktop). */

@@ -1,7 +1,6 @@
 // `es image build`: every image the planned attempts' Docker sandboxes need, built or listed.
 import {
   type BakedHarness,
-  dockerAvailable,
   dockerfileTag,
   ES_BASE_ARG,
   harnessImageFor,
@@ -25,6 +24,7 @@ import {
   projectPath,
   usesEsBase,
 } from './prepare.ts'
+import { requireDocker } from './providers.ts'
 
 /**
  * One image to make: a Docker sandbox for one harness's CLI. `id` is the sandbox's cell id, plus
@@ -163,9 +163,7 @@ export async function buildImages(
   root: string,
   log: (line: string) => void,
 ): Promise<Array<ImageTarget & { image: AttemptImage }>> {
-  if (!(await dockerAvailable())) {
-    throw new UsageError('Docker is not running. Start Docker and try again.')
-  }
+  await requireDocker()
   for (const { sandbox } of targets) {
     if (sandbox.image && !(await imageInfo(sandbox.image))) {
       throw new UsageError(

@@ -157,7 +157,8 @@ Before any attempt starts, ES builds every image the plan needs that isn't there
 
 | Situation | Message |
 |---|---|
-| Docker isn't running | `Docker is not running. Start Docker and try again.` (exit 2) |
+| Docker isn't running | `Docker is not running. Start Docker and try again.` (exit 2); on Windows, `… Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.` |
+| Docker runs Windows containers | `Docker is running Windows containers, but ES's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again.` (exit 2) |
 | An `image` that isn't there | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` |
 | The config's image fails | The failure, then `The sandbox docker + install is set by es.config.ts for every eval, so nothing ran.` (exit 3) |
 | A non-Debian base | `Building the toolchain layer FROM alpine:3.20 failed: ES needs a Debian or Ubuntu based image (glibc and apt-get)` |
