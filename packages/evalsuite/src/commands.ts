@@ -19,7 +19,7 @@ import {
   resolveRun,
   stackChanges,
 } from './history/views.ts'
-import { relativeFile, sha256 } from './ids.ts'
+import { fromCwd, sha256 } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
 
 export type HistoryFlags = {
@@ -65,7 +65,7 @@ export async function reachability(root: string): Promise<Reachability> {
   return shas ? new Set(shas) : null
 }
 
-const rel = (path: string) => relativeFile(process.cwd(), path) || path
+const rel = (path: string) => fromCwd(path) || path
 
 export function parseLevel(value: string | undefined, fallback: ArtifactLevel): ArtifactLevel {
   if (value === undefined) return fallback

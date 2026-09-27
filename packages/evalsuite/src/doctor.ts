@@ -16,7 +16,7 @@ import {
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
 import { AGENTS, isAgentKind } from './harness/agents.ts'
-import { relativeFile } from './ids.ts'
+import { fromCwd } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
@@ -527,7 +527,7 @@ export async function doctor(
   }
   if (config) {
     loadEnvFiles(configPath)
-    const envFile = relativeFile(process.cwd(), join(config.root, '.env.local')) || '.env.local'
+    const envFile = fromCwd(join(config.root, '.env.local')) || '.env.local'
     const docker = await checkDocker(config, deps)
     checks.push(...docker.checks)
     if (docker.running) {

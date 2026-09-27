@@ -5,7 +5,7 @@
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
-import { relativeFile } from '../ids.ts'
+import { fromCwd } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import type { AnalysisDoc, AnalysisEntry } from '../view/analysis.ts'
 import { NewerSchemaError, readableAnalysis } from '../view/record.ts'
@@ -24,9 +24,7 @@ const parse = (text: string, file: string): AnalysisDoc | null => {
   } catch (error) {
     if (error instanceof NewerSchemaError && !warned.has(file)) {
       warned.add(file)
-      process.stderr.write(
-        `warning: skipped ${relativeFile(process.cwd(), file)}: ${error.reason}\n`,
-      )
+      process.stderr.write(`warning: skipped ${fromCwd(file)}: ${error.reason}\n`)
     }
     return null
   }

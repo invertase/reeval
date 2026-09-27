@@ -1,8 +1,26 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { relative, sep } from 'node:path'
+import { realpathSync } from 'node:fs'
+import { basename, dirname, join, relative, sep } from 'node:path'
 
 export const relativeFile = (root: string, file: string) =>
   relative(root, file).split(sep).join('/')
+
+/**
+ * `path` from the current directory, as ES prints it. The current directory is always spelled
+ * physically (macOS's `/var/…` is `/private/var/…`), so `path` is too, through its nearest part
+ * that exists.
+ */
+export function fromCwd(path: string): string {
+  const real = (p: string): string => {
+    try {
+      return realpathSync(p)
+    } catch {
+      const parent = dirname(p)
+      return parent === p ? p : join(real(parent), basename(p))
+    }
+  }
+  return relativeFile(process.cwd(), real(path))
+}
 
 /** Stable id: the file, the enclosing group names and the eval name. */
 export const evalId = (file: string, path: string[]) => [file, ...path].join(' › ')
