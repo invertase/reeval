@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, relative, sep } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { VERSION as ANTIGRAVITY_VERSION } from '@evalsuite/harness-antigravity'
 import { VERSION as CODEX_VERSION } from '@evalsuite/harness-codex'
 import { VERSION as CURSOR_SDK_VERSION } from '@evalsuite/harness-cursor-sdk'
@@ -10,7 +10,7 @@ import { VERSION as GOOSE_VERSION } from '@evalsuite/harness-goose'
 import { VERSION as OPENCODE_VERSION } from '@evalsuite/harness-opencode'
 import { VERSION as PI_VERSION } from '@evalsuite/harness-pi'
 import { adapterVersion } from '@evalsuite/sandbox-docker'
-import { git } from '../git.ts'
+import { git, repoTop } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
 import type { RunRecord } from './types.ts'
@@ -36,10 +36,9 @@ const LOCKFILES = [
 
 /** Dependency state: lockfiles in the project root and, if different, the repo root. */
 export async function lockfiles(root: string): Promise<Array<{ path: string; sha256: string }>> {
-  const top = await git(root, ['rev-parse', '--show-toplevel'])
   const dirs = [root]
-  const repo = top.code === 0 ? top.stdout.toString('utf8').trim() : null
-  if (repo && repo !== root) dirs.push(repo)
+  const repo = await repoTop(root)
+  if (repo && repo !== resolve(root)) dirs.push(repo)
   const found: Array<{ path: string; sha256: string }> = []
   for (const dir of dirs) {
     for (const name of LOCKFILES) {
@@ -61,9 +60,8 @@ export const WORKTREE_PATCH_LIMIT = 5 * 1024 * 1024
  * never touched. ES's own output (`ignore`, absolute paths) is left out.
  */
 export async function worktreePatch(root: string, ignore: string[]): Promise<Buffer | null> {
-  const topResult = await git(root, ['rev-parse', '--show-toplevel'])
-  if (topResult.code !== 0) return null
-  const top = topResult.stdout.toString('utf8').trim()
+  const top = await repoTop(root)
+  if (!top) return null
   const index = join(tmpdir(), `es-index-${process.pid}-${randomBytes(4).toString('hex')}`)
   const env = { GIT_INDEX_FILE: index }
   const exclude = [

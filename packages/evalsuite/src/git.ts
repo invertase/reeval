@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { run } from '@evalsuite/sandbox-docker/process'
 import { redactSecrets } from './redact.ts'
 
@@ -19,6 +20,15 @@ export async function git(
     binary: true,
   })
   return { code: r.exitCode, stdout: r.stdout, stderr: redactSecrets(r.stderr) }
+}
+
+/**
+ * The repository's top level, spelled from `root`: `--show-toplevel` resolves symlinks and
+ * Windows 8.3 names (`RUNNER~1`), so a path relative to it can climb out of the repository.
+ */
+export async function repoTop(root: string): Promise<string | null> {
+  const r = await git(root, ['rev-parse', '--show-cdup'])
+  return r.code === 0 ? resolve(root, r.stdout.toString('utf8').trim()) : null
 }
 
 export class GitError extends Error {
