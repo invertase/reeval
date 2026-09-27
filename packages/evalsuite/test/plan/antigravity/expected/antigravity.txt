@@ -9,9 +9,9 @@ evals/a.es.ts › antigravity on a toolchain base  cursor:composer-2.5/-/docker:
                                                  antigravity:gemini-3.1-pro-high/-/docker:python:3.12-slim  control  gated  ×1
 excluded: —
 image docker · 1 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:cursor-0.1.0  (ES's image: built when missing or when its base changed)
 image docker · antigravity · 2 evals
-  base  evalsuite-sandbox:antigravity-0.1.0  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:antigravity-0.1.0  (ES's image: built when missing or when its base changed)
 image docker:tools · 1 evals
   dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-<context + ES image id>  (docker build (layer cache), tagged by content hash)
   harness                             evalsuite-dockerfile:tools-<context + ES image id>  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
@@ -22,6 +22,6 @@ image docker:tools · claude-code · 1 evals
   dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-<context + ES image id>  (docker build (layer cache), tagged by content hash)
   harness                             evalsuite-dockerfile:tools-<context + ES image id>  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c)
 image docker:python:3.12-slim · 1 evals
-  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; es image build refreshes a moved tag)
 image docker:python:3.12-slim · antigravity · 1 evals
-  from python:3.12-slim  evalsuite-sandbox:antigravity-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  from python:3.12-slim  evalsuite-sandbox:antigravity-0.1.0-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; es image build refreshes a moved tag)
