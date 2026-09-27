@@ -303,8 +303,8 @@ export function holdFileUntilEvalsSettle(): void {
 }
 
 export function registerGroup(name: string, mode: TestMode, body: () => void): void {
-  if (mode === 'todo') describe.todo(name)
-  else (mode === 'run' ? describe : describe[mode])(name, body)
+  const register = mode === 'run' ? describe : describe[mode]
+  register(name, body)
 }
 
 export const getRunContext = (): RunContext => inject('es:run')

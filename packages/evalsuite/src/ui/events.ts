@@ -20,6 +20,8 @@ export type EvalResult = {
   /** `errors` as Vitest prints them (diff, code frame), with ANSI colour codes. */
   formattedErrors: string[]
   meta: EvalMeta | undefined
+  /** A placeholder (`evaluate.todo` or `group.todo`): no body; it's skipped and shown as todo. */
+  todo?: true
 }
 
 /** What the worker reports while an eval runs. */

@@ -102,8 +102,17 @@ export const group: GroupFn & { skip: GroupFn; only: GroupFn; todo: (name: strin
   Object.assign(defineGroup('run'), {
     skip: defineGroup('skip'),
     only: defineGroup('only'),
-    todo: (name: string) => registerGroup(name, 'todo', () => {}),
+    todo: (name: string) => registerTodo(name),
   })
+
+/**
+ * A placeholder, `evaluate.todo` or `group.todo`: one eval entry that never runs, counted as
+ * skipped and shown as todo. The enclosing groups' tags filter it as they do an eval.
+ */
+function registerTodo(name: string) {
+  const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
+  if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
+}
 
 type EvaluateFn<F = EvalFn> = {
   (name: string, fn: F, options?: EvalOptions): void
@@ -302,10 +311,6 @@ export const evaluate: EvaluateFn & {
 } = Object.assign(defineEval('run'), {
   skip: defineEval('skip'),
   only: defineEval('only'),
-  todo: (name: string) => {
-    const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
-    if (matchesTags(tags, getRunContext().tags))
-      registerTest(name, { mode: 'todo' }, async () => {})
-  },
+  todo: registerTodo,
   for: evalFor,
 })

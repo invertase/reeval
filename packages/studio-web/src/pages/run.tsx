@@ -121,7 +121,9 @@ function TreeRow({
       >
         <OutcomeIcon outcome={node.eval.outcome} />
         <span className="min-w-0 flex-1 truncate">{node.name}</span>
-        {isMatrix(node.eval) ? (
+        {node.eval.todo ? (
+          <span className="shrink-0 text-xs text-muted-foreground">todo</span>
+        ) : isMatrix(node.eval) ? (
           <span className="tabular shrink-0 text-xs text-muted-foreground">
             {node.tally.pass}/{node.tally.pass + node.tally.fail + node.tally.infra}
           </span>
@@ -299,7 +301,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
         </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
           <h2 className="text-lg font-semibold tracking-tight">{entry.name}</h2>
-          <OutcomeBadge outcome={entry.outcome} />
+          <OutcomeBadge outcome={entry.outcome} label={entry.todo ? 'Todo' : undefined} />
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm">

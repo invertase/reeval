@@ -55,12 +55,21 @@ export function OutcomeIcon({
   return <Icon className={cn('size-4 shrink-0', text, className)} aria-label={label} />
 }
 
-export function OutcomeBadge({ outcome, className }: { outcome: Outcome; className?: string }) {
-  const { label, bg, Icon } = OUTCOME[outcome]
+export function OutcomeBadge({
+  outcome,
+  label,
+  className,
+}: {
+  outcome: Outcome
+  /** Shown instead of the outcome's own label, e.g. `Todo` for a placeholder. */
+  label?: string
+  className?: string
+}) {
+  const { bg, Icon } = OUTCOME[outcome]
   return (
     <Badge variant="outline" className={cn(bg, className)}>
       <Icon />
-      {label}
+      {label ?? OUTCOME[outcome].label}
     </Badge>
   )
 }

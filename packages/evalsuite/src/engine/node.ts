@@ -149,6 +149,7 @@ function toEngineEval(root: string, test: TestCase, vitest?: Vitest): EngineEval
     errors: errors.map((e) => capMiddle(cleanMessage(e.message ?? String(e)))),
     formattedErrors: vitest ? errors.map((e) => capMiddle(format(e))) : [],
     meta: test.meta().es,
+    ...(test.options.mode === 'todo' ? { todo: true as const } : {}),
   }
 }
 
