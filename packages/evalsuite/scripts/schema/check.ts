@@ -1,6 +1,8 @@
 // `pnpm schema:check` (CI) and `pnpm schema:update`: holds every shape ES persists and reads back
 // to its committed snapshot in schema/, so a change can't silently stop older files from loading.
+import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -19,6 +21,22 @@ import { validate } from './validate.ts'
 export const snapshotFile = (shape: Pick<PersistedShape, 'name'>, dir = SNAPSHOT_DIR) =>
   join(dir, `${shape.name}.schema.json`)
 export const encode = (doc: ShapeSchema) => `${JSON.stringify(doc, null, 2)}\n`
+
+/** The workspace's Biome, run with Node, so it formats with the repo's own config. */
+export function biome(args: string[]) {
+  const root = join(PACKAGE_DIR, '..', '..')
+  const bin = createRequire(join(root, 'package.json')).resolve('@biomejs/biome/bin/biome')
+  return spawnSync(process.execPath, [bin, ...args], { cwd: root, encoding: 'utf8' })
+}
+
+/** Writes snapshots, then formats them as `pnpm lint` wants them, so `biome ci` passes. */
+export function writeSnapshots(docs: Array<{ file: string; doc: ShapeSchema }>): void {
+  for (const { file, doc } of docs) writeFileSync(file, encode(doc))
+  if (!docs.length) return
+  const r = biome(['format', '--write', ...docs.map((d) => d.file)])
+  if (r.status !== 0)
+    throw new Error(`biome format failed on the snapshots:\n${r.stderr}${r.stdout}`)
+}
 
 export type ShapeReport = {
   shape: PersistedShape
@@ -194,8 +212,13 @@ function main(argv: string[]): number {
     return 1
   }
   mkdirSync(SNAPSHOT_DIR, { recursive: true })
+  writeSnapshots(
+    stale.map((r) => ({
+      file: snapshotFile(r.shape),
+      doc: current.get(r.shape.name) as ShapeSchema,
+    })),
+  )
   for (const r of stale) {
-    writeFileSync(snapshotFile(r.shape), encode(current.get(r.shape.name) as ShapeSchema))
     process.stdout.write(`updated ${relative(PACKAGE_DIR, snapshotFile(r.shape))}\n`)
   }
   return 0
