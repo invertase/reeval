@@ -175,3 +175,7 @@ can load the ES skill in [`.agents/skills/es/SKILL.md`](./.agents/skills/es/SKIL
 
 Licensed under the [Apache License, Version 2.0](./LICENSE). Copyright 2026 Invertase Limited.
 Questions about licensing: [oss@invertase.io](mailto:oss@invertase.io).
+
+The published package inlines some third-party code (the studio app's React, Radix UI and
+shadcn/ui components, and Claude Code's patched adapter). Its `THIRD_PARTY_NOTICES.md`, generated
+at build time, lists each of those packages with its version, licence and notices.

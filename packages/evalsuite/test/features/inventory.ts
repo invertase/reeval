@@ -79,6 +79,17 @@ export const inventory: InventoryFeature[] = [
     tests: [engine('.env.local wins over .env, the shell wins over both, and evals see them')],
   },
   {
+    id: 'config.discovery',
+    area: 'Config and selection',
+    name: 'Finding the nearest `es.config.*` upward from the current directory; `--config` wins',
+    fixtures: ['config/found-from-subdirectory'],
+    tests: [
+      unit('findConfig takes the nearest config at or above the directory'),
+      'evalsuite/test/history.test.ts › every command run from a nested subdirectory finds the project config',
+      "evalsuite/test/history.test.ts › a nested project's own config wins over the parent's",
+    ],
+  },
+  {
     id: 'matrix.harness-runs',
     area: 'Config and selection',
     name: '`harness` lists × `runs`, and `--runs`',
@@ -203,7 +214,7 @@ export const inventory: InventoryFeature[] = [
     id: 'selection.filters',
     area: 'Config and selection',
     name: 'Filters (path, eval name, cell key; the kinds narrow each other); no match exits 2',
-    plan: ['compare/mixed-filter'],
+    plan: ['compare/mixed-filter', 'selection/group-and-eval-filter'],
     tests: [
       engine('filters match paths, then eval names'),
       engine('a path filter and a cell filter together run only that cell of that file'),

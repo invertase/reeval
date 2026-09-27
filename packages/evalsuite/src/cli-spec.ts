@@ -102,14 +102,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
 
 const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
-/** `parseArgs` options for every flag; the config path defaults to `es.config.ts`. */
-export const parseOptions = () =>
-  Object.fromEntries(
-    Object.entries(FLAGS).map(([name, spec]) => [
-      name,
-      name === 'config' ? { ...spec, default: 'es.config.ts' } : spec,
-    ]),
-  ) as { [K in FlagName]: (typeof FLAGS)[K] & (K extends 'config' ? { default: string } : unknown) }
+/** `parseArgs` options for every flag; without `--config`, `es` finds the nearest config. */
+export const parseOptions = () => FLAGS
 
 /** Splits a command line on whitespace, honouring single and double quotes. */
 export function shellWords(line: string): string[] | null {

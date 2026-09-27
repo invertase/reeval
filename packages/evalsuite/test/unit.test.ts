@@ -6,8 +6,10 @@ import { test } from 'node:test'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { AttemptSpec } from '../src/attempt/state.ts'
 import {
+  CONFIG_FILES,
   defaultConcurrency,
   evalRoot,
+  findConfig,
   missingCredentials,
   parseDuration,
   resolveConcurrency,
@@ -380,6 +382,34 @@ test('huge single outputs keep their head and tail, with a marker and hash', () 
   assert.ok(capped.endsWith('z'.repeat(1000)))
   assert.match(capped, /\[es: truncated \d+ of 220000 characters, sha256 [0-9a-f]{64}\]/)
   assert.equal(capText('small'), 'small')
+})
+
+test('findConfig takes the nearest config at or above the directory, like Vitest and ESLint', () => {
+  const root = mkdtempSync(join(tmpdir(), 'es-find-config-'))
+  try {
+    const deep = join(root, 'app', 'src', 'lib')
+    mkdirSync(deep, { recursive: true })
+    assert.equal(findConfig(deep), undefined, 'no config up to the filesystem root')
+    writeFileSync(join(root, 'es.config.mjs'), '')
+    assert.equal(findConfig(deep), join(root, 'es.config.mjs'), 'any supported extension')
+    writeFileSync(join(root, 'es.config.ts'), '')
+    assert.equal(findConfig(deep), join(root, 'es.config.ts'), '.ts first in one directory')
+    writeFileSync(join(root, 'app', 'es.config.cjs'), '')
+    assert.equal(findConfig(deep), join(root, 'app', 'es.config.cjs'), 'the nearest wins')
+    assert.equal(findConfig(root), join(root, 'es.config.ts'), 'never looks below')
+    writeFileSync(join(root, 'app', 'es.claude.config.ts'), '')
+    assert.equal(findConfig(join(root, 'app')), join(root, 'app', 'es.config.cjs'))
+    assert.deepEqual(CONFIG_FILES, [
+      'es.config.ts',
+      'es.config.mts',
+      'es.config.cts',
+      'es.config.js',
+      'es.config.mjs',
+      'es.config.cjs',
+    ])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })
 
 test('the history folder sits in the directory the evals live in', () => {

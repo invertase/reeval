@@ -2,11 +2,13 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { join, relative, resolve } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { inspect, parseArgs } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseOptions } from './cli-spec.ts'
 import {
+  configLabel,
+  configPathFor,
   hostCapacity,
   loadConfig,
   malformedCredentials,
@@ -102,7 +104,8 @@ Usage:
     --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
     --no-token              Skip the session token (for scripts; anyone local can then read it)
   es studio build           Write the studio as a static site for Pages, Netlify or any host
-    --out <dir>             Output folder (default studio-dist); --scratch adds unrecorded runs
+    --out <dir>             Output folder (default studio-dist beside the config); --scratch
+                            adds unrecorded runs
     --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs
   es image build [filter...]
                             Build every image the evals' Docker sandboxes need, per harness: ES's
@@ -112,7 +115,8 @@ Usage:
   es --help
 
 Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
-Options: --config <path> (default ./es.config.ts)
+Options: --config <path> (default: the nearest es.config.ts, or .mts, .cts, .js, .mjs or .cjs,
+in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
 143 terminated (SIGTERM)
 `
@@ -139,21 +143,22 @@ async function run(argv: string[]): Promise<number> {
     console.log(HELP)
     return values.help ? EXIT.ok : EXIT.usage
   }
+  const configPath = configPathFor(values.config)
   if (command === 'image') {
     if (filters[0] !== 'build') {
       throw new UsageError(
         `Unknown command "image ${filters[0] ?? ''}". Did you mean es image build?`,
       )
     }
-    return imageBuildCommand(values, filters.slice(1))
+    return imageBuildCommand(values, configPath, filters.slice(1))
   }
   if (command === 'studio') {
-    const config = await loadConfig(values.config, 'studio')
+    const config = await loadConfig(configPath, 'studio')
     const { studioCommand } = await import('./studio/command.ts')
     return studioCommand({ config, flags: values, version, build: filters[0] === 'build' })
   }
   if (command in HISTORY_COMMANDS) {
-    const config = await loadConfig(values.config, command)
+    const config = await loadConfig(configPath, command)
     const commands = await import('./commands.ts')
     const ctx = { config, flags: values, out: (s: string) => console.log(s) }
     switch (command as keyof typeof HISTORY_COMMANDS) {
@@ -172,20 +177,20 @@ async function run(argv: string[]): Promise<number> {
         return queryCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
       case 'analyze': {
-        loadEnvFiles(values.config)
+        loadEnvFiles(configPath)
         const { analyzeCommand } = await import('./analysis/command.ts')
         return analyzeCommand({ ...ctx, err: (s: string) => console.error(dim(s)) }, filters)
       }
     }
   }
-  if (command === 'clean') return cleanCommand(values)
+  if (command === 'clean') return cleanCommand(values, configPath)
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
-  return runCommand(values, filters)
+  return runCommand(values, configPath, filters)
 }
 
 /** `es clean`: removes local debug data, all of it or all but the newest `--keep` runs. */
-async function cleanCommand(flags: Flags): Promise<number> {
-  const config = await loadConfig(flags.config, 'clean')
+async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
+  const config = await loadConfig(configPath, 'clean')
   let keep = 0
   if (flags.keep !== undefined) {
     keep = Number(flags.keep)
@@ -217,7 +222,11 @@ type Flags = ReturnType<typeof parse>['values']
  * `es image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
  * sandboxes need; with `--dry-run`, lists them instead. Without a config, just ES's image.
  */
-async function imageBuildCommand(flags: Flags, filters: string[]): Promise<number> {
+async function imageBuildCommand(
+  flags: Flags,
+  configPath: string | undefined,
+  filters: string[],
+): Promise<number> {
   const { buildImages, imagePlanLines, imageTargets } = await import('./sandbox/images.ts')
   const { docker } = await import('./sandbox.ts')
   let root = process.cwd()
@@ -226,8 +235,8 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
   let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
     { id: '', harness: fakeHarness(), sandbox: docker() },
   ]
-  if (existsSync(resolve(flags.config))) {
-    const setup = await prepareRun({ ...flags, 'dry-run': true })
+  if (configPath) {
+    const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
     const ctx = await startRun(setup)
     const { runId, stagingDir, config, runs, tags, concurrency, profile } = ctx
     root = config.root
@@ -267,8 +276,12 @@ async function imageBuildCommand(flags: Flags, filters: string[]): Promise<numbe
 }
 
 /** `es run`: check, plan, run the engine, then write the run and pick the exit code. */
-async function runCommand(flags: Flags, filters: string[]): Promise<number> {
-  const setup = await prepareRun(flags)
+async function runCommand(
+  flags: Flags,
+  configPath: string | undefined,
+  filters: string[],
+): Promise<number> {
+  const setup = await prepareRun(flags, configPath)
   const ctx = await startRun(setup)
   const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
@@ -357,7 +370,7 @@ async function runCommand(flags: Flags, filters: string[]): Promise<number> {
 }
 
 /** Everything that can fail before the evals are collected: output mode, config, profile, flags. */
-async function prepareRun(flags: Flags) {
+async function prepareRun(flags: Flags, configPath: string | undefined) {
   const output = resolveOutput({
     flags: {
       ui: flags.ui,
@@ -374,9 +387,9 @@ async function prepareRun(flags: Flags) {
       'es run --json only prints the plan: add --dry-run. A run writes its record to .es/runs; read it with es show --json.',
     )
   }
-  loadEnvFiles(flags.config)
+  loadEnvFiles(configPath)
   const named = flags.profile ?? (process.env.ES_PROFILE || undefined)
-  const config = await loadConfig(flags.config, 'run', named)
+  const config = await loadConfig(configPath, 'run', named)
   const profile = selectProfile(config, flags.profile)
   let runs: number | undefined
   if (flags.runs !== undefined) {
@@ -408,7 +421,9 @@ async function prepareRun(flags: Flags) {
     json: !!flags.json,
     force: !!flags.force,
     verbosity: verbosityOf(flags),
-    configFile: relative(config.root, resolve(flags.config)) || flags.config,
+    configFile: configPath && configLabel(configPath),
+    /** Named in the plan line when the project root isn't the current directory. */
+    configElsewhere: !!configPath && dirname(configPath) !== process.cwd(),
   }
 }
 
@@ -540,7 +555,7 @@ async function executeRun(
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }
-    const lines = [planLine(plan)]
+    const lines = [planLine(plan, setup.configElsewhere ? configFile : undefined)]
     if (setup.dryRun) {
       const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
       lines.push(...planTable(plan, todos))

@@ -12,8 +12,8 @@ import type { AttemptSpec } from './state.ts'
 
 /** Which config and profile the attempt runs under, and where each resolved option came from. */
 export function tracePlan(debug: AttemptDebug, spec: AttemptSpec, ctx: RunContext): void {
-  const config = ctx.configFile ?? 'es.config.ts'
-  const from = (key: string, fallback = `${config} or its default`) =>
+  const config = ctx.configFile ?? 'none (no config file found)'
+  const from = (key: string, fallback = ctx.configFile ? `${config} or its default` : 'default') =>
     `(${spec.sources[key] ?? fallback})`
   const profile = ctx.profile ? `profile ${ctx.profile.name} (${ctx.profile.reason})` : 'no profile'
   debug.log(

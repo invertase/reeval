@@ -1239,6 +1239,30 @@ describe('Antigravity transcripts', () => {
   })
 })
 
+describe('a failed tool call keeps its error', () => {
+  const failed = (error: unknown) =>
+    normaliseStream(
+      [
+        { ms: 10, part: { type: 'tool-call', toolCallId: 'w', toolName: 'write', input: {} } },
+        { ms: 20, part: { type: 'tool-error', toolCallId: 'w', error } },
+      ],
+      0,
+    ).flatMap((e) => (e.type === 'tool' ? [[e.output, e.ok]] : []))
+
+  test("OpenCode's ACP rawOutput, `{ error }`", () => {
+    // A write outside the workspace, as the unprivileged sandbox user (a real contract turn).
+    assert.deepEqual(failed({ error: 'PermissionDenied: FileSystem.writeFile (/codeword.txt)' }), [
+      ['PermissionDenied: FileSystem.writeFile (/codeword.txt)', false],
+    ])
+  })
+
+  test('an Error, a string, and a shape with no message, as JSON', () => {
+    assert.deepEqual(failed(new Error('boom')), [['boom', false]])
+    assert.deepEqual(failed('stat: no such file'), [['stat: no such file', false]])
+    assert.deepEqual(failed({ code: 13 }), [['{"code":13}', false]])
+  })
+})
+
 /**
  * A harness that emits `parts` for every turn, through a real HarnessAgent, as ES drives it.
  * `stream` is the agent's `fullStream`, stamped as ES stamps it for `normaliseStream`.

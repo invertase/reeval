@@ -539,3 +539,102 @@ evaluate('uses none', async (t) => { await t.send('x') })
     assert.equal(run.runner.kind === 'local' || run.runner.pr !== undefined, true)
   })
 })
+
+describe('config discovery', () => {
+  const passing = (name: string) => `import { evaluate } from 'evalsuite'
+evaluate('${name}', async () => {})
+`
+  const wrongConfig = (name: string) => `import { evaluate, expect } from 'evalsuite'
+evaluate('${name}', async () => expect('this config').toBe('never run'))
+`
+
+  test('every command run from a nested subdirectory finds the project config and acts from its directory', async () => {
+    const p = await gitProject('found-upward', {
+      'es.config.ts': fakeConfig({
+        harness: `{ id: process.env.ES_T_WHERE ?? 'unset', files: { 'hello.txt': 'hi\\n' }, text: 'Wrote it' }`,
+      }),
+      'evals/agent.es.ts': agent(),
+      // Decoys a run that resolved from the current directory would pick up.
+      'src/deep/nested/evals/decoy.es.ts': wrongConfig('decoy'),
+      'src/deep/nested/marker.txt': 'here\n',
+    })
+    await writeFile(join(p.dir, '.env.local'), 'ES_T_WHERE=root\n')
+    await writeFile(join(p.dir, 'src/deep/nested/.env.local'), 'ES_T_WHERE=cwd\n')
+    const sub = join(p.dir, 'src/deep/nested')
+    const config = '../../../es.config.ts'
+    const ok = async (args: string[]) => {
+      const r = await runCli(sub, args)
+      assert.equal(r.code, 0, `es ${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      return r
+    }
+
+    const plan = await ok(['run', '--dry-run'])
+    assert.match(plan.stdout, /^plan {2}config \.\.\/\.\.\/\.\.\/es\.config\.ts · 1 eval · /m)
+    assert.doesNotMatch(plan.stdout, /decoy/)
+
+    const run = await ok(['run', '-v'])
+    assert.match(run.stdout, /plan +config \.\.\/\.\.\/\.\.\/es\.config\.ts · no profile · /)
+    const first = readRun(p.dir).run
+    assert.deepEqual(
+      first.evals.flatMap((e) => e.attempts.map((a) => `${e.id} ${a.id}`)),
+      ['evals/agent.es.ts › agent root/-/fake#1'],
+      "the config's .env.local, not the current directory's",
+    )
+
+    assert.match((await ok(['record'])).stdout, /^recorded \.\.\/\.\.\/\.\.\/evals\/\.history\//)
+    assert.deepEqual(recordedRuns(p.dir), [first.runId])
+    await ok(['run', '--record'])
+    assert.equal(recordedRuns(p.dir).length, 2)
+    const history = JSON.parse((await ok(['history', '--json'])).stdout)
+    assert.deepEqual(
+      history.rows.map((r: { id: string }) => r.id),
+      ['evals/agent.es.ts › agent'],
+    )
+    assert.equal(JSON.parse((await ok(['show', 'latest', '--json'])).stdout).kind, 'es-run')
+    assert.match((await ok(['compare'])).stdout, /same/i)
+    assert.deepEqual(JSON.parse((await ok(['query', 'failing_attempts', '--json'])).stdout), [])
+    assert.ok(existsSync(join(p.dir, '.es/history.db')))
+    await ok(['analyze', '--context'])
+    assert.match((await ok(['studio', 'build'])).stdout, /built \.\.\/\.\.\/\.\.\/studio-dist\//)
+    assert.match(
+      (await ok(['image', 'build', '--dry-run'])).stdout,
+      /No eval runs in a Docker sandbox/,
+      "the config's fake sandbox, not the default docker()",
+    )
+    assert.match((await ok(['clean'])).stdout, / from \.\.\/\.\.\/\.\.\/\.es\/debug$/m)
+
+    assert.deepEqual(readdirSync(sub).sort(), ['.env.local', 'evals', 'marker.txt'])
+    assert.equal((await ok(['run', '--dry-run', '--config', config])).code, 0)
+  })
+
+  test("a nested project's own config wins over the parent's, and --config wins over both", async () => {
+    const p = await project('nearest-wins', {
+      'es.config.ts': fakeConfig(),
+      'evals/parent.es.ts': wrongConfig('parent'),
+      'packages/app/es.config.mjs': fakeConfig(),
+      'packages/app/evals/app.es.ts': passing('app'),
+      'packages/app/src/lib/index.ts': '',
+    })
+    const app = join(p.dir, 'packages/app')
+    const lib = join(app, 'src/lib')
+
+    const nested = await runCli(lib)
+    assert.equal(nested.code, 0, nested.stdout + nested.stderr)
+    assert.deepEqual(
+      readRun(app).run.evals.map((e) => e.id),
+      ['evals/app.es.ts › app'],
+    )
+    assert.equal(existsSync(join(p.dir, '.es')), false, "nothing under the parent's config")
+
+    // Twin: the parent's config, found from its own tree or named with --config, runs its eval.
+    const parent = await runCli(join(p.dir, 'evals'))
+    assert.equal(parent.code, 1, parent.stdout + parent.stderr)
+    assert.match(parent.stdout, /✗ evals\/parent\.es\.ts › parent/)
+    const named = await runCli(lib, ['run', '--config', '../../../../es.config.ts'])
+    assert.equal(named.code, 1, named.stdout + named.stderr)
+    assert.deepEqual(
+      readRun(p.dir).run.evals.map((e) => e.id),
+      ['evals/parent.es.ts › parent'],
+    )
+  })
+})

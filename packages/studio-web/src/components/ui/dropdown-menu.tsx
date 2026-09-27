@@ -1,3 +1,4 @@
+// Modified from shadcn/ui (https://ui.shadcn.com), MIT License, Copyright (c) 2023 shadcn.
 import { CheckIcon, ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import type * as React from 'react'
