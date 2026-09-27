@@ -223,16 +223,28 @@ have fixtures on which tier is a separate, generated matrix:
 ### CI and releases
 
 GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with Node from
-`engines`:
+`engines`, plus Windows and macOS legs (below):
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `lint` (`biome ci`), `typecheck`, `engine coverage` (100% of the engine's files), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
+| `ci.yml` | `lint` (`biome ci`), `typecheck`, `engine coverage` (100% of the engine's files), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`), `coverage` (below), `windows (unit 1/4 … 4/4, tiers, packed)` with the `windows` check over them, and `macos` |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
+- **Windows and macOS** run `scripts/ci-os.sh`: the unit and plan files (in four shards on
+  Windows), then `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
+  its browser test, the other packages) and `packed` (the pack test, then `es init` → `es run` →
+  `es doctor` → `es studio build` in a fresh project from the tarball, and `es doctor`'s Docker
+  fix). There's no Docker tier there: GitHub's Windows runners have Windows containers only (ES's
+  sandboxes are Linux containers) and its macOS runners have no Docker. Tests that need POSIX
+  signals skip on Windows with a reason (`noSignals` in `test/helpers.ts`). Anything ES writes
+  or prints uses posix paths (`relativeFile`), and host commands go through
+  `@evalsuite/sandbox-docker/process`'s `run`, which runs `.cmd` tools on Windows without a shell.
+  `.gitattributes` checks everything out LF, and pnpm runs scripts in its shell emulator, so
+  `VAR=x cmd` and quotes work on Windows too. On Windows, `git config --system core.longpaths true`
+  before cloning: recorded runs' paths pass 260 characters.
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
   versions and the build context.

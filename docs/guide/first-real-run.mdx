@@ -7,6 +7,10 @@ The quickstart ran against a fake agent. Here you run the same kind of eval on a
 
 **Before you begin:** Node {{ node }} or later, a running Docker, a Cursor API key and a key for your judge.
 
+<Info>
+  ES's sandboxes are Linux containers. On Windows, use Docker Desktop on the WSL 2 backend, running Linux containers (not Windows containers). `es doctor` checks both and names the fix.
+</Info>
+
 ## Point the config at Cursor
 
 ```ts title="es.config.ts"
