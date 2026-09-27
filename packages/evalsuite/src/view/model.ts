@@ -114,6 +114,18 @@ export function formatDuration(ms: number | null | undefined): string {
 export const formatPercent = (rate: number | null) =>
   rate === null ? '–' : `${Math.round(rate * 100)}%`
 
+/**
+ * A harness of the run's stack as `cursor (model composer-2.5, served composer-2.5[fast=true])`:
+ * the configured model, then the variant the harness says it resolved.
+ */
+export function harnessLabel(h: RunRecord['stack']['harnesses'][number]): string {
+  const parts = [
+    ...(h.model ? [`model ${h.model}`] : []),
+    ...(h.resolvedModels.length ? [`served ${h.resolvedModels.join(', ')}`] : []),
+  ]
+  return parts.length ? `${h.id} (${parts.join(', ')})` : h.id
+}
+
 /** Harness-reported tokens as `127k in (98k cached) · 776 out`; null when none were reported. */
 export function formatUsage(usage: TokenUsage | null | undefined): string | null {
   if (!usage) return null

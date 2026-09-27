@@ -220,6 +220,8 @@ export const behaviours: Behaviour[] = [
           const reported = t.model ?? null
           if (row.servedModel) assert.match(reported ?? '', row.servedModel, `${a.key}: turn model`)
           else assert.equal(reported, null, `${row.id} reports no model`)
+          const stack = ran.run.stack.harnesses.find((h) => h.id === cellOf(row))
+          if (reported) assert.ok(stack?.resolvedModels.includes(reported), `stack: ${reported}`)
         }
         const wire = row.wireModel
         if (!wire) assert.equal(a.servedModels, null, `${row.id}'s requests don't name a model`)

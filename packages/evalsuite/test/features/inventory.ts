@@ -767,6 +767,13 @@ export const inventory: InventoryFeature[] = [
     tests: ['evalsuite/test/harness.test.ts › its brokered requests name the served model'],
     real: ['contract › served model recorded'],
   },
+  {
+    id: 'record.resolved-variant',
+    area: 'Harnesses',
+    name: "The model variant a harness resolved (`composer-2.5[fast=true]`), in the stack's `resolvedModels`, `-v`, `summary.md` and the studio",
+    tests: [engine('the resolved model variant is in the record, the stack, -v and summary.md')],
+    real: ['contract › served model recorded'],
+  },
 
   // Judges and matchers
   {

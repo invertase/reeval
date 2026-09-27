@@ -23,7 +23,7 @@ With no `harness` in the config, ES uses `cursor({ model: 'composer-2.5' })`.
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalog, which ES sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`.
+  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalog, which ES sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`. Cursor can change that default, so pin every parameter for reproducible evals.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -80,7 +80,7 @@ A request carrying the placeholder anywhere else gets a 403, and the attempt pri
 
 ## Tokens and transcripts
 
-Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=true]`). The run's summary totals them:
+Each turn records its token `usage` and the model that served it, with its parameters (`composer-2.5[fast=true]`). The stack's `resolvedModels`, `summary.md`'s Harnesses row, `-v`'s turn line and the studio show the same resolved variant. The run's summary totals the tokens:
 
 ```text
    Evals  1 passed (1)

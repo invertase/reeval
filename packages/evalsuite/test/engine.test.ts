@@ -891,6 +891,38 @@ evaluate('huge diff', async (t) => {
     assert.match(agent.stdout, new RegExp(`\\n {2}turn 1 error: ${billing}\\n`))
   })
 
+  test('the resolved model variant is in the record, the stack, -v and summary.md', async () => {
+    const served = 'composer-2.5[fast=true]'
+    const p = await project('served-model', {
+      'es.config.ts': fakeConfig({ harness: `{ servedModel: '${served}' }` }),
+      'evals/agent.es.ts': agentEval(''),
+    })
+    const r = await runCli(p.dir, ['run', '-v'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      / harness {3}turn 1 completed in \S+ · .* · model composer-2\.5\[fast=true\]$/m,
+    )
+    const { run, read } = readRun(p.dir)
+    assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.model, served)
+    assert.deepEqual(run.stack.harnesses, [
+      { id: 'fake', kind: 'fake', model: null, resolvedModels: [served] },
+    ])
+    assert.match(
+      read('summary.md'),
+      /\| Harnesses \| fake \(served composer-2\.5\[fast=true\]\) \|/,
+    )
+
+    // Canary: a harness that reports no model shows none.
+    await writeFile(join(p.dir, 'es.config.ts'), fakeConfig())
+    const quiet = await runCli(p.dir, ['run', '-v'])
+    assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
+    assert.doesNotMatch(quiet.stdout, / · model /)
+    const again = readRun(p.dir)
+    assert.deepEqual(again.run.stack.harnesses[0]?.resolvedModels, [])
+    assert.match(again.read('summary.md'), /\| Harnesses \| fake \|/)
+  })
+
   test('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown', async () => {
     const p = await project('unawaited', {
       'es.config.ts': fakeConfig(),

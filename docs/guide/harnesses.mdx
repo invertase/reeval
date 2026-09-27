@@ -130,7 +130,9 @@ A harness's id defaults to `<kind>:<model>`. It names the cell (`cursor:composer
 es: evals/guide-matrix.es.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
 ```
 
-`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalog lists (`fast=true` for `composer-2.5`), so set any that change the price. Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit.harness` lists ids too.
+`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalog lists (`fast=true` for `composer-2.5`), and ES records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
+
+Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit.harness` lists ids too.
 
 ## Compare on some harnesses
 
