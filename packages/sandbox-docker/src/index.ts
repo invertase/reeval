@@ -28,6 +28,7 @@ export {
   installLayerTag,
   installScript,
   pruneImages,
+  resolveFrom,
   usesEsBase,
 } from './build-image.ts'
 export {

@@ -98,28 +98,30 @@ There's one line per place that set the sandbox: the config file, a profile's `d
 
 ## Images and caching
 
-Each harness has its own sandbox image. `es image build` builds the images the config's evals need; `es image build --dry-run` lists them:
+Each harness has its own sandbox image. `es image build` builds the images the config's evals need that are missing or stale; `es image build --dry-run` lists them and how each step stands (`✓` ready, `+` to build, `~` stale, `✗` missing), building and pulling nothing:
 
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  ✓ base  evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
 docker + install · 1 eval
-  base               evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
-  install 1 command  evalsuite-install:<base id + commands>  (build unless cached)
+  ✓ base               evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + install 1 command  evalsuite-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  + from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
 docker:sqlite · 1 eval
-  dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-9630558fd3724574  (docker build (layer cache), tagged by content hash)
-  harness                              evalsuite-dockerfile:sqlite-9630558fd3724574  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
+  + dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-<context + ES image id>  (to build: not built yet (evalsuite-dockerfile:sqlite-6030a60be3d263ca))
+  ✓ harness                              evalsuite-dockerfile:sqlite-<context + ES image id>  (ready: evalsuite-sandbox:cursor-0.1.0 built (e04d443bc8e2))
 ```
 
 | Image | Tag | Rebuilt when |
 |---|---|---|
-| ES's sandbox image | `evalsuite-sandbox:<harness>-<adapter version>` | `es image build` (its toolchain layer is `evalsuite-sandbox-base:latest`) |
-| `from` | `evalsuite-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, then cached |
+| ES's sandbox image | `evalsuite-sandbox:<harness>-<adapter version>` | Missing, or ES's base build context changed (its `dev.evalsuite.context` label); its toolchain layer is `evalsuite-sandbox-base:latest` |
+| `from` | `evalsuite-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, on the digest the tag names then (its `dev.evalsuite.from-digest` label, and `image.from.digest` in the record); `es image build` rebuilds it when the tag has moved upstream |
 | `install` | `evalsuite-install:<hash of base id and commands>` | The base image's id or a command changes |
 | `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${ES_BASE}`, ES's image is rebuilt (the hash has its id) |
+
+`es image build --force` rebuilds every image and pulls each base again. A `from` pinned to a digest (`node:22@sha256:…`) never moves.
 
 A rebuild removes the image its tag pointed at before, unless a container or another tag still uses it, and a `from` build drops its intermediate `…-base` tag once the harness is committed, so rebuilds leave no dangling images behind.
 

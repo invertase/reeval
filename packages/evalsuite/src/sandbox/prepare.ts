@@ -15,6 +15,7 @@ import {
   imageInfo,
   installLayerTag,
   LABEL,
+  resolveFrom,
   usesEsBase,
 } from '@evalsuite/sandbox-docker'
 import { parseDuration } from '../config.ts'
@@ -52,9 +53,14 @@ export type Builds = {
   /** A step that may hit the network, retried on a transient failure. */
   retry: <T>(step: () => Promise<T>) => Promise<T>
   log: (line: string) => void
-  /** `es image build`: rebuild `from` and Dockerfile images even when they exist. */
-  force: boolean
+  /**
+   * `none` (`es run`): use what's built. `check` (`es image build`): also rebuild a `from` image
+   * whose tag moved upstream. `force` (`es image build --force`): rebuild and pull everything.
+   */
+  refresh: Refresh
 }
+
+export type Refresh = 'none' | 'check' | 'force'
 
 export function createBuilds(options: Partial<Omit<Builds, 'once'>> = {}): Builds {
   const builds = new Map<string, Promise<ImageInfo>>()
@@ -69,7 +75,7 @@ export function createBuilds(options: Partial<Omit<Builds, 'once'>> = {}): Build
     },
     retry: options.retry ?? ((step) => step()),
     log: options.log ?? (() => {}),
-    force: options.force ?? false,
+    refresh: options.refresh ?? 'none',
   }
 }
 
@@ -97,10 +103,12 @@ export const esImage = (harness: BakedHarness, root: string, signal: AbortSignal
   const ref = imageFor(harness)
   return b.once(ref, async () => {
     const info = await imageInfo(ref)
-    if (info && info.labels[LABEL.context] === contextHash()) return info
-    b.log(info ? `Rebuilding ${ref}: ES's base image changed` : `Building ${ref}`)
+    const current = info?.labels[LABEL.context] === contextHash()
+    if (info && current && b.refresh !== 'force') return info
+    b.log(info && !current ? `Rebuilding ${ref}: ES's base image changed` : `Building ${ref}`)
     const output = buildLogger(root, ref)
-    await b.retry(() => buildImage(b.log, { harness, signal, output }))
+    const pull = b.refresh === 'force'
+    await b.retry(() => buildImage(b.log, { harness, signal, output, pull }))
     return built(ref)
   })
 }
@@ -120,10 +128,18 @@ async function harnessBase(
   const bake = (from: string) => {
     const ref = harnessImageFor(harness, from)
     return b.once(ref, async () => {
-      const cached = b.force ? null : await imageInfo(ref)
-      if (cached) return cached
+      const cached = b.refresh === 'force' ? null : await imageInfo(ref)
+      if (cached && b.refresh === 'check') {
+        // `es image build` refreshes a tag that moved upstream; a pinned digest never moves.
+        const now = await resolveFrom(from, signal)
+        const was = cached.labels[LABEL.fromDigest]
+        if ('digest' in now && was && now.digest !== was) {
+          b.log(`Rebuilding ${ref}: ${from} moved upstream`)
+        } else return cached
+      } else if (cached) return cached
       const output = buildLogger(root, ref)
-      await b.retry(() => buildImage(b.log, { harness, from, signal, output }))
+      const pull = b.refresh === 'force'
+      await b.retry(() => buildImage(b.log, { harness, from, signal, output, pull }))
       return built(ref)
     })
   }
@@ -155,7 +171,7 @@ async function harnessBase(
     const { tag, sha256 } = dockerfileTag(path, harness, esBase)
     const dockerfile = { path: projectPath(root, path), sha256 }
     const info = await b.once(tag, async () => {
-      const cached = b.force ? null : await imageInfo(tag)
+      const cached = b.refresh === 'force' ? null : await imageInfo(tag)
       if (cached) return cached
       b.log(`Building ${dockerfile.path} as ${tag}`)
       const output = buildLogger(root, tag)
@@ -167,6 +183,7 @@ async function harnessBase(
           signal,
           output,
           force: true,
+          pull: b.refresh === 'force',
         }),
       )
       return built(tag)
@@ -198,7 +215,14 @@ export async function prepareImage(
   const agentCli = base.info.labels[LABEL.agentVersion] ?? null
   const steps = installSteps(sandbox)
   const install = (sandbox.install ?? []).map(stepCommand)
-  const image = { agentCli, base: base.ref, install, dockerfile: base.dockerfile }
+  const digest = sandbox.from ? (base.info.labels[LABEL.fromDigest] ?? null) : null
+  const image = {
+    agentCli,
+    base: base.ref,
+    install,
+    dockerfile: base.dockerfile,
+    ...(sandbox.from ? { from: { ref: sandbox.from, digest } } : {}),
+  }
   if (steps.length === 0) return { ref: base.ref, id: base.info.id, ...image }
 
   const parent = { ref: base.ref, id: base.info.id }

@@ -8,6 +8,7 @@ import {
 } from '@evalsuite/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import type { DockerSandboxDescriptor, FakeSandboxDescriptor, HarnessDescriptor } from '../types.ts'
+import type { Refresh } from './prepare.ts'
 import { PrepareError, type PrepareFailure, type SandboxProvider } from './provider.ts'
 
 /** The key of a Docker sandbox's image: what's in it, not the limits or user it runs with. */
@@ -62,7 +63,7 @@ export async function requireDocker(): Promise<void> {
 
 /** Docker: one image per key, each sub-image built once per provider (so once per run). */
 export function dockerProvider(
-  options: { force?: boolean } = {},
+  options: { refresh?: Refresh } = {},
 ): SandboxProvider<DockerSandboxDescriptor> {
   let builds: import('./prepare.ts').Builds | undefined
   return {
@@ -83,7 +84,11 @@ export function dockerProvider(
     key: dockerKey,
     async prepare(sandbox, harness, ctx) {
       const { createBuilds, imageHarness, prepareImage } = await import('./prepare.ts')
-      builds ??= createBuilds({ retry: ctx.retry, log: ctx.log, force: !!options.force })
+      builds ??= createBuilds({
+        retry: ctx.retry,
+        log: ctx.log,
+        refresh: options.refresh ?? 'none',
+      })
       return await prepareImage(sandbox, imageHarness(harness), ctx.root, ctx.signal, builds)
     },
     classify: classifyDocker,
@@ -107,7 +112,7 @@ export const fakeProvider = (): SandboxProvider<FakeSandboxDescriptor> => ({
 })
 
 /** A fresh set of providers, one per run: each keeps the run's builds. */
-export const createProviders = (options: { force?: boolean } = {}) =>
+export const createProviders = (options: { refresh?: Refresh } = {}) =>
   ({ docker: dockerProvider(options), fake: fakeProvider() }) as unknown as Record<
     string,
     SandboxProvider

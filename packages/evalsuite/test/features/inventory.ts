@@ -612,6 +612,18 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'image.from-digest',
+    area: 'Sandbox',
+    name: '`from` digests: recorded, kept by `es run`, flagged by `--dry-run` and rebuilt by `es image build` when the tag moves',
+    tests: [docker('a from tag that moves upstream')],
+  },
+  {
+    id: 'run.dry-run-images',
+    area: 'CLI and runner',
+    name: '`es run --dry-run` checks each sandbox image: ready, to build, stale or missing',
+    tests: [docker('es image build builds every image, reports every failure and exits 3')],
+  },
+  {
     id: 'image.failures',
     area: 'Sandbox',
     name: 'Image build failures: the headline first, ENOSPC and exit 137 named, transient errors retried',
@@ -637,8 +649,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'image.build',
     area: 'Sandbox',
-    name: '`es image build` and `--dry-run`',
-    tests: [options('es image build --dry-run lists every image')],
+    name: '`es image build` (every image, every failure, exit 3, `--force`) and its `--dry-run`',
+    tests: [
+      options('es image build --dry-run lists every image'),
+      docker('es image build builds every image, reports every failure and exits 3'),
+    ],
   },
   {
     id: 'egress',
