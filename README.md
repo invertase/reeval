@@ -2,7 +2,7 @@
 
 Does a coding agent actually use your SDK, your skills and your docs correctly? ES answers
 that with evals. You write the task, a real agent (Cursor, Claude Code, Antigravity, OpenCode,
-Goose or pi) does it in a fresh local Docker sandbox, and ES grades the result with deterministic checks and an LLM judge.
+Goose, pi or Codex) does it in a fresh local Docker sandbox, and ES grades the result with deterministic checks and an LLM judge.
 `compare` runs the same task with and without a skill, MCP server or docs, and reports the lift.
 Every run is saved as a result file you can commit, diff against earlier runs and browse in a
 web studio.
@@ -41,7 +41,7 @@ import { docker } from '@invertase/foobar/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.es.ts'],
-  harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), opencode({ model }), goose({ model }), pi({ model }), or a list: each is its own cell
+  harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), opencode({ model }), goose({ model }), pi({ model }), codex({ model }), or a list: each is its own cell
   sandbox: docker(),
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // optional; pin the version
   timeout: '15m',
@@ -119,7 +119,7 @@ kept locally in `.es/debug`, never in the committed history. Commit runs into `e
 and `es compare`, or ask across runs with SQL: `es query lift`, `es query effort` (tool calls and
 agent time, variant against control), `es query factor_effects`, or
 `es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`. Where the harness
-reports them (Cursor, Claude Code, Antigravity and pi do), the record keeps each turn's tokens and the model that
+reports them (Cursor, Claude Code, Antigravity, pi and Codex do), the record keeps each turn's tokens and the model that
 served it, and totals them per attempt and per run.
 
 `es analyze` explains a run: one LLM call over a digest of those facts, with every claim's

@@ -28,6 +28,7 @@ export const INIT_HARNESSES: ReadonlyArray<{
   { kind: 'opencode', label: 'OpenCode', factory: 'opencode', model: 'gemini-3.8-flash' },
   { kind: 'goose', label: 'Goose', factory: 'goose', model: 'gemini-3.8-flash' },
   { kind: 'pi', label: 'pi', factory: 'pi', model: 'gemini-3.8-flash' },
+  { kind: 'codex', label: 'Codex', factory: 'codex', model: 'gpt-5.4-mini' },
 ]
 
 export type InitChoice = AgentKind | 'none'

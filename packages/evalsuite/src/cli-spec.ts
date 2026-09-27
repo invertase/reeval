@@ -96,8 +96,9 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: `
   es init [dir]             Scaffold a project in dir (default: here): es.config.ts, a passing
                             eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>        cursor, claude-code, antigravity, opencode, goose, pi or none (fake
-                            agent only); the config's harness, with a fake profile for no keys
+    --harness <name>        cursor, claude-code, antigravity, opencode, goose, pi, codex or none
+                            (fake agent only); the config's harness, with a fake profile for no
+                            keys
     -y, --yes               Don't ask: take the defaults (--harness cursor)
     --force                 Overwrite es.config.ts and the eval when they differ
     --dry-run               Print what it would create or change, and write nothing`,

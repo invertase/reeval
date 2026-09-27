@@ -61,7 +61,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, prepare the image), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake) and image preparation |
 | `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
-| `packages/evalsuite/src/harness` | The Cursor (`@evalsuite/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`), Antigravity (`@evalsuite/harness-antigravity`), OpenCode (`@evalsuite/harness-opencode`), Goose (`@evalsuite/harness-goose`) and pi (`@evalsuite/harness-pi`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, rules file, skill directories, MCP shape), and a fake harness |
+| `packages/evalsuite/src/harness` | The Cursor (`@evalsuite/harness-cursor-sdk`), Claude Code (`@ai-sdk/harness-claude-code`), Antigravity (`@evalsuite/harness-antigravity`), OpenCode (`@evalsuite/harness-opencode`), Goose (`@evalsuite/harness-goose`), pi (`@evalsuite/harness-pi`) and Codex (`@evalsuite/harness-codex`) harnesses, described in one catalog (`agents.ts`: credential, brokered endpoints, the responses that name the served model, rules file, skill directories, MCP shape), and a fake harness |
 | `packages/evalsuite/src/ui` | Terminal output: the event model and the plain and agent renderers (no Vitest) |
 | `packages/evalsuite/src/debug` | Local debug data: each attempt's trace on the worker (`attempt.ts`: debug.log, requests, the capped trace buffer, reached through async context), docker commands into it (`docker.ts`), and `.es/debug`'s layout, retention and `es clean` (`files.ts`) |
 | `packages/evalsuite/src/view` | `@invertase/foobar/view`: browser-safe run headers, the studio's file layout and view-models, effort (`effort.ts`) and the analysis document (`analysis.ts`) |
@@ -76,8 +76,9 @@ its files import `evalsuite`.
 | `packages/harness-opencode` | `@evalsuite/harness-opencode`: OpenCode on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` can't broker a Google key). It names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and drops the turn's usage, which OpenCode's ACP server reports for its last model call only. The image bakes the plugin runtime OpenCode would otherwise fetch from npm on every start. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/harness-goose` | `@evalsuite/harness-goose`: Goose on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `goose acp` in the sandbox. Its bootstrap downloads the pinned release and checks its sha256, and gives Goose a private home. MCP servers go in Goose's `config.yaml` as enabled extensions (servers from ACP `session/new` start disabled). It names the tool calls `harness-acp` can't from Goose's `_meta.goose.toolCall`, and drops the turn's usage, which Goose's ACP server reports for its last model call only. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/harness-pi` | `@evalsuite/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in ES's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused at plan time. Private, and bundled into `@invertase/foobar` like `harness-antigravity`, with its `assets/` beside `dist/` |
+| `packages/harness-codex` | `@evalsuite/harness-codex`: OpenAI's Codex CLI on an OpenAI API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-codex` carries none of Codex's native events and drops reasoning tokens). Each turn is one `codex exec --json` process (later turns `resume` the thread), the pinned native build downloaded from npm and checked against its sha512. Its `config.toml` gives Codex an HTTP-only provider for the OpenAI API and turns off analytics and the plugin sync, so a turn contacts only `api.openai.com`; its NDJSON becomes stream parts with each turn's tokens, reasoning included. Codex reports no served model, so the gateway reads it, and the effort, from each Responses API response (`modelResponses` in the catalog). Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/sandbox-docker` | `@evalsuite/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `evalsuite`. It's private: the build bundles it into `@invertase/foobar` and ships `docker/` beside `dist/` there, so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts`, `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` and `es.pi.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose and pi), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`). Its `tsconfig.json` extends nothing, so the example runs when copied out of the repo (with `evalsuite` pointed at the published package); `test/example.test.ts` copies it to a temp directory and runs the fake config |
+| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `es.claude.config.ts`, `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts`, `es.pi.config.ts` and `es.codex.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose, pi and Codex), a fake one, and `es.bench.config.ts`, a concurrency benchmark (`es run --config es.bench.config.ts --concurrency N`). Its `tsconfig.json` extends nothing, so the example runs when copied out of the repo (with `evalsuite` pointed at the published package); `test/example.test.ts` copies it to a temp directory and runs the fake config |
 
 ## Development
 
@@ -145,7 +146,7 @@ ES_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the d
 
 **The harness contract** (`test/contract.test.ts`, [its README](./packages/evalsuite/test/contract/README.md))
 runs one ES project on each real harness (the rows in `test/support/harnesses.ts`: Cursor,
-Antigravity, Claude Code, OpenCode, Goose and pi) and checks the same behaviours on each: a placed skill is used, rules are
+Antigravity, Claude Code, OpenCode, Goose, pi and Codex) and checks the same behaviours on each: a placed skill is used, rules are
 read, a stdio MCP server is called, a file edit and a command are in the transcript, tokens and the
 served model are recorded, the real key is nowhere in the container, `deny-all` with the automatic
 hosts works and a blocked host is refused and recorded, the native stream format is known, and
@@ -184,7 +185,8 @@ runs sees only the placeholder); without the key it skips and says why, unless `
 when it fails. The Docker tests skip unless Docker is running and the sandbox images have
 been built (Cursor's, and each other harness's for its own: `es image build` in a project whose
 config uses it, such as `examples/hello` with `--config es.claude.config.ts`,
-`es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` or `es.pi.config.ts`);
+`es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts`, `es.pi.config.ts` or
+`es.codex.config.ts`);
 `ES_TEST_REQUIRE_DOCKER=1` (which `pnpm test:docker` sets) makes them fail instead.
 
 For the studio: `node packages/studio-web/scripts/seed-demo.mjs /tmp/es-demo` builds a demo project
@@ -211,7 +213,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
-| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `ANTHROPIC_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
@@ -306,7 +308,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into ES's image for it,
    `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128-patch.5d1c985c`,
-   `antigravity-0.1.0`, `opencode-0.1.0`, `goose-0.1.0`, `pi-0.1.0`), so
+   `antigravity-0.1.0`, `opencode-0.1.0`, `goose-0.1.0`, `pi-0.1.0`, `codex-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 
@@ -318,6 +320,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    pnpm es image build --config es.opencode.config.ts   # OpenCode's image
    pnpm es image build --config es.goose.config.ts   # Goose's image
    pnpm es image build --config es.pi.config.ts   # pi's image
+   pnpm es image build --config es.codex.config.ts   # Codex's image
    ```
 
 2. Put your credentials in `examples/hello/.env.local`. It is gitignored.
@@ -327,6 +330,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    ANTHROPIC_API_KEY=...              # for es.claude.config.ts
    GEMINI_API_KEY=...                 # for es.antigravity.config.ts (a Gemini API key)
    GOOGLE_GENERATIVE_AI_API_KEY=...   # the example's judge (google/*), es.opencode.config.ts, es.goose.config.ts, es.pi.config.ts and the Genkit evals' sandbox
+   OPENAI_API_KEY=...                 # for es.codex.config.ts (an OpenAI API key)
    # TYPESAFE_AI_API_KEY=...          # for typesafe-ai/* judges such as Jev (or AI_GATEWAY_API_KEY)
    ```
 
@@ -343,6 +347,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
    pnpm es run --config es.opencode.config.ts   # the coding evals under OpenCode
    pnpm es run --config es.goose.config.ts   # the coding evals under Goose
    pnpm es run --config es.pi.config.ts   # the coding evals under pi
+   pnpm es run --config es.codex.config.ts   # the coding evals under Codex
    ```
 
 The harness keys stay on the host (see [Secrets and egress](./docs/guide/secrets-and-egress.mdx)). ES masks secret-looking values in

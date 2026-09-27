@@ -194,7 +194,7 @@ describe('es init', () => {
     assert.equal((await ask(`${INIT_HARNESSES.length + 1}\n`)).choice, 'none')
     const again = await ask('9\nClaude Code\n')
     assert.equal(again.choice, 'claude-code')
-    assert.match(again.out, /Answer 1 to 7, or one of cursor, claude-code/)
+    assert.match(again.out, /Answer 1 to 8, or one of cursor, claude-code/)
     assert.match(again.out, /1\) Cursor +cursor:composer-2\.5, CURSOR_API_KEY/)
     await assert.rejects(ask(''), (e) => e instanceof UsageError && /no answer/.test(e.message))
   })
