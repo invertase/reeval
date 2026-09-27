@@ -25,6 +25,7 @@ import { capMiddle } from '../text.ts'
 import type { AttemptMeta, RunContext } from '../types.ts'
 import type { EsEvent, EvalResult } from '../ui/events.ts'
 import { cancelMarker } from './cancel.ts'
+import { esFrames, formatError } from './errors.ts'
 import type {} from './runtime.ts'
 
 /** One attempt: a Vitest test. */
@@ -79,7 +80,7 @@ const packageName: string = require(join(PACKAGE_DIR, 'package.json')).name
 
 const esDistDir = `${DIST_DIR}${sep}`
 // ES's own frames (src/ via source maps, or dist/) are noise in an eval's stack trace.
-const esDirs = [join(PACKAGE_DIR, 'src', sep), esDistDir]
+const esDirs = esFrames(PACKAGE_DIR)
 // Workers load ES's built modules natively, as they do from node_modules once ES is installed.
 // From a workspace checkout Vitest would otherwise transform them under their own file URLs,
 // which V8 coverage can't map back to the files.
@@ -136,7 +137,7 @@ function toEngineEval(root: string, test: TestCase, vitest?: Vitest): EngineEval
     result.state === 'failed' ? 'failed' : result.state === 'passed' ? 'passed' : 'skipped'
   const errors = result.errors ?? []
   const format = (e: (typeof errors)[number]) =>
-    vitest?.logger.formatError(e, { project: test.project, showCodeFrame: true }).output ?? ''
+    formatError(e, { root, hide: esDirs, columns: process.stdout.columns })
   return {
     id,
     key,

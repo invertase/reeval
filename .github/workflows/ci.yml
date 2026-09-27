@@ -170,6 +170,18 @@ jobs:
         uses: ./.github/actions/upload-coverage
         with: { name: studio }
 
+  # The engine's own code (scripts/coverage.mjs ENGINE) must be fully covered by its tests.
+  engine-coverage:
+    name: engine coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: node scripts/coverage.mjs engine
+
   coverage:
     name: coverage
     needs: [unit, features, docker, studio]
