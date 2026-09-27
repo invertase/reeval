@@ -114,7 +114,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="record" type="'manual' | 'ci' | 'always'">
-  When `es run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `es record`. Default `'ci'`. A run stopped by `budget.duration` is recorded too, with status `budget`; an interrupted one never is.
+  When `es run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `es record`. Default `'ci'`. A run stopped by `budget.duration` is recorded too, with status `budget`, and `es compare` never takes it as a base; an interrupted one never is. With `manual`, `es record` needs `--allow-incomplete` for it.
 </Property>
 
 <Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }">

@@ -104,7 +104,7 @@ plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~13s 
 es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```
 
-`budget.attempts` is checked against the plan before anything starts. Over it, `es run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run is recorded with status `budget` (exit 1).
+`budget.attempts` is checked against the plan before anything starts. Over it, `es run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run ends with status `budget` (exit 1). When the run records (`--record`, `record: 'always'`, or in CI), it's recorded with that status, and `es compare` never takes it as a base.
 
 There's no cost or token budget. `budget: { usd: 5 }` stops the run before it starts:
 
