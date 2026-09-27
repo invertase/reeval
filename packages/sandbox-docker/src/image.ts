@@ -47,6 +47,8 @@ export const LABEL = {
   session: 'dev.evalsuite.session',
   agentVersion: 'dev.evalsuite.agent-version',
   harness: 'dev.evalsuite.harness',
+  /** On ES's own images: the hash of the base image's build context, to tell a stale one. */
+  context: 'dev.evalsuite.context',
 } as const
 
 /**

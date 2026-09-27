@@ -118,8 +118,10 @@ docker:sqlite · 1 eval
 |---|---|---|
 | ES's sandbox image | `evalsuite-sandbox:<harness>-<adapter version>` | `es image build` (its toolchain layer is `evalsuite-sandbox-base:latest`) |
 | `from` | `evalsuite-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, then cached |
-| `install` | `evalsuite-install:<hash of base id and commands>` | The base or a command changes |
-| `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile, its context (less `.dockerignore`) or `ES_BASE` changes |
+| `install` | `evalsuite-install:<hash of base id and commands>` | The base image's id or a command changes |
+| `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${ES_BASE}`, ES's image is rebuilt (the hash has its id) |
+
+A rebuild removes the image its tag pointed at before, unless a container or another tag still uses it, and a `from` build drops its intermediate `…-base` tag once the harness is committed, so rebuilds leave no dangling images behind.
 
 Adapter versions: Cursor `0.1.0` (`@evalsuite/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
@@ -158,8 +160,26 @@ Before a run, ES checks every image the plan needs:
 | Docker isn't running | `Docker is not running. Start Docker and try again.` |
 | ES's image isn't built | `Sandbox image evalsuite-sandbox:cursor-0.1.0 not found. Build it once with: es image build` |
 | An `image` that isn't there | `… docker({ image }) is used as is, so pull or build it first.` |
-| A non-Debian base | `ES needs a Debian or Ubuntu based image (glibc and apt-get)` |
-| A failing install step | `Building the install layer (N commands) failed: install i/N exited <code>: <command>`, then the build's last lines |
+| A non-Debian base | `Building the toolchain layer FROM alpine:3.20 failed: ES needs a Debian or Ubuntu based image (glibc and apt-get)` |
+| A failing install step | `Building the install layer (N commands) failed: install i/N exited <code>: <command>` |
+| A failing Dockerfile | `Building evals/x.Dockerfile failed: a RUN step exited 42`, or BuildKit's error (`dockerfile parse error on line 2: unknown instruction: COPYY …`) |
+| A harness bootstrap that fails | `Baking the Cursor CLI onto <base> failed: Bootstrap command failed …` |
+
+Every build failure starts with that headline. A named cause follows when ES recognises one, then the failing step's own last lines (`  | …`, never ES's generated Dockerfile), then `(full log: .es/cache/images/<tag>.log)`:
+
+```text
+Building the install layer (1 command) failed: install 1/1 exited 1: dd if=/dev/zero …
+out of disk space (ENOSPC): free space for Docker (docker system df, es clean --images) and rerun
+  | dd: error writing '/dev/shm/fill': No space left on device
+(full log: .es/cache/images/evalsuite-install-4f0c2a1e9b7d3c55.log)
+```
+
+| Cause | Named when |
+|---|---|
+| `out of disk space (ENOSPC)` | The output says `No space left on device` or `ENOSPC` |
+| `killed (exit 137): usually out of memory` | A step exits 137 (SIGKILL, usually the kernel's out-of-memory killer) |
+
+A registry or network error (`no such host`, `i/o timeout`, `TLS handshake timeout`, `EAI_AGAIN`, a registry `5xx` or `429`) is tried twice more, after 2 s and 8 s. A failing `RUN` or `install` step, a Dockerfile syntax error, a denied pull and a non-Debian base fail at once: they'd fail the same way again.
 | An `image` without Node | `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). The egress gateway needs Node in the image: …` |
 
 ## Related

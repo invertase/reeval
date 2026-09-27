@@ -3,7 +3,16 @@ import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from '
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type HarnessAgentAdapter, prepareSandboxForHarness } from '@ai-sdk/harness/agent'
-import { docker, dockerOk } from './docker-cli.ts'
+import {
+  failureCause,
+  failureMessage,
+  ImageBuildError,
+  type ImageStage,
+  isTransient,
+  outputTail,
+  parseBuildOutput,
+} from './build-failure.ts'
+import { docker, dockerOk, imageInfo } from './docker-cli.ts'
 import {
   BASE_IMAGE,
   type BakedHarness,
@@ -136,29 +145,140 @@ WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}
 
 const tail = (text: string) => text.trim().split('\n').slice(-15).join('\n')
 
+const clipLine = (text: string, max = 300) =>
+  text.length > max ? `${text.slice(0, max - 1)}…` : text
+
+/** Why a `docker build` failed, in a line: the failing step's exit, or BuildKit's own error. */
+function buildReason(error: string | null): string {
+  if (!error) return 'docker build failed'
+  const exit = /^process ".*" did not complete successfully: exit code: (\d+)$/s.exec(error)
+  return exit ? `a RUN step exited ${exit[1]}` : clipLine(error.replace(/\s+/g, ' '))
+}
+
+/**
+ * A failed `docker build --progress plain` as an {@link ImageBuildError}: `headline` then the
+ * reason, the named cause, and the failing step's own last lines.
+ */
+function buildError(
+  output: string,
+  what: { stage: ImageStage; ref: string; headline: string; log?: string | null },
+  reason?: (parsed: ReturnType<typeof parseBuildOutput>) => string | null,
+  keep: (line: string) => boolean = () => true,
+): ImageBuildError {
+  const parsed = parseBuildOutput(output)
+  const text = [parsed.error ?? '', ...parsed.output].join('\n')
+  const cause = failureCause(text, parsed.exitCode)
+  parsed.output = parsed.output.filter(keep)
+  const why = reason?.(parsed) ?? buildReason(parsed.error)
+  return new ImageBuildError(
+    failureMessage({
+      headline: `${what.headline} failed: ${why}`,
+      cause,
+      output: parsed.output,
+      log: what.log ?? null,
+    }),
+    {
+      stage: what.stage,
+      ref: what.ref,
+      transient: isTransient(text),
+      cause,
+      log: what.log ?? null,
+    },
+  )
+}
+
+/** Every image ES builds carries this label, so `es clean --images` can find what it left. */
+const BUILT_BY = ['--label', `${LABEL.managed}=image`]
+
+/**
+ * Removes the images ES built that nothing tags any more (a rebuild's old image) and the
+ * intermediate `-base` tags of `from` builds. Returns how many it removed.
+ */
+export async function pruneImages(): Promise<number> {
+  const list = async (args: string[]) =>
+    (await docker(['image', 'ls', ...args])).stdout
+      .toString('utf8')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+  const dangling = [
+    ...(await list([
+      '-q',
+      '--filter',
+      'dangling=true',
+      '--filter',
+      `label=${LABEL.managed}=image`,
+    ])),
+    ...(await list(['-q', '--filter', 'dangling=true', '--filter', `label=${LABEL.harness}`])),
+  ]
+  const bases = (await list(['--format', '{{.Repository}}:{{.Tag}}', 'evalsuite-sandbox'])).filter(
+    (ref) => ref.endsWith('-base'),
+  )
+  let removed = 0
+  for (const ref of [...bases, ...new Set(dangling)]) {
+    if ((await docker(['image', 'rm', ref]).catch(() => null))?.exitCode === 0) removed++
+  }
+  return removed
+}
+
+/** Removes a tag or an image ES replaced, unless something still uses it. */
+const removeQuietly = async (ref: string) => {
+  await docker(['image', 'rm', ref]).catch(() => {})
+}
+
+/** The hash of ES's base image build context, which its images carry as a label. */
+export function contextHash(): string {
+  const hash = createHash('sha256')
+  for (const path of contextFiles(DOCKER_CONTEXT, join(DOCKER_CONTEXT, 'Dockerfile'))) {
+    hash.update(`${path}\0`)
+    hash.update(readFileSync(join(DOCKER_CONTEXT, path)))
+    hash.update('\0')
+  }
+  return hash.digest('hex').slice(0, 16)
+}
+
 /**
  * Bakes a harness's bootstrap (which installs its agent's CLI) into an image, so the image tag
  * pins the CLI build. Rebuild after bumping the adapter. With `from`, the base is that toolchain
- * image instead of ES's Node image.
+ * image instead of ES's Node image. `log` gets progress lines, `output` the build's full output
+ * (for a log file, whose path failures name). The previous image under the tag, and the
+ * intermediate `-base` tag of a `from` build, are removed once the new one is committed.
  */
 export async function buildImage(
   log: (line: string) => void,
-  options: { harness: BakedHarness; from?: string; signal?: AbortSignal },
+  options: {
+    harness: BakedHarness
+    from?: string
+    signal?: AbortSignal
+    output?: BuildOutput
+  },
 ): Promise<{ image: string; agentVersion: string }> {
   const { harness, from, signal } = options
   const bootstrap = BOOTSTRAPS[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
+  const previous = [(await imageInfo(target))?.id, from ? null : (await imageInfo(base))?.id]
   log(`Building ${base}${from ? ` from ${from}` : ''}`)
   const build = from
-    ? await docker(['build', '--quiet', '--tag', base, '-'], {
+    ? await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', base, '-'], {
         input: toolchainDockerfile(from),
         signal,
       })
-    : await docker(['build', '--quiet', '--tag', base, DOCKER_CONTEXT], { signal })
+    : await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', base, DOCKER_CONTEXT], {
+        signal,
+      })
+  const output = `${build.stdout.toString('utf8')}${build.stderr}`
+  options.output?.write(output)
   if (build.exitCode !== 0) {
-    throw new Error(
-      `Building the sandbox image${from ? ` FROM ${from}` : ''} failed:\n${tail(build.stderr)}`,
+    throw buildError(
+      output,
+      {
+        stage: from ? 'from' : 'harness',
+        ref: target,
+        headline: from ? `Building the toolchain layer FROM ${from}` : "Building ES's base image",
+        log: options.output?.path ?? null,
+      },
+      (parsed) => parsed.output.find((l) => l.startsWith('ES needs a Debian')) ?? null,
     )
   }
 
@@ -169,40 +289,14 @@ export async function buildImage(
     lifetimeMs: 30 * 60_000,
     ...(signal ? { abortSignal: signal } : {}),
   })
+  let agentVersion: string
   try {
-    await prepareSandboxForHarness({
-      session,
-      harnesses: [await bootstrap.adapter()],
-      sandboxConfig: { workDir: WORKSPACE_DIR },
-    })
-    if (bootstrap.warm) {
-      const warmed = await session.run({ command: await bootstrap.warm() })
-      if (warmed.exitCode !== 0) {
-        throw new Error(`Warming the ${bootstrap.name} image failed:\n${tail(warmed.stderr)}`)
-      }
-    }
-    let probe = bootstrap.version
-    if (!probe) {
-      const found = await session.run({
-        command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
-      })
-      const bin = found.stdout.trim()
-      if (!bin) throw new Error(`The harness bootstrap did not install the ${bootstrap.name} CLI`)
-      probe = `'${bin}' --version`
-    }
-    const version = await session.run({ command: probe })
-    if (bootstrap.version && version.exitCode !== 0) {
-      throw new Error(
-        `The harness bootstrap did not install ${bootstrap.cli}:\n${tail(version.stderr)}`,
-      )
-    }
-    const agentVersion = version.stdout.trim() || 'unknown'
+    agentVersion = await bake(session, bootstrap)
     log(`${bootstrap.name} ${bootstrap.version ? '' : 'CLI '}${agentVersion}`)
-
     await dockerOk([
       'commit',
       '--change',
-      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"`,
+      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? '' : ` ${LABEL.context}="${contextHash()}"`}`,
       '--change',
       `WORKDIR ${SANDBOX_ROOT}`,
       // Not the bootstrap's user: Dockerfiles `FROM ${ES_BASE}` build as root.
@@ -215,10 +309,67 @@ export async function buildImage(
       session.id,
       target,
     ])
-    return { image: target, agentVersion }
+  } catch (error) {
+    if (signal?.aborted || error instanceof ImageBuildError) throw error
+    const [first = '', ...rest] = (error as Error).message.split('\n')
+    const cause = failureCause((error as Error).message, null)
+    options.output?.write(`${output}\n${(error as Error).message}\n`)
+    throw new ImageBuildError(
+      failureMessage({
+        headline: `Baking the ${bootstrap.name} CLI onto ${from ?? BASE_IMAGE} failed: ${clipLine(first)}`,
+        cause,
+        output: outputTail(rest.join('\n')),
+        log: options.output?.path ?? null,
+      }),
+      {
+        stage: 'harness',
+        ref: target,
+        transient: isTransient((error as Error).message),
+        cause,
+        log: options.output?.path ?? null,
+      },
+    )
   } finally {
     await session.destroy()
   }
+  if (from) await removeQuietly(base)
+  const now = (await imageInfo(target))?.id
+  for (const id of previous) if (id && id !== now) await removeQuietly(id)
+  return { image: target, agentVersion }
+}
+
+/** Runs the harness bootstrap in `session` and returns the CLI version it installed. */
+async function bake(
+  session: Awaited<ReturnType<typeof createDockerSession>>,
+  bootstrap: (typeof BOOTSTRAPS)[BakedHarness],
+): Promise<string> {
+  await prepareSandboxForHarness({
+    session,
+    harnesses: [await bootstrap.adapter()],
+    sandboxConfig: { workDir: WORKSPACE_DIR },
+  })
+  if (bootstrap.warm) {
+    const warmed = await session.run({ command: await bootstrap.warm() })
+    if (warmed.exitCode !== 0) {
+      throw new Error(`Warming the ${bootstrap.name} image failed:\n${tail(warmed.stderr)}`)
+    }
+  }
+  let probe = bootstrap.version
+  if (!probe) {
+    const found = await session.run({
+      command: `find "$HOME/.ai-sdk-harness" -name ${bootstrap.cli} \\( -type f -o -type l \\) -perm -u+x | head -1`,
+    })
+    const bin = found.stdout.trim()
+    if (!bin) throw new Error(`The harness bootstrap did not install the ${bootstrap.name} CLI`)
+    probe = `'${bin}' --version`
+  }
+  const version = await session.run({ command: probe })
+  if (bootstrap.version && version.exitCode !== 0) {
+    throw new Error(
+      `The harness bootstrap did not install ${bootstrap.cli}:\n${tail(version.stderr)}`,
+    )
+  }
+  return version.stdout.trim() || 'unknown'
 }
 
 /** One `docker({ install })` command, killed after `timeoutMs` when set. */
@@ -248,11 +399,14 @@ export function installScript(steps: InstallStep[]): string {
   return `${lines.join('\n')}\n`
 }
 
-/** Builds the install layer if it's missing. `log` gets the build's output, for a log file. */
+/** Where a build's full output goes, and the path its failure names. */
+export type BuildOutput = { write: (text: string) => void; path: string }
+
+/** Builds the install layer if it's missing. `output` gets the build's output, for a log file. */
 export async function buildInstallLayer(
   parent: { ref: string; id: string },
   steps: InstallStep[],
-  options: { signal?: AbortSignal; log?: (output: string) => void } = {},
+  options: { signal?: AbortSignal; output?: BuildOutput } = {},
 ): Promise<string> {
   const { signal } = options
   const tag = installLayerTag(parent, steps)
@@ -273,15 +427,26 @@ export async function buildInstallLayer(
     `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
     `WORKDIR ${SANDBOX_ROOT}`,
   ].join('\n')
-  const build = await docker(['build', '--progress', 'plain', '--tag', tag, '-'], {
+  const build = await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', tag, '-'], {
     input: dockerfile,
     signal,
   })
-  options.log?.(`${script}\n${dockerfile}\n\n${build.stdout.toString('utf8')}${build.stderr}`)
+  const output = `${build.stdout.toString('utf8')}${build.stderr}`
+  options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
   if (build.exitCode !== 0) {
-    const failed = /es: install \d+\/\d+ exited \d+: .*/.exec(build.stderr)?.[0]
-    throw new Error(
-      `Building the install layer (${steps.length} commands) failed${failed ? `: ${failed.replace(/^es: /, '')}` : ''}\n${tail(build.stderr)}`,
+    const failed = /es: install (\d+\/\d+) exited (\d+): (.*)/.exec(output)
+    const count = `${steps.length} command${steps.length === 1 ? '' : 's'}`
+    throw buildError(
+      output,
+      {
+        stage: 'install',
+        ref: tag,
+        headline: `Building the install layer (${count})`,
+        log: options.output?.path ?? null,
+      },
+      () =>
+        failed ? `install ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}` : null,
+      (line) => !line.startsWith('es: install '),
     )
   }
   return tag
@@ -350,17 +515,24 @@ export function contextFiles(context: string, dockerfile: string): string[] {
   return files.sort()
 }
 
+/** Whether the Dockerfile starts from ES's sandbox image, which then has to exist first. */
+export const usesEsBase = (dockerfile: string) =>
+  new RegExp(`\\$\\{?${ES_BASE_ARG}\\b`).test(readFileSync(dockerfile, 'utf8'))
+
 /**
  * The tag of a `docker({ dockerfile })` build for a harness: a hash of the Dockerfile, every file
- * of its build context (its directory, less `.dockerignore`) and the harness's image that
- * `ES_BASE` names, so an edit to any of them builds anew.
+ * of its build context (its directory, less `.dockerignore`) and, for a Dockerfile `FROM
+ * ${ES_BASE}`, the id of the harness's image it names, so an edit to any of them, or a rebuilt ES
+ * image, builds anew. `esBase` is that id (null when it isn't built).
  */
 export function dockerfileTag(
   dockerfile: string,
   harness: BakedHarness,
+  esBase: string | null = null,
 ): { tag: string; sha256: string } {
   const context = dirname(dockerfile)
-  const hash = createHash('sha256').update(`${ES_BASE_ARG}=${imageFor(harness)}\0`)
+  const base = usesEsBase(dockerfile) ? `${imageFor(harness)}@${esBase ?? 'unbuilt'}` : ''
+  const hash = createHash('sha256').update(`${ES_BASE_ARG}=${base}\0`)
   for (const path of contextFiles(context, dockerfile)) {
     const full = join(context, path)
     const stat = lstatSync(full)
@@ -378,29 +550,31 @@ export function dockerfileTag(
 
 /**
  * Builds the user's Dockerfile with plain `docker build` (so Docker's layer cache applies), from
- * its directory, with `ES_BASE` set to the harness's sandbox image. Rebuilds even when the tag
- * exists with `force`, as `es image build` does.
+ * its directory, with `ES_BASE` set to the harness's sandbox image (whose id is `esBase`).
+ * Rebuilds even when the tag exists with `force`, as `es image build` does, and then removes the
+ * image the tag pointed at before. `name` is the path failures name.
  */
 export async function buildDockerfile(
   dockerfile: string,
   options: {
     harness: BakedHarness
+    esBase?: string | null
+    name?: string
     signal?: AbortSignal
-    log?: (output: string) => void
+    output?: BuildOutput
     force?: boolean
   },
 ): Promise<string> {
   const { harness, signal } = options
-  const { tag } = dockerfileTag(dockerfile, harness)
-  if (!options.force) {
-    const exists = await docker(['image', 'inspect', '--format', '{{.Id}}', tag], { signal })
-    if (exists.exitCode === 0) return tag
-  }
+  const { tag } = dockerfileTag(dockerfile, harness, options.esBase ?? null)
+  const previous = (await imageInfo(tag))?.id
+  if (previous && !options.force) return tag
   const build = await docker(
     [
       'build',
       '--progress',
       'plain',
+      ...BUILT_BY,
       '--file',
       dockerfile,
       '--build-arg',
@@ -411,9 +585,17 @@ export async function buildDockerfile(
     ],
     { signal },
   )
-  options.log?.(`${build.stdout.toString('utf8')}${build.stderr}`)
+  const output = `${build.stdout.toString('utf8')}${build.stderr}`
+  options.output?.write(output)
   if (build.exitCode !== 0) {
-    throw new Error(`Building ${dockerfile} failed:\n${tail(build.stderr)}`)
+    throw buildError(output, {
+      stage: 'dockerfile',
+      ref: tag,
+      headline: `Building ${options.name ?? dockerfile}`,
+      log: options.output?.path ?? null,
+    })
   }
+  const now = (await imageInfo(tag))?.id
+  if (previous && previous !== now) await removeQuietly(previous)
   return tag
 }

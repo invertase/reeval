@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import {
   type BakedHarness,
@@ -15,6 +15,8 @@ import {
   imageInfo,
   installLayerTag,
   LABEL,
+  retryTransient,
+  usesEsBase,
 } from '@evalsuite/sandbox-docker'
 import { parseDuration } from '../config.ts'
 import { debugLog } from '../debug/attempt.ts'
@@ -68,9 +70,7 @@ export const installSteps = (sandbox: DockerSandboxDescriptor): InstallStep[] =>
         },
   )
 
-/** Whether the Dockerfile starts from ES's sandbox image, which then has to exist first. */
-export const usesEsBase = (dockerfile: string) =>
-  new RegExp(`\\$\\{?${ES_BASE_ARG}\\b`).test(readFileSync(dockerfile, 'utf8'))
+export { usesEsBase }
 
 export const projectPath = (root: string, path: string) =>
   relative(root, path).split(sep).join('/') || '.'
@@ -89,12 +89,21 @@ const buildLogger = (root: string, ref: string) => {
   const file = join(dir, `${ref.replace(/[^A-Za-z0-9._-]+/g, '-')}.log`)
   return {
     file,
+    path: projectPath(root, file),
     write: (output: string) => {
       mkdirSync(dir, { recursive: true })
       writeFileSync(file, output)
     },
   }
 }
+
+/** A build, tried again after a registry or network error, and never after any other. */
+const retried = <T>(build: () => Promise<T>, signal: AbortSignal) =>
+  retryTransient(build, {
+    signal,
+    onRetry: (error) =>
+      debugLog('image', `transient failure, retrying: ${error.message.split('\n')[0]}`),
+  })
 
 /**
  * The image with the harness in it that the sandbox's `install` layer (if any) goes on: ES's
@@ -120,9 +129,15 @@ async function harnessBase(
     const cached = force ? null : await imageInfo(ref)
     if (cached) debugLog('image', `cache hit ${ref} (${from} with the ${harness} CLI baked on)`)
     else debugLog('image', `building ${ref}: ${from} with Node, git and the ${harness} CLI`)
+    const output = buildLogger(root, ref)
     const info =
       cached ??
-      (await buildOnce(ref, () => buildImage(log, { harness, from, signal }), signal, force))
+      (await buildOnce(
+        ref,
+        () => retried(() => buildImage(log, { harness, from, signal, output }), signal),
+        signal,
+        force,
+      ))
     if (!info) throw new InfraError(`The sandbox image ${ref} disappeared after building`)
     return { ref, info }
   }
@@ -140,37 +155,44 @@ async function harnessBase(
   if (sandbox.from) return { ...(await bake(sandbox.from)), dockerfile: null }
   if (sandbox.dockerfile) {
     const path = sandbox.dockerfile
-    const { tag, sha256 } = dockerfileTag(path, harness)
+    const esBase = usesEsBase(path) ? ((await imageInfo(imageFor(harness)))?.id ?? null) : null
+    const { tag, sha256 } = dockerfileTag(path, harness, esBase)
     const dockerfile = { path: projectPath(root, path), sha256 }
-    if (usesEsBase(path) && !(await imageInfo(imageFor(harness)))) {
+    if (usesEsBase(path) && !esBase) {
       throw new InfraError(
         `${dockerfile.path} starts FROM \${${ES_BASE_ARG}}, and ${imageFor(harness)} isn't built. Build it once with: es image build`,
       )
     }
     const force = rebuild(tag)
-    const logFile = buildLogger(root, tag)
-    let built: ImageInfo | null
-    try {
-      log(`Building ${dockerfile.path} as ${tag}`)
-      const cached = force ? null : await imageInfo(tag)
-      debugLog(
-        'image',
-        cached
-          ? `cache hit ${tag} (${dockerfile.path}, context ${sha256.slice(0, 12)})`
-          : `building ${dockerfile.path} as ${tag} (log: ${projectPath(root, logFile.file)})`,
-      )
-      built =
-        cached ??
-        (await buildOnce(
-          tag,
-          () => buildDockerfile(path, { harness, signal, log: logFile.write, force: true }),
-          signal,
-          force,
-        ))
-    } catch (error) {
-      if (signal.aborted) throw error
-      throw new InfraError(`${(error as Error).message}\n(full log: ${logFile.file})`)
-    }
+    const output = buildLogger(root, tag)
+    log(`Building ${dockerfile.path} as ${tag}`)
+    const cached = force ? null : await imageInfo(tag)
+    debugLog(
+      'image',
+      cached
+        ? `cache hit ${tag} (${dockerfile.path}, context ${sha256.slice(0, 12)})`
+        : `building ${dockerfile.path} as ${tag} (log: ${output.path})`,
+    )
+    const built =
+      cached ??
+      (await buildOnce(
+        tag,
+        () =>
+          retried(
+            () =>
+              buildDockerfile(path, {
+                harness,
+                esBase,
+                name: dockerfile.path,
+                signal,
+                output,
+                force: true,
+              }),
+            signal,
+          ),
+        signal,
+        force,
+      ))
     if (!built) throw new InfraError(`The image ${tag} disappeared after building`)
     // Built on this harness's image, so its CLI is already there. Any other base, including
     // another harness's image, gets this harness baked on.
@@ -207,27 +229,17 @@ export async function prepareImage(
 
   const parent = { ref: base.ref, id: base.info.id }
   const ref = installLayerTag(parent, steps)
-  const logFile = buildLogger(root, ref)
-  let info: ImageInfo | null
-  try {
-    info = await imageInfo(ref)
-    if (info) {
-      debugLog('image', `cache hit ${ref}: install layer on ${base.ref}, no install steps ran`)
-    } else {
-      debugLog(
-        'image',
-        `building ${ref} on ${base.ref}: running install ${steps.map((s, i) => `${i + 1}. ${s.run}`).join(' ')} (log: ${projectPath(root, logFile.file)})`,
-      )
-      options.log?.(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
-      info = await buildOnce(
-        ref,
-        () => buildInstallLayer(parent, steps, { signal, log: logFile.write }),
-        signal,
-      )
-    }
-  } catch (error) {
-    if (signal.aborted) throw error
-    throw new InfraError(`${(error as Error).message}\n(full log: ${logFile.file})`)
+  const output = buildLogger(root, ref)
+  let info = await imageInfo(ref)
+  if (info) {
+    debugLog('image', `cache hit ${ref}: install layer on ${base.ref}, no install steps ran`)
+  } else {
+    debugLog(
+      'image',
+      `building ${ref} on ${base.ref}: running install ${steps.map((s, i) => `${i + 1}. ${s.run}`).join(' ')} (log: ${output.path})`,
+    )
+    options.log?.(`Installing ${steps.length} command(s) onto ${base.ref} as ${ref}`)
+    info = await buildOnce(ref, () => buildInstallLayer(parent, steps, { signal, output }), signal)
   }
   if (!info) throw new InfraError(`The install layer ${ref} disappeared after building`)
   return { ref, id: info.id, ...image }

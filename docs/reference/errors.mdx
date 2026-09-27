@@ -93,8 +93,12 @@ See [Profiles and budgets](/reference/profiles).
 | `Docker is not running. Start Docker and try again.` | Start Docker. |
 | `Sandbox image evalsuite-sandbox:cursor-0.1.0 not found. Build it once with: es image build` | Run `es image build`. |
 | `Sandbox image … not found. docker({ image }) is used as is, so pull or build it first.` | Pull or build your image, or use `from` or `dockerfile` so ES builds it. |
-| `ES needs a Debian or Ubuntu based image (glibc and apt-get)` | Use a Debian or Ubuntu base for `from` or `dockerfile`. |
-| `Building the install layer (N commands) failed: …` | Fix the failing `install` command; the build log is in `.es/cache/images/`. |
+| `Building the toolchain layer FROM … failed: ES needs a Debian or Ubuntu based image (glibc and apt-get)` | Use a Debian or Ubuntu base for `from` or `dockerfile`. |
+| `Building the install layer (N commands) failed: …` | Fix the failing `install` command; its last lines follow, and the build log is in `.es/cache/images/`. |
+| `Building <Dockerfile> failed: …` | Fix the Dockerfile; the failing step's last lines follow. |
+| `out of disk space (ENOSPC): …` | Free space for Docker (`docker system df`), then rerun. |
+| `killed (exit 137): usually out of memory; …` | Give Docker more memory, or lower `--concurrency`. |
+| `Baking the <harness> CLI onto <base> failed: …` | Usually the network; ES already retried it twice. |
 | `Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start (…). …` | The image has no Node for the egress gateway. Use `docker({ from })` or `docker({ dockerfile })`. |
 | `The Cursor harness needs the Docker sandbox` | Real harnesses run only in `docker()`. |
 

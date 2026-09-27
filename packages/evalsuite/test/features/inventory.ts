@@ -520,6 +520,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       docker('dockerfile: FROM the ES_BASE arg'),
       sandboxDocker('unit', 'the Dockerfile tag hashes the Dockerfile'),
+      sandboxDocker('build-failure', 'a rebuilt ES image (a new id) is a new tag'),
     ],
   },
   {
@@ -582,6 +583,29 @@ export const inventory: InventoryFeature[] = [
     name: '`docker({ from })` toolchain images',
     tests: [
       options('es image build --dry-run lists every image'),
+      docker('from: a toolchain image gets Node, git and the harness baked on'),
+    ],
+  },
+  {
+    id: 'image.failures',
+    area: 'Sandbox',
+    name: 'Image build failures: the headline first, ENOSPC and exit 137 named, transient errors retried',
+    tests: [
+      docker('a failing install command names itself and is an infra error, headline first'),
+      docker('ENOSPC and exit 137 in install are named in the headline'),
+      docker('a Dockerfile syntax error, and a from that is not Debian, say so first'),
+      docker('a registry that cannot be reached is retried, bounded'),
+      sandboxDocker('build-failure', 'the failing step'),
+      sandboxDocker('build-failure', 'network and registry 5xx errors are transient'),
+      sandboxDocker('build-failure', 'a transient failure is retried, then succeeds'),
+    ],
+  },
+  {
+    id: 'image.clean',
+    area: 'Sandbox',
+    name: '`es clean --images`, and no `-base` tag or replaced image left behind',
+    tests: [
+      docker('es clean --images removes the images ES left dangling'),
       docker('from: a toolchain image gets Node, git and the harness baked on'),
     ],
   },
