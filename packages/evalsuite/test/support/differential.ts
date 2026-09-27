@@ -103,6 +103,19 @@ export function normaliseText(text: string, roots: string[]): string {
       .replace(/~<n>( serial)?( \(~<n> at concurrency \d+\))?/g, '~<estimate>')
       .replace(/ +<n>(?!\w)/g, ' <n>')
       .replace(/^Duration .*$/gm, 'Duration <d>')
+      // How an image stands (built here, a from tag's digest now) is this host's and its
+      // registry's, not the engine's; which images and steps a plan lists still count.
+      .replace(
+        /^( {2})[✓+~✗] (.+?) {2}\((ready|to build|stale|missing): .*\)$/gm,
+        '$1<s> $2  (<status>)',
+      )
+      .replace(
+        /^( {2})[✓+~✗] (.+?) {2,}(ready|to build|stale|missing)\b.*$/gm,
+        '$1<s> $2  <status>',
+      )
+      .replace(/^images {2}(\d+) sandbox images?: .*$/gm, 'images  $1 sandbox images: <status>')
+      .replace(/"status": ?"(ready|build|stale|missing)"/g, '"status": <x>')
+      .replace(/"detail": ?"(?:[^"\\]|\\.)*"/g, '"detail": <x>')
   )
 }
 

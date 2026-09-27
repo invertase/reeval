@@ -913,6 +913,11 @@ export type AttemptImage = {
   install: string[]
   /** `docker({ dockerfile })`: the path from the project root and the build context's hash. */
   dockerfile: { path: string; sha256: string } | null
+  /**
+   * `docker({ from })`: the base as written and the digest the image was built on (a local-only
+   * base's image id); `es image build` rebuilds it when the tag has moved since.
+   */
+  from?: { ref: string; digest: string | null }
 }
 
 /** What one judge call saw, and for a call that failed, why and what was retried first. */

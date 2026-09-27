@@ -49,6 +49,8 @@ export const LABEL = {
   harness: 'dev.evalsuite.harness',
   /** On ES's own images: the hash of the base image's build context, to tell a stale one. */
   context: 'dev.evalsuite.context',
+  /** On a `from` image: the digest (or, for a local-only base, the image id) it was built on. */
+  fromDigest: 'dev.evalsuite.from-digest',
 } as const
 
 /**

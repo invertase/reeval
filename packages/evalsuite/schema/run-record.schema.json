@@ -1740,6 +1740,25 @@
                   }
                 ]
               },
+              "from": {
+                "type": "object",
+                "properties": {
+                  "digest": {
+                    "anyOf": [
+                      {
+                        "type": "null"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "ref": {
+                    "type": "string"
+                  }
+                },
+                "required": ["digest", "ref"]
+              },
               "id": {
                 "type": "string"
               },

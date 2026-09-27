@@ -613,8 +613,13 @@ export async function doctorCommand(
       const targets = imageTargets(
         configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
       )
-      await buildImages(targets, config.root, (line) => io.out(line))
-      io.out('Built. Run es doctor again to check.')
+      const built = await buildImages(targets, config.root, { log: (line) => io.out(line) })
+      for (const b of built) if (!b.ok) io.out(`✗ ${b.id}: ${b.failure.message.split('\n')[0]}`)
+      io.out(
+        built.every((b) => b.ok)
+          ? 'Built. Run es doctor again to check.'
+          : 'Some images failed to build; es image build shows why.',
+      )
     }
   }
   return report.healthy ? 0 : 1

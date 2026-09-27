@@ -221,6 +221,32 @@ export async function pruneImages(): Promise<number> {
   return removed
 }
 
+/**
+ * What a `from` names now, without pulling: its registry digest, or for an image that's only
+ * local, its id (`local`). `error` when neither resolves, e.g. a typo or no network.
+ */
+export async function resolveFrom(
+  from: string,
+  signal?: AbortSignal,
+): Promise<{ digest: string; local: boolean } | { error: string }> {
+  const pinned = /@(sha256:[0-9a-f]{64})$/.exec(from)?.[1]
+  if (pinned) return { digest: pinned, local: false }
+  const remote = await docker(
+    ['buildx', 'imagetools', 'inspect', '--format', '{{json .Manifest.Digest}}', from],
+    { signal },
+  ).catch(() => null)
+  const digest = remote?.exitCode === 0 ? JSON.parse(remote.stdout.toString('utf8').trim()) : null
+  if (typeof digest === 'string' && digest.startsWith('sha256:')) return { digest, local: false }
+  const local = await imageInfo(from)
+  if (local) return { digest: local.id, local: true }
+  const error =
+    remote?.stderr
+      .trim()
+      .replace(/^ERROR: /, '')
+      .replace(/\s+/g, ' ') || `${from} doesn't resolve`
+  return { error }
+}
+
 /** Removes a tag or an image ES replaced, unless something still uses it. */
 const removeQuietly = async (ref: string) => {
   await docker(['image', 'rm', ref]).catch(() => {})
@@ -251,19 +277,37 @@ export async function buildImage(
     from?: string
     signal?: AbortSignal
     output?: BuildOutput
+    /** Pull the base again even when it's cached: `es image build --force`. */
+    pull?: boolean
   },
 ): Promise<{ image: string; agentVersion: string }> {
   const { harness, from, signal } = options
+  // Built on the digest `from` names now, and labelled with it, so a moved tag is visible.
+  const resolved = from ? await resolveFrom(from, signal) : null
+  const digest = resolved && 'digest' in resolved ? resolved.digest : null
+  const pinned =
+    from && digest && resolved && 'local' in resolved && !resolved.local && !from.includes('@')
+      ? `${from}@${digest}`
+      : from
   const bootstrap = BOOTSTRAPS[harness]
   const base = from ? `${harnessImageFor(harness, from)}-base` : BASE_IMAGE
   const target = from ? harnessImageFor(harness, from) : imageFor(harness)
   const previous = [(await imageInfo(target))?.id, from ? null : (await imageInfo(base))?.id]
   log(`Building ${base}${from ? ` from ${from}` : ''}`)
   const build = from
-    ? await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', base, '-'], {
-        input: toolchainDockerfile(from),
-        signal,
-      })
+    ? await docker(
+        [
+          'build',
+          '--progress',
+          'plain',
+          ...BUILT_BY,
+          ...(options.pull ? ['--pull'] : []),
+          '--tag',
+          base,
+          '-',
+        ],
+        { input: toolchainDockerfile(pinned ?? from), signal },
+      )
     : await docker(['build', '--progress', 'plain', ...BUILT_BY, '--tag', base, DOCKER_CONTEXT], {
         signal,
       })
@@ -296,7 +340,7 @@ export async function buildImage(
     await dockerOk([
       'commit',
       '--change',
-      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? '' : ` ${LABEL.context}="${contextHash()}"`}`,
+      `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}`,
       '--change',
       `WORKDIR ${SANDBOX_ROOT}`,
       // Not the bootstrap's user: Dockerfiles `FROM ${ES_BASE}` build as root.
@@ -563,6 +607,8 @@ export async function buildDockerfile(
     signal?: AbortSignal
     output?: BuildOutput
     force?: boolean
+    /** Pull its `FROM` again: `es image build --force`. */
+    pull?: boolean
   },
 ): Promise<string> {
   const { harness, signal } = options
@@ -575,6 +621,7 @@ export async function buildDockerfile(
       '--progress',
       'plain',
       ...BUILT_BY,
+      ...(options.pull ? ['--pull'] : []),
       '--file',
       dockerfile,
       '--build-arg',

@@ -577,6 +577,135 @@ evaluate('plain', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { a
     },
   )
 
+  test(
+    'es image build builds every image, reports every failure and exits 3; --dry-run says how each stands',
+    docker,
+    async () => {
+      const p = await project('docker-image-build-all', {
+        'es.config.ts': config('{}'),
+        'evals/bad.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
+        'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('plain', async (t) => { await t.sandbox() })
+evaluate('bad', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }, async (t) => { await t.sandbox() })
+evaluate('nope', { sandbox: docker({ from: 'nonexistent-es-image-${process.pid}:1' }) }, async (t) => { await t.sandbox() })
+`,
+      })
+      const dry = await runCli(p.dir, ['image', 'build', '--dry-run'])
+      assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+      assert.match(dry.stdout, /^ {2}✓ base +evalsuite-sandbox:cursor-[\d.]+ +\(ready: built/m)
+      assert.match(
+        dry.stdout,
+        /^ {2}\+ dockerfile evals\/bad\.Dockerfile .+\(to build: not built yet\)$/m,
+      )
+      assert.match(
+        dry.stdout,
+        /^ {2}✗ from nonexistent-es-image-\d+:1 .+\(missing: doesn't resolve: .*(denied|not found)/m,
+      )
+      const plan = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(plan.code, 0, plan.stdout + plan.stderr)
+      assert.match(plan.stdout, /^images {2}3 sandbox images: 1 ready, 1 to build, 1 missing$/m)
+
+      const r = await runCli(p.dir, ['image', 'build'], slow)
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(r.stdout, /^✓ docker: evalsuite-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
+      assert.match(
+        r.stdout,
+        /^✗ docker:bad\.Dockerfile \(1 eval\): Building evals\/bad\.Dockerfile failed: a RUN step exited 42$/m,
+      )
+      assert.match(
+        r.stdout,
+        /^✗ docker:nonexistent-es-image-\d+:1 \(1 eval\): Building the toolchain layer FROM nonexistent-es-image-\d+:1 failed/m,
+      )
+      assert.match(r.stdout, /^2 of 3 images failed to build$/m)
+      // Canary: without the broken images there's nothing to fail.
+      const plain = await runCli(p.dir, ['image', 'build', 'plain'], slow)
+      assert.equal(plain.code, 0, plain.stdout + plain.stderr)
+      assert.match(plain.stdout, /^1 image ready$/m)
+    },
+  )
+
+  test('a from tag that moves upstream: es run keeps its build, --dry-run says stale, es image build rebuilds it; --force rebuilds anyway', {
+    ...docker,
+    timeout: 900_000,
+  }, async () => {
+    const name = `es-registry-${process.pid}`
+    const port = 5100 + (process.pid % 800)
+    const tag = `localhost:${port}/es/base:1`
+    const push = (version: string) => {
+      execFileSync('docker', ['build', '-q', '-t', tag, '-'], {
+        input: `FROM debian:bookworm-slim\nRUN echo ${version} > /etc/es-version\n`,
+      })
+      execFileSync('docker', ['push', '-q', tag], { stdio: 'ignore' })
+      execFileSync('docker', ['rmi', tag], { stdio: 'ignore' })
+    }
+    execFileSync(
+      'docker',
+      ['run', '-d', '--rm', '--name', name, '-p', `${port}:5000`, 'registry:2'],
+      { stdio: 'ignore' },
+    )
+    let ref = ''
+    try {
+      for (let i = 0; i < 20; i++) {
+        if (spawnSync('curl', ['-sf', `http://localhost:${port}/v2/`]).status === 0) break
+        await new Promise((r) => setTimeout(r, 500))
+      }
+      push('v1')
+      const p = await project('docker-from-moves', {
+        'es.config.ts': config('{}'),
+        'evals/a.es.ts': `import { evaluate, expect } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('base', { sandbox: docker({ from: '${tag}' }) }, async (t) => {
+  await t.sandbox()
+  expect((await t.exec('cat /etc/es-version')).stdout).toBe('v1\\n')
+})
+`,
+      })
+      const first = await runCli(p.dir, ['run'], { timeoutMs: 600_000 })
+      assert.equal(first.code, 0, first.stdout + first.stderr)
+      const image = readRun(p.dir).evals[0]?.image
+      ref = image?.ref ?? ''
+      assert.equal(image?.from?.ref, tag)
+      assert.match(image?.from?.digest ?? '', /^sha256:[0-9a-f]{64}$/)
+
+      push('v2')
+      const dry = await runCli(p.dir, ['run', '--dry-run'])
+      assert.match(
+        dry.stdout,
+        /^ {2}~ \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): es image build rebuilds it$/m,
+      )
+      const kept = await runCli(p.dir, ['run'], slow)
+      assert.equal(kept.code, 0, 'es run keeps the build it has')
+      assert.equal(readRun(p.dir).evals[0]?.image?.id, image?.id)
+
+      const counter = countBuilds(p.dir, '-base')
+      const refreshed = await runCli(p.dir, ['image', 'build'], {
+        env: counter.env,
+        timeoutMs: 600_000,
+      })
+      assert.equal(refreshed.code, 0, refreshed.stdout + refreshed.stderr)
+      assert.equal(counter.count(), 1, 'rebuilt once, on the moved tag')
+      // Canary: the rebuilt image has v2, so the eval's v1 check now fails.
+      const moved = await runCli(p.dir, ['run'], slow)
+      assert.equal(moved.code, 1, moved.stdout + moved.stderr)
+      assert.match(readRun(p.dir).evals[0]?.error?.message ?? '', /expected 'v2\\n' to be 'v1\\n'/)
+
+      counter.reset()
+      const current = await runCli(p.dir, ['image', 'build'], { env: counter.env, ...slow })
+      assert.equal(current.code, 0, current.stdout + current.stderr)
+      assert.equal(counter.count(), 0, 'nothing moved, so nothing is rebuilt')
+      const forced = await runCli(p.dir, ['image', 'build', '--force'], {
+        env: counter.env,
+        timeoutMs: 600_000,
+      })
+      assert.equal(forced.code, 0, forced.stdout + forced.stderr)
+      assert.equal(counter.count(), 1, '--force rebuilds it anyway')
+    } finally {
+      spawnSync('docker', ['rm', '-f', name], { stdio: 'ignore' })
+      if (ref) spawnSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
+    }
+  })
+
   test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`
     const env = `import { docker } from 'evalsuite/sandbox'
@@ -668,7 +797,7 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       assert.match(planned.stdout, /^images {2}1 sandbox image/m)
       const build = await runCli(p.dir, ['image', 'build', 'deb'], { timeoutMs: 600_000 })
       assert.equal(build.code, 0, build.stdout + build.stderr)
-      const debRef = /^docker:deb\.Dockerfile: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      const debRef = /^✓ docker:deb\.Dockerfile: (\S+)/m.exec(build.stdout)?.[1] ?? ''
       assert.match(debRef, /^evalsuite-sandbox:cursor-[\d.]+-evalsuite-dockerfile-deb-dockerfile-/)
       refs.add(debRef)
 
@@ -824,8 +953,8 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
         env: { ANTHROPIC_API_KEY: '' },
       })
       assert.equal(build.code, 0, build.stdout + build.stderr)
-      const toolsRef = /^docker:tools · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
-      const debRef = /^docker:deb\.Dockerfile · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      const toolsRef = /^✓ docker:tools · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
+      const debRef = /^✓ docker:deb\.Dockerfile · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
       refs.add(toolsRef)
       refs.add(debRef)
       assert.match(toolsRef, /^evalsuite-dockerfile:tools-[0-9a-f]{16}$/, build.stdout)
