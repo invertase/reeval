@@ -1,3 +1,6 @@
+/** What a masked value reads as. */
+export const REDACTED = '[REDACTED]'
+
 export const SECRET_NAME = /KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL/i
 
 /** Well-known credential shapes, masked even when they aren't in this process's environment. */
@@ -150,7 +153,7 @@ function maskFragments(text: string, secrets: Secrets): string {
   let out = ''
   let at = 0
   for (const [start, end] of ranges) {
-    out += `${text.slice(at, start)}[REDACTED]`
+    out += `${text.slice(at, start)}${REDACTED}`
     at = end
   }
   return out + text.slice(at)
@@ -164,9 +167,9 @@ function maskFragments(text: string, secrets: Secrets): string {
 export function redactSecrets(text: string, env: NodeJS.ProcessEnv = process.env): string {
   const secrets = envSecrets(env)
   let out = text
-  for (const secret of secrets.forms) out = out.replaceAll(secret, '[REDACTED]')
+  for (const secret of secrets.forms) out = out.replaceAll(secret, REDACTED)
   out = maskFragments(out, secrets)
-  for (const pattern of TOKEN_PATTERNS) out = out.replace(pattern, '[REDACTED]')
+  for (const pattern of TOKEN_PATTERNS) out = out.replace(pattern, REDACTED)
   return out
 }
 

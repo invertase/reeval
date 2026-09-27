@@ -74,7 +74,14 @@ export function redactionLine(b: ReportBundle): string {
     'home → ~',
     ...(b.redaction.paths.includes('<project>') ? ['project → <project>'] : []),
   ]
-  return `${plural(b.redaction.masked, 'secret value')} masked; ${paths.join(', ')}`
+  const { masked, upstream } = b.redaction
+  const already =
+    upstream && upstream < masked
+      ? `, ${upstream} of them already by ES's records and logs`
+      : upstream
+        ? ", all already by ES's records and logs"
+        : ''
+  return `${plural(masked, 'secret value')} masked${already}; ${paths.join(', ')}`
 }
 
 /** The terminal summary, one labelled line each. */
