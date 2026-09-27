@@ -306,3 +306,29 @@ describe('stream translation', () => {
     assert.equal(toUsage(undefined).inputTokens.total, undefined)
   })
 })
+
+describe('a failed or cancelled turn, as the runner reports it (SDK 1.0.32)', () => {
+  test("a rejected key: the runner's error line is the turn's error", () => {
+    const { parts } = translate(fixture('bad-key.ndjson'), { exitCode: 0 })
+    const error = parts.find((p) => p.type === 'error')
+    assert.equal(error?.type === 'error' && (error.error as Error).message, 'Invalid User API Key')
+    const finish = parts.find((p) => p.type === 'finish')
+    assert.equal(finish?.type === 'finish' && finish.finishReason.unified, 'error')
+  })
+
+  test('a turn ES cancelled mid-edit: no error, the open edit closed, finish cancelled', () => {
+    const { parts } = translate(fixture('cancelled.ndjson'), { exitCode: 0 })
+    assert.equal(
+      parts.some((p) => p.type === 'error'),
+      false,
+    )
+    const calls = parts.filter((p) => p.type === 'tool-call').map((p) => p.toolCallId)
+    const results = parts.filter((p) => p.type === 'tool-result').map((p) => p.toolCallId)
+    assert.deepEqual(results, calls)
+    const finish = parts.find((p) => p.type === 'finish')
+    assert.deepEqual(finish?.type === 'finish' && finish.finishReason, {
+      unified: 'other',
+      raw: 'cancelled',
+    })
+  })
+})

@@ -269,3 +269,29 @@ describe('stream translation', () => {
     })
   })
 })
+
+describe("a provider's failure (agy 1.2.11, a Gemini endpoint refusing every call)", () => {
+  const failed = (file: string) => {
+    const { parts } = translate(fixture(file), { exitCode: 3 })
+    const error = parts.find((p) => p.type === 'error')
+    const finish = parts.find((p) => p.type === 'finish')
+    return {
+      error: error?.type === 'error' ? String((error.error as Error).message) : undefined,
+      finish: finish?.type === 'finish' ? finish.finishReason : undefined,
+      tools: parts.filter((p) => p.type === 'tool-call').length,
+    }
+  }
+
+  for (const [file, message] of [
+    ['provider-400.ndjson', /Error 400, Message: fake 400, Status: INVALID_ARGUMENT/],
+    ['provider-429.ndjson', /Error 429, Message: fake 429, Status: RESOURCE_EXHAUSTED/],
+    ['provider-503.ndjson', /Error 503, Message: fake 503, Status: UNAVAILABLE/],
+    ['provider-dropped-mid-stream.ndjson', /network issue connecting to the server/],
+  ] as const)
+    test(`${file}: the error_message steps are skipped, the ERROR result is the turn's error`, () => {
+      const r = failed(file)
+      assert.match(r.error ?? '', message)
+      assert.deepEqual(r.finish, { unified: 'error', raw: 'ERROR' })
+      assert.equal(r.tools, 0)
+    })
+})
