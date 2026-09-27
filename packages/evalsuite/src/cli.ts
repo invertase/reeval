@@ -813,21 +813,38 @@ const crash = (error: unknown) => {
 process.on('unhandledRejection', crash)
 process.on('uncaughtException', crash)
 
-run(process.argv.slice(2)).then(
-  (code) => {
-    finish(code)
-    process.exitCode = code
-  },
-  (error: unknown) => {
-    const name = (error as Error).name
-    const expected =
-      error instanceof UsageError ||
-      EXPECTED_ERRORS.includes(name) ||
-      name === 'PreflightInfraError'
-    console.error(red(`es: ${redactSecrets((error as Error).message)}`))
-    if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
-    const code = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
-    finish(code, error, error instanceof UsageError ? 'usage' : expected ? 'expected' : 'crash')
-    process.exitCode = code
-  },
-)
+// Node exits 0 when nothing is left to wait on, even with the command unfinished: never a pass.
+let settled = false
+process.on('exit', (code) => {
+  // A crash or a forced Ctrl-C exits on purpose, with its own code.
+  if (settled || code !== 0) return
+  process.stderr.write(
+    red(
+      "es: stopped before it finished: nothing was left for it to wait on. That's a bug in ES, or in code the config or an eval ran; es report collects a redacted report.\n",
+    ),
+  )
+  process.exitCode = EXIT.infra
+})
+
+run(process.argv.slice(2))
+  .finally(() => {
+    settled = true
+  })
+  .then(
+    (code) => {
+      finish(code)
+      process.exitCode = code
+    },
+    (error: unknown) => {
+      const name = (error as Error).name
+      const expected =
+        error instanceof UsageError ||
+        EXPECTED_ERRORS.includes(name) ||
+        name === 'PreflightInfraError'
+      console.error(red(`es: ${redactSecrets((error as Error).message)}`))
+      if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
+      const code = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
+      finish(code, error, error instanceof UsageError ? 'usage' : expected ? 'expected' : 'crash')
+      process.exitCode = code
+    },
+  )
