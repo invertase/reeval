@@ -757,7 +757,7 @@ evaluate('on a value', async (t) => {
       .filter((l) => tag.test(l))
       .map((l) => l.replace(tag, ''))
     assert.deepEqual(
-      detail.map((l) => l.replace(/ \d+ms/g, '')),
+      detail.map((l) => l.replace(/ \d+m?s\b/g, '')),
       [
         'sandbox starting',
         'sandbox ready',

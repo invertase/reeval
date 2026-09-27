@@ -173,7 +173,7 @@ jobs:
   # Windows and macOS: every tier that needs no Docker, through scripts/ci-os.sh. The Docker tier
   # runs on Linux only: GitHub's Windows runners have Windows containers only, while ES's sandboxes
   # are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners have no
-  # Docker. Windows starts processes slowly, so its unit files run in four shards.
+  # Docker. Windows starts processes slowly, so its unit files run in six shards.
   windows-tests:
     name: windows (${{ matrix.part }})
     runs-on: windows-latest
@@ -183,10 +183,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        part: ['unit 1/4', 'unit 2/4', 'unit 3/4', 'unit 4/4', tiers, packed]
+        part: ['unit 1/6', 'unit 2/6', 'unit 3/6', 'unit 4/6', 'unit 5/6', 'unit 6/6', tiers, packed]
     steps:
       # Recorded runs' artifact paths pass Windows' 260-character limit, which git keeps by default.
       - run: git config --system core.longpaths true
+      # Scanning every file the tests write and every process they start makes attempts on a busy
+      # runner take tens of seconds; the runner is thrown away after the job.
+      - run: powershell -Command "Set-MpPreference -DisableRealtimeMonitoring \$true"
+        continue-on-error: true
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
@@ -207,7 +211,7 @@ jobs:
           RESULT: ${{ needs.windows-tests.result }}
         run: |
           if [ "$RESULT" != success ]; then
-            echo "::error::windows (unit, tiers, packed): $RESULT"
+            echo "::error::windows (unit 1/6 … 6/6, tiers, packed): $RESULT"
             exit 1
           fi
 
