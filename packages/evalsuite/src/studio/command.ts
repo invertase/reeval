@@ -1,4 +1,4 @@
-import { basename, relative, resolve } from 'node:path'
+import { basename, join, relative, resolve } from 'node:path'
 import { UsageError } from '../errors.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { APP_DIR, buildStudio, openBrowser, startStudio } from './index.ts'
@@ -23,7 +23,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
   const project = basename(config.root)
   const rel = (path: string) => relative(process.cwd(), path) || '.'
   if (build) {
-    const out = resolve(flags.out ?? 'studio-dist')
+    const out = flags.out ? resolve(flags.out) : join(config.root, 'studio-dist')
     const artifacts = !flags['no-artifacts']
     const result = await buildStudio({
       source: { root: config.root, historyDir: config.history.dir, scratch: !!flags.scratch },

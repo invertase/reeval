@@ -943,6 +943,6 @@ export type RunContext = {
   profile: ResolvedProfile | null
   /** `-v` (1) or `-vv`/`--trace` (2) streams the attempts' debug lines; 0 only writes debug.log. */
   verbosity?: 0 | 1 | 2
-  /** The config file, relative to the project root, for the debug trace. */
+  /** The config file, relative to the current directory, for the debug trace; unset without one. */
   configFile?: string
 }

@@ -52,6 +52,8 @@ type Feature = {
    * with the copied project's directory.
    */
   hostEnv?: NodeJS.ProcessEnv | ((dir: string) => NodeJS.ProcessEnv)
+  /** Where `es run` starts, under the copied project; defaults to its root. */
+  cwd?: string
   /** Runs on the copied project before `es run`. */
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
@@ -193,6 +195,19 @@ const git = (cwd: string, ...args: string[]) =>
 
 // biome-ignore lint/suspicious/noExportsInTest: the feature matrix reads this table (support/feature-matrix.ts)
 export const features: Feature[] = [
+  {
+    dir: 'config/found-from-subdirectory',
+    tiers: ['fake', 'docker'],
+    cwd: 'deep/nested',
+    env: 'found',
+    canary: /expected 'from the project root\\n' to be 'from the current directory\\n'/,
+    record: ({ project }) =>
+      assert.deepEqual(
+        readdirSync(join(project, 'deep/nested')),
+        ['marker.txt'],
+        'the run is written under the config, not the current directory',
+      ),
+  },
   {
     dir: 'skills/workspace-placement',
     tiers: ['fake', 'docker'],
@@ -1014,7 +1029,8 @@ function fixtureTests(tiers: Tier[]) {
         }
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
-        const r = await runCli(p.dir, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
+        const cwd = join(p.dir, f.cwd ?? '')
+        const r = await runCli(cwd, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
           env: {
             ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
             ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',

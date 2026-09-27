@@ -237,7 +237,8 @@ es studio            es studio build --out site      es image build [--dry-run] 
 ```
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
-(`es run skill antigravity`). Every command takes `--config <path>`. Exit codes: 0 pass (and
+(`es run skill antigravity`). Every command uses the nearest `es.config.*` in the current directory or
+above (paths resolve from its directory), or `--config <path>`. Exit codes: 0 pass (and
 `--dry-run`), 1 a gated failure, 2 usage/config error (including a filter that matches nothing),
 3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.es/runs/`; `--record` (or `record: 'ci'` in CI) copies
 them to `evals/.history/` to commit.

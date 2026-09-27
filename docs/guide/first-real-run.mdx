@@ -170,6 +170,19 @@ On a terminal, the same run is in colour:
 
 Every `es run` writes a scratch run under `.es/runs/`. The name is the UTC start time, the commit, the author and a random suffix. [History](/guide/history) shows how to keep runs in git.
 
+## Run from any directory
+
+```bash
+cd src/lib
+npx es run --dry-run
+```
+
+```text
+plan  config ../../es.config.ts · …
+```
+
+`es` uses the nearest `es.config.ts` in the current directory or above, as Vitest and ESLint find their configs, and the plan line names it. Every path is the config's: the evals, `.env.local` and `.es/runs/` stay at the project root, for every command. A nested project with its own config uses that one; [Loading](/reference/config#loading) has the rules.
+
 ## Ignore local files
 
 ```text title=".gitignore"

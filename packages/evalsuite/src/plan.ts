@@ -151,9 +151,12 @@ function gateHint(rows: PlanRow[]): string[] {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
-/** `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …` */
-export function planLine(plan: RunPlan): string {
-  const parts: string[] = []
+/**
+ * `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …`, led by
+ * `config ../es.config.ts` when `config` is given (the config isn't in the current directory).
+ */
+export function planLine(plan: RunPlan, config?: string): string {
+  const parts: string[] = config ? [`config ${config}`] : []
   if (plan.profile) parts.push(`profile ${plan.profile.name} (${plan.profile.reason})`)
   const skipped = plan.rows.length - plan.evals
   parts.push(plural(plan.evals, 'eval') + (skipped ? ` (${skipped} skipped)` : ''))
