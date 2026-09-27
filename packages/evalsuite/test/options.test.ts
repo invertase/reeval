@@ -583,6 +583,16 @@ describe('common mistakes', () => {
       /files\["docs\\\\api\.md"\] in defineEnvironment\("e"\): use forward slashes \(docs\/api\.md\)/,
     ],
     [
+      'a zero install step timeout',
+      `docker({ install: [{ run: 'ls', timeout: 0 }] })`,
+      /docker\(\{ install \}\) command "ls": Invalid duration 0\. A duration is more than zero/,
+    ],
+    [
+      'a negative install step timeout',
+      `docker({ install: [{ run: 'ls', timeout: '-5s' }] })`,
+      /docker\(\{ install \}\) command "ls": Invalid duration "-5s"\. Use e\.g\. "90s" or "15m"\./,
+    ],
+    [
       'runs 0',
       `evaluate('e', { runs: 0 }, async () => {})`,
       /runs must be a whole number of at least 1 \(got 0\)/,
@@ -724,7 +734,7 @@ describe('common mistakes', () => {
         'es.config.ts': fakeConfig(),
         'evals/o.es.ts': `import { defineEnvironment, evaluate, group } from 'evalsuite'
 import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
+import { docker, fakeSandbox } from 'evalsuite/sandbox'
 const a = defineEnvironment('a', {})
 const b = defineEnvironment('b', {})
 ${body}
@@ -1161,7 +1171,7 @@ describe('sandbox images', () => {
     [
       'a bad install timeout',
       `docker({ install: [{ run: 'x', timeout: 'soon' }] as never })`,
-      /Invalid timeout "soon" for docker\(\{ install \}\) command "x"\. Use e\.g\. "90s" or "15m"\./,
+      /docker\(\{ install \}\) command "x": Invalid duration "soon"\. Use e\.g\. "90s" or "15m"\./,
     ],
     [
       'steps instead of install',
