@@ -220,7 +220,7 @@ describe('es report: the bundle', () => {
     const { masked, upstream } = bundle.redaction
     const markers = (text: string) => text.split('[REDACTED]').length - 1
     const tar = tempDir('report-count')
-    execFileSync('tar', ['-xzf', join(out, 'report-logs.tar.gz'), '-C', tar])
+    execFileSync('tar', ['-xzf', 'report-logs.tar.gz', '-C', tar], { cwd: out })
     assert.equal(
       masked,
       markers(readFileSync(join(out, 'report.json'), 'utf8')) + markers(allText(tar)),
