@@ -932,12 +932,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'exit-codes',
     area: 'CLI and runner',
-    name: 'Exit codes 0, 1, 2, 3 and 130',
+    name: 'Exit codes 0, 1, 2, 3, 130 and 143',
     tests: [
       engine('a passing eval exits 0'),
       engine('a failing assertion exits 1'),
       engine('a harness failure is an infra error and exits 3'),
-      engine('exits 130, records the run'),
+      engine('records the run and destroys the sandbox'),
     ],
   },
   {
@@ -1040,8 +1040,8 @@ export const inventory: InventoryFeature[] = [
       'evalsuite/test/concurrency.test.ts › Ctrl-C cancels running attempts',
       engine('a timeout aborts the agent and destroys the sandbox'),
       engine('a turn whose agent ignores the abort is cut off shortly after the timeout'),
-      engine('exits 130, records the run and destroys the sandbox'),
-      docker('SIGTERM to the process group mid-turn exits 130 and leaves no container'),
+      engine('records the run and destroys the sandbox'),
+      docker('SIGTERM to the process group mid-turn exits 143 and leaves no container'),
     ],
   },
   {

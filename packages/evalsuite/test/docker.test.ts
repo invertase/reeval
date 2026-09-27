@@ -475,7 +475,7 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
   })
 
   test(
-    'SIGTERM to the process group mid-turn exits 130 and leaves no container',
+    'SIGTERM to the process group mid-turn exits 143 and leaves no container',
     docker,
     async () => {
       const p = await project('docker-sigterm', {
@@ -494,7 +494,7 @@ evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
           return true
         },
       })
-      assert.equal(r.code, 130, r.stdout + r.stderr)
+      assert.equal(r.code, 143, r.stdout + r.stderr)
       const runId = readdirSync(join(p.dir, '.es/runs'))
         .find((f) => f.endsWith('.json'))
         ?.replace(/\.json$/, '')
