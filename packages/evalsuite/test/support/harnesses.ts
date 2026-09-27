@@ -107,7 +107,8 @@ export const harnesses: HarnessRow[] = [
     tokens: false,
     tokensWhy:
       "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
-    servedModel: null,
+    // Its ACP server names no model; the turn records the one the gateway saw it request.
+    servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
   },
   {
@@ -125,7 +126,8 @@ export const harnesses: HarnessRow[] = [
     tokens: false,
     tokensWhy:
       "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
-    servedModel: null,
+    // Its ACP server names no model; the turn records the one the gateway saw it request.
+    servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
   },
   {
