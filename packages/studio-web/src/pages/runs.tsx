@@ -12,6 +12,7 @@ import {
 } from 'evalsuite/view'
 import { Bot, GitBranch, History, Search, User } from 'lucide-react'
 import { useMemo } from 'react'
+import { LiveRuns } from '@/components/live'
 import { Code, EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { DriftBadge, OutcomeIcon, TallyBar } from '@/components/status'
 import { Badge } from '@/components/ui/badge'
@@ -25,7 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { headersQuery, useStudio } from '@/lib/data'
+import { headersQuery, useLiveRuns, useStudio } from '@/lib/data'
 import { formatDate, plural, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
@@ -173,6 +174,7 @@ export function RunsPage() {
   const navigate = useNavigate()
   const { data: studio } = useStudio()
   const { data, error, isPending } = useQuery(headersQuery)
+  const { runs: live } = useLiveRuns()
   const rows = useMemo(() => (data ? runRows(data.headers) : []), [data])
   const filtered = useMemo(() => {
     const q = search.q?.toLowerCase()
@@ -221,7 +223,9 @@ export function RunsPage() {
         {rows.length > 1 ? <Trend rows={rows} /> : null}
       </div>
 
-      {rows.length === 0 ? (
+      <LiveRuns runs={live.filter((r) => !rows.some((row) => row.entry.runId === r.runId))} />
+
+      {rows.length === 0 && live.length ? null : rows.length === 0 ? (
         <EmptyState icon={History} title="No runs yet">
           Record one with <Code>es run --record</Code>, or promote your latest scratch run with{' '}
           <Code>es record latest</Code>.{' '}
