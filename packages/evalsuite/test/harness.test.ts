@@ -17,6 +17,11 @@ import {
   toUsage as antigravityUsage,
 } from '@evalsuite/harness-antigravity'
 import {
+  CODEX_ENDPOINTS,
+  CODEX_HOME_SKILLS_DIR,
+  CODEX_WORKSPACE_SKILLS_DIR,
+} from '@evalsuite/harness-codex'
+import {
   CURSOR_SDK_BUILTIN_TOOLS,
   CURSOR_SDK_HOME_SKILLS_DIR,
   CURSOR_SDK_RECOVERED_TOOLS,
@@ -54,12 +59,14 @@ import {
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
+  type ServedModel,
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
 import { normaliseStream, type StampedPart } from '../src/harness/transcript.ts'
 import {
   antigravity,
   claudeCode,
+  codex,
   cursor,
   fakeHarness,
   goose,
@@ -155,14 +162,15 @@ describe('the Claude Code harness', () => {
       opencode({ model: 'm' }),
       goose({ model: 'm' }),
       pi({ model: 'm' }),
+      codex({ model: 'm' }),
     ]) {
       const fake = fakeHarness({ layout: real.kind })
       assert.deepEqual(layoutOf(fake), layoutOf(real), real.kind)
       assert.equal(imageHarness(fake), imageHarness(real), real.kind)
     }
     assert.throws(
-      () => fakeHarness({ layout: 'codex' as never }),
-      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi' \(got "codex"\)/,
+      () => fakeHarness({ layout: 'cline' as never }),
+      /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' \(got "cline"\)/,
     )
   })
 
@@ -431,6 +439,8 @@ describe('mcp.sse', () => {
       goose:
         /^InfraError: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       pi: /^InfraError: pi has no MCP client, so it can't use the events MCP server$/,
+      codex:
+        /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
     }
     for (const [kind, shape] of Object.entries(expected) as [AgentKind, unknown][]) {
       const toHarness = () => AGENTS[kind].mcpServers(mcp as never)
@@ -504,6 +514,88 @@ describe('the pi harness', () => {
     assert.deepEqual(
       events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind, e.added, e.removed] : e.type)),
       [['b.txt', 'modify', 2, 1]],
+    )
+  })
+})
+
+describe('the Codex harness', () => {
+  test('is plain data with its own cell id, and needs an OpenAI model id', () => {
+    const h = codex({ model: 'gpt-5.4-mini' })
+    assert.deepEqual(h, { kind: 'codex', model: 'gpt-5.4-mini' })
+    assert.equal(harnessId(h), 'codex:gpt-5.4-mini')
+    assert.throws(
+      () => codex({ model: 'openai/gpt-5.4-mini' }),
+      /codex\(\) needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e\.g\. codex\(\{ model: 'gpt-5\.4-mini' \}\)/,
+    )
+  })
+
+  test('Codex reads rules from AGENTS.md and skills from .agents/skills and ~/.agents/skills', () => {
+    const h = codex({ model: 'm' })
+    assert.deepEqual(layoutOf(h), {
+      rulesFile: 'AGENTS.md',
+      workspaceSkillDir: CODEX_WORKSPACE_SKILLS_DIR,
+      harnessSkillDir: CODEX_HOME_SKILLS_DIR,
+    })
+    assert.equal(imageHarness(h), 'codex')
+    const config = resolveConfig({ harness: [h] }, '/p')
+    assert.deepEqual(missingCredentials(config, {}), ['OPENAI_API_KEY'])
+    assert.deepEqual(missingCredentials(config, { OPENAI_API_KEY: 'x' }), [])
+  })
+
+  test("Codex's key is brokered to the Responses API only, whose response names the served model", () => {
+    assert.deepEqual(AGENTS.codex.endpoints, CODEX_ENDPOINTS)
+    const b = brokeringFor(codex({ model: 'm' }))
+    assert.equal(b?.credential, 'OPENAI_API_KEY')
+    assert.deepEqual(b?.modelResponses, CODEX_ENDPOINTS)
+    const served = (request: Parameters<ServedModel>[0]) => b?.servedModel?.(request)
+    const at = { method: 'POST', host: 'api.openai.com', path: '/v1/responses' }
+    assert.equal(
+      served({ ...at, responseModel: 'gpt-5.4-mini-2026-03-17', responseEffort: 'medium' }),
+      'gpt-5.4-mini-2026-03-17[effort=medium]',
+    )
+    assert.equal(served({ ...at, responseModel: 'gpt-4.1' }), 'gpt-4.1')
+    assert.equal(served(at), undefined, 'a response that names no model')
+    assert.equal(served({ ...at, path: '/v1/models', responseModel: 'x' }), undefined)
+  })
+
+  test("MCP servers go in Codex's config.toml shape; it has no SSE transport", () => {
+    assert.deepEqual(
+      AGENTS.codex.mcpServers({
+        stamp: { transport: 'stdio', command: 'node', args: ['s.mjs'], env: { A: 'b' } },
+        web: { transport: 'http', url: 'https://x.test/mcp', headers: { H: 'v' } },
+      }),
+      {
+        stamp: { command: 'node', args: ['s.mjs'], env: { A: 'b' } },
+        web: { url: 'https://x.test/mcp', http_headers: { H: 'v' } },
+      },
+    )
+    assert.throws(
+      () =>
+        AGENTS.codex.mcpServers({ s: { transport: 'sse', url: 'https://x.test', headers: {} } }),
+      /^InfraError: Codex has no SSE MCP transport, so it can't use the s server \(mcp\.sse\)/,
+    )
+  })
+
+  test("Codex's file changes are file edits: an added file is created, an updated one modified", () => {
+    const change = (id: string, toolName: string, path: string, kind: string) => [
+      { ms: 1, part: { type: 'tool-call', toolCallId: id, toolName, input: { path } } },
+      { ms: 2, part: { type: 'tool-result', toolCallId: id, output: { kind } } },
+    ]
+    const events = normaliseStream(
+      [
+        ...change('a', 'write', 'new.txt', 'add'),
+        ...change('u', 'edit', 'notes.txt', 'update'),
+        ...change('d', 'delete', 'old.txt', 'delete'),
+      ],
+      0,
+    )
+    assert.deepEqual(
+      events.map((e) => (e.type === 'file-edit' ? [e.path, e.kind] : e.type)),
+      [
+        ['new.txt', 'create'],
+        ['notes.txt', 'modify'],
+        ['old.txt', 'delete'],
+      ],
     )
   })
 })

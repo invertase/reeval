@@ -84,6 +84,27 @@ function startUpstream(host: string, h2: boolean): Promise<{ port: number; close
         out.writeHead(200, { 'content-type': 'application/json' })
         return out.end(JSON.stringify({ accessToken: ACCESS, refreshToken: REFRESH, kind: 'user' }))
       }
+      if (req.url === '/responses') {
+        // OpenAI's Responses API streams its first event with the request's instructions (which
+        // may mention a "model" in a JSON string) before the model that served it.
+        out.writeHead(200, {
+          'content-type': 'text/event-stream',
+          'x-accept-encoding': String(req.headers['accept-encoding'] ?? ''),
+        })
+        const created = JSON.stringify({
+          type: 'response.created',
+          response: {
+            id: 'resp_1',
+            instructions: 'Answer as "model": "not-this-one".',
+            model: 'gpt-5.4-mini-2026-03-17',
+            reasoning: { effort: 'medium', summary: null },
+          },
+        })
+        const event = `event: response.created\ndata: ${created}\n\n`
+        const cut = event.indexOf('mini-2026')
+        out.write(event.slice(0, cut))
+        return setTimeout(() => out.end(`${event.slice(cut)}data: [DONE]\n\n`), 20)
+      }
       if (req.url === '/trailers') {
         out.writeHead(200, { 'content-type': 'application/grpc', trailer: 'grpc-status' })
         out.write('payload')
@@ -136,7 +157,7 @@ async function startProxy(
   policy: NetworkPolicy = { mode: 'allow-all' },
   extra: Pick<
     EgressProxyOptions,
-    'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens' | 'onEvent'
+    'endpoints' | 'onRefused' | 'onUnsubstituted' | 'derivedTokens' | 'onEvent' | 'modelResponses'
   > = {},
   /** Hand each connection over as a plain Duplex, as the gateway's mux streams are. */
   asMux = false,
@@ -1104,6 +1125,94 @@ describe('brokered secrets through the proxy', () => {
         /self-signed|unable to verify|certificate/i,
         'tunnelled blind: the gateway CA is not presented',
       )
+    } finally {
+      gw.close()
+    }
+  })
+})
+
+describe('the model a response names, on a modelResponses endpoint', () => {
+  const brokered: RequestTransformation = {
+    match: {
+      host: HOST,
+      headers: [{ key: { exact: 'Authorization' }, value: { exact: `Bearer ${PLACEHOLDER}` } }],
+    },
+    transform: { headers: { Authorization: `Bearer ${REAL}` } },
+  }
+  let h1: { port: number; close(): void }
+  let h2: { port: number; close(): void }
+  before(async () => {
+    h1 = await startUpstream(HOST, false)
+    h2 = await startUpstream(HOST, true)
+  })
+  after(() => {
+    h1.close()
+    h2.close()
+  })
+  /** The one request's event, once the response has closed. */
+  const requestEvent = async (events: EgressEvent[]) => {
+    for (let i = 0; i < 100 && !events.some((e) => e.type === 'request'); i++)
+      await new Promise((r) => setTimeout(r, 20))
+    return events.find((e) => e.type === 'request')
+  }
+  const responses = (gw: Gw) =>
+    viaProxy(gw, HOST, h1.port, {
+      method: 'POST',
+      path: '/responses',
+      headers: { authorization: `Bearer ${PLACEHOLDER}`, 'accept-encoding': 'gzip, br, zstd' },
+      body: '{}',
+    })
+
+  test('asks for it uncompressed and records the model and effort, the body passed through whole', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/responses' }, method: ['POST'] }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await responses(gw)
+      assert.equal(r.status, 200)
+      assert.equal(r.headers['x-accept-encoding'], '', 'accept-encoding dropped upstream')
+      assert.match(r.body, /"model":"gpt-5\.4-mini-2026-03-17".*data: \[DONE\]/s)
+      const e = await requestEvent(events)
+      assert.equal(e?.type === 'request' && e.responseModel, 'gpt-5.4-mini-2026-03-17')
+      assert.equal(e?.type === 'request' && e.responseEffort, 'medium')
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('over HTTP/2 too', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/responses' } }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await viaProxyH2(gw, HOST, h2.port, '/responses', `Bearer ${PLACEHOLDER}`)
+      assert.equal(r.status, 200)
+      const e = await requestEvent(events)
+      assert.equal(e?.type === 'request' && e.responseModel, 'gpt-5.4-mini-2026-03-17')
+    } finally {
+      gw.close()
+    }
+  })
+
+  test('twin: off the endpoints, the response is neither read nor its encoding changed', async () => {
+    const events: EgressEvent[] = []
+    const gw = await startProxy(undefined, {
+      modelResponses: [{ host: HOST, path: { exact: '/v1/other' } }],
+      onEvent: (e) => events.push(e),
+    })
+    try {
+      gw.proxy.addTransformations([brokered])
+      const r = await responses(gw)
+      assert.equal(r.headers['x-accept-encoding'], 'gzip, br, zstd')
+      const e = await requestEvent(events)
+      assert.equal(e?.type, 'request')
+      assert.equal(e?.type === 'request' && e.responseModel, undefined)
     } finally {
       gw.close()
     }

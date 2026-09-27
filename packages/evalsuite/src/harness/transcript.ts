@@ -182,6 +182,19 @@ function fileEdits(
       },
     ]
   }
+  // Codex's file changes say whether the patch added or updated the file, not by how many lines.
+  if (result.kind === 'add' || result.kind === 'update') {
+    return [
+      {
+        type: 'file-edit',
+        toolCallId,
+        path: editPath(input),
+        kind: result.kind === 'add' ? 'create' : 'modify',
+        added: null,
+        removed: null,
+      },
+    ]
+  }
   // Cursor reports counts and a unified diff, whose old side is /dev/null for a new file.
   if (typeof result.linesAdded === 'number') {
     return [

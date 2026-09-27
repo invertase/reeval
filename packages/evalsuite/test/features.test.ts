@@ -22,6 +22,7 @@ import { dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
 import { ANTIGRAVITY_CLI_VERSION } from '@evalsuite/harness-antigravity'
+import { CODEX_CLI_VERSION } from '@evalsuite/harness-codex'
 import { GOOSE_CLI_VERSION } from '@evalsuite/harness-goose'
 import { OPENCODE_CLI_VERSION } from '@evalsuite/harness-opencode'
 import { PI_CLI_VERSION } from '@evalsuite/harness-pi'
@@ -842,6 +843,33 @@ export const features: Feature[] = [
       ),
   },
   {
+    dir: 'harness/codex-rules',
+    tiers: ['fake', 'docker'],
+    image: 'codex',
+    env: 'house-rules',
+    canary: /expected null to be 'Always write tests\.'/,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['AGENTS.md']),
+  },
+  {
+    dir: 'harness/codex-workspace-skills',
+    tiers: ['fake', 'docker'],
+    image: 'codex',
+    env: 'greeting',
+    canary: /expected \[ '' \] to deeply equal \[ '\.\/SKILL\.md' \]/,
+  },
+  {
+    dir: 'harness/codex-home-skills',
+    tiers: ['fake', 'docker'],
+    image: 'codex',
+    env: 'greeting',
+    canary: /expected '' to contain 'Greet people with "Ahoy, <name>!"\.'/,
+    record: ({ run }) =>
+      assert.deepEqual(
+        skills(run).map((s) => [s.name, s.placement]),
+        [['house-greeting', 'harness']],
+      ),
+  },
+  {
     dir: 'harness/cursor-workspace-skills',
     tiers: ['fake', 'docker'],
     env: 'greeting',
@@ -909,6 +937,18 @@ export const features: Feature[] = [
       const [image] = run.stack.images
       assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
       assert.equal(image?.agentCli, PI_CLI_VERSION)
+    },
+  },
+  {
+    dir: 'harness/codex-dockerfile',
+    tiers: ['docker'],
+    image: 'codex',
+    env: 'plain',
+    canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
+    record: ({ run }) => {
+      const [image] = run.stack.images
+      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.equal(image?.agentCli, `codex-cli ${CODEX_CLI_VERSION}`)
     },
   },
   {

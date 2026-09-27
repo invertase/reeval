@@ -208,6 +208,10 @@ test('an auth failure names the credential; other errors get no hint', () => {
       'claude-code',
       '401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
     ],
+    [
+      'codex',
+      'unexpected status 401 Unauthorized: Incorrect API key provided: sk-not-a*****-key. You can find your API key at https://platform.openai.com/account/api-keys., url: https://api.openai.com/v1/responses, auth error: 401, auth error code: invalid_api_key',
+    ],
   ]
   for (const [kind, message] of refused) {
     const { credential } = AGENTS[kind]

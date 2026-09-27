@@ -985,6 +985,44 @@ evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
   }
 
   test(
+    'codex: the key is brokered on the Responses API only, and OpenAI refusing it names the host variable',
+    harnessImage('codex'),
+    async () => {
+      const p = await project('docker-codex-refused-key', {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { codex } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({ harness: codex({ model: 'gpt-5.4-mini' }), sandbox: docker(), timeout: '3m' })
+`,
+        'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('hi', async (t) => {
+  await t.send('Reply with the word hi.')
+  // Each turn is its own codex process, gone by now: the files it left are what can hold the key.
+  const found = await t.exec('grep -rl not_a_real_key "$HOME" /es /tmp 2>/dev/null; true')
+  expect(found.stdout).toBe('')
+  expect(await t.exec('cat ~/.codex/config.toml').then((r) => r.stdout)).toContain('openai-http')
+})
+`,
+      })
+      const env = { OPENAI_API_KEY: 'sk-not_a_real_key_0000000000000000', ES_DEBUG: '1' }
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 300_000 })
+      const out = r.stdout + r.stderr
+      assert.match(
+        out,
+        /es:egress POST https:\/\/api\.openai\.com\/v1\/responses HTTP\/[\d.]+ \(set authorization\)/,
+      )
+      assert.doesNotMatch(out, /refused/)
+      assert.doesNotMatch(out, /chatgpt\.com|github\.com/, 'no analytics or plugin sync')
+      assert.match(out, /turn 1 error: The API rejected OPENAI_API_KEY: set a valid key/)
+      const { run, evals } = readRun(p.dir)
+      const trial = evals[0]?.trial
+      assert.equal(trial?.turns[0]?.status, 'error', JSON.stringify(trial?.turns[0]))
+      assert.equal(trial?.outcome, 'pass', 'the sandbox saw only the placeholder')
+      assert.equal(liveContainers(run.runId), '')
+    },
+  )
+
+  test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',
     claudeImage,
     async () => {
