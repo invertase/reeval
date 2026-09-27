@@ -47,6 +47,7 @@ export const FLAGS = {
   'no-cache': { type: 'boolean' },
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
+  online: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -100,6 +101,16 @@ export const COMMANDS: Record<string, CommandSpec> = {
     -y, --yes               Don't ask: take the defaults (--harness cursor)
     --force                 Overwrite es.config.ts and the eval when they differ
     --dry-run               Print what it would create or change, and write nothing`,
+  },
+  doctor: {
+    flags: ['online', 'json'],
+    positionals: 0,
+    help: `
+  es doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
+                            images, each harness's and the judge's key, egress and .gitignore;
+                            exit 1 on a problem, each with its fix. Never prints a key
+    --online                Also try each key with one tiny authenticated request
+    --json                  The checks as JSON`,
   },
   run: {
     flags: RUN_FLAGS,
