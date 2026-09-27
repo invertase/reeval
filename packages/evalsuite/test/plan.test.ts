@@ -154,7 +154,10 @@ evaluate('uses tools', { environment: tools }, async () => {})
       /evaluate\("uses tools"\) on pi:gemini-3\.8-flash: pi has no MCP client, so it can't use the local, remote MCP servers/,
     )
     // The twin: the same servers plan on a harness that has an MCP client.
-    const goose = await project('mcp-goose', { 'es.config.ts': config('goose'), 'evals/m.es.ts': evals })
+    const goose = await project('mcp-goose', {
+      'es.config.ts': config('goose'),
+      'evals/m.es.ts': evals,
+    })
     const planned = await runCli(goose.dir, ['run', '--dry-run'])
     assert.equal(planned.code, 0, planned.stdout + planned.stderr)
   })
