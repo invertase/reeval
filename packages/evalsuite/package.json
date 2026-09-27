@@ -57,6 +57,8 @@
     "build": "tsdown --config-loader native",
     "features:matrix": "node --experimental-strip-types --no-warnings --import ./test/support/tables-only.mjs test/support/feature-matrix.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "schema:check": "node --experimental-strip-types --no-warnings scripts/schema/check.ts",
+    "schema:update": "node --experimental-strip-types --no-warnings scripts/schema/check.ts --update",
     "test": "node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",

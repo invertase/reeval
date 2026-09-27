@@ -19,6 +19,7 @@ import {
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
+import { readableTranscriptLine } from './record.ts'
 
 // ── Index ────────────────────────────────────────────────────────────────────────────────────
 
@@ -491,7 +492,7 @@ export function parseTranscript(text: string): TranscriptLine[] {
     if (!line.trim()) continue
     try {
       const value = JSON.parse(line) as TranscriptLine
-      if (value && typeof value.type === 'string') lines.push(value)
+      if (value && typeof value.type === 'string') lines.push(readableTranscriptLine(value))
     } catch {}
   }
   return lines

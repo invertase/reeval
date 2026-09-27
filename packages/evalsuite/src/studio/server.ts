@@ -20,6 +20,7 @@ import {
 import type { StudioInfo } from '../view/model.ts'
 import { indexFiles } from '../view/model.ts'
 import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
+import { readableDebugRequest } from '../view/record.ts'
 import { listHeaders, resolveFile, type StudioSource } from './source.ts'
 
 export const COOKIE = 'es_studio_token'
@@ -177,7 +178,9 @@ export function createStudioApp(options: StudioServerOptions) {
     if (!dir || log === null) return c.json(null, 200, { 'Cache-Control': 'no-cache' })
     const view: DebugView = {
       lines: parseDebugLog(log),
-      requests: parseNdjson<DebugRequest>((await readText(join(dir, REQUESTS_FILE))) ?? ''),
+      requests: parseNdjson<DebugRequest>((await readText(join(dir, REQUESTS_FILE))) ?? '').map(
+        readableDebugRequest,
+      ),
       trace: (await stat(join(dir, TRACE_FILE)).catch(() => null))?.isFile() ?? false,
     }
     return c.json(view, 200, { 'Cache-Control': 'no-cache' })

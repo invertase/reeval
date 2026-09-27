@@ -26,12 +26,13 @@ its files import `evalsuite`.
   schemas, APIs, CLI flags and file layouts freely, and delete files or restart designs when
   that's simpler. Don't write migrations, compatibility shims, deprecation paths or readers for
   old formats. This holds until the first public release, or until the team says real users
-  depend on it. One exception: a field added to the run record reads as its empty value in
-  records written before it (`readableRecord` in `src/view/record.ts`, which every record reader
-  goes through), with a test against `test/fixtures/records/before-100` or a newer old record.
-- **Schema v1.** Don't bump schema versions. Keep every schema at version 1 and change it in
-  place, and delete old records or data that no longer fit. Versioning starts at the first
-  public release.
+  depend on it. One exception: files ES writes and reads back (run records, transcripts, saved
+  analyses, `.es/debug` request logs) keep loading after a change, which `pnpm schema:check`
+  enforces; see [Changing what ES persists](#changing-what-es-persists).
+- **Schema v1.** Keep every schema at version 1 and change it additively: a new field is optional
+  or has a read default. Only a change that can't be additive (a removed, renamed or narrowed
+  field) bumps the shape's `schemaVersion`, with a migration; the schema check refuses it
+  otherwise.
 - **Conventional Commits.** Every commit message is `type(scope): summary`, where the type is one
   of `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore` or `revert`. The
   scope is optional and short (`history`, `judge`, `sandbox`, `cli`, `ui`, …). Mark breaking
@@ -70,6 +71,7 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/history/facts.ts` | The derived facts behind `es query effort`, `factor_effects`, `flaky_cells` and `drift`, computed at sync |
 | `packages/evalsuite/src/analysis` | `es analyze`: the digest, the schema and prompt, the model call, validation, rendering, and the cache and saved files |
 | `packages/evalsuite/src/cli-spec.ts` | Every command, flag and help line as data: `cli-parse.ts` builds `es`'s [commander](https://github.com/tj/commander.js) parser from it, `es --help` (and so the docs' CLI help) is its help lines, and `es analyze` checks verify commands against it. A new flag or command goes here, then `test/cli.test.ts` parses it and `ES_UPDATE_SNAPSHOTS=1` refreshes the help golden file |
+| `packages/evalsuite/schema` | JSON Schema snapshots of every shape ES persists and reads back, generated from the types by `scripts/schema/` and checked in CI (`pnpm schema:check`) |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents) and `replay/` (captured real streams and each CLI's known stream format) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
@@ -237,6 +239,37 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
   in the `npm` environment with npm trusted publishing (OIDC, no token). If a flake fails it,
   re-run the failed jobs. Provenance is automatic once the repository is public. Don't publish
   by hand, and don't edit versions or `CHANGELOG.md`.
+
+### Changing what ES persists
+
+Every shape ES writes to disk and reads back later, maybe from an older or newer ES, is listed in
+`packages/evalsuite/scripts/schema/shapes.ts` and snapshotted as a JSON Schema generated from its
+TypeScript type in `packages/evalsuite/schema/`: the run record (`RunRecord`), transcript lines
+(`TranscriptLine`), analysis documents (`AnalysisDoc`) and `.es/debug` request lines
+(`DebugRequest`). Every reader goes through `src/view/record.ts` (`readableRecord`,
+`readableTranscriptLine`, `readableAnalysis`, `readableDebugRequest`).
+
+```bash
+pnpm --filter @invertase/foobar schema:check    # CI (typecheck job); fails on a breaking change
+pnpm --filter @invertase/foobar schema:update   # accept a compatible change, then commit schema/
+```
+
+- **A new field** is optional in the type (`field?: T`, handled where it's read), or required
+  with a read default: `{ path: 'evals[].todo', empty: () => false }` in `READ_DEFAULTS`
+  (`[]` walks an array's items, `{}` a record's values, `<type=tool>` a union variant).
+  `test/schema.test.ts` checks some corpus file lacks the field, so the default runs, and every
+  corpus record, read, fits the current schema.
+- **A removed, renamed or narrowed field** (a lost enum value, a lost `null`, optional made
+  required) fails: an older ES reading a new file, or this one reading an old file, would crash.
+  Keep the field, or bump the shape's `schemaVersion` and add `MIGRATIONS[shape][oldVersion]`.
+- **Newer files:** a record or analysis with a `schemaVersion` above this ES's is skipped with
+  "written by a newer ES … Upgrade ES to read it", never a crash. Fields and enum values a newer ES
+  added are ignored; `test/history.test.ts` ("records from a newer ES") covers both.
+- **Caches** (`.es/history-cache.json`, `.es/history.db`) aren't snapshotted: they're keyed on
+  ES's version and build, so another ES rebuilds them.
+- **Add a corpus record** under `test/fixtures/records/` whenever you change a persisted shape,
+  recorded by the ES before your change, so the next change is tested against
+  a file that really has the old shape.
 
 ### Adding a feature
 

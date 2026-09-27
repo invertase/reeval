@@ -45,6 +45,8 @@ jobs:
       # evalsuite and examples/hello resolve their workspace dependencies' types from dist/.
       - run: pnpm build
       - run: pnpm typecheck
+      - name: persisted shapes (schema/ snapshots)
+        run: pnpm --filter @invertase/foobar schema:check
 
   docs:
     name: docs

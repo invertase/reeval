@@ -18,4 +18,9 @@ export * from './effort.ts'
 export { runHeader } from './header.ts'
 export * from './model.ts'
 export * from './paths.ts'
-export { readableRecord } from './record.ts'
+export {
+  NewerSchemaError,
+  readableAnalysis,
+  readableRecord,
+  readableTranscriptLine,
+} from './record.ts'
