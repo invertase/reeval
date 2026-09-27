@@ -1,10 +1,18 @@
 // The persisted-shape guard: schema/ snapshots every shape ES writes and reads back, and a change
 // that would stop older files from loading fails here and in CI's `pnpm schema:check`.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { checkCorpus, checkShape, explain, snapshotFile } from '../scripts/schema/check.ts'
+import {
+  biome,
+  checkCorpus,
+  checkShape,
+  encode,
+  explain,
+  snapshotFile,
+  writeSnapshots,
+} from '../scripts/schema/check.ts'
 import { compare } from '../scripts/schema/compat.ts'
 import { generate, type Schema, type ShapeSchema } from '../scripts/schema/generate.ts'
 import { SHAPES } from '../scripts/schema/shapes.ts'
@@ -266,5 +274,34 @@ describe('read defaults', () => {
       () => readableAnalysis({ kind: 'es-analysis', schemaVersion: 3 } as never),
       NewerSchemaError,
     )
+  })
+})
+
+describe('schema:update', () => {
+  test('writes snapshots that pass biome ci; canary: the unformatted JSON does not', () => {
+    // Inside the package and not gitignored, so Biome checks it with the repo's config.
+    const dir = join(import.meta.dirname, '..', `schema-update-check-${process.pid}`)
+    mkdirSync(dir, { recursive: true })
+    try {
+      const current = generate()
+      writeSnapshots(
+        SHAPES.map((s) => ({
+          file: snapshotFile(s, dir),
+          doc: current.get(s.name) as ShapeSchema,
+        })),
+      )
+      const written = biome(['ci', dir])
+      assert.equal(written.status, 0, written.stdout + written.stderr)
+      for (const s of SHAPES) {
+        const doc = JSON.parse(readFileSync(snapshotFile(s, dir), 'utf8'))
+        assert.deepEqual(doc, current.get(s.name), 'formatting keeps the content')
+      }
+
+      const raw = join(dir, 'raw.schema.json')
+      writeFileSync(raw, encode(current.get('run-record') as ShapeSchema))
+      assert.notEqual(biome(['ci', raw]).status, 0, 'JSON.stringify output fails biome ci')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })
