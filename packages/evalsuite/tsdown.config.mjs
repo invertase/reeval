@@ -3,11 +3,27 @@
 // `dependencies`. What ships next to the code: each of those packages' other `files` (such as
 // sandbox-docker's `docker/` build context), at the package root beside `dist/`, where their
 // `../<dir>` from a module finds it in a chunk too, and the prebuilt studio app
-// (`dist/studio-app`).
-import { cpSync, existsSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+// (`dist/studio-app`). THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
+// that inlines (scripts/third-party.mjs).
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, relative } from 'node:path'
 import { defineConfig } from 'tsdown'
+import {
+  bundledLicenses,
+  markedFiles,
+  packageDir,
+  packageLicense,
+  renderNotices,
+} from '../../scripts/third-party.mjs'
 
 const here = import.meta.dirname
 const require = createRequire(import.meta.url)
@@ -40,13 +56,19 @@ for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('
  */
 const patched = ['@ai-sdk/harness-claude-code']
 const BRIDGE_FILES = ['index.mjs', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']
+/** What the adapters' own build inlined into `bridge/index.mjs`, resolved from the adapter. */
+const BRIDGE_BUNDLES = ['@ai-sdk/harness']
 for (const name of patched) {
   if (!pkg.devDependencies[name] || pkg.dependencies[name])
     throw new Error(`${name} is inlined: list it in devDependencies only`)
 }
 
 const dist = join(here, 'dist')
-const studioApp = join(here, '../studio-web/dist')
+const studioWeb = join(here, '../studio-web')
+const studioApp = join(studioWeb, 'dist')
+/** studio-web's build writes the third-party packages it inlined here. */
+const studioLicenses = join(studioApp, 'third-party.json')
+let bundled = []
 
 export default defineConfig({
   entry: {
@@ -79,6 +101,9 @@ export default defineConfig({
         handler: (id) => sources.get(id),
       },
     },
+    bundledLicenses('dist', (packages) => {
+      bundled = packages
+    }),
   ],
   hooks: {
     'build:done': ({ chunks }) => {
@@ -91,23 +116,59 @@ export default defineConfig({
         if (file.includes('/') && code.includes('import.meta.url'))
           throw new Error(`dist/${file} uses import.meta.url outside dist/'s top level`)
       }
+      const thirdParty = [...bundled]
       for (const name of patched) {
-        const bridge = join(
-          dirname(realpathSync(require.resolve(`${name}/package.json`))),
-          'dist/bridge',
-        )
-        for (const file of BRIDGE_FILES) cpSync(join(bridge, file), join(dist, 'bridge', file))
+        const adapter = dirname(realpathSync(require.resolve(`${name}/package.json`)))
+        const bridge = join(adapter, 'dist/bridge')
+        const { version } = JSON.parse(readFileSync(join(adapter, 'package.json'), 'utf8'))
+        const patch = `patches/${name.replace('/', '__')}@${version}.patch`
+        const changed = [
+          ...readFileSync(join(here, '../..', patch), 'utf8').matchAll(
+            /^diff --git a\/dist\/bridge\/(\S+)/gm,
+          ),
+        ].map((m) => m[1])
+        for (const file of BRIDGE_FILES) {
+          const code = readFileSync(join(bridge, file), 'utf8')
+          // Apache-2.0 §4(b): a modified file says so.
+          const notice = `// Modified by Invertase with ${patch}; see THIRD_PARTY_NOTICES.md.\n`
+          mkdirSync(join(dist, 'bridge'), { recursive: true })
+          const marked = changed.includes(file) && /\.m?js$/.test(file)
+          writeFileSync(join(dist, 'bridge', file), marked ? notice + code : code)
+        }
+        thirdParty.push({
+          ...packageLicense(adapter, 'dist/bridge'),
+          modified: `${changed.map((f) => `dist/bridge/${f}`).join(', ')}, with ${patch}`,
+        })
+        for (const inlined of BRIDGE_BUNDLES)
+          thirdParty.push(packageLicense(packageDir(inlined, adapter), 'dist/bridge'))
       }
       for (const [asset, from] of assets) {
         rmSync(join(here, asset), { recursive: true, force: true })
         cpSync(from, join(here, asset), { recursive: true })
       }
-      if (existsSync(join(studioApp, 'index.html')))
-        cpSync(studioApp, join(dist, 'studio-app'), { recursive: true })
-      else
+      if (existsSync(join(studioApp, 'index.html'))) {
+        cpSync(studioApp, join(dist, 'studio-app'), {
+          recursive: true,
+          filter: (file) => file !== studioLicenses,
+        })
+        thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
+      } else
         console.warn(
           "studio-web isn't built; es studio will have no app. Run pnpm build from the repo root.",
         )
+      const shadcn = markedFiles(join(studioWeb, 'src'), 'shadcn/ui', join(here, '../..'))
+      writeFileSync(
+        join(here, 'THIRD_PARTY_NOTICES.md'),
+        renderNotices(pkg.name, thirdParty, [
+          {
+            title: 'shadcn/ui',
+            license: 'MIT',
+            licenseText: readFileSync(join(studioWeb, 'src/components/ui/LICENSE'), 'utf8'),
+            source: 'https://github.com/shadcn-ui/ui',
+            files: shadcn,
+          },
+        ]),
+      )
     },
   },
 })
