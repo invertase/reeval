@@ -73,7 +73,7 @@ When images are missing and `es doctor` runs in a terminal, it offers to build t
              fix: set a valid CURSOR_API_KEY in .env.local
 ```
 
-With `--online`, each key goes in one request to its API, only in a header: `GET /v0/me` on `api.cursor.com`, `GET /v1/models` on `api.anthropic.com` and `GET /v1beta/models` on `generativelanguage.googleapis.com`. HTTP 401 or 403 is a problem. Other keys, such as `TYPESAFE_AI_API_KEY`, are only checked for being set.
+With `--online`, each key goes in one request to its API, only in a header: `GET /v0/me` on `api.cursor.com`, `GET /v1/models` on `api.anthropic.com`, `GET /v1beta/models` on `generativelanguage.googleapis.com` and `GET /v1/models` on `api.openai.com`. HTTP 401 or 403 is a problem. Other keys, such as `TYPESAFE_AI_API_KEY`, are only checked for being set.
 
 ## --json
 

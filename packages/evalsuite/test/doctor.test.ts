@@ -39,7 +39,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
 async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
     'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { claudeCode, cursor, fakeHarness, pi } from 'evalsuite/harness'
+import { claudeCode, codex, cursor, fakeHarness, pi } from 'evalsuite/harness'
 import { fakeJudge } from 'evalsuite/judge'
 import { docker, fakeSandbox } from 'evalsuite/sandbox'
 export default defineConfig(${body})
@@ -167,6 +167,20 @@ describe('es doctor checks', () => {
     assert.match(wrapped[0]?.summary ?? '', /line break in it at character 28/)
     noSecret(wrapped)
 
+    const openai = await configOf('keys-codex', `{ harness: codex({ model: 'gpt-5.4-mini' }) }`)
+    const unset = await checkKeys(openai, deps(), false, '.env.local')
+    assert.deepEqual(statuses(unset), ['fail'])
+    assert.match(unset[0]?.summary ?? '', /^OPENAI_API_KEY for codex:gpt-5\.4-mini: not set$/)
+    assert.equal(unset[0]?.fix, 'add OPENAI_API_KEY=... to .env.local')
+    const codexSet = await checkKeys(
+      openai,
+      deps({ env: { OPENAI_API_KEY: SECRET } }),
+      false,
+      '.env.local',
+    )
+    assert.deepEqual(statuses(codexSet), ['ok'])
+    noSecret(codexSet)
+
     const fake = await configOf('keys-fake', '{ harness: fakeHarness(), sandbox: fakeSandbox() }')
     assert.deepEqual(statuses(await checkKeys(fake, deps(), false, '.env.local')), ['skip'])
   })
@@ -197,6 +211,15 @@ describe('es doctor checks', () => {
       /couldn't reach generativelanguage\.googleapis\.com \(ENOTFOUND\)/,
     )
     assert.equal((await probeKey('TYPESAFE_AI_API_KEY', SECRET, answer(500))).status, 'ok')
+    const openai = await probeKey('OPENAI_API_KEY', SECRET, answer(401))
+    assert.deepEqual(openai, {
+      status: 'fail',
+      summary: 'set, but api.openai.com rejects it (HTTP 401)',
+    })
+    assert.ok(!JSON.stringify(openai).includes(SECRET))
+    const openaiCall = seen.at(-1)
+    assert.equal(openaiCall?.url, 'https://api.openai.com/v1/models')
+    assert.equal(openaiCall?.headers.authorization, `Bearer ${SECRET}`)
     for (const { url } of seen) assert.ok(!url.includes(SECRET), url)
     assert.equal(seen[0]?.headers['x-api-key'], SECRET)
     assert.equal(

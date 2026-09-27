@@ -289,6 +289,10 @@ const PROBES: Record<string, (key: string) => { url: string; headers: Record<str
     url: 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1',
     headers: { 'x-goog-api-key': key },
   }),
+  OPENAI_API_KEY: (key) => ({
+    url: 'https://api.openai.com/v1/models',
+    headers: { authorization: `Bearer ${key}` },
+  }),
 }
 
 /** Whether the API accepts the key, from one request; the key only goes in its headers. */
