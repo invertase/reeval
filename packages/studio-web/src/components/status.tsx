@@ -1,6 +1,13 @@
 import type { Outcome, StackChange } from 'evalsuite/view'
 import { formatPercent } from 'evalsuite/view'
-import { CircleAlert, CircleCheck, CircleDashed, CircleX, GitCompareArrows } from 'lucide-react'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleDashed,
+  CircleMinus,
+  CircleX,
+  GitCompareArrows,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -32,11 +39,14 @@ const OUTCOME = {
   },
 } satisfies Record<Outcome, unknown>
 
+/** `missed` mutes a failure in an ungated cell, which doesn't fail the run. */
 export function OutcomeIcon({
   outcome,
+  missed = false,
   className,
 }: {
   outcome: Outcome | null
+  missed?: boolean
   className?: string
 }) {
   if (!outcome) {
@@ -52,6 +62,14 @@ export function OutcomeIcon({
     )
   }
   const { Icon, text, label } = OUTCOME[outcome]
+  if (missed && outcome === 'fail') {
+    return (
+      <CircleMinus
+        className={cn('size-4 shrink-0 text-muted-foreground', className)}
+        aria-label="Missed, not gated"
+      />
+    )
+  }
   return <Icon className={cn('size-4 shrink-0', text, className)} aria-label={label} />
 }
 
@@ -76,21 +94,23 @@ export function OutcomeBadge({
 
 export const outcomeLabel = (o: Outcome) => OUTCOME[o].label
 
-/** A compact segmented bar: pass, fail, infra, skipped. */
+/** A compact segmented bar: pass, fail, missed (ungated failures), infra, skipped. */
 export function TallyBar({
   pass,
   fail,
+  missed = 0,
   infra = 0,
   skipped = 0,
   className,
 }: {
   pass: number
   fail: number
+  missed?: number
   infra?: number
   skipped?: number
   className?: string
 }) {
-  const total = pass + fail + infra + skipped
+  const total = pass + fail + missed + infra + skipped
   if (total === 0) return <div className={cn('h-1.5 rounded-full bg-muted', className)} />
   const seg = (n: number, color: string) =>
     n > 0 ? <div className={color} style={{ width: `${(n / total) * 100}%` }} /> : null
@@ -98,6 +118,7 @@ export function TallyBar({
     <div className={cn('flex h-1.5 overflow-hidden rounded-full bg-muted', className)}>
       {seg(pass, 'bg-pass')}
       {seg(fail, 'bg-fail')}
+      {seg(missed, 'bg-muted-foreground/40')}
       {seg(infra, 'bg-infra')}
       {seg(skipped, 'bg-skip/50')}
     </div>

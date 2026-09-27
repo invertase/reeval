@@ -235,12 +235,47 @@ group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}1 eval · 2 cells · 4 attempts/m)
-    assert.match(r.stdout, /^\[writes#1 control\] ✗ .*\(not gated\)$/m)
+    assert.match(r.stdout, /^\[writes#1 control\] ○ .*\(not gated\)$/m)
     assert.match(r.stdout, /^\[writes#1 skilled\] ✓ /m)
     assert.match(r.stdout, /fake\/base\/fake +control +0\/2 +0% +not gated/)
     assert.match(r.stdout, /fake\/skilled\/fake +variant +2\/2 +100% +lift \+100 pts/)
     assert.match(r.stdout, /overrides: env\.MODE/)
-    assert.match(r.stdout, /2 passed · 2 failed, not gated \(4 attempts, 1 evals\)/)
+    // A successful compare reads as one: the control's expected misses aren't failures.
+    assert.doesNotMatch(r.stdout, /✗|Failures|Assertion failures|failed/)
+    assert.match(r.stdout, /^Expected misses, not gated \(2\)$/m)
+    assert.match(r.stdout, /^ ○ evals\/c\.es\.ts › g › writes ok\.txt {2}fake\/base\/fake#1$/m)
+    const section = r.stdout.slice(
+      r.stdout.indexOf('Expected misses'),
+      r.stdout.indexOf('Attempts'),
+    )
+    assert.equal(section.trim().split('\n').length, 1 + 2 * 3, 'a name, a reason and a record each')
+    assert.match(r.stdout, /2 passed · 2 missed, not gated \(4 attempts, 1 evals\)/)
+
+    const colour = await runCli(p.dir, ['run'], { env: { FORCE_COLOR: '1' } })
+    assert.equal(colour.code, 0, colour.stdout + colour.stderr)
+    assert.ok(!colour.stdout.includes('\x1b[31m'), 'nothing red')
+
+    const agent = await runCli(p.dir, ['run', '--ui', 'agent'])
+    assert.equal(agent.code, 0, agent.stdout + agent.stderr)
+    assert.doesNotMatch(agent.stdout, /^FAIL /m)
+    assert.match(
+      agent.stdout,
+      /^MISS evals\/c\.es\.ts › g › writes ok\.txt \[.*\] \(.*, assertion, not gated\)$/m,
+    )
+    assert.match(agent.stdout, /^2 passed, 2 missed, not gated \(4 attempts, 1 evals\)$/m)
+
+    const gha = await runCli(p.dir, ['run', '--log-order', 'grouped'], {
+      env: { GITHUB_ACTIONS: 'true' },
+    })
+    assert.equal(gha.code, 0, gha.stdout + gha.stderr)
+    assert.doesNotMatch(gha.stdout, /^::error/m)
+    assert.equal(gha.stdout.match(/^::group::/gm)?.length, 4, 'expected misses collapse too')
+
+    const md = readRun(p.dir).read('summary.md')
+    assert.match(md, /^2 passed · 2 missed, not gated \(4 attempts, 1 evals\)/m)
+    assert.doesNotMatch(md, /✗|failed/)
+    assert.match(md, /^#### ○ fake\/base\/fake#1 · missed, not gated$/m)
+    assert.match(md, /^<details><summary>Why it missed<\/summary>$/m)
     const { run, evals } = readRun(p.dir)
     const [e] = evals
     assert.equal(e?.outcome, 'pass', 'the ungated control fails without failing the eval')
@@ -295,6 +330,11 @@ evaluate('no worse', { compare: { variants: [skilled], minLift: 0.5, gate: 'none
     assert.equal(noWorse?.cells[1]?.lift?.points, -1)
     assert.equal(noWorse?.cells[1]?.outcome, 'fail')
     assert.equal(noWorse?.outcome, 'pass', "gate 'none' reports but never fails")
+    // The canary: a gated control's failure is still a failure; only the ungated miss moves.
+    assert.match(r.stdout, /^Failures \(1\)$/m)
+    assert.match(r.stdout, /^ ✗ evals\/c\.es\.ts › all gated {2}fake\/base\/fake#1$/m)
+    assert.match(r.stdout, /^Expected misses, not gated \(1\)$/m)
+    assert.match(r.stdout, /^ ○ evals\/c\.es\.ts › no worse {2}fake\/skilled\/fake#1$/m)
     assert.match(
       r.stdout,
       /lift −100 pts \(95% −100…\+12, 0\/1 vs 1\/1\), within noise \(minLift 50\) ✗/,

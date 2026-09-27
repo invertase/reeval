@@ -24,7 +24,7 @@ flowchart TD
 
 | Mode | Picked when | Prints |
 |---|---|---|
-| `agent` | A coding agent runs ES (Cursor, Claude Code, Codex…, as std-env detects them) | Failures only, then totals and the summary path; no colour, no heartbeat |
+| `agent` | A coding agent runs ES (Cursor, Claude Code, Codex…, as std-env detects them) | Failures (and expected misses, as `MISS`) only, then totals and the summary path; no colour, no heartbeat |
 | `plain` | CI is detected (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…), or stdout isn't a terminal | Append-only lines, never rewritten |
 | `live` | On a terminal | The same as `plain`, until the redrawn view lands |
 
@@ -105,11 +105,11 @@ With `GITHUB_ACTIONS=true`, passing attempts collapse into `::group::` blocks ti
 ::endgroup::
 ```
 
-A failing control that isn't gated gets `(not gated)` and no annotation.
+An ungated control's miss collapses into a group like a pass, marked `○` and `(not gated)`, with no annotation.
 
 ## Agent mode
 
-Agent mode prints one block per failure with its record path, then totals, and the summary path last, so an agent reads what it needs and nothing else. A real run:
+Agent mode prints one block per failure with its record path, then totals, and the summary path last, so an agent reads what it needs and nothing else. An ungated cell's expected miss is one `MISS` line with its reason and record, never `FAIL`. A real run:
 
 ```text
 plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
@@ -141,12 +141,11 @@ Summary
          cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
 …
-Failures (4)
-
-Assertion failures (4)
- ✗ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#1  (not gated)
+Expected misses, not gated (4)
+ ○ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#1
+   Error: expected command to succeed, exit code 1
 …
-Attempts  12 passed · 4 failed, not gated (16 attempts, 3 evals)
+Attempts  12 passed · 4 missed, not gated (16 attempts, 3 evals)
 Duration  2m 39s
   Tokens  5149k in (2946k cached) · 64k out
  Results  .es/runs/20260926T174444Z_b010670_ada-lovelace_7gmj/summary.md
@@ -154,7 +153,7 @@ Duration  2m 39s
 
 An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity and pi do): input includes cached reads, and there's no cost line because ES prices no models.
 
-Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its artifact directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure.
+Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its artifact directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure. Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
 
 | Variable | Same as |
 |---|---|

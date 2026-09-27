@@ -11,6 +11,7 @@ import {
   formatRatio,
   formatUsage,
   isMatrix,
+  isUngatedMiss,
   type RunRecord,
   runOutcome,
   shortSha,
@@ -125,7 +126,8 @@ function TreeRow({
           <span className="shrink-0 text-xs text-muted-foreground">todo</span>
         ) : isMatrix(node.eval) ? (
           <span className="tabular shrink-0 text-xs text-muted-foreground">
-            {node.tally.pass}/{node.tally.pass + node.tally.fail + node.tally.infra}
+            {node.tally.pass}/
+            {node.tally.pass + node.tally.fail + node.tally.missed + node.tally.infra}
           </span>
         ) : null}
       </button>
@@ -146,6 +148,8 @@ function TreeRow({
         <span className={cn('min-w-0 flex-1 truncate', isFile && 'font-mono')}>{node.name}</span>
         {node.tally.fail ? (
           <span className="tabular text-fail">{node.tally.fail} failed</span>
+        ) : node.tally.missed ? (
+          <span className="tabular">{node.tally.missed} missed, not gated</span>
         ) : null}
       </button>
       {open
@@ -235,7 +239,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                       title={`${a.id} · ${formatDuration(a.durationMs)}`}
                       className="rounded-sm p-0.5 hover:bg-accent"
                     >
-                      <OutcomeIcon outcome={a.outcome} />
+                      <OutcomeIcon outcome={a.outcome} missed={!row.gated} />
                     </Link>
                   ))}
                 </div>
@@ -329,6 +333,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
         <div className="divide-y overflow-hidden rounded-lg border">
           {entry.attempts.map((a) => {
             const judge = a.judgements[0]
+            const missed = isUngatedMiss(entry, a)
             return (
               <Link
                 key={a.id}
@@ -336,7 +341,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                 params={{ runId: record.runId, slug: entry.slug, attempt: a.id }}
                 className="group flex items-start gap-3 px-3.5 py-3 transition-colors hover:bg-accent/50"
               >
-                <OutcomeIcon outcome={a.outcome} className="mt-0.5" />
+                <OutcomeIcon outcome={a.outcome} missed={missed} className="mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="font-mono text-xs">{a.id}</span>
@@ -354,9 +359,19 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                         judge {judge.score.toFixed(2)} / {judge.threshold}
                       </span>
                     ) : null}
+                    {missed ? (
+                      <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                        missed, not gated
+                      </Badge>
+                    ) : null}
                   </div>
                   {a.error ? (
-                    <p className="mt-1 line-clamp-2 font-mono text-xs text-fail">
+                    <p
+                      className={cn(
+                        'mt-1 line-clamp-2 font-mono text-xs',
+                        missed ? 'text-muted-foreground' : 'text-fail',
+                      )}
+                    >
                       {a.error.kind}: {a.error.message.split('\n')[0]}
                     </p>
                   ) : a.turns.at(-1)?.text ? (
@@ -403,7 +418,8 @@ export function RunPage() {
     record.evals[0]
   const headers = index?.headers ?? []
   const previous = headers.find((h) => h.runId < runId && h.status === 'complete')
-  const { pass, fail, infraError, skipped } = record.summary
+  const { pass, fail: failed, notGated, infraError, skipped } = record.summary
+  const fail = failed - notGated
 
   return (
     <div className="space-y-6">
@@ -438,6 +454,12 @@ export function RunPage() {
                 <span className="font-semibold text-fail">{fail}</span> failed
               </>
             ) : null}
+            {notGated ? (
+              <>
+                {' · '}
+                <span className="font-semibold">{notGated}</span> missed, not gated
+              </>
+            ) : null}
             {infraError ? (
               <>
                 {' · '}
@@ -461,6 +483,7 @@ export function RunPage() {
           className="mt-3 h-2"
           pass={pass}
           fail={fail}
+          missed={notGated}
           infra={infraError}
           skipped={skipped}
         />

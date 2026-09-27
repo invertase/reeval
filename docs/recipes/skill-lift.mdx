@@ -103,7 +103,7 @@ Summary
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
            effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 …
-Attempts  2 passed · 2 failed, not gated (4 attempts, 1 evals)
+Attempts  2 passed · 2 missed, not gated (4 attempts, 1 evals)
 Duration  24s
   Tokens  362k in (169k cached) · 3525 out
 ```
@@ -124,7 +124,7 @@ The recipe as written, under the [fake harness](/recipes/fake-harness) (which wr
 - `2/4` or `3/6` counts every attempt. `100%` is the pass rate of the cells that gate, which here is only the variant.
 - `lift +100 pts` is the variant's pass rate minus the control's.
 - `95% +21…+100` is the interval on that difference. Its lower bound is above `minLift`, so the cell passes.
-- The control's failures print as `not gated`, so they don't change the exit code.
+- The control's misses print as `not gated`, apart from failures, so they don't change the exit code.
 - The fake agent makes no tool calls, so its `effort` line compares zeros.
 
 ## Read the effort

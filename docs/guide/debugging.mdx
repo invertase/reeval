@@ -8,7 +8,7 @@ When an eval fails, the reason is usually in the summary. When it isn't, ES has 
 ## Read the failure block
 
 ```text
- ✗ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#2  (not gated)
+ ✗ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#2
    Error: expected command to succeed, exit code 1
    --- stderr ---
    (node:1390) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
@@ -25,7 +25,7 @@ When an eval fails, the reason is usually in the summary. When it isn't, ES has 
    record  .es/runs/20260926T174022Z_b010670_ada-lovelace_pmvn/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/cursor-composer-2-5-docker-76739b/2
 ```
 
-The first line names the eval, the cell and the attempt number. `(not gated)` means this is the control, so its failure doesn't fail the run. Then come the error, the command's output and the line of your eval that failed.
+The first line names the eval, the cell and the attempt number. Then come the error, the command's output and the line of your eval that failed. A control that isn't gated prints only the error's first line and its `record`, under `Expected misses, not gated`, since its miss doesn't fail the run.
 
 The `record` line is the attempt's folder. It holds what the agent did:
 

@@ -353,7 +353,8 @@ export function RunsPage() {
                           <TallyBar
                             className="mt-1.5"
                             pass={entry.summary.pass}
-                            fail={entry.summary.fail}
+                            fail={entry.summary.fail - entry.summary.notGated}
+                            missed={entry.summary.notGated}
                             infra={entry.summary.infraError}
                             skipped={entry.summary.skipped}
                           />

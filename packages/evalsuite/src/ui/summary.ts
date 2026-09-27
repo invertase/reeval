@@ -2,10 +2,17 @@ import { gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
-import { formatUsage, hasUngatedCells } from '../view/model.ts'
-import type { Colors } from './colors.ts'
+import { formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
+import { type Colors, colors } from './colors.ts'
 import type { EsEvent, EvalResult } from './events.ts'
-import { attemptOutcome, failureLines, formatDuration, mark, type Outcome } from './format.ts'
+import {
+  attemptOutcome,
+  failureLines,
+  formatDuration,
+  MISS_MARK,
+  mark,
+  type Outcome,
+} from './format.ts'
 
 type RunEnd = Extract<EsEvent, { type: 'run-end' }>
 export type AttemptDir = (id: string, cell: string, n: number) => string
@@ -143,7 +150,7 @@ export function totals(c: Colors, s: RunSummary, cancelled = 0): string {
   const parts = [
     s.pass && c.green(`${s.pass} passed`),
     fail > 0 && c.red(`${fail} failed`),
-    s.notGated > 0 && c.dim(`${s.notGated} failed, not gated`),
+    s.notGated > 0 && c.dim(`${s.notGated} missed, not gated`),
     s.infraError && c.yellow(`${s.infraError} infra error`),
     cancelled && c.yellow(`${cancelled} cancelled`),
     s.skipped && c.dim(`${s.skipped} skipped`),
@@ -152,7 +159,7 @@ export function totals(c: Colors, s: RunSummary, cancelled = 0): string {
   return parts.length ? `${parts.join(c.dim(' · '))} ${c.dim(`(${scope})`)}` : 'no evals ran'
 }
 
-/** Failing attempts, in run order. */
+/** Failing attempts, in run order, including expected misses. */
 export function failingAttempts(evals: EvalEntry[]) {
   return evals.flatMap((entry) =>
     entry.attempts
@@ -166,7 +173,9 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
   const lines: string[] = []
   if (record.evals.length) lines.push(c.bold('Summary'), ...tree(c, record.evals))
 
-  const failing = failingAttempts(record.evals)
+  const all = failingAttempts(record.evals)
+  const missed = all.filter(({ entry, attempt }) => isUngatedMiss(entry, attempt))
+  const failing = all.filter((f) => !missed.includes(f))
   if (failing.length) {
     lines.push('', c.bold(c.red(`Failures (${failing.length})`)))
     for (const kind of KINDS) {
@@ -186,6 +195,19 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
         }
         lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, attempt.cell, attempt.n)}`)
       }
+    }
+  }
+  // Short on purpose: in a compare, the control missing is what the lift is measured against.
+  if (missed.length) {
+    lines.push('', c.bold(`Expected misses, not gated (${missed.length})`))
+    for (const { entry, attempt } of missed) {
+      const which = entry.attempts.length > 1 ? `  ${c.dim(attempt.id)}` : ''
+      const [reason] = failureLines(colors(false), resultFor(entry, attempt, e.results), {
+        max: 1,
+      }).filter((l) => l.trim())
+      lines.push(` ${MISS_MARK(c)} ${entry.id}${which}`)
+      if (reason) lines.push(`   ${c.dim(reason.trim())}`)
+      lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, attempt.cell, attempt.n)}`)
     }
   }
 
