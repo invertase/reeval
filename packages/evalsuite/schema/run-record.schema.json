@@ -5,7 +5,29 @@
   "$ref": "#/$defs/RunRecord",
   "$defs": {
     "ArtifactLevel": {
-      "enum": ["all", "failures", "none"]
+      "enum": [
+        "all",
+        "failures",
+        "none"
+      ]
+    },
+    "AttemptError": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ErrorKind"
+        },
+        "message": {
+          "type": "string"
+        },
+        "prepare": {
+          "$ref": "#/$defs/PrepareFailureRecord"
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ]
     },
     "AttemptFiles": {
       "type": "object",
@@ -64,7 +86,13 @@
               ]
             }
           },
-          "required": ["fileEdits", "reasoningMs", "tools", "webFetches", "webSearches"]
+          "required": [
+            "fileEdits",
+            "reasoningMs",
+            "tools",
+            "webFetches",
+            "webSearches"
+          ]
         },
         "cell": {
           "type": "string"
@@ -81,10 +109,17 @@
                 "type": "string"
               },
               "status": {
-                "enum": ["added", "deleted", "modified"]
+                "enum": [
+                  "added",
+                  "deleted",
+                  "modified"
+                ]
               }
             },
-            "required": ["path", "status"]
+            "required": [
+              "path",
+              "status"
+            ]
           }
         },
         "checks": {
@@ -105,7 +140,11 @@
                 "$ref": "#/$defs/FileRef"
               }
             },
-            "required": ["command", "durationMs", "exitCode"]
+            "required": [
+              "command",
+              "durationMs",
+              "exitCode"
+            ]
           }
         },
         "context": {
@@ -149,24 +188,19 @@
               }
             }
           },
-          "required": ["brokered", "secrets", "vars"]
+          "required": [
+            "brokered",
+            "secrets",
+            "vars"
+          ]
         },
         "error": {
           "anyOf": [
             {
-              "type": "null"
+              "$ref": "#/$defs/AttemptError"
             },
             {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "$ref": "#/$defs/ErrorKind"
-                },
-                "message": {
-                  "type": "string"
-                }
-              },
-              "required": ["kind", "message"]
+              "type": "null"
             }
           ]
         },
@@ -346,7 +380,10 @@
     "CellGate": {
       "anyOf": [
         {
-          "enum": ["all", "none"]
+          "enum": [
+            "all",
+            "none"
+          ]
         },
         {
           "type": "object",
@@ -355,7 +392,9 @@
               "type": "number"
             }
           },
-          "required": ["passRate"]
+          "required": [
+            "passRate"
+          ]
         }
       ]
     },
@@ -473,7 +512,10 @@
       ]
     },
     "CellRole": {
-      "enum": ["control", "variant"]
+      "enum": [
+        "control",
+        "variant"
+      ]
     },
     "ContextFile": {
       "type": "object",
@@ -485,7 +527,10 @@
           "type": "string"
         }
       },
-      "required": ["path", "sha256"]
+      "required": [
+        "path",
+        "sha256"
+      ]
     },
     "Cost": {
       "type": "object",
@@ -511,7 +556,10 @@
           ]
         },
         "source": {
-          "enum": ["reported", "unreported"]
+          "enum": [
+            "reported",
+            "unreported"
+          ]
         },
         "usage": {
           "anyOf": [
@@ -524,12 +572,20 @@
           ]
         }
       },
-      "required": ["inputTokens", "outputTokens", "source", "usage"]
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "source",
+        "usage"
+      ]
     },
     "EgressPolicy": {
       "anyOf": [
         {
-          "enum": ["allow-all", "deny-all"]
+          "enum": [
+            "allow-all",
+            "deny-all"
+          ]
         },
         {
           "type": "object",
@@ -541,7 +597,9 @@
               }
             }
           },
-          "required": ["allow"]
+          "required": [
+            "allow"
+          ]
         }
       ]
     },
@@ -579,7 +637,12 @@
                 "type": "string"
               }
             },
-            "required": ["connections", "host", "port", "reason"]
+            "required": [
+              "connections",
+              "host",
+              "port",
+              "reason"
+            ]
           }
         },
         "contacted": {
@@ -603,7 +666,13 @@
                 "type": "number"
               }
             },
-            "required": ["connections", "host", "port", "received", "sent"]
+            "required": [
+              "connections",
+              "host",
+              "port",
+              "received",
+              "sent"
+            ]
           }
         },
         "expectedBlocked": {
@@ -624,7 +693,12 @@
                 "type": "string"
               }
             },
-            "required": ["connections", "host", "port", "reason"]
+            "required": [
+              "connections",
+              "host",
+              "port",
+              "reason"
+            ]
           }
         },
         "policy": {
@@ -634,7 +708,14 @@
           "type": "boolean"
         }
       },
-      "required": ["allowed", "blocked", "contacted", "expectedBlocked", "policy", "recorded"]
+      "required": [
+        "allowed",
+        "blocked",
+        "contacted",
+        "expectedBlocked",
+        "policy",
+        "recorded"
+      ]
     },
     "EnvironmentRecord": {
       "type": "object",
@@ -663,7 +744,10 @@
                 "type": "string"
               }
             },
-            "required": ["path", "sha256"]
+            "required": [
+              "path",
+              "sha256"
+            ]
           }
         },
         "mcp": {
@@ -737,7 +821,14 @@
                 "type": "string"
               }
             },
-            "required": ["commit", "excluded", "name", "placement", "sha256", "source"]
+            "required": [
+              "commit",
+              "excluded",
+              "name",
+              "placement",
+              "sha256",
+              "source"
+            ]
           }
         },
         "unset": {
@@ -770,7 +861,13 @@
       ]
     },
     "ErrorKind": {
-      "enum": ["aborted", "assertion", "infra", "judge", "timeout"]
+      "enum": [
+        "aborted",
+        "assertion",
+        "infra",
+        "judge",
+        "timeout"
+      ]
     },
     "EvalEntry": {
       "type": "object",
@@ -836,7 +933,10 @@
                 "type": "string"
               }
             },
-            "required": ["path", "sha256"]
+            "required": [
+              "path",
+              "sha256"
+            ]
           }
         },
         "tags": {
@@ -879,7 +979,11 @@
           "type": "string"
         }
       },
-      "required": ["bytes", "path", "sha256"]
+      "required": [
+        "bytes",
+        "path",
+        "sha256"
+      ]
     },
     "FingerprintParts": {
       "type": "object",
@@ -927,7 +1031,15 @@
           "type": "string"
         }
       },
-      "required": ["agentCli", "context", "environment", "harness", "image", "judge", "sources"]
+      "required": [
+        "agentCli",
+        "context",
+        "environment",
+        "harness",
+        "image",
+        "judge",
+        "sources"
+      ]
     },
     "GitInfo": {
       "type": "object",
@@ -1035,10 +1147,20 @@
           "type": "number"
         },
         "verdict": {
-          "enum": ["fail", "pass"]
+          "enum": [
+            "fail",
+            "pass"
+          ]
         }
       },
-      "required": ["key", "model", "question", "score", "threshold", "verdict"]
+      "required": [
+        "key",
+        "model",
+        "question",
+        "score",
+        "threshold",
+        "verdict"
+      ]
     },
     "JudgeRetry": {
       "type": "object",
@@ -1050,7 +1172,10 @@
           "type": "string"
         }
       },
-      "required": ["delayMs", "error"]
+      "required": [
+        "delayMs",
+        "error"
+      ]
     },
     "Lift": {
       "type": "object",
@@ -1065,7 +1190,10 @@
               "type": "number"
             }
           },
-          "required": ["counted", "pass"]
+          "required": [
+            "counted",
+            "pass"
+          ]
         },
         "interval": {
           "type": "object",
@@ -1083,7 +1211,12 @@
               "const": "newcombe-wilson"
             }
           },
-          "required": ["hi", "level", "lo", "method"]
+          "required": [
+            "hi",
+            "level",
+            "lo",
+            "method"
+          ]
         },
         "minLift": {
           "type": "number"
@@ -1101,7 +1234,10 @@
               "type": "number"
             }
           },
-          "required": ["counted", "pass"]
+          "required": [
+            "counted",
+            "pass"
+          ]
         },
         "vs": {
           "type": "string"
@@ -1110,10 +1246,22 @@
           "type": "boolean"
         }
       },
-      "required": ["control", "interval", "points", "variant", "vs", "withinNoise"]
+      "required": [
+        "control",
+        "interval",
+        "points",
+        "variant",
+        "vs",
+        "withinNoise"
+      ]
     },
     "Outcome": {
-      "enum": ["fail", "infra_error", "pass", "skipped"]
+      "enum": [
+        "fail",
+        "infra_error",
+        "pass",
+        "skipped"
+      ]
     },
     "PhaseTimings": {
       "type": "object",
@@ -1134,7 +1282,75 @@
           "type": "number"
         }
       },
-      "required": ["agentMs", "checksMs", "diffMs", "judgeMs", "setupMs"]
+      "required": [
+        "agentMs",
+        "checksMs",
+        "diffMs",
+        "judgeMs",
+        "setupMs"
+      ]
+    },
+    "PrepareFailureRecord": {
+      "type": "object",
+      "properties": {
+        "cause": {
+          "anyOf": [
+            {
+              "enum": [
+                "enospc",
+                "oom"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "class": {
+          "enum": [
+            "config",
+            "resource",
+            "transient"
+          ]
+        },
+        "log": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "ref": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "setBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "cause",
+        "class",
+        "log",
+        "ref",
+        "setBy",
+        "stage"
+      ]
     },
     "RunnerInfo": {
       "anyOf": [
@@ -1183,7 +1399,10 @@
                       ]
                     }
                   },
-                  "required": ["baseRef", "number"]
+                  "required": [
+                    "baseRef",
+                    "number"
+                  ]
                 }
               ]
             },
@@ -1201,7 +1420,13 @@
               ]
             }
           },
-          "required": ["attempt", "kind", "pr", "provider", "runUrl"]
+          "required": [
+            "attempt",
+            "kind",
+            "pr",
+            "provider",
+            "runUrl"
+          ]
         },
         {
           "type": "object",
@@ -1213,7 +1438,10 @@
               "const": "local"
             }
           },
-          "required": ["hostHash", "kind"]
+          "required": [
+            "hostHash",
+            "kind"
+          ]
         }
       ]
     },
@@ -1323,11 +1551,16 @@
                     "type": "string"
                   }
                 },
-                "required": ["path", "sha256"]
+                "required": [
+                  "path",
+                  "sha256"
+                ]
               }
             }
           },
-          "required": ["lockfiles"]
+          "required": [
+            "lockfiles"
+          ]
         },
         "durationMs": {
           "type": "number"
@@ -1382,7 +1615,13 @@
               }
             }
           },
-          "required": ["attempts", "cells", "estimateMs", "evals", "sandboxWarnings"]
+          "required": [
+            "attempts",
+            "cells",
+            "estimateMs",
+            "evals",
+            "sandboxWarnings"
+          ]
         },
         "profile": {
           "anyOf": [
@@ -1444,7 +1683,9 @@
                               "type": "number"
                             }
                           },
-                          "required": ["maxVariants"]
+                          "required": [
+                            "maxVariants"
+                          ]
                         }
                       ]
                     },
@@ -1467,7 +1708,12 @@
                   "type": "string"
                 }
               },
-              "required": ["defaults", "limit", "name", "reason"]
+              "required": [
+                "defaults",
+                "limit",
+                "name",
+                "reason"
+              ]
             }
           ]
         },
@@ -1478,7 +1724,9 @@
               "const": 1
             }
           },
-          "required": ["version"]
+          "required": [
+            "version"
+          ]
         },
         "runId": {
           "type": "string"
@@ -1496,7 +1744,11 @@
           "type": "string"
         },
         "status": {
-          "enum": ["budget", "complete", "interrupted"]
+          "enum": [
+            "budget",
+            "complete",
+            "interrupted"
+          ]
         },
         "summary": {
           "$ref": "#/$defs/RunSummary"
@@ -1552,7 +1804,15 @@
           "type": "number"
         }
       },
-      "required": ["attempts", "evals", "fail", "infraError", "notGated", "pass", "skipped"]
+      "required": [
+        "attempts",
+        "evals",
+        "fail",
+        "infraError",
+        "notGated",
+        "pass",
+        "skipped"
+      ]
     },
     "SandboxWarning": {
       "type": "object",
@@ -1574,10 +1834,18 @@
           ]
         },
         "kind": {
-          "enum": ["capabilities", "root"]
+          "enum": [
+            "capabilities",
+            "root"
+          ]
         },
         "level": {
-          "enum": ["config", "eval", "group", "profile"]
+          "enum": [
+            "config",
+            "eval",
+            "group",
+            "profile"
+          ]
         },
         "message": {
           "type": "string"
@@ -1586,10 +1854,19 @@
           "type": "string"
         }
       },
-      "required": ["file", "kind", "level", "message", "where"]
+      "required": [
+        "file",
+        "kind",
+        "level",
+        "message",
+        "where"
+      ]
     },
     "SkillPlacement": {
-      "enum": ["harness", "workspace"]
+      "enum": [
+        "harness",
+        "workspace"
+      ]
     },
     "Stack": {
       "type": "object",
@@ -1640,7 +1917,12 @@
                 }
               }
             },
-            "required": ["id", "kind", "model", "resolvedModels"]
+            "required": [
+              "id",
+              "kind",
+              "model",
+              "resolvedModels"
+            ]
           }
         },
         "images": {
@@ -1676,7 +1958,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["path", "sha256"]
+                    "required": [
+                      "path",
+                      "sha256"
+                    ]
                   }
                 ]
               },
@@ -1699,7 +1984,15 @@
                 }
               }
             },
-            "required": ["agentCli", "base", "dockerfile", "id", "install", "ref", "repoDigests"]
+            "required": [
+              "agentCli",
+              "base",
+              "dockerfile",
+              "id",
+              "install",
+              "ref",
+              "repoDigests"
+            ]
           }
         },
         "judge": {
@@ -1728,7 +2021,12 @@
               "type": "string"
             }
           },
-          "required": ["model", "resolvedModels", "threshold", "version"]
+          "required": [
+            "model",
+            "resolvedModels",
+            "threshold",
+            "version"
+          ]
         },
         "node": {
           "type": "string"
@@ -1784,13 +2082,26 @@
           ]
         }
       },
-      "required": ["cacheRead", "cacheWrite", "input", "output", "reasoning"]
+      "required": [
+        "cacheRead",
+        "cacheWrite",
+        "input",
+        "output",
+        "reasoning"
+      ]
     },
     "TurnStatus": {
-      "enum": ["aborted", "completed", "error"]
+      "enum": [
+        "aborted",
+        "completed",
+        "error"
+      ]
     },
     "WebEventType": {
-      "enum": ["web-fetch", "web-search"]
+      "enum": [
+        "web-fetch",
+        "web-search"
+      ]
     }
   },
   "x-schemaVersion": 1
