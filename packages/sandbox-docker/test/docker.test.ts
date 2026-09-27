@@ -212,13 +212,14 @@ describe('egress gateway in Docker', {
     )
     assert.match(environ.stdout, new RegExp(PLACEHOLDER), 'the check can see process environments')
     assert.doesNotMatch(environ.stdout, new RegExp(NEEDLE))
-    const grep = `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev ${NEEDLE} / ; echo "exit=$?"`
+    // Only what grep lists counts: as the sandbox user it can't read every directory, so it exits 2.
+    const grep = `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev ${NEEDLE} / ; echo end`
     const files = await sh(s, grep)
-    assert.equal(files.stdout.trim(), 'exit=1', `files containing the key: ${files.stdout}`)
+    assert.equal(files.stdout.trim(), 'end', `files containing the key: ${files.stdout}`)
     // The sandbox user can't read root's files, and root (with no capabilities) can't read the
     // sandbox user's private ones, so search as both.
     const rootFiles = asRoot(s, `${grep}; cat /proc/[0-9]*/environ | grep -c ${NEEDLE}`)
-    assert.equal(rootFiles.stdout.trim(), 'exit=1\n0', `as root: ${rootFiles.stdout}`)
+    assert.equal(rootFiles.stdout.trim(), 'end\n0', `as root: ${rootFiles.stdout}`)
     await bridge.kill()
   })
 
@@ -258,10 +259,10 @@ describe('egress gateway in Docker', {
     assert.doesNotMatch(environ.stdout, new RegExp(tail))
     const files = await sh(
       s,
-      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
+      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo end`,
       { N: tail },
     )
-    assert.equal(files.stdout.trim(), 'exit=1', `files containing the value: ${files.stdout}`)
+    assert.equal(files.stdout.trim(), 'end', `files containing the value: ${files.stdout}`)
     const env = (await sh(s, 'env')).stdout
     for (const name of [
       'SSL_CERT_FILE',
@@ -306,15 +307,15 @@ describe('egress gateway in Docker', {
     assert.match(auth, /"accessToken":"eyJhbGciOiJIUzI1NiJ9\.eyJleHAiOjIwMDAwMDAwMDB9\.es_secret_/)
     const files = await sh(
       s,
-      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
+      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo end`,
       { N: SIGNATURE },
     )
-    assert.equal(files.stdout.trim(), 'exit=1', `files containing a real token: ${files.stdout}`)
+    assert.equal(files.stdout.trim(), 'end', `files containing a real token: ${files.stdout}`)
     // Twin: the same search for the placeholder's signature finds auth.json.
     const signature = /\.(es_secret_\w+)"/.exec(auth)?.[1] ?? ''
     const twin = await sh(
       s,
-      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
+      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo end`,
       { N: signature },
     )
     assert.match(twin.stdout, /\.config\/cursor\/auth\.json/)
