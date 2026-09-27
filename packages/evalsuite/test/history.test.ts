@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { appendFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -340,6 +340,35 @@ describe('recording runs into evals/.history', () => {
     assert.equal(readFileSync(join(target, 'src/app.js'), 'utf8'), 'export const v = 2\n')
     assert.equal(readFileSync(join(target, 'src/new.js'), 'utf8'), 'export const added = true\n')
     sh(p.dir, 'worktree', 'remove', '--force', target)
+  })
+
+  test('a project reached through another spelling of its path records like any other', async () => {
+    // A symlink here; on Windows an 8.3 short name (C:\\Users\\RUNNER~1). git reports its top
+    // level canonically, so paths ES works out against it must be spelled from the project's root.
+    const p = await gitProject('record-symlink', {
+      'evals/agent.es.ts': agent(),
+      'package-lock.json': '{"lockfileVersion":3}\n',
+    })
+    const link = join(tempDir('record-symlink-link'), 'project')
+    symlinkSync(p.dir, link, 'junction')
+    // Through --config: a symlinked cwd would be resolved by the OS.
+    const config = ['--config', join(link, 'es.config.ts')]
+    for (let i = 0; i < 2; i++) {
+      const clean = await runCli(p.dir, ['run', '--record', ...config])
+      assert.equal(clean.code, 0, clean.stdout + clean.stderr)
+      const { git } = readRun(link, { history: HISTORY }).run
+      assert.equal(git?.dirty, false, 'its own history is not a change')
+    }
+    await writeFile(join(link, 'app.js'), 'export const v = 2\n')
+    assert.equal((await runCli(p.dir, ['run', '--record', ...config])).code, 0)
+    const { run, read } = readRun(link, { history: HISTORY })
+    assert.equal(run.git?.dirty, true)
+    assert.match(read('worktree.patch'), /\+export const v = 2/)
+    assert.doesNotMatch(read('worktree.patch'), /evals\/\.history/)
+    assert.deepEqual(
+      run.dependencies.lockfiles.map((l) => l.path),
+      ['package-lock.json'],
+    )
   })
 
   test('a secret in the uncommitted changes stops the record', async () => {

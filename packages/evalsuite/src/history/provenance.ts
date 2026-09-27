@@ -1,7 +1,7 @@
 import { hostname, userInfo } from 'node:os'
 import { relative, sep } from 'node:path'
 import { inCI } from '../env.ts'
-import { git } from '../git.ts'
+import { git, repoTop } from '../git.ts'
 import { sha256, slugify } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
 import type { GitInfo, RunnerInfo } from './types.ts'
@@ -22,7 +22,7 @@ export async function gitInfo(
 ): Promise<GitInfo | null> {
   const sha = await text(root, ['rev-parse', '--verify', '-q', 'HEAD'])
   if (!sha) return null
-  const top = (await text(root, ['rev-parse', '--show-toplevel'])) ?? root
+  const top = (await repoTop(root)) ?? root
   const ignored = ignore.map((dir) => `${relative(top, dir).split(sep).join('/')}/`)
   const isEsOutput = (path: string) =>
     path.split('/').includes('.es') || ignored.some((dir) => path.startsWith(dir))
