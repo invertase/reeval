@@ -17,6 +17,7 @@ import {
   type DoctorDeps,
   probeKey,
 } from '../src/doctor.ts'
+import { dockerProblem } from '../src/sandbox/providers.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 
 const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
@@ -24,7 +25,8 @@ const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
 const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   env: {},
   nodeVersion: '22.13.0',
-  dockerAvailable: async () => true,
+  platform: 'linux',
+  dockerState: async () => 'running',
   dockerCapacity: async () => ({ cpus: 8, memoryBytes: 16 * 1024 ** 3 }),
   imageExists: async () => true,
   imageTags: async () => [],
@@ -51,6 +53,22 @@ const noSecret = (checks: Check[]) =>
   assert.doesNotMatch(JSON.stringify(checks), new RegExp(SECRET.slice(8)))
 
 describe('es doctor checks', () => {
+  test('a run stops on Docker it cannot use, naming the fix for the platform', () => {
+    assert.equal(dockerProblem('running'), null)
+    assert.equal(
+      dockerProblem('down', 'linux'),
+      'Docker is not running. Start Docker and try again.',
+    )
+    assert.match(
+      dockerProblem('down', 'win32') ?? '',
+      /Docker Desktop \(with the WSL 2 backend and Linux containers\)/,
+    )
+    assert.match(
+      dockerProblem('windows-containers', 'win32') ?? '',
+      /running Windows containers, but ES's sandboxes are Linux containers\. Switch Docker Desktop to Linux containers/,
+    )
+  })
+
   test('node against engines', () => {
     assert.equal(checkNode('22.13.0').status, 'ok')
     assert.equal(checkNode('24.1.0').status, 'ok')
@@ -62,15 +80,15 @@ describe('es doctor checks', () => {
 
   test('docker: skipped without a Docker sandbox, fails when down, warns on little memory', async () => {
     const fake = await configOf('fake', '{ harness: fakeHarness(), sandbox: fakeSandbox() }')
-    const down = async () => false
-    assert.deepEqual(statuses((await checkDocker(fake, deps({ dockerAvailable: down }))).checks), [
+    const down = async () => 'down' as const
+    assert.deepEqual(statuses((await checkDocker(fake, deps({ dockerState: down }))).checks), [
       'skip',
     ])
     const real = await configOf('docker', "{ harness: cursor({ model: 'composer-2.5' }) }")
     const ok = await checkDocker(real, deps())
     assert.equal(ok.running, true)
     assert.match(ok.checks[0]?.summary ?? '', /running · 8 CPUs, 16\.0 GB memory/)
-    const off = await checkDocker(real, deps({ dockerAvailable: down }))
+    const off = await checkDocker(real, deps({ dockerState: down }))
     assert.equal(off.running, false)
     assert.equal(off.checks[0]?.status, 'fail')
     assert.match(off.checks[0]?.fix ?? '', /start Docker/)
@@ -79,13 +97,31 @@ describe('es doctor checks', () => {
       deps({ dockerCapacity: async () => ({ cpus: 2, memoryBytes: 2 * 1024 ** 3 }) }),
     )
     assert.equal(small.checks[0]?.status, 'warn')
+    // Windows needs Docker Desktop on WSL 2, running Linux containers: the fixes say so.
+    const winOff = await checkDocker(real, deps({ dockerState: down, platform: 'win32' }))
+    assert.equal(winOff.checks[0]?.status, 'fail')
+    assert.match(
+      winOff.checks[0]?.fix ?? '',
+      /Docker Desktop with the WSL 2 backend and Linux containers/,
+    )
+    const winContainers = await checkDocker(
+      real,
+      deps({ dockerState: async () => 'windows-containers', platform: 'win32' }),
+    )
+    assert.equal(winContainers.running, false)
+    assert.equal(winContainers.checks[0]?.status, 'fail')
+    assert.match(
+      winContainers.checks[0]?.summary ?? '',
+      /is running Windows containers, but ES's sandboxes are Linux containers/,
+    )
+    assert.match(winContainers.checks[0]?.fix ?? '', /Switch to Linux containers/)
     // A profile's Docker sandbox counts too.
     const profiled = await configOf(
       'profile-docker',
       '{ harness: fakeHarness(), sandbox: fakeSandbox(), profiles: { real: { defaults: { sandbox: docker() } } } }',
     )
     assert.equal(
-      (await checkDocker(profiled, deps({ dockerAvailable: down }))).checks[0]?.status,
+      (await checkDocker(profiled, deps({ dockerState: down }))).checks[0]?.status,
       'fail',
     )
   })
