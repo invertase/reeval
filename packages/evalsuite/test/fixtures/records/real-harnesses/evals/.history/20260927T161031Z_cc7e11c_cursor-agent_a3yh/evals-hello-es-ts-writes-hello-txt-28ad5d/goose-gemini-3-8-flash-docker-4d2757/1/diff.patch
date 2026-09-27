@@ -1,0 +1,8 @@
+diff --git a/hello.txt b/hello.txt
+new file mode 100644
+index 0000000..32f95c0
+--- /dev/null
++++ b/hello.txt
+@@ -0,0 +1 @@
++hi
+\ No newline at end of file

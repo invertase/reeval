@@ -1,0 +1,4 @@
+$ grep -qx hi hello.txt
+exit 0
+--- stdout
+--- stderr

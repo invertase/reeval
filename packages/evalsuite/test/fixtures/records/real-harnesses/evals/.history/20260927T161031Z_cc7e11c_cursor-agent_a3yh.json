@@ -1,0 +1,1882 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260927T161031Z_cc7e11c_cursor-agent_a3yh",
+  "status": "complete",
+  "startedAt": "2026-09-27T16:10:31.317Z",
+  "endedAt": "2026-09-27T16:11:11.580Z",
+  "durationMs": 40263,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "cc7e11c20a21d79b33f614def179c7c0b25cfa1f",
+    "branch": "master",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-27T16:10:30+00:00",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "5c7602959760"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "22.14.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "evalsuite-sandbox:antigravity-0.1.0",
+        "id": "sha256:3159ee84597a78499e4f15258f9009f6e44ade28b2f785ef3555d84e9f5034d3",
+        "agentCli": "1.2.11",
+        "base": "evalsuite-sandbox:antigravity-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      },
+      {
+        "ref": "evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c",
+        "id": "sha256:a6823b9ac9f26613ecf88be978f3b8fb85853593053b65a10088638eaccfe287",
+        "agentCli": "2.1.276 (Claude Code)",
+        "base": "evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      },
+      {
+        "ref": "evalsuite-sandbox:codex-0.1.0",
+        "id": "sha256:276a4ca7ed53d1ef6589935db09211630a3b00d0ba9907213ce7b449e068f1f5",
+        "agentCli": "codex-cli 0.157.1",
+        "base": "evalsuite-sandbox:codex-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      },
+      {
+        "ref": "evalsuite-sandbox:cursor-0.1.0",
+        "id": "sha256:b163d6043340288ee0e2db0af7e24f73ce0d9d6238fb2a0f08f7f89869d5401e",
+        "agentCli": "@cursor/sdk 1.0.32",
+        "base": "evalsuite-sandbox:cursor-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      },
+      {
+        "ref": "evalsuite-sandbox:goose-0.1.0",
+        "id": "sha256:a4ee1a7ae356aa91c4355a7296f06bf63509fe13fbd50ae287df780129d631a4",
+        "agentCli": "1.52.0",
+        "base": "evalsuite-sandbox:goose-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      },
+      {
+        "ref": "evalsuite-sandbox:opencode-0.1.0",
+        "id": "sha256:49a6832a5c3606c2c1bb008a64e02fa2cd47a6264033727d06b314d1bb066fd9",
+        "agentCli": "1.18.32",
+        "base": "evalsuite-sandbox:opencode-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      },
+      {
+        "ref": "evalsuite-sandbox:pi-0.1.0",
+        "id": "sha256:a898580c1d8c02382a61477875dfe10f924a4d5c7219c7d21568bcffeabb8f6b",
+        "agentCli": "0.87.1",
+        "base": "evalsuite-sandbox:pi-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "vitest": "5.0.2",
+      "@evalsuite/harness-antigravity": "0.1.0",
+      "@evalsuite/harness-opencode": "0.1.0",
+      "@evalsuite/harness-goose": "0.1.0",
+      "@evalsuite/harness-pi": "0.1.0",
+      "@evalsuite/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@evalsuite/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "antigravity:gemini-3.8-flash-medium",
+        "kind": "antigravity",
+        "model": "gemini-3.8-flash-medium",
+        "resolvedModels": [
+          "gemini-3.8-flash-medium"
+        ]
+      },
+      {
+        "id": "claude-code:claude-sonnet-5",
+        "kind": "claude-code",
+        "model": "claude-sonnet-5",
+        "resolvedModels": [
+          "claude-sonnet-5"
+        ]
+      },
+      {
+        "id": "codex:gpt-5.4-mini",
+        "kind": "codex",
+        "model": "gpt-5.4-mini",
+        "resolvedModels": [
+          "gpt-5.4-mini-2026-03-17[effort=medium]"
+        ]
+      },
+      {
+        "id": "cursor:composer-2.5",
+        "kind": "cursor",
+        "model": "composer-2.5",
+        "resolvedModels": [
+          "composer-2.5[fast=true]"
+        ]
+      },
+      {
+        "id": "goose:gemini-3.8-flash",
+        "kind": "goose",
+        "model": "gemini-3.8-flash",
+        "resolvedModels": [
+          "gemini-3.8-flash"
+        ]
+      },
+      {
+        "id": "opencode:gemini-3.8-flash",
+        "kind": "opencode",
+        "model": "gemini-3.8-flash",
+        "resolvedModels": [
+          "gemini-3.8-flash"
+        ]
+      },
+      {
+        "id": "pi:gemini-3.8-flash",
+        "kind": "pi",
+        "model": "gemini-3.8-flash",
+        "resolvedModels": [
+          "gemini-3.8-flash"
+        ]
+      }
+    ],
+    "judge": {
+      "model": "google/gemini-3.8-flash",
+      "resolvedModels": [
+        "gemini-3.8-flash"
+      ],
+      "threshold": 0.8,
+      "version": "e0f032315413"
+    },
+    "context": [
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.codex/config.toml",
+        "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+      },
+      {
+        "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+        "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+        "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+        "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+        "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+        "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+        "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+        "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+        "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+        "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+        "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+        "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+        "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+        "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+        "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+        "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+        "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+        "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+        "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+        "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+        "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+        "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+        "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+        "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+        "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+        "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+        "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+        "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+        "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+        "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+        "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+        "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+        "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+        "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+        "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+        "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+        "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+        "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+        "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+        "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+        "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+        "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+      },
+      {
+        "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+        "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+      },
+      {
+        "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+        "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+        "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+        "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+        "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+        "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/license.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+        "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+        "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+        "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+        "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+        "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+        "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+        "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+        "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+        "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+        "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+        "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+      },
+      {
+        "path": "~/.config/opencode/opencode.jsonc",
+        "sha256": "4e901f9e457c8d52ab31f9fb4ea637a8c9104ebdbf23fe8b3600f35ad46d4a61"
+      },
+      {
+        "path": "~/.config/opencode/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.gemini/antigravity-cli/settings.json",
+        "sha256": "f61604259fc14294ed668832e71662624fce87af97c436b3f3e7f9bf6540bb57"
+      },
+      {
+        "path": "~/.gemini/config/mcp_config.json",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": "~/.gemini/config/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.pi/agent/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 7,
+    "attempts": 7,
+    "estimateMs": 1260000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": "google/gemini-3.8-flash",
+    "threshold": 0.8,
+    "timeoutMs": 480000,
+    "concurrency": 4,
+    "configHash": "690efddea6a754f9f5fdae94b3983039ef3e9b16a80c3bc60b6bce0da67a6be5"
+  },
+  "cost": {
+    "inputTokens": 197312,
+    "outputTokens": 1280,
+    "usage": {
+      "input": 83656,
+      "output": 1280,
+      "cacheRead": 84819,
+      "cacheWrite": 28837,
+      "reasoning": 425
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 7,
+    "pass": 7,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/hello.es.ts › writes hello.txt",
+      "key": "evals/hello.es.ts › writes hello.txt",
+      "slug": "evals-hello-es-ts-writes-hello-txt-28ad5d",
+      "file": "evals/hello.es.ts",
+      "group": [],
+      "name": "writes hello.txt",
+      "tags": [],
+      "fingerprint": "9bad9ee2331dc71860deb36d2e9d5881aa04109535fefa257c19a25488bfd2a6",
+      "sources": [
+        {
+          "path": "evals/hello.es.ts",
+          "sha256": "87465914cf7e5fd08ae594ceb0417f417e61868d8c98aafbce28143c902b4252"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/-/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "13fdee8c851cfb2a3a75c9ba87429dfdb5e31bd984f2eaeb261b062b45e34f8a",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "7baac3ecdf9f6500e04c0d9d5b985386cb74ef20c0ccfd6d6e0e7f176b4a65e7",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:b163d6043340288ee0e2db0af7e24f73ce0d9d6238fb2a0f08f7f89869d5401e",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": null,
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        },
+        {
+          "key": "claude-code:claude-sonnet-5/-/docker",
+          "harness": "claude-code:claude-sonnet-5",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "d5af68858a9aa80cf7dfdc99464e5d6b594189dc3c6a99984834307b95dadcd3",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "50475852c1172f3f08c90b27a6d061da05a2f61bbff8ad3aa593320f8b5cbe43",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:a6823b9ac9f26613ecf88be978f3b8fb85853593053b65a10088638eaccfe287",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "d680a9af604b702351f33a2ce31b15296969758add41c64fb0a6166601be0556"
+          },
+          "environmentDigest": null,
+          "harnessKind": "claude-code",
+          "model": "claude-sonnet-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        },
+        {
+          "key": "antigravity:gemini-3.8-flash-medium/-/docker",
+          "harness": "antigravity:gemini-3.8-flash-medium",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "5daa650518a734acd9a3c8ebdcc289485a222a9410acd29cc3db6a568930225b",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "d7212cc765731ecbe48c2930525b7f2d6382fe7ff68c7f9aced3d83dc0f3a188",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:3159ee84597a78499e4f15258f9009f6e44ade28b2f785ef3555d84e9f5034d3",
+            "agentCli": "1.2.11",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "bc835eaa55bf90e7abb20e9a242cb2eef7d3c5b9bb5f796eea68544650ba071d"
+          },
+          "environmentDigest": null,
+          "harnessKind": "antigravity",
+          "model": "gemini-3.8-flash-medium",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        },
+        {
+          "key": "opencode:gemini-3.8-flash/-/docker",
+          "harness": "opencode:gemini-3.8-flash",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "398f2672384933e53169565761b24f8d102278f7df90ee8c6cc7536d5df42d93",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "a1b7d0da3ee5c3415c60130523673db5e50b816c0f599e3cf67dc1662c6d044e",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:49a6832a5c3606c2c1bb008a64e02fa2cd47a6264033727d06b314d1bb066fd9",
+            "agentCli": "1.18.32",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "4b51eb472b3e307567ca9756ffe8893cc29f1cccbbe6ddd23eae7ddf8e6334c4"
+          },
+          "environmentDigest": null,
+          "harnessKind": "opencode",
+          "model": "gemini-3.8-flash",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        },
+        {
+          "key": "goose:gemini-3.8-flash/-/docker",
+          "harness": "goose:gemini-3.8-flash",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "9def7c1d9c6426985488d219307443238be8095bc3c5b5df917c5727da4ff420",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "31daad991df94c85311461ce2f78ad6a81227d4c47609fc5c7b99635284be25f",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:a4ee1a7ae356aa91c4355a7296f06bf63509fe13fbd50ae287df780129d631a4",
+            "agentCli": "1.52.0",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "d5ad349da19a2f247b688122a58838e76f7c530aec022b5fb3ce038dfab90e8e"
+          },
+          "environmentDigest": null,
+          "harnessKind": "goose",
+          "model": "gemini-3.8-flash",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        },
+        {
+          "key": "pi:gemini-3.8-flash/-/docker",
+          "harness": "pi:gemini-3.8-flash",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "4fcb8e4f5aa4daa10e105949acd1f3059148b3a950a8f1064165bebc0b42a9fc",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "41d247d9e20236ac592da758e62277a1e30d543aac5d4b95db0fb1b8563e7132",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:a898580c1d8c02382a61477875dfe10f924a4d5c7219c7d21568bcffeabb8f6b",
+            "agentCli": "0.87.1",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "cfda8c9bd1454ad1547166fb5d59e1152ba8d1a8302dde181aed7bae82dc0643"
+          },
+          "environmentDigest": null,
+          "harnessKind": "pi",
+          "model": "gemini-3.8-flash",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        },
+        {
+          "key": "codex:gpt-5.4-mini/-/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "9794bd87099ef49c6b44d798263fde6633c5f91310e7138876ce53decb312218",
+          "fingerprintParts": {
+            "sources": "8fcebf875bcc9aa7dfb85f515840ba1e738d648bf7cebff8d23fc834db15192a",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:276a4ca7ed53d1ef6589935db09211630a3b00d0ba9907213ce7b449e068f1f5",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "420360e9c618ea1c84382cde06139351bd6c1fb95d4192ed693a2189795ba33d",
+            "context": "aa33eb928491655bdce1214c76dd75cb6f117d634b26b2e937ef7b9de5b5bac1"
+          },
+          "environmentDigest": null,
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # cursor:composer-2.5/-/docker#1",
+          "id": "cursor:composer-2.5/-/docker#1",
+          "cell": "cursor:composer-2.5/-/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-27T16:10:32.235Z",
+          "imageId": "sha256:b163d6043340288ee0e2db0af7e24f73ce0d9d6238fb2a0f08f7f89869d5401e",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 12,
+                "sent": 71913,
+                "received": 192157
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 10428,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:34.029Z",
+              "durationMs": 6218,
+              "usage": {
+                "input": 15602,
+                "output": 157,
+                "cacheRead": 6912,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "**Workspace:** `/es/workspace` was empty aside from `.` and `..`.\n\n**Created:** `hello.txt` with exactly:\n\n```\nhi\n```"
+            }
+          ],
+          "usage": {
+            "input": 15602,
+            "output": 157,
+            "cacheRead": 6912,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 1793,
+            "agentMs": 6219,
+            "diffMs": 123,
+            "checksMs": 55,
+            "judgeMs": 1715
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 89
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 56,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/cursor-composer-2-5-docker-76739b/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/cursor-composer-2-5-docker-76739b/1/transcript.jsonl",
+              "sha256": "9c09bfbf44d2ff7a73bdda5dbfcdada83e48c82e8cf1a1d056b43577af3997a0",
+              "bytes": 1298
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/cursor-composer-2-5-docker-76739b/1/diff.patch",
+              "sha256": "d9dc00423d404dbf9808814a2ff34d0d76bbb8f453f26908d33f2a40b8572745",
+              "bytes": 155
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/cursor-composer-2-5-docker-76739b/1/judge-input.json",
+              "sha256": "10d6acbf4c7b5eaf8ab8dd6d3c00d5b192b2d8f5fafcb40aabdb9650207a8099",
+              "bytes": 562
+            }
+          }
+        },
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # claude-code:claude-sonnet-5/-/docker#1",
+          "id": "claude-code:claude-sonnet-5/-/docker#1",
+          "cell": "claude-code:claude-sonnet-5/-/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-09-27T16:10:32.238Z",
+          "imageId": "sha256:a6823b9ac9f26613ecf88be978f3b8fb85853593053b65a10088638eaccfe287",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 264777,
+                "received": 15520
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 11215,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:34.357Z",
+              "durationMs": 6851,
+              "usage": {
+                "input": 6,
+                "output": 211,
+                "cacheRead": 57171,
+                "cacheWrite": 28837,
+                "reasoning": null
+              },
+              "model": "claude-sonnet-5",
+              "unreported": [],
+              "error": null,
+              "text": "Created `hello.txt` containing \"hi\"."
+            }
+          ],
+          "usage": {
+            "input": 6,
+            "output": 211,
+            "cacheRead": 57171,
+            "cacheWrite": 28837,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 2119,
+            "agentMs": 6851,
+            "diffMs": 130,
+            "checksMs": 59,
+            "judgeMs": 1584
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 59,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/claude-code-claude-sonnet-5-docker-35eb43/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/claude-code-claude-sonnet-5-docker-35eb43/1/transcript.jsonl",
+              "sha256": "dcebfbc32f2a9c1a6d9c311398a1b0771f41732ac553a4c4085200de55433511",
+              "bytes": 1220
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/claude-code-claude-sonnet-5-docker-35eb43/1/diff.patch",
+              "sha256": "d9dc00423d404dbf9808814a2ff34d0d76bbb8f453f26908d33f2a40b8572745",
+              "bytes": 155
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/claude-code-claude-sonnet-5-docker-35eb43/1/judge-input.json",
+              "sha256": "14ef2efd1af103a27ddbb6740d04f207cfc8a8e9e917269402bad477d228619a",
+              "bytes": 477
+            }
+          }
+        },
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # antigravity:gemini-3.8-flash-medium/-/docker#1",
+          "id": "antigravity:gemini-3.8-flash-medium/-/docker#1",
+          "cell": "antigravity:gemini-3.8-flash-medium/-/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-09-27T16:10:32.239Z",
+          "imageId": "sha256:3159ee84597a78499e4f15258f9009f6e44ade28b2f785ef3555d84e9f5034d3",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.gemini/antigravity-cli/settings.json",
+              "sha256": "f61604259fc14294ed668832e71662624fce87af97c436b3f3e7f9bf6540bb57"
+            },
+            {
+              "path": "~/.gemini/config/mcp_config.json",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            },
+            {
+              "path": "~/.gemini/config/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "antigravity-unleash.goog",
+                "port": 443,
+                "connections": 2,
+                "sent": 5437,
+                "received": 84247
+              },
+              {
+                "host": "generativelanguage.googleapis.com",
+                "port": 443,
+                "connections": 1,
+                "sent": 227785,
+                "received": 13707
+              },
+              {
+                "host": "play.googleapis.com",
+                "port": 443,
+                "connections": 1,
+                "sent": 374679,
+                "received": 7758
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gemini-3.1-flash-lite-preview",
+            "gemini-3.8-flash"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 27480,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:33.868Z",
+              "durationMs": 24155,
+              "usage": {
+                "input": 50325,
+                "output": 456,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 228
+              },
+              "model": "gemini-3.8-flash-medium",
+              "unreported": [],
+              "error": null,
+              "text": "Ran `ls -a` (directory was empty) and created [hello.txt](file:///es/workspace/hello.txt) containing `hi`.\n"
+            }
+          ],
+          "usage": {
+            "input": 50325,
+            "output": 456,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 228
+          },
+          "timings": {
+            "setupMs": 1628,
+            "agentMs": 24155,
+            "diffMs": 136,
+            "checksMs": 55,
+            "judgeMs": 1047
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 55,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/antigravity-gemini-3-8-flash-medium-docker-4d994b/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/antigravity-gemini-3-8-flash-medium-docker-4d994b/1/transcript.jsonl",
+              "sha256": "b54f18677b376c8b551e3d9d46210fe6c453c70985934c72fd2d42809a549d85",
+              "bytes": 1172
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/antigravity-gemini-3-8-flash-medium-docker-4d994b/1/diff.patch",
+              "sha256": "6d8a1251bcd4e7cd836434bedd568df730407f743a965bc0dd0a5fb261d8075c",
+              "bytes": 127
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/antigravity-gemini-3-8-flash-medium-docker-4d994b/1/judge-input.json",
+              "sha256": "dc0978d9363df7901d5c046444bf0872c070987e9615ab1d97a46d822ddc2b97",
+              "bytes": 547
+            }
+          }
+        },
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # opencode:gemini-3.8-flash/-/docker#1",
+          "id": "opencode:gemini-3.8-flash/-/docker#1",
+          "cell": "opencode:gemini-3.8-flash/-/docker",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-09-27T16:10:32.241Z",
+          "imageId": "sha256:49a6832a5c3606c2c1bb008a64e02fa2cd47a6264033727d06b314d1bb066fd9",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.config/opencode/opencode.jsonc",
+              "sha256": "4e901f9e457c8d52ab31f9fb4ea637a8c9104ebdbf23fe8b3600f35ad46d4a61"
+            },
+            {
+              "path": "~/.config/opencode/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "generativelanguage.googleapis.com",
+                "port": 443,
+                "connections": 2,
+                "sent": 117580,
+                "received": 9814
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gemini-3.8-flash"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 11868,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:34.328Z",
+              "durationMs": 6317,
+              "usage": null,
+              "model": "gemini-3.8-flash",
+              "unreported": [],
+              "error": null,
+              "text": ""
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 2086,
+            "agentMs": 6317,
+            "diffMs": 119,
+            "checksMs": 56,
+            "judgeMs": 1788
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 56,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/opencode-gemini-3-8-flash-docker-ad8642/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/opencode-gemini-3-8-flash-docker-ad8642/1/transcript.jsonl",
+              "sha256": "17786f52c1e7d194aa303c5e3dfc014775744ecc35689f976be9eca4764902e5",
+              "bytes": 707
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/opencode-gemini-3-8-flash-docker-ad8642/1/diff.patch",
+              "sha256": "d9dc00423d404dbf9808814a2ff34d0d76bbb8f453f26908d33f2a40b8572745",
+              "bytes": 155
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/opencode-gemini-3-8-flash-docker-ad8642/1/judge-input.json",
+              "sha256": "57d5bb8887e5725bdc3552d02a97a91d9670c72948c522dbcfe85753a870fdfa",
+              "bytes": 439
+            }
+          }
+        },
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # goose:gemini-3.8-flash/-/docker#1",
+          "id": "goose:gemini-3.8-flash/-/docker#1",
+          "cell": "goose:gemini-3.8-flash/-/docker",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-09-27T16:10:42.658Z",
+          "imageId": "sha256:a4ee1a7ae356aa91c4355a7296f06bf63509fe13fbd50ae287df780129d631a4",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "generativelanguage.googleapis.com",
+                "port": 443,
+                "connections": 2,
+                "sent": 63277,
+                "received": 14503
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gemini-3.8-flash"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 28913,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:44.361Z",
+              "durationMs": 11152,
+              "usage": null,
+              "model": "gemini-3.8-flash",
+              "unreported": [],
+              "error": null,
+              "text": "I have run `ls -a` to inspect the directory and created `hello.txt` with the exact content `hi`."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 1702,
+            "agentMs": 11151,
+            "diffMs": 114,
+            "checksMs": 65,
+            "judgeMs": 14393
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 65,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/goose-gemini-3-8-flash-docker-4d2757/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/goose-gemini-3-8-flash-docker-4d2757/1/transcript.jsonl",
+              "sha256": "93dea447264f2117c07ff54f4037616b16889a9a3a1b9a12a28496174358e87a",
+              "bytes": 852
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/goose-gemini-3-8-flash-docker-4d2757/1/diff.patch",
+              "sha256": "d9dc00423d404dbf9808814a2ff34d0d76bbb8f453f26908d33f2a40b8572745",
+              "bytes": 155
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/goose-gemini-3-8-flash-docker-4d2757/1/judge-input.json",
+              "sha256": "8b8133f8212d98cefca5492e4de8e5d04bd712b41aff2fd50a66bc17797b1166",
+              "bytes": 535
+            }
+          }
+        },
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # pi:gemini-3.8-flash/-/docker#1",
+          "id": "pi:gemini-3.8-flash/-/docker#1",
+          "cell": "pi:gemini-3.8-flash/-/docker",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-09-27T16:10:43.452Z",
+          "imageId": "sha256:a898580c1d8c02382a61477875dfe10f924a4d5c7219c7d21568bcffeabb8f6b",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.pi/agent/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "generativelanguage.googleapis.com",
+                "port": 443,
+                "connections": 1,
+                "sent": 33088,
+                "received": 9310
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gemini-3.8-flash"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 18916,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:44.718Z",
+              "durationMs": 15750,
+              "usage": {
+                "input": 6513,
+                "output": 205,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 121
+              },
+              "model": "gemini-3.8-flash",
+              "unreported": [],
+              "error": null,
+              "text": "Ran `ls -a` and created `hello.txt` containing `hi`."
+            }
+          ],
+          "usage": {
+            "input": 6513,
+            "output": 205,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 121
+          },
+          "timings": {
+            "setupMs": 1265,
+            "agentMs": 15751,
+            "diffMs": 103,
+            "checksMs": 55,
+            "judgeMs": 1336
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 56,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/pi-gemini-3-8-flash-docker-12b197/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/pi-gemini-3-8-flash-docker-12b197/1/transcript.jsonl",
+              "sha256": "e7b17c5fe0f345efa4988552b9f924a70d2d78b96d40fac750fc513d83c4a993",
+              "bytes": 996
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/pi-gemini-3-8-flash-docker-12b197/1/diff.patch",
+              "sha256": "d9dc00423d404dbf9808814a2ff34d0d76bbb8f453f26908d33f2a40b8572745",
+              "bytes": 155
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/pi-gemini-3-8-flash-docker-12b197/1/judge-input.json",
+              "sha256": "5f17449d94ef5e19444b9d58d08a9cd7b91d2764ef81315ad90e7357d022ae2b",
+              "bytes": 491
+            }
+          }
+        },
+        {
+          "key": "evals/hello.es.ts › writes hello.txt # codex:gpt-5.4-mini/-/docker#1",
+          "id": "codex:gpt-5.4-mini/-/docker#1",
+          "cell": "codex:gpt-5.4-mini/-/docker",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-09-27T16:10:44.110Z",
+          "imageId": "sha256:276a4ca7ed53d1ef6589935db09211630a3b00d0ba9907213ce7b449e068f1f5",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 116869,
+                "received": 305751
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 14133,
+          "turns": [
+            {
+              "prompt": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+              "status": "completed",
+              "startedAt": "2026-09-27T16:10:45.456Z",
+              "durationMs": 6258,
+              "usage": {
+                "input": 11210,
+                "output": 251,
+                "cacheRead": 20736,
+                "cacheWrite": 0,
+                "reasoning": 76
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "I’ll take a quick look at the workspace with `ls -a`, then I’ll add `hello.txt` with the exact contents you asked for.I’ve checked the directory, and it’s empty aside from `.` and `..`. Next I’m creating `hello.txt` with the exact single-line content `hi`.Created `hello.txt` with exactly `hi`."
+            }
+          ],
+          "usage": {
+            "input": 11210,
+            "output": 251,
+            "cacheRead": 20736,
+            "cacheWrite": 0,
+            "reasoning": 76
+          },
+          "timings": {
+            "setupMs": 1345,
+            "agentMs": 6259,
+            "diffMs": 125,
+            "checksMs": 67,
+            "judgeMs": 5896
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Did the agent create hello.txt containing hi?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:eed5fa1c9df8"
+            }
+          ],
+          "checks": [
+            {
+              "command": "grep -qx hi hello.txt",
+              "exitCode": 0,
+              "durationMs": 67,
+              "log": {
+                "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/codex-gpt-5-4-mini-docker-afcfca/1/checks/1.log",
+                "sha256": "7d9ee4970068acd14c7c8d545f49b6e269ba39374d2fbb216daf19371c42b12c",
+                "bytes": 53
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/codex-gpt-5-4-mini-docker-afcfca/1/transcript.jsonl",
+              "sha256": "b9bf2764e6fdd63a228f2dc269bf07cf778cad1e05a6e515122d4f2bce14d9da",
+              "bytes": 1222
+            },
+            "diff": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/codex-gpt-5-4-mini-docker-afcfca/1/diff.patch",
+              "sha256": "6d8a1251bcd4e7cd836434bedd568df730407f743a965bc0dd0a5fb261d8075c",
+              "bytes": 127
+            },
+            "judgeInput": {
+              "path": "evals-hello-es-ts-writes-hello-txt-28ad5d/codex-gpt-5-4-mini-docker-afcfca/1/judge-input.json",
+              "sha256": "431c48680295a9d71646581072430086b92aeb45ac5c13e40a38f463a95c7f55",
+              "bytes": 743
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

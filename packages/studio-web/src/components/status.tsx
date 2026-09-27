@@ -4,6 +4,7 @@ import {
   CircleAlert,
   CircleCheck,
   CircleDashed,
+  CircleHelp,
   CircleMinus,
   CircleX,
   GitCompareArrows,
@@ -39,6 +40,15 @@ const OUTCOME = {
   },
 } satisfies Record<Outcome, unknown>
 
+/** An outcome's look; one from a newer ES that this studio doesn't know shows as its name. */
+const outcomeStyle = (outcome: Outcome) =>
+  OUTCOME[outcome] ?? {
+    label: String(outcome),
+    Icon: CircleHelp,
+    text: 'text-muted-foreground',
+    bg: 'bg-muted text-muted-foreground',
+  }
+
 /** `missed` mutes a failure in an ungated cell, which doesn't fail the run. */
 export function OutcomeIcon({
   outcome,
@@ -61,7 +71,7 @@ export function OutcomeIcon({
       />
     )
   }
-  const { Icon, text, label } = OUTCOME[outcome]
+  const { Icon, text, label } = outcomeStyle(outcome)
   if (missed && outcome === 'fail') {
     return (
       <CircleMinus
@@ -83,16 +93,16 @@ export function OutcomeBadge({
   label?: string
   className?: string
 }) {
-  const { bg, Icon } = OUTCOME[outcome]
+  const { bg, Icon, label: own } = outcomeStyle(outcome)
   return (
     <Badge variant="outline" className={cn(bg, className)}>
       <Icon />
-      {label ?? OUTCOME[outcome].label}
+      {label ?? own}
     </Badge>
   )
 }
 
-export const outcomeLabel = (o: Outcome) => OUTCOME[o].label
+export const outcomeLabel = (o: Outcome) => outcomeStyle(o).label
 
 /** A compact segmented bar: pass, fail, missed (ungated failures), infra, skipped. */
 export function TallyBar({
@@ -224,7 +234,7 @@ export function OutcomeStrip({
               'rounded-[3px]',
               size === 'sm' ? 'size-2.5' : 'size-3.5',
               item.outcome
-                ? color[item.outcome]
+                ? (color[item.outcome] ?? 'bg-muted-foreground/40')
                 : 'border border-dashed border-muted-foreground/40',
             )}
           />

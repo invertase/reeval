@@ -3,10 +3,18 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { MIGRATIONS, READ_DEFAULTS } from '../../src/view/record.ts'
+import {
+  MIGRATIONS,
+  READ_DEFAULTS,
+  readableAnalysis,
+  readableRecord,
+  readableTranscriptLine,
+} from '../../src/view/record.ts'
 import { type Change, checkDefaults, compare } from './compat.ts'
+import { CORPUS_DIR, corpus } from './corpus.ts'
 import { generate, type ShapeSchema } from './generate.ts'
 import { PACKAGE_DIR, type PersistedShape, SHAPES, SNAPSHOT_DIR } from './shapes.ts'
+import { validate } from './validate.ts'
 
 export const snapshotFile = (shape: Pick<PersistedShape, 'name'>, dir = SNAPSHOT_DIR) =>
   join(dir, `${shape.name}.schema.json`)
@@ -98,6 +106,57 @@ export function explain(reports: ShapeReport[]): string {
   return lines.join('\n')
 }
 
+/**
+ * Every file in the record corpus, read the way ES reads it, checked against the shapes the code
+ * describes now: a missing read default (or one dropped later) shows up here as a missing field.
+ */
+export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
+  const problems: string[] = []
+  const missing = new Set<string>()
+  const at = (file: string) => relative(PACKAGE_DIR, file)
+  const report = (file: string, found: string[]) => {
+    for (const p of found) {
+      const m = /^(?:line \d+: )?(.+): missing$/.exec(p)
+      if (m) missing.add((m[1] as string).replace(/\[\d+\]/g, '[]'))
+    }
+    if (found.length)
+      problems.push(
+        `${at(file)}:\n${found
+          .slice(0, 8)
+          .map((p) => `    ${p}`)
+          .join('\n')}`,
+      )
+  }
+  const { records, transcripts, analyses } = corpus()
+  const shape = (name: string) => current.get(name) as ShapeSchema
+  for (const r of records) {
+    report(r.file, validate(shape('run-record'), readableRecord(structuredClone(r.value) as never)))
+  }
+  for (const file of transcripts) {
+    const found = new Set<string>()
+    for (const [i, line] of readFileSync(file, 'utf8').split('\n').entries()) {
+      if (!line.trim()) continue
+      const read = readableTranscriptLine(JSON.parse(line))
+      for (const p of validate(shape('transcript-line'), read)) found.add(`line ${i + 1}: ${p}`)
+    }
+    report(file, [...found])
+  }
+  for (const a of analyses) {
+    report(a.file, validate(shape('analysis'), readableAnalysis(structuredClone(a.value) as never)))
+  }
+  if (!problems.length) return []
+  return [
+    `✗ Files in ${relative(PACKAGE_DIR, CORPUS_DIR)} don't fit the shapes the code describes, once read:`,
+    ...problems.map((p) => `  ${p}`),
+    '',
+    '  A reader gets exactly this, so it would see undefined (or a value its type rules out) there.',
+    '  Give each missing field a read default in READ_DEFAULTS (src/view/record.ts), or make it',
+    '  optional in the type and handle it missing where it is read.',
+    ...[...missing].map((p) => `    e.g. { path: '${p}', empty: () => … }`),
+    '',
+  ]
+}
+
 function readSnapshot(shape: PersistedShape): ShapeSchema | null {
   const file = snapshotFile(shape)
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as ShapeSchema) : null
@@ -110,8 +169,9 @@ function main(argv: string[]): number {
     checkShape(s, current.get(s.name) as ShapeSchema, readSnapshot(s)),
   )
   const broken = reports.filter((r) => r.breaking.length)
-  if (broken.length) {
-    process.stderr.write(`${explain(reports)}`)
+  const misfits = checkCorpus(current)
+  if (broken.length || misfits.length) {
+    process.stderr.write(`${explain(reports)}${misfits.join('\n')}`)
     process.stderr.write(
       'The snapshots in packages/evalsuite/schema/ record what ES has written. See "Changing what ES persists" in AGENTS.md.\n',
     )
@@ -122,7 +182,9 @@ function main(argv: string[]): number {
     for (const c of r.changes) process.stdout.write(`  ${r.shape.type}: ${c.message}\n`)
   }
   if (!stale.length) {
-    process.stdout.write(`✓ ${SHAPES.length} persisted shapes match their snapshots in schema/\n`)
+    process.stdout.write(
+      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads\n`,
+    )
     return 0
   }
   if (!update) {

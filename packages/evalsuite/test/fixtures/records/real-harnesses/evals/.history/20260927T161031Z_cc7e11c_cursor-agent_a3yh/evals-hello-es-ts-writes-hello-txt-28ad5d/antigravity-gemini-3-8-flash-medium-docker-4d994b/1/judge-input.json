@@ -1,0 +1,17 @@
+[
+  {
+    "question": "Did the agent create hello.txt containing hi?",
+    "model": "google/gemini-3.8-flash",
+    "state": {
+      "task": "Run `ls -a` to look around, then create hello.txt containing exactly: hi",
+      "output": "Ran `ls -a` (directory was empty) and created [hello.txt](file:///es/workspace/hello.txt) containing `hi`.\n",
+      "files": [
+        "added hello.txt"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "6d8a1251bcd4e7cd836434bedd568df730407f743a965bc0dd0a5fb261d8075c"
+      }
+    }
+  }
+]

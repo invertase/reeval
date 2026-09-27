@@ -1,0 +1,6 @@
+{"ts":"2026-09-27T16:10:44.718Z","atMs":0,"turn":0,"type":"prompt","text":"Run `ls -a` to look around, then create hello.txt containing exactly: hi"}
+{"turn":0,"ts":"2026-09-27T16:10:53.082Z","atMs":8364,"durationMs":1923,"type":"tool","toolCallId":"call_44915","tool":"bash","input":{"timeout":null,"command":"ls -a"},"output":".\n..\n","ok":true}
+{"turn":0,"ts":"2026-09-27T16:10:54.962Z","atMs":10244,"durationMs":3972,"type":"file-edit","toolCallId":"call_70833","path":"hello.txt","kind":"modify","added":null,"removed":null}
+{"turn":0,"ts":"2026-09-27T16:10:58.893Z","atMs":14175,"durationMs":1565,"type":"tool","toolCallId":"call_70173","tool":"read","input":{"path":"hello.txt","limit":10,"offset":1},"output":"hi","ok":true}
+{"turn":0,"ts":"2026-09-27T16:11:00.414Z","atMs":15696,"type":"text","text":"Ran `ls -a` and created `hello.txt` containing `hi`.","durationMs":43}
+{"ts":"2026-09-27T16:11:00.468Z","atMs":15750,"turn":0,"type":"turn-end","status":"completed","durationMs":15750}
