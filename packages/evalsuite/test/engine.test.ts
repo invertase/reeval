@@ -1164,6 +1164,29 @@ evaluate('fine', async () => {})
     })
   }
 
+  test('an unhandled rejection in the main process mid-run prints it, redacted, and exits 3', async () => {
+    const secret = 'sk-live-0123456789abcdefghij'
+    const p = await project('unhandled', {
+      'es.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
+process.on('SIGUSR2', () => {
+  Promise.reject(new Error(\`main process boom with \${process.env.ES_TEST_API_KEY}\`))
+})
+`,
+      'evals/agent.es.ts': agentEval(''),
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: { ES_TEST_API_KEY: secret },
+      onOutput: (stdout, pid) => {
+        if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
+        process.kill(pid, 'SIGUSR2')
+        return true
+      },
+    })
+    assert.equal(r.code, 3, r.stdout + r.stderr)
+    assert.match(r.stderr, /es: main process boom with /)
+    assert.doesNotMatch(r.stdout + r.stderr, new RegExp(secret))
+  })
+
   test('Ctrl-C while the worker boots still cancels the attempt before it starts', async () => {
     const p = await project('sigint-early', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),

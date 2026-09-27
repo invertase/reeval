@@ -1008,6 +1008,7 @@ export const inventory: InventoryFeature[] = [
       engine('a failing assertion exits 1'),
       engine('a harness failure is an infra error and exits 3'),
       engine('records the run and destroys the sandbox'),
+      engine('an unhandled rejection in the main process mid-run prints it, redacted, and exits 3'),
     ],
   },
   {

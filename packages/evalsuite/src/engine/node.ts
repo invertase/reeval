@@ -370,8 +370,9 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
   const nameFilters: string[] = []
   const matchesName = (e: EngineEval) =>
     nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))
-  const signals = ['SIGINT', 'SIGTERM'] as const
-  const ownListeners = new Set(signals.flatMap((signal) => process.listeners(signal)))
+  // `process` as a plain emitter, whose methods take any event name.
+  const events: NodeJS.EventEmitter = process
+  const ownListeners = new Set(events.eventNames().flatMap((event) => events.listeners(event)))
   const { concurrency } = options.run
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each; one
   // worker per file in flight lets the scheduler balance across files.
@@ -411,10 +412,11 @@ export async function runEngine(options: EngineOptions): Promise<EngineRun> {
       { customLogger: silentLogger, logLevel: 'silent', cacheDir: 'node_modules/.cache/es' },
       { stdout, stderr },
     )
-    // Vitest's logger exits the process on SIGINT and SIGTERM; the CLI owns both instead.
-    for (const signal of signals) {
-      for (const listener of process.listeners(signal)) {
-        if (!ownListeners.has(listener)) process.off(signal, listener)
+    // Vitest's logger exits the process on SIGINT, SIGTERM and an unhandled rejection, which it
+    // prints to the stderr ES discards; the CLI owns all of them instead.
+    for (const event of events.eventNames()) {
+      for (const listener of events.listeners(event)) {
+        if (!ownListeners.has(listener)) events.off(event, listener as (...args: unknown[]) => void)
       }
     }
     vitest.provide('es:run', options.run)
