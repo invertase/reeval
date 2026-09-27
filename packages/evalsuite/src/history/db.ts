@@ -10,14 +10,15 @@ import { fileURLToPath } from 'node:url'
 import { isRuntimeState } from '../attempt/context.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, sha256 } from '../ids.ts'
+import { PACKAGE_VERSION } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
 const DB_VERSION = 2
-/** The mtime of this module, like the header cache: a rebuilt ES re-derives every row. */
-const BUILD = statSync(fileURLToPath(import.meta.url)).mtimeMs
+/** ES's version and this module's mtime, like the header cache: another ES re-derives every row. */
+const BUILD = `${PACKAGE_VERSION}:${statSync(fileURLToPath(import.meta.url)).mtimeMs}`
 
 export const historyDbPath = (root: string) => join(root, '.es', 'history.db')
 
@@ -459,7 +460,8 @@ function insertRun(
         )
       }
       for (const [kind, ref] of Object.entries(a.files)) {
-        if (!ref) continue
+        // A newer ES may add other fields here; only file refs are artifacts.
+        if (typeof ref?.path !== 'string') continue
         run(
           'INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?)',
           record.runId,

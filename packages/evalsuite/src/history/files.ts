@@ -15,13 +15,23 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RUN_ID, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
+import { PACKAGE_VERSION } from '../root.ts'
 import { runHeader } from '../view/header.ts'
-import { readableRecord } from '../view/record.ts'
+import { NewerSchemaError, readableRecord } from '../view/record.ts'
 import { renderSummary } from './summary.ts'
 import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
 export class HistoryError extends Error {
   override name = 'HistoryError'
+}
+
+/** A record from a newer ES: skipped with a warning to upgrade, never "restore or delete it". */
+export class NewerRecordError extends HistoryError {
+  readonly reason: string
+  constructor(error: NewerSchemaError) {
+    super(error.message)
+    this.reason = error.reason
+  }
 }
 
 /** Where `es run` writes runs before they're recorded. Gitignored. */
@@ -37,7 +47,12 @@ export const encodeRecord = (record: RunRecord) =>
 export function parseRecord(bytes: Uint8Array, where: string): RunRecord {
   const value = JSON.parse(Buffer.from(bytes).toString('utf8')) as RunRecord
   if (value?.kind !== 'es-run') throw new HistoryError(`${where} is not an ES run record`)
-  return readableRecord(value)
+  try {
+    return readableRecord(value, where)
+  } catch (error) {
+    if (error instanceof NewerSchemaError) throw new NewerRecordError(error)
+    throw error
+  }
 }
 
 export async function readRecord(path: string): Promise<RunRecord> {
@@ -53,6 +68,10 @@ const warnedUnreadable = new Set<string>()
 export function warnUnreadable(path: string, error: unknown): void {
   if (warnedUnreadable.has(path)) return
   warnedUnreadable.add(path)
+  if (error instanceof NewerRecordError) {
+    process.stderr.write(`warning: skipped ${relative(process.cwd(), path)}: ${error.reason}\n`)
+    return
+  }
   const why = error instanceof Error ? error.message : String(error)
   process.stderr.write(
     `warning: skipped ${relative(process.cwd(), path)}: not a readable ES run record (${why}). Restore it from git, or delete it.\n`,
@@ -97,12 +116,15 @@ export async function recentRecords(dirs: string[], limit: number): Promise<RunR
 }
 
 type Cache = {
-  /** The mtime of this module: any rebuild of ES drops entries derived by the old code. */
-  build: number
+  /**
+   * ES's version and this module's mtime: another ES, or a rebuild, drops entries derived by the
+   * old code. npm gives every installed file the same mtime, so the version tells releases apart.
+   */
+  build: string
   files: Record<string, { size: number; mtimeMs: number; entry: HistoryEntry }>
 }
 
-const BUILD = statSync(fileURLToPath(import.meta.url)).mtimeMs
+const BUILD = `${PACKAGE_VERSION}:${statSync(fileURLToPath(import.meta.url)).mtimeMs}`
 
 async function readCache(root: string): Promise<Cache> {
   try {

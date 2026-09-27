@@ -1,0 +1,341 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from TranscriptLine in src/view/model.ts by `pnpm schema:update`; don't edit. One line of an attempt's transcript.jsonl in a run's artifacts.",
+  "title": "TranscriptLine",
+  "$ref": "#/$defs/TranscriptLine",
+  "$defs": {
+    "TranscriptLine": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "added": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "kind": {
+              "enum": ["create", "delete", "modify"]
+            },
+            "path": {
+              "type": "string"
+            },
+            "removed": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "file-edit"
+            }
+          },
+          "required": [
+            "added",
+            "atMs",
+            "durationMs",
+            "kind",
+            "path",
+            "removed",
+            "toolCallId",
+            "ts",
+            "turn",
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "input": {},
+            "ok": {
+              "type": "boolean"
+            },
+            "output": {},
+            "tool": {
+              "type": "string"
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "tool"
+            }
+          },
+          "required": [
+            "atMs",
+            "durationMs",
+            "input",
+            "ok",
+            "output",
+            "tool",
+            "toolCallId",
+            "ts",
+            "turn",
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "ok": {
+              "type": "boolean"
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "web-fetch"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": ["atMs", "durationMs", "ok", "toolCallId", "ts", "turn", "type", "url"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "query": {
+              "type": "string"
+            },
+            "references": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "toolCallId": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "web-search"
+            }
+          },
+          "required": [
+            "atMs",
+            "durationMs",
+            "query",
+            "references",
+            "toolCallId",
+            "ts",
+            "turn",
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "text": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "enum": ["reasoning", "text"]
+            }
+          },
+          "required": ["atMs", "durationMs", "text", "ts", "turn", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "durationMs": {
+              "type": "number"
+            },
+            "status": {
+              "$ref": "#/$defs/TurnStatus"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "turn-end"
+            }
+          },
+          "required": ["atMs", "durationMs", "status", "ts", "turn", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "message": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "error"
+            }
+          },
+          "required": ["atMs", "message", "ts", "turn", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "message": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "retry"
+            }
+          },
+          "required": ["atMs", "message", "ts", "turn", "type"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "atMs": {
+              "type": "number"
+            },
+            "text": {
+              "type": "string"
+            },
+            "ts": {
+              "type": "string"
+            },
+            "turn": {
+              "type": "number"
+            },
+            "type": {
+              "const": "prompt"
+            }
+          },
+          "required": ["atMs", "text", "ts", "turn", "type"]
+        }
+      ]
+    },
+    "TurnStatus": {
+      "enum": ["aborted", "completed", "error"]
+    }
+  }
+}

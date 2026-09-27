@@ -5,7 +5,7 @@ description: Every field of a run's JSON record, and the history folder layout.
 
 Each run is one JSON file, `<runId>.json`, plus optional artifacts in `<runId>/`. The record is immutable once written. `es show <run> --json` prints it.
 
-A record written before a field existed still loads everywhere: ES reads the missing field as empty (`[]`, or `false` for `todo`).
+A record written before a field existed still loads everywhere: ES reads the missing field as empty (`[]`, or `false` for `todo`). A record from a newer ES loads too, ignoring fields this ES doesn't know, unless its `schemaVersion` is higher: then ES skips it with a warning to upgrade.
 
 ```bash
 npx es show latest --json | jq '.evals[] | select(.outcome != "pass") | .id'

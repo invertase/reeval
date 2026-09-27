@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { appendFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { withUnknownFields } from '../scripts/schema/validate.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
@@ -721,5 +722,124 @@ describe('records from before a field existed', () => {
       /✓ → ✓ .* evals\/greet\.es\.ts › writes greet\.js/,
     )
     await ok(['studio', 'build', '--out', join(p.dir, 'site')])
+  })
+})
+
+describe('records from a newer ES', () => {
+  const OLD = 'fixtures/records/before-100'
+  const oldRun = '20260927T151935Z_facb81b_cursor-agent_07sv'
+  const newRun = '20270101T000000Z_facb81b_cursor-agent_zz01'
+
+  /** Writes a copy of the old run as `newRun`, changed by `edit`, with its artifacts. */
+  async function future(dir: string, edit: (r: Record<string, unknown>) => void) {
+    const history = join(dir, HISTORY)
+    const r = JSON.parse(readFileSync(join(history, `${oldRun}.json`), 'utf8'))
+    r.runId = newRun
+    edit(r)
+    await writeFile(join(history, `${newRun}.json`), JSON.stringify(r, null, 2))
+    execFileSync('cp', ['-R', join(history, oldRun), join(history, newRun)])
+  }
+
+  test('a newer schemaVersion: es show says to upgrade ES, and the other readers skip it with a warning', async () => {
+    const p = await fixture(OLD)
+    await future(p.dir, (r) => {
+      r.schemaVersion = 2
+    })
+    const upgrade =
+      /written by a newer ES \(schemaVersion 2; this ES reads up to 1\)\. Upgrade ES to read it\./
+    const shown = await runCli(p.dir, ['show', newRun])
+    assert.notEqual(shown.code, 0, shown.stdout + shown.stderr)
+    assert.match(shown.stderr, upgrade)
+    for (const args of [
+      ['history'],
+      ['query', 'select count(*) as n from runs'],
+      ['studio', 'build', '--out', join(p.dir, 'site')],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.equal(r.code, 0, `es ${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, new RegExp(`skipped ${HISTORY}/${newRun}\\.json: ${upgrade.source}`))
+      assert.doesNotMatch(r.stderr, /Restore it from git/)
+    }
+    assert.match(
+      (await runCli(p.dir, ['query', 'select count(*) as n from runs'])).stdout,
+      /^n\n1$/m,
+    )
+    const compared = await runCli(p.dir, ['compare', oldRun, newRun])
+    assert.notEqual(compared.code, 0)
+    assert.match(compared.stderr, upgrade)
+  })
+
+  test('fields, values and transcript events a newer ES added are ignored by every reader', async () => {
+    const p = await fixture(OLD)
+    const schema = JSON.parse(
+      readFileSync(join(testDir, '../schema/run-record.schema.json'), 'utf8'),
+    )
+    await future(p.dir, (r) => {
+      withUnknownFields(schema, r, () => ({ by: 'a newer ES', list: [1] }))
+      const record = r as unknown as RunRecord
+      record.status = 'paused' as RunRecord['status']
+      const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
+      attempt.outcome = 'cancelled' as typeof attempt.outcome
+      attempt.error = { kind: 'quota' as never, message: 'a kind this ES does not know' }
+      attempt.turns[0] = {
+        ...(attempt.turns[0] as (typeof attempt.turns)[number]),
+        status: 'paused' as never,
+      }
+    })
+    const transcripts = execFileSync(
+      'find',
+      [join(p.dir, HISTORY, newRun), '-name', 'transcript.jsonl'],
+      { encoding: 'utf8' },
+    )
+      .trim()
+      .split('\n')
+    for (const t of transcripts) {
+      await appendFile(
+        t,
+        `${JSON.stringify({ turn: 1, ts: '2027-01-01T00:00:00.000Z', atMs: 1, type: 'hologram', frames: 3 })}\n`,
+      )
+    }
+    for (const args of [
+      ['show', newRun],
+      ['show', newRun, '--json'],
+      ['show', newRun, '--md'],
+      ['history'],
+      ['history', '--json'],
+      ['query', 'eval_trend'],
+      ['query', 'select count(*) as n from tool_calls'],
+      ['compare', oldRun, newRun],
+      ['studio', 'build', '--out', join(p.dir, 'site')],
+    ]) {
+      const r = await runCli(p.dir, args)
+      assert.ok(
+        r.code === 0 || (args[0] === 'compare' && r.code === 1),
+        `es ${args.join(' ')}\n${r.stdout}${r.stderr}`,
+      )
+      assert.doesNotMatch(
+        r.stderr,
+        /TypeError|Cannot read|undefined is not|skipped/,
+        `es ${args.join(' ')}\n${r.stderr}`,
+      )
+    }
+  })
+})
+
+describe('caches another ES wrote', () => {
+  test('.es/history-cache.json from another ES version is rebuilt, even at the same mtime', async () => {
+    const p = await fixture('fixtures/records/before-100')
+    assert.equal((await runCli(p.dir, ['history'])).code, 0)
+    const file = join(p.dir, '.es/history-cache.json')
+    const cache = JSON.parse(readFileSync(file, 'utf8'))
+    for (const hit of Object.values(cache.files) as Array<{ entry: { author: string } }>) {
+      hit.entry.author = 'from-a-stale-cache'
+    }
+    await writeFile(file, JSON.stringify(cache))
+    assert.match((await runCli(p.dir, ['history', '--json'])).stdout, /from-a-stale-cache/)
+    // npm installs every file with the same mtime, so only the version tells two releases apart.
+    cache.build = cache.build.replace(/^[^:]+:/, '0.0.0-older:')
+    await writeFile(file, JSON.stringify(cache))
+    const r = await runCli(p.dir, ['history', '--json'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.doesNotMatch(r.stdout, /from-a-stale-cache/)
   })
 })

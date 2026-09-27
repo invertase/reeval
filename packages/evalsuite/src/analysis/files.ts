@@ -3,27 +3,36 @@
 // <hash8>.{json,md}`, written create-only: the record is never touched, so two teammates who save
 // never conflict, and the static studio build picks them up with the run's other files.
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
 import { countSecrets } from '../redact.ts'
 import type { AnalysisDoc, AnalysisEntry } from '../view/analysis.ts'
+import { NewerSchemaError, readableAnalysis } from '../view/record.ts'
 
 export const analysisCacheDir = (root: string) => join(root, '.es', 'analysis')
 export const savedAnalysisDir = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), 'analysis')
 
-const parse = (text: string): AnalysisDoc | null => {
+const warned = new Set<string>()
+
+/** An analysis file as this ES reads it; null if it isn't one, or (with a warning) is newer. */
+const parse = (text: string, file: string): AnalysisDoc | null => {
   try {
     const doc = JSON.parse(text) as AnalysisDoc
-    return doc?.kind === 'es-analysis' ? doc : null
-  } catch {
+    return doc?.kind === 'es-analysis' ? readableAnalysis(doc, file) : null
+  } catch (error) {
+    if (error instanceof NewerSchemaError && !warned.has(file)) {
+      warned.add(file)
+      process.stderr.write(`warning: skipped ${relative(process.cwd(), file)}: ${error.reason}\n`)
+    }
     return null
   }
 }
 
 export async function readCached(root: string, key: string): Promise<AnalysisDoc | null> {
-  const text = await readFile(join(analysisCacheDir(root), `${key}.json`), 'utf8').catch(() => null)
-  return text === null ? null : parse(text)
+  const file = join(analysisCacheDir(root), `${key}.json`)
+  const text = await readFile(file, 'utf8').catch(() => null)
+  return text === null ? null : parse(text, file)
 }
 
 export async function writeCached(root: string, key: string, doc: AnalysisDoc): Promise<string> {
@@ -97,7 +106,8 @@ export async function listAnalyses(
       n.endsWith('.json'),
     )
     for (const name of names.sort().reverse()) {
-      const doc = parse(await readFile(join(folder, name), 'utf8').catch(() => ''))
+      const file = join(folder, name)
+      const doc = parse(await readFile(file, 'utf8').catch(() => ''), file)
       if (doc) entries.push({ file: `analysis/${name}`, source: 'saved', doc })
     }
     if (entries.length) break
@@ -106,7 +116,8 @@ export async function listAnalyses(
     const cache = analysisCacheDir(root)
     for (const name of await readdir(cache).catch(() => [] as string[])) {
       if (!name.endsWith('.json')) continue
-      const doc = parse(await readFile(join(cache, name), 'utf8').catch(() => ''))
+      const file = join(cache, name)
+      const doc = parse(await readFile(file, 'utf8').catch(() => ''), file)
       if (doc?.anchor === runId)
         entries.push({ file: `.es/analysis/${name}`, source: 'cached', doc })
     }
