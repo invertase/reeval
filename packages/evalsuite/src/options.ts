@@ -576,10 +576,13 @@ export function unbrokered(env: EnvVars, attempts: PlannedAttempt[]): Unbrokered
 }
 
 /** `GEMINI_API_KEY → generativelanguage.googleapis.com` for each secret an attempt brokers. */
-export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
-  plannedSecrets(env, attempt.environment.layers).flatMap((s) =>
-    s.hosts ? [`${s.label} → ${s.hosts.join(', ')}`] : [],
-  )
+export const brokeredIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [
+  ...new Set(
+    plannedSecrets(env, attempt.environment.layers).flatMap((s) =>
+      s.hosts ? [`${s.label} → ${s.hosts.join(', ')}`] : [],
+    ),
+  ),
+]
 
 /** The host variables an attempt's secrets read, brokered or not. */
 export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] => [

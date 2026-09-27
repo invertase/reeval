@@ -250,7 +250,8 @@ export function plannedSecrets(env: EnvVars, layers: readonly EnvironmentLayer[]
     checksOnly = false,
     optional = false,
   ) =>
-    out.set(label, {
+    // Keyed by variable too: a header's secret.template can read several.
+    out.set(`${label}\0${from}`, {
       label,
       from,
       ...(hosts ? { hosts } : {}),

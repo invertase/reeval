@@ -9,7 +9,7 @@ import { type BrokeredSecret, resolveEnvironment } from '../src/environment/reso
 import { defineEnvironment, layered, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import type { PlannedAttempt } from '../src/options.ts'
-import { unbrokered, unbrokeredWarning } from '../src/options.ts'
+import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
 import { countSecrets, redactSecrets, registerSecret } from '../src/redact.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
@@ -319,6 +319,34 @@ describe('unbrokered secrets', () => {
       unbrokeredWarning({ label: 'PLAIN', from: 'PLAIN' }),
       /^PLAIN is in the sandbox as its real value/,
     )
+  })
+
+  test("every variable of a header's secret.template is a secret the run masks", () => {
+    const env = defineEnvironment('e', ({ secret, mcp }) => ({
+      mcp: {
+        local: mcp.http('http://localhost:1', {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+          headers: { auth: secret.template('Basic ${ACME_USER}:${ACME_PASS}') },
+        }),
+      },
+    }))
+    const attempt = { environment: layered(undefined, env) } as PlannedAttempt
+    assert.deepEqual(secretVarsIn({}, attempt), ['ACME_USER', 'ACME_PASS'])
+    const https = defineEnvironment('e', ({ secret, mcp }) => ({
+      mcp: {
+        remote: mcp.http('https://mcp.example.com', {
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
+          headers: { auth: secret.template('Basic ${ACME_USER}:${ACME_PASS}') },
+        }),
+      },
+    }))
+    assert.deepEqual(brokeredIn({}, { environment: layered(undefined, https) } as PlannedAttempt), [
+      'mcp.remote.headers.auth → mcp.example.com',
+    ])
+    assert.deepEqual(unbrokeredSecrets({}, env.layers), [
+      { label: 'mcp.local.headers.auth', from: 'ACME_USER' },
+      { label: 'mcp.local.headers.auth', from: 'ACME_PASS' },
+    ])
   })
 
   test('only Docker attempts count', () => {
