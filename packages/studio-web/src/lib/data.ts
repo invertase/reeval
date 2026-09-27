@@ -9,6 +9,7 @@ import {
   type IndexManifest,
   manifestPath,
   type RunRecord,
+  readableRecord,
   recordPath,
   type StudioInfo,
   shardPath,
@@ -64,7 +65,7 @@ export const headersQuery = queryOptions({
 export const recordQuery = (runId: string) =>
   queryOptions({
     queryKey: ['record', runId],
-    queryFn: () => fetchJson<RunRecord>(recordPath(runId)),
+    queryFn: async () => readableRecord(await fetchJson<RunRecord>(recordPath(runId))),
   })
 
 export const artifactQuery = (runId: string, path: string | undefined) =>
