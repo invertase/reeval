@@ -323,6 +323,19 @@ export type DockerSandboxDescriptor = {
   install?: InstallStep[]
   /** The most Docker sandboxes at once, across the run, whatever their image. */
   maxConcurrent?: number
+  /**
+   * Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead
+   * of the unprivileged `es` user. For evals that install system packages at run time.
+   */
+  root?: boolean
+  /** Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped. */
+  capabilities?: string[]
+  /** The container's memory, with no swap on top: `'4g'` (default), `'512m'`, or bytes. */
+  memory?: string | number
+  /** CPUs the container may use, fractions allowed. Default 2, capped at the Docker host's. */
+  cpus?: number
+  /** Processes and threads at once. Default 1024. */
+  pids?: number
 }
 export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
 

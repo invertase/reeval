@@ -290,7 +290,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
         auth,
         ...(mcpServers ? { mcpServers } : {}),
         env: {
-          // The CLI refuses to skip permissions as root unless told it's in a sandbox.
+          // The CLI refuses to skip permissions as root (docker({ root: true })) unless told it's
+          // in a sandbox.
           IS_SANDBOX: '1',
           // No telemetry, error reporting or feature-flag fetches: fewer endpoints for the key,
           // and flags that can't change between runs.

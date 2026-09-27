@@ -17,7 +17,19 @@ export type DockerOptions = Omit<DockerSandboxDescriptor, 'kind' | 'dockerfile'>
   dockerfile?: string | URL
 }
 
-const DOCKER_KEYS = ['id', 'image', 'from', 'dockerfile', 'install', 'maxConcurrent']
+const DOCKER_KEYS = [
+  'id',
+  'image',
+  'from',
+  'dockerfile',
+  'install',
+  'maxConcurrent',
+  'root',
+  'capabilities',
+  'memory',
+  'cpus',
+  'pids',
+]
 const DOCKER_HINTS: Record<string, string> = {
   steps: 'install',
   run: 'install',
@@ -26,6 +38,51 @@ const DOCKER_HINTS: Record<string, string> = {
   file: 'dockerfile',
   build: 'dockerfile',
   base: 'from',
+  user: 'root',
+  privileged: 'root',
+  capAdd: 'capabilities',
+  caps: 'capabilities',
+  mem: 'memory',
+  memoryLimit: 'memory',
+  cpu: 'cpus',
+  pidsLimit: 'pids',
+}
+
+/** Docker's memory size: bytes, or a number with `b`, `k`, `m` or `g`. */
+const MEMORY = /^\d+(\.\d+)?[bkmg]?$/i
+
+function checkConfinement(options: DockerOptions): void {
+  const { root, capabilities, memory, cpus, pids } = options
+  if (root !== undefined && typeof root !== 'boolean') {
+    throw new UsageError(`docker({ root }) is true or false (got ${JSON.stringify(root)})`)
+  }
+  if (
+    capabilities !== undefined &&
+    (!Array.isArray(capabilities) ||
+      !capabilities.every((c) => typeof c === 'string' && /^(CAP_)?[A-Z_]+$/.test(c)))
+  ) {
+    throw new UsageError(
+      `docker({ capabilities }) takes Linux capability names, e.g. capabilities: ['NET_RAW'] (got ${JSON.stringify(capabilities)})`,
+    )
+  }
+  if (
+    memory !== undefined &&
+    !(typeof memory === 'number' ? Number.isInteger(memory) && memory > 0 : MEMORY.test(memory))
+  ) {
+    throw new UsageError(
+      `docker({ memory }) takes a size such as '4g' or '512m', or bytes (got ${JSON.stringify(memory)})`,
+    )
+  }
+  if (cpus !== undefined && !(typeof cpus === 'number' && cpus > 0 && Number.isFinite(cpus))) {
+    throw new UsageError(
+      `docker({ cpus }) takes a number of CPUs above zero, e.g. 1.5 (got ${JSON.stringify(cpus)})`,
+    )
+  }
+  if (pids !== undefined && !(Number.isInteger(pids) && (pids as number) > 0)) {
+    throw new UsageError(
+      `docker({ pids }) takes a whole number of processes above zero (got ${JSON.stringify(pids)})`,
+    )
+  }
 }
 
 function checkInstall(install: unknown): InstallStep[] {
@@ -66,6 +123,10 @@ function checkInstall(install: unknown): InstallStep[] {
  * `install` bakes shell commands onto the base in one cached layer (not with `dockerfile`: put
  * them in it). They run as root from `/`, in order, and never see secrets or the workspace; what
  * needs either belongs in the environment's `setup`.
+ *
+ * At run time the agent, setup steps and checks run as the unprivileged `es` user with every
+ * capability dropped, `no-new-privileges`, and `memory`, `cpus` and `pids` limits. `root: true`
+ * opts an eval into root; `capabilities` adds specific ones back.
  */
 export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
   if (typeof options !== 'object' || options === null || Array.isArray(options)) {
@@ -95,8 +156,10 @@ export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
       )
     }
   }
+  checkConfinement(options)
   const { dockerfile, install, ...rest } = options
   const descriptor: DockerSandboxDescriptor = { kind: 'docker', ...rest }
+  if (rest.capabilities) descriptor.capabilities = [...rest.capabilities]
   if (dockerfile !== undefined) {
     if (install !== undefined) {
       throw new UsageError(
