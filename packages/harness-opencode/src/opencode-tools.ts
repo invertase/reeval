@@ -15,6 +15,8 @@ const native = (title: string, toolUseKind?: 'readonly' | 'edit' | 'bash'): Buil
  * when it first has input, when OpenCode's title is still the tool's name, except for `bash`,
  * whose title is already the command: that one is matched by its `command` input instead.
  * read, write and edit take `filePath`, not the common `file_path`, so they aren't common tools.
+ * There's no websearch: OpenCode offers it only on its own provider or with Exa or Parallel
+ * enabled, and the adapter runs it on `google` with neither.
  */
 export const OPENCODE_BUILTIN_TOOLS = {
   bash: {
@@ -70,14 +72,6 @@ export const OPENCODE_BUILTIN_TOOLS = {
     ...tool({ title: 'webfetch', inputSchema: z.looseObject({ url: z.string() }) }),
     nativeName: 'webfetch',
     toolUseKind: 'readonly',
-  },
-  webSearch: {
-    ...commonTool('webSearch', {
-      nativeName: 'websearch',
-      toolUseKind: 'readonly',
-      inputSchema: z.looseObject({ query: z.string() }),
-    }),
-    title: 'websearch',
   },
   todowrite: native('todowrite'),
   task: native('task'),
