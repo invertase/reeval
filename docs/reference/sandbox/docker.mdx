@@ -44,7 +44,7 @@ Without options, `docker()` uses ES's sandbox image for the harness, which `es i
 </Property>
 
 <Property name="install" type="Array<string | { run: string, timeout?: string | number }>" optional>
-  Shell commands baked onto the base in one cached layer. They run in order, as root, from `/`, with bash, and never see secrets or the workspace: what needs either belongs in the environment's `setup`. A step's `timeout` kills it (there's none by default). Not with `dockerfile`: put the commands in it as `RUN` lines.
+  Shell commands baked onto the base in one cached layer. They run in order, as root with `HOME=/home/es` (what they put there is handed to the `es` user), from `/`, with bash, and never see secrets or the workspace: what needs either belongs in the environment's `setup`. A step's `timeout` kills it (there's none by default). Not with `dockerfile`: put the commands in it as `RUN` lines.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -53,6 +53,28 @@ Without options, `docker()` uses ES's sandbox image for the harness, which `es i
 
 <Property name="maxConcurrent" type="number" optional>
   The most Docker sandboxes at once across the run, whatever their image.
+</Property>
+
+These set what the container runs with, not what's in its image, so changing them never rebuilds one. See [Sandbox security](/guide/sandboxes#sandbox-security).
+
+<Property name="memory" type="string | number" optional>
+  The container's memory, with no swap on top: a size such as `'4g'` or `'512m'`, or bytes. Default `'4g'`. A process that goes past it is killed with exit 137, and the container keeps running.
+</Property>
+
+<Property name="cpus" type="number" optional>
+  CPUs the container may use; fractions such as `1.5` are fine. Default `2`, and never more than the Docker host has.
+</Property>
+
+<Property name="pids" type="number" optional>
+  Processes and threads at once in the container. Default `1024`.
+</Property>
+
+<Property name="root" type="boolean" optional>
+  Run the agent, setup steps and checks as root instead of the `es` user, with the capabilities `apt-get` needs added back (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Default `false`. For evals that install system packages during the attempt; baking them in with `install` needs no opt-in.
+</Property>
+
+<Property name="capabilities" type="string[]" optional>
+  Linux capabilities to add back, such as `['NET_RAW']`. Every other one is dropped. Default none.
 </Property>
 
 ## Images and caching
@@ -82,13 +104,15 @@ docker:sqlite · 1 eval
 
 Adapter versions: Cursor `0.1.0` (`@evalsuite/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
-What ES adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, with the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.es/cache/images/<tag>.log`.
+What ES adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `es` user, and the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.es/cache/images/<tag>.log`.
 
 Image builds don't count toward the eval timeout.
 
 ## Inside the container
 
-Every attempt gets a fresh container with the workspace at `/es/workspace`. An egress gateway runs with it: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image ES builds has.
+Every attempt gets a fresh container with the workspace at `/es/workspace`. The agent, setup steps and checks run as `es` (uid 10001, home `/home/es`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image ES builds has.
+
+Every image ES builds has the `es` user. `docker({ image })` with an image that doesn't fails with `<image> has no es user to run the sandbox as. …`: rebuild it with ES, or pass `root: true`.
 
 ## Errors
 
@@ -98,9 +122,13 @@ Every attempt gets a fresh container with the workspace at `/es/workspace`. An e
 | `dockerfile` and `install` | `docker() takes dockerfile or install, not both: put the install commands in the Dockerfile as RUN lines, so there's one recipe for the image.` |
 | A missing Dockerfile | `docker({ dockerfile: "./Dockerfile" }): <full path> doesn't exist. Paths are relative to the file that calls docker().` |
 | `env` on the sandbox | `Unknown docker() option "env". The sandbox is what's baked into the image; variables and secrets belong in defineEnvironment({ env }).` |
-| A near miss | `Unknown docker() option "base". Did you mean "from"?` (also `steps`, `run`, `setup` → `install`; `file`, `build` → `dockerfile`) |
+| A near miss | `Unknown docker() option "base". Did you mean "from"?` (also `steps`, `run`, `setup` → `install`; `file`, `build` → `dockerfile`; `user`, `privileged` → `root`; `capAdd`, `caps` → `capabilities`; `mem`, `memoryLimit` → `memory`; `cpu` → `cpus`; `pidsLimit` → `pids`) |
 | An empty `install` | `docker({ install }) takes a non-empty list of shell commands, e.g. install: ['apt-get update && apt-get install -y jq'] (got [])` |
 | A bad install step | `docker({ install }) commands are strings or { run, timeout? } objects (got …)` |
+| `root` isn't a boolean | `docker({ root }) is true or false (got "yes")` |
+| A bad capability list | `docker({ capabilities }) takes Linux capability names, e.g. capabilities: ['NET_RAW'] (got "NET_RAW")` |
+| A bad `memory` | `docker({ memory }) takes a size such as '4g' or '512m', or bytes (got "4GB")` |
+| A bad `cpus` or `pids` | `docker({ cpus }) takes a number of CPUs above zero, e.g. 1.5 (got 0)`, `docker({ pids }) takes a whole number of processes above zero (got 10.5)` |
 | A bad install timeout | `docker({ install }) command "x": Invalid duration "5 min". Use e.g. "90s" or "15m".` (zero or negative: `A duration is more than zero`) |
 | An empty `image` | `docker({ image }) must be a non-empty string (got "")` |
 

@@ -57,7 +57,7 @@ evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
 })
 ```
 
-`install` runs its commands in order, as root, in one build container. ES caches the result as one image, keyed on the base image and the exact list, so any edit builds anew. Install commands never see secrets or the workspace; anything that needs them is an environment `setup` step.
+`install` runs its commands in order, as root, in one build container, with `HOME` set to `/home/es`: what an installer puts in `~` is where the agent runs, and ES hands it to the `es` user. ES caches the result as one image, keyed on the base image and the exact list, so any edit builds anew. Install commands never see secrets or the workspace; anything that needs them is an environment `setup` step.
 
 ## Bring a Dockerfile
 
@@ -88,7 +88,7 @@ evaluate(
 ES builds the Dockerfile from its directory with `docker build`, and passes `ES_BASE`: its own image for the harness. `FROM ${ES_BASE}` layers on it, so the result already has the harness and is used as is. From any other Debian or Ubuntu base, ES adds the harness on top, as it does for `from`.
 
 <Warning>
-  Keep `root` as the user and leave `/es` alone in your Dockerfile. `install` doesn't combine with `dockerfile`: write the commands as `RUN` lines.
+  Keep `root` as the user and leave `/es` alone in your Dockerfile. `RUN` lines build as root, but the agent runs as the `es` user (see [Sandbox security](#sandbox-security)), so install tools system-wide or under `/home/es` and `chown` them to `es`. `install` doesn't combine with `dockerfile`: write the commands as `RUN` lines.
 </Warning>
 
 ## Build the images
@@ -137,6 +137,37 @@ Summary
    ✓ queries a seeded SQLite database         13s  1 turn
 …
 ```
+
+## Sandbox security
+
+The agent runs code you didn't write, so each container is locked down by default. You don't need to set anything up for this.
+
+**What's isolated**
+
+- **Your keys.** The harness's API key and brokered secrets never enter the container. The agent sees a placeholder, and the egress gateway on your machine swaps in the real value on the way out, only to that secret's hosts. See [credential brokering](/concepts/credential-brokering).
+- **The network.** Under a restricted [egress policy](/guide/secrets-and-egress) the container is detached from every Docker network, so the gateway is its only way out. The agent can't change that: it can't edit routes or firewall rules, and unsetting or changing the proxy variables finds no other route. The gateway's process inside the container runs as root, so the agent can't stop or replace it either.
+- **Privileges.** The agent, setup steps and `t.exec` checks run as `es` (uid 10001, home `/home/es`), not root. Every Linux capability is dropped and `no-new-privileges` is set, so setuid programs can't raise privileges. Image builds (`install`, your Dockerfile, `from`) still run as root.
+- **Resources.** A runaway agent or fork bomb hits the container's limits, not your machine:
+
+| Limit | Default | Option |
+|---|---|---|
+| Memory | 4 GB, with no swap on top. A process past it is killed (exit 137); the container keeps running | `memory: '8g'` |
+| CPUs | 2, or fewer if the Docker host has fewer | `cpus: 4` |
+| Processes and threads | 1024 | `pids: 4096` |
+
+**What isn't isolated**
+
+- **It's a container, not a VM.** It shares your machine's kernel. The steps above make a kernel or Docker bug much harder to reach, but they aren't a hardware boundary.
+- **Under `allow-all`, the agent can reach anything.** That's the default when no eval sets a policy. The keys are still brokered, but the agent can go around the proxy to any host.
+- **WebSocket messages aren't scrubbed.** Headers are, but if a brokered host echoes a real secret back inside a WebSocket message after the upgrade, the agent can read it.
+- **Secrets sent `to: 'checks'` are real values in setup steps and checks.** Those run as the same `es` user as the agent, so a process the agent left running could read them while they run.
+
+**When an eval needs more**
+
+- **Root at run time**, for example an agent that has to `apt-get install` during the task. Use `docker({ root: true })`. The agent, setup and checks then run as root with only the capabilities `apt-get` needs (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Prefer baking packages in with `install`, which needs no opt-in.
+- **A specific capability**, such as `NET_RAW` for `ping`. Use `docker({ capabilities: ['NET_RAW'] })`.
+
+Everything else works as the `es` user: `npm i`, `pip install` (as a user install), `git`, `curl`, and `npm i -g`, which goes to `~/.local`, on `PATH`.
 
 ## One sandbox per eval
 
