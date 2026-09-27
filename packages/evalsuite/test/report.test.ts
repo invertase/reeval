@@ -5,8 +5,9 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, delimiter, dirname, join } from 'node:path'
 import { describe, test } from 'node:test'
+import { pathToFileURL } from 'node:url'
 import { readInvocations } from '../src/report/invocations.ts'
 import {
   FIELDS,
@@ -16,7 +17,7 @@ import {
   issueUrl,
   MAX_URL,
 } from '../src/report/issue.ts'
-import { commandOf, redactArgv, scrubber } from '../src/report/scrub.ts'
+import { commandOf, redactArgv, scrubber, shortHome } from '../src/report/scrub.ts'
 import { tarGz } from '../src/report/tar.ts'
 import type { ReportBundle } from '../src/report/types.ts'
 import { fakeConfig, pkgRoot, project, runCli, tempDir } from './helpers.ts'
@@ -27,7 +28,7 @@ const UNNAMED = 'hunter2-webhook-q8w7e6r5t4y3' // in .env.local under an innocen
 const TOKEN = `ghp_${'R3p0rtT0k3n'.repeat(4)}` // a token shape, set nowhere
 const FRAGMENT = NAMED.slice(-12) // a stretch of a secret on its own
 
-const NO_NETWORK = join(pkgRoot, 'test/support/no-network.mjs')
+const NO_NETWORK = pathToFileURL(join(pkgRoot, 'test/support/no-network.mjs')).href
 
 /** Every seed found in `text`, by name. */
 function leaks(text: string, paths: Record<string, string> = {}): string[] {
@@ -50,7 +51,8 @@ function allText(dir: string): string {
     const path = join(entry.parentPath, entry.name)
     if (path.endsWith('.tar.gz')) {
       const into = tempDir('untar')
-      execFileSync('tar', ['-xzf', path, '-C', into])
+      // The archive by its name: GNU tar reads a `C:` in a Windows path as a remote host.
+      execFileSync('tar', ['-xzf', basename(path), '-C', into], { cwd: dirname(path) })
       text += allText(into)
     } else text += readFileSync(path, 'utf8')
   }
@@ -70,11 +72,27 @@ evaluate('agent eval', async (t) => { await t.send('go') })
 `,
     '.env.local': `WEBHOOK=${UNNAMED}\n`,
   })
-  const env = { HOME: home, MY_API_KEY: NAMED }
+  // USERPROFILE: Windows' home directory, which os.homedir() reads there.
+  const env = { HOME: home, USERPROFILE: home, MY_API_KEY: NAMED }
   return { ...p, home, env }
 }
 
 describe('es report: redaction', () => {
+  test("Windows' 8.3 short home, as TEMP spells it, is masked too", () => {
+    const long = (p: string) => p.replace('RUNNER~1', 'runneradmin')
+    const temp = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp'
+    assert.equal(shortHome('C:\\Users\\runneradmin', temp, long), 'C:\\Users\\RUNNER~1')
+    assert.equal(
+      shortHome('C:\\Users\\runneradmin', 'C:\\Users\\runneradmin\\Temp', long),
+      undefined,
+    )
+    assert.equal(shortHome('C:\\Users\\bob', temp, long), undefined, 'TEMP is under no one else')
+    assert.equal(shortHome('/home/alice', undefined, long), undefined)
+    const s = scrubber({ env: { TEMP: temp }, home: 'C:\\Users\\runneradmin' })
+    // Where the machine can't expand the short name (not Windows), the long form is still masked.
+    assert.equal(s.text('at C:\\Users\\runneradmin\\x'), 'at ~\\x')
+  })
+
   test('argv keeps commands and flag names, never values or arguments', () => {
     assert.deepEqual(redactArgv(['run', '--profile', 'secret-profile', 'greet', '-vv', '--json']), [
       'run',
@@ -411,12 +429,18 @@ describe('es report: filing an issue', () => {
     await runCli(p.dir, ['run'], { env: p.env })
     const bin = tempDir('report-gh-bin')
     const log = join(bin, 'gh.log')
+    // Node behind an sh and a .cmd wrapper, so it runs on every OS.
     writeFileSync(
-      join(bin, 'gh'),
-      `#!/bin/sh\necho "$@" >> "${log}"\n[ "$1" = issue ] && echo https://github.com/invertase/evalsuite/issues/42\nexit 0\n`,
+      join(bin, 'gh.js'),
+      `const args = process.argv.slice(2)
+require('node:fs').appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
+if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/issues/42')
+`,
     )
+    writeFileSync(join(bin, 'gh'), `#!/bin/sh\nexec node "$(dirname "$0")/gh.js" "$@"\n`)
     chmodSync(join(bin, 'gh'), 0o755)
-    const env = { ...p.env, PATH: `${bin}:${process.env.PATH}` }
+    writeFileSync(join(bin, 'gh.cmd'), '@node "%~dp0gh.js" %*\r\n')
+    const env = { ...p.env, PATH: `${bin}${delimiter}${process.env.PATH}` }
     const r = await runCli(p.dir, ['report', '--issue', '--yes'], { env })
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /Filed https:\/\/github\.com\/invertase\/evalsuite\/issues\/42/)
@@ -511,7 +535,7 @@ describe('es report: the logs archive', () => {
       ]),
     )
     const into = tempDir('untar')
-    execFileSync('tar', ['-xzf', archive, '-C', into])
+    execFileSync('tar', ['-xzf', basename(archive), '-C', into], { cwd: dirname(archive) })
     assert.equal(readFileSync(join(into, 'run/one.log'), 'utf8'), 'one\n')
     assert.equal(readFileSync(join(into, long), 'utf8').length, 1300)
   })
