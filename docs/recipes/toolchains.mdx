@@ -62,7 +62,7 @@ evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
 })
 ```
 
-`install` commands run once, as root, with no secrets and no workspace. ES caches the result by the base image and the exact command list, so any edit builds a new layer.
+`install` commands run once, as root with `HOME=/home/es`, with no secrets and no workspace. The agent itself runs as the unprivileged `es` user, so bake packages in here rather than having it `apt-get` them. ES caches the result by the base image and the exact command list, so any edit builds a new layer.
 
 ## Your own Dockerfile
 
