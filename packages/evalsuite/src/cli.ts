@@ -79,6 +79,14 @@ async function run(argv: string[]): Promise<number> {
       cwd: process.cwd(),
     })
   }
+  if (command === 'doctor') {
+    const { doctorCommand } = await import('./doctor.ts')
+    return doctorCommand(values, {
+      out: (s) => console.log(s),
+      color: !!process.stdout.isTTY && !process.env.NO_COLOR,
+      confirm: process.stdin.isTTY && process.stdout.isTTY ? confirm : undefined,
+    })
+  }
   const configPath = configPathFor(values.config)
   if (command === 'image') {
     if (filters[0] !== 'build') {
@@ -122,6 +130,17 @@ async function run(argv: string[]): Promise<number> {
   if (command === 'clean') return cleanCommand(values, configPath)
   if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
   return runCommand(values, configPath, filters)
+}
+
+/** Asks a yes/no question on the terminal; anything but y or yes is no. */
+async function confirm(question: string): Promise<boolean> {
+  const { createInterface } = await import('node:readline/promises')
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  try {
+    return /^y(es)?$/i.test((await rl.question(question)).trim())
+  } finally {
+    rl.close()
+  }
 }
 
 /** `es clean`: removes local debug data, all of it or all but the newest `--keep` runs. */

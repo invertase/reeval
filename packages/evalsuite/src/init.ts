@@ -137,10 +137,15 @@ function owned(
   return { path, action: 'overwrite', note, content }
 }
 
+/** The entries ES needs (`.es/`, `.env*`) that a `.gitignore`'s text doesn't list. */
+export function missingGitignoreEntries(text: string): string[] {
+  const lines = new Set(text.split(/\r?\n/).map((l) => l.trim().replace(/^\//, '')))
+  return GITIGNORE.filter((e) => !lines.has(e) && !lines.has(e.replace(/\/$/, '')))
+}
+
 function gitignore(dir: string): InitAction {
   const existing = read(join(dir, '.gitignore'))
-  const lines = new Set((existing ?? '').split(/\r?\n/).map((l) => l.trim().replace(/^\//, '')))
-  const missing = GITIGNORE.filter((e) => !lines.has(e) && !lines.has(e.replace(/\/$/, '')))
+  const missing = missingGitignoreEntries(existing ?? '')
   if (!missing.length) return { path: '.gitignore', action: 'keep', note: GITIGNORE.join(', ') }
   const lead = existing && !existing.endsWith('\n') ? '\n' : ''
   const block = `${existing ? `${lead}\n` : ''}# ES: scratch runs and debug data; local keys\n${missing.join('\n')}\n`
