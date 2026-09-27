@@ -103,7 +103,9 @@ export function run(
     const child = spawn(target.file, target.args, {
       cwd: options.cwd,
       stdio: 'pipe',
-      detached,
+      // A detached process on Windows has no console, and cmd.exe then runs nothing (exit 0, no
+      // output); the abort still kills its whole tree.
+      detached: detached && !target.verbatim,
       windowsHide: true,
       windowsVerbatimArguments: target.verbatim,
       env: options.env ? { ...process.env, ...options.env } : process.env,
@@ -117,7 +119,7 @@ export function run(
     // A detached child leads its own process group: kill the group, or grandchildren (a `git`
     // under `sh -c`) outlive the abort.
     const onAbort = () => {
-      if (detached && child.pid) killTree(child.pid)
+      if ((detached || process.platform === 'win32') && child.pid) killTree(child.pid)
       else child.kill('SIGKILL')
     }
     signal?.addEventListener('abort', onAbort, { once: true })
