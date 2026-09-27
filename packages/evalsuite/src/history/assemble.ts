@@ -177,7 +177,7 @@ const endOf = (startedAt: string, durationMs: number) =>
   new Date(Date.parse(startedAt) + durationMs).toISOString()
 
 /** One JSON object per line: each turn's prompt, its events, then a `turn-end`. */
-function transcriptLines(record: EvalRecord): string {
+export function transcriptLines(record: EvalRecord): string {
   const lines: string[] = []
   record.turns.forEach((turn, index) => {
     lines.push(

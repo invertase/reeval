@@ -26,10 +26,12 @@ export async function sweepStaging(root: string): Promise<void> {
 /** Assembles the run into `.es/runs/`, with every artifact and a summary.md. */
 export async function writeScratchRun(
   input: AssembleInput,
+  landed?: () => void,
 ): Promise<WrittenRun & { record: RunRecord }> {
   const { record, artifacts } = await assembleRun(input)
   artifacts.set('summary.md', Buffer.from(renderSummary(record)))
   const written = await writeRun(scratchDir(input.ctx.config.root), record, artifacts)
+  landed?.()
   await rm(input.ctx.stagingDir, { recursive: true, force: true })
   return { ...written, record }
 }

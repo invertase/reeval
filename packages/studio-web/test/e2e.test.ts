@@ -353,7 +353,7 @@ describe('studio in a browser', () => {
     assert.doesNotMatch(page.url(), /token=/)
     assert.equal(await page.locator('tbody tr').count(), 5)
     assert.equal(await page.getByText('scratch', { exact: true }).count(), 1)
-    assert.equal(await page.getByText('Live').count(), 1)
+    assert.equal(await page.getByText('Live', { exact: true }).count(), 1)
 
     const run = spawnSync(process.execPath, [cli, 'run', '--config', config], {
       cwd: demo,
@@ -385,6 +385,116 @@ describe('studio in a browser', () => {
     assert.equal(await (await checked).text(), 'null')
     await page.getByRole('tab', { name: /^State/ }).waitFor()
     assert.equal(await page.getByRole('tab', { name: 'Debug' }).count(), 0)
+    assert.deepEqual(errors, [])
+  })
+
+  /** Waits for the runs list to show a run in progress at 0/4; throws after `timeout`. */
+  const waitForLive = (page: Page, timeout: number) =>
+    page.locator('[data-live-run]', { hasText: /Running 0\/4/ }).waitFor({ timeout })
+
+  test('es studio shows a run in progress attempt by attempt, until its record replaces it', async (t) => {
+    if (!browser) return t.skip('no Chrome or Chromium found')
+    // Each turn takes 1.5 s: hello.es.ts's two evals × two runs, two attempts at a time.
+    const slow = join(demo, 'es.slow.config.ts')
+    writeFileSync(
+      slow,
+      readFileSync(config, 'utf8')
+        .replace(/include: \[[^\]]*\]/, 'include: ["evals/hello.es.ts"]')
+        .replace('"text":', '"delayMs": 1500,\n  "text":'),
+    )
+    const child = spawn(process.execPath, [cli, 'studio', '--config', config, '--port', '47433'], {
+      env: { ...process.env, NO_COLOR: '1' },
+    })
+    children.push(child)
+    const url = await new Promise<string>((resolve, reject) => {
+      let out = ''
+      child.stdout.on('data', (d) => {
+        out += d
+        const m = /http:\/\/127\.0\.0\.1:\d+\/\?token=[\w-]+/.exec(out)
+        if (m) resolve(m[0])
+      })
+      child.on('exit', () => reject(new Error(out)))
+    })
+    const { page, errors } = await open(url)
+    await page.setViewportSize({ width: 1280, height: 860 })
+    await page.waitForSelector('tbody tr')
+    const before = await page.locator('tbody tr').count()
+    assert.equal(await page.locator('[data-live-run]').count(), 0)
+
+    const run = spawn(
+      process.execPath,
+      [cli, 'run', '--config', slow, '--runs', '2', '--concurrency', '2'],
+      { cwd: demo, env: { ...process.env, NO_COLOR: '1', ES_UI: 'plain', CI: '' } },
+    )
+    children.push(run)
+    let runOut = ''
+    run.stdout.on('data', (d) => (runOut += d))
+    run.stderr.on('data', (d) => (runOut += d))
+    const ran = new Promise<number | null>((resolve) => run.on('close', resolve))
+
+    await waitForLive(page, 30_000)
+    const live = page.locator('[data-live-run]')
+    const runId = (await live.getAttribute('data-live-run')) as string
+    assert.match(runId, /^\d{8}T\d{6}Z_/)
+    assert.equal(await live.getByRole('progressbar').count(), 1)
+    assert.equal(await page.locator('tbody tr').count(), before, 'not in the list until it lands')
+
+    // A static build made mid-run has no live section: the same wait must fail there.
+    const out = join(demo, 'studio-mid-run')
+    const built = spawnSync(
+      process.execPath,
+      [cli, 'studio', 'build', '--config', config, '--out', out],
+      {
+        encoding: 'utf8',
+      },
+    )
+    assert.equal(built.status, 0, built.stderr)
+    assert.equal(existsSync(join(out, 'api')), false)
+    const snapshot = await open(await host(out))
+    await snapshot.page.waitForSelector('tbody tr')
+    await assert.rejects(waitForLive(snapshot.page, 2000), /Timeout/)
+    assert.deepEqual(snapshot.errors, [])
+    await snapshot.page.close()
+
+    await live.click()
+    await page.getByRole('heading', { name: 'Run in progress' }).waitFor()
+    assert.match(page.url(), new RegExp(`#/live/${runId}$`))
+    assert.equal(await page.locator('[data-live-attempt]').count(), 4)
+    await page.waitForFunction(
+      () => {
+        const done = document.querySelectorAll('[data-live-attempt=pass]').length
+        const running = document.querySelectorAll('[data-live-attempt=running]').length
+        return done >= 1 && running >= 1
+      },
+      null,
+      { timeout: 30_000 },
+    )
+    const shot = process.env.ES_STUDIO_LIVE_SCREENSHOT
+    if (shot) await page.screenshot({ path: shot })
+    assert.match((await page.getByText(/^Running \d\/4$/).textContent()) ?? '', /Running [1-3]\/4/)
+
+    // A finished attempt opens its transcript while the run goes on.
+    await page.locator('[data-live-attempt=pass] a').first().click()
+    assert.match(page.url(), /#\/live\/.+\/attempt\?key=/)
+    await page.getByText('Turn 1', { exact: true }).waitFor()
+    await page
+      .getByRole('button', { name: /^shell/ })
+      .first()
+      .waitFor()
+    await page.goBack()
+
+    // When the record lands, the live page becomes the run's own page.
+    assert.equal(await ran, 0, runOut)
+    await page.waitForURL(new RegExp(`#/runs/${runId}$`), { timeout: 20_000 })
+    await page.waitForSelector('h2')
+    assert.equal(await page.getByText("Couldn't load this").count(), 0)
+    await page.getByRole('link', { name: 'Runs' }).first().click()
+    await page.waitForFunction(
+      (n) => document.querySelectorAll('tbody tr').length === n,
+      before + 1,
+    )
+    assert.equal(await page.locator('[data-live-run]').count(), 0)
+    assert.match((await page.locator('tbody tr').first().textContent()) ?? '', new RegExp(runId))
     assert.deepEqual(errors, [])
   })
 })

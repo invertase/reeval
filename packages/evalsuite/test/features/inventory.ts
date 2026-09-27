@@ -1110,6 +1110,22 @@ export const inventory: InventoryFeature[] = [
       'studio-web/test/e2e.test.ts › a static build works from a subpath',
     ],
   },
+  {
+    id: 'studio.live',
+    area: 'Records and studio',
+    name: "Runs in progress in `es studio`: `es run`'s `.es/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it",
+    tests: [
+      'evalsuite/test/live.test.ts › starts with every planned attempt queued',
+      'evalsuite/test/live.test.ts › is replaced whole',
+      'evalsuite/test/live.test.ts › anything it cannot read is null',
+      'evalsuite/test/live.test.ts › running, stopped (process gone, or quiet), corrupt and landed runs',
+      'evalsuite/test/live.test.ts › a finished attempt serves its redacted transcript',
+      'evalsuite/test/live.test.ts › /api/events streams run.progress',
+      'evalsuite/test/live.test.ts › from 0/N to done, then the record replaces it',
+      'evalsuite/test/live.test.ts › a killed run is shown as stopped',
+      'studio-web/test/e2e.test.ts › es studio shows a run in progress attempt by attempt',
+    ],
+  },
 
   // CLI and runner
   {

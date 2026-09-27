@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { debugLog } from '../debug/attempt.ts'
 import { allowedHosts } from '../egress.ts'
@@ -77,7 +77,10 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
     recordFileName(attemptKey(id, spec.cell.key, spec.n)),
   )
   await mkdir(join(stagingDir, 'evals'), { recursive: true })
-  await writeFile(recordPath, redactSecrets(JSON.stringify(record, null, 2)))
+  // Replaced whole: es studio reads it while the run goes on.
+  const tmp = `${recordPath}.${process.pid}.tmp`
+  await writeFile(tmp, redactSecrets(JSON.stringify(record, null, 2)))
+  await rename(tmp, recordPath)
   return {
     outcome: record.outcome,
     errorKind: record.error?.kind ?? null,

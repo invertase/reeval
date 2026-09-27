@@ -17,10 +17,12 @@ import {
   REQUESTS_FILE,
   TRACE_FILE,
 } from '../view/debug.ts'
+import type { LiveIndex, LiveRun } from '../view/live.ts'
 import type { StudioInfo } from '../view/model.ts'
 import { indexFiles } from '../view/model.ts'
 import { artifactType, parseDataPath, RUN_ID } from '../view/paths.ts'
 import { readableDebugRequest } from '../view/record.ts'
+import { listLive, liveTranscript } from './live.ts'
 import { listHeaders, resolveFile, type StudioSource } from './source.ts'
 
 export const COOKIE = 'es_studio_token'
@@ -35,10 +37,13 @@ export type StudioServerOptions = {
   token: string | null
   /** Host headers to accept, e.g. `127.0.0.1:4984`; empty accepts any (tests only). */
   hosts: string[]
-  /** Subscribes to history changes; returns an unsubscribe function. */
-  subscribe?: (listener: () => void) => () => void
+  /** Subscribes to history and live-run changes; returns an unsubscribe function. */
+  subscribe?: (listener: (event: StudioEvent) => void) => () => void
   maxEventClients?: number
 }
+
+/** What `/api/events` streams: a run landed or was recorded, or a run in progress moved. */
+export type StudioEvent = { type: 'history.changed' } | { type: 'run.progress'; runs: LiveRun[] }
 
 export const newToken = () => randomBytes(32).toString('base64url')
 
@@ -151,8 +156,9 @@ export function createStudioApp(options: StudioServerOptions) {
     clients++
     return streamSSE(c, async (stream) => {
       let id = 0
-      const unsubscribe = subscribe(() => {
-        void stream.writeSSE({ event: 'history.changed', data: '{}', id: String(++id) })
+      const unsubscribe = subscribe((event) => {
+        const data = event.type === 'run.progress' ? JSON.stringify({ runs: event.runs }) : '{}'
+        void stream.writeSSE({ event: event.type, data, id: String(++id) })
       })
       const closed = new Promise<void>((resolve) => stream.onAbort(resolve))
       await stream.writeSSE({ event: 'ready', data: '{}', id: String(id) })
@@ -161,6 +167,21 @@ export function createStudioApp(options: StudioServerOptions) {
       clearInterval(ping)
       unsubscribe()
       clients--
+    })
+  })
+
+  // Runs in progress, from .es/staging: only here, never in a static build.
+  app.get('/api/live', async (c) => {
+    const index: LiveIndex = { runs: await listLive(source) }
+    return c.json(index, 200, { 'Cache-Control': 'no-cache' })
+  })
+  app.get('/api/live/:runId/transcript', async (c) => {
+    const text = await liveTranscript(source, c.req.param('runId'), c.req.query('attempt') ?? '')
+    if (text === null) return c.text('No transcript for this attempt yet', 404)
+    return c.body(text, 200, {
+      'Cache-Control': 'no-cache',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Security-Policy': 'sandbox',
     })
   })
 

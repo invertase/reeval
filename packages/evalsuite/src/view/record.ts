@@ -10,7 +10,12 @@ import type { DebugRequest } from './debug.ts'
 import type { TranscriptLine } from './model.ts'
 
 /** Each shape ES persists and reads back; `schema/<name>.schema.json` is its snapshot. */
-export type ShapeName = 'run-record' | 'transcript-line' | 'analysis' | 'debug-request'
+export type ShapeName =
+  | 'run-record'
+  | 'transcript-line'
+  | 'analysis'
+  | 'debug-request'
+  | 'live-progress'
 
 /**
  * A field added after files were written without it, and what it reads as there. The path is
@@ -28,6 +33,7 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
   'transcript-line': [],
   analysis: [],
   'debug-request': [],
+  'live-progress': [],
 }
 
 /**

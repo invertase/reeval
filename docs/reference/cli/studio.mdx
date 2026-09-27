@@ -31,6 +31,7 @@ Ctrl-C to stop.
 
 - **Port:** 4984, or the next free port. It runs until Ctrl-C.
 - **Live:** it watches the history folder and `.es/runs/`. New runs appear within about a second. Unrecorded runs show a `scratch` badge unless you pass `--no-scratch`.
+- **Runs in progress:** a running `es run` keeps `.es/staging/<runId>/live.json` (its planned attempts, each one's status and duration, and a heartbeat), replaced whole on every change. The studio shows the run at the top of the list until its record lands. A run whose process has exited, or whose heartbeat is over 15 seconds old, shows as `Stopped`. A finished attempt's transcript is served from the staged attempt record, redacted as records are. `--no-scratch` hides runs in progress too.
 - **Debug tab:** attempts with local debug data in `.es/debug` get a Debug tab (phase timeline, gateway requests, `trace.ndjson` when kept).
 - **Security:** the printed URL carries a random per-session token. Opening it sets an httpOnly, SameSite=Strict cookie and strips the token. Without it every route answers 401. The server checks `Host` and `Origin`, sends no CORS headers, answers GET and HEAD only, maps URLs to files through an allowlist and a realpath check, and serves artifacts as `text/plain` with `nosniff` and a sandboxing CSP.
 
@@ -70,7 +71,9 @@ data/index/manifest.json                  { shards: [{ id: "2026-09", runs }], l
 data/index/<YYYY-MM>.json                 run headers started that UTC month, newest first
 data/runs/<runId>.json                    the record, byte for byte
 data/runs/<runId>/<artifact path>         summary.md, worktree.patch, <eval>/<cell>/<n>/…
-api/events                                live mode only: SSE history.changed
+api/events                                live mode only: SSE history.changed and run.progress
+api/live                                  live mode only: { runs: [...] }, the runs in progress
+api/live/<runId>/transcript?attempt=<key> live mode only: a finished attempt's transcript
 ```
 
 ## Related

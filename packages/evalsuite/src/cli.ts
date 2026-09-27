@@ -25,6 +25,7 @@ import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
+import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
@@ -269,35 +270,40 @@ async function runCommand(
     await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const { engineRun, plan, sandboxVersions, budgetReached } = executed
+  const { engineRun, plan, sandboxVersions, budgetReached, live } = executed
   if ((interrupted || engineRun.cancelled) && plan?.sandboxes.some((s) => s.kind === 'docker')) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
     await removeRunContainers(ctx.runId)
   }
   if (engineRun.stopped || !plan) {
+    live?.remove()
     renderer.close()
     return EXIT.ok
   }
 
   const { lockfiles } = await import('./history/state.ts')
   const { writeScratchRun } = await import('./results.ts')
-  const run = await writeScratchRun({
-    ctx,
-    author: ctx.author,
-    engine: engineRun,
-    startedAt: ctx.startedAt,
-    endedAt: new Date(),
-    interrupted: interrupted || engineRun.cancelled,
-    budgetReached: budgetReached(),
-    plan,
-    es: version,
-    enginePackages: engineVersions,
-    sandbox: sandboxVersions,
-    worktreePatch: ctx.worktreePatch,
-    lockfiles: await lockfiles(ctx.config.root),
-    git: ctx.git,
-    runner: runnerInfo(),
-  })
+  const run = await writeScratchRun(
+    {
+      ctx,
+      author: ctx.author,
+      engine: engineRun,
+      startedAt: ctx.startedAt,
+      endedAt: new Date(),
+      interrupted: interrupted || engineRun.cancelled,
+      budgetReached: budgetReached(),
+      plan,
+      es: version,
+      enginePackages: engineVersions,
+      sandbox: sandboxVersions,
+      worktreePatch: ctx.worktreePatch,
+      lockfiles: await lockfiles(ctx.config.root),
+      git: ctx.git,
+      runner: runnerInfo(),
+    },
+    // Until the record lands, the studio shows the run as live.
+    () => live?.stop(),
+  )
   const { record } = run
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
@@ -489,9 +495,12 @@ async function executeRun(
   let preflightStop: Error | undefined
   let reached = false
   let budgetTimer: NodeJS.Timeout | undefined
+  let toRun: PlannedItem[] = []
+  let live: LiveProgressWriter | undefined
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
+    toRun = planned
     for (const p of planned)
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
     plan = await buildPlan({
@@ -616,7 +625,13 @@ async function executeRun(
       ),
       filters,
       onPlan,
-      onRunStart: (files) =>
+      onRunStart: (files) => {
+        live = writeLiveProgress({
+          dir: stagingDir,
+          runId,
+          startedAt: ctx.startedAt,
+          planned: toRun,
+        })
         renderer.onEvent({
           type: 'run-start',
           at: Date.now(),
@@ -625,9 +640,14 @@ async function executeRun(
           harness: (plan?.harnesses ?? config.harness.map(harnessId)).join(', '),
           sandbox: sandboxId(config.sandbox),
           concurrency,
-        }),
+        })
+      },
       onEvent: (e) => {
-        if (e.type === 'eval-start') startBudget()
+        if (e.type === 'eval-start') {
+          startBudget()
+          live?.start(e.key, e.at)
+        }
+        if (e.type === 'eval-end') live?.end(e.result)
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
         if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
         renderer.onEvent(e)
@@ -641,6 +661,7 @@ async function executeRun(
             process.exit(stopCode)
           }
           interrupted = true
+          live?.phase('cancelling')
           renderer.onEvent({
             type: 'notice',
             at: Date.now(),
@@ -653,12 +674,18 @@ async function executeRun(
         process.on('SIGTERM', onSignal)
       },
     })
+    live?.phase('finishing')
+  } catch (error) {
+    live?.remove()
+    throw error
   } finally {
     clearTimeout(budgetTimer)
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
   }
   if (preflightStop) throw preflightStop
+  if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted))
+    live?.remove()
   if (engineRun.noFiles && !filters.length && !tags.length) {
     throw new UsageError(
       `No eval files match ${config.include.join(', ')} (config.include) in ${config.root}. Name eval files to match it, or set include in ${config.file}.`,
@@ -667,7 +694,7 @@ async function executeRun(
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted)) {
     throw noMatch(config, filters, tags)
   }
-  return { engineRun, plan, sandboxVersions, budgetReached: () => reached }
+  return { engineRun, plan, sandboxVersions, budgetReached: () => reached, live }
 }
 
 // `es run | head` closes stdout early; that isn't an error.
