@@ -76,14 +76,14 @@ const harnessImage = (harness: Parameters<typeof imageFor>[0]) => {
   }
 }
 /** A `docker` shim on PATH that counts ES's `docker build` calls. */
-function countBuilds(dir: string) {
+function countBuilds(dir: string, match = '') {
   const shim = join(dir, 'bin')
   const log = join(dir, 'builds.log')
   mkdirSync(shim, { recursive: true })
   const real = execFileSync('sh', ['-c', 'command -v docker'], { encoding: 'utf8' }).trim()
   writeFileSync(
     join(shim, 'docker'),
-    `#!/bin/sh\n[ "$1" = build ] && echo build >> '${log}'\nexec '${real}' "$@"\n`,
+    `#!/bin/sh\n[ "$1" = build ] && case "$*" in *'${match}'*) echo build >> '${log}';; esac\nexec '${real}' "$@"\n`,
     { mode: 0o755 },
   )
   return {
@@ -417,6 +417,162 @@ evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (
           '-c',
           `docker rmi -f ${theirs} es-clean-test-ours:${nonce} es-clean-test-theirs:${nonce} >/dev/null 2>&1 || true`,
         ])
+      }
+    },
+  )
+
+  test(
+    'an eval-level image that fails fails only its cells, each once, built once, annotated once; everything else runs',
+    docker,
+    async () => {
+      const broken = `import { evaluate, group } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+group('broken tools', { sandbox: docker({ install: ['echo nope && exit 5'] }) }, () => {
+  evaluate('a', { runs: 2 }, async (t) => { await t.sandbox() })
+  evaluate('b', async (t) => { await t.sandbox() })
+})
+`
+      const p = await project('docker-prepare-scoped', {
+        'es.config.ts': config('{}'),
+        'evals/ok.es.ts': `import { evaluate, expect } from 'evalsuite'
+evaluate('ok', async (t) => {
+  await t.sandbox()
+  expect((await t.exec('echo fine')).stdout).toBe('fine\\n')
+})
+`,
+        'evals/broken.es.ts': broken,
+      })
+      const counter = countBuilds(p.dir, 'evalsuite-install')
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', '--concurrency', '4'], {
+        env: { ...counter.env, GITHUB_ACTIONS: 'true' },
+        ...slow,
+      })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.equal(counter.count(), 1, 'the failing install layer is built once for three attempts')
+      const { run, read } = readRun(p.dir)
+      const outcome = (name: string) => run.evals.find((e) => e.name === name)
+      assert.equal(outcome('ok')?.outcome, 'pass', 'the eval that needs no broken image runs')
+      const failed = run.evals.filter((e) => e.name !== 'ok').flatMap((e) => e.attempts)
+      assert.equal(failed.length, 3)
+      for (const a of failed) {
+        assert.equal(a.outcome, 'infra_error')
+        assert.match(
+          a.error?.message ?? '',
+          /^Building the install layer \(1 command\) failed: install 1\/1 exited 5/,
+        )
+        assert.equal(a.error?.prepare?.stage, 'install')
+        assert.equal(a.error?.prepare?.class, 'config')
+        assert.match(a.error?.prepare?.ref ?? '', /^evalsuite-install:/)
+        assert.match(
+          a.error?.prepare?.log ?? '',
+          /^\.es\/cache\/images\/evalsuite-install-.+\.log$/,
+        )
+        assert.deepEqual(a.error?.prepare?.setBy, ['group("broken tools")'])
+      }
+      const lines = r.stdout.split('\n')
+      const failedAt = lines.findIndex((l) =>
+        /✗ docker \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
+      )
+      assert.ok(failedAt >= 0, r.stdout)
+      assert.ok(
+        failedAt < lines.findIndex((l) => l.includes('▶')),
+        'reported before any attempt starts',
+      )
+      assert.equal(
+        lines.filter((l) =>
+          l.startsWith('::error title=Sandbox docker + install failed to prepare::'),
+        ).length,
+        1,
+      )
+      assert.equal(
+        lines.filter((l) => l.startsWith('::error file=evals/broken.es.ts')).length,
+        0,
+        'no annotation per attempt',
+      )
+      const summary = lines.slice(lines.indexOf('Infra errors (3)'))
+      assert.equal(
+        summary.filter((l) => l.includes(' record ')).length,
+        0,
+        'no record path for attempts that never started',
+      )
+      assert.match(
+        read('summary.md'),
+        /Building the install layer \(1 command\) failed: install 1\/1 exited 5/,
+      )
+
+      // Canary: with the install fixed, nothing fails to prepare, so the checks above would fail.
+      writeFileSync(join(p.dir, 'evals/broken.es.ts'), broken.replace('exit 5', 'true'))
+      const fixed = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
+      assert.equal(fixed.code, 0, fixed.stdout + fixed.stderr)
+      assert.doesNotMatch(fixed.stdout, /failed to prepare/)
+    },
+  )
+
+  test(
+    'a config-level image that fails stops the run before any attempt: exit 3, or 2 for a missing image',
+    docker,
+    async () => {
+      const p = await project('docker-prepare-config', {
+        'es.config.ts': config('{}').replace(
+          'sandbox: docker()',
+          "sandbox: docker({ install: ['echo config && exit 6'] })",
+        ),
+        'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('a', async (t) => { await t.sandbox() })
+evaluate('b', async (t) => { await t.sandbox() })
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.match(
+        r.stderr,
+        /^es: Building the install layer \(1 command\) failed: install 1\/1 exited 6/m,
+      )
+      assert.match(
+        r.stderr,
+        /The sandbox docker \+ install is set by es\.config\.ts for every eval, so nothing ran\./,
+      )
+      assert.doesNotMatch(r.stdout, /▶/, 'no attempt started')
+
+      writeFileSync(
+        join(p.dir, 'es.config.ts'),
+        config('{}').replace(
+          'sandbox: docker()',
+          "sandbox: docker({ image: 'es-missing-image:nope' })",
+        ),
+      )
+      const missing = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
+      assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+      assert.match(
+        missing.stderr,
+        /Docker image es-missing-image:nope not found\. docker\(\{ image \}\) is used as is/,
+      )
+      assert.doesNotMatch(missing.stdout, /▶/)
+    },
+  )
+
+  test(
+    'two sandboxes on one failing from build it once: the failure is cached for the run',
+    docker,
+    async () => {
+      const p = await project('docker-prepare-cache', {
+        'es.config.ts': config('{}'),
+        'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+evaluate('one', { sandbox: docker({ from: 'alpine:3.20', install: ['echo one'] }) }, async (t) => { await t.sandbox() })
+evaluate('two', { sandbox: docker({ from: 'alpine:3.20', install: ['echo two'] }) }, async (t) => { await t.sandbox() })
+evaluate('plain', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { await t.sandbox() })
+`,
+      })
+      const counter = countBuilds(p.dir, '-base')
+      const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env: counter.env, ...slow })
+      assert.equal(r.code, 3, r.stdout + r.stderr)
+      assert.equal(counter.count(), 1, 'one toolchain build for three sandboxes on it')
+      const { run } = readRun(p.dir)
+      for (const e of run.evals) {
+        assert.equal(e.outcome, 'infra_error', e.name)
+        assert.equal(e.attempts[0]?.error?.prepare?.stage, 'from')
+        assert.match(e.attempts[0]?.error?.message ?? '', /ES needs a Debian or Ubuntu based image/)
       }
     },
   )
@@ -1003,8 +1159,10 @@ evaluate('calls out', async (t) => {
       const line = (phase: string, text: string) =>
         new RegExp(`^\\[calls#1 fake\\]\\s+\\d{2}:\\d{2}:\\d{2} ${phase.padEnd(9)} ${text}`, 'm')
       for (const [phase, text] of [
-        ['image', `cache hit ${DEFAULT_IMAGE.replace(/[.:]/g, '\\$&')} `],
-        ['image', 'ready \\S+ \\([0-9a-f]{12}\\) in '],
+        [
+          'image',
+          `ready ${DEFAULT_IMAGE.replace(/[.:]/g, '\\$&')} \\([0-9a-f]{12}\\) · prepared before the run`,
+        ],
         ['container', 'created [0-9a-f]{12} from '],
         ['container', 'network policy allow example\\.com · detached from every Docker network'],
         ['container', 'egress gateway started · brokers API_KEY$'],

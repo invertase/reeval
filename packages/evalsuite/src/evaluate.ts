@@ -181,6 +181,10 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
     if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
   }
   const file = collectingFile()
+  const setBy = {
+    sandbox: resolved.sources?.sandbox ?? ctx.config.file,
+    harness: resolved.sources?.harness ?? ctx.config.file,
+  }
   const plan = evalPlan(resolvedEval, plannedAttempts, {
     configFile: ctx.config.file,
     file: file ? relativeFile(ctx.config.root, file) : null,
@@ -197,6 +201,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
       label: '',
       harness: first.harness,
       sandbox: first.sandbox,
+      setBy,
       gate: 'none',
       brokered: [],
       secretVars: [],
@@ -222,6 +227,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
       label: planned.label,
       harness: planned.harness,
       sandbox: planned.sandbox,
+      setBy,
       gate: planned.gate,
       ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
       brokered: brokeredIn(resolved.env, planned),

@@ -93,7 +93,7 @@ async function attemptBody(
   try {
     a.report({ kind: 'sandbox' })
     const where = `${id} [${attemptId(spec.cell.key, spec.n)}]`
-    await a.timed('setupMs', () => prepareEnvironment(a, config.root, where, testSignal))
+    await a.timed('setupMs', () => prepareEnvironment(a, config.root, runId, where, testSignal))
     clock = evalTimer(spec.timeoutMs)
     timer = clock.signal
     a.signal = AbortSignal.any([testSignal, timer])

@@ -1,10 +1,10 @@
 import type {
+  AttemptError,
   AttemptImage,
   Cell,
   CellGate,
   EgressRecord,
   EnvironmentRecord,
-  ErrorKind,
   FileChange,
   Outcome,
   PhaseTimings,
@@ -117,7 +117,7 @@ export type AttemptRecord = {
    */
   servedModels: string[] | null
   outcome: Outcome
-  error: { kind: ErrorKind; message: string } | null
+  error: AttemptError | null
   durationMs: number
   /** `text` is the agent's final message, cut at 8 KB; the whole of it is in `transcript.jsonl`. */
   turns: Array<{

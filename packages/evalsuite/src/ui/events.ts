@@ -1,6 +1,7 @@
 // The terminal output's view of a run. Nothing in ui/ may import Vitest: the engine translates
 // its reporter hooks into these events.
 import type { RunRecord } from '../history/types.ts'
+import type { PrepareEvent } from '../sandbox/preflight.ts'
 import type { AttemptMeta, EvalMeta, SandboxWarning, TurnStatus } from '../types.ts'
 import type { DebugLine } from '../view/debug.ts'
 
@@ -92,6 +93,8 @@ export type EsEvent =
   /** User `console.log`/`console.error` output; `key` is unset for output outside an eval. */
   | { type: 'log'; at: number; key?: string; stream: 'stdout' | 'stderr'; text: string }
   | { type: 'eval-end'; at: number; result: EvalResult }
+  /** Preflight preparing the sandboxes: the list, then each one ready or failed. */
+  | ({ type: 'prepare'; at: number } & PrepareEvent)
   /** A run-level message, e.g. the Ctrl-C notice. */
   | { type: 'notice'; at: number; level: 'info' | 'warn' | 'error'; text: string }
   | {

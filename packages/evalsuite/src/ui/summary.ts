@@ -193,7 +193,9 @@ export function renderSummary(c: Colors, e: RunEnd, attemptDir: AttemptDir): str
           for (const line of failureLines(c, result, { max: FAILURE_LINES }))
             lines.push(`   ${line}`)
         }
-        lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, attempt.cell, attempt.n)}`)
+        if (!attempt.error?.prepare) {
+          lines.push(`   ${c.dim('record')}  ${attemptDir(entry.id, attempt.cell, attempt.n)}`)
+        }
       }
     }
   }

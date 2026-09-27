@@ -1,6 +1,18 @@
-import { dockerAvailable, imageFor, imageInfo, LABEL } from '@evalsuite/sandbox-docker'
+import { imageInfo, LABEL } from '@evalsuite/sandbox-docker'
 import { UsageError } from './errors.ts'
-import type { ImageTarget } from './sandbox/images.ts'
+import { sandboxId } from './options.ts'
+import {
+  type PrepareEvent,
+  type PrepareUse,
+  prepareAll,
+  prepareTargets,
+  RunStopError,
+  writePrepared,
+} from './sandbox/preflight.ts'
+import { imageHarness } from './sandbox/prepare.ts'
+import { PrepareError, type SandboxProvider } from './sandbox/provider.ts'
+import { createProviders } from './sandbox/providers.ts'
+import type { AttemptImage } from './types.ts'
 
 export type SandboxImage = {
   ref: string
@@ -8,36 +20,77 @@ export type SandboxImage = {
   repoDigests: string[]
   agentCli: string | null
 }
-/** The config's Docker images, found before the run; groups and evals may add others. */
+/** The Docker images preflight prepared for the run. */
 export type SandboxVersions = { images: SandboxImage[] }
 
-/** Checks Docker and the planned attempts' sandbox images before any eval starts. */
-export async function preflight(targets: ImageTarget[]): Promise<SandboxVersions> {
-  if (targets.length === 0) return { images: [] }
-  if (!(await dockerAvailable())) {
-    throw new UsageError('Docker is not running. Start Docker and try again.')
-  }
-  const images: SandboxImage[] = []
-  // `from` and `dockerfile` images are built on first use, so there's nothing to check yet.
-  const refs = new Set(
-    targets
-      .filter(({ sandbox: s }) => !s.from && !s.dockerfile)
-      .map(({ sandbox, harness }) => sandbox.image ?? imageFor(harness)),
-  )
-  for (const ref of refs) {
-    const info = await imageInfo(ref)
-    if (!info) {
-      throw new UsageError(
-        targets.some((t) => !t.sandbox.image && imageFor(t.harness) === ref)
-          ? `Sandbox image ${ref} not found. Build it once with: es image build`
-          : `Sandbox image ${ref} not found. docker({ image }) is used as is, so pull or build it first.`,
-      )
+/** How the terminal names a sandbox to prepare: its cell id, `+ install`, and a harness other than Cursor. */
+export function prepareLabel({ sandbox, harness }: Pick<PrepareUse, 'sandbox' | 'harness'>) {
+  if (sandbox.kind !== 'docker') return sandboxId(sandbox)
+  const baked = imageHarness(harness)
+  const install = sandbox.install?.length ? ' + install' : ''
+  return `${sandboxId(sandbox)}${install}${baked === 'cursor' ? '' : ` · ${baked}`}`
+}
+
+/** A run that stopped in preflight on an infra failure: exit 3. */
+export class PreflightInfraError extends Error {
+  override name = 'PreflightInfraError'
+}
+
+/**
+ * Before any eval starts: checks each sandbox provider, then prepares every distinct sandbox the
+ * planned attempts need (building Docker images), in parallel, and writes the results for the
+ * run's workers. A config-level sandbox that fails stops the run (exit 2 for a mistake in the
+ * config, exit 3 otherwise); any other failure fails only the attempts that need it.
+ */
+export async function preflight(
+  uses: PrepareUse[],
+  options: {
+    root: string
+    runId: string
+    onEvent?: (e: PrepareEvent) => void
+    signal?: AbortSignal
+    providers?: Record<string, SandboxProvider>
+    delays?: number[]
+  },
+): Promise<SandboxVersions> {
+  const providers = options.providers ?? createProviders()
+  const targets = prepareTargets(uses, providers, prepareLabel)
+  if (!targets.some((t) => t.kind !== 'fake')) return { images: [] }
+  let outcomes: Awaited<ReturnType<typeof prepareAll>>
+  try {
+    outcomes = await prepareAll(targets, {
+      providers,
+      root: options.root,
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.delays ? { delays: options.delays } : {}),
+      ...(options.onEvent ? { onEvent: options.onEvent } : {}),
+      log: (line) => process.env.ES_DEBUG && console.error(line),
+    })
+  } catch (error) {
+    if (error instanceof PrepareError) {
+      throw error.failure.usage
+        ? new UsageError(error.message)
+        : new PreflightInfraError(error.message)
     }
+    if (error instanceof RunStopError) {
+      throw error.outcome.failure.usage
+        ? new UsageError(error.message)
+        : new PreflightInfraError(error.message)
+    }
+    throw error
+  }
+  writePrepared(options.root, options.runId, outcomes)
+  const images: SandboxImage[] = []
+  for (const o of outcomes) {
+    if (!o.ok || o.target.kind !== 'docker') continue
+    const { ref, id, agentCli } = o.handle as unknown as AttemptImage
+    if (images.some((i) => i.id === id)) continue
+    const info = await imageInfo(ref)
     images.push({
       ref,
-      id: info.id,
-      repoDigests: info.repoDigests,
-      agentCli: info.labels[LABEL.agentVersion] ?? null,
+      id,
+      repoDigests: info?.repoDigests ?? [],
+      agentCli: agentCli ?? info?.labels[LABEL.agentVersion] ?? null,
     })
   }
   return { images }

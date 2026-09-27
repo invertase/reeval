@@ -14,6 +14,7 @@ import {
   offset,
   outcomeOf,
   phaseOf,
+  prepareLines,
   progressLine,
 } from './format.ts'
 import type { OutputOptions } from './mode.ts'
@@ -197,6 +198,15 @@ export class PlainRenderer implements Renderer {
       case 'eval-end':
         this.#end(e.result, e.at)
         return
+      case 'prepare': {
+        for (const line of prepareLines(c, e, ERROR_LINES)) this.#write(line)
+        if (e.state === 'failed' && this.#o.output.githubActions) {
+          const { target, failure } = e.outcome as Extract<typeof e.outcome, { ok: false }>
+          const title = ghEscape(`Sandbox ${target.label} failed to prepare`, true)
+          this.#write(`::error title=${title}::${ghEscape(failure.message)}`)
+        }
+        return
+      }
       case 'notice': {
         const paint = { info: c.dim, warn: c.yellow, error: c.red }[e.level]
         this.#write(paint(e.text))
@@ -257,7 +267,8 @@ export class PlainRenderer implements Renderer {
     if (showDetail) for (const line of lines) this.#write(this.#detail(a, line, prefixed))
     for (const line of errors) this.#write(prefixed ? `${this.#prefix(a)}  ${line}` : ` ${line}`)
     if (group) this.#write('::endgroup::')
-    if (githubActions && failed && !ungated) {
+    // A sandbox that failed to prepare was annotated once, for all its attempts.
+    if (githubActions && failed && !ungated && !result.meta?.prepare) {
       const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
       const title = ghEscape(`${result.id}${which}`, true)
       const message = ghEscape(failureLines(colors(false), result, { max: ERROR_LINES }).join('\n'))
