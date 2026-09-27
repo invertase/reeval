@@ -116,6 +116,21 @@ ge/math.es.ts › math › writes add.js
 
 The id is what the plan, the reporters, `es history` and the run record show, and what `es run` filters match. Each attempt also has an id, `<cell key>#<n>`, such as `cursor/-/docker#1`.
 
+## Eval files
+
+```ts title="evals/greet.es.ts"
+import { readFile } from 'node:fs/promises'
+import { evaluate } from '{{ pkg }}'
+import cases from './cases.json'            // JSON imports
+import { house } from './style'             // extensionless: style.ts
+// Top-level await works too.
+const brief = await readFile(new URL('./brief.md', import.meta.url), 'utf8')
+```
+
+Eval files are TypeScript or JavaScript, ESM or CommonJS, loaded with no build step. Imports may leave out the extension, and JSON imports work. Each eval file loads in a fresh process of its own, so module state and globals never leak from one file to another; `es run` loads each file twice, once for the plan and once to run.
+
+The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and trailing commas are fine) or extends a missing file stops the run. Its `paths` aliases aren't applied. Decorators are TypeScript's legacy ones. npm, pnpm, Yarn 1 and Yarn's Plug'n'Play all work.
+
 ## Timeouts
 
 `timeout` covers one attempt's body. Starting the sandbox and running setup steps pause the clock. An attempt that runs out fails with `Eval timed out after 300s`, and `t.signal` aborts so you can stop work early.
