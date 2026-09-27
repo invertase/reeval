@@ -475,6 +475,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="judgements" type="JudgementRecord[]"></Property>
 
+<Property name="startRetries" type="StartRetry[]" optional>
+  Harness session starts that didn't become ready within `startTimeout` and were started again (at most one).
+</Property>
+
 <Property name="checks" type="Array<{command: string; exitCode: number; durationMs: number; log?: FileRef}>"></Property>
 
 <Property name="changedFiles" type="Array<FileChange &amp; {count?: number}>">

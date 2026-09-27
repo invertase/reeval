@@ -240,6 +240,12 @@
             }
           ]
         },
+        "startRetries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StartRetry"
+          }
+        },
         "timings": {
           "$ref": "#/$defs/PhaseTimings"
         },
@@ -1811,6 +1817,18 @@
         "os",
         "packages"
       ]
+    },
+    "StartRetry": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "waitedMs": {
+          "type": "number"
+        }
+      },
+      "required": ["error", "waitedMs"]
     },
     "TokenUsage": {
       "type": "object",

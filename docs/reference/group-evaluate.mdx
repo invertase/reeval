@@ -133,7 +133,7 @@ The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and t
 
 ## Timeouts
 
-`timeout` covers one attempt's body. Starting the sandbox and running setup steps pause the clock. An attempt that runs out fails with `Eval timed out after 300s`, and `t.signal` aborts so you can stop work early.
+`timeout` covers one attempt's body. Starting the sandbox, running setup steps and starting the harness pause the clock; the harness's start has its own `startTimeout` (default 90s, retried once). An attempt that runs out fails with `Eval timed out after 300s`, and `t.signal` aborts so you can stop work early.
 
 ## Errors
 

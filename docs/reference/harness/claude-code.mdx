@@ -31,6 +31,10 @@ export default defineConfig({
   The most Claude Code attempts at once across the run, for example for your account's rate limits.
 </Property>
 
+<Property name="startTimeout" type="Duration" optional>
+  How long its session may take to become ready (bootstrap and session start) before the attempt is an infra error, such as `'3m'`. Default `'90s'`. A start that times out is aborted and started once more; a second timeout fails the attempt with `claude-code: session did not become ready within 90s (tried twice)`, and the record's `startRetries` notes a retried start.
+</Property>
+
 ## At a glance
 
 | | |

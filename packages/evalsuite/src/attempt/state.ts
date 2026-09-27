@@ -4,7 +4,7 @@ import type { HarnessSession } from '../harness/types.ts'
 import type { PlannedAttempt } from '../options.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
-import type { EnvVars, EvalRecord, JudgeOptions, Turn } from '../types.ts'
+import type { EnvVars, EvalRecord, HarnessDescriptor, JudgeOptions, Turn } from '../types.ts'
 import type { ProgressUpdate } from '../ui/events.ts'
 
 /** Extra time an attempt gets, outside its eval timeout, when its image may need building. */
@@ -82,7 +82,16 @@ export function createAttempt(
   }
 }
 
-/** Setup steps run outside the eval timeout, so the attempt's own limit makes room for them. */
+/** How long a harness session may take to become ready, unless its `startTimeout` says. */
+export const DEFAULT_START_TIMEOUT = '90s'
+
+export const startTimeoutMs = (harness: HarnessDescriptor): number =>
+  parseDuration(harness.startTimeout ?? DEFAULT_START_TIMEOUT)
+
+/**
+ * Setup steps and the harness's start (once retried) run outside the eval timeout, so the
+ * attempt's own limit makes room for them.
+ */
 export function setupAllowance(planned: PlannedAttempt): number {
   const layers = planned.environment.layers
   const steps = layers.flatMap((l) => l.spec.setup ?? [])
@@ -93,7 +102,7 @@ export function setupAllowance(planned: PlannedAttempt): number {
   const { sandbox } = planned
   const building =
     sandbox.kind === 'docker' && !!(sandbox.from || sandbox.dockerfile || sandbox.install?.length)
-  return setupMs + (building ? SETUP_BUDGET_MS : 0)
+  return setupMs + (building ? SETUP_BUDGET_MS : 0) + 2 * startTimeoutMs(planned.harness)
 }
 
 /** The eval's timer, paused while the sandbox and its setup steps start. */

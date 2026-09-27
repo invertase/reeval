@@ -3,13 +3,13 @@ import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
 import { brokeringFor, expectedBlockedFor } from '../harness/agents.ts'
 import { createHarness, layoutOf, workspaceSkillDir } from '../harness/index.ts'
-import type { HarnessSession } from '../harness/types.ts'
+import type { Harness, HarnessSession } from '../harness/types.ts'
 import { harnessId } from '../options.ts'
 import { createSandbox, InfraError, type Sandbox } from '../sandbox/index.ts'
 import { brokerPhases } from '../sandbox/phases.ts'
 import { clip, formatDuration } from '../text.ts'
 import { asCheck } from './checks.ts'
-import { type Attempt, setupAllowance } from './state.ts'
+import { type Attempt, setupAllowance, startTimeoutMs } from './state.ts'
 
 const tailOf = (text: string) => text.trim().split('\n').slice(-10).join('\n')
 
@@ -63,6 +63,42 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
         ? `${what} exited ${r.exitCode} after ${formatDuration(durationMs)} (see setup.log):\n${tailOf(r.stderr || r.stdout)}`
         : `${what} timed out after ${formatDuration(step.timeoutMs)} (see setup.log)`,
     )
+  }
+}
+
+/**
+ * Starts the harness session within its `startTimeout`. A start that doesn't become ready in time
+ * is aborted (and closed, should it finish later) and started once more: a stuck bootstrap is
+ * usually transient, and nothing has run yet, so the retry can't change what the attempt
+ * measures. A second timeout is an infra error; a start that fails outright isn't retried.
+ */
+async function startHarness(
+  a: Attempt,
+  harness: Harness,
+  box: Sandbox,
+  options: Parameters<Harness['start']>[2],
+): Promise<HarnessSession> {
+  const { harness: descriptor } = a.spec
+  const ms = startTimeoutMs(descriptor)
+  const late = `${descriptor.kind}: session did not become ready within ${formatDuration(ms)}`
+  for (let tries = 1; ; tries++) {
+    const stop = new AbortController()
+    let timer: NodeJS.Timeout | undefined
+    const timedOut = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), ms)
+    })
+    const starting = harness.start(box, AbortSignal.any([a.signal, stop.signal]), options)
+    const session = await Promise.race([starting, timedOut]).finally(() => clearTimeout(timer))
+    if (session) return session
+    stop.abort(new InfraError(late))
+    starting.then(
+      (s) => s.close().catch(() => {}),
+      () => {},
+    )
+    a.signal.throwIfAborted()
+    if (tries === 2) throw new InfraError(`${late} (tried twice)`)
+    a.record.startRetries = [{ error: late, waitedMs: ms }]
+    debugLog('harness', `${late}; starting it once more`)
   }
 }
 
@@ -134,7 +170,7 @@ export async function startSession(
   const harness = await createHarness(spec.harness)
   const harnessStart = performance.now()
   debugLog('harness', `starting ${harnessId(spec.harness)}: bootstrap and session`)
-  const session = await harness.start(box, a.signal, {
+  const session = await startHarness(a, harness, box, {
     skills: env.skills,
     workspaceSkills: env.workspaceSkills.map((s) => s.name),
     mcp: env.mcp,
