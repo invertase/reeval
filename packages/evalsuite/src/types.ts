@@ -722,6 +722,8 @@ export type ResolvedConfig = {
   root: string
   /** The config file as typed from the current directory, or `es.config.ts` without one. */
   file: string
+  /** The keys the config sets, for `es report`'s config shape. */
+  optionKeys?: string[]
   include: string[]
   harness: HarnessDescriptor[]
   sandbox: SandboxDescriptor

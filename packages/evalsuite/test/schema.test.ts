@@ -228,6 +228,7 @@ describe('read defaults', () => {
       'transcript-line': lines,
       analysis: analyses.map((a) => a.value),
       'debug-request': [],
+      'cli-invocation': [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
       for (const d of defaults) {

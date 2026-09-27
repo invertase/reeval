@@ -49,6 +49,8 @@ export const FLAGS = {
   yes: { type: 'boolean', short: 'y' },
   harness: { type: 'string' },
   online: { type: 'boolean' },
+  issue: { type: 'boolean' },
+  last: { type: 'boolean' },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -227,6 +229,22 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs`,
       },
     },
+  },
+  report: {
+    flags: ['out', 'json', 'last', 'issue', 'yes'],
+    positionals: 1,
+    help: `
+  es report [run]           Collect a bug report: versions, es doctor, the config's shape, the
+                            last es command's error and stack, the run's failures and their
+                            .es/debug logs, redacted. Prints a summary, writes it to .es/reports
+                            and uploads nothing
+    --out <dir|file>        Write report.md, report.json and report-logs.tar.gz there instead
+                            (a .md or .json file writes the others beside it)
+    --json                  The bundle as JSON on stdout
+    --last                  Report the last es command that failed, and its run
+    --issue                 Open a pre-filled GitHub issue for ES in the browser, or with gh
+                            installed, file it with gh issue create once you confirm
+    -y, --yes               With --issue, file it with gh without asking`,
   },
   image: {
     flags: [],

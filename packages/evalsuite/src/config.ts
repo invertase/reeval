@@ -333,6 +333,7 @@ export function resolveConfig(
   return {
     root,
     file,
+    optionKeys: Object.keys(user),
     include,
     harness,
     sandbox: user.sandbox ?? docker(),
