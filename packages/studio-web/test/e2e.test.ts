@@ -353,7 +353,7 @@ describe('studio in a browser', () => {
     assert.doesNotMatch(page.url(), /token=/)
     assert.equal(await page.locator('tbody tr').count(), 5)
     assert.equal(await page.getByText('scratch', { exact: true }).count(), 1)
-    assert.equal(await page.getByText('Live').count(), 1)
+    assert.equal(await page.getByText('Live', { exact: true }).count(), 1)
 
     const run = spawnSync(process.execPath, [cli, 'run', '--config', config], {
       cwd: demo,
