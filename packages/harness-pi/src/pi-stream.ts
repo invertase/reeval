@@ -1,6 +1,7 @@
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 
 type Usage = Extract<HarnessV1StreamPart, { type: 'finish' }>['totalUsage']
+type FinishReason = Extract<HarnessV1StreamPart, { type: 'finish-step' }>['finishReason']
 
 /** One model call's counts, as pi's `message_end` reports them (it also has a USD `cost`). */
 export type PiUsage = {
@@ -65,6 +66,14 @@ const add = (a: PiUsage | undefined, b: PiUsage): PiUsage => ({
   cacheWrite: (a?.cacheWrite ?? 0) + (b.cacheWrite ?? 0),
   reasoning: (a?.reasoning ?? 0) + (b.reasoning ?? 0),
 })
+
+/** pi's stop reasons for a call that didn't fail; `error` is an error part instead. */
+const UNIFIED: Record<string, FinishReason['unified']> = {
+  stop: 'stop',
+  toolUse: 'tool-calls',
+  length: 'length',
+  aborted: 'other',
+}
 
 const text = (content: PiContent[] | undefined) =>
   (content ?? []).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : [])).join('')
@@ -146,7 +155,7 @@ export class PiStreamTranslator {
       parts.push({
         type: 'finish-step',
         finishReason: {
-          unified: m.stopReason === 'toolUse' ? 'tool-calls' : 'stop',
+          unified: UNIFIED[m.stopReason ?? 'stop'] ?? 'stop',
           raw: m.stopReason ?? 'stop',
         },
         usage: toUsage(m.usage),

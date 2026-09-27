@@ -64,7 +64,8 @@ const detail = (a: AttemptRecord) =>
     {
       outcome: a.outcome,
       error: a.error,
-      turns: a.turns.map((t) => ({ status: t.status, text: t.text.slice(0, 500) })),
+      // A turn's error names a provider outage (Gemini's 503) that the eval's assertion can't.
+      turns: a.turns.map((t) => ({ status: t.status, error: t.error, text: t.text.slice(0, 500) })),
       tools: a.activity.tools,
     },
     null,

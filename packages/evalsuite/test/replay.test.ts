@@ -327,6 +327,46 @@ for (const [harness, outcomes] of [
       })
   })
 
+describe("replay: pi's format holds every stop reason pi defines, and a failed call's error", () => {
+  const known = new Set(knownSignatures('pi'))
+  const unknownIn = (events: Record<string, unknown>[]) =>
+    signatures('pi', events).filter((s) => !known.has(s))
+
+  test('a nightly contract turn whose one model call Gemini refused (503) is not a format change', () => {
+    const capture = readFileSync(
+      join(testDir, 'fixtures', 'pi-provider-unavailable.raw.jsonl'),
+      'utf8',
+    )
+    assert.match(capture, /"stopReason":"error"/)
+    assert.deepEqual(unknownIn(nativeEvents(capture)), [])
+  })
+
+  test("pi 0.87.1's whole failed turn (a bad key): message_start, message_end and turn_end", () => {
+    const lines = readFileSync(
+      new URL('../../harness-pi/test/fixtures/bad-key.ndjson', import.meta.url),
+      'utf8',
+    )
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l) as Record<string, unknown>)
+    assert.deepEqual(unknownIn(lines), [])
+  })
+
+  for (const to of ['length', 'aborted', 'error'])
+    test(`"stopReason":"${to}" is not a format change`, () => {
+      const base = read('pi', 'edit-and-run.raw.jsonl')
+      const changed = base.replaceAll('"stopReason":"stop"', `"stopReason":"${to}"`)
+      assert.notEqual(changed, base)
+      assert.deepEqual(unknownIn(nativeEvents(changed)), [])
+    })
+
+  test("twin: a stop reason pi's one-shot loop never ends a call with is a format change", () => {
+    const base = read('pi', 'edit-and-run.raw.jsonl')
+    const changed = base.replaceAll('"stopReason":"stop"', '"stopReason":"deferred"')
+    assert.notDeepEqual(unknownIn(nativeEvents(changed)), [])
+  })
+})
+
 describe('replay: the Claude Code bridge, from the SDK’s own messages', () => {
   // A real contract turn (edit and run, claude-haiku-4-5): the host's `start` and every message
   // the bridge's query() loop saw. Claude Code acknowledges the bridge's streamed user message
