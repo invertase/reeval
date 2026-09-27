@@ -60,7 +60,9 @@ export function sweepLabelDetached(label: string, seconds = 15): void {
 
 export async function dockerAvailable(): Promise<boolean> {
   try {
-    return (await docker(['info', '--format', '{{.ServerVersion}}'])).exitCode === 0
+    const r = await docker(['info', '--format', '{{.ServerVersion}}'])
+    // Some CLI versions exit 0 without a daemon, printing no server version.
+    return r.exitCode === 0 && r.stdout.toString('utf8').trim() !== ''
   } catch {
     return false
   }
