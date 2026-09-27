@@ -1,4 +1,4 @@
-import type { AttemptRecord, RunRecord } from 'evalsuite/view'
+import { type AttemptRecord, harnessLabel, type RunRecord } from 'evalsuite/view'
 import type { ReactNode } from 'react'
 import { Artifact } from '@/components/artifact'
 import { CopyButton } from '@/components/copy-button'
@@ -188,9 +188,7 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
         <Row k="ES">
           {stack.es} · node {stack.node} · {stack.os}/{stack.arch}
         </Row>
-        <Row k="Harnesses">
-          {stack.harnesses.map((h) => `${h.id}${h.model ? ` (${h.model})` : ''}`).join(', ')}
-        </Row>
+        <Row k="Harnesses">{stack.harnesses.map(harnessLabel).join(', ')}</Row>
         <Row k="Judge">
           {stack.judge.model ?? 'none'} · threshold {stack.judge.threshold} · version{' '}
           {stack.judge.version}

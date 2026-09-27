@@ -27,8 +27,15 @@ export type HarnessRow = {
   mcp?: false
   /** Whether it reports token usage for each turn; checked either way. */
   tokens: boolean
+  /** Why a real harness reports none, for the harness matrix in the README and docs. */
+  tokensWhy?: string
   /** What every turn's `model` (the model the harness says served it) looks like; null: none. */
   servedModel: RegExp | null
+  /**
+   * Why the turns don't record the model `servedModel` expects yet, while the contract's check of
+   * it fails on real runs; the harness matrix shows it as missing. Delete it with the fix.
+   */
+  servedModelGap?: string
   /**
    * What `servedModels` (the models its API requests named, seen by the gateway) must include;
    * null when its requests don't name one, so the record says it's unknown.
@@ -84,6 +91,8 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api.anthropic.com',
     tokens: true,
     servedModel: /^claude-haiku-4-5/,
+    servedModelGap:
+      "the Claude Code adapter's stream doesn't carry the model yet, so each turn's `model` is null.",
     wireModel: null,
   },
   {
@@ -97,8 +106,9 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.
     tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
     servedModel: null,
     wireModel: /^gemini-3\.8-flash$/,
   },
@@ -114,8 +124,9 @@ export const harnesses: HarnessRow[] = [
       /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/goose\/implementation\/home\/\.config\/goose\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    // Its ACP server reports its last model call's usage, not the turn's, so the adapter drops it.
     tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
     servedModel: null,
     wireModel: /^gemini-3\.8-flash$/,
   },

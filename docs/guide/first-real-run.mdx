@@ -99,10 +99,10 @@ CURSOR_API_KEY=...
 GOOGLE_GENERATIVE_AI_API_KEY=...
 ```
 
-`es run` reads `.env.local` and `.env` from the current directory. The judge key depends on the judge model: `google/*` models use `GOOGLE_GENERATIVE_AI_API_KEY`, and `typesafe-ai/jev-1.13.0` uses `TYPESAFE_AI_API_KEY`.
+`es run` reads `.env.local` and `.env` from the directory that holds `es.config.ts`, wherever you run it from. The judge key depends on the judge model: `google/*` models use `GOOGLE_GENERATIVE_AI_API_KEY`, and `typesafe-ai/jev-1.13.0` uses `TYPESAFE_AI_API_KEY`.
 
 <Warning>
-  Run `es` from the directory that holds `.env.local`, usually your project root. A key in another directory isn't read.
+  Put `.env.local` next to `es.config.ts`. A key in another directory, the current one included, isn't read.
 </Warning>
 
 ## Your key stays on the host

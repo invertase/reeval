@@ -75,7 +75,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'config.dotenv',
     area: 'Config and selection',
-    name: '`.env` and `.env.local` loading',
+    name: "`.env` and `.env.local` loading, from the config's directory",
     tests: [engine('.env.local wins over .env, the shell wins over both, and evals see them')],
   },
   {
@@ -773,6 +773,13 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: "The models a harness's API requests named on the wire (`servedModels`)",
     tests: ['evalsuite/test/harness.test.ts › its brokered requests name the served model'],
+    real: ['contract › served model recorded'],
+  },
+  {
+    id: 'record.resolved-variant',
+    area: 'Harnesses',
+    name: "The model variant a harness resolved (`composer-2.5[fast=true]`), in the stack's `resolvedModels`, `-v`, `summary.md` and the studio",
+    tests: [engine('the resolved model variant is in the record, the stack, -v and summary.md')],
     real: ['contract › served model recorded'],
   },
 

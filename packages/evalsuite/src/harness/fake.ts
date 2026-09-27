@@ -65,7 +65,7 @@ export const createFakeHarness = (descriptor: FakeHarnessDescriptor): Harness =>
           durationMs: Date.now() - startedAt,
           transcript,
           usage: null,
-          model: null,
+          model: descriptor.servedModel ?? null,
           unreported: [],
         })
         const write = async (path: string, content: string) => {
