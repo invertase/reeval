@@ -227,8 +227,12 @@ jobs:
           path: ${{ runner.temp }}/package/*.tgz
           if-no-files-found: error
           retention-days: 7
+      # Besides npm, the pack test installs with the runner's Yarn 1 and with strict pnpm, which
+      # install no peers.
       - working-directory: packages/evalsuite
-        run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
+        run: |
+          yarn --version
+          node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
       # npm's dry run still refuses a version that's already published, so this dry-runs a
       # throwaway prerelease of it.
       - name: npm publish --dry-run

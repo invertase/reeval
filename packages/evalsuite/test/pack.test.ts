@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { test } from 'node:test'
 import { VERSION } from '@evalsuite/harness-antigravity'
@@ -14,17 +15,93 @@ const sh = (cmd: string, cwd: string, args: string[], timeout = 120_000) =>
 const hasTools =
   sh('pnpm', pkgRoot, ['--version']).status === 0 &&
   sh('npm', pkgRoot, ['ping'], 15_000).status === 0
+const hasYarn = sh('yarn', tmpdir(), ['--version']).status === 0
 const hasDocker = sh('docker', pkgRoot, ['info']).status === 0
 
-test('the packed package installs into a clean project and runs es', {
-  skip: !hasTools && 'needs pnpm, npm and the registry',
-  timeout: 900_000,
-}, async () => {
+/** Packs the package into a fresh directory. */
+function pack() {
   const dir = tempDir('packed')
   const packed = sh('pnpm', pkgRoot, ['pack', '--pack-destination', dir])
   assert.equal(packed.status, 0, packed.stdout + packed.stderr)
   const tarball = readdirSync(dir).find((f) => f.endsWith('.tgz')) as string
   assert.ok(tarball, readdirSync(dir).join(', '))
+  const manifest = JSON.parse(extract(dir, tarball, 'package.json'))
+  return { dir, tarball, manifest, pkg: manifest.name as string }
+}
+
+/** An empty project next to the tarball, with the fake config and one eval. */
+async function makeApp(dir: string, pkg: string) {
+  const app = join(dir, 'app')
+  await mkdir(join(app, 'evals'), { recursive: true })
+  await writeFile(join(app, 'package.json'), '{ "name": "app", "private": true, "type": "module" }')
+  await writeFile(join(app, 'es.config.ts'), fakeConfig().replaceAll("'evalsuite", `'${pkg}`))
+  await writeFile(
+    join(app, 'evals/hello.es.ts'),
+    `import { evaluate, expect } from '${pkg}'
+evaluate('hello', async (t) => {
+  await t.send('say hi')
+  expect(await t.judge('Did it say hi?')).toPass()
+})
+`,
+  )
+  return app
+}
+
+// Yarn doesn't install peer dependencies, and neither does pnpm without auto-install-peers, so
+// everything es loads must be one of the package's own dependencies. Strict peers also fails
+// the install when a dependency's required peer isn't met.
+const installers = [
+  {
+    name: 'yarn',
+    cmd: 'yarn',
+    // CI's runners have Yarn 1, so there a missing one fails.
+    skip: !hasYarn && !process.env.CI && 'needs yarn',
+    // Yarn caches a file: tarball by name and version, so a fresh cache installs this one.
+    args: (tarball: string) => [
+      'add',
+      '--non-interactive',
+      '--no-progress',
+      '--cache-folder',
+      '../yarn-cache',
+      `file:../${tarball}`,
+    ],
+  },
+  {
+    name: 'pnpm, strict about peers',
+    cmd: 'pnpm',
+    skip: false,
+    args: (tarball: string) => [
+      'add',
+      '--ignore-workspace',
+      '--config.auto-install-peers=false',
+      '--config.strict-peer-dependencies=true',
+      `../${tarball}`,
+    ],
+  },
+]
+
+for (const installer of installers) {
+  test(`the packed package installs with ${installer.name} and runs es`, {
+    skip: (!hasTools && 'needs pnpm, npm and the registry') || installer.skip,
+    timeout: 600_000,
+  }, async () => {
+    const { dir, tarball, manifest, pkg } = pack()
+    const app = await makeApp(dir, pkg)
+    const added = sh(installer.cmd, app, installer.args(tarball), 240_000)
+    assert.equal(added.status, 0, added.stdout + added.stderr)
+    const es = (...args: string[]) => sh(join(app, 'node_modules/.bin/es'), app, args, 60_000)
+    assert.equal(es('--version').stdout.trim(), manifest.version)
+    const run = es('run')
+    assert.equal(run.status, 0, run.stdout + run.stderr)
+    assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+  })
+}
+
+test('the packed package installs into a clean project and runs es', {
+  skip: !hasTools && 'needs pnpm, npm and the registry',
+  timeout: 900_000,
+}, async () => {
+  const { dir, tarball, manifest, pkg } = pack()
   const listing = sh('tar', dir, ['tzf', tarball]).stdout
   assert.match(listing, /^package\/LICENSE$/m)
   assert.match(listing, /^package\/dist\/cli\.js$/m)
@@ -43,8 +120,6 @@ test('the packed package installs into a clean project and runs es', {
 
   // The @evalsuite/* packages are bundled into dist, so nothing in the manifest points at the
   // workspace.
-  const manifest = JSON.parse(extract(dir, tarball, 'package.json'))
-  const pkg = manifest.name as string
   assert.equal(manifest.license, 'Apache-2.0')
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
   assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@evalsuite/')))
@@ -85,19 +160,7 @@ test('the packed package installs into a clean project and runs es', {
       assert.ok(!inlinedInto(name)?.includes('dist'), `${dep} is a dependency, not inlined`)
   assert.match(extract(dir, tarball, 'dist/bridge/index.mjs'), /^\/\/ Modified by Invertase/)
 
-  const app = join(dir, 'app')
-  await mkdir(join(app, 'evals'), { recursive: true })
-  await writeFile(join(app, 'package.json'), '{ "name": "app", "private": true, "type": "module" }')
-  await writeFile(join(app, 'es.config.ts'), fakeConfig().replaceAll("'evalsuite", `'${pkg}`))
-  await writeFile(
-    join(app, 'evals/hello.es.ts'),
-    `import { evaluate, expect } from '${pkg}'
-evaluate('hello', async (t) => {
-  await t.send('say hi')
-  expect(await t.judge('Did it say hi?')).toPass()
-})
-`,
-  )
+  const app = await makeApp(dir, pkg)
   // --prefer-online: a stale cached packument misses versions published since, but tarballs
   // still come from the cache.
   const added = sh(
