@@ -53,13 +53,13 @@ describe('formatError', () => {
         '- Expected\n+ Received\n\n- 2\n+ 1',
         '',
         ' ❯ helper node_modules/some-lib/index.js:9:9',
-        ` ❯ evals${sep}a.es.ts:5:17`,
+        ' ❯ evals/a.es.ts:5:17',
         "      3| evaluate('x', async () => {",
         '      4|  const value = 1',
         '      5|   expect(value).toBe(2)',
         '       |                 ^',
         '      6| })',
-        ` ❯ evals${sep}gone.ts:1:1`,
+        ' ❯ evals/gone.ts:1:1',
         '',
       ].join('\n'),
     )
@@ -112,7 +112,7 @@ describe('formatError', () => {
         codeFrame: '1| x',
         stack: stack(`${file}:5:3`),
       }),
-      `SyntaxError: bad\n1| x\n\n ❯ evals${sep}a.es.ts:5:3\n      3| evaluate('x', async () => {\n      4|  const value = 1\n      5|   expect(value).toBe(2)\n       |   ^\n      6| })\n`,
+      `SyntaxError: bad\n1| x\n\n ❯ evals/a.es.ts:5:3\n      3| evaluate('x', async () => {\n      4|  const value = 1\n      5|   expect(value).toBe(2)\n       |   ^\n      6| })\n`,
     )
     assert.equal(plain({ name: 'E', message: 'm', frame: '> 1 | x' }), 'E: m\n> 1 | x')
     const caused = plain({
@@ -120,7 +120,7 @@ describe('formatError', () => {
       message: 'outer',
       cause: { name: 'TypeError', message: 'inner', stack: stack(`${file}:5:3`) },
     })
-    assert.equal(caused, `Error: outer\nCaused by: TypeError: inner\n ❯ evals${sep}a.es.ts:5:3\n`)
+    assert.equal(caused, `Error: outer\nCaused by: TypeError: inner\n ❯ evals/a.es.ts:5:3\n`)
     assert.equal(plain({ name: 'E', message: 'm', cause: 'why' }), 'E: m\nCaused by: why')
     assert.equal(
       plain({ name: 'E', message: 'm', cause: { message: 'plain' } }),

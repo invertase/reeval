@@ -2,7 +2,7 @@
 // and usage errors, filters, leases across workers, events, cancel and workers that die.
 import assert from 'node:assert/strict'
 import { mkdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { runEngine } from '../src/engine/node.ts'
 import type { Exit, Spawn, WorkerProcess } from '../src/engine/pool.ts'
@@ -46,7 +46,7 @@ function fakeSpawn(
       send: (m) => {
         received.push(m)
         if (m.t === 'init') {
-          spawned.push(`${m.file.split('/').pop()}:${m.select ? m.select.join(',') : 'collect'}`)
+          spawned.push(`${basename(m.file)}:${m.select ? m.select.join(',') : 'collect'}`)
           ctl = {
             init: m,
             emit,
@@ -104,7 +104,7 @@ const engine = (options: Options, spawn: Spawn) => runEngine({ filters: [], ...o
 const passing =
   (tests: Record<string, WireTest[]>, extra?: (ctl: Ctl) => void): Script =>
   (ctl) => {
-    const list = tests[ctl.init.file.split('/').pop() as string] ?? []
+    const list = tests[basename(ctl.init.file)] ?? []
     ctl.emit({ t: 'collected', tests: list })
     if (ctl.init.select) {
       extra?.(ctl)
@@ -189,7 +189,7 @@ describe('runEngine: files that fail to load', () => {
   test('load errors are grouped by message, and name every file', async () => {
     const { run } = project(['evals/a.es.ts', 'evals/b.es.ts', 'evals/c.es.ts'])
     const { spawn } = fakeSpawn((ctl) => {
-      const name = ctl.init.file.split('/').pop()
+      const name = basename(ctl.init.file)
       if (name === 'c.es.ts') {
         ctl.exit({ code: null, signal: 'SIGKILL' })
         return
@@ -375,7 +375,7 @@ describe('runEngine: running', () => {
     const order: string[] = []
     const tests = { 'a.es.ts': [test0(0, 'a')], 'b.es.ts': [test0(0, 'b')] }
     const { spawn } = fakeSpawn((ctl) => {
-      const name = ctl.init.file.split('/').pop() as 'a.es.ts'
+      const name = basename(ctl.init.file) as 'a.es.ts'
       ctl.emit({ t: 'collected', tests: tests[name] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })
@@ -419,7 +419,7 @@ describe('runEngine: running', () => {
     let cancel = () => {}
     const tests = { 'a.es.ts': [test0(0, 'a')], 'b.es.ts': [test0(0, 'b')] }
     const { spawn, spawned } = fakeSpawn((ctl) => {
-      const name = ctl.init.file.split('/').pop() as 'a.es.ts'
+      const name = basename(ctl.init.file) as 'a.es.ts'
       ctl.emit({ t: 'collected', tests: tests[name] })
       if (!ctl.init.select) {
         ctl.emit({ t: 'done' })

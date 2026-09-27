@@ -1,12 +1,21 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { writeFile } from 'node:fs/promises'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { describe, test } from 'node:test'
-import { fakeConfig, liveSandboxes, pkgRoot, project, readRun, runCli } from './helpers.ts'
+import { pathToFileURL } from 'node:url'
+import {
+  fakeConfig,
+  liveSandboxes,
+  noSignals,
+  pkgRoot,
+  project,
+  readRun,
+  runCli,
+} from './helpers.ts'
 
 const math = (value: number) => `
 import { evaluate, expect } from 'evalsuite'
@@ -519,7 +528,9 @@ evaluate('killed', async (t) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /The worker running evals\/dies\.es\.ts exited unexpectedly \(signal SIGKILL\)/,
+      process.platform === 'win32'
+        ? /The worker running evals\/dies\.es\.ts exited unexpectedly \(exit code 1\)/
+        : /The worker running evals\/dies\.es\.ts exited unexpectedly \(signal SIGKILL\)/,
     )
     assert.deepEqual(
       readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
@@ -569,7 +580,7 @@ evaluate('same', async () => {})
     const importing = (pattern: RegExp) =>
       files
         .filter((path) => pattern.test(readFileSync(path, 'utf8')))
-        .map((p) => p.slice(src.length + 1))
+        .map((p) => p.slice(src.length + 1).replaceAll(sep, '/'))
     assert.deepEqual(importing(/from ['"](vitest|vite)(\/[^'"]*)?['"]/), [])
     const vitestParts = importing(/from ['"]@vitest\//)
     assert.ok(vitestParts.length > 0, 'the canary: the engine does import @vitest/expect')
@@ -758,7 +769,7 @@ evaluate('on a value', async (t) => {
         'cleaning up',
       ],
     )
-    assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.es\.ts › agent eval {2}\d+ms$/m)
+    assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.es\.ts › agent eval {2}\d+m?s$/m)
   })
 
   test('--log-order, --log-prefix and --output-logs shape what es run prints', async () => {
@@ -901,7 +912,7 @@ evaluate('passes', async () => {})
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
     const { port } = server.address() as AddressInfo
     try {
-      const google = join(pkgRoot, 'node_modules/@ai-sdk/google/dist/index.js')
+      const google = pathToFileURL(join(pkgRoot, 'node_modules/@ai-sdk/google/dist/index.js')).href
       const p = await project('judge-model', {
         'es.config.ts': fakeConfig({ harness: `{ text: 'Hello, friend!' }` }),
         'evals/judged.es.ts': `import { evaluate, expect, group } from 'evalsuite'
@@ -1298,7 +1309,7 @@ evaluate('fine', async () => {})
       143,
     ],
   ] as const) {
-    test(`${target}, records the run and destroys the sandbox`, async () => {
+    test(`${target}, records the run and destroys the sandbox`, { skip: noSignals }, async () => {
       const p = await project('sigint', {
         'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
         'evals/agent.es.ts': agentEval(''),
@@ -1327,17 +1338,22 @@ evaluate('fine', async () => {})
     const secret = 'sk-live-0123456789abcdefghij'
     const p = await project('unhandled', {
       'es.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
-process.on('SIGUSR2', () => {
+import { existsSync } from 'node:fs'
+// The test writes ./boom (a signal would do, but Windows has none to send); workers have process.send.
+const boom = setInterval(() => {
+  if (process.send || !existsSync('boom')) return
+  clearInterval(boom)
   Promise.reject(new Error(\`main process boom with \${process.env.ES_TEST_API_KEY}\`))
-})
+}, 50)
+boom.unref()
 `,
       'evals/agent.es.ts': agentEval(''),
     })
     const r = await runCli(p.dir, ['run'], {
       env: { ES_TEST_API_KEY: secret },
-      onOutput: (stdout, pid) => {
+      onOutput: (stdout) => {
         if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
-        process.kill(pid, 'SIGUSR2')
+        writeFileSync(join(p.dir, 'boom'), '')
         return true
       },
     })
@@ -1347,13 +1363,25 @@ process.on('SIGUSR2', () => {
   })
 
   for (const [how, stop, code] of [
-    ['crashes (exit 3)', (pid: number) => process.kill(pid, 'SIGUSR2'), 3],
-    ['is killed (SIGKILL)', (pid: number) => process.kill(pid, 'SIGKILL'), null],
+    ['crashes (exit 3)', (_pid: number, dir: string) => writeFileSync(join(dir, 'boom'), ''), 3],
+    // Windows has no signals: the kill is TerminateProcess, with exit code 1.
+    [
+      'is killed (SIGKILL)',
+      (pid: number) => process.kill(pid, 'SIGKILL'),
+      process.platform === 'win32' ? 1 : null,
+    ],
   ] as const) {
     test(`when the main process ${how} mid-turn, its worker cancels, destroys the sandbox and exits`, async () => {
       const p = await project('main-gone', {
         'es.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
-process.on('SIGUSR2', () => { Promise.reject(new Error('main process boom')) })
+import { existsSync } from 'node:fs'
+// The test writes ./boom (a signal would do, but Windows has none to send); workers have process.send.
+const boom = setInterval(() => {
+  if (process.send || !existsSync('boom')) return
+  clearInterval(boom)
+  Promise.reject(new Error('main process boom'))
+}, 50)
+boom.unref()
 `,
         'evals/agent.es.ts': `import { writeFileSync } from 'node:fs'
 import { evaluate } from 'evalsuite'
@@ -1366,7 +1394,7 @@ evaluate('agent eval', async (t) => {
       const r = await runCli(p.dir, ['run'], {
         onOutput: (stdout, pid) => {
           if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
-          stop(pid)
+          stop(pid, p.dir)
           return true
         },
       })
@@ -1388,7 +1416,9 @@ evaluate('agent eval', async (t) => {
     })
   }
 
-  test('Ctrl-C while the worker boots still cancels the attempt before it starts', async () => {
+  test('Ctrl-C while the worker boots still cancels the attempt before it starts', {
+    skip: noSignals,
+  }, async () => {
     const p = await project('sigint-early', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
       'evals/agent.es.ts': agentEval(''),

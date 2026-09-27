@@ -2,7 +2,7 @@
 // CommonJS mixes through jiti, tsconfig checks, and stacks mapped back to the sources.
 import assert from 'node:assert/strict'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { filterFiles, findEvalFiles, matchesFilter } from '../src/engine/files.ts'
 import {
@@ -24,6 +24,13 @@ function tree(files: Record<string, string>): string {
   return root
 }
 
+/** `path` as a pattern: frames of transformed files say C:/… on Windows, others C:\\…. */
+const pathRe = (path: string) =>
+  path
+    .split(/[\\/]/)
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[\\\\/]')
+
 describe('findEvalFiles and filterFiles', () => {
   test('globs include minus exclude, dotfiles included, sorted and absolute', async () => {
     const root = tree({
@@ -40,7 +47,7 @@ describe('findEvalFiles and filterFiles', () => {
       ['**/node_modules/**', 'evals/.history/**'],
     )
     assert.deepEqual(
-      files.map((f) => relative(root, f)),
+      files.map((f) => relative(root, f).split(sep).join('/')),
       ['evals/.hidden/c.es.ts', 'evals/a.es.ts', 'evals/b.es.ts'],
     )
   })
@@ -53,6 +60,9 @@ describe('findEvalFiles and filterFiles', () => {
     assert.deepEqual(filterFiles(files, ['/p/evals/sub'], root), ['/p/evals/sub/skill.es.ts'])
     assert.deepEqual(filterFiles(files, ['evals/sub/'], root), ['/p/evals/sub/skill.es.ts'])
     assert.deepEqual(filterFiles(files, ['nope', 'x.es'], root), ['/p/other/x.es.ts'])
+    // On Windows, a path typed with backslashes picks the same files.
+    if (sep === '\\')
+      assert.deepEqual(filterFiles(files, ['evals\\sub\\'], root), ['/p/evals/sub/skill.es.ts'])
     const cwd = process.cwd()
     process.chdir(tempDir('cwd'))
     try {
@@ -227,8 +237,8 @@ export function run(): void {
     } catch (error) {
       stack = originalStack((error as Error).stack ?? '')
     }
-    assert.match(stack, new RegExp(`at boom \\(${join(root, 'evals/helper.ts')}:3:9\\)`))
-    assert.match(stack, new RegExp(`at run \\(${join(root, 'evals/main.ts')}:5:3\\)`))
+    assert.match(stack, new RegExp(`at boom \\(${pathRe(join(root, 'evals/helper.ts'))}:3:9\\)`))
+    assert.match(stack, new RegExp(`at run \\(${pathRe(join(root, 'evals/main.ts'))}:5:3\\)`))
     // Edited since it loaded, down to one line: the position is kept as mapped.
     writeFileSync(join(root, 'evals/helper.ts'), '// gone\n')
     let again = ''
@@ -237,7 +247,7 @@ export function run(): void {
     } catch (error) {
       again = originalStack((error as Error).stack ?? '')
     }
-    assert.match(again, new RegExp(`at boom \\(${join(root, 'evals/helper.ts')}:3:9\\)`))
+    assert.match(again, new RegExp(`at boom \\(${pathRe(join(root, 'evals/helper.ts'))}:3:9\\)`))
   })
 
   test('other frames, unmapped positions and line 1 are handled', async () => {
@@ -250,13 +260,17 @@ export function run(): void {
     } catch (error) {
       raw = (error as Error).stack ?? ''
     }
-    assert.match(originalStack(raw), new RegExp(`${file}:1:32`))
+    assert.match(originalStack(raw), new RegExp(`${pathRe(file)}:1:32`))
     assert.equal(originalStack('    at x (/elsewhere.js:1:1)'), '    at x (/elsewhere.js:1:1)')
     assert.equal(originalStack(`    at ${file}:999:1`), `    at ${file}:999:1`)
     assert.equal(originalStack(`    at ${file}:1:3`), `    at ${file}:1:3`, "in jiti's wrapper")
     rmSync(file)
     writeFileSync(file, '')
-    assert.match(originalStack(raw), new RegExp(`${file}:1:`), 'a file edited since it loaded')
+    assert.match(
+      originalStack(raw),
+      new RegExp(`${pathRe(file)}:1:`),
+      'a file edited since it loaded',
+    )
     rmSync(file)
     assert.throws(() => originalStack(raw), /ENOENT/)
   })

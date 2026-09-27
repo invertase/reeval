@@ -26,12 +26,14 @@ export const forkWorker: Spawn = (entry, cwd) => {
   const child = fork(entry, [], {
     cwd,
     detached: true,
+    windowsHide: true,
     execArgv: ['--enable-source-maps'],
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     serialization: 'advanced',
   })
+  // 'close', not 'exit': on Windows 'exit' can come before the worker's last IPC messages.
   const exited = new Promise<Exit>((resolve) =>
-    child.once('exit', (code, signal) => resolve({ code, signal })),
+    child.once('close', (code, signal) => resolve({ code, signal })),
   )
   // A message sent after the worker exited has nowhere to go; its exit is handled instead.
   child.on('error', () => {})

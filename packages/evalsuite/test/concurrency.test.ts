@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict'
 import { chmodSync, existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { acquire, useSchedulerChannel } from '../src/scheduler/client.ts'
 import { type Rank, type Request, Scheduler } from '../src/scheduler/core.ts'
-import { fakeConfig, liveSandboxes, project, readRun, runCli } from './helpers.ts'
+import { fakeConfig, liveSandboxes, noSignals, project, readRun, runCli } from './helpers.ts'
 
 const rank = (evalId: string, n: number, cell = 0, order = 0): Rank => ({
   eval: evalId,
@@ -150,6 +150,10 @@ function maxOverlap(trace: Trace[]): number {
   return most
 }
 
+/** The time the traced turns took end to end, one after another. */
+const serial = (trace: Trace[]) =>
+  trace.reduce((sum, t) => sum + (t.event === 'end' ? t.at : -t.at), 0)
+
 const wall = (trace: Trace[]) =>
   Math.max(...trace.map((t) => t.at)) - Math.min(...trace.map((t) => t.at))
 
@@ -167,7 +171,11 @@ describe('concurrency', () => {
     const trace = readTrace(p.dir)
     assert.equal(trace.length, 12)
     assert.equal(maxOverlap(trace), 4)
-    assert.ok(wall(trace) < 6 * 800, `wall ${wall(trace)}ms is no better than serial`)
+    // Against the turns' own time, not 6 × 800 ms: on a slow machine (Windows) a turn takes longer.
+    assert.ok(
+      wall(trace) < serial(trace) * 0.75,
+      `wall ${wall(trace)}ms is no better than serial ${serial(trace)}ms`,
+    )
     const firstFour = trace.filter((t) => t.event === 'start').slice(0, 4)
     assert.deepEqual(firstFour.map((t) => t.name[0]).sort(), ['a', 'a', 'b', 'b'])
     const { run } = readRun(p.dir)
@@ -209,11 +217,14 @@ describe('concurrency', () => {
         "sandbox: (await import('evalsuite/sandbox')).docker(),",
       ),
       'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('go') })\n`,
-      // A docker CLI whose VM has 3 CPUs and 16 GB, whatever the host has.
-      'bin/docker': `#!/bin/sh\n[ "$1" = info ] && case "$*" in *NCPU*) echo "3 16000000000"; exit 0;; esac\nexit 1\n`,
+      // A docker CLI whose VM has 3 CPUs and 16 GB, whatever the host has: Node, behind an sh
+      // and a .cmd wrapper, so it runs on every OS.
+      'bin/docker.js': `const a = process.argv.slice(2).join(' ')\nif (a.startsWith('info') && a.includes('NCPU')) console.log('3 16000000000')\nelse process.exit(1)\n`,
+      'bin/docker': `#!/bin/sh\nexec node "$(dirname "$0")/docker.js" "$@"\n`,
+      'bin/docker.cmd': '@node "%~dp0docker.js" %*\r\n',
     })
     chmodSync(join(p.dir, 'bin/docker'), 0o755)
-    const env = { PATH: `${join(p.dir, 'bin')}:${process.env.PATH}` }
+    const env = { PATH: `${join(p.dir, 'bin')}${delimiter}${process.env.PATH}` }
     const r = await runCli(p.dir, ['run', '--dry-run', '--json'], { env })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.equal(JSON.parse(r.stdout).concurrency, 3)
@@ -281,16 +292,17 @@ for (const name of ['a', 'b']) {
     const p = await project('conc-queue-time', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 1200 }' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': tracedEval('a', "{ runs: 3, timeout: '2s' }"),
+      // Four at concurrency 1: the last waits 3.6 s or more, over its 3 s timeout if it counted.
+      'evals/a.es.ts': tracedEval('a', "{ runs: 4, timeout: '3s' }"),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '1'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
     assert.deepEqual(
       attempts.map((a) => a.outcome),
-      ['pass', 'pass', 'pass'],
+      ['pass', 'pass', 'pass', 'pass'],
     )
-    for (const a of attempts) assert.ok(a.durationMs < 2000, `${a.id}: ${a.durationMs}ms`)
+    for (const a of attempts) assert.ok(a.durationMs < 3000, `${a.id}: ${a.durationMs}ms`)
     assert.match(r.stdout, /\[eval#3 fake\] ▶/)
   })
 
@@ -312,7 +324,9 @@ for (const name of ['a', 'b']) {
     assert.deepEqual(liveSandboxes(p), [])
   })
 
-  test('Ctrl-C cancels running attempts, skips queued ones and destroys every sandbox', async () => {
+  test('Ctrl-C cancels running attempts, skips queued ones and destroys every sandbox', {
+    skip: noSignals,
+  }, async () => {
     const p = await project('conc-sigint', {
       'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
       'evals/trace.ts': TRACE,

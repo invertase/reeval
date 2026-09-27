@@ -2,12 +2,13 @@
 // eval's own line, as Vitest's reporter printed them. Workers serialize errors with
 // @vitest/utils (`serializeError`); this runs in the main process.
 import { existsSync, readFileSync } from 'node:fs'
-import { relative, sep } from 'node:path'
+import { sep } from 'node:path'
 import { inspect, stripVTControlCharacters } from 'node:util'
 import type { ParsedStack } from '@vitest/utils'
 import { truncateString } from '@vitest/utils/display'
 import { lineSplitRE, positionToOffset } from '@vitest/utils/offset'
 import { parseErrorStacktrace } from '@vitest/utils/source-map'
+import { relativeFile } from '../ids.ts'
 
 /** An error as a worker serialized it. */
 export type SerializedError = {
@@ -41,6 +42,12 @@ export const esFrames = (packageDir: string) => [
   `${packageDir}${packageDir.endsWith(sep) ? '' : sep}dist${sep}`,
 ]
 
+/** A path as frames are compared: forward slashes (parsed frames say C:/… on Windows), any case there. */
+const comparable = (path: string) => {
+  const slashed = path.replaceAll('\\', '/')
+  return process.platform === 'win32' ? slashed.toLowerCase() : slashed
+}
+
 /** Loaders and assertion libraries ES runs eval files through; never the eval's own frames. */
 const HIDDEN = ['/node_modules/jiti/', '/node_modules/@vitest/', '/node_modules/chai/']
 
@@ -72,13 +79,14 @@ function printError(
   let e = error as SerializedError
   if (e === null || (typeof e !== 'object' && typeof e !== 'function'))
     e = { message: String(error).split(/\n/g)[0], stack: String(error) }
+  const hide = options.hide.map(comparable)
   const stacks = parseErrorStacktrace(e as Error, {
     frameFilter: (_error, frame) =>
-      !options.hide.some((dir) => frame.file.startsWith(dir)) &&
-      !HIDDEN.some((dir) => frame.file.includes(dir)),
+      !hide.some((dir) => comparable(frame.file).startsWith(dir)) &&
+      !HIDDEN.some((dir) => comparable(frame.file).includes(dir)),
   })
   const nearest = stacks.find(
-    (frame) => !frame.file.includes('/node_modules/') && existsSync(frame.file),
+    (frame) => !comparable(frame.file).includes('/node_modules/') && existsSync(frame.file),
   )
   const name = e.name || 'Unknown Error'
   if (!e.message) out.push(inspect(e))
@@ -90,7 +98,7 @@ function printError(
   else {
     for (const frame of stacks) {
       const color = frame === nearest ? cyan : gray
-      const path = relative(options.root, frame.file)
+      const path = relativeFile(options.root, frame.file)
       out.push(
         color(
           ` ${dim(POINTER)} ${[frame.method, `${path}:${dim(`${frame.line}:${frame.column}`)}`].filter(Boolean).join(' ')}`,

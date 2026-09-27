@@ -289,7 +289,12 @@ describe('console routing and error serialization', () => {
       thrown = error as Error
     }
     const serialized = serializeError(thrown)
-    assert.match(String(serialized.stack), new RegExp(`${file}:3:9`))
+    // Transformed files' frames say C:/… on Windows.
+    assert.ok(
+      String(serialized.stack)
+        .replaceAll('\\', '/')
+        .includes(`${file.replaceAll('\\', '/')}:3:9`),
+    )
     assert.deepEqual(serializeError('plain'), { message: 'plain' })
     // A stack that can't be mapped (its file is gone) is kept as it was.
     const again = new Error('kept')
