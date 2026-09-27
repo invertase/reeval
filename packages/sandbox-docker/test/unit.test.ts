@@ -21,7 +21,7 @@ import {
   installLayerTag,
   installScript,
 } from '../src/build-image.ts'
-import { dockerState, isRegistryDigest } from '../src/docker-cli.ts'
+import { dockerState, imageInfo, isRegistryDigest } from '../src/docker-cli.ts'
 import { createCertificateAuthority, issueServerCertificate } from '../src/egress/cert.ts'
 import { createMux, forwarderScript, link } from '../src/egress/mux.ts'
 import { createPolicyCheck, defaultAllowedHosts, hostAllowed } from '../src/egress/policy.ts'
@@ -85,6 +85,16 @@ test("dockerState: running, down, or Windows containers, from the CLI's own answ
   } finally {
     process.env.PATH = path
     delete process.env.FAKE_DOCKER_INFO
+  }
+})
+
+test('imageInfo without a docker CLI at all is no image, not a spawn error', async () => {
+  const path = process.env.PATH
+  process.env.PATH = mkdtempSync(join(tmpdir(), 'es-no-docker-'))
+  try {
+    assert.equal(await imageInfo('evalsuite-sandbox:cursor-0.1.0'), null)
+  } finally {
+    process.env.PATH = path
   }
 })
 

@@ -124,8 +124,9 @@ export async function imageInfo(image: string): Promise<ImageInfo | null> {
     // `.Config.Labels` is a template error, not null, on images without labels.
     '{"config":{{json .Config}},"id":{{json .Id}},"repoDigests":{{json .RepoDigests}}}',
     image,
-  ])
-  if (r.exitCode !== 0) return null
+  ]).catch(() => null)
+  // No docker CLI at all (spawn ENOENT) is no image, as a daemon that doesn't have it is.
+  if (r?.exitCode !== 0) return null
   const info = JSON.parse(r.stdout.toString('utf8'))
   const repoDigests = ((info.repoDigests ?? []) as string[]).filter(isRegistryDigest)
   return { labels: info.config?.Labels ?? {}, id: info.id, repoDigests }
