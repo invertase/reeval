@@ -295,3 +295,53 @@ describe("a provider's failure (agy 1.2.11, a Gemini endpoint refusing every cal
       assert.equal(r.tools, 0)
     })
 })
+
+describe("a model call agy retried: only the final attempt's reply is the turn's text", () => {
+  const texts = (parts: HarnessV1StreamPart[]) =>
+    parts.flatMap((p) => (p.type === 'text-delta' ? [p.delta] : [])).join('')
+  const retries = (parts: HarnessV1StreamPart[]) =>
+    parts.filter((p) => p.type === 'finish-step' && p.finishReason.unified === 'error')
+
+  test('the first call dropped mid-reply, the retry answered: its partial is not text', () => {
+    const { parts } = translate(fixture('provider-retried.ndjson'), { exitCode: 0 })
+    assert.equal(texts(parts), 'FINAL-ATTEMPT reply, whole.\n')
+    assert.deepEqual(
+      retries(parts).map((p) => p.type === 'finish-step' && p.finishReason),
+      [{ unified: 'error', raw: 'error_message' }],
+    )
+    // The dropped call's tokens were spent: its step keeps them.
+    const [dropped] = retries(parts)
+    assert.equal(dropped?.type === 'finish-step' && dropped.usage.outputTokens.total, 5)
+  })
+
+  test("every call dropped mid-reply: no text at all, nor agy's concatenated response", () => {
+    const { parts } = translate(fixture('provider-dropped-mid-stream.ndjson'), { exitCode: 3 })
+    assert.equal(texts(parts), '')
+    // Nine failed calls: eight retried, and the last one agy gave up on, the result's error.
+    assert.equal(retries(parts).length, 8)
+    const last = parts.filter((p) => p.type === 'finish-step').at(-1)
+    assert.deepEqual(last?.type === 'finish-step' && last.finishReason, {
+      unified: 'other',
+      raw: 'error_message',
+    })
+    assert.equal(parts.filter((p) => p.type === 'error').length, 1)
+  })
+
+  test('every call refused (503): eight retried calls, then the one agy gave up on', () => {
+    const { parts } = translate(fixture('provider-503.ndjson'), { exitCode: 3 })
+    assert.equal(retries(parts).length, 8)
+    assert.equal(texts(parts), '')
+  })
+
+  test('a call refused once (400) and not retried: no retry, only the error', () => {
+    const { parts } = translate(fixture('provider-400.ndjson'), { exitCode: 3 })
+    assert.equal(retries(parts).length, 0)
+    assert.equal(parts.filter((p) => p.type === 'error').length, 1)
+  })
+
+  test('twin: a reply followed by a tool step, not an error_message, is kept', () => {
+    const { parts } = translate(fixture('write-and-run.ndjson'))
+    assert.notEqual(texts(parts), '')
+    assert.equal(retries(parts).length, 0)
+  })
+})

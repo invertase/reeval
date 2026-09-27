@@ -42,6 +42,8 @@ export type TranscriptEvent = EventTime &
         durationMs: number | null
       }
     | { type: 'error'; message: string }
+    /** A step that failed while the turn went on: a model call the harness retried. */
+    | { type: 'retry'; message: string }
   )
 
 /** The transcript events a harness may be unable to report. */
