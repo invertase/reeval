@@ -47,6 +47,9 @@ its files import `evalsuite`.
   package when that isn't the vitest the range resolves to (npm/cli#8261). A patch range
   follows vitest's patches, but a new vitest minor breaks it again until we move the range. CI's
   `packed install (npm 10.9)` leg catches it.
+- `vite` is one of ES's `dependencies`, in vitest's peer range for it: vitest 5 requires it as a
+  peer, and Yarn (and pnpm without `auto-install-peers`) don't install peers. The pack test's Yarn
+  and strict pnpm installs catch a missing one.
 
 ## Repository layout
 
@@ -154,7 +157,7 @@ The engine and wrapper tests drive the real `es` CLI against generated projects 
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
 and reproduce a dirty run with `es checkout`. The ui tests feed recorded event streams to each
 renderer on a fake non-TTY stream and compare the output line by line. The pack test installs the
-packed tarballs into an empty project with npm and runs them. `packages/sandbox-docker` has its own
+packed tarballs into an empty project with npm, Yarn 1 and pnpm (strict about peers) and runs them. `packages/sandbox-docker` has its own
 tests: request-transformation and policy matching, certificates and the stdio multiplexer; the
 gateway against local HTTP/1.1, HTTP/2 and WebSocket servers; and real containers, where it checks
 the header swap, searches `env`, `/proc` and the filesystem for the key, and checks a restricted
