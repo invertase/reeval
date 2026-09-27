@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import http from 'node:http'
 import https from 'node:https'
 import type net from 'node:net'
@@ -97,6 +97,10 @@ const egress = (over: Partial<EgressOptions> = {}): EgressOptions => ({
 
 const sh = async (s: DockerSession, command: string, env?: Record<string, string>) =>
   s.run({ command, ...(env ? { env } : {}) })
+
+/** As root in the container, outside the session: what the gateway's own execs run as. */
+const asRoot = (s: DockerSession, command: string) =>
+  spawnSync('docker', ['exec', '--user', '0:0', s.id, 'sh', '-c', command], { encoding: 'utf8' })
 
 // Interfaces with IFF_UP set. Docker Desktop's kernel adds tunnel devices (gre0, sit0…) that stay
 // down, and names an interface attached later eth1 rather than eth0.
@@ -208,12 +212,13 @@ describe('egress gateway in Docker', {
     )
     assert.match(environ.stdout, new RegExp(PLACEHOLDER), 'the check can see process environments')
     assert.doesNotMatch(environ.stdout, new RegExp(NEEDLE))
-    const files = await sh(
-      s,
-      `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo "exit=$?"`,
-      { N: NEEDLE },
-    )
+    const grep = `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev ${NEEDLE} / ; echo "exit=$?"`
+    const files = await sh(s, grep)
     assert.equal(files.stdout.trim(), 'exit=1', `files containing the key: ${files.stdout}`)
+    // The sandbox user can't read root's files, and root (with no capabilities) can't read the
+    // sandbox user's private ones, so search as both.
+    const rootFiles = asRoot(s, `${grep}; cat /proc/[0-9]*/environ | grep -c ${NEEDLE}`)
+    assert.equal(rootFiles.stdout.trim(), 'exit=1\n0', `as root: ${rootFiles.stdout}`)
     await bridge.kill()
   })
 
@@ -461,7 +466,23 @@ describe('egress gateway in Docker', {
     } catch {
       return
     }
-    const s = await open({ image: 'busybox:1.37', egress: egress() })
+    // busybox has no sandbox user, so root; without it, the session says why it can't start.
+    await assert.rejects(
+      createDockerSession({
+        image: 'busybox:1.37',
+        labels: { 'dev.evalsuite.test': 'no-user' },
+      }),
+      /busybox:1\.37 has no es user to run the sandbox as[\s\S]*docker\(\{ root: true \}\)/,
+    )
+    await retry(async () =>
+      assert.equal(
+        execFileSync('docker', ['ps', '-aq', '--filter', 'label=dev.evalsuite.test=no-user'], {
+          encoding: 'utf8',
+        }).trim(),
+        '',
+      ),
+    )
+    const s = await open({ image: 'busybox:1.37', root: true, egress: egress() })
     assert.equal(s.egress?.active, false)
     assert.match(s.egress?.active === false ? s.egress.reason : '', /forwarder/)
     assert.equal(s.addRequestTransformations, undefined)
@@ -469,6 +490,7 @@ describe('egress gateway in Docker', {
     await assert.rejects(
       createDockerSession({
         image: 'busybox:1.37',
+        root: true,
         labels: { 'dev.evalsuite.test': 'fallback' },
         egress: egress({ policy: { mode: 'deny-all' } }),
       }),
@@ -487,7 +509,7 @@ describe('egress gateway in Docker', {
     const tunnels = () =>
       execFileSync('ps', ['-eo', 'args'], { encoding: 'utf8' })
         .split('\n')
-        .filter((l) => l.startsWith(`docker exec --interactive ${s.id} node -e`)).length
+        .filter((l) => l.startsWith(`docker exec --interactive --user 0:0 ${s.id} node -e`)).length
     assert.equal(tunnels(), 1)
     await s.destroy()
     await new Promise((r) => setTimeout(r, 500))
@@ -529,8 +551,11 @@ describe('egress policy in Docker', {
     assert.notEqual(r.exitCode, 0, `${what}: a direct connect got ${r.stdout}`)
     assert.equal(listener.hits, hits, `${what}: the host listener saw a connection`)
   }
-  const killForwarder = (s: DockerSession) =>
-    sh(s, `pkill -KILL -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}'`)
+  /** As root: the sandbox user can't signal the forwarder. */
+  const killForwarder = (s: DockerSession) => ({
+    exitCode: asRoot(s, `pkill -KILL -f '[${String(PROXY_PORT)[0]}]${String(PROXY_PORT).slice(1)}'`)
+      .status,
+  })
 
   before(async () => {
     upstream = await startUpstream()

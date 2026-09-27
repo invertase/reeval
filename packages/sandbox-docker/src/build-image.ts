@@ -10,7 +10,9 @@ import {
   harnessLabel,
   imageFor,
   LABEL,
+  SANDBOX_HOME,
   SANDBOX_ROOT,
+  SANDBOX_USER,
   WORKSPACE_DIR,
 } from './image.ts'
 
@@ -115,7 +117,11 @@ RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \\
   && ln -sf ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \\
   && npm install --global npm@${NPM_VERSION} \\
   && npm install --global pnpm@${PNPM_VERSION} \\
-  && mkdir -p ${SANDBOX_ROOT}/${WORKSPACE_DIR}
+  && { id -u ${SANDBOX_USER} >/dev/null 2>&1 \\
+    || useradd --create-home --shell /bin/bash --uid 10001 --user-group ${SANDBOX_USER} 2>/dev/null \\
+    || useradd --create-home --shell /bin/bash --user-group ${SANDBOX_USER}; } \\
+  && mkdir -p ${SANDBOX_ROOT}/${WORKSPACE_DIR} && chown -R ${SANDBOX_USER}: ${SANDBOX_ROOT}
+ENV PATH=${SANDBOX_HOME}/.local/bin:$PATH
 WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}
 `
 
@@ -148,6 +154,7 @@ export async function buildImage(
   }
 
   log(`Installing the ${bootstrap.name} harness bootstrap`)
+  // As the sandbox user, so the bootstrap lands in the home the agent runs with.
   const session = await createDockerSession({
     image: base,
     lifetimeMs: 30 * 60_000,
@@ -189,6 +196,9 @@ export async function buildImage(
       `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"`,
       '--change',
       `WORKDIR ${SANDBOX_ROOT}`,
+      // Not the bootstrap's user: Dockerfiles `FROM ${ES_BASE}` build as root.
+      '--change',
+      'USER root',
       '--change',
       'ENTRYPOINT []',
       '--change',
@@ -242,9 +252,16 @@ export async function buildInstallLayer(
   const script = installScript(steps)
   // Base64, so no command's quoting or newlines can break the Dockerfile.
   const encoded = Buffer.from(script).toString('base64')
+  // As root, but with the sandbox user's home as HOME, so what an installer puts in `~` (uv, bun,
+  // rustup…) is where the agent runs, and is then handed to that user.
+  const home = `$(getent passwd ${SANDBOX_USER} | cut -d: -f6)`
   const dockerfile = [
     `FROM ${parent.ref}`,
-    `RUN echo ${encoded} | base64 -d > /tmp/es-install.sh && bash /tmp/es-install.sh && rm /tmp/es-install.sh`,
+    'USER root',
+    `RUN echo ${encoded} | base64 -d > /tmp/es-install.sh \\`,
+    `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
+    '  && bash /tmp/es-install.sh && rm /tmp/es-install.sh \\',
+    `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
     `WORKDIR ${SANDBOX_ROOT}`,
   ].join('\n')
   const build = await docker(['build', '--progress', 'plain', '--tag', tag, '-'], {
