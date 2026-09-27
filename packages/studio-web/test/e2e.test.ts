@@ -20,11 +20,13 @@ import { extname, join, normalize } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { type Browser, chromium, type Page } from 'playwright-core'
+import { withUnknownFields } from '../../evalsuite/scripts/schema/validate.ts'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = join(repo, 'packages/evalsuite/dist/cli.js')
 const demo = join(tmpdir(), `es-studio-e2e-${process.pid}`)
 const config = join(demo, 'es.demo.config.ts')
+const corpus = join(repo, 'packages/evalsuite/test/fixtures/records')
 
 let browser: Browser | null = null
 const children: ChildProcess[] = []
@@ -222,12 +224,11 @@ describe('studio in a browser', () => {
     assert.deepEqual(errors, [])
   })
 
-  test('a run recorded before newer record fields renders its run, State and transcript', async (t) => {
-    if (!browser) return t.skip('no Chrome or Chromium found')
-    const project = join(demo, 'before-100')
-    cpSync(join(repo, 'packages/evalsuite/test/fixtures/records/before-100'), project, {
-      recursive: true,
-    })
+  /** Copies a corpus entry into a project, adds `extra` runs, and builds its static studio. */
+  async function buildCorpus(name: string, extra?: (history: string) => void) {
+    const project = join(demo, `corpus-${name}${extra ? '-changed' : ''}`)
+    cpSync(join(corpus, name), project, { recursive: true })
+    extra?.(join(project, 'evals/.history'))
     mkdirSync(join(project, 'node_modules'), { recursive: true })
     symlinkSync(join(repo, 'packages/evalsuite'), join(project, 'node_modules/evalsuite'), 'dir')
     const out = join(project, 'site')
@@ -236,16 +237,90 @@ describe('studio in a browser', () => {
       encoding: 'utf8',
     })
     assert.equal(built.status, 0, built.stderr)
-    const { page, errors } = await open(await host(out))
-    await page.locator('tbody tr').first().click()
-    await page.waitForSelector('h2')
-    assert.equal(await page.getByRole('alert').count(), 0, 'no sandbox warnings')
-    await page.getByText('writes greet.js').first().waitFor()
-    await page.locator('a[href*="/attempts/"]').first().click()
-    await page.getByText('Turn 1', { exact: true }).waitFor()
-    await page.getByRole('tab', { name: /^State/ }).click()
-    await page.getByText('Package versions').waitFor()
-    assert.deepEqual(errors, [])
+    assert.doesNotMatch(built.stderr, /warning: skipped/)
+    return out
+  }
+
+  /** Opens every run of a build, its analysis, and every tab of every attempt. */
+  async function readEverything(out: string, label: string) {
+    const url = await host(out)
+    const { page, errors } = await open(url)
+    const broken = async (where: string) => {
+      assert.equal(await page.getByText("Couldn't load this").count(), 0, where)
+      assert.deepEqual(errors, [], where)
+    }
+    const runs = readdirSync(join(out, 'data/runs'))
+      .filter((n) => n.endsWith('.json'))
+      .map((n) => n.slice(0, -5))
+      .sort()
+    await page.waitForSelector('tbody tr')
+    assert.equal(await page.locator('tbody tr').count(), runs.length, label)
+    for (const runId of runs) {
+      await page.goto(`${url}#/runs/${runId}`)
+      await page.waitForSelector('h2', { timeout: 10_000 }).catch((e) => {
+        throw new Error(`${label} ${runId} didn't render: ${errors.join('\n') || e}`)
+      })
+      await broken(`${label} ${runId}`)
+      if (existsSync(join(out, 'data/analysis', `${runId}.json`))) {
+        await page.getByRole('tab', { name: 'Analysis' }).click()
+        await page.getByText('Suggested actions').first().waitFor()
+        await broken(`${label} ${runId} analysis`)
+        await page.getByRole('tab', { name: 'Evals' }).click()
+      }
+      const attempts = await page
+        .locator('a[href*="/attempts/"]')
+        .evaluateAll((links) => [...new Set(links.map((a) => (a as HTMLAnchorElement).href))])
+      assert.ok(attempts.length > 0, `${label} ${runId} links its attempts`)
+      for (const href of attempts) {
+        await page.goto(href)
+        await page.waitForSelector('[role=tablist]')
+        for (const tab of ['Transcript', 'Diff', 'Checks', 'Judge', 'State']) {
+          await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
+          await page.waitForTimeout(50)
+          await broken(`${label} ${href} ${tab}`)
+        }
+        await page.getByText('Package versions').waitFor()
+      }
+    }
+    if (runs.length > 1) {
+      await page.goto(`${url}#/compare?base=${runs[0]}&head=${runs.at(-1)}`)
+      await page.waitForTimeout(300)
+      await broken(`${label} compare`)
+    }
+    await page.close()
+  }
+
+  test('every run in the record corpus renders: runs, analysis, and every attempt tab', async (t) => {
+    if (!browser) return t.skip('no Chrome or Chromium found')
+    const names = readdirSync(corpus).filter((n) => existsSync(join(corpus, n, 'evals/.history')))
+    assert.ok(names.length >= 3)
+    for (const name of names) await readEverything(await buildCorpus(name), name)
+  })
+
+  test('a run from a newer ES, with fields and values this one lacks, still renders', async (t) => {
+    if (!browser) return t.skip('no Chrome or Chromium found')
+    const schema = JSON.parse(
+      readFileSync(join(repo, 'packages/evalsuite/schema/run-record.schema.json'), 'utf8'),
+    )
+    const out = await buildCorpus('real-harnesses', (history) => {
+      const [name] = readdirSync(history).filter((n) => n.endsWith('.json'))
+      const r = JSON.parse(readFileSync(join(history, name as string), 'utf8'))
+      withUnknownFields(schema, r, () => ({ by: 'a newer ES' }))
+      r.status = 'paused'
+      r.evals[0].attempts[0].outcome = 'cancelled'
+      r.evals[0].attempts[0].error = { kind: 'quota', message: 'a kind this ES does not know' }
+      r.evals[0].attempts[1].turns[0].status = 'paused'
+      writeFileSync(join(history, name as string), JSON.stringify(r, null, 2))
+      for (const f of readdirSync(history, { recursive: true }) as string[]) {
+        if (!f.endsWith('transcript.jsonl')) continue
+        const line = { turn: 1, ts: '2027-01-01T00:00:00.000Z', atMs: 1, type: 'hologram' }
+        writeFileSync(
+          join(history, f),
+          `${readFileSync(join(history, f), 'utf8')}${JSON.stringify(line)}\n`,
+        )
+      }
+    })
+    await readEverything(out, 'newer')
   })
 
   test('es studio needs its token, then shows new runs as they land', async (t) => {

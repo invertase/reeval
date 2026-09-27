@@ -267,9 +267,14 @@ pnpm --filter @invertase/foobar schema:update   # accept a compatible change, th
   added are ignored; `test/history.test.ts` ("records from a newer ES") covers both.
 - **Caches** (`.es/history-cache.json`, `.es/history.db`) aren't snapshotted: they're keyed on
   ES's version and build, so another ES rebuilds them.
-- **Add a corpus record** under `test/fixtures/records/` whenever you change a persisted shape,
-  recorded by the ES before your change, so the next change is tested against
-  a file that really has the old shape.
+- **Add a corpus entry** whenever you change a persisted shape, recorded by the ES before your
+  change: `pnpm build && pnpm --filter @invertase/foobar corpus:add <name>` on your base branch
+  (or `--from <project>` to copy runs from another project, such as real-harness runs). The
+  corpus, [`test/fixtures/records/`](./packages/evalsuite/test/fixtures/records/README.md), is
+  real runs from meaningful points; `schema:check` reads every file in it,
+  `test/corpus.test.ts` runs every CLI reader (`history`, `show`, `compare`, each `query` view,
+  `analyze --dry-run`, `studio build`) on every run, and the studio's browser test opens every
+  run and attempt tab.
 
 ### Adding a feature
 

@@ -4,18 +4,16 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { checkShape, explain, snapshotFile } from '../scripts/schema/check.ts'
+import { checkCorpus, checkShape, explain, snapshotFile } from '../scripts/schema/check.ts'
 import { compare } from '../scripts/schema/compat.ts'
 import { generate, type Schema, type ShapeSchema } from '../scripts/schema/generate.ts'
 import { SHAPES } from '../scripts/schema/shapes.ts'
-import { validate } from '../scripts/schema/validate.ts'
 import {
   fillDefaults,
   NewerSchemaError,
   READ_DEFAULTS,
   readableAnalysis,
   readableRecord,
-  readableTranscriptLine,
 } from '../src/view/record.ts'
 import { corpus } from './support/corpus.ts'
 import { testDir } from './support/fixture.ts'
@@ -208,7 +206,7 @@ const has = (value: unknown, segments: string[]): boolean => {
 }
 
 describe('read defaults', () => {
-  const { records, transcripts } = corpus()
+  const { records, transcripts, analyses } = corpus()
   const lines = transcripts.flatMap((f) =>
     readFileSync(f, 'utf8')
       .split('\n')
@@ -220,7 +218,7 @@ describe('read defaults', () => {
     const files = {
       'run-record': records.map((r) => r.value),
       'transcript-line': lines,
-      analysis: [],
+      analysis: analyses.map((a) => a.value),
       'debug-request': [],
     }
     for (const [name, defaults] of Object.entries(READ_DEFAULTS)) {
@@ -234,15 +232,10 @@ describe('read defaults', () => {
     }
   })
 
-  test('every corpus record and transcript line, read, fits the current schema', () => {
-    assert.ok(records.length > 0)
-    for (const { file, value } of records) {
-      const problems = validate(snapshot('run-record'), readableRecord(copy(value) as never))
-      assert.deepEqual(problems.slice(0, 10), [], file)
-    }
-    for (const line of lines) {
-      assert.deepEqual(validate(snapshot('transcript-line'), readableTranscriptLine(line)), [])
-    }
+  test('every corpus record, transcript line and saved analysis, read, fits the current schema', () => {
+    assert.ok(records.length > 0 && lines.length > 0 && analyses.length > 0)
+    const current = new Map(SHAPES.map((s) => [s.name, snapshot(s.name)]))
+    assert.equal(checkCorpus(current).join('\n'), '')
   })
 
   test('a default fills in only what is missing, through arrays and union variants', () => {
