@@ -30,7 +30,8 @@ site; its Reference tab has every option, flag and error).
 3. `npx es run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
 4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` next
-   to `es.config.ts` (not the directory you run from), then `npx es run`. Exit 0 means every gated cell passed.
+   to `es.config.ts` (not the directory you run from), `npx es doctor` (exit 1 names each
+   problem and its fix; `--json`, `--online` tries the keys), then `npx es run`. Exit 0 means every gated cell passed.
 5. Read failures in the summary, then `.es/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx es run -v` prints a timestamped trace per attempt; `.es/debug/` keeps it.
