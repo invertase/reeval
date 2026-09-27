@@ -110,7 +110,7 @@ export function turnSender(
     const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
     debugLog(
       'harness',
-      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(String(failure.message), 200)}` : ''}`,
+      `turn ${turnNumber} ${result.status} in ${formatDuration(result.durationMs)} · ${plural(count('tool', 'web-search', 'web-fetch'), 'tool call')} · ${plural(count('file-edit'), 'file edit')}${failure && 'message' in failure ? ` · error: ${clip(String(failure.message), 200)}` : ''}${result.model ? ` · model ${result.model}` : ''}`,
     )
     a.signal.throwIfAborted()
     const diff: Diff = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))

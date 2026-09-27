@@ -25,7 +25,7 @@ Without a config file, every key takes its default. The option keys (`harness`, 
 
 `es` loads `es.config.ts` from the current directory, or the file you pass with `--config`. A missing `es.config.ts` means all defaults; a missing `--config` file is an error (`Config file not found: nope.ts`).
 
-The config's directory is the project root: `include` globs and helper paths (`skill.local`, `file`) resolve against it. ES also loads `.env.local`, then `.env`, from the current directory; a variable already set in the environment wins.
+The config's directory is the project root: `include` globs and helper paths (`skill.local`, `file`) resolve against it. ES also loads `.env.local`, then `.env`, from it, not from the current directory, so `es run --config ../es.config.ts` from a subdirectory reads the project's files. Precedence: the shell, then `.env.local`, then `.env`.
 
 The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `es.config.ts must default-export defineConfig({...})`.
 

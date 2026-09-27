@@ -8,11 +8,13 @@
 // Generated blocks sit between `[//]: # (generated:<name>)` and `[//]: # (/generated:<name>)` in
 // the .mdx files; everything outside them is hand-written. The CLI help and the query schema
 // come from the built CLI, so run `pnpm build` first. The flags come from src/cli-spec.ts, which
-// is why the scripts run node with --experimental-strip-types.
+// is why the scripts run node with --experimental-strip-types. README.md has generated blocks too,
+// named `readme:<name>`, rendered with links to the docs' files.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
+import { harnessFacts, renderLayout, renderMatrix } from './harness-matrix.mjs'
 
 const root = join(import.meta.dirname, '..')
 const docsDir = join(root, 'docs')
@@ -261,7 +263,7 @@ function aliases(files) {
   return found
 }
 
-function blocks() {
+async function blocks() {
   const out = new Map()
   const sections = helpSections(help)
   for (const [name, lines] of sections)
@@ -337,6 +339,12 @@ function blocks() {
       .map((n) => renderType(types.get(n)))
       .join('\n\n'),
   )
+
+  const harness = await harnessFacts()
+  problems.push(...harness.problems)
+  out.set('harness-matrix', renderMatrix(harness.facts, { href: (p) => `/${p}`, text: mdxText }))
+  out.set('readme:harness-matrix', renderMatrix(harness.facts, { href: (p) => `./docs/${p}.mdx` }))
+  out.set('harness-layout', renderLayout(harness.facts))
   return out
 }
 
@@ -352,7 +360,7 @@ function mdxFiles(dir = docsDir) {
   )
 }
 
-const generated = blocks()
+const generated = await blocks()
 const print = process.argv.indexOf('--print')
 if (print > 0) {
   console.log(generated.get(process.argv[print + 1]) ?? [...generated.keys()].join('\n'))
@@ -362,7 +370,7 @@ const used = new Set()
 const marker =
   /(\[\/\/\]: # \(generated:([\w:-]+)\))\n(?:[\s\S]*?\n)?(\[\/\/\]: # \(\/generated:\2\))/g
 
-for (const file of mdxFiles()) {
+for (const file of [...mdxFiles(), join(root, 'README.md')]) {
   const text = read(file)
   const next = text.replace(marker, (all, open, name, close) => {
     used.add(name)
