@@ -67,9 +67,21 @@ function searchReferences(output: unknown): number | null {
   }, 0)
 }
 
-/** Claude Code's bridge sends errors as `{ message }` objects; Cursor's as strings or Errors. */
+/**
+ * Claude Code's bridge sends errors as `{ message }` objects; Cursor's as strings or Errors; ACP
+ * harnesses (OpenCode) the tool's `rawOutput`, `{ error }`. Any other object is kept as JSON.
+ */
 export const errorText = (error: unknown) =>
-  str(error) || str(record(error).message) || String(error)
+  str(error) || str(record(error).message) || str(record(error).error) || jsonText(error)
+
+function jsonText(value: unknown): string {
+  if (typeof value !== 'object' || value === null) return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
 
 /** Lines added and removed across unified-diff hunks, each `{ lines: ['+x', '-y', ' z'] }`. */
 function hunkDelta(hunks: unknown[]): { added: number; removed: number } {
