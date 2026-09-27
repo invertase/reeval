@@ -184,8 +184,18 @@ export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
   return descriptor
 }
 
-/** A temp directory on the host with no isolation. For tests and the fake harness only. */
-export const fakeSandbox = (options: Omit<FakeSandboxDescriptor, 'kind'> = {}) =>
-  ({ kind: 'fake', ...options }) satisfies FakeSandboxDescriptor
+/**
+ * A temp directory on the host with no isolation. For tests and the fake harness only. `dir` may
+ * be a `file:` URL, such as `new URL('./sandboxes', import.meta.url)`.
+ */
+export const fakeSandbox = ({
+  dir,
+  ...options
+}: Omit<FakeSandboxDescriptor, 'kind' | 'dir'> & { dir?: string | URL } = {}) =>
+  ({
+    kind: 'fake',
+    ...options,
+    ...(dir !== undefined && { dir: dir instanceof URL ? fileURLToPath(dir) : dir }),
+  }) satisfies FakeSandboxDescriptor
 
 export type { DockerSandboxDescriptor, FakeSandboxDescriptor, SandboxDescriptor } from './types.ts'

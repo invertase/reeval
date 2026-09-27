@@ -31,7 +31,7 @@ import { fakeHarness } from 'evalsuite/harness'
 import { fakeSandbox } from 'evalsuite/sandbox'
 export default defineConfig({
   harness: fakeHarness({}),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url).pathname }),
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
   ANALYSIS
 })
 `

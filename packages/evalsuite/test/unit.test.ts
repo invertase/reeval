@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { AttemptSpec } from '../src/attempt/state.ts'
@@ -38,7 +38,7 @@ import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
 import { cascade, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
-import { createFakeSandbox } from '../src/sandbox/fake.ts'
+import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
@@ -108,6 +108,31 @@ test('run ids sort by start time and differ for runs in the same second', () => 
   assert.equal(newRunId(start, null, 'x', 'abcd'), '20260924T152700Z_nogit_x_abcd')
   const later = newRunId(new Date('2026-09-24T15:27:01Z'), null, 'a', '0000')
   assert.ok(later > newRunId(start, null, 'z', 'zzzz'), 'the stamp orders runs first')
+})
+
+test("the fake sandbox's shell: sh, or on Windows the sh.exe on PATH or Git for Windows'", () => {
+  assert.equal(
+    posixShell('linux', {}, () => false),
+    'sh',
+  )
+  const has = (path: string) => (p: string) => p === path
+  assert.equal(
+    posixShell(
+      'win32',
+      { PATH: 'C:\\tools;D:\\msys\\usr\\bin' },
+      has('D:\\msys\\usr\\bin\\sh.exe'),
+    ),
+    'D:\\msys\\usr\\bin\\sh.exe',
+  )
+  const git = 'C:\\Program Files\\Git\\bin\\sh.exe'
+  assert.equal(
+    posixShell('win32', { PATH: 'C:\\tools', ProgramFiles: 'C:\\Program Files' }, has(git)),
+    git,
+  )
+  assert.throws(
+    () => posixShell('win32', { PATH: 'C:\\tools' }, () => false),
+    /runs commands with a POSIX sh, and there's none on this machine\. Install Git for Windows/,
+  )
 })
 
 test('the fake sandbox reads and writes ~/ paths in its home', async () => {
@@ -420,8 +445,8 @@ test('the history folder sits in the directory the evals live in', () => {
   assert.equal(evalRoot(['evals/**/*.es.ts']), 'evals')
   assert.equal(evalRoot(['test/evals/a/*.es.ts', 'test/evals/b/**/*.es.ts']), 'test/evals')
   assert.equal(evalRoot(['**/*.es.ts']), '')
-  assert.equal(resolveConfig({}, '/p').history.dir, '/p/evals/.history')
-  assert.equal(resolveConfig({ history: { dir: 'runs' } }, '/p').history.dir, '/p/runs')
+  assert.equal(resolveConfig({}, '/p').history.dir, resolve('/p/evals/.history'))
+  assert.equal(resolveConfig({ history: { dir: 'runs' } }, '/p').history.dir, resolve('/p/runs'))
   assert.equal(resolveConfig({}, '/p').record, 'ci')
   assert.throws(() => resolveConfig({ history: { artifacts: 'some' as 'all' } }, '/p'), /artifacts/)
 })

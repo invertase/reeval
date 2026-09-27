@@ -24,8 +24,8 @@ export default defineConfig({
   The sandbox's id in cell keys. Default `fake`.
 </Property>
 
-<Property name="dir" type="string" optional>
-  The parent directory for each attempt's temporary directory. Default the OS temp directory.
+<Property name="dir" type="string | URL" optional>
+  The parent directory for each attempt's temporary directory, as a path or a `file:` URL such as `new URL('./sandboxes', import.meta.url)`. Default the OS temp directory.
 </Property>
 
 <Property name="maxConcurrent" type="number" optional>
@@ -35,6 +35,8 @@ export default defineConfig({
 ## What it is
 
 Each attempt gets a directory `es-sandbox-*` under `dir`, with the workspace in `work/`. `HOME` is the attempt's directory, so `~/` paths in `files`, `t.readFile` and skills land there. `t.exec`, setup steps and the fake agent's `exec` steps run with `sh -c` on the host, in the workspace. The directory is removed when the attempt ends.
+
+On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe`: the one on `PATH`, or else the one in Git's install folder. Without it, the attempt fails with `The fake sandbox runs commands with a POSIX sh, and there's none on this machine.`
 
 ## What it can't do
 
