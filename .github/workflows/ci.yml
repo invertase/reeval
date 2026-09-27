@@ -196,11 +196,19 @@ jobs:
       - name: the captures are the Vitest engine's
         run: |
           node --experimental-strip-types --no-warnings scripts/differential.mjs record vitest "$RUNNER_TEMP/vitest"
-          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/vitest"
+          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/vitest" --vitest
       - name: ES's engine does the same
         run: |
           node --experimental-strip-types --no-warnings scripts/differential.mjs record es "$RUNNER_TEMP/es"
           node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: differential-captures
+          path: |
+            ${{ runner.temp }}/es
+            ${{ runner.temp }}/vitest
+          retention-days: 7
 
   coverage:
     name: coverage
