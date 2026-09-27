@@ -10,6 +10,7 @@ import { type Flags, helpText } from './cli-spec.ts'
 import {
   configLabel,
   configPathFor,
+  findConfig,
   hostCapacity,
   loadConfig,
   malformedCredentials,
@@ -30,6 +31,9 @@ import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
+import { logInvocation } from './report/invocations.ts'
+import { commandOf, redactArgv } from './report/scrub.ts'
+import type { CliInvocation } from './report/types.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -55,6 +59,14 @@ const HELP = helpText(version)
 
 const { green, red, dim } = colors(!!process.stdout.isTTY && !process.env.NO_COLOR)
 
+const startedAt = Date.now()
+const argv = process.argv.slice(2)
+/** What the invocation log needs from the command as it goes. */
+const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string[] } = {
+  runId: null,
+  unhandledErrors: [],
+}
+
 /** Set by the first Ctrl-C or SIGTERM of `es run`. */
 let interrupted = false
 /** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
@@ -62,6 +74,7 @@ let stopCode: number = EXIT.interrupted
 
 async function run(argv: string[]): Promise<number> {
   const { values, positionals } = parseCli(argv)
+  invocation.flags = values
   if (values.version) {
     console.log(version)
     return EXIT.ok
@@ -85,6 +98,15 @@ async function run(argv: string[]): Promise<number> {
     return doctorCommand(values, {
       out: (s) => console.log(s),
       color: !!process.stdout.isTTY && !process.env.NO_COLOR,
+      confirm: process.stdin.isTTY && process.stdout.isTTY ? confirm : undefined,
+    })
+  }
+  if (command === 'report') {
+    const { reportCommand } = await import('./report/command.ts')
+    return reportCommand(values, filters, {
+      out: (s) => console.log(s),
+      err: (s) => console.error(dim(s)),
+      interactive: !!process.stdin.isTTY && !!process.stdout.isTTY,
       confirm: process.stdin.isTTY && process.stdout.isTTY ? confirm : undefined,
     })
   }
@@ -248,6 +270,7 @@ async function runCommand(
 ): Promise<number> {
   const setup = await prepareRun(flags, configPath)
   const ctx = await startRun(setup)
+  invocation.runId = ctx.runId
   const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
     // The JSON plan is the only output of `--dry-run --json`.
@@ -267,6 +290,7 @@ async function runCommand(
     throw error
   }
   const { engineRun, plan, sandboxVersions, budgetReached, live } = executed
+  invocation.unhandledErrors = engineRun.unhandledErrors
   if ((interrupted || engineRun.cancelled) && plan?.sandboxes.some((s) => s.kind === 'docker')) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
     await removeRunContainers(ctx.runId)
@@ -698,10 +722,59 @@ process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code !== 'EPIPE') throw error
 })
 
+/**
+ * Logs the command for `es report` and, when it looks like ES broke (a crash, an unexpected
+ * error or an infra error), prints one line suggesting `es report`. Not for agents or JSON.
+ */
+function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation['error']>['kind']) {
+  const flags = invocation.flags
+  let root = process.cwd()
+  try {
+    const configPath = flags ? configPathFor(flags.config) : findConfig()
+    if (configPath) root = dirname(configPath)
+  } catch {}
+  const command = commandOf(argv)
+  logInvocation(root, {
+    at: new Date(startedAt).toISOString(),
+    es: version,
+    argv: redactArgv(argv),
+    command,
+    exitCode: code,
+    durationMs: Date.now() - startedAt,
+    runId: invocation.runId,
+    error:
+      error && kind
+        ? {
+            kind,
+            name: error instanceof Error ? error.name : 'Error',
+            message: redactSecrets(error instanceof Error ? error.message : String(error)),
+            stack: error instanceof Error && error.stack ? redactSecrets(error.stack) : null,
+          }
+        : null,
+    unhandledErrors: invocation.unhandledErrors.map((e) => redactSecrets(e)),
+  })
+  const broke = kind === 'crash' || code === EXIT.infra || invocation.unhandledErrors.length > 0
+  const quiet =
+    !!process.env.ES_NO_REPORT_HINT ||
+    command === 'report' ||
+    !!flags?.json ||
+    flags?.ui === 'agent' ||
+    process.env.ES_UI === 'agent' ||
+    (!flags?.ui && !process.env.ES_UI && !!detectAgent().name)
+  if (broke && !quiet) {
+    console.error(
+      dim(
+        'hint: if this looks like a bug in ES, es report collects a redacted report to file (ES_NO_REPORT_HINT=1 hides this)',
+      ),
+    )
+  }
+}
+
 // An error nothing awaited, from ES or from code the config runs, ends the run as an infra error.
 const crash = (error: unknown) => {
   console.error(red(`es: ${redactSecrets(error instanceof Error ? error.message : String(error))}`))
   if (process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
+  finish(EXIT.infra, error, 'crash')
   process.exit(EXIT.infra)
 }
 process.on('unhandledRejection', crash)
@@ -709,6 +782,7 @@ process.on('uncaughtException', crash)
 
 run(process.argv.slice(2)).then(
   (code) => {
+    finish(code)
     process.exitCode = code
   },
   (error: unknown) => {
@@ -719,6 +793,8 @@ run(process.argv.slice(2)).then(
       name === 'PreflightInfraError'
     console.error(red(`es: ${redactSecrets((error as Error).message)}`))
     if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
-    process.exitCode = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
+    const code = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
+    finish(code, error, error instanceof UsageError ? 'usage' : expected ? 'expected' : 'crash')
+    process.exitCode = code
   },
 )

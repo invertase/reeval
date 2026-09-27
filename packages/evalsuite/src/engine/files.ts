@@ -1,7 +1,7 @@
 // Which files are eval files, and which of them a path filter picks, as Vitest decided both.
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { glob } from 'tinyglobby'
-import { attemptId } from '../ids.ts'
+import { attemptId, relativeFile } from '../ids.ts'
 
 /** Never searched for eval files. */
 export const DEFAULT_EXCLUDE = ['**/node_modules/**', '**/.git/**']
@@ -27,14 +27,23 @@ export async function findEvalFiles(
  */
 export function filterFiles(files: readonly string[], filters: readonly string[], root: string) {
   if (filters.length === 0) return [...files]
+  // Compared with forward slashes, so `evals/a` picks `evals\a.es.ts` on Windows, as does `evals\a`.
+  const slashed = (path: string) => path.replaceAll('\\', '/')
   return files.filter((file) => {
-    const rel = relative(root, file).toLocaleLowerCase()
+    const rel = relativeFile(root, file).toLocaleLowerCase()
     return filters.some((f) => {
-      if (isAbsolute(f) && file.startsWith(f)) return true
-      const fromCwd = f.endsWith('/') ? join(relative(root, f), '/') : relative(root, f)
-      return rel.includes(f.toLocaleLowerCase()) || rel.includes(fromCwd.toLocaleLowerCase())
+      if (isAbsolute(f) && isUnder(file, resolve(f))) return true
+      const typed = slashed(f)
+      const fromCwd = relativeFile(root, f) + (typed.endsWith('/') ? '/' : '')
+      return rel.includes(typed.toLocaleLowerCase()) || rel.includes(fromCwd.toLocaleLowerCase())
     })
   })
+}
+
+/** Whether `file` is `dir` or under it; any case on Windows, where paths ignore it. */
+function isUnder(file: string, dir: string): boolean {
+  const rel = relative(dir, file)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
 }
 
 /** A name or cell filter part matches part of the eval id (`file › group › name`) or `cell#n`. */

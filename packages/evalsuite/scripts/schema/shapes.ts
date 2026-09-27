@@ -53,4 +53,10 @@ export const SHAPES: PersistedShape[] = [
     where: "A running es run's progress: .es/staging/<run>/live.json, read by es studio",
     versionField: 'schemaVersion',
   },
+  {
+    name: 'cli-invocation',
+    file: 'src/report/types.ts',
+    type: 'CliInvocation',
+    where: 'One line of .es/cli.jsonl, the last es commands es report reads',
+  },
 ]

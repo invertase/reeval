@@ -86,6 +86,15 @@ export function spawnTool(
   })
 }
 
+/**
+ * Why a test that sends the CLI Ctrl-C or SIGTERM can't run: Windows has no signals to send, and
+ * `process.kill(pid, 'SIGINT')` terminates the process outright. Cleanup when the CLI dies is
+ * still tested there, through the worker's IPC channel closing (the main process SIGKILL test).
+ */
+export const noSignals =
+  process.platform === 'win32' &&
+  "Windows can't send a process SIGINT or SIGTERM: process.kill terminates it instead"
+
 /** The environment every spawned process in the tests starts from. */
 export const baseEnv: NodeJS.ProcessEnv = {
   ...Object.fromEntries(PASSTHROUGH.flatMap((k) => (process.env[k] ? [[k, process.env[k]]] : []))),

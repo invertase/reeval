@@ -2,11 +2,12 @@
 // jiti. The file's tsconfig.json must load, as it had to when Vite transformed eval files: a
 // broken one fails every eval file under it, loudly.
 import { readFileSync } from 'node:fs'
-import { dirname, relative } from 'node:path'
+import { dirname } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { DecodedMap, getOriginalPosition } from '@vitest/utils/source-map'
 import { getTsconfig } from 'get-tsconfig'
 import { createJiti } from 'jiti'
+import { relativeFile } from '../ids.ts'
 import { codeFrame } from './errors.ts'
 
 export class TsconfigError extends Error {
@@ -63,20 +64,16 @@ function missingModule(error: unknown): unknown {
 export function syntaxError(error: unknown, root: string): SyntaxError | undefined {
   const parsed = /^ParseError: (.*?)\s*\n\s*(.+):(\d+):(\d+)$/.exec((error as Error)?.message ?? '')
   if (!parsed) return undefined
-  const [, reason, file, line, column] = parsed as unknown as [
-    string,
-    string,
-    string,
-    string,
-    string,
-  ]
+  const [, said, file, line, column] = parsed as unknown as [string, string, string, string, string]
+  // On Windows the reason starts with a path of its own (`C:\: Unexpected token`).
+  const reason = said.replace(/^(?:[A-Za-z]:)?[\\/]\S*?: /, '')
   const at = { line: Number(line), column: Number(column) + 1 }
   let frame = ''
   try {
     frame = stripVTControlCharacters(codeFrame(readFileSync(file, 'utf8'), 0, at, 200))
   } catch {}
   return new SyntaxError(
-    `${reason} (${relative(root, file)}:${at.line}:${at.column})${frame ? `\n${frame}` : ''}`,
+    `${reason} (${relativeFile(root, file)}:${at.line}:${at.column})${frame ? `\n${frame}` : ''}`,
   )
 }
 
@@ -129,7 +126,7 @@ export function checkTsconfig(dir: string, root: string): void {
     JSON.parse(stripJsonComments(readFileSync(found.path, 'utf8')))
   } catch (error) {
     throw new TsconfigError(
-      `Failed to load tsconfig '${relative(root, found.path)}': ${(error as Error).message}`,
+      `Failed to load tsconfig '${relativeFile(root, found.path)}': ${(error as Error).message}`,
     )
   }
 }
