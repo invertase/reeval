@@ -3,10 +3,11 @@
 import { execFile } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { homedir, release } from 'node:os'
-import { basename, dirname, extname, join, relative, resolve } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { detectAgent } from 'std-env'
 import type { Flags } from '../cli-spec.ts'
 import { UsageError } from '../config.ts'
+import { fromCwd } from '../ids.ts'
 import { type Collected, collectReport, type ReportDeps } from './collect.ts'
 import { defaultIssueDeps, fileIssue, type IssueDeps, issueRepo, MAX_BODY } from './issue.ts'
 import { issueTitle, renderIssueBody, renderMarkdown, summaryLines } from './render.ts'
@@ -130,6 +131,6 @@ export async function reportCommand(
   return 0
 }
 
-const rel = (path: string) => relative(process.cwd(), path) || path
+const rel = (path: string) => fromCwd(path) || path
 
 const files = (w: Written) => [w.markdown, w.json, ...(w.logs ? [w.logs] : [])].map(rel).join(', ')

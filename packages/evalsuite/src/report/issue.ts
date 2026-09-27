@@ -4,6 +4,7 @@
 import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { run } from '@evalsuite/sandbox-docker/process'
 import { PACKAGE_DIR } from '../root.ts'
 
 /** GitHub refuses longer new-issue URLs; this leaves room under its ~8 KB limit. */
@@ -88,10 +89,17 @@ const exec = (command: string, args: string[]) =>
     )
   })
 
+/** gh through ES's own `run`, which finds it however it's installed on Windows (.exe or .cmd). */
+const gh = (args: string[]) =>
+  run('gh', args, { signal: AbortSignal.timeout(60_000), detached: false }).then(
+    (r) => ({ code: r.exitCode, stdout: r.stdout, stderr: r.stderr }),
+    (error: Error) => ({ code: 1, stdout: '', stderr: error.message }),
+  )
+
 export function defaultIssueDeps(): IssueDeps {
   return {
-    hasGh: async () => (await exec('gh', ['--version'])).code === 0,
-    gh: (args) => exec('gh', args),
+    hasGh: async () => (await gh(['--version'])).code === 0,
+    gh,
     open: async (url) => {
       const [command, args] =
         process.platform === 'darwin'
