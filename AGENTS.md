@@ -103,6 +103,17 @@ An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, 
 root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `@invertase/foobar`'s `files` and `.gitignore`.
 
+**Patched upstream adapters.** `@ai-sdk/harness-claude-code` 1.0.128 carries a pnpm patch
+(`patches/`, `patchedDependencies` in `pnpm-workspace.yaml`): its bridge loses the served model.
+A patch reaches only this workspace, so `@invertase/foobar` lists the adapter in `devDependencies`
+and tsdown inlines it with its bridge files (`dist/bridge/`), which its bootstrap writes into the
+sandbox. Its image tag and label carry the patch's hash (`HARNESS_PACKAGES`' `patch`, which a test
+holds to the file), so a changed patch rebuilds the image. Bumping the adapter fails `pnpm install`
+(`ERR_PNPM_UNUSED_PATCH`) until the patch is moved or dropped. `test/replay.test.ts` replays a real
+captured turn through the shipped bridge, and the drift leg's `scripts/drift/claude-code-patch.mjs`
+fails once the newest upstream reports the model unpatched (drop the patch) or the patch stops
+applying (rebase it with `pnpm patch`).
+
 In `packages/evalsuite`, the tests run `dist/cli.js`, so rebuild after changing `src/`:
 
 ```bash
@@ -183,7 +194,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
-| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `ANTHROPIC_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `ANTHROPIC_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
@@ -277,7 +288,7 @@ pnpm es run --config es.fake.config.ts --dry-run --profile nightly   # the plan,
 ### With a real agent
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into ES's image for it,
-   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128`,
+   `evalsuite-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128-patch.5d1c985c`,
    `antigravity-0.1.0`, `opencode-0.1.0`, `goose-0.1.0`, `pi-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
