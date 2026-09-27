@@ -1024,18 +1024,24 @@ evaluate('fine', async () => {})
     assert.deepEqual(liveSandboxes(p), [])
   })
 
-  for (const [target, signal] of [
-    ['Ctrl-C mid-turn to the CLI only', (pid: number) => process.kill(pid, 'SIGINT')],
+  for (const [target, signal, code] of [
     [
-      'Ctrl-C mid-turn to the process group, like a terminal',
-      (pid: number) => process.kill(-pid, 'SIGINT'),
+      'Ctrl-C mid-turn to the CLI only exits 130',
+      (pid: number) => process.kill(pid, 'SIGINT'),
+      130,
     ],
     [
-      'SIGTERM mid-turn to the CLI, like docker stop',
+      'Ctrl-C mid-turn to the process group, like a terminal, exits 130',
+      (pid: number) => process.kill(-pid, 'SIGINT'),
+      130,
+    ],
+    [
+      'SIGTERM mid-turn to the CLI, like docker stop, exits 143',
       (pid: number) => process.kill(pid, 'SIGTERM'),
+      143,
     ],
   ] as const) {
-    test(`${target} exits 130, records the run and destroys the sandbox`, async () => {
+    test(`${target}, records the run and destroys the sandbox`, async () => {
       const p = await project('sigint', {
         'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
         'evals/agent.es.ts': agentEval(''),
@@ -1049,7 +1055,7 @@ evaluate('fine', async () => {})
           return false
         },
       })
-      assert.equal(r.code, 130, r.stdout + r.stderr)
+      assert.equal(r.code, code, r.stdout + r.stderr)
       const { run, evals } = readRun(p.dir)
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')

@@ -48,6 +48,7 @@
 | `mcp.stdio` | ✓ 3 | — | — | ● 1 | ● 2 |
 | `mcp.http` | ✓ 1 | — | — | — | — |
 | `mcp.sse` | ✓ 2 | ✓ 1 | — | — | — |
+| MCP servers on a harness with no MCP client (pi) refused at plan time | ✓ 1 | — | — | — | — |
 | `secret.template` in MCP headers | ✓ 2 | — | — | — | — |
 | `rules`: `AGENTS.md` for Cursor, Antigravity, OpenCode, Goose and pi, `CLAUDE.md` for Claude Code | ✓ 1 | — | ● 7 | ● 7 | ● 2 |
 | `files` in the workspace, and `file()`; paths that leave it are refused | ✓ 2 | — | — | — | — |
@@ -113,7 +114,7 @@
 | Budget-stopped runs are recorded with status `budget` | ✓ 2 | — | — | — | — |
 | Recording, merges across branches, rebases and `es checkout` | ✓ 3 | — | — | — | — |
 | `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 5 | — | — | — | ◐ 2 (2 without a canary) |
-| `es compare --fail-on-regression` | ✓ 1 | — | — | — | — |
+| `es compare --fail-on-regression` | ✓ 2 | — | — | — | — |
 | `es query` | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
 | `es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
@@ -127,7 +128,7 @@
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Exit codes 0, 1, 2, 3 and 130 | ✓ 4 | — | — | — | — |
+| Exit codes 0, 1, 2, 3, 130 and 143 | ✓ 4 | — | — | — | — |
 | Exit code precedence (a failure and an infra error in one run) | ✓ 1 | — | — | — | — |
 | Output modes, renderers and GitHub Actions groups | ✓ 4 | — | — | — | — |
 | `--log-order`, `--log-prefix` and `--output-logs` through `es run` | ✓ 1 | — | — | — | — |

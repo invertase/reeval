@@ -168,7 +168,7 @@ Base 20260926T172538Z_nogit_ci_hz13 (no-git) → head 20260926T172540Z_nogit_ci_
 | evals/hello.es.ts › greet module › creates a tested greet module | ✓ | ✗ | regressed |
 ```
 
-The command exits 1, so the step and the check fail. In the job summary the table renders as a table. A `regressed` row fails the check, and so does a `new` eval that fails; a changed eval shows as `not comparable` and doesn't.
+The command exits 1, so the step and the check fail. In the job summary the table renders as a table. A `regressed` row fails the check, and so does a `new` or `not comparable` eval that fails; a changed eval that passes doesn't.
 
 ## The first run
 
