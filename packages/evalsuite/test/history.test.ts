@@ -452,6 +452,34 @@ evaluate('flips', async (t) => {
     assert.equal(twin.code, 0, twin.out)
   })
 
+  test('es compare --fail-on-regression fails on a failing eval that changed (not comparable); a passing one is fine', async () => {
+    const edited = (prompt: string) => `import { evaluate, expect } from 'evalsuite'
+evaluate('edited', async (t) => {
+  await t.send('${prompt}')
+  expect(process.env.ES_TEST_BREAK ?? 'ok').toBe('ok')
+})
+`
+    const p = await gitProject('fail-on-drift', { 'evals/a.es.ts': edited('write hello.txt') })
+    const compareCode = async (...args: string[]) => {
+      const r = await runCli(p.dir, ['compare', ...args])
+      return { code: r.code, out: r.stdout + r.stderr }
+    }
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+
+    await writeFile(join(p.dir, 'evals/a.es.ts'), edited('write hello.txt!'))
+    assert.equal((await runCli(p.dir, ['run'], { env: { ES_TEST_BREAK: '1' } })).code, 1)
+    const failing = await compareCode('--fail-on-regression')
+    assert.match(failing.out, /✓ → ✗ {2}changed \(not comparable\) +evals\/a\.es\.ts › edited/)
+    assert.equal(failing.code, 1, failing.out)
+    assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
+
+    // Canary: the same edit, passing, isn't a failure.
+    assert.equal((await runCli(p.dir)).code, 0)
+    const passing = await compareCode('--fail-on-regression')
+    assert.match(passing.out, /✓ → ✓ {2}changed \(not comparable\)/)
+    assert.equal(passing.code, 0, passing.out)
+  })
+
   test("a turn's text is cut at 8 KB in the record; transcript.jsonl keeps it whole", async () => {
     const long = 'x'.repeat(20_000)
     const p = await project('turn-cap', {

@@ -8,7 +8,13 @@ import { baseEnv, pkgRoot } from './helpers.ts'
 const suite = (file: string, env: NodeJS.ProcessEnv) => {
   const r = spawnSync(
     process.execPath,
-    ['--test', '--experimental-strip-types', '--no-warnings', join('test', file)],
+    [
+      '--test',
+      '--test-reporter=tap',
+      '--experimental-strip-types',
+      '--no-warnings',
+      join('test', file),
+    ],
     { cwd: pkgRoot, env: { ...baseEnv, ES_TEST_REQUIRE_DOCKER: '1', ...env }, encoding: 'utf8' },
   )
   return { code: r.status, out: r.stdout + r.stderr }

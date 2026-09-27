@@ -37,7 +37,8 @@ npx es run --dry-run
 ```text
 Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
 Options: --config <path> (default ./es.config.ts)
-Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted
+Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
+143 terminated (SIGTERM)
 ```
 
 [//]: # (/generated:cli-help:footer)
@@ -67,16 +68,18 @@ A run id is `<UTC start>_<short sha>_<author>_<random>`. The author is `git conf
 | 2 | `usage` |
 | 3 | `infra` |
 | 130 | `interrupted` |
+| 143 | `terminated` |
 
 [//]: # (/generated:exit-codes)
 
 | Code | When |
 |---|---|
 | 0 | Every gated cell passed. Failing controls under `compare.gate: 'variants'` don't count. Also `--dry-run`, and `es compare` without `--fail-on-regression`. |
-| 1 | A gated attempt failed, a variant fell below its `minLift`, `budget.duration` stopped the run, or `es compare --fail-on-regression` found a regression or a failing new eval. |
+| 1 | A gated attempt failed, a variant fell below its `minLift`, `budget.duration` stopped the run, or `es compare --fail-on-regression` found a regression, or a failing new or not comparable eval. |
 | 2 | A usage, config or credentials error. That includes an unknown command, flag, option or profile, a filter or tag that matches no eval, a plan over `budget.attempts` without `--force`, `.only` in CI, Docker not running, a missing image, a bad run reference and a refused record. None of these writes a run. |
 | 3 | An infrastructure error (sandbox, harness or setup step) and no failures. A run with both a failure and an infra error exits 1. |
-| 130 | Interrupted with Ctrl-C or `SIGTERM` (`docker stop`, a cancelled CI job). Sandboxes are destroyed and the run is saved as `interrupted`. A second signal forces the exit. |
+| 130 | Interrupted with Ctrl-C (`SIGINT`). Sandboxes are destroyed and the run is saved as `interrupted`. A second signal forces the exit. |
+| 143 | Terminated with `SIGTERM` (`docker stop`, a cancelled CI job), the conventional 128 + 15. Otherwise the same as 130: sandboxes are destroyed, the run is saved as `interrupted`, and a second signal forces the exit. |
 
 A real exit 2, from a filter that matches nothing:
 
