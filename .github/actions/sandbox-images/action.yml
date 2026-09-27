@@ -14,13 +14,14 @@ runs:
         echo "list=$images" >> "$GITHUB_OUTPUT"
         echo "Sandbox images: $images"
     # The tag pins each adapter, whose bootstrap pins the CLI, but @ai-sdk/harness does the
-    # baking, so the key is the adapters, sandbox-docker's pin of @ai-sdk/harness and the build
-    # context. `actions/cache` saves the tarball when the job ends.
+    # baking, so the key is the adapters, the files that pin and install each CLI,
+    # sandbox-docker's pin of @ai-sdk/harness and the build context. `actions/cache` saves the
+    # tarball when the job ends.
     - id: cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/es-sandbox-images.tar.zst
-        key: es-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'packages/harness-antigravity/package.json', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
+        key: es-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
     - if: steps.cache.outputs.cache-hit == 'true'
       shell: bash
       run: zstd -dc "$RUNNER_TEMP/es-sandbox-images.tar.zst" | docker load

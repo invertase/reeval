@@ -93,7 +93,7 @@ pnpm add --save-exact --ignore-scripts @earendil-works/pi-coding-agent@$latest >
 expect \"$latest\" \"\$($bootstrap/pi/node_modules/.bin/pi --version)\""
       ;;
     *)
-      rows+=("| $harness | $pinned | — | no latest source (no key to test it with) |")
+      rows+=("| $harness | $pinned | — | not swapped: runs on the pinned CLI |")
       continue
       ;;
   esac
