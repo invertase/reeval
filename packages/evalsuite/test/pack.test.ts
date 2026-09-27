@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
@@ -16,6 +16,15 @@ const hasTools =
   sh('pnpm', pkgRoot, ['--version']).status === 0 &&
   sh('npm', pkgRoot, ['ping'], 15_000).status === 0
 const hasYarn = sh('yarn', tmpdir(), ['--version']).status === 0
+const hasCorepack = sh('corepack', tmpdir(), ['--version']).status === 0
+/** Yarn Berry, through corepack, without its download prompt. */
+const berry = (cwd: string, args: string[], timeout = 240_000) =>
+  spawnSync('corepack', ['yarn', ...args], {
+    cwd,
+    env: { ...baseEnv, COREPACK_ENABLE_DOWNLOAD_PROMPT: '0' },
+    encoding: 'utf8',
+    timeout,
+  })
 const hasDocker = sh('docker', pkgRoot, ['info']).status === 0
 
 /** Packs the package into a fresh directory. */
@@ -97,6 +106,71 @@ for (const installer of installers) {
   })
 }
 
+// A project's own Vitest, another major for its own unit tests, is never loaded or run by es.
+test("the packed package runs beside the project's own, different vitest", {
+  skip: !hasTools && 'needs pnpm, npm and the registry',
+  timeout: 600_000,
+}, async () => {
+  const { dir, tarball, pkg } = pack()
+  const app = await makeApp(dir, pkg)
+  await writeFile(join(app, 'vitest.config.ts'), 'export default {}\n')
+  await mkdir(join(app, 'src'), { recursive: true })
+  await writeFile(
+    join(app, 'src/sum.test.ts'),
+    "import { expect, test } from 'vitest'\ntest('sum', () => expect(1 + 1).toBe(2))\n",
+  )
+  const added = sh(
+    'npm',
+    app,
+    ['install', '--no-audit', '--no-fund', 'vitest@3.2.4', `../${tarball}`],
+    300_000,
+  )
+  assert.equal(added.status, 0, added.stdout + added.stderr)
+  const theirs = JSON.parse(readFileSync(join(app, 'node_modules/vitest/package.json'), 'utf8'))
+  assert.equal(theirs.version, '3.2.4')
+  const run = sh(join(app, 'node_modules/.bin/es'), app, ['run', '--ui', 'plain'], 60_000)
+  assert.equal(run.status, 0, run.stdout + run.stderr)
+  assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+  assert.doesNotMatch(run.stdout + run.stderr, /sum\.test|warning/)
+  // The canary: the project's own vitest still runs its own tests.
+  const unit = sh(join(app, 'node_modules/.bin/vitest'), app, ['run', 'src'], 120_000)
+  assert.equal(unit.status, 0, unit.stdout + unit.stderr)
+  assert.match(unit.stdout, /1 passed/)
+})
+
+// Plug'n'Play has no node_modules: the CLI, its worker and jiti resolve everything through
+// .pnp.cjs, and ES asks to be unplugged so its files (the worker, Docker's build context) are
+// on disk rather than inside Yarn's zip cache.
+test("the packed package installs with Yarn Berry's Plug'n'Play and runs es", {
+  skip:
+    (!hasTools && 'needs pnpm, npm and the registry') ||
+    (!hasCorepack && !process.env.CI && 'needs corepack'),
+  timeout: 600_000,
+}, async () => {
+  const { dir, tarball, manifest, pkg } = pack()
+  const app = await makeApp(dir, pkg)
+  const project = JSON.parse(readFileSync(join(app, 'package.json'), 'utf8'))
+  await writeFile(
+    join(app, 'package.json'),
+    JSON.stringify({ ...project, packageManager: 'yarn@4.18.1' }),
+  )
+  await writeFile(
+    join(app, '.yarnrc.yml'),
+    'nodeLinker: pnp\nenableGlobalCache: false\nenableTelemetry: false\n',
+  )
+  const added = berry(app, ['add', `${pkg}@file:../${tarball}`])
+  assert.equal(added.status, 0, added.stdout + added.stderr)
+  assert.ok(!existsSync(join(app, 'node_modules')), 'no node_modules under PnP')
+  assert.ok(
+    readdirSync(join(app, '.yarn/unplugged')).some((d) => d.startsWith(pkg.replace('/', '-'))),
+    'ES is unplugged',
+  )
+  assert.equal(berry(app, ['es', '--version']).stdout.trim(), manifest.version)
+  const run = berry(app, ['es', 'run', '--ui', 'plain'], 60_000)
+  assert.equal(run.status, 0, run.stdout + run.stderr)
+  assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+})
+
 test('the packed package installs into a clean project and runs es', {
   skip: !hasTools && 'needs pnpm, npm and the registry',
   timeout: 900_000,
@@ -108,6 +182,7 @@ test('the packed package installs into a clean project and runs es', {
   assert.match(listing, /^package\/dist\/setup\.js$/m)
   assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
   assert.match(listing, /^package\/dist\/worker-signals\.js$/m)
+  assert.match(listing, /^package\/dist\/worker\.js$/m)
   for (const entry of ['index', 'harness', 'sandbox', 'judge', 'view/index']) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))

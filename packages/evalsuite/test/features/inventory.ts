@@ -1113,6 +1113,39 @@ export const inventory: InventoryFeature[] = [
 
   // CLI and runner
   {
+    id: 'engine.loading',
+    area: 'CLI and runner',
+    name: 'Eval files load as TypeScript, ESM, CommonJS and JSON (extensionless, circular, top-level await), each file in a process of its own; a broken tsconfig or syntax error fails loudly',
+    tests: [
+      engine(
+        'eval files mix TypeScript, ESM, CommonJS and JSON, with extensionless, circular imports and top-level await',
+      ),
+      engine(
+        'each eval file runs in a process of its own: module state and globals never cross files',
+      ),
+      engine(
+        "a tsconfig that isn't JSON fails every eval file loudly; comments and trailing commas are fine",
+      ),
+      engine('a tsconfig that extends a missing file fails every eval file loudly, once'),
+      engine('.only narrows only the file it is in'),
+      engine('a name declared twice in one file is a usage error naming it'),
+      "evalsuite/test/pack.test.ts › the packed package installs with Yarn Berry's Plug'n'Play and runs es",
+    ],
+  },
+  {
+    id: 'engine.failures',
+    area: 'CLI and runner',
+    name: 'A worker that dies, throws or runs out of memory fails its attempts; a CLI that crashes or is killed takes its workers and sandboxes with it',
+    tests: [
+      engine('a worker killed mid-attempt fails its attempts, names the file, and the run goes on'),
+      engine('a worker that runs out of memory fails its attempts too'),
+      engine(
+        "an uncaught exception or unhandled rejection in an eval's worker fails the run; the other evals still finish",
+      ),
+      engine('mid-turn, its worker cancels, destroys the sandbox and exits'),
+    ],
+  },
+  {
     id: 'exit-codes',
     area: 'CLI and runner',
     name: 'Exit codes 0, 1, 2, 3, 130 and 143',

@@ -49,6 +49,7 @@
     "assets",
     "THIRD_PARTY_NOTICES.md"
   ],
+  "preferUnplugged": true,
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
@@ -79,9 +80,11 @@
     "@vitest/utils": "5.0.2",
     "ai": "7.0.114",
     "commander": "15.0.0",
+    "get-tsconfig": "4.14.3",
     "hono": "4.13.9",
     "jiti": "2.7.0",
     "std-env": "4.2.0",
+    "tinyglobby": "0.2.17",
     "vite": "^8.3.1",
     "vitest": "~5.0.2",
     "ws": "8.21.0",

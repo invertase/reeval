@@ -78,6 +78,9 @@ importers:
       commander:
         specifier: 15.0.0
         version: 15.0.0
+      get-tsconfig:
+        specifier: 4.14.3
+        version: 4.14.3
       hono:
         specifier: 4.13.9
         version: 4.13.9
@@ -87,6 +90,9 @@ importers:
       std-env:
         specifier: 4.2.0
         version: 4.2.0
+      tinyglobby:
+        specifier: 0.2.17
+        version: 0.2.17
       vite:
         specifier: ^8.3.1
         version: 8.3.1(@types/node@22.20.4)(jiti@2.7.0)(yaml@2.9.1)
@@ -2040,6 +2046,9 @@ packages:
   get-nonce@1.0.1:
     resolution: {integrity: sha512-FJhYRoDaiatfEkUK8HKlicmu/3SGFD51q3itKDGoSTysQJBnfOcxU5GxnhE1E6soB76MbT0MBtnKJuXyAx+96Q==}
     engines: {node: '>=6'}
+
+  get-tsconfig@4.14.3:
+    resolution: {integrity: sha512-++QEw4DIY7WGoukz+/+A/8dGYPT9l9yIadnmSgZ8Rjr3YVSVDipQSO9CdnJo9ePqFqUUqh+wk9uIaoiAwsiPkA==}
 
   get-tsconfig@5.0.0-beta.6:
     resolution: {integrity: sha512-X6fBC0pmImC70gvX2zm56go9hx0MyoGVdG0tUCkg/D+Xnh5TJsOZ7iDbOdI3PvmtrDxnu1YdDufpK2QJX1Meqw==}
@@ -4230,6 +4239,10 @@ snapshots:
   get-east-asian-width@1.7.0: {}
 
   get-nonce@1.0.1: {}
+
+  get-tsconfig@4.14.3:
+    dependencies:
+      resolve-pkg-maps: 1.0.0
 
   get-tsconfig@5.0.0-beta.6:
     dependencies:

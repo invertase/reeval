@@ -11,10 +11,13 @@ ES is an open-source eval runner for coding agents. You write an eval, then a re
 the task in a local Docker container. ES checks the result with deterministic assertions and an
 LLM judge, prints a pass/fail summary and writes a result JSON file.
 
-Under the hood ES embeds [Vitest](https://vitest.dev) as a hidden engine for discovery,
-timeouts, abort signals and reporting. You never import it, configure it or see its output.
-`expect` comes from Vitest's standalone `@vitest/expect` (`src/engine/expect.ts`), and errors
-print through ES's own formatter (`src/engine/errors.ts`), with diffs from `@vitest/utils`.
+Under the hood ES runs eval files on its own small engine (`src/engine`): it finds the files,
+loads each with [jiti](https://github.com/unjs/jiti) in a fresh worker process of its own (once
+to collect the plan, once to run), and hands out the scheduler's leases to the workers over
+Node's IPC channel. `expect` is Vitest's standalone `@vitest/expect`, and errors print with
+diffs from `@vitest/utils`, pinned to the same version. The Vitest engine it replaces is still
+there behind `ES_ENGINE=vitest` for the side-by-side comparison, until the stack's last PR
+removes it.
 
 The package is published as `@invertase/foobar`. That's a placeholder until the final name is
 chosen. Code, docs and examples import from `@invertase/foobar` and its subpaths `/harness`,
@@ -61,7 +64,7 @@ its files import `evalsuite`.
 | Path | What it is |
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
-| `packages/evalsuite/src/engine` | The only code that imports `vitest` (`~5.0.2`) |
+| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, `worker-entry.ts`), the IPC messages (`protocol.ts`), `expect` (`expect.ts`) and error printing (`errors.ts`); and, until it's removed, the Vitest engine (`vitest.ts`, `vitest-runtime.ts`), the only code that imports `vitest` |
 | `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
@@ -202,7 +205,7 @@ without one.
 
 **Coverage.** `pnpm coverage` builds, runs every package's tests with `NODE_V8_COVERAGE` set, and
 merges what each process wrote with c8, mapped back to `src/` through the build's source maps.
-That's the test runner, each `es` CLI, its Vitest workers and the egress gateway, which runs in
+That's the test runner, each `es` CLI, its workers and the egress gateway, which runs in
 them. It writes `coverage/report/` (`index.html`, `lcov.info` and `summary.md`) and is report-only,
 with no threshold. It doesn't count code inside Docker containers (the gateway's forwarder, the
 harness CLIs), the studio app in the browser, or the packed-install test, which runs an installed
@@ -210,7 +213,14 @@ copy outside the repo. Without Docker, the Docker-only code reads as uncovered. 
 files are the exception: `node scripts/coverage.mjs engine` (CI's `engine coverage` job) runs
 their tests and fails below 100% of lines, branches and functions for each file in its `ENGINE`
 list. A new engine file joins that list with its tests; a line no test can reach needs a
-`/* c8 ignore */` comment saying why. Which features
+`/* c8 ignore */` comment saying why.
+
+**The side-by-side comparison.** `node scripts/differential.mjs record <es|vitest> <dir>` runs
+the suites that start `es` (the feature fixtures, plan snapshots, the example, the engine and
+history tests) on one engine, capturing every run's exit code, output and record, normalised
+(`test/support/differential.ts`); `compare <expected> <actual>` fails on any difference that
+isn't in its `INTENDED` list, each with its reason. `test/differential/vitest/` holds the Vitest
+engine's captures, which CI's `engine differential` job holds ES's engine to. Which features
 have fixtures on which tier is a separate, generated matrix:
 [`test/features/COVERAGE.md`](./packages/evalsuite/test/features/COVERAGE.md).
 
