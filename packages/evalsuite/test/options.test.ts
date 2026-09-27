@@ -852,6 +852,95 @@ ${body}
     })
   }
 
+  test('config errors name the config file that was read, as typed from the current directory', async () => {
+    const bad = (extra: string) =>
+      config(extra).replace(
+        "import { defineConfig } from 'evalsuite'",
+        "import { defineConfig, defineEnvironment } from 'evalsuite'",
+      )
+    const p = await project('config-path', {
+      'es.config.ts': bad('harnesses: [],'),
+      'es.compare.config.ts': bad(`compare: [defineEnvironment('x', {})],`),
+      'es.secret.config.ts': bad(`env: { GOOGLE_API_KEY: 'AIza-not-really' },`),
+      'es.empty.config.ts': bad('harness: [],'),
+      'es.none.config.ts': fakeConfig().replace('export default defineConfig({', 'defineConfig({'),
+      'es.profile.config.ts': bad(`profiles: { pr: {} },`),
+      'es.budget.config.ts': bad('budget: { attempts: 1 },'),
+      'es.include.config.ts': bad(`include: ['nothing/**/*.es.ts'],`),
+      'es.judge.config.ts': bad('').replace('judge: { model: fakeJudge({ score: 0.9 }) },', ''),
+      'es.unbrokered.config.ts': bad(`secrets: { unbrokered: 'error' },`),
+      'evals/o.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('e', { runs: 2 }, async () => {})\n`,
+      'evals/j.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('judged', async (t) => { await t.send('x'); await t.judge('ok?') })
+`,
+      'evals/s.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+import { docker } from 'evalsuite/sandbox'
+const env = defineEnvironment('s', ({ secret }) => ({
+  env: { AWS_SECRET_ACCESS_KEY: secret.fromEnv('AWS_SECRET_ACCESS_KEY') },
+}))
+evaluate('one', { sandbox: docker(), environment: env }, async () => {})
+`,
+    })
+    const cases: Array<[string, string[], RegExp]> = [
+      ['.', [], /Unknown option "harnesses" in es\.config\.ts\. Did you mean "harness"\?/],
+      [
+        'evals',
+        [],
+        /Unknown option "harnesses" in \.\.\/es\.config\.ts\. Did you mean "harness"\?/,
+      ],
+      [
+        '.',
+        ['--config', 'es.compare.config.ts'],
+        /compare can't be set in es\.compare\.config\.ts:/,
+      ],
+      [
+        '.',
+        ['--config', 'es.secret.config.ts'],
+        /env\.GOOGLE_API_KEY in es\.secret\.config\.ts is a literal string/,
+      ],
+      [
+        '.',
+        ['--config', 'es.empty.config.ts'],
+        /harness is an empty list in es\.empty\.config\.ts\./,
+      ],
+      [
+        'evals',
+        ['--config', '../es.none.config.ts'],
+        /^es: \.\.\/es\.none\.config\.ts has no default export/m,
+      ],
+      [
+        '.',
+        ['--config', 'es.profile.config.ts', '--profile', 'nope'],
+        /Profiles in es\.profile\.config\.ts: pr\./,
+      ],
+      [
+        '.',
+        ['--config', 'es.budget.config.ts', 'o.es'],
+        /over budget\.attempts 1 \(es\.budget\.config\.ts\)/,
+      ],
+      ['.', ['--config', 'es.include.config.ts'], /or set include in es\.include\.config\.ts\./],
+      [
+        '.',
+        ['--config', 'es.unbrokered.config.ts', 's.es'],
+        /secrets\.unbrokered is 'error' in es\.unbrokered\.config\.ts\./,
+      ],
+    ]
+    for (const [cwd, args, message] of cases) {
+      const r = await runCli(join(p.dir, cwd), ['run', ...args], {
+        env: { AWS_SECRET_ACCESS_KEY: 'not-a-real-secret-value' },
+      })
+      assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, message)
+      if (args.length) assert.doesNotMatch(r.stderr, /(?<![\w./])es\.config\.ts/, args.join(' '))
+    }
+    const judged = await runCli(p.dir, ['run', '--config', 'es.judge.config.ts', 'j.es'])
+    assert.equal(judged.code, 1, judged.stdout + judged.stderr)
+    assert.match(
+      readRun(p.dir).evals[0]?.error?.message ?? '',
+      /Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in es\.judge\.config\.ts,/,
+    )
+  })
+
   for (const [what, replacement, message] of [
     [
       'no export',

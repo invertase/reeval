@@ -172,7 +172,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
   const plannedAttempts = resolvedEval.skip ? [] : expand(resolved)
   if (ctx.config.secrets.unbrokered === 'error') {
     const [first] = unbrokered(resolved.env, plannedAttempts)
-    if (first) throw new UsageError(unbrokeredError(first, where))
+    if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
   }
   for (const planned of plannedAttempts) {
     const why = unenforceable(planned.egress, planned.sandbox, where)

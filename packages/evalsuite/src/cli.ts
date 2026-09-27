@@ -564,7 +564,7 @@ async function executeRun(
     lines.push(...plan.hints.map((h) => `hint: ${h}`))
     renderer.onEvent({ type: 'plan', at: Date.now(), lines })
     if (setup.dryRun) return false
-    checkAttemptBudget(plan, setup.force)
+    checkAttemptBudget(plan, setup.force, config.file)
     const missing = missingCredentials(config, process.env, {
       harnessKinds: plan.harnessKinds,
       profile,
@@ -667,7 +667,7 @@ async function executeRun(
   }
   if (engineRun.noFiles && !filters.length && !tags.length) {
     throw new UsageError(
-      `No eval files match ${config.include.join(', ')} (config.include) in ${config.root}. Name eval files to match it, or set include in es.config.ts.`,
+      `No eval files match ${config.include.join(', ')} (config.include) in ${config.root}. Name eval files to match it, or set include in ${config.file}.`,
     )
   }
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted)) {
