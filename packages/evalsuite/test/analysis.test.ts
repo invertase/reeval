@@ -13,7 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
@@ -475,7 +475,10 @@ function tree(dir: string): Map<string, string> {
   for (const name of readdirSync(dir, { recursive: true }) as string[]) {
     const path = join(dir, name)
     if (statSync(path).isFile())
-      out.set(name, createHash('sha256').update(readFileSync(path)).digest('hex'))
+      out.set(
+        name.replaceAll(sep, '/'),
+        createHash('sha256').update(readFileSync(path)).digest('hex'),
+      )
   }
   return out
 }
