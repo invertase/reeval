@@ -51,30 +51,21 @@ const docker = {
   skip: !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`,
   timeout: 300_000,
 }
-const claudeImageBuilt = (() => {
+/** Per-test options for a test that needs a harness's own image. */
+const harnessImage = (harness: Parameters<typeof imageFor>[0]) => {
+  let built = true
   try {
-    execFileSync('docker', ['image', 'inspect', imageFor('claude-code')], { stdio: 'ignore' })
-    return true
+    execFileSync('docker', ['image', 'inspect', imageFor(harness)], { stdio: 'ignore' })
   } catch {
-    return false
+    built = false
   }
-})()
-const gooseImageBuilt = (() => {
-  try {
-    execFileSync('docker', ['image', 'inspect', imageFor('goose')], { stdio: 'ignore' })
-    return true
-  } catch {
-    return false
+  return {
+    skip: !built && !requireDocker && `needs Docker and ${imageFor(harness)}`,
+    timeout: 300_000,
   }
-})()
-const gooseImage = {
-  skip: !gooseImageBuilt && !requireDocker && `needs Docker and ${imageFor('goose')}`,
-  timeout: 300_000,
 }
-const claudeImage = {
-  skip: !claudeImageBuilt && !requireDocker && `needs Docker and ${imageFor('claude-code')}`,
-  timeout: 300_000,
-}
+const gooseImage = harnessImage('goose')
+const claudeImage = harnessImage('claude-code')
 
 describe('docker sandbox', () => {
   test('runs checks in the container, diffs, and removes it', docker, async () => {
@@ -871,9 +862,48 @@ evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
         /es:egress POST \S+:streamGenerateContent HTTP\/[\d.]+ \(set x-goog-api-key\)/,
       )
       assert.doesNotMatch(out, /refused/)
-      assert.equal(liveContainers(readRun(p.dir).run.runId), '')
+      // Gemini's refusal fails the turn and names the host variable to fix.
+      assert.match(
+        out,
+        /turn 1 error: The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key/,
+      )
+      const { run, evals } = readRun(p.dir)
+      assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
+      assert.equal(liveContainers(run.runId), '')
     },
   )
+
+  for (const [factory, harness] of [
+    ['opencode', 'opencode'],
+    ['pi', 'pi'],
+  ] as const) {
+    test(
+      `${factory}: Gemini refusing the key fails the turn and names the host variable`,
+      harnessImage(harness),
+      async () => {
+        const p = await project(`docker-${factory}-refused-key`, {
+          'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { ${factory} } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }), sandbox: docker(), timeout: '90s' })
+`,
+          'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
+`,
+        })
+        const env = { GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000' }
+        const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
+        const out = r.stdout + r.stderr
+        assert.match(
+          out,
+          /turn 1 error: The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key/,
+        )
+        const { run, evals } = readRun(p.dir)
+        assert.equal(evals[0]?.trial.turns[0]?.status, 'error')
+        assert.equal(liveContainers(run.runId), '')
+      },
+    )
+  }
 
   test(
     'Claude Code attempts broker the key on its endpoints; without brokering the attempt fails closed',
