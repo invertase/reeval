@@ -1,15 +1,20 @@
 /**
  * The harness adapters an image can bake. Each pin must match the exact dependency (or
- * `workspace:<version>` for this repo's own adapters); a test enforces it.
+ * `workspace:<version>` for this repo's own adapters); a test enforces it. `patch` is the first 8
+ * hex of the sha256 of the adapter's pnpm patch (`patchedDependencies` in pnpm-workspace.yaml),
+ * whose bridge the image bakes; a test holds it to the patch file.
  */
-export const HARNESS_PACKAGES = {
+export const HARNESS_PACKAGES: Record<
+  'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi',
+  { readonly name: string; readonly version: string; readonly patch?: string }
+> = {
   cursor: { name: '@evalsuite/harness-cursor-sdk', version: '0.1.0' },
-  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.128' },
+  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.128', patch: '5d1c985c' },
   antigravity: { name: '@evalsuite/harness-antigravity', version: '0.1.0' },
   opencode: { name: '@evalsuite/harness-opencode', version: '0.1.0' },
   goose: { name: '@evalsuite/harness-goose', version: '0.1.0' },
   pi: { name: '@evalsuite/harness-pi', version: '0.1.0' },
-} as const
+}
 
 /** A harness whose CLI an image can bake. */
 export type BakedHarness = keyof typeof HARNESS_PACKAGES
@@ -18,15 +23,21 @@ export const BAKED_HARNESSES = Object.keys(HARNESS_PACKAGES) as BakedHarness[]
 export const isBakedHarness = (kind: string): kind is BakedHarness =>
   Object.hasOwn(HARNESS_PACKAGES, kind)
 
+/** The adapter build ES runs for a harness: its version, and its patch if ES patches it. */
+export const adapterVersion = (harness: BakedHarness) => {
+  const { version, patch } = HARNESS_PACKAGES[harness]
+  return patch ? `${version}-patch.${patch}` : version
+}
+
 export const BASE_IMAGE = 'evalsuite-sandbox-base:latest'
 /** ES's image for a harness; the tag pins the adapter, whose bootstrap pins the CLI. */
 export const imageFor = (harness: BakedHarness) =>
-  `evalsuite-sandbox:${harness}-${HARNESS_PACKAGES[harness].version}`
+  `evalsuite-sandbox:${harness}-${adapterVersion(harness)}`
 /** Cursor's image, which the fake harness also runs in by default. */
 export const DEFAULT_IMAGE = imageFor('cursor')
 /** The `dev.evalsuite.harness` label value an image baked for `harness` carries. */
 export const harnessLabel = (harness: BakedHarness) =>
-  `${HARNESS_PACKAGES[harness].name}@${HARNESS_PACKAGES[harness].version}`
+  `${HARNESS_PACKAGES[harness].name}@${adapterVersion(harness)}`
 
 export const LABEL = {
   managed: 'dev.evalsuite.managed',

@@ -33,6 +33,18 @@ for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('
   }
 }
 
+/**
+ * Upstream adapters inlined from their published `dist/`, not imported, so the published package
+ * runs the build pnpm patched (`patchedDependencies`). Each reads its bridge files from
+ * `./bridge/` next to its code, which lands in a chunk at `dist/`'s top level.
+ */
+const patched = ['@ai-sdk/harness-claude-code']
+const BRIDGE_FILES = ['index.mjs', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']
+for (const name of patched) {
+  if (!pkg.devDependencies[name] || pkg.dependencies[name])
+    throw new Error(`${name} is inlined: list it in devDependencies only`)
+}
+
 const dist = join(here, 'dist')
 const studioApp = join(here, '../studio-web/dist')
 
@@ -55,7 +67,7 @@ export default defineConfig({
   // c8 reads the sources from the checkout; the tarball doesn't need a second copy.
   outputOptions: { sourcemapExcludeSources: true },
   deps: {
-    alwaysBundle: [/^@evalsuite\//],
+    alwaysBundle: [/^@evalsuite\//, ...patched],
     onlyBundle: false,
     onlyImport: Object.keys(pkg.dependencies),
   },
@@ -78,6 +90,13 @@ export default defineConfig({
         // src/root.ts finds the package from import.meta.url, one level below the root.
         if (file.includes('/') && code.includes('import.meta.url'))
           throw new Error(`dist/${file} uses import.meta.url outside dist/'s top level`)
+      }
+      for (const name of patched) {
+        const bridge = join(
+          dirname(realpathSync(require.resolve(`${name}/package.json`))),
+          'dist/bridge',
+        )
+        for (const file of BRIDGE_FILES) cpSync(join(bridge, file), join(dist, 'bridge', file))
       }
       for (const [asset, from] of assets) {
         rmSync(join(here, asset), { recursive: true, force: true })

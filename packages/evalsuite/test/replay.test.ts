@@ -2,9 +2,12 @@
 // with ES_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: ES's normaliser must
 // still find each behaviour's signals, each adapter (Antigravity, the Cursor SDK) must still translate the native events
 // to the same tool calls, text and token counts, and every native event must match the committed
-// format (test/replay/formats/). Each check has a twin that proves it can fail.
+// format (test/replay/formats/). Claude Code's adapter translates inside its bridge, so its
+// captured SDK messages (test/fixtures/claude-code-bridge/) replay through the bridge ES ships.
+// Each check has a twin that proves it can fail.
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
@@ -15,6 +18,7 @@ import { OpenCodeStreamTranslator } from '@evalsuite/harness-opencode'
 import { PiStreamTranslator } from '@evalsuite/harness-pi'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
+import { replayBridge } from './support/claude-code-bridge.ts'
 import { testDir } from './support/fixture.ts'
 import { knownSignatures, nativeEvents, signatures } from './support/stream-formats.ts'
 
@@ -288,6 +292,52 @@ for (const harness of Object.keys(formatChanges))
       }
     })
   })
+
+describe('replay: the Claude Code bridge, from the SDK’s own messages', () => {
+  // A real contract turn (edit and run, claude-haiku-4-5): the host's `start` and every message
+  // the bridge's query() loop saw. Claude Code acknowledges the bridge's streamed user message
+  // with `command_lifecycle` messages before `system/init`, which names the model.
+  const fixture = join(testDir, 'fixtures/claude-code-bridge/edit-and-run')
+  const start = JSON.parse(readFileSync(`${fixture}.start.json`, 'utf8'))
+  const messages = readFileSync(`${fixture}.sdk.jsonl`, 'utf8')
+  const sdk = messages
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { type: string; subtype?: string; model?: string })
+  // What the image bakes and the published package ships: the adapter's patched bridge.
+  const shipped = join(testDir, '../dist/bridge/index.mjs')
+  const fix = '!streamStarted && type !== "command_lifecycle"'
+
+  test('the capture starts with command_lifecycle, then system/init names the model', () => {
+    assert.equal(sdk[0]?.type, 'command_lifecycle')
+    const init = sdk.findIndex((m) => m.type === 'system' && m.subtype === 'init')
+    assert.ok(init > 0 && sdk.slice(0, init).every((m) => m.type === 'command_lifecycle'))
+    assert.equal(sdk[init]?.model, 'claude-haiku-4-5')
+  })
+
+  test('the shipped bridge starts the stream with the served model, then the turn', async () => {
+    const parts = await replayBridge({ bridge: shipped, start, messages })
+    assert.deepEqual(parts[0], { type: 'stream-start', modelId: 'claude-haiku-4-5' })
+    assert.equal(parts.filter((p) => p.type === 'stream-start').length, 1)
+    const calls = parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+    assert.deepEqual(calls, ['read', 'edit', 'bash'])
+    assert.equal(parts.at(-1)?.type, 'finish')
+  })
+
+  test('twin: without the patch, command_lifecycle starts the stream and the model is lost', async () => {
+    const source = readFileSync(shipped, 'utf8')
+    assert.ok(source.includes(fix), 'the shipped bridge has the patch')
+    const dir = mkdtempSync(join(tmpdir(), 'es-unpatched-'))
+    const unpatched = join(dir, 'bridge.mjs')
+    writeFileSync(unpatched, source.replace(fix, '!streamStarted'))
+    try {
+      const parts = await replayBridge({ bridge: unpatched, start, messages })
+      assert.deepEqual(parts[0], { type: 'stream-start' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
 
 describe('replay: Cursor web calls, streamed and recovered', () => {
   // A real two-turn capture where SDK 1.0.32 streamed no web calls and the runner recovered them

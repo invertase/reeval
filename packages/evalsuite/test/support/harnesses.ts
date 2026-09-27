@@ -91,8 +91,6 @@ export const harnesses: HarnessRow[] = [
     apiHost: 'api.anthropic.com',
     tokens: true,
     servedModel: /^claude-haiku-4-5/,
-    servedModelGap:
-      "the Claude Code adapter's stream doesn't carry the model yet, so each turn's `model` is null.",
     wireModel: null,
   },
   {

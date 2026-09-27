@@ -9,12 +9,12 @@ excluded: —
 image docker · 1 evals
   base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 image docker · claude-code · 2 evals
-  base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c  (rebuild: the harness bootstrap)
 image docker:tools · 1 evals
   dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-ae1c85729bb2fe02  (docker build (layer cache), tagged by content hash)
   harness                             evalsuite-dockerfile:tools-ae1c85729bb2fe02  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
 image docker:tools · claude-code · 1 evals
-  dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-bd46c5b8f1891f13  (docker build (layer cache), tagged by content hash)
-  harness                             evalsuite-dockerfile:tools-bd46c5b8f1891f13  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:claude-code-1.0.128)
+  dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-56686cd06cce6ab2  (docker build (layer cache), tagged by content hash)
+  harness                             evalsuite-dockerfile:tools-56686cd06cce6ab2  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c)
 image docker:python:3.12-slim · claude-code · 1 evals
-  from python:3.12-slim  evalsuite-sandbox:claude-code-1.0.128-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)
+  from python:3.12-slim  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c-python-3-12-slim-1d044754  (rebuild: Node, git and the harness bootstrap on top)

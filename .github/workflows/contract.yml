@@ -6,6 +6,9 @@
 # pinned images
 # (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
 # to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
+# It also checks the newest @ai-sdk/harness-claude-code against ES's patch to the pinned one
+# (scripts/drift/claude-code-patch.mjs): it fails once upstream fixes the bug or the patch stops
+# applying.
 name: contract
 
 on:
@@ -49,6 +52,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/drift/latest-images.sh
+      # Key-free: flags the newest adapter fixing the bug ES patches (drop the patch) or the patch
+      # no longer applying (rebase it).
+      - if: inputs.versions == 'latest'
+        name: whether the newest @ai-sdk/harness-claude-code still needs ES's patch
+        run: node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs
       # One suite at a time, one real row at a time; no retries: a failure is reported as it is.
       - name: harness contract${{ inputs.versions == 'pinned' && ' and e2e CLI scenarios' || '' }}
         working-directory: packages/evalsuite

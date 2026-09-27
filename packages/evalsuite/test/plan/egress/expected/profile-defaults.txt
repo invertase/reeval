@@ -12,4 +12,4 @@ excluded: —
 image docker · 7 evals
   base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 image docker · claude-code · 1 evals
-  base  evalsuite-sandbox:claude-code-1.0.128  (rebuild: the harness bootstrap)
+  base  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c  (rebuild: the harness bootstrap)
