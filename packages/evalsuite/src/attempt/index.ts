@@ -1,7 +1,6 @@
 // One attempt's lifecycle, a phase per module: resolve the environment (environment.ts), start
 // the session (session.ts), run turns (turns.ts), run checks and the judge (checks.ts, judge.ts),
 // tear down, and write the record (record.ts). They share one `Attempt` (state.ts).
-import { relative } from 'node:path'
 import { AttemptDebug, withDebug } from '../debug/attempt.ts'
 import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
@@ -129,7 +128,7 @@ async function attemptBody(
     const { record } = a
     const error = record.error ? ` · ${record.error.kind}: ${record.error.message}` : ''
     debug.log('teardown', `outcome ${record.outcome}${error}`)
-    const rel = (path: string) => relative(config.root, path) || '.'
+    const rel = (path: string) => relativeFile(config.root, path) || '.'
     const scratch = `.es/runs/${runId}`
     debug.log(
       'teardown',

@@ -3,8 +3,9 @@
 // <hash8>.{json,md}`, written create-only: the record is never touched, so two teammates who save
 // never conflict, and the static studio build picks them up with the run's other files.
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
+import { fromCwd } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
 import type { AnalysisDoc, AnalysisEntry } from '../view/analysis.ts'
 import { NewerSchemaError, readableAnalysis } from '../view/record.ts'
@@ -23,7 +24,7 @@ const parse = (text: string, file: string): AnalysisDoc | null => {
   } catch (error) {
     if (error instanceof NewerSchemaError && !warned.has(file)) {
       warned.add(file)
-      process.stderr.write(`warning: skipped ${relative(process.cwd(), file)}: ${error.reason}\n`)
+      process.stderr.write(`warning: skipped ${fromCwd(file)}: ${error.reason}\n`)
     }
     return null
   }

@@ -371,6 +371,18 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
+  test('paths print from the current directory when the config is reached through a symlink', async () => {
+    // As on macOS, where the temp dir is /var/… and the current directory /private/var/….
+    const p = await gitProject('display-symlink', { 'evals/agent.es.ts': agent() })
+    const link = join(tempDir('display-symlink-link'), 'project')
+    symlinkSync(p.dir, link, 'junction')
+    const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'es.config.ts')])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /^ Results {2}\.es\/runs\/\S+\/summary\.md$/m)
+    assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
+  })
+
   test('a secret in the uncommitted changes stops the record', async () => {
     const p = await gitProject('record-patch-secret', { 'evals/agent.es.ts': agent() })
     await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)

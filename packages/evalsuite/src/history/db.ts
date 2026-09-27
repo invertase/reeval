@@ -4,12 +4,12 @@
 import { statSync } from 'node:fs'
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
 import { fileURLToPath } from 'node:url'
 import { isRuntimeState } from '../attempt/context.ts'
 import { UsageError } from '../errors.ts'
-import { RUN_ID, sha256 } from '../ids.ts'
+import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { PACKAGE_VERSION } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
@@ -595,7 +595,7 @@ async function sync(db: DatabaseSync, root: string, historyDir: string): Promise
     }
     for (const [runId, { path, recorded }] of wanted) {
       const info = await stat(path)
-      const rel = relative(root, path)
+      const rel = relativeFile(root, path)
       const had = known.get(runId)
       if (had && had.path === rel && had.size === info.size && had.mtime_ms === info.mtimeMs) {
         continue
