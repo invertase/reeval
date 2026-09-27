@@ -1,7 +1,7 @@
 // `es analyze [run] [--vs base] [--eval filter]`: a digest of the run's facts, one structured call,
 // validation, then the cache (always) and the run's history folder (with --save).
 import { readFile } from 'node:fs/promises'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
 import { allRuns, CommandError, lines, reachability } from '../commands.ts'
 import { UsageError } from '../errors.ts'
@@ -10,7 +10,7 @@ import { parseRecord, scratchDir } from '../history/files.ts'
 import { author } from '../history/provenance.ts'
 import type { HistoryEntry } from '../history/types.ts'
 import { pickBaseline, RefError, resolveRun } from '../history/views.ts'
-import { sha256 } from '../ids.ts'
+import { relativeFile, sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { ANALYSIS_PROMPT_VERSION, type AnalysisDoc } from '../view/analysis.ts'
@@ -278,7 +278,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   if (flags.save) {
     const saved = await saveAnalysis(config.history.dir, doc, key, renderMarkdown(doc))
     ctx.err(
-      `saved ${saved.map((p) => relative(process.cwd(), p)).join(' and ')}. Commit them with git.`,
+      `saved ${saved.map((p) => relativeFile(process.cwd(), p)).join(' and ')}. Commit them with git.`,
     )
   }
   ctx.out(

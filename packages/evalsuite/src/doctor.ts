@@ -2,7 +2,7 @@
 // every key it checks and never prints a key's value.
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join } from 'node:path'
 import type { Flags } from './cli-spec.ts'
 import {
   badCharacterAt,
@@ -15,6 +15,7 @@ import {
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
 import { AGENTS, isAgentKind } from './harness/agents.ts'
+import { relativeFile } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
@@ -505,7 +506,7 @@ export async function doctor(
   }
   if (config) {
     loadEnvFiles(configPath)
-    const envFile = relative(process.cwd(), join(config.root, '.env.local')) || '.env.local'
+    const envFile = relativeFile(process.cwd(), join(config.root, '.env.local')) || '.env.local'
     const docker = await checkDocker(config, deps)
     checks.push(...docker.checks)
     if (docker.running) {

@@ -2,7 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
 import { parseCli } from './cli-parse.ts'
@@ -24,7 +24,7 @@ import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
-import { evalSlug, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
+import { evalSlug, newRunId, RUN_STAMP_LENGTH, relativeFile } from './ids.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
 import { preflight, type SandboxVersions } from './preflight.ts'
@@ -156,7 +156,7 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
   const { debugRoot, pruneDebug } = await import('./debug/files.ts')
   const { formatBytes } = await import('./view/debug.ts')
   const { runs, bytes } = await pruneDebug(config.root, keep)
-  const where = relative(process.cwd(), debugRoot(config.root)) || '.'
+  const where = relativeFile(process.cwd(), debugRoot(config.root)) || '.'
   console.log(
     runs.length
       ? `Removed debug data for ${runs.length} run${runs.length === 1 ? '' : 's'} (${formatBytes(bytes)}) from ${where}`
@@ -256,7 +256,7 @@ async function runCommand(
     verbosity: ctx.verbosity ?? 0,
     harness: setup.config.harness[0]?.kind ?? 'agent',
     attemptDir: (id, cell, n) =>
-      relative(
+      relativeFile(
         process.cwd(),
         join(ctx.scratch, ctx.runId, evalSlug(id), evalSlug(cell), String(n)),
       ),
@@ -306,7 +306,7 @@ async function runCommand(
     type: 'run-end',
     at: Date.now(),
     record,
-    summaryPath: relative(process.cwd(), summary),
+    summaryPath: relativeFile(process.cwd(), summary),
     results: engineRun.evals,
     unhandledErrors: engineRun.unhandledErrors,
   })

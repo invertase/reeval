@@ -1,7 +1,7 @@
 // The run-history commands: record, history, show, compare.
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { git, gitText } from './git.ts'
 import { listRuns, readRecord, recordRun, scratchDir } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
@@ -19,7 +19,7 @@ import {
   resolveRun,
   stackChanges,
 } from './history/views.ts'
-import { sha256 } from './ids.ts'
+import { relativeFile, sha256 } from './ids.ts'
 import type { ResolvedConfig } from './types.ts'
 
 export type HistoryFlags = {
@@ -65,7 +65,7 @@ export async function reachability(root: string): Promise<Reachability> {
   return shas ? new Set(shas) : null
 }
 
-const rel = (path: string) => relative(process.cwd(), path) || path
+const rel = (path: string) => relativeFile(process.cwd(), path) || path
 
 export function parseLevel(value: string | undefined, fallback: ArtifactLevel): ArtifactLevel {
   if (value === undefined) return fallback
