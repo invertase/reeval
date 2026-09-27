@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, delimiter, dirname, join } from 'node:path'
+import { delimiter, dirname, join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import { pathToFileURL } from 'node:url'
 import { readInvocations } from '../src/report/invocations.ts'
@@ -51,13 +51,19 @@ function allText(dir: string): string {
     const path = join(entry.parentPath, entry.name)
     if (path.endsWith('.tar.gz')) {
       const into = tempDir('untar')
-      // The archive by its name: GNU tar reads a `C:` in a Windows path as a remote host.
-      execFileSync('tar', ['-xzf', basename(path), '-C', into], { cwd: dirname(path) })
+      untar(path, into)
       text += allText(into)
     } else text += readFileSync(path, 'utf8')
   }
   return text
 }
+
+/**
+ * Unpacks `archive` into `into` by a relative path from there: Git for Windows' GNU tar reads a
+ * `C:` in a path as a remote host, in `-f` and `-C` alike.
+ */
+const untar = (archive: string, into: string) =>
+  execFileSync('tar', ['-xzf', relative(into, archive).replaceAll(sep, '/')], { cwd: into })
 
 /** A project in a fake HOME whose agent fails with every seed and both paths in its message. */
 async function failingProject(name: string) {
@@ -220,7 +226,7 @@ describe('es report: the bundle', () => {
     const { masked, upstream } = bundle.redaction
     const markers = (text: string) => text.split('[REDACTED]').length - 1
     const tar = tempDir('report-count')
-    execFileSync('tar', ['-xzf', 'report-logs.tar.gz', '-C', tar], { cwd: out })
+    untar(join(out, 'report-logs.tar.gz'), tar)
     assert.equal(
       masked,
       markers(readFileSync(join(out, 'report.json'), 'utf8')) + markers(allText(tar)),
@@ -535,7 +541,7 @@ describe('es report: the logs archive', () => {
       ]),
     )
     const into = tempDir('untar')
-    execFileSync('tar', ['-xzf', basename(archive), '-C', into], { cwd: dirname(archive) })
+    untar(archive, into)
     assert.equal(readFileSync(join(into, 'run/one.log'), 'utf8'), 'one\n')
     assert.equal(readFileSync(join(into, long), 'utf8').length, 1300)
   })
