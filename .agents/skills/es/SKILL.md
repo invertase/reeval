@@ -25,8 +25,8 @@ site; its Reference tab has every option, flag and error).
    `include`). Gitignore `.es/` and `.env*`.
 3. `npx es run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
-4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` in
-   the directory you run from, then `npx es run`. Exit 0 means every gated cell passed.
+4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` next
+   to `es.config.ts` (not the directory you run from), then `npx es run`. Exit 0 means every gated cell passed.
 5. Read failures in the summary, then `.es/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
    `npx es run -v` prints a timestamped trace per attempt; `.es/debug/` keeps it.
@@ -252,4 +252,4 @@ them to `evals/.history/` to commit.
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
 | Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.es.ts` under `evals/` |
-| `es run` from another directory | `Missing credentials: …` | Run from the directory with `.env.local` |
+| `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `es.config.ts` |

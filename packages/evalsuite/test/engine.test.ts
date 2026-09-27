@@ -269,6 +269,19 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     const cells = JSON.parse(plan.stdout).evals[0].cells.map((c: { key: string }) => c.key)
     assert.deepEqual(cells, ['from-local/-/fake', 'only-env/-/fake', 'from-shell/-/fake'])
 
+    await writeFile(join(p.dir, 'evals/.env.local'), 'ES_T_ENV=from-cwd\n')
+    const fromSub = await runCli(
+      join(p.dir, 'evals'),
+      ['run', '--config', '../es.config.ts', '--dry-run', '--json'],
+      { env },
+    )
+    assert.equal(fromSub.code, 0, fromSub.stdout + fromSub.stderr)
+    assert.deepEqual(
+      JSON.parse(fromSub.stdout).evals[0].cells.map((c: { key: string }) => c.key),
+      cells,
+      "run from a subdirectory, the env files still come from the config's directory",
+    )
+
     const sees = await runCli(p.dir, ['run', 'sees.es'], { env })
     assert.equal(sees.code, 0, sees.stdout + sees.stderr)
     const canary = await runCli(p.dir, ['run', 'canary.es'], { env })
