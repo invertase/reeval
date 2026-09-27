@@ -46,7 +46,8 @@ pnpm test:contract          # the real rows, and the e2e CLI suite (CURSOR_API_K
 pnpm test:replay            # the captured streams, key-free
 ```
 
-A row without its key skips and says which variable it needs. `ES_CONTRACT_HARNESSES=cursor`
+Without `ES_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
+anything, naming the variable it needs: narrow the run with `ES_CONTRACT_HARNESSES=cursor`, which
 picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, at `--concurrency
 2`; es.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`ES_REAL_ATTEMPT_BUDGET`). `ES_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,

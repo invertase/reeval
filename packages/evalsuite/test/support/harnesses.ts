@@ -155,15 +155,16 @@ const imageBuilt = (ref: string) => {
 
 /**
  * Why a row doesn't run here, or false. Real rows run only with `ES_TEST_REAL=1` (they spend
- * money) and their key, and skip without it, saying so; `ES_CONTRACT_HARNESSES=cursor,…` picks
- * rows. A missing image fails instead under `ES_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
+ * money), and skip without it, saying so; asked for, a row without its key runs and fails in
+ * `reserveAttempts`, naming the variable. `ES_CONTRACT_HARNESSES=cursor,…` picks rows. A missing
+ * image fails instead under `ES_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
  */
 export function skipRow(row: HarnessRow): string | false {
   const only = process.env.ES_CONTRACT_HARNESSES?.split(',')
   if (only && !only.includes(row.id)) return `ES_CONTRACT_HARNESSES=${only.join(',')}`
   if (row.key) {
     if (process.env.ES_TEST_REAL !== '1') return 'set ES_TEST_REAL=1 to run real agents'
-    if (!keyOf(row)) return `${row.key.from.join(' or ')} isn't set, so ${row.id} can't run`
+    if (!keyOf(row)) return false
   }
   if (process.env.ES_TEST_REQUIRE_DOCKER === '1') return false
   if (!imageBuilt(imageFor(row.image)))
@@ -212,9 +213,16 @@ export function scanTargets(value: string): string {
  * The hard cap on real attempts across every suite of one CI job: each real row reserves what it
  * may start in `ES_REAL_LEDGER` (a file, one number per line) before it runs, and fails without
  * starting anything when that would take the job over `ES_REAL_ATTEMPT_BUDGET`. Unset, no cap
- * (local runs); each es run's own `budget.attempts` still holds.
+ * (local runs); each es run's own `budget.attempts` still holds. A real row without its key fails
+ * here, before anything starts: asking for real agents (`ES_TEST_REAL=1`) and getting a skip would
+ * pass a nightly that tested nothing.
  */
 export function reserveAttempts(row: HarnessRow, attempts: number, what: string): void {
+  if (row.key && !keyOf(row)) {
+    throw new Error(
+      `${row.key.from.join(' or ')} isn't set, and ES_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of ES_CONTRACT_HARNESSES`,
+    )
+  }
   const budget = Number(process.env.ES_REAL_ATTEMPT_BUDGET)
   const ledger = process.env.ES_REAL_LEDGER
   if (!row.key || !budget || !ledger) return

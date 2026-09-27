@@ -125,7 +125,8 @@ nothing is left behind. Each behaviour is an eval, a canary that must fail and a
 record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness and checks `es
 compare` says "same", every `es query` view answers, `-v` and `.es/debug` have the trace, and `es
 studio build` builds the history. Both need `ES_TEST_REAL=1` (which `pnpm test:contract` sets) and
-each harness's key; a row without its key skips and says so. Their
+each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
+so narrow a local run with `ES_CONTRACT_HARNESSES`. Their
 `fake` rows run key-free in the Docker tier. `test/replay.test.ts` replays streams captured from
 real runs (`ES_UPDATE_CAPTURES=1` on a contract run refreshes them, `ES_UPDATE_FORMATS=1` accepts a
 new native format). No real-agent test retries: checks read files, exit codes, the record and
@@ -135,8 +136,8 @@ The real tier is skipped (with a reason) unless `ES_TEST_REAL=1`, which `pnpm te
 runs the fixtures that list `real` on Cursor in Docker, one at a time, on `composer-2.5` unless
 `ES_REAL_MODEL` names another. From the repo root, `pnpm smoke:real` is the nightly real-agent
 smoke: the real tier, then `examples/hello`'s `smoke` profile (the judge-free evals tagged
-`smoke`). It exits 0 with a note when `CURSOR_API_KEY` isn't set, and skips the example without
-`GOOGLE_GENERATIVE_AI_API_KEY`.
+`smoke`). It needs `CURSOR_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY`, and fails naming whichever
+isn't set. Without `ES_TEST_REAL=1`, the real tests skip as before.
 
 The engine and wrapper tests drive the real `es` CLI against generated projects with the fake
 harness. The history tests record runs on two branches and merge them, check out old commits, rebase,
@@ -151,7 +152,8 @@ policy leaves no route out. ES's Docker tests build real `install` layers and Do
 Code) and check the cache and the record, and start real Claude Code and Antigravity with a
 made-up key to check brokering end to end. With `GEMINI_API_KEY` set, one more runs the real
 Antigravity CLI (it edits the workspace, answers from its rules and a home skill, and a script it
-runs sees only the placeholder); without the key it skips and says why. The Docker tests skip unless Docker is running and the sandbox images have
+runs sees only the placeholder); without the key it skips and says why, unless `ES_TEST_REAL=1`,
+when it fails. The Docker tests skip unless Docker is running and the sandbox images have
 been built (Cursor's, and each other harness's for its own: `es image build` in a project whose
 config uses it, such as `examples/hello` with `--config es.claude.config.ts`,
 `es.antigravity.config.ts`, `es.opencode.config.ts`, `es.goose.config.ts` or `es.pi.config.ts`);
@@ -181,7 +183,7 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `coverage` (below) |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
-| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's), skipping with a notice without the `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` and `ANTHROPIC_API_KEY` secrets (each row needs its own): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY` or `ANTHROPIC_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose and pi into the images (Claude Code stays pinned); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
