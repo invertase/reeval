@@ -507,6 +507,48 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'docker.confinement',
+    area: 'Sandbox',
+    name: 'Docker confinement: the `es` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })`',
+    fixtures: ['sandbox/unprivileged'],
+    tests: [
+      sandboxDocker(
+        'confinement',
+        'every command, spawn and file write runs as the unprivileged sandbox user',
+      ),
+      sandboxDocker(
+        'confinement',
+        'no capabilities, and no-new-privileges; root: true adds back only what apt-get needs',
+      ),
+      sandboxDocker('confinement', 'install layers put ~ in the sandbox user’s home, owned by it'),
+      sandboxDocker(
+        'confinement',
+        'network configuration, iptables and new namespaces are refused',
+      ),
+      sandboxDocker(
+        'confinement',
+        'changing or dropping the proxy variables finds no other way out',
+      ),
+      sandboxDocker(
+        'confinement',
+        'the forwarder, its port and the gateway CA are out of the sandbox user’s reach',
+      ),
+      sandboxDocker('confinement', 'a root: true sandbox is still detached from every network'),
+    ],
+  },
+  {
+    id: 'docker.limits',
+    area: 'Sandbox',
+    name: '`docker({ memory, cpus, pids })` and their defaults',
+    fixtures: ['sandbox/limits'],
+    tests: [
+      sandboxDocker('confinement', 'default limits: memory with no swap, CPUs and processes'),
+      sandboxDocker('confinement', 'each limit is overridable, and CPUs are capped'),
+      sandboxDocker('confinement', 'a fork bomb stops at the process limit'),
+      sandboxDocker('confinement', 'memory past the limit is killed'),
+    ],
+  },
+  {
     id: 'docker.from',
     area: 'Sandbox',
     name: '`docker({ from })` toolchain images',
