@@ -103,21 +103,20 @@ Duration  944ms
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`t.exec`, `toHaveFile`, `t.judge`) run for real against what it wrote.
 
-When a coding agent runs ES for you, agent output prints only the failures. This is `examples/hello` under its fake config, where the skill compare's control fails on purpose:
+When a coding agent runs ES for you, agent output prints only the failures, and the expected misses of ungated cells as `MISS`. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose:
 
 ```bash
 ES_UI=agent npx es run --config es.fake.config.ts
 ```
 
 ```text
-plan  10 evals · 11 cells · 11 attempts · ~678ms serial (~170ms at concurrency 4)
+plan  10 evals · 11 cells · 11 attempts · ~3s serial (~633ms at concurrency 4)
 es run: 3 eval files
-FAIL evals/skill.es.ts › house greeting › greets in the house style [control] (72ms, assertion, not gated)
+MISS evals/skill.es.ts › house greeting › greets in the house style [control] (152ms, assertion, not gated)
   Error: expected command to succeed, exit code 1
-…
-  record: .es/runs/20260926T173927Z_7e5376d_ada-lovelace_j03w/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
-10 passed, 1 failed, not gated (11 attempts, 10 evals)
-summary: .es/runs/20260926T173927Z_7e5376d_ada-lovelace_j03w/summary.md
+  record: .es/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
+10 passed, 1 missed, not gated (11 attempts, 10 evals)
+summary: .es/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
 ```
 
 <Warning>

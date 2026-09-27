@@ -186,7 +186,8 @@ group('greetings', { compare: [houseStyle], runs: 2 }, () => {
 - A variant runs `control.extend(variant)`. There's no `baseline`: leave `environment` unset and
   the control is empty.
 - Only variant cells gate by default (`compare: { variants, gate: 'variants' | 'all' | 'none' }`);
-  a failing control prints `(not gated)`. `compare.harness: ['cursor:composer-2.5']` compares on
+  a control's miss prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent
+  output), never under `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on
   some harnesses only.
 - **Lift** is variant pass rate minus control pass rate, with a 95% interval; with few runs it's
   usually "within noise". The summary also prints **effort** under each variant (median tool

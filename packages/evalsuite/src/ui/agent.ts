@@ -1,5 +1,6 @@
 // For coding agents running `es run`: they read every line back into context, so print only
-// failures, each with where its detail lives, in a stable greppable vocabulary.
+// failures (and, as MISS, ungated cells' expected misses), each with where its detail lives, in
+// a stable greppable vocabulary.
 import { colors } from './colors.ts'
 import type { EsEvent, EvalResult, OutputStream, Renderer } from './events.ts'
 import {
@@ -52,13 +53,16 @@ export class AgentRenderer implements Renderer {
       .filter(Boolean)
       .join(', ')
     const which = result.attempt?.label ? ` [${result.attempt.label}]` : ''
-    this.#write(`${WORD[outcome]} ${result.id}${which} (${detail})`)
+    // An ungated cell's miss (a compare's control, by default) doesn't fail the run: one line of why.
+    const missed = outcome === 'fail' && result.attempt?.gate === 'none'
+    this.#write(`${missed ? 'MISS' : WORD[outcome]} ${result.id}${which} (${detail})`)
     if (outcome !== 'cancelled') {
-      for (const line of failureLines(this.#c, result, { max: MAX_LINES })) {
+      const lines = failureLines(this.#c, result, { max: MAX_LINES })
+      for (const line of missed ? lines.filter((l) => l.trim()).slice(0, 1) : lines) {
         this.#write(`  ${line}`)
       }
     }
-    const logs = this.#logs.get(result.key)
+    const logs = missed ? undefined : this.#logs.get(result.key)
     if (logs?.length) {
       this.#write('  console:')
       for (const line of capLines(logs.join('\n'), MAX_LINES)) this.#write(`    ${line}`)
@@ -118,7 +122,7 @@ export class AgentRenderer implements Renderer {
         const parts = [
           s.pass && `${s.pass} passed`,
           s.fail - s.notGated - cancelled > 0 && `${s.fail - s.notGated - cancelled} failed`,
-          s.notGated > 0 && `${s.notGated} failed, not gated`,
+          s.notGated > 0 && `${s.notGated} missed, not gated`,
           s.infraError && `${s.infraError} infra error`,
           cancelled && `${cancelled} cancelled`,
           s.skipped && `${s.skipped} skipped`,

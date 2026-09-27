@@ -211,7 +211,8 @@ export function runRows(entries: HistoryEntry[]): RunRow[] {
 
 // ── Run detail ───────────────────────────────────────────────────────────────────────────────
 
-export type Tally = { pass: number; fail: number; infra: number; skipped: number }
+/** Attempt counts; `missed` is ungated cells' failures, which `fail` leaves out. */
+export type Tally = { pass: number; fail: number; missed: number; infra: number; skipped: number }
 
 export type TreeNode =
   | { kind: 'group'; key: string; name: string; tally: Tally; children: TreeNode[] }
@@ -219,7 +220,8 @@ export type TreeNode =
 
 const tallyOf = (e: EvalEntry): Tally => ({
   pass: e.attempts.filter((a) => a.outcome === 'pass').length,
-  fail: e.attempts.filter((a) => a.outcome === 'fail').length,
+  fail: e.attempts.filter((a) => a.outcome === 'fail' && !isUngatedMiss(e, a)).length,
+  missed: e.attempts.filter((a) => isUngatedMiss(e, a)).length,
   infra: e.attempts.filter((a) => a.outcome === 'infra_error').length,
   skipped: e.attempts.filter((a) => a.outcome === 'skipped').length,
 })
@@ -227,11 +229,12 @@ const tallyOf = (e: EvalEntry): Tally => ({
 const addTally = (a: Tally, b: Tally): Tally => ({
   pass: a.pass + b.pass,
   fail: a.fail + b.fail,
+  missed: a.missed + b.missed,
   infra: a.infra + b.infra,
   skipped: a.skipped + b.skipped,
 })
 
-const ZERO: Tally = { pass: 0, fail: 0, infra: 0, skipped: 0 }
+const ZERO: Tally = { pass: 0, fail: 0, missed: 0, infra: 0, skipped: 0 }
 
 /** Files, then groups, then evals, each with attempt counts; failing branches sort first. */
 export function evalTree(record: Pick<RunRecord, 'evals'>): TreeNode[] {
@@ -408,6 +411,18 @@ export const COMPARE_ORDER: CompareStatus[] = [
  */
 export const hasUngatedCells = (cells: readonly Pick<HistoryCell, 'gate'>[]) =>
   cells.some((c) => c.gate === 'none')
+
+/**
+ * An expected miss: a failed attempt in an ungated cell (a control, by default). It's reported
+ * apart from failures, since it fails neither its eval nor the run.
+ */
+export const isUngatedMiss = (
+  e: { cells: readonly Pick<HistoryCell, 'key' | 'gate'>[] },
+  a: Pick<AttemptRecord, 'cell' | 'outcome' | 'error'>,
+) =>
+  a.outcome === 'fail' &&
+  a.error?.kind !== 'aborted' &&
+  e.cells.find((c) => c.key === a.cell)?.gate === 'none'
 
 /** Passes over passes and fails in the gated cells, as an eval's `passRate` counts them. */
 function gatedPassRate(cells: HistoryCell[]): number | null {

@@ -7,6 +7,7 @@ import {
   debugLines,
   failureLines,
   formatDuration,
+  MISS_MARK,
   mark,
   offset,
   outcomeOf,
@@ -51,6 +52,8 @@ type Attempt = {
   startedAt: number
   lines: Line[]
   last: EsEvent | undefined
+  /** In an ungated cell, whose misses don't fail the run, so they aren't painted red. */
+  ungated: boolean
 }
 
 const ERROR_LINES = 12
@@ -99,7 +102,8 @@ export class PlainRenderer implements Renderer {
   #attempt(ref: AttemptRef, startedAt: number): Attempt {
     const n = ref.attempt?.n ?? 1
     const label = `[${this.#tags.label(ref.id, n)} ${attemptAxes(ref.attempt, this.#o.harness)}]`
-    return { key: ref.key, id: ref.id, label, startedAt, lines: [], last: undefined }
+    const ungated = ref.attempt?.gate === 'none'
+    return { key: ref.key, id: ref.id, label, startedAt, lines: [], last: undefined, ungated }
   }
 
   #prefix(a: Pick<Attempt, 'label'>) {
@@ -155,7 +159,12 @@ export class PlainRenderer implements Renderer {
         if (!a) return
         a.last = e
         const { progress } = e
-        const line: Line = { at: progress.at, text: progressLine(c, progress), kind: progress.kind }
+        const paint = a.ungated ? { ...c, red: c.dim } : c
+        const line: Line = {
+          at: progress.at,
+          text: progressLine(paint, progress),
+          kind: progress.kind,
+        }
         const start = STARTS[progress.kind]
         const open = start && a.lines.findLastIndex((l) => l.kind === start)
         if (!this.#streaming && open !== undefined && open >= 0) {
@@ -206,7 +215,8 @@ export class PlainRenderer implements Renderer {
     const failed = outcome !== 'pass' && outcome !== 'skipped'
     const time = outcome === 'skipped' ? '' : `  ${c.dim(formatDuration(result.durationMs))}`
     const ungated = failed && result.attempt?.gate === 'none' ? `  ${c.dim('(not gated)')}` : ''
-    const head = `${this.#prefix(a)} ${mark(c, outcome)} ${result.id}${time}${ungated}`
+    const missed = ungated !== '' && outcome === 'fail'
+    const head = `${this.#prefix(a)} ${missed ? MISS_MARK(c) : mark(c, outcome)} ${result.id}${time}${ungated}`
     const { outputLogs, githubActions, logPrefix } = this.#o.output
 
     const showDetail =
@@ -217,14 +227,19 @@ export class PlainRenderer implements Renderer {
     const judged = result.meta?.errorKind === 'judge' && (showDetail || this.#streaming)
     const errors =
       failed && outputLogs !== 'none' && !judged
-        ? failureLines(c, result, { max: ERROR_LINES })
+        ? missed
+          ? failureLines(colors(false), result, { max: 1 })
+              .filter((l) => l.trim())
+              .slice(0, 1)
+              .map((l) => c.dim(l))
+          : failureLines(c, result, { max: ERROR_LINES })
         : []
     const lines = a.lines.filter((l) => l.kind !== 'cleanup').sort((x, y) => x.at - y.at)
     const prefixed = logPrefix === 'task'
 
     // Like Turborepo on GitHub Actions: passing attempts collapse into a group, failing ones
     // stay expanded under their result line.
-    const group = githubActions && showDetail && !failed
+    const group = githubActions && showDetail && (!failed || missed)
     this.#write(group ? `::group::${stripAnsi(head)}` : head)
     if (showDetail) for (const line of lines) this.#write(this.#detail(a, line, prefixed))
     for (const line of errors) this.#write(prefixed ? `${this.#prefix(a)}  ${line}` : ` ${line}`)

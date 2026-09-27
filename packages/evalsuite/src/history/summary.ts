@@ -1,7 +1,7 @@
 import { clip, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
-import { harnessLabel } from '../view/model.ts'
+import { harnessLabel, isUngatedMiss } from '../view/model.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
 
@@ -21,7 +21,7 @@ export function summaryCounts(s: RunRecord['summary']): string {
   const parts = [
     s.pass && `${s.pass} passed`,
     s.fail - s.notGated > 0 && `${s.fail - s.notGated} failed`,
-    s.notGated > 0 && `${s.notGated} failed, not gated`,
+    s.notGated > 0 && `${s.notGated} missed, not gated`,
     s.infraError && `${s.infraError} infra error`,
     s.skipped && `${s.skipped} skipped`,
   ].filter(Boolean)
@@ -181,15 +181,24 @@ export function renderSummary(run: RunRecord): string {
           : ''
     lines.push(`| ${OUTCOME_MARK[e.outcome]} | ${cell(e.id)} | ${cell(time)} | ${judgeCell(e)} |`)
   }
-  // Failures first, but passes get the same detail: why something passed matters too.
+  // Failures first, but passes get the same detail: why something passed matters too. Expected
+  // misses (ungated cells) come after the passes, collapsed: they fail neither the eval nor the run.
   const rank = (o: Outcome) => (o === 'fail' || o === 'infra_error' ? 0 : o === 'pass' ? 1 : 2)
   for (const e of [...run.evals].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
     if (e.outcome === 'skipped') continue
     lines.push('', `### ${OUTCOME_MARK[e.outcome]} ${e.id}`, '')
     const multi = e.attempts.length > 1
     if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
-    for (const a of [...e.attempts].sort((x, y) => rank(x.outcome) - rank(y.outcome))) {
+    const attemptRank = (a: AttemptRecord) => (isUngatedMiss(e, a) ? 3 : rank(a.outcome))
+    for (const a of [...e.attempts].sort((x, y) => attemptRank(x) - attemptRank(y))) {
       if (a.outcome === 'skipped') continue
+      if (isUngatedMiss(e, a)) {
+        if (multi) lines.push(`#### ○ ${a.id} · missed, not gated`, '')
+        lines.push('<details><summary>Why it missed</summary>', '')
+        attemptDetail(lines, a)
+        lines.push('', '</details>')
+        continue
+      }
       if (multi) lines.push(`#### ${OUTCOME_MARK[a.outcome]} ${a.id}`, '')
       attemptDetail(lines, a)
     }

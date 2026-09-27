@@ -57,6 +57,9 @@ export function mark(c: Colors, outcome: Outcome): string {
   }[outcome]
 }
 
+/** An expected miss's mark: neutral, since it doesn't fail the run. */
+export const MISS_MARK = (c: Colors) => c.dim('○')
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /** A command on one line: the first line, cut to 80 characters at a word boundary. */

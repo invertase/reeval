@@ -143,6 +143,16 @@ evaluate('writes ok', { compare }, async (t) => {
     assert.ok(header)
     assert.deepEqual([header.summary.fail, header.summary.notGated], [1, 1])
     assert.equal(runOutcome(header), 'pass')
+    const recordOf = (h: HistoryEntry) =>
+      JSON.parse(readFileSync(join(p.dir, '.es/runs', `${h.runId}.json`), 'utf8')) as RunRecord
+    // The studio's tree counts the control's miss apart, so the file doesn't read as failed.
+    assert.deepEqual(evalTree(recordOf(header))[0]?.tally, {
+      pass: 1,
+      fail: 0,
+      missed: 1,
+      infra: 0,
+      skipped: 0,
+    })
 
     // Twin: the same failure in a gated control fails the run, and es run exits 1.
     const gated = await runCli(p.dir, ['run'], { env: { ES_TEST_GATE_ALL: '1' } })
@@ -152,6 +162,13 @@ evaluate('writes ok', { compare }, async (t) => {
     ).at(-1)
     assert.ok(latest && latest.runId !== header.runId)
     assert.equal(runOutcome(latest), 'fail')
+    assert.deepEqual(evalTree(recordOf(latest))[0]?.tally, {
+      pass: 1,
+      fail: 1,
+      missed: 0,
+      infra: 0,
+      skipped: 0,
+    })
   })
 
   test('the outcome follows the status too', () => {
@@ -297,7 +314,7 @@ describe('view-models over a real history', () => {
     const tree = evalTree(matrix)
     assert.equal(tree[0]?.kind, 'group')
     assert.equal(tree[0]?.name, 'evals/hello.es.ts')
-    assert.deepEqual(tree[0]?.tally, { pass: 4, fail: 0, infra: 0, skipped: 0 })
+    assert.deepEqual(tree[0]?.tally, { pass: 4, fail: 0, missed: 0, infra: 0, skipped: 0 })
     const rows = cellRows(matrix.evals[0] as RunRecord['evals'][number])
     assert.deepEqual(
       rows.map((r) => [r.environment, r.role, r.gated, r.pass, r.runs, r.lift, r.attempts.length]),
