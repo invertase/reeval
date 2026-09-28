@@ -69,7 +69,7 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
 
     const text = await runCli(p.dir, ['query', 'SELECT key, outcome FROM evals'])
     assert.equal(text.code, 0, text.stderr)
-    assert.equal(text.stdout, 'key                     outcome\nevals/s.eval.ts › greets  pass\n')
+    assert.equal(text.stdout, 'key                       outcome\nevals/s.eval.ts › greets  pass\n')
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 

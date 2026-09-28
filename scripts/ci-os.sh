@@ -44,7 +44,7 @@ case $part in
     work=$(mktemp -d)
     pnpm --filter reeval pack --pack-destination "$work"
     tarball=$(cd "$work" && ls ./*.tgz)
-    es() { npx --no-install es "$@"; }
+    reeval() { npx --no-install reeval "$@"; }
 
     # A fresh project on the fake agent: init, run, doctor and a studio build of the run.
     mkdir "$work/fake" && cd "$work/fake"
