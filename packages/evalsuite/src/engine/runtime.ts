@@ -34,8 +34,8 @@ export type TestOptions = {
   timeout?: number
   mode: TestMode
   attempt?: AttemptMeta
-  /** Called with the eval file's path when the attempt is ready to start. */
-  gate?: (file: string) => Gate
+  /** The leases the attempt waits for when it's ready to start; none for placeholders. */
+  gate?: Gate
 }
 
 export type Engine = {

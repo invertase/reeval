@@ -625,10 +625,10 @@ export type HarnessOption =
 export type CompareGate = 'variants' | 'all' | 'none'
 
 /** Variants run next to the inherited environment (the control), with the same prompt and checks. */
-export type CompareOptions =
-  | Environment[]
+export type CompareOptions<E = Environment> =
+  | E[]
   | {
-      variants: Environment[]
+      variants: E[]
       /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
       gate?: CompareGate
       /** Lift in points from -1 to 1; a variant cell below it fails. */
@@ -675,6 +675,20 @@ export type EvalOptions = {
   pin?: PinnableKey[]
 }
 export type GroupOptions = EvalOptions
+
+/**
+ * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model
+ * by name or a fake judge, and environments without `extend`.
+ */
+export type EvalOptionsData = Omit<EvalOptions, 'harness' | 'judge' | 'environment' | 'compare'> & {
+  harness?: HarnessData
+  judge?: ConfigJudgeOptions
+  environment?: EnvironmentData
+  compare?: CompareOptions<EnvironmentData>
+}
+
+/** An `Environment` as data, as JSON carries it: without `extend`. */
+export type EnvironmentData = Omit<Environment, 'extend'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
