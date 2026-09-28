@@ -1,0 +1,21 @@
+# Labelling a PR `ci:full` runs ci.yml unscoped, with extended.yml (the Node 22.13 floor, Windows
+# and macOS), once, as `full / …`. From then on the label is on the PR, so each push's own ci.yml
+# run is full. Adding any other label runs nothing here.
+name: ci-full
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-full-${{ github.event.pull_request.number }}-${{ github.event.label.name }}
+  cancel-in-progress: true
+
+jobs:
+  full:
+    name: full
+    if: github.event.label.name == 'ci:full'
+    uses: ./.github/workflows/ci.yml

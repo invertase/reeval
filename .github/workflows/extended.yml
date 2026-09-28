@@ -1,0 +1,85 @@
+# ci.yml's full-run legs, which PRs skip unless labelled ci:full: the unit and plan files on the
+# engines floor (Node 22.13), and every tier that needs no Docker on Windows and macOS, through
+# scripts/ci-os.sh. ci.yml calls this on main, nightly, on demand, on release and for ci:full, and
+# its `ci` check fails when any of these fails. No concurrency group: the caller's applies.
+#
+# The Docker tier runs on Linux only: GitHub's Windows runners have Windows containers only, while
+# ES's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
+# have no Docker. Windows starts processes slowly, so its unit files run in six shards.
+name: extended
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-floor:
+    name: unit and plan (node 22.13, ${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/4', '2/4', '3/4', '4/4']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+        with: { node-version: '22.13' }
+      - run: pnpm build
+      - name: evalsuite (every test file but the fixture, Docker, studio, pack and real-agent ones)
+        working-directory: packages/evalsuite
+        run: |
+          shopt -s extglob
+          node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
+            --test-shard=${{ matrix.shard }} \
+            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real).test.ts
+      - name: sandbox-docker (without containers) and the harness packages
+        if: matrix.shard == '1/4'
+        run: |
+          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
+            echo "::group::@evalsuite/$p"
+            pnpm --filter "@evalsuite/$p" test
+            echo "::endgroup::"
+          done
+
+  windows:
+    name: windows (${{ matrix.part }})
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run: { shell: bash }
+    strategy:
+      fail-fast: false
+      matrix:
+        part: ['unit 1/6', 'unit 2/6', 'unit 3/6', 'unit 4/6', 'unit 5/6', 'unit 6/6', tiers, packed]
+    steps:
+      # Recorded runs' artifact paths pass Windows' 260-character limit, which git keeps by default.
+      - run: git config --system core.longpaths true
+      # Scanning every file the tests write and every process they start makes attempts on a busy
+      # runner take tens of seconds; the runner is thrown away after the job.
+      - run: powershell -Command "Set-MpPreference -DisableRealtimeMonitoring \$true"
+        continue-on-error: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - if: matrix.part == 'tiers'
+        run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and ES's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
+      - run: scripts/ci-os.sh ${{ matrix.part }}
+
+  macos:
+    name: macos
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      - run: pnpm build
+      - run: echo "::notice title=No Docker tier on macOS::GitHub's macOS runners have no Docker. The docker jobs run the Docker tier on Linux."
+      - run: scripts/ci-os.sh unit
+      - run: scripts/ci-os.sh tiers
+      - run: scripts/ci-os.sh packed

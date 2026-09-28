@@ -233,25 +233,41 @@ that starts `es`. `test/differential/vitest/` keeps what the Vitest engine did, 
 scripts/differential.mjs record <dir>` runs those suites (the feature fixtures, plan snapshots,
 the example, the engine and history tests), capturing every run's exit code, output and record,
 normalised (`test/support/differential.ts`), and `compare <expected> <actual>` fails on any
-difference that isn't in its `INTENDED` list, each with its reason. A deliberate change to what
+difference that isn't in its `INTENDED` list, each with its reason. CI doesn't run `record`: the
+`unit and plan` shards and `features (fake)` run with `ES_DIFFERENTIAL_DIR` set and upload their
+captures, and `engine differential` compares them all. A deliberate change to what
 `es` prints or records updates the captures it touches, named in the PR. Which features
 have fixtures on which tier is a separate, generated matrix:
 [`test/features/COVERAGE.md`](./packages/evalsuite/test/features/COVERAGE.md).
 
 ### CI and releases
 
-GitHub Actions runs on every PR, every merge-queue entry (`merge_group`) and every push to
-`main`, on `ubuntu-24.04` with Node from `engines`, plus Windows and macOS legs (below):
+GitHub Actions runs on every PR, every merge-queue entry (`merge_group`), every push to `main`
+and nightly, on `ubuntu-24.04` with Node from `engines`, plus the Node 22.13 floor and Windows and
+macOS legs off PRs (below). What runs where:
+
+| Event | Runs |
+|---|---|
+| PR | The Linux tiers, scoped to the files it changes (`ci.yml`'s `changes` job): docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `.agents/`) run only `lint, typecheck and docs`; `packages/studio-web`-only changes add `studio` and `packed install`; anything else adds the unit, fixture, differential and Docker tiers; `engine coverage` runs when the engine, its tests or what builds them change. Any `.github/` change runs every tier. No coverage |
+| PR labelled `ci:full` | Everything, unscoped, as on `main` (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
+| Merge queue | Every Linux tier, unscoped; not `extended.yml`, npm 10.9 or coverage |
+| `main`, nightly, `workflow_dispatch`, release | Everything: every tier, `extended.yml` (Node 22.13, Windows, macOS), npm 10.9's packed install and the coverage report |
+
+**The required checks are `ci` and `conventional commits`.** `ci` is `ci.yml`'s last job: it needs
+every other job and fails when any failed or was cancelled, while a job the change didn't need is
+skipped, which passes. Rename or add jobs freely; only those two names are in the ruleset.
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `lint` (`biome ci`), `typecheck`, `engine coverage` (100% of the engine's files), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`), `coverage` (below), `windows (unit 1/6 … 6/6, tiers, packed)` with the `windows` check over them, and `macos` |
+| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `engine differential`, `docker (…)` with `ES_TEST_REQUIRE_DOCKER=1` (evalsuite's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
+| `extended.yml` | Called by `ci.yml` on full runs: `unit and plan (node 22.13, 1/4 … 4/4)`, `windows (unit 1/6 … 6/6, tiers, packed)` and `macos` |
+| `ci-full.yml` | On a PR labelled `ci:full`: `ci.yml`, unscoped, as `full / …` |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch), then re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`, key-free); any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
-- **Windows and macOS** run `scripts/ci-os.sh`: the unit and plan files (in six shards on
+- **Windows and macOS** (in `extended.yml`, so not on PRs without `ci:full`) run `scripts/ci-os.sh`: the unit and plan files (in six shards on
   Windows), then `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
   its browser test, the other packages) and `packed` (the pack test, then `es init` → `es run` →
   `es doctor` → `es studio build` in a fresh project from the tarball, and `es doctor`'s Docker
@@ -266,15 +282,15 @@ GitHub Actions runs on every PR, every merge-queue entry (`merge_group`) and eve
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
   versions and the build context.
-- **Coverage:** the `unit` (newest Node), `features`, `docker` and `studio` jobs run their tests
-  with `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
+- **Coverage** (off PRs and the queue): the `unit` (newest Node), `features`, `docker` and `studio`
+  jobs run their tests with `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
   (`coverage-report`) and writes the summary and the feature × tier matrix to the job summary.
   It's report-only, so it doesn't fail on a low number.
 - **Merge with squash,** so the PR title (checked by `commits.yml`) is the commit release-please
   reads. `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking
   change bumps the minor too.
-- **Merge queue:** `ci.yml` and `commits.yml` run every required check on `merge_group`, with
-  nothing skipped or path-filtered; each queue entry has its own concurrency group (its
+- **Merge queue:** `ci.yml` and `commits.yml` run on `merge_group`, with every Linux tier and
+  nothing path-filtered, so `ci` there means what it means on `main` less `extended.yml`; each queue entry has its own concurrency group (its
   `gh-readonly-queue/…` ref), so entries never cancel each other or PR runs. The queue's merge
   method must be squash. `real.yml` and `contract.yml` don't run in the queue.
 - **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open with the new version
