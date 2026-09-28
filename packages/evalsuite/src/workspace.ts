@@ -225,7 +225,7 @@ function fetchError(failure: Failure, stderr: string, w: GitWorkspace, what: str
     }
     case 'auth':
       return new WorkspaceError(
-        `${what}: couldn't be read with this machine's git credentials (${line}). ES fetches the repository on the host, so set up access there (gh auth setup-git, a credential helper or an SSH key); the sandbox never gets the credentials.`,
+        `${what}: isn't readable with this machine's git credentials, or doesn't exist (${line}). ES fetches the repository on the host, so set up access there (gh auth setup-git, a credential helper or an SSH key); the sandbox never gets the credentials.`,
         true,
       )
     case 'url':

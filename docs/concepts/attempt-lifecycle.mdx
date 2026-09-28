@@ -9,7 +9,8 @@ Every attempt gets its own sandbox and goes through the same phases, in the same
 flowchart TD
   I[image ready] --> C[container and egress gateway]
   C --> V[env vars]
-  V --> F[files and rules]
+  V --> W[workspace: the git repository, if any]
+  W --> F[files and rules]
   F --> S[setup steps]
   S --> N[workspace snapshot]
   N --> H[harness session: skills and MCP]
@@ -55,6 +56,7 @@ flowchart TD
 | Image | ES's image for the harness, or a `from`, `dockerfile` or `install` image, built once and cached | Its tools, yes |
 | Container | A fresh container, with the [egress gateway](/concepts/credential-brokering) as its only proxy | No |
 | Env | `env` variables; brokered secrets as placeholders | Yes, placeholders only |
+| Workspace | A `workspace: git(…)` repository's tree, fetched on the host before the run, unpacked; no `.git` | Yes, not in the diff |
 | Files and rules | `files` written byte for byte; `rules` to `AGENTS.md` (`CLAUDE.md` for Claude Code) | Yes, not in the diff |
 | Setup | `setup` steps in order, with secrets, output to `setup.log` | Their results, not in the diff |
 | Snapshot | The workspace as it is now: the diff starts here | No |
