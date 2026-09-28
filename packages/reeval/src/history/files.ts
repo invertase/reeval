@@ -38,6 +38,13 @@ const cacheFile = (root: string) => join(root, '.reeval', 'history-cache.json')
 const TEXT_FILE = /\.(json|jsonl|md|patch|log|txt)$/
 
 const isMissing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
+
+/**
+ * A file another process is writing, renaming or removing right now: Windows refuses to open or
+ * replace one that's open elsewhere (EPERM, EBUSY). It reads fine on a later try.
+ */
+const inFlux = (error: unknown) =>
+  ['ENOENT', 'EPERM', 'EBUSY'].includes((error as NodeJS.ErrnoException).code ?? '')
 const tmpName = () => `${process.pid}-${randomBytes(6).toString('hex')}`
 export const encodeRecord = (record: RunRecord) =>
   Buffer.from(`${JSON.stringify(record, null, 2)}\n`)
@@ -149,29 +156,41 @@ export async function listRuns(
   for (const name of names) {
     const path = join(dir, name)
     const key = relativeFile(root, path)
-    const info = await stat(path)
-    const hit = cache.files[key]
-    if (hit && hit.size === info.size && hit.mtimeMs === info.mtimeMs) {
-      entries.push(hit.entry)
-      continue
-    }
     try {
+      const info = await stat(path)
+      const hit = cache.files[key]
+      if (hit && hit.size === info.size && hit.mtimeMs === info.mtimeMs) {
+        entries.push(hit.entry)
+        continue
+      }
       const entry = runHeader(await readRecord(path), recorded)
       cache.files[key] = { size: info.size, mtimeMs: info.mtimeMs, entry }
       entries.push(entry)
       changed = true
     } catch (error) {
+      // A record landing as we list is left for the next read, not cached or warned about.
+      if (inFlux(error)) continue
       if (!(error instanceof HistoryError) && !(error instanceof SyntaxError)) throw error
       warnUnreadable(path, error)
     }
   }
-  if (changed) {
+  if (changed) await writeCache(root, cache)
+  return entries
+}
+
+/**
+ * Best-effort: another reader (a studio serving parallel requests, a second `es`) may be
+ * replacing the same file, which Windows refuses. The cache is only a speed-up.
+ */
+async function writeCache(root: string, cache: Cache): Promise<void> {
+  const tmp = `${cacheFile(root)}.${tmpName()}`
+  try {
     await mkdir(dirname(cacheFile(root)), { recursive: true })
-    const tmp = `${cacheFile(root)}.${tmpName()}`
     await writeFile(tmp, JSON.stringify(cache))
     await rename(tmp, cacheFile(root))
+  } catch {
+    await rm(tmp, { force: true }).catch(() => {})
   }
-  return entries
 }
 
 export type WrittenRun = { recordPath: string; artifactDir: string | null; created: boolean }
