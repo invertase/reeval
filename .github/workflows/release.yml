@@ -18,7 +18,7 @@ concurrency:
 jobs:
   release-please:
     name: release-please
-    if: github.repository == 'invertase/evalsuite'
+    if: github.repository == 'invertase/reeval'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

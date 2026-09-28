@@ -36,7 +36,7 @@ jobs:
     name: gate
     # This repository only; on a PR, only its own branches and only with the label.
     if: >-
-      github.repository == 'invertase/evalsuite' &&
+      github.repository == 'invertase/reeval' &&
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.head.repo.full_name == github.repository &&
         contains(github.event.pull_request.labels.*.name, 'real-agents')))

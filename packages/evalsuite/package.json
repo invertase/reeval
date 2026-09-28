@@ -6,12 +6,12 @@
   "author": "Invertase <oss@invertase.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/invertase/evalsuite.git",
+    "url": "git+https://github.com/invertase/reeval.git",
     "directory": "packages/evalsuite"
   },
-  "homepage": "https://github.com/invertase/evalsuite/tree/main/packages/evalsuite#readme",
+  "homepage": "https://github.com/invertase/reeval/tree/main/packages/evalsuite#readme",
   "bugs": {
-    "url": "https://github.com/invertase/evalsuite/issues"
+    "url": "https://github.com/invertase/reeval/issues"
   },
   "type": "module",
   "engines": {

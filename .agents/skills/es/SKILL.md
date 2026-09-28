@@ -12,7 +12,7 @@ description: >
 ES runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex) on a task
 in a fresh Docker sandbox, then checks the result with deterministic assertions and an LLM judge.
 You write evals in TypeScript; `es run` runs them. The package is `@invertase/foobar` (a
-placeholder name) and the CLI is `es`. Full docs: the `docs/` folder of github.com/invertase/evalsuite (a docs.page
+placeholder name) and the CLI is `es`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
 site; its Reference tab has every option, flag and error).
 
 ## Workflow

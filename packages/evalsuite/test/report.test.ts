@@ -343,12 +343,12 @@ evaluate('slow', async (t) => { await new Promise((r) => setTimeout(r, 2000)) })
 })
 
 describe('es report: filing an issue', () => {
-  const repo = issueRepo({ bugs: { url: 'https://github.com/invertase/evalsuite/issues' } })
+  const repo = issueRepo({ bugs: { url: 'https://github.com/invertase/reeval/issues' } })
 
   test("the repository comes from the package's bugs field, so a rename moves it", () => {
     assert.deepEqual(repo, {
-      issues: 'https://github.com/invertase/evalsuite/issues',
-      slug: 'invertase/evalsuite',
+      issues: 'https://github.com/invertase/reeval/issues',
+      slug: 'invertase/reeval',
     })
     assert.equal(
       issueRepo({ bugs: 'https://github.com/acme/renamed/issues/' }).slug,
@@ -366,7 +366,7 @@ describe('es report: filing an issue', () => {
     for (const id of Object.values(FIELDS)) assert.match(template, new RegExp(`id: ${id}\\n`))
 
     const short = new URL(issueUrl(repo, 'es run: it broke', 'line one\nline two'))
-    assert.equal(short.origin + short.pathname, 'https://github.com/invertase/evalsuite/issues/new')
+    assert.equal(short.origin + short.pathname, 'https://github.com/invertase/reeval/issues/new')
     assert.equal(short.searchParams.get('template'), ISSUE_TEMPLATE)
     assert.equal(short.searchParams.get('title'), 'es run: it broke')
     assert.equal(short.searchParams.get(FIELDS.report), 'line one\nline two')
@@ -392,7 +392,7 @@ describe('es report: filing an issue', () => {
         calls.push(args)
         return over.code
           ? { code: over.code, stdout: '', stderr: 'HTTP 403' }
-          : { code: 0, stdout: 'https://github.com/invertase/evalsuite/issues/9\n', stderr: '' }
+          : { code: 0, stdout: 'https://github.com/invertase/reeval/issues/9\n', stderr: '' }
       },
       open: async (url: string) => {
         opened.push(url)
@@ -414,13 +414,13 @@ describe('es report: filing an issue', () => {
       'issue',
       'create',
       '--repo',
-      'invertase/evalsuite',
+      'invertase/reeval',
       '--title',
       'es run: it broke',
       '--body-file',
       '/tmp/issue.md',
     ])
-    assert.match(out.at(-1) ?? '', /^Filed https:\/\/github\.com\/invertase\/evalsuite\/issues\/9$/)
+    assert.match(out.at(-1) ?? '', /^Filed https:\/\/github\.com\/invertase\/reeval\/issues\/9$/)
     assert.deepEqual(opened, [])
     assert.equal(await fileIssue({ ...base, yes: true }, deps()), 'gh')
     assert.equal(calls.length, 2)
@@ -432,7 +432,7 @@ describe('es report: filing an issue', () => {
     assert.equal(await fileIssue({ ...base, interactive: false }, deps({ hasGh: false })), 'url')
     assert.equal(calls.length, 3)
     assert.equal(opened.length, 3)
-    assert.match(out.at(-1) ?? '', /^https:\/\/github\.com\/invertase\/evalsuite\/issues\/new\?/)
+    assert.match(out.at(-1) ?? '', /^https:\/\/github\.com\/invertase\/reeval\/issues\/new\?/)
   })
 
   test('es report --issue --yes runs gh issue create with a scrubbed body file', async () => {
@@ -445,7 +445,7 @@ describe('es report: filing an issue', () => {
       join(bin, 'gh.js'),
       `const args = process.argv.slice(2)
 require('node:fs').appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
-if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/issues/42')
+if (args[0] === 'issue') console.log('https://github.com/invertase/reeval/issues/42')
 `,
     )
     writeFileSync(join(bin, 'gh'), `#!/bin/sh\nexec node "$(dirname "$0")/gh.js" "$@"\n`)
@@ -454,12 +454,12 @@ if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/iss
     const env = { ...p.env, PATH: `${bin}${delimiter}${process.env.PATH}` }
     const r = await runCli(p.dir, ['report', '--issue', '--yes'], { env })
     assert.equal(r.code, 0, r.stderr)
-    assert.match(r.stdout, /Filed https:\/\/github\.com\/invertase\/evalsuite\/issues\/42/)
+    assert.match(r.stdout, /Filed https:\/\/github\.com\/invertase\/reeval\/issues\/42/)
     const create = readFileSync(log, 'utf8')
       .split('\n')
       .find((l) => l.startsWith('issue create'))
     const bodyFile = /--body-file (\S+)/.exec(create ?? '')?.[1] ?? ''
-    assert.match(create ?? '', /--repo invertase\/evalsuite --title es run: infra: agent broke/)
+    assert.match(create ?? '', /--repo invertase\/reeval --title es run: infra: agent broke/)
     const body = readFileSync(bodyFile, 'utf8')
     assert.match(body, /\*\*Command:\*\* `es run` → exit 3/)
     assert.match(body, /attach `report\.md`/)
@@ -471,7 +471,7 @@ if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/iss
     const url = await runCli(p.dir, ['report', '--issue'], { env })
     assert.match(
       url.stdout,
-      /\nhttps:\/\/github\.com\/invertase\/evalsuite\/issues\/new\?template=bug_report\.yml&/,
+      /\nhttps:\/\/github\.com\/invertase\/reeval\/issues\/new\?template=bug_report\.yml&/,
     )
     assert.equal(
       readFileSync(log, 'utf8')
