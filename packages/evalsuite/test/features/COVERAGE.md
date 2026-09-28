@@ -20,7 +20,7 @@
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — |
 | Finding the nearest `es.config.*` upward from the current directory; `--config` wins | ✓ 3 | — | ● 1 | ● 1 | — |
 | `harness` lists × `runs`, and `--runs` | ✓ 2 | ✓ 2 | — | — | — |
-| Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 2 | ✓ 1 | — | — | — |
+| Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 3 | ✓ 1 | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 1 | — | — | — |
 | `compare.harness` | ✓ 1 | ✓ 1 | — | — | — |
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 2 | — | — | — | — |

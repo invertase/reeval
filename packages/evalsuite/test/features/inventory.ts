@@ -111,6 +111,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       engine('groups nest, cascade options'),
       options('groups replace the harness list, evals can edit it'),
+      options('harness edits as data: { add } appends to the inherited list, { only } keeps by id'),
     ],
   },
   {

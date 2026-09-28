@@ -105,10 +105,8 @@ import { fakeHarness } from 'evalsuite/harness'
 group('only c', () => {
   evaluate('replaced', async (t) => { await t.send('x') })
   evaluate('added', { harness: (h) => [...h, fakeHarness({ id: 'd' })] }, async (t) => { await t.send('x') })
-  evaluate('added as data', { harness: { add: fakeHarness({ id: 'd' }) } }, async (t) => { await t.send('x') })
 }, { harness: fakeHarness({ id: 'c' }) })
 evaluate('inherits', async (t) => { await t.send('x') })
-evaluate('kept as data', { harness: { only: 'b' } }, async (t) => { await t.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -116,13 +114,27 @@ evaluate('kept as data', { harness: { only: 'b' } }, async (t) => { await t.send
     const cells = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.cells.map((c) => c.harness)]),
     )
-    assert.deepEqual(cells, {
-      replaced: ['c'],
-      added: ['c', 'd'],
-      'added as data': ['c', 'd'],
-      inherits: ['a', 'b'],
-      'kept as data': ['b'],
+    assert.deepEqual(cells, { replaced: ['c'], added: ['c', 'd'], inherits: ['a', 'b'] })
+  })
+
+  test('harness edits as data: { add } appends to the inherited list, { only } keeps by id', async () => {
+    const p = await project('harness-edits', {
+      'es.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
+      'evals/e.es.ts': `import { evaluate, group } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+group('only a', { harness: { only: 'a' } }, () => {
+  evaluate('kept', async (t) => { await t.send('x') })
+  evaluate('added', { harness: { add: [fakeHarness({ id: 'd' })] } }, async (t) => { await t.send('x') })
+})
+evaluate('kept both', { harness: { only: ['b', 'a'] } }, async (t) => { await t.send('x') })
+`,
     })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const cells = Object.fromEntries(
+      readRun(p.dir).evals.map((e) => [e.name, e.cells.map((c) => c.harness)]),
+    )
+    assert.deepEqual(cells, { kept: ['a'], added: ['a', 'd'], 'kept both': ['a', 'b'] })
   })
 
   test('tags filter, todo, for, and a filter that matches nothing exits 2', async () => {
