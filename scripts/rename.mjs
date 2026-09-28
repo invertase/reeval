@@ -118,6 +118,8 @@ const RULES = [
   [/(\.agents\/skills\/)es\b/g, '$1reeval'],
   [/\b(npx|bunx|pnpm exec|pnpm|yarn|npm exec --) es(?![\w.:/-])/g, '$1 reeval'],
   [/(\.bin(?:\/|\\+))es\b/g, '$1reeval'],
+  [/\b(npx --no-install) es\b/g, '$1 reeval'],
+  [/\bes\(\) \{/g, 'reeval() {'],
   [
     new RegExp(
       `\\bes (?=(?:${COMMANDS}|VERSION)\\b|--|-h\\b|-v|\\$\\{|\\[|<|\\d+\\.\\d+\\.\\d+)`,
@@ -200,6 +202,11 @@ const PATCHES = [
     file: 'packages/evalsuite/test/mcp.test.ts',
     from: "getServerVersion()?.name, 'es')",
     to: "getServerVersion()?.name, 'reeval')",
+  },
+  {
+    file: 'packages/evalsuite/test/query.test.ts',
+    from: "'key                     outcome\\nevals/s.es.ts › greets  pass\\n'",
+    to: "'key                       outcome\\nevals/s.eval.ts › greets  pass\\n'",
   },
   {
     file: 'packages/harness-opencode/test/unit.test.ts',
