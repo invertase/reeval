@@ -47,7 +47,7 @@ const SKIP = [
 const KEEP_EVAL_NAMES = /\/test\/fixtures\/records\//
 /** Tests that read the analysis fixtures, where the recorded environment and eval names stay. */
 const READS_ANALYSIS =
-  /\/test\/(analysis\.test\.ts|differential\/vitest\/analysis\.test\.ts\.jsonl)$/
+  /\/test\/(analysis\.test\.ts|features\/inventory\.ts|differential\/vitest\/analysis\.test\.ts\.jsonl)$/
 const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|tgz|gz|zip|wasm)$/i
 const COMMANDS =
   'init|doctor|run|clean|record|history|show|compare|checkout|query|analyze|mcp|studio|report|image|help|eval'
@@ -148,6 +148,9 @@ const RULES = [
   [/\bes_(?=[a-z])/g, 'reeval_'],
   [/\b(A|a)n ES\b(?! modules?\b)/g, '$1 reeval'],
   [/\bES\b(?! modules?\b)(?!\d)/g, 'reeval'],
+  [/\b(A|a)n reeval\b/g, '$1 reeval'],
+  // The message is cut at a fixed width, and `reeval` is four characters longer than `ES`.
+  [/(blocked by the reeval egress policy: )(?:the |bloc)…/g, '$1…', /\/test\/features\.test\.ts$/],
 ]
 
 /**
@@ -479,8 +482,8 @@ function unmatched(actual, renamed, original) {
   // source columns and where a long line is cut (`…`); the analysis prompt names reeval.
   const loose = (s) =>
     (s ?? '')
-      .replace(/\bevals-[a-z0-9-]*-(?=[0-9a-f]*\d)[0-9a-f]{6}\b/g, '<slug>')
-      .replace(/(.)\1{49,}/g, '$1<run>')
+      .replace(/\bevals-[a-z0-9-]*-[0-9a-f]{6}\b/g, '<slug>')
+      .replace(/(\S)\1{49,}/g, '$1<run>')
       .replace(/\b(?=[0-9a-f]*\d)[0-9a-f]{12,}\b/g, '<hex>')
       .replace(/-(?=[0-9a-f]*\d)[0-9a-f]{5,}\b/g, '-<h>')
       .replace(/(\.[cm]?[jt]s):(\d+):\d+/g, '$1:$2:<c>')
@@ -491,18 +494,27 @@ function unmatched(actual, renamed, original) {
   const same = (a, b) => {
     if (a === b) return true
     const [x, y] = [a.split('…')[0], b.split('…')[0]]
-    return (a.includes('…') || b.includes('…')) && (x.startsWith(y) || y.startsWith(x))
+    const shorter = Math.min(x.length, y.length)
+    return (
+      a.includes('…') &&
+      b.includes('…') &&
+      shorter >= 8 &&
+      x.slice(0, shorter) === y.slice(0, shorter)
+    )
   }
-  const pool = renamed.map((line, i) => [loose(line), loose(original[i])])
-  const fits = (j, l) => pool[j].some((p) => same(p, l))
-  const used = new Array(pool.length).fill(false)
+  // Two pools, not pairs: sorted output (live lines) sorts the old and new names differently.
+  const pools = [renamed, original].map((lines) => lines.map(loose))
+  const used = pools.map((p) => new Array(p.length).fill(false))
   const bad = []
   actual.forEach((line, i) => {
     const l = loose(line)
-    let at = i < pool.length && !used[i] && fits(i, l) ? i : -1
-    if (at < 0) at = pool.findIndex((_, j) => !used[j] && fits(j, l))
-    if (at < 0) bad.push(line)
-    else used[at] = true
+    const hit = pools.some((pool, k) => {
+      let at = i < pool.length && !used[k][i] && same(pool[i], l) ? i : -1
+      if (at < 0) at = pool.findIndex((p, j) => !used[k][j] && same(p, l))
+      if (at >= 0) used[k][at] = true
+      return at >= 0
+    })
+    if (!hit) bad.push(line)
   })
   return actual.length === renamed.length
     ? bad
