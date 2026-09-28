@@ -21,7 +21,13 @@ export async function planJson(c: Omit<PlanCase, 'name'>): Promise<PlanDocument>
   })
   assert.equal(r.code, 0, r.stdout + r.stderr)
   assert.equal(existsSync(join(p.dir, '.es/runs')), false, 'a dry run writes no run')
-  return JSON.parse(r.stdout) as PlanDocument
+  try {
+    return JSON.parse(r.stdout) as PlanDocument
+  } catch (error) {
+    throw new Error(
+      `es run --dry-run --json printed ${r.stdout.length} characters that aren't one JSON document (${(error as Error).message}):\n${r.stdout.slice(0, 400)}\n…\n${r.stdout.slice(-400)}\nstderr:\n${r.stderr}`,
+    )
+  }
 }
 
 /** Aligns columns; a short row (a skipped eval) only shares the first column's width. */
