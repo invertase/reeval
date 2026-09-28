@@ -22,6 +22,7 @@ import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environ
 import {
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
+  helpersFor,
   isMovingRef,
   layered,
   parseGitRepo,
@@ -936,6 +937,33 @@ test('git refs and repo shorthands', () => {
     ref: 'v1',
     path: 'skills/genkit',
   })
+})
+
+test('git(): URLs, GitHub shorthands and local paths, resolved against the calling file', () => {
+  const { git } = helpersFor('/p/evals')
+  assert.deepEqual(git('https://github.com/acme/app', { ref: 'v1', path: 'examples/basic/' }), {
+    kind: 'git',
+    repo: 'https://github.com/acme/app',
+    url: 'https://github.com/acme/app',
+    ref: 'v1',
+    path: 'examples/basic',
+  })
+  assert.deepEqual(git('github:acme/app'), {
+    kind: 'git',
+    repo: 'github:acme/app',
+    url: 'https://github.com/acme/app.git',
+  })
+  assert.deepEqual(git('https://github.com/acme/app/tree/v2/apps/web'), {
+    kind: 'git',
+    repo: 'https://github.com/acme/app',
+    url: 'https://github.com/acme/app.git',
+    ref: 'v2',
+    path: 'apps/web',
+  })
+  assert.equal(git('../fixtures/app').url, resolve('/p/evals', '../fixtures/app'))
+  assert.equal(git('git@github.com:acme/app.git').url, 'git@github.com:acme/app.git')
+  assert.throws(() => git('https://tok@github.com/acme/app'), /password or token in it/)
+  assert.throws(() => git('github:acme/app', { ref: '--upload-pack=x' }), /ref is a branch/)
 })
 
 test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {

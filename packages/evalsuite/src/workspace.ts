@@ -186,8 +186,12 @@ async function treeAt(dir: string, commit: string, w: GitWorkspace, what: string
   if (entry.code === 0 && name === w.path) {
     throw new WorkspaceError(`${what} ${at}: "${w.path}" is a file, not a directory`, true)
   }
-  const parent = posix.dirname(w.path)
-  const list = await gitIn(dir, ['ls-tree', parent === '.' ? commit : `${commit}:${parent}`])
+  let parent = posix.dirname(w.path)
+  let list = await gitIn(dir, ['ls-tree', parent === '.' ? commit : `${commit}:${parent}`])
+  if (list.code !== 0) {
+    parent = '.'
+    list = await gitIn(dir, ['ls-tree', commit])
+  }
   const names =
     list.code === 0
       ? list.text
@@ -199,7 +203,7 @@ async function treeAt(dir: string, commit: string, w: GitWorkspace, what: string
           })
       : []
   const shown = names.slice(0, 12).join(', ') + (names.length > 12 ? ', …' : '')
-  const where = list.code === 0 && parent !== '.' ? `${parent}/ has` : 'its top level has'
+  const where = parent === '.' ? 'its top level has' : `${parent}/ has`
   throw new WorkspaceError(
     `${what} ${at} has no directory "${w.path}"${names.length ? `; ${where}: ${shown}` : ''}`,
     true,

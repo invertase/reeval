@@ -67,7 +67,8 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
   }
 }
 
-const WORKSPACE_TAR = '~/.es-workspace.tar'
+// A relative path: GNU tar (Git for Windows' too) reads a `C:` in its file name as a remote host.
+const WORKSPACE_TAR = '.es-workspace.tar'
 
 /** Unpacks the git workspace's tarball into the (empty) workspace. */
 async function copyWorkspace(
@@ -78,10 +79,7 @@ async function copyWorkspace(
   const start = performance.now()
   const tar = await readFile(workspace.tar)
   await box.writeFile(WORKSPACE_TAR, tar)
-  const r = await box.exec(
-    `tar -xf "$HOME/${WORKSPACE_TAR.slice(2)}" && rm -f "$HOME/${WORKSPACE_TAR.slice(2)}"`,
-    { signal },
-  )
+  const r = await box.exec(`tar -xf ${WORKSPACE_TAR} && rm -f ${WORKSPACE_TAR}`, { signal })
   if (r.exitCode !== 0) {
     throw new InfraError(
       `Couldn't unpack the workspace ${workspace.label} into the sandbox (the image needs tar): ${tailOf(r.stderr || r.stdout)}`,

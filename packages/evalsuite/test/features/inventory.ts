@@ -50,6 +50,7 @@ const prepareContract = (name: string) =>
 const debug = (name: string) => `evalsuite/test/debug.test.ts › ${name}`
 const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `evalsuite/test/analysis.test.ts › ${name}`
+const workspace = (name: string) => `evalsuite/test/workspace.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -265,6 +266,20 @@ export const inventory: InventoryFeature[] = [
     name: '`skill.git`: ref, `path`, `only` and the recorded commit',
     fixtures: ['skills/git-ref'],
     tests: [unit('git refs and repo shorthands'), options('skills come from a git URL at a ref')],
+  },
+  {
+    id: 'environment.workspace',
+    area: 'Environments',
+    name: '`workspace: git(…)`: a repository or directory at a ref, fetched on the host, with its commit and tree recorded',
+    fixtures: ['workspace/git-subpath', 'workspace/files-over-repo', 'workspace/setup-in-repo'],
+    plan: ['workspace/git'],
+    tests: [
+      workspace('a ref the repository lacks stops the run before any attempt'),
+      workspace('a missing subdirectory names what is there'),
+      workspace('a pinned SHA reruns offline from the cache, with the same commit and tree'),
+      workspace("the agent's diff starts from the repository, and a variant's workspace overrides"),
+      options('common mistakes'),
+    ],
   },
   {
     id: 'skill.inline',

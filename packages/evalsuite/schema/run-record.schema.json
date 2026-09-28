@@ -763,6 +763,41 @@
           "items": {
             "type": "string"
           }
+        },
+        "workspace": {
+          "type": "object",
+          "properties": {
+            "commit": {
+              "type": "string"
+            },
+            "path": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "ref": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "source": {
+              "type": "string"
+            },
+            "tree": {
+              "type": "string"
+            }
+          },
+          "required": ["commit", "path", "ref", "source", "tree"]
         }
       },
       "required": [

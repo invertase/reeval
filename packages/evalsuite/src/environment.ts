@@ -413,7 +413,8 @@ function gitHelper(base: string): GitHelper {
     const cleanPath = path?.replace(/\/+$/, '')
     return {
       kind: 'git',
-      repo: written,
+      // A GitHub /tree/ URL names the repository, ref and path: keep the repository part.
+      repo: 'ref' in parsed || 'path' in parsed ? parsed.url.replace(/\.git$/, '') : written,
       url: parsed.url,
       ...(ref ? { ref } : {}),
       ...(cleanPath ? { path: cleanPath } : {}),
