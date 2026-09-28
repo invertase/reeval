@@ -103,29 +103,50 @@ export async function recordCommand(ctx: Ctx, refs: string[]): Promise<number> {
   return 0
 }
 
-export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number> {
-  const entries = ctx.flags.all ? await allRuns(ctx.config) : await recorded(ctx.config)
-  const limit = ctx.flags.limit ? Number(ctx.flags.limit) : 20
+/** `es history --json`: recent runs (recorded, or with `all` scratch ones too) and each eval's strip. */
+export async function historyView(
+  config: ResolvedConfig,
+  options: { filter?: string; limit?: number; all?: boolean } = {},
+) {
+  const entries = options.all ? await allRuns(config) : await recorded(config)
+  const limit = options.limit ?? 20
   if (!(limit > 0)) throw new CommandError('--limit must be a positive number')
-  const reach = await reachability(ctx.config.root)
-  const view = history(entries, { filter: filter.join(' ') || undefined, limit, reach })
+  const reach = await reachability(config.root)
+  return history(entries, { filter: options.filter || undefined, limit, reach })
+}
+
+export async function historyCommand(ctx: Ctx, filter: string[]): Promise<number> {
+  const view = await historyView(ctx.config, {
+    filter: filter.join(' '),
+    limit: ctx.flags.limit ? Number(ctx.flags.limit) : undefined,
+    all: ctx.flags.all,
+  })
   ctx.out(ctx.flags.json ? JSON.stringify(view, null, 2) : formatHistory(view))
   return 0
 }
 
+/** The record of the run `ref` names (default latest), recorded or scratch. */
+export async function showRecord(config: ResolvedConfig, ref?: string) {
+  const entry = resolveRun(await allRuns(config), ref)
+  const dir = entry.recorded ? config.history.dir : scratchDir(config.root)
+  return readRecord(join(dir, `${entry.runId}.json`))
+}
+
 export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const entry = resolveRun(await allRuns(ctx.config), refs[0])
-  const dir = entry.recorded ? ctx.config.history.dir : scratchDir(ctx.config.root)
-  const run = await readRecord(join(dir, `${entry.runId}.json`))
+  const run = await showRecord(ctx.config, refs[0])
   if (ctx.flags.json) ctx.out(JSON.stringify(run, null, 2))
   else if (ctx.flags.md) ctx.out(renderSummary(run).trimEnd())
   else ctx.out(formatShow(run))
   return 0
 }
 
-export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> {
-  const { root } = ctx.config
-  const entries = await allRuns(ctx.config)
+/**
+ * Two runs and their rows: `base` and `head` when both are given, else `head` (default latest)
+ * against its nearest recorded ancestor. `json` is what `es compare --json` prints.
+ */
+export async function compareView(config: ResolvedConfig, refs: string[]) {
+  const { root } = config
+  const entries = await allRuns(config)
   const reach = await reachability(root)
   let base: HistoryEntry | null
   let head: HistoryEntry
@@ -145,29 +166,23 @@ export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> 
     : head.evals.map(
         (e): CompareRow => ({ id: e.id, base: null, head: e.outcome, status: 'added' }),
       )
+  const flag = (e: HistoryEntry) => ({
+    runId: e.runId,
+    recorded: e.recorded,
+    inHistory: !reach || !e.git ? null : reach.has(e.git.sha),
+  })
+  const json = base
+    ? { base: flag(base), head: flag(head), changes: stackChanges(base, head), rows }
+    : { base: null, head: { runId: head.runId }, changes: [], rows }
+  return { base, head, rows, reach, json }
+}
+
+export async function compareCommand(ctx: Ctx, refs: string[]): Promise<number> {
+  const { base, head, rows, reach, json } = await compareView(ctx.config, refs)
   const failing = regressions(rows)
-  if (!base) {
-    if (ctx.flags.json) {
-      ctx.out(
-        JSON.stringify({ base: null, head: { runId: head.runId }, changes: [], rows }, null, 2),
-      )
-    } else ctx.out(formatNoBaseline(head, rows, !!ctx.flags.md))
-    return ctx.flags['fail-on-regression'] && failing.length ? 1 : 0
-  }
-  if (ctx.flags.json) {
-    const flag = (e: HistoryEntry) => ({
-      runId: e.runId,
-      recorded: e.recorded,
-      inHistory: !reach || !e.git ? null : reach.has(e.git.sha),
-    })
-    ctx.out(
-      JSON.stringify(
-        { base: flag(base), head: flag(head), changes: stackChanges(base, head), rows },
-        null,
-        2,
-      ),
-    )
-  } else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
+  if (ctx.flags.json) ctx.out(JSON.stringify(json, null, 2))
+  else if (!base) ctx.out(formatNoBaseline(head, rows, !!ctx.flags.md))
+  else ctx.out(formatCompare(base, head, rows, !!ctx.flags.md, reach))
   return ctx.flags['fail-on-regression'] && failing.length ? 1 : 0
 }
 

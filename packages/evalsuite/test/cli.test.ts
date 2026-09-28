@@ -103,6 +103,10 @@ describe('cli', () => {
       'no-scratch': true,
     })
     assert.deepEqual(parseCli(['studio', 'build', '--scratch']).values, { scratch: true })
+    assert.deepEqual(parseCli(['mcp', '--http', '--port', '4990', '--no-token']), {
+      positionals: ['mcp'],
+      values: { http: true, port: '4990', 'no-token': true },
+    })
   })
 
   test('commands the dispatcher reports stay positionals', () => {
@@ -130,6 +134,8 @@ describe('cli', () => {
     usage(['show', 'a', 'b'], /^es show takes at most 1 argument \(got a b\)$/)
     usage(['compare', 'a', 'b', 'c'], /^es compare takes at most 2 arguments \(got a b c\)$/)
     usage(['studio', 'foo'], /^es studio takes no arguments \(got foo\)$/)
+    usage(['mcp', 'x'], /^es mcp takes no arguments \(got x\)$/)
+    usage(['mcp', '--json'], /^--json isn't an option of es mcp\b/)
     // Every command refuses every flag that isn't its own.
     for (const { path, spec } of PATHS) {
       for (const flag of Object.keys(FLAGS) as FlagName[]) {

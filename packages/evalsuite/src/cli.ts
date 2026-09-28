@@ -124,6 +124,13 @@ async function run(argv: string[]): Promise<number> {
     const { studioCommand } = await import('./studio/command.ts')
     return studioCommand({ config, flags: values, version, build: filters[0] === 'build' })
   }
+  if (command === 'mcp') {
+    // On stdio, stdout carries the protocol: anything the config prints goes to stderr.
+    if (!values.http) console.log = console.info = console.debug = console.error
+    const config = await loadConfig(configPath, 'mcp')
+    const { mcpCommand } = await import('./mcp/command.ts')
+    return mcpCommand({ config, flags: values, version })
+  }
   if (command in HISTORY_COMMANDS) {
     const config = await loadConfig(configPath, command)
     const commands = await import('./commands.ts')

@@ -63,6 +63,12 @@ Usage:
     --context               Print the digest and rules for your own coding agent (no key, no call)
     --dry-run               Print the digest's size and the cache key, without calling the model
     --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again
+  es mcp                    Serve the run history to other agents over MCP (stdio): read-only
+                            tools for es query's views and SQL, history, show, compare,
+                            transcripts and saved analyses, and runs as resources
+    --http                  Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp, behind a
+                            bearer token it prints; --port <n> (default 4986), --host <addr>
+    --no-token              With --http, skip the token (anyone local can then read it)
   es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
     --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
     --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
