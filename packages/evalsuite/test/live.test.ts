@@ -2,7 +2,7 @@
 // studio reads it (killed runs, corrupt files, landed records), and what it serves and streams.
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import { after, describe, test } from 'node:test'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import type { PlannedItem } from '../src/engine/types.ts'
+import type { RunRecord } from '../src/history/types.ts'
 import { attemptKey, recordFileName } from '../src/ids.ts'
 import { replace, writeLiveProgress } from '../src/live.ts'
 import { listLive, liveTranscript, stagingRoot } from '../src/studio/live.ts'
@@ -508,8 +509,16 @@ describe('the studio serves and streams live runs', () => {
   })
 })
 
-/** Each distinct `done/planned` a run's progress file showed, polled until the CLI exits. */
-async function watchRun(dir: string, args: string[], env: NodeJS.ProcessEnv = {}) {
+/**
+ * Each distinct `done/planned` a run's progress file showed, polled until the CLI exits.
+ * `onStep` hears each new step's done count.
+ */
+async function watchRun(
+  dir: string,
+  args: string[],
+  env: NodeJS.ProcessEnv = {},
+  onStep: (done: number) => void = () => {},
+) {
   const child = spawn(process.execPath, [cli, ...args], {
     cwd: dir,
     env: { ...baseEnv, ...env },
@@ -533,7 +542,10 @@ async function watchRun(dir: string, args: string[], env: NodeJS.ProcessEnv = {}
         if (p) {
           runId = p.runId
           const step = `${p.counts.done}/${p.planned}${p.phase === 'running' ? '' : ` ${p.phase}`}`
-          if (seen.at(-1) !== step) seen.push(step)
+          if (seen.at(-1) !== step) {
+            seen.push(step)
+            onStep(p.counts.done)
+          }
         }
       } catch {}
     }
@@ -553,14 +565,29 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
 
   test('from 0/N to done, then the record replaces it', async () => {
     const p = await project('live-run', {
-      'es.config.ts': fakeConfig({ harness: agent(400) }),
-      'evals/hello.es.ts': evalFile,
+      'es.config.ts': fakeConfig({ harness: agent(0) }),
+      'evals/hello.es.ts': `import { existsSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate, expect } from 'evalsuite'
+evaluate('writes hello', { runs: 3 }, async (t) => {
+  while (!existsSync(new URL(\`../gate-\${t.attempt.n}\`, import.meta.url))) await sleep(20)
+  await t.send('write hello.txt')
+  await expect(t.exec('test -f hello.txt')).toSucceed()
+})
+`,
     })
-    const r = await watchRun(p.dir, ['run', '--concurrency', '1'])
+    // Attempt n starts its turn once the test has seen n - 1 done, so no count goes unseen however
+    // slow the machine. The last one lasts only until the record replaces the file: the record
+    // shows it.
+    const r = await watchRun(p.dir, ['run', '--concurrency', '1'], {}, (done) =>
+      writeFileSync(join(p.dir, `gate-${done + 1}`), ''),
+    )
     assert.equal(r.code, 0, r.output)
-    assert.equal(r.seen[0], '0/3')
-    assert.ok(r.seen.includes('1/3') && r.seen.includes('2/3'), r.seen.join(' '))
-    assert.match(r.seen.at(-1) as string, /^3\/3/)
+    assert.deepEqual(
+      r.seen.filter((s) => !s.startsWith('3/3')),
+      ['0/3', '1/3', '2/3'],
+      r.seen.join(' '),
+    )
     assert.ok(r.runId)
     assert.equal(existsSync(join(p.dir, '.es/staging', r.runId)), false, 'staging is gone')
     assert.ok(existsSync(join(p.dir, '.es/runs', `${r.runId}.json`)), 'the record landed')
@@ -568,15 +595,21 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
     assert.deepEqual(await listLive(source), [])
     const record = readFileSync(join(p.dir, '.es/runs', `${r.runId}.json`), 'utf8')
     assert.doesNotMatch(record, /"(queued|running)"/, 'nothing live reaches the record')
+    const outcomes = (JSON.parse(record) as RunRecord).evals[0]?.attempts.map((a) => a.outcome)
+    assert.deepEqual(outcomes, ['pass', 'pass', 'pass'])
   })
 
   test('a killed run is shown as stopped, with what it had finished', async () => {
+    // No shell command, and the worker's pid: the kill's whole tree is gone before the test ends.
     const p = await project('live-killed', {
       'es.config.ts': fakeConfig({ harness: agent(300) }),
-      'evals/hello.es.ts': evalFile.replace(
-        "'writes hello', { runs: 3 }",
-        "'writes hello', { runs: 20 }",
-      ),
+      'evals/hello.es.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'evalsuite'
+evaluate('writes hello', { runs: 20 }, async (t) => {
+  writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
+  await t.send('write hello.txt')
+})
+`,
     })
     const child = spawn(process.execPath, [cli, 'run', '--concurrency', '1'], {
       cwd: p.dir,
@@ -599,6 +632,16 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
       } catch {}
     } else process.kill(-(child.pid as number), 'SIGKILL')
     await new Promise((resolve) => child.on('exit', resolve))
+    const worker = Number(readFileSync(join(p.dir, 'worker.pid'), 'utf8'))
+    const alive = () => {
+      try {
+        process.kill(worker, 0)
+        return true
+      } catch {
+        return false
+      }
+    }
+    while (alive()) await sleep(50)
     runs = await listLive(source)
     assert.equal(runs.length, 1)
     assert.equal(runs[0]?.state, 'stopped')
