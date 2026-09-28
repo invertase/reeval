@@ -495,6 +495,7 @@ function unmatched(actual, renamed, original) {
       .replace(/-(?=[0-9a-f]*\d)[0-9a-f]{5,}\b/g, '-<h>')
       .replace(/(\.[cm]?[jt]s):(\d+):\d+/g, '$1:$2:<c>')
       .replace(/size \d+ characters ≈ \d+ tokens/g, 'size <n>')
+      .replace(/\d+ characters cut/g, '<n> characters cut')
       .replace(/\s+/g, ' ')
       .trim()
       .replace(/,$/, '')
