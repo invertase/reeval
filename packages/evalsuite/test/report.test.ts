@@ -115,12 +115,17 @@ describe('es report: redaction', () => {
       '--out',
       '<value>',
     ])
-    assert.deepEqual(redactArgv(['query', 'select 1', '--token=abc', '--', 'x']), [
+    assert.deepEqual(redactArgv(['query', 'select 1', '--api-key=abc', '--', 'x']), [
       'query',
       '<arg>',
       '<flag>',
       '--',
       '<arg>',
+    ])
+    assert.deepEqual(redactArgv(['mcp', '--http', '--token=abc']), [
+      'mcp',
+      '--http',
+      '--token=<value>',
     ])
     // A positional that happens to name a command, after the command, is still an argument.
     assert.deepEqual(redactArgv(['show', 'run']), ['show', '<arg>'])
