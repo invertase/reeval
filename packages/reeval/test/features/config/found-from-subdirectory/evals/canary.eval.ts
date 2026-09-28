@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 
 // Must fail: file() never resolves from the current directory.
 evaluate('canary', async (t) => {

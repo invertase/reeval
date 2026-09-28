@@ -36,7 +36,7 @@ const dim = paint(2, 22)
 
 const POINTER = '❯'
 
-/** ES's own directories; their frames are noise in an eval's stack. */
+/** reeval's own directories; their frames are noise in an eval's stack. */
 export const esFrames = (packageDir: string) => [
   `${packageDir}${packageDir.endsWith(sep) ? '' : sep}src${sep}`,
   `${packageDir}${packageDir.endsWith(sep) ? '' : sep}dist${sep}`,
@@ -48,7 +48,7 @@ export const comparable = (path: string, windows = process.platform === 'win32')
   return windows ? slashed.toLowerCase() : slashed
 }
 
-/** Loaders and assertion libraries ES runs eval files through; never the eval's own frames. */
+/** Loaders and assertion libraries reeval runs eval files through; never the eval's own frames. */
 const HIDDEN = ['/node_modules/jiti/', '/node_modules/@vitest/', '/node_modules/chai/']
 
 export type FormatOptions = {

@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { slow } from './env.ts'
 
 // A setup step over its own timeout is cut off: the attempt is an infra error naming the step

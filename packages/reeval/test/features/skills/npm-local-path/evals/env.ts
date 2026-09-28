@@ -1,6 +1,6 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
-// Relative to this file, like skill.local and file(), not to ES's working directories.
+// Relative to this file, like skill.local and file(), not to reeval's working directories.
 export const vendored = defineEnvironment('npm-vendored', ({ skill }) => ({
   skills: [skill.npm('../vendor/acme-skills-1.2.3.tgz', { placement: 'workspace' })],
 }))

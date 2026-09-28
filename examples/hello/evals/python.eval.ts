@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 
-// A non-Node toolchain: ES bakes Node (for the harness bridge) and the Cursor CLI onto the
+// A non-Node toolchain: reeval bakes Node (for the harness bridge) and the Cursor CLI onto the
 // official Python image the first time this runs, then reuses it.
 evaluate(
   'writes and tests fizzbuzz in python',

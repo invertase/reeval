@@ -4,8 +4,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 } from 'node:path'
-import type { EgressCapabilities } from '@evalsuite/sandbox-docker'
-import { run, shellQuote } from '@evalsuite/sandbox-docker/process'
+import type { EgressCapabilities } from '@reeval/sandbox-docker'
+import { run, shellQuote } from '@reeval/sandbox-docker/process'
 import { UsageError } from '../errors.ts'
 import type { FakeSandboxDescriptor } from '../types.ts'
 import type { Sandbox } from './types.ts'
@@ -38,7 +38,7 @@ export function posixShell(
   )
 }
 
-const EXEC_TAG = 'ES_FAKE_EXEC'
+const EXEC_TAG = 'REEVAL_FAKE_EXEC'
 
 // Kills every MSYS process whose environment carries the command's tag, until none is left.
 const KILL_TAGGED = `for pass in 1 2 3 4 5; do
@@ -72,7 +72,7 @@ export async function createFakeSandbox(
   const sh = posixShell()
   const parent = descriptor.dir ?? tmpdir()
   await mkdir(parent, { recursive: true })
-  const base = await mkdtemp(join(parent, 'es-sandbox-'))
+  const base = await mkdtemp(join(parent, 'reeval-sandbox-'))
   const workdir = join(base, 'work')
   await mkdir(workdir)
   let destroyed: Promise<void> | undefined

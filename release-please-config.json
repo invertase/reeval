@@ -5,11 +5,11 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "package-name": "@invertase/foobar",
+      "package-name": "reeval",
       "changelog-path": "CHANGELOG.md",
       "bump-minor-pre-major": true,
       "extra-files": [
-        { "type": "json", "path": "packages/evalsuite/package.json", "jsonpath": "$.version" }
+        { "type": "json", "path": "packages/reeval/package.json", "jsonpath": "$.version" }
       ]
     }
   }

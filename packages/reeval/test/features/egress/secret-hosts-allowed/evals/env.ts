@@ -1,10 +1,10 @@
-import { defineEnvironment, type Turn } from 'evalsuite'
+import { defineEnvironment, type Turn } from 'reeval'
 
-const host = process.env.ES_EGRESS_HOST ?? 'missing.invalid'
+const host = process.env.REEVAL_EGRESS_HOST ?? 'missing.invalid'
 
 export const keyed = defineEnvironment('keyed', ({ secret }) => ({
   egress: 'deny-all',
-  env: { TOKEN: secret.fromEnv('ES_FIXTURE_TOKEN', { hosts: [host] }) },
+  env: { TOKEN: secret.fromEnv('REEVAL_FIXTURE_TOKEN', { hosts: [host] }) },
 }))
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })
 

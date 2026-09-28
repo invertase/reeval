@@ -1,7 +1,7 @@
-import { defineEnvironment, type Turn } from 'evalsuite'
+import { defineEnvironment, type Turn } from 'reeval'
 
 export const listed = defineEnvironment('listed', {
-  egress: { allow: [process.env.ES_EGRESS_HOST ?? 'missing.invalid'] },
+  egress: { allow: [process.env.REEVAL_EGRESS_HOST ?? 'missing.invalid'] },
 })
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })
 

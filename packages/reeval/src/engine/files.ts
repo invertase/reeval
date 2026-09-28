@@ -27,7 +27,7 @@ export async function findEvalFiles(
  */
 export function filterFiles(files: readonly string[], filters: readonly string[], root: string) {
   if (filters.length === 0) return [...files]
-  // Compared with forward slashes, so `evals/a` picks `evals\a.es.ts` on Windows, as does `evals\a`.
+  // Compared with forward slashes, so `evals/a` picks `evals\a.eval.ts` on Windows, as does `evals\a`.
   const slashed = (path: string) => path.replaceAll('\\', '/')
   return files.filter((file) => {
     const rel = relativeFile(root, file).toLocaleLowerCase()

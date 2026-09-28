@@ -1,4 +1,4 @@
-// The last `es` commands in a project, in `.es/cli.jsonl`, for `es report`: redacted
+// The last `reeval` commands in a project, in `.reeval/cli.jsonl`, for `reeval report`: redacted
 // arguments, the exit code and the error that ended each. Written synchronously, so a crash that
 // exits straight away still logs.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -11,7 +11,7 @@ import type { CliInvocation } from './types.ts'
 /** How many commands the log keeps. */
 export const INVOCATIONS_KEPT = 20
 
-export const invocationsFile = (root: string) => join(root, '.es', 'cli.jsonl')
+export const invocationsFile = (root: string) => join(root, '.reeval', 'cli.jsonl')
 
 /** Every logged command, oldest first; lines that don't parse are skipped. */
 export function readInvocations(root: string): CliInvocation[] {
@@ -31,11 +31,11 @@ export function readInvocations(root: string): CliInvocation[] {
 
 /**
  * Appends `entry` to the project's log, keeping the newest `INVOCATIONS_KEPT`. Only in a project
- * that already has `.es/`, so a command in a fresh directory creates nothing. Never throws.
+ * that already has `.reeval/`, so a command in a fresh directory creates nothing. Never throws.
  */
 export function logInvocation(root: string, entry: CliInvocation): void {
   try {
-    if (!existsSync(join(root, '.es'))) return
+    if (!existsSync(join(root, '.reeval'))) return
     const scrub = scrubber({ env: process.env, home: homedir(), project: root })
     const lines = [...readInvocations(root), scrub.value(entry)]
       .slice(-INVOCATIONS_KEPT)

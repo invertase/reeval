@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
-// Must fail: ES doesn't put OpenCode's workspace skills in .agents/skills, though OpenCode 2 reads
+// Must fail: reeval doesn't put OpenCode's workspace skills in .agents/skills, though OpenCode 2 reads
 // that too.
 evaluate('canary', { environment: greeting }, async (t) => {
   await t.sandbox()

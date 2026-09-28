@@ -7,7 +7,7 @@ import type { DataTarget } from '../view/paths.ts'
 export type StudioSource = {
   root: string
   historyDir: string
-  /** Also list unrecorded runs from `.es/runs/`, labelled as scratch. */
+  /** Also list unrecorded runs from `.reeval/runs/`, labelled as scratch. */
   scratch: boolean
 }
 
@@ -37,7 +37,7 @@ async function inside(base: string, path: string): Promise<string | null> {
 
 /**
  * The file a record or artifact path names, or null. A run resolves to the history folder first,
- * then `.es/runs/`; the real path must stay inside that run's directory, so symlinks can't escape.
+ * then `.reeval/runs/`; the real path must stay inside that run's directory, so symlinks can't escape.
  */
 export async function resolveFile(
   source: StudioSource,

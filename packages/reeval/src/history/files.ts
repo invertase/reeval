@@ -23,7 +23,7 @@ export class HistoryError extends Error {
   override name = 'HistoryError'
 }
 
-/** A record from a newer ES: skipped with a warning to upgrade, never "restore or delete it". */
+/** A record from a newer reeval: skipped with a warning to upgrade, never "restore or delete it". */
 export class NewerRecordError extends HistoryError {
   readonly reason: string
   constructor(error: NewerSchemaError) {
@@ -32,9 +32,9 @@ export class NewerRecordError extends HistoryError {
   }
 }
 
-/** Where `es run` writes runs before they're recorded. Gitignored. */
-export const scratchDir = (root: string) => join(root, '.es', 'runs')
-const cacheFile = (root: string) => join(root, '.es', 'history-cache.json')
+/** Where `reeval run` writes runs before they're recorded. Gitignored. */
+export const scratchDir = (root: string) => join(root, '.reeval', 'runs')
+const cacheFile = (root: string) => join(root, '.reeval', 'history-cache.json')
 const TEXT_FILE = /\.(json|jsonl|md|patch|log|txt)$/
 
 const isMissing = (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
@@ -44,7 +44,7 @@ export const encodeRecord = (record: RunRecord) =>
 
 export function parseRecord(bytes: Uint8Array, where: string): RunRecord {
   const value = JSON.parse(Buffer.from(bytes).toString('utf8')) as RunRecord
-  if (value?.kind !== 'es-run') throw new HistoryError(`${where} is not an ES run record`)
+  if (value?.kind !== 'es-run') throw new HistoryError(`${where} is not a reeval run record`)
   try {
     return readableRecord(value, where)
   } catch (error) {
@@ -72,7 +72,7 @@ export function warnUnreadable(path: string, error: unknown): void {
   }
   const why = error instanceof Error ? error.message : String(error)
   process.stderr.write(
-    `warning: skipped ${fromCwd(path)}: not a readable ES run record (${why}). Restore it from git, or delete it.\n`,
+    `warning: skipped ${fromCwd(path)}: not a readable reeval run record (${why}). Restore it from git, or delete it.\n`,
   )
 }
 
@@ -115,7 +115,7 @@ export async function recentRecords(dirs: string[], limit: number): Promise<RunR
 
 type Cache = {
   /**
-   * This build of ES (`BUILD_ID`): another ES, or a rebuild, drops entries derived by the old
+   * This build of reeval (`BUILD_ID`): another reeval, or a rebuild, drops entries derived by the old
    * code.
    */
   build: string
@@ -134,7 +134,7 @@ async function readCache(root: string): Promise<Cache> {
 
 /**
  * Every run in `dir`, sorted by file name (= start time). Derived from the folder listing on
- * every read; parsed records are cached in `.es/` by size and mtime, and never committed.
+ * every read; parsed records are cached in `.reeval/` by size and mtime, and never committed.
  */
 export async function listRuns(
   root: string,
@@ -252,7 +252,7 @@ export type RecordOptions = {
 
 export type RecordResult = WrittenRun & { files: number; bytes: number }
 
-/** Promotes a scratch run into the committed history folder. ES never commits it. */
+/** Promotes a scratch run into the committed history folder. reeval never commits it. */
 export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   const { runId, artifacts: level } = options
   const source = scratchDir(options.root)
@@ -260,7 +260,7 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   try {
     scratch = await readRecord(join(source, `${runId}.json`))
   } catch (error) {
-    if (isMissing(error)) throw new HistoryError(`No run ${runId} in .es/runs`)
+    if (isMissing(error)) throw new HistoryError(`No run ${runId} in .reeval/runs`)
     throw error
   }
   if (scratch.status !== 'complete' && !options.allowIncomplete) {

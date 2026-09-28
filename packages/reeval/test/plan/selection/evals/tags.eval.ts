@@ -1,4 +1,4 @@
-import { evaluate, group } from 'evalsuite'
+import { evaluate, group } from 'reeval'
 
 group('slow things', { tags: ['slow'] }, () => {
   evaluate('big', async () => {})

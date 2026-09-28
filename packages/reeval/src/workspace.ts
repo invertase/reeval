@@ -1,11 +1,11 @@
 // Git workspaces on the host: before any attempt, the CLI fetches each repository the planned
-// attempts start from into a cache under `.es/cache/git`, resolves its ref to a commit once for
+// attempts start from into a cache under `.reeval/cache/git`, resolves its ref to a commit once for
 // the run, and exports the tree (or one directory of it) as a tarball the attempts copy in. The
 // sandbox never sees the repository, its remote or the credentials that fetched it.
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, posix } from 'node:path'
-import { RETRY_DELAYS } from '@evalsuite/sandbox-docker'
+import { RETRY_DELAYS } from '@reeval/sandbox-docker'
 import { workspaceLabel } from './environment.ts'
 import { git } from './git.ts'
 import { sha256 } from './ids.ts'
@@ -32,9 +32,9 @@ export class WorkspaceError extends Error {
 export const workspaceKey = (w: GitWorkspace) =>
   JSON.stringify([w.url, w.ref ?? null, w.path ?? null])
 
-const cacheDir = (root: string) => join(root, '.es', 'cache', 'git')
+const cacheDir = (root: string) => join(root, '.reeval', 'cache', 'git')
 const preparedFile = (root: string, runId: string) =>
-  join(root, '.es', 'cache', 'prepared', `${runId}.git.json`)
+  join(root, '.reeval', 'cache', 'prepared', `${runId}.git.json`)
 
 const FULL_SHA = /^[0-9a-f]{40}$/
 
@@ -240,7 +240,7 @@ function fetchError(failure: Failure, stderr: string, w: GitWorkspace, what: str
     }
     case 'auth':
       return new WorkspaceError(
-        `${what}: isn't readable with this machine's git credentials, or doesn't exist (${line}). ES fetches the repository on the host, so set up access there (gh auth setup-git, a credential helper or an SSH key); the sandbox never gets the credentials.`,
+        `${what}: isn't readable with this machine's git credentials, or doesn't exist (${line}). reeval fetches the repository on the host, so set up access there (gh auth setup-git, a credential helper or an SSH key); the sandbox never gets the credentials.`,
         true,
       )
     case 'url':

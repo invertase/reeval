@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { LOG, prompt, stamp } from './env.ts'
 
 // The agent reached the environment's stdio MCP server: the server logged the tool call.

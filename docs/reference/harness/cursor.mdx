@@ -1,11 +1,11 @@
 ---
 title: cursor()
-description: The Cursor harness, its options and id, the key it needs, how ES brokers that key, and the tokens it reports.
+description: The Cursor harness, its options and id, the key it needs, how reeval brokers that key, and the tokens it reports.
 ---
 
 `cursor({ model })` runs Cursor's agent in the Docker sandbox, through the Cursor TypeScript SDK. `model` is required.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 
@@ -14,7 +14,7 @@ export default defineConfig({
 })
 ```
 
-With no `harness` in the config, ES uses `cursor({ model: 'composer-2.5' })`.
+With no `harness` in the config, reeval uses `cursor({ model: 'composer-2.5' })`.
 
 ## Options
 
@@ -23,7 +23,7 @@ With no `harness` in the config, ES uses `cursor({ model: 'composer-2.5' })`.
 </Property>
 
 <Property name="params" type="Record<string, string>" optional>
-  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalog, which ES sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`. Cursor can change that default, so pin every parameter for reproducible evals.
+  Model parameters, by id, such as `{ fast: 'true' }`. They can change the price. A parameter you don't set takes the default variant in Cursor's model catalog, which reeval sends explicitly: `composer-2.5` runs as `composer-2.5[fast=true]`, the Fast variant, unless you pass `{ fast: 'false' }`. Cursor can change that default, so pin every parameter for reproducible evals.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -44,9 +44,9 @@ With no `harness` in the config, ES uses `cursor({ model: 'composer-2.5' })`.
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `CURSOR_API_KEY` (a user or service-account API key) |
-| Adapter | `@evalsuite/harness-cursor-sdk` 0.1.0, bundled with ES |
+| Adapter | `@reeval/harness-cursor-sdk` 0.1.0, bundled with reeval |
 | Sandbox | `docker()` only |
-| Image | `evalsuite-sandbox:cursor-0.1.0` |
+| Image | `reeval-sandbox:cursor-0.1.0` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.agents/skills` |
 | Skills (`placement: 'workspace'`) | `.cursor/skills` in the workspace |
@@ -63,7 +63,7 @@ The agent runs every tool without asking, inside the sandbox.
 
 ## The key
 
-ES reads `CURSOR_API_KEY` on the host and passes it to the adapter explicitly: a host AI Gateway key, subscription or keychain is never used. The key never enters the container, and the adapter refuses a sandbox that can't broker it. The agent sees a placeholder (`aisdkhc_…`), and the egress gateway swaps in the real key on one endpoint only:
+reeval reads `CURSOR_API_KEY` on the host and passes it to the adapter explicitly: a host AI Gateway key, subscription or keychain is never used. The key never enters the container, and the adapter refuses a sandbox that can't broker it. The agent sees a placeholder (`aisdkhc_…`), and the egress gateway swaps in the real key on one endpoint only:
 
 | Host | Endpoint |
 |---|---|
@@ -92,9 +92,9 @@ Duration  8s
   Tokens  31k in (15k cached) · 111 out
 ```
 
-ES records tokens but prices no models, so there's no USD. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+reeval records tokens but prices no models, so there's no USD. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
-File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
+File edits are reported relative to the workspace, with line counts. Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. reeval's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
 
 When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn.
 
@@ -112,7 +112,7 @@ Rules go to `AGENTS.md` in the workspace. Skills with the default placement go t
 | A key with a line break | `Credentials with whitespace or a line break in them: CURSOR_API_KEY (character 4). …` |
 | A non-Docker sandbox | `The Cursor harness needs the Docker sandbox` |
 | The agent doesn't start | `Cursor harness failed to start: …` |
-| Its image can't be built | `Baking the Cursor CLI onto evalsuite-sandbox-base:latest failed: …` (`es run` builds a missing image before the run) |
+| Its image can't be built | `Baking the Cursor CLI onto reeval-sandbox-base:latest failed: …` (`reeval run` builds a missing image before the run) |
 
 ## Related
 

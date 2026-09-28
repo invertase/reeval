@@ -1,4 +1,4 @@
-import { defineEnvironment, type HarnessOption, type Turn } from 'evalsuite'
+import { defineEnvironment, type HarnessOption, type Turn } from 'reeval'
 import { BLOCKED_HOST, COMMAND, PLANTED, RULES_WORD, reach } from './constants.ts'
 
 // What every harness in the contract gets, and the signals the checks read. The prompts are one
@@ -14,12 +14,12 @@ export const ruled = defineEnvironment('ruled', {
   rules: `# House rules\n\nThe house codeword is ${RULES_WORD}. When anyone asks for the house codeword, write it (the codeword only) into a file named codeword.txt in the workspace root.\n`,
 })
 export const stamped = defineEnvironment('stamped', ({ file, mcp }) => ({
-  files: { '~/es-mcp/stamp.mjs': file('../stamp.mjs') },
-  mcp: { stamp: mcp.stdio('node', ['/home/es/es-mcp/stamp.mjs']) },
+  files: { '~/reeval-mcp/stamp.mjs': file('../stamp.mjs') },
+  mcp: { stamp: mcp.stdio('node', ['/home/es/reeval-mcp/stamp.mjs']) },
 }))
 export const notes = defineEnvironment('notes', { files: { 'notes.txt': 'status: draft\n' } })
 export const scanned = defineEnvironment('scanned', ({ file }) => ({
-  files: { '~/.es-contract/scan.mjs': file('../scan.mjs') },
+  files: { '~/.reeval-contract/scan.mjs': file('../scan.mjs') },
 }))
 export const planted = scanned.extend('planted', {
   env: { CONTRACT_PLANTED: PLANTED },
@@ -39,7 +39,7 @@ export const prompts = {
 
 /**
  * The fake agent's script for the key-free row: every probe's action, on every turn. It reads the
- * skill and the rules where ES put them, so it's a check of the suite, not of a model.
+ * skill and the rules where reeval put them, so it's a check of the suite, not of a model.
  */
 export const fakeScript = [
   { exec: `grep -o 'PROBE-[A-Z0-9-]*' ~/.agents/skills/contract-probe/SKILL.md > skill-proof.txt` },
@@ -91,7 +91,7 @@ export async function scan(
   exec: (command: string) => Promise<{ exitCode: number; stdout: string; stderr: string }>,
   targets: string,
 ): Promise<ScanResult> {
-  const r = await exec(`node ~/.es-contract/scan.mjs '${targets}'`)
+  const r = await exec(`node ~/.reeval-contract/scan.mjs '${targets}'`)
   if (r.exitCode !== 0) throw new Error(`the scanner failed: ${r.stderr}`)
   return JSON.parse(r.stdout) as ScanResult
 }

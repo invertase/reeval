@@ -1,4 +1,4 @@
-// Runs in progress: the progress file `es run` keeps in `.es/staging/<run>/live.json`, how the
+// Runs in progress: the progress file `reeval run` keeps in `.reeval/staging/<run>/live.json`, how the
 // studio reads it (killed runs, corrupt files, landed records), and what it serves and streams.
 import assert from 'node:assert/strict'
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
@@ -36,7 +36,7 @@ after(async () => {
   for (const t of temps) await rm(t, { recursive: true, force: true })
 })
 const temp = async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'es-live-'))
+  const dir = await mkdtemp(join(tmpdir(), 'reeval-live-'))
   temps.push(dir)
   return dir
 }
@@ -44,12 +44,12 @@ const temp = async () => {
 function planned(names: string[], runs = 1): PlannedItem[] {
   return names.flatMap((name) =>
     Array.from({ length: runs }, (_, i) => {
-      const id = `evals/a.es.ts › ${name}`
+      const id = `evals/a.eval.ts › ${name}`
       const cell = 'fake/default/fake'
       return {
         id,
         key: attemptKey(id, cell, i + 1),
-        file: 'evals/a.es.ts',
+        file: 'evals/a.eval.ts',
         attempt: { name, n: i + 1, cell: { key: cell }, plan: {} },
       } as unknown as PlannedItem
     }),
@@ -264,7 +264,7 @@ describe('reading a progress file', () => {
   })
 
   test('recomputes counts from the attempts, and ignores unknown fields', () => {
-    const read = readableLiveProgress({ ...valid(), extra: { from: 'a newer ES' } })
+    const read = readableLiveProgress({ ...valid(), extra: { from: 'a newer reeval' } })
     assert.ok(read)
     assert.equal(read.planned, 1)
     assert.equal(read.counts.done, 1)
@@ -289,7 +289,7 @@ describe('reading a progress file', () => {
   })
 })
 
-/** A project root with `.es/staging/<run>/live.json` for each progress given. */
+/** A project root with `.reeval/staging/<run>/live.json` for each progress given. */
 async function stagingProject(files: Record<string, string | LiveProgress>) {
   const root = await temp()
   for (const [runId, value] of Object.entries(files)) {
@@ -313,10 +313,10 @@ const progress = (runId: string, patch: Partial<LiveProgress> = {}): LiveProgres
   counts: { done: 1, passed: 1, failed: 0, errored: 0, skipped: 0, running: 1 },
   attempts: [
     {
-      key: attemptKey('evals/a.es.ts › one', 'fake/default/fake', 1),
-      evalId: 'evals/a.es.ts › one',
+      key: attemptKey('evals/a.eval.ts › one', 'fake/default/fake', 1),
+      evalId: 'evals/a.eval.ts › one',
       name: 'one',
-      file: 'evals/a.es.ts',
+      file: 'evals/a.eval.ts',
       cell: 'fake/default/fake',
       n: 1,
       status: 'pass',
@@ -324,10 +324,10 @@ const progress = (runId: string, patch: Partial<LiveProgress> = {}): LiveProgres
       durationMs: 2000,
     },
     {
-      key: attemptKey('evals/a.es.ts › one', 'fake/default/fake', 2),
-      evalId: 'evals/a.es.ts › one',
+      key: attemptKey('evals/a.eval.ts › one', 'fake/default/fake', 2),
+      evalId: 'evals/a.eval.ts › one',
       name: 'one',
-      file: 'evals/a.es.ts',
+      file: 'evals/a.eval.ts',
       cell: 'fake/default/fake',
       n: 2,
       status: 'running',
@@ -360,8 +360,8 @@ describe('the studio reads live runs', () => {
       [stamp(8)]: progress(stamp(9)),
       'not-a-run': progress('not-a-run'),
     })
-    await mkdir(join(root, '.es/runs'), { recursive: true })
-    await writeFile(join(root, '.es/runs', `${stamp(7)}.json`), '{}')
+    await mkdir(join(root, '.reeval/runs'), { recursive: true })
+    await writeFile(join(root, '.reeval/runs', `${stamp(7)}.json`), '{}')
     const runs = await listLive(source)
     assert.deepEqual(
       runs.map((r) => [r.runId, r.state]),
@@ -464,7 +464,7 @@ describe('the studio serves and streams live runs', () => {
     for (const path of [
       liveTranscriptPath(RUN, running),
       liveTranscriptPath(RUN, `${done}0`),
-      liveTranscriptPath(RUN, '../../../es.config.ts'),
+      liveTranscriptPath(RUN, '../../../reeval.config.ts'),
       liveTranscriptPath('not-a-run', done),
       liveTranscriptPath(stamp(1), done),
     ]) {
@@ -533,7 +533,7 @@ async function watchRun(
   let open = true
   void exited.then(() => (open = false))
   while (open) {
-    const staging = join(dir, '.es/staging')
+    const staging = join(dir, '.reeval/staging')
     const [name] = existsSync(staging) ? readdirSync(staging) : []
     const file = name && join(staging, name, LIVE_FILE)
     if (file && existsSync(file)) {
@@ -554,8 +554,8 @@ async function watchRun(
   return { code: await exited, seen, runId, output }
 }
 
-describe('es run keeps its progress file', () => {
-  const evalFile = `import { evaluate, expect } from 'evalsuite'
+describe('reeval run keeps its progress file', () => {
+  const evalFile = `import { evaluate, expect } from 'reeval'
 evaluate('writes hello', { runs: 3 }, async (t) => {
   await t.send('write hello.txt')
   await expect(t.exec('test -f hello.txt')).toSucceed()
@@ -565,10 +565,10 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
 
   test('from 0/N to done, then the record replaces it', async () => {
     const p = await project('live-run', {
-      'es.config.ts': fakeConfig({ harness: agent(0) }),
-      'evals/hello.es.ts': `import { existsSync } from 'node:fs'
+      'reeval.config.ts': fakeConfig({ harness: agent(0) }),
+      'evals/hello.eval.ts': `import { existsSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 evaluate('writes hello', { runs: 3 }, async (t) => {
   while (!existsSync(new URL(\`../gate-\${t.attempt.n}\`, import.meta.url))) await sleep(20)
   await t.send('write hello.txt')
@@ -589,11 +589,11 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
       r.seen.join(' '),
     )
     assert.ok(r.runId)
-    assert.equal(existsSync(join(p.dir, '.es/staging', r.runId)), false, 'staging is gone')
-    assert.ok(existsSync(join(p.dir, '.es/runs', `${r.runId}.json`)), 'the record landed')
+    assert.equal(existsSync(join(p.dir, '.reeval/staging', r.runId)), false, 'staging is gone')
+    assert.ok(existsSync(join(p.dir, '.reeval/runs', `${r.runId}.json`)), 'the record landed')
     const source = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true }
     assert.deepEqual(await listLive(source), [])
-    const record = readFileSync(join(p.dir, '.es/runs', `${r.runId}.json`), 'utf8')
+    const record = readFileSync(join(p.dir, '.reeval/runs', `${r.runId}.json`), 'utf8')
     assert.doesNotMatch(record, /"(queued|running)"/, 'nothing live reaches the record')
     const outcomes = (JSON.parse(record) as RunRecord).evals[0]?.attempts.map((a) => a.outcome)
     assert.deepEqual(outcomes, ['pass', 'pass', 'pass'])
@@ -604,10 +604,10 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
     // is running in the sandbox: on Windows, taskkill doesn't reach what MSYS starts. The worker
     // writes its pid, so the test ends only once the whole tree is gone.
     const p = await project('live-killed', {
-      'es.config.ts': fakeConfig({ harness: agent(0) }),
-      'evals/hello.es.ts': `import { writeFileSync } from 'node:fs'
+      'reeval.config.ts': fakeConfig({ harness: agent(0) }),
+      'evals/hello.eval.ts': `import { writeFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 evaluate('writes hello', { runs: 20 }, async (t) => {
   writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
   await t.send('write hello.txt')
@@ -656,8 +656,8 @@ evaluate('writes hello', { runs: 20 }, async (t) => {
 
   test('a run that stops at the plan leaves no progress file', async () => {
     const p = await project('live-dry', {
-      'es.config.ts': fakeConfig({ harness: agent(0) }),
-      'evals/hello.es.ts': evalFile,
+      'reeval.config.ts': fakeConfig({ harness: agent(0) }),
+      'evals/hello.eval.ts': evalFile,
     })
     const r = await watchRun(p.dir, ['run', '--dry-run'])
     assert.equal(r.code, 0, r.output)

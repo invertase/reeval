@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 /** The repository at v1, with init: true giving the workspace a .git of its own. */
 export const repo = defineEnvironment('with-git', ({ git }) => ({

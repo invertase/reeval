@@ -1,7 +1,7 @@
 // Runs a Claude Code bridge (the bridge.mjs @ai-sdk/harness-claude-code's bootstrap writes into the
 // sandbox) on the host, key-free: a stub Agent SDK replays a turn's captured SDK messages to it, and
 // the host side of the bridge protocol sends the captured `start` and collects the parts it emits.
-// test/replay.test.ts runs the bridge ES ships; scripts/drift/claude-code-patch.mjs runs the newest
+// test/replay.test.ts runs the bridge reeval ships; scripts/drift/claude-code-patch.mjs runs the newest
 // upstream one.
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
@@ -20,7 +20,7 @@ const packageDir = (name: string) => dirname(require.resolve(`${name}/package.js
 /** The only SDK export the bridge calls: `query`, here a replay of the captured messages. */
 const STUB_SDK = `import { readFileSync } from 'node:fs'
 export function query({ prompt }) {
-  const messages = readFileSync(process.env.ES_REPLAY_SDK_MESSAGES, 'utf8')
+  const messages = readFileSync(process.env.REEVAL_REPLAY_SDK_MESSAGES, 'utf8')
     .split('\\n').filter(Boolean).map((line) => JSON.parse(line))
   async function* replay() {
     await prompt[Symbol.asyncIterator]().next()
@@ -37,7 +37,7 @@ export async function replayBridge(options: {
   messages: string
   timeoutMs?: number
 }): Promise<BridgePart[]> {
-  const dir = mkdtempSync(join(tmpdir(), 'es-claude-bridge-'))
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-claude-bridge-'))
   try {
     const modules = join(dir, 'node_modules')
     const sdk = join(modules, '@anthropic-ai/claude-agent-sdk')
@@ -64,7 +64,7 @@ export async function replayBridge(options: {
           PATH: process.env.PATH,
           BRIDGE_CHANNEL_TOKEN: token,
           BRIDGE_WS_PORT: '0',
-          ES_REPLAY_SDK_MESSAGES: messages,
+          REEVAL_REPLAY_SDK_MESSAGES: messages,
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       },

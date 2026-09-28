@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from DebugRequest in src/view/debug.ts by `pnpm schema:update`; don't edit. One line of an attempt's .es/debug/…/requests.ndjson.",
+  "$comment": "Generated from DebugRequest in src/view/debug.ts by `pnpm schema:update`; don't edit. One line of an attempt's .reeval/debug/…/requests.ndjson.",
   "title": "DebugRequest",
   "$ref": "#/$defs/DebugRequest",
   "$defs": {

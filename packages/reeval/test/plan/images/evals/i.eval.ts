@@ -1,5 +1,5 @@
-import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 
 evaluate('config sandbox with install', async () => {})
 evaluate('same sandbox again', async () => {})

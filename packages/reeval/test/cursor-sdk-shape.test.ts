@@ -5,7 +5,7 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { join } from 'node:path'
 import { test } from 'node:test'
-import { imageFor } from '@evalsuite/sandbox-docker'
+import { imageFor } from '@reeval/sandbox-docker'
 import { READ_FIELDS, shapeProblems } from '../../../scripts/drift/cursor-sdk-shape.mjs'
 import { testDir } from './support/fixture.ts'
 
@@ -20,7 +20,7 @@ const built = (() => {
   }
 })()
 const skip =
-  built || process.env.ES_TEST_REQUIRE_DOCKER === '1' ? false : `needs Docker and ${image}`
+  built || process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ? false : `needs Docker and ${image}`
 
 /** A bundle that declares `fields` for each message, as the SDK's dist does. */
 const bundle = (fields: Record<string, string[]>) =>
@@ -52,7 +52,7 @@ test('the check passes on every read field, and names each one that goes (twins)
 test("the image's @cursor/sdk declares every field the runner reads", { skip }, () => {
   const label = execFileSync(
     'docker',
-    ['inspect', image, '--format', '{{index .Config.Labels "dev.evalsuite.agent-version"}}'],
+    ['inspect', image, '--format', '{{index .Config.Labels "ai.reeval.agent-version"}}'],
     { encoding: 'utf8' },
   ).trim()
   const r = spawnSync(

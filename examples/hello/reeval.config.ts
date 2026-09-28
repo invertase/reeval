@@ -1,9 +1,9 @@
-import { defineConfig } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { docker } from 'reeval/sandbox'
 import { composer } from './evals/harnesses.ts'
 
 export default defineConfig({
-  include: ['evals/**/*.es.ts'],
+  include: ['evals/**/*.eval.ts'],
   harness: composer,
   sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },

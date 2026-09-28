@@ -1,5 +1,5 @@
-// Collects `es report`'s bundle: versions, `es doctor`, the config's shape, the last command, the
-// run's failures and the slice of `.es/debug` behind them. Local files and local commands only:
+// Collects `reeval report`'s bundle: versions, `reeval doctor`, the config's shape, the last command, the
+// run's failures and the slice of `.reeval/debug` behind them. Local files and local commands only:
 // nothing here uses the network. Everything passes through the report's scrubber.
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
@@ -26,7 +26,7 @@ export type ReportDeps = {
   arch: string
   nodeVersion: string
   npmVersion: () => Promise<string | null>
-  /** `es doctor --json`, offline. */
+  /** `reeval doctor --json`, offline. */
   doctor: (flags: Flags) => Promise<DoctorReport>
   agent: string | null
   now: () => Date
@@ -48,7 +48,7 @@ export type Collected = {
   scrub: Scrubber
 }
 
-/** `npm_config_user_agent` names the manager that ran `es`; else the project's lockfile. */
+/** `npm_config_user_agent` names the manager that ran `reeval`; else the project's lockfile. */
 export function packageManager(
   env: NodeJS.ProcessEnv,
   root: string,
@@ -94,7 +94,7 @@ const tail = (text: string, n: number) => text.trimEnd().split('\n').slice(-n)
 
 const OMITTED_CONFIG = JSON.stringify({
   kind: 'config',
-  omitted: "es report leaves the config's values out",
+  omitted: "reeval report leaves the config's values out",
 })
 
 /** A trace without its `config` entries, which hold the config's values. */
@@ -175,7 +175,7 @@ export function pickInvocation(root: string, last: boolean): CliInvocation | nul
   return picked.at(-1) ?? null
 }
 
-/** Collects the bundle for `es report [run]`, scrubbed; see `ReportDeps` for what it reads. */
+/** Collects the bundle for `reeval report [run]`, scrubbed; see `ReportDeps` for what it reads. */
 export async function collectReport(
   flags: Flags,
   refs: string[],
@@ -198,7 +198,7 @@ export async function collectReport(
     } catch (error) {
       configError = (error as Error).message
     }
-  } else configError = 'no es.config.* here or above'
+  } else configError = 'no reeval.config.* here or above'
 
   const doctor = await deps.doctor({ config: flags.config }).catch((error: Error) => ({
     error: error.message,
@@ -242,7 +242,7 @@ export async function collectReport(
           attachedMasks.before += masks(kept)
           attachedMasks.after += masks(scrubbed)
           attachments.push({
-            path: relative(join(root, '.es', 'debug'), path).replaceAll('\\', '/'),
+            path: relative(join(root, '.reeval', 'debug'), path).replaceAll('\\', '/'),
             data: Buffer.from(scrubbed),
           })
         }
@@ -251,7 +251,7 @@ export async function collectReport(
   }
 
   const raw: ReportBundle = {
-    kind: 'es-report',
+    kind: 'reeval-report',
     version: 1,
     createdAt: deps.now().toISOString(),
     es: PACKAGE_VERSION,
@@ -262,7 +262,7 @@ export async function collectReport(
     ci: inCI(deps.env),
     agent: deps.agent,
     env: Object.keys(deps.env)
-      .filter((name) => name.startsWith('ES_') || SECRET_NAME.test(name))
+      .filter((name) => name.startsWith('REEVAL_') || SECRET_NAME.test(name))
       .filter((name) => deps.env[name])
       .sort(),
     invocation,
@@ -274,7 +274,7 @@ export async function collectReport(
     redaction: { masked: 0, upstream: 0, paths: scrub.paths },
   }
   const bundle = scrub.value(raw)
-  // Counted as markers, so values ES masked before the report read them (in the record, the
+  // Counted as markers, so values reeval masked before the report read them (in the record, the
   // debug logs, the command log) count as well as the ones the report masks itself.
   const upstream = masks(JSON.stringify(raw)) + attachedMasks.before
   const masked = masks(JSON.stringify(bundle)) + attachedMasks.after

@@ -1,4 +1,4 @@
-// `es mcp`: the official MCP client talks to the real CLI over stdio (in the 2026-07-28 stateless
+// `reeval mcp`: the official MCP client talks to the real CLI over stdio (in the 2026-07-28 stateless
 // protocol and the 2025 handshake) and over stateless HTTP, against a project with recorded fake
 // runs. Every tool's answer is checked against the CLI command it mirrors.
 import assert from 'node:assert/strict'
@@ -7,9 +7,9 @@ import { request } from 'node:http'
 import { createServer } from 'node:net'
 import { join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
-import { killTree } from '@evalsuite/sandbox-docker/process'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio'
+import { killTree } from '@reeval/sandbox-docker/process'
 import { VIEW_NAMES } from '../src/history/db.ts'
 import { firstKeyword, sqlProblem } from '../src/mcp/server.ts'
 import { baseEnv, pkgRoot, project, runCli } from './helpers.ts'
@@ -23,10 +23,10 @@ type Json = Record<string, unknown>
 type Tool = { structuredContent?: unknown; content: unknown; isError?: boolean }
 
 const config = `
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
-import { fakeAnalysis, fakeJudge } from 'evalsuite/judge'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness({ files: process.env.BREAK ? {} : { 'ok.txt': 'y' } }),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
@@ -43,13 +43,13 @@ export default defineConfig({
 `
 
 const evals = {
-  'evals/a.es.ts': `import { evaluate, expect } from 'evalsuite'
+  'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('writes ok', async (t) => {
   await t.send('go')
   await expect(t).toHaveFile('ok.txt')
 })
 `,
-  'evals/b.es.ts': `import { evaluate, expect } from 'evalsuite'
+  'evals/b.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('also writes ok ${PLANTED}', async (t) => {
   await t.send('go')
   await expect(t).toHaveFile('ok.txt')
@@ -59,7 +59,7 @@ evaluate('also writes ok ${PLANTED}', async (t) => {
 
 async function connect(dir: string, mode: unknown, env: NodeJS.ProcessEnv = {}) {
   const client = new Client(
-    { name: 'es-test', version: '1.0.0' },
+    { name: 'reeval-test', version: '1.0.0' },
     { versionNegotiation: { mode: mode as 'legacy' } },
   )
   await client.connect(
@@ -101,14 +101,14 @@ const freePort = () =>
     })
   })
 
-describe('es mcp', () => {
+describe('reeval mcp', () => {
   let dir = ''
   let runs: string[] = []
   let modern: Client
   let legacy: Client
 
   before(async () => {
-    const p = await project('mcp', { 'es.config.ts': config, ...evals })
+    const p = await project('mcp', { 'reeval.config.ts': config, ...evals })
     dir = p.dir
     assert.equal((await runCli(dir, ['run', '--record'])).code, 0)
     const second = await runCli(dir, ['run', '--record'], { env: { BREAK: '1' } })
@@ -131,7 +131,7 @@ describe('es mcp', () => {
     assert.ok(discovered, 'the pinned client discovered a modern server')
     assert.ok((discovered.supportedVersions as string[]).includes('2026-07-28'))
     assert.equal(legacy.getDiscoverResult(), undefined, 'the default client used initialize')
-    assert.equal(modern.getServerVersion()?.name, 'es')
+    assert.equal(modern.getServerVersion()?.name, 'reeval')
     assert.match(modern.getInstructions() ?? '', /Read-only access/)
     const names = (await modern.listTools()).tools.map((t) => t.name)
     assert.deepEqual(names, [
@@ -153,7 +153,7 @@ describe('es mcp', () => {
     }
   })
 
-  test("each query_<view> tool answers what es query <view> does, with its columns' filters", async () => {
+  test("each query_<view> tool answers what reeval query <view> does, with its columns' filters", async () => {
     const schema = (await cliJson(dir, ['query', '--schema'])) as Array<Json>
     const tools = (await modern.listTools()).tools
     for (const view of VIEW_NAMES) {
@@ -162,7 +162,7 @@ describe('es mcp', () => {
       assert.deepEqual(got.rows, expected, view)
       assert.equal(got.truncated, false)
       const columns = schema.find((o) => o.name === view)?.columns as string[]
-      assert.deepEqual(got.columns, columns, `${view}: the columns of es query --schema`)
+      assert.deepEqual(got.columns, columns, `${view}: the columns of reeval query --schema`)
       const where = tools.find((t) => t.name === `query_${view}`)?.inputSchema.properties
         ?.where as { properties: Json }
       assert.deepEqual(Object.keys(where.properties), columns, `${view}: filterable by its columns`)
@@ -182,7 +182,7 @@ describe('es mcp', () => {
     assert.ok(bad.isError, 'an unknown column is refused')
   })
 
-  test('query runs one read-only SELECT; query_schema is es query --schema', async () => {
+  test('query runs one read-only SELECT; query_schema is reeval query --schema', async () => {
     const r = await json(modern, 'query', {
       sql: '-- count\nSELECT COUNT(*) AS n FROM runs',
     })
@@ -271,9 +271,9 @@ describe('es mcp', () => {
     const listed = (await modern.listResources()).resources.map((x) => x.uri)
     assert.deepEqual(
       listed,
-      [...runs].reverse().map((id) => `es://runs/${id}`),
+      [...runs].reverse().map((id) => `reeval://runs/${id}`),
     )
-    const run = await legacy.readResource({ uri: `es://runs/${runs[0]}` })
+    const run = await legacy.readResource({ uri: `reeval://runs/${runs[0]}` })
     assert.deepEqual(
       JSON.parse((run.contents[0] as { text: string }).text),
       await cliJson(dir, ['show', runs[0] as string]),
@@ -283,22 +283,22 @@ describe('es mcp', () => {
     assert.ok(ambiguous.isError, 'two evals share the attempt id')
     assert.match(textOf(ambiguous), /use its key/)
     for (const bad of [
-      `es://runs/${runs[0]}/transcripts/..%2F..%2Fes.config.ts`,
-      'es://runs/..%2F..',
+      `reeval://runs/${runs[0]}/transcripts/..%2F..%2Freeval.config.ts`,
+      'reeval://runs/..%2F..',
     ]) {
       await assert.rejects(modern.readResource({ uri: bad }), bad)
     }
   })
 
   test('masks secret-looking values from its environment in everything it returns', async () => {
-    const client = await connect(dir, MODERN, { ES_TEST_API_KEY: PLANTED })
+    const client = await connect(dir, MODERN, { REEVAL_TEST_API_KEY: PLANTED })
     try {
       const shown = JSON.stringify(await json(client, 'show'))
       assert.ok(!shown.includes(PLANTED))
       assert.match(shown, /also writes ok \[REDACTED\]/)
       const rows = JSON.stringify(await json(client, 'query_eval_trend'))
       assert.ok(!rows.includes(PLANTED))
-      const run = await client.readResource({ uri: `es://runs/${runs[0]}` })
+      const run = await client.readResource({ uri: `reeval://runs/${runs[0]}` })
       assert.ok(!JSON.stringify(run).includes(PLANTED))
     } finally {
       await client.close()
@@ -306,7 +306,7 @@ describe('es mcp', () => {
     assert.ok(JSON.stringify(await json(modern, 'show')).includes(PLANTED), 'unmasked without it')
   })
 
-  /** Starts `es mcp --http` on a free port; resolves once it's listening. */
+  /** Starts `reeval mcp --http` on a free port; resolves once it's listening. */
   async function serveHttp(args: string[] = [], env: NodeJS.ProcessEnv = {}) {
     const port = await freePort()
     const child: ChildProcess = spawn(
@@ -316,7 +316,7 @@ describe('es mcp', () => {
     )
     let out = ''
     await new Promise<void>((resolve, reject) => {
-      child.on('exit', (code) => reject(new Error(`es mcp --http exited ${code}`)))
+      child.on('exit', (code) => reject(new Error(`reeval mcp --http exited ${code}`)))
       child.stdout?.on('data', (d) => {
         out += d
         if (out.includes('Ctrl-C')) resolve()
@@ -339,7 +339,7 @@ describe('es mcp', () => {
 
   async function httpClient(url: string, headers: Record<string, string> = {}) {
     const client = new Client(
-      { name: 'es-test', version: '1.0.0' },
+      { name: 'reeval-test', version: '1.0.0' },
       { versionNegotiation: { mode: MODERN } },
     )
     await client.connect(
@@ -377,8 +377,10 @@ describe('es mcp', () => {
     }
   })
 
-  test('--http with a token (--token beats ES_MCP_TOKEN) wants it as a bearer token', async () => {
-    const http = await serveHttp(['--token', 'flag-token-123'], { ES_MCP_TOKEN: 'env-token-456' })
+  test('--http with a token (--token beats REEVAL_MCP_TOKEN) wants it as a bearer token', async () => {
+    const http = await serveHttp(['--token', 'flag-token-123'], {
+      REEVAL_MCP_TOKEN: 'env-token-456',
+    })
     try {
       assert.match(http.out, /requires Authorization: Bearer/)
       assert.ok(!http.out.includes('flag-token-123'), 'the token is never printed')
@@ -389,7 +391,7 @@ describe('es mcp', () => {
         'a wrong one',
       )
       const env = { ...JSON_POST, authorization: 'Bearer env-token-456' }
-      assert.equal(await http.raw(env), 401, 'the flag wins over ES_MCP_TOKEN')
+      assert.equal(await http.raw(env), 401, 'the flag wins over REEVAL_MCP_TOKEN')
       const auth = { authorization: 'Bearer flag-token-123' }
       assert.equal(
         await http.raw({ ...JSON_POST, ...auth, host: `evil.example:${http.port}` }),
@@ -401,9 +403,9 @@ describe('es mcp', () => {
     } finally {
       http.stop()
     }
-    const fromEnv = await serveHttp([], { ES_MCP_TOKEN: 'env-token-456' })
+    const fromEnv = await serveHttp([], { REEVAL_MCP_TOKEN: 'env-token-456' })
     try {
-      assert.equal(await fromEnv.raw(JSON_POST), 401, 'ES_MCP_TOKEN alone sets it')
+      assert.equal(await fromEnv.raw(JSON_POST), 401, 'REEVAL_MCP_TOKEN alone sets it')
       const client = await httpClient(fromEnv.url, { authorization: 'Bearer env-token-456' })
       assert.ok(client.getDiscoverResult())
       await client.close()

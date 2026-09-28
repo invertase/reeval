@@ -1,13 +1,13 @@
 ---
-title: es doctor
+title: reeval doctor
 description: Check that a project is ready to run, with a fix for every problem.
 ---
 
-`es doctor` checks what `es run` needs, without running anything, and prints the fix for each problem. It exits 0 when nothing failed and 1 when something did.
+`reeval doctor` checks what `reeval run` needs, without running anything, and prints the fix for each problem. It exits 0 when nothing failed and 1 when something did.
 
 ```bash
-npx es doctor
-npx es doctor --online --json
+npx reeval doctor
+npx reeval doctor --online --json
 ```
 
 ## Flags
@@ -15,23 +15,23 @@ npx es doctor --online --json
 [//]: # (generated:cli-help:doctor)
 
 ```text
-es doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
-                          images, each harness's and the judge's key, egress and .gitignore;
-                          exit 1 on a problem, each with its fix. Never prints a key
-  --online                Also try each key with one tiny authenticated request
-  --json                  The checks as JSON
+reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
+                              images, each harness's and the judge's key, egress and .gitignore;
+                              exit 1 on a problem, each with its fix. Never prints a key
+  --online                    Also try each key with one tiny authenticated request
+  --json                      The checks as JSON
 ```
 
 [//]: # (/generated:cli-help:doctor)
 
 ## Output
 
-A real run in a project from `es init --yes`, before Docker was started or a key was set:
+A real run in a project from `reeval init --yes`, before Docker was started or a key was set:
 
 ```text
-es doctor · es.config.ts
-✓ node       22.14.0 (ES needs >=22.13)
-✓ config     es.config.ts: harness cursor:composer-2.5, sandbox docker, profiles fake, pr, nightly
+reeval doctor · reeval.config.ts
+✓ node       22.14.0 (reeval needs >=22.13)
+✓ config     reeval.config.ts: harness cursor:composer-2.5, sandbox docker, profiles fake, pr, nightly
 ✗ docker     isn't running, and the config's sandboxes need it
              fix: start Docker Desktop, or the Docker service (sudo systemctl start docker)
 - image      Docker isn't running
@@ -39,9 +39,9 @@ es doctor · es.config.ts
              fix: add CURSOR_API_KEY=... to .env.local
 - judge      no judge model (t.judge needs one)
 ✓ egress     allow-all: the agents reach any host (the default); evals and environments may set their own
-✓ gitignore  .env* and .es/ are ignored
+✓ gitignore  .env* and .reeval/ are ignored
 
-2 problems, 0 warnings. Fix them and run es doctor again.
+2 problems, 0 warnings. Fix them and run reeval doctor again.
 ```
 
 `✓` passed, `!` is a warning (exit 0), `✗` is a problem (exit 1), and `-` was skipped.
@@ -51,17 +51,17 @@ es doctor · es.config.ts
 | Check | Problem (`✗`) | Warning (`!`) |
 |---|---|---|
 | `node` | Older than the package's `engines` | |
-| `config` | No `es.config.*` here or above, or it doesn't load | |
+| `config` | No `reeval.config.*` here or above, or it doesn't load | |
 | `docker` | Not running, or running Windows containers, when a sandbox in the config or a profile is `docker()` | Under 4 GB of memory, one attempt's default limit |
-| `image` | ES's sandbox image for a configured harness isn't built, or a `docker({ image })` isn't in Docker | Images for this harness from another ES version |
+| `image` | reeval's sandbox image for a configured harness isn't built, or a `docker({ image })` isn't in Docker | Images for this harness from another reeval version |
 | `key` | A config harness's key isn't set, has whitespace in it, or (`--online`) its API rejects it | A key only a profile's harness needs isn't set; `--online` couldn't reach the API |
 | `judge` | The judge model's key isn't set | The same, for a profile's judge |
 | `egress` | A sandbox can't enforce its policy, such as a restricted policy on `fakeSandbox()` | |
-| `gitignore` | `.env*` isn't ignored | `.es/` isn't ignored |
+| `gitignore` | `.env*` isn't ignored | `.reeval/` isn't ignored |
 
 ## Docker on each platform
 
-ES's sandboxes are Linux containers. The `docker` check's fix names what your platform needs:
+reeval's sandboxes are Linux containers. The `docker` check's fix names what your platform needs:
 
 | Platform | Docker isn't running | Docker runs Windows containers |
 |---|---|---|
@@ -69,9 +69,9 @@ ES's sandboxes are Linux containers. The `docker` check's fix names what your pl
 | macOS | `start Docker Desktop (or another Docker engine, such as OrbStack or Colima)` | |
 | Windows | `install or start Docker Desktop with the WSL 2 backend and Linux containers (…)` | `switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers), on the WSL 2 backend` |
 
-Keys come from the environment and the `.env.local` and `.env` beside the config, as `es run` reads them. `es doctor` names each key but never prints its value, in text or JSON.
+Keys come from the environment and the `.env.local` and `.env` beside the config, as `reeval run` reads them. `reeval doctor` names each key but never prints its value, in text or JSON.
 
-When images are missing and `es doctor` runs in a terminal, it offers to build them with `es image build`.
+When images are missing and `reeval doctor` runs in a terminal, it offers to build them with `reeval image build`.
 
 ## --online
 
@@ -89,9 +89,9 @@ With `--online`, each key goes in one request to its API, only in a header: `GET
   "healthy": false,
   "problems": 2,
   "warnings": 1,
-  "config": "es.config.ts",
+  "config": "reeval.config.ts",
   "checks": [
-    { "id": "node", "status": "ok", "summary": "22.14.0 (ES needs >=22.13)" },
+    { "id": "node", "status": "ok", "summary": "22.14.0 (reeval needs >=22.13)" },
     …
   ]
 }
@@ -101,5 +101,5 @@ With `--online`, each key goes in one request to its API, only in a header: `GET
 
 ## Related
 
-- [es init](/reference/cli/init): scaffolds a project that passes these checks, once Docker runs and the key is set
+- [reeval init](/reference/cli/init): scaffolds a project that passes these checks, once Docker runs and the key is set
 - [Your first real run](/guide/first-real-run): Docker, the image and keys

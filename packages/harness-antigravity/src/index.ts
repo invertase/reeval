@@ -1,4 +1,4 @@
-// `@evalsuite/harness-antigravity`: the Google Antigravity CLI (`agy`) as an AI SDK harness.
+// `@reeval/harness-antigravity`: the Google Antigravity CLI (`agy`) as an AI SDK harness.
 import { createAntigravity } from './antigravity-harness.ts'
 
 /** Default Antigravity harness instance. Equivalent to `createAntigravity()`. */

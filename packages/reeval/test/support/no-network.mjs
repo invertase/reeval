@@ -1,12 +1,13 @@
 // Preloaded (`node --import`) into a CLI that must stay offline: any TCP connection, DNS lookup
-// or fetch is written to $ES_TEST_NETWORK_LOG and refused. Unix sockets (Docker's) are allowed.
+// or fetch is written to $REEVAL_TEST_NETWORK_LOG and refused. Unix sockets (Docker's) are allowed.
 
 import dns from 'node:dns'
 import { appendFileSync } from 'node:fs'
 import net from 'node:net'
 
 const log = (what) => {
-  if (process.env.ES_TEST_NETWORK_LOG) appendFileSync(process.env.ES_TEST_NETWORK_LOG, `${what}\n`)
+  if (process.env.REEVAL_TEST_NETWORK_LOG)
+    appendFileSync(process.env.REEVAL_TEST_NETWORK_LOG, `${what}\n`)
 }
 
 const connect = net.Socket.prototype.connect

@@ -1,4 +1,4 @@
-// `es report [run]`: collects a redacted bug report, prints its summary and writes it locally.
+// `reeval report [run]`: collects a redacted bug report, prints its summary and writes it locally.
 // It uploads nothing: `--issue` opens a pre-filled issue, or files one with gh once you say yes.
 import { execFile } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -85,7 +85,7 @@ export async function reportCommand(
   issueDeps: IssueDeps = defaultIssueDeps(),
 ): Promise<number> {
   if (flags.json && flags.issue) {
-    throw new UsageError('es report --json prints the bundle; --issue files it. Pick one.')
+    throw new UsageError('reeval report --json prints the bundle; --issue files it. Pick one.')
   }
   const collected = await collectReport(flags, refs, deps ?? (await defaultReportDeps()))
   const { bundle, attachments, root } = collected
@@ -99,15 +99,15 @@ export async function reportCommand(
     return 0
   }
   const target = resolve(
-    flags.out ?? join(root, '.es', 'reports', stamp(new Date(bundle.createdAt))),
+    flags.out ?? join(root, '.reeval', 'reports', stamp(new Date(bundle.createdAt))),
   )
   const written = writeReport(collected, target, attached)
-  io.out('es report')
+  io.out('reeval report')
   for (const line of summaryLines(bundle, attached.length)) io.out(line)
   io.out('')
   io.out(`Wrote ${files(written)}`)
   if (!flags.issue) {
-    io.out('Nothing was uploaded. Review the files, then file it with es report --issue.')
+    io.out('Nothing was uploaded. Review the files, then file it with reeval report --issue.')
     return 0
   }
   const shownDir = collected.scrub.text(written.dir)

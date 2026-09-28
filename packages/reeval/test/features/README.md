@@ -1,7 +1,7 @@
 # Feature fixtures
 
-Each directory here is a small ES project that checks **one** behaviour of one feature, from
-inside the attempt, with ES's own API. `features.test.ts` runs it and checks the record from
+Each directory here is a small reeval project that checks **one** behaviour of one feature, from
+inside the attempt, with reeval's own API. `features.test.ts` runs it and checks the record from
 outside. Every user-facing feature or option lands with its fixtures in the same change.
 
 ## Which tier
@@ -19,10 +19,10 @@ outside. Every user-facing feature or option lands with its fixtures in the same
 
 ```text
 <area>/<what-it-checks>/        e.g. skills/exclude-custom, not skills-2
-  es.config.ts                  ES_FIXTURE_SANDBOX picks the fake sandbox or docker()
+  reeval.config.ts                  REEVAL_FIXTURE_SANDBOX picks the fake sandbox or docker()
   evals/env.ts                  the environment both evals use
-  evals/lands.es.ts             the check: one evaluate, one expectation
-  evals/canary.es.ts            the same check with a wrong expectation: it must fail
+  evals/lands.eval.ts             the check: one evaluate, one expectation
+  evals/canary.eval.ts            the same check with a wrong expectation: it must fail
   …                             whatever the feature needs (skills/, files)
 ```
 
@@ -60,7 +60,7 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
   turn: `const box = await t.sandbox()` starts the sandbox, and then `box.exec` and
   `box.readFile` work (so do `t.exec` and `t.readFile`).
 - **What the agent itself sees** differs from what `t.exec` sees: checks get `to: 'checks'`
-  secrets, and the agent doesn't. Script the fake agent in `es.config.ts` with real sandbox
+  secrets, and the agent doesn't. Script the fake agent in `reeval.config.ts` with real sandbox
   actions, then assert on its transcript:
 
   ```ts
@@ -79,8 +79,8 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 - **Egress fixtures** (`egress/*`) list only `docker` (and `real`): the fake sandbox can't
   enforce a policy, so a restricted one makes its plan exit 2. For a host to reach,
   `features.test.ts` starts a listener on the host at a non-loopback address (the gateway never
-  reaches loopback) that answers `es-egress-ok`; a row passes `hostEnv: egressEnv` to give the
-  fixture `ES_EGRESS_HOST` (its address) and `ES_EGRESS_TARGET` (address and port). The row's
+  reaches loopback) that answers `reeval-egress-ok`; a row passes `hostEnv: egressEnv` to give the
+  fixture `REEVAL_EGRESS_HOST` (its address) and `REEVAL_EGRESS_TARGET` (address and port). The row's
   `record` checks the attempt's `egress` from outside.
 - **Per-harness behaviour without a key:** `fakeHarness({ layout: 'claude-code' })` (or
   `'cursor'`) places rules and skills exactly where that agent reads them and runs in that
@@ -89,9 +89,9 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 
 ## The real tier
 
-A fixture that lists `real` also runs on real Cursor in Docker: its `es.config.ts` picks
-`cursor({ model: process.env.ES_REAL_MODEL ?? 'composer-2.5' })` when `ES_FIXTURE_HARNESS=cursor`.
-The tier is skipped unless `ES_TEST_REAL=1`, and then needs `CURSOR_API_KEY`: without it each fixture
+A fixture that lists `real` also runs on real Cursor in Docker: its `reeval.config.ts` picks
+`cursor({ model: process.env.REEVAL_REAL_MODEL ?? 'composer-2.5' })` when `REEVAL_FIXTURE_HARNESS=cursor`.
+The tier is skipped unless `REEVAL_TEST_REAL=1`, and then needs `CURSOR_API_KEY`: without it each fixture
 fails, naming the variable. Its fixtures run one
 at a time, at `--concurrency 1`, and spend money, so keep them cheap:
 
@@ -100,7 +100,7 @@ at a time, at `--concurrency 1`, and spend money, so keep them cheap:
   output, or the record (`context`, taken after the first turn, lists the adapter's home).
 - A canary that needs no turn (`await t.sandbox()`) when the check allows it; else one short turn.
 - A fixture whose behaviour only a real agent has (rules reaching its context) lists `real` alone,
-  next to the fake/Docker fixture that checks where ES put the file.
+  next to the fake/Docker fixture that checks where reeval put the file.
 
 What every real harness must do, on each of them, is the **harness contract**
 ([`../contract/README.md`](../contract/README.md)): a table of behaviours run once per harness
@@ -112,17 +112,17 @@ behaviour there when it applies to every harness, and names it in its inventory 
 
 ```bash
 pnpm build                              # the tests run dist/cli.js; rebuild after changing src/
-cd packages/evalsuite
+cd packages/reeval
 pnpm test:plan                          # plan snapshots
 pnpm test:features                      # fixtures on the fake sandbox, and Docker if it's there
 pnpm test:docker                        # Docker only, failing (not skipping) without it
 pnpm test:real                          # real Cursor fixtures, one at a time (CURSOR_API_KEY)
-ES_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the diff
+REEVAL_UPDATE_SNAPSHOTS=1 pnpm test:plan    # accept plan changes, then review the diff
 pnpm test                               # everything, before finishing
 ```
 
-To debug one fixture by hand, run with `ES_TEST_KEEP=1` to keep the temp project, then `cd` into
-it and run `es run --ui plain`. Add `ES_FIXTURE_SANDBOX=docker` for the Docker tier.
+To debug one fixture by hand, run with `REEVAL_TEST_KEEP=1` to keep the temp project, then `cd` into
+it and run `reeval run --ui plain`. Add `REEVAL_FIXTURE_SANDBOX=docker` for the Docker tier.
 
 ## Done means
 
@@ -135,5 +135,5 @@ it and run `es run --ui plain`. Add `ES_FIXTURE_SANDBOX=docker` for the Docker t
 5. The change lists the fixtures it adds, and its entry in `inventory.ts` names them (or says why
    it's a gap), with `COVERAGE.md` regenerated.
 6. The docs are updated: the feature's page in the Reference tab (`docs/reference/`), and the
-   Guide or a Recipe if it changes how people use ES. `pnpm docs:check` is green (see
+   Guide or a Recipe if it changes how people use reeval. `pnpm docs:check` is green (see
    [AGENTS.md](../../../../AGENTS.md#docs)).

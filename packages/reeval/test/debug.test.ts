@@ -1,7 +1,7 @@
 // Verbosity and local debug data, through the real CLI on the fake sandbox: the `-v` phase trace
-// and `-vv` payloads on screen, debug.log always in .es/debug and never in the history folder,
+// and `-vv` payloads on screen, debug.log always in .reeval/debug and never in the history folder,
 // trace.ndjson kept like a flight recorder (failures, or --trace), redaction in every output,
-// retention and `es clean`. The Docker phases (image, container, gateway, docker commands) are
+// retention and `reeval clean`. The Docker phases (image, container, gateway, docker commands) are
 // in docker.test.ts.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
@@ -33,7 +33,7 @@ function attemptDir(root: string, name: string): string {
 const read = (path: string) => readFileSync(path, 'utf8')
 
 const script = "{ script: [[{ exec: 'echo from-the-agent' }, { write: { 'out.txt': 'hi\\n' } }]] }"
-const passing = `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const passing = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('traced', {
   files: { 'notes.md': 'notes\\n' },
   setup: ['echo set-up > setup.txt'],
@@ -44,7 +44,7 @@ evaluate('traces every phase', { environment: env }, async (t) => {
   expect(await t.judge('Did it write out.txt?')).toPass()
 })
 `
-const failing = `import { evaluate, expect } from 'evalsuite'
+const failing = `import { evaluate, expect } from 'reeval'
 evaluate('fails its check', async (t) => {
   await t.send('write out.txt')
   expect((await t.exec('test -f missing.txt')).exitCode).toBe(0)
@@ -63,8 +63,8 @@ const PHASES = ['plan', 'env', 'image', 'container', 'harness', 'check', 'judge'
 describe('verbosity', () => {
   test('-v prints each phase line for an attempt, prefixed with the attempt', async () => {
     const p = await project('debug-v', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
     })
     const r = await runCli(p.dir, ['run', '-v'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -72,7 +72,7 @@ describe('verbosity', () => {
     // What each phase says: the plan's sources, the files and setup placed, tool calls, the check.
     assert.match(
       r.stdout,
-      / plan {6}config es\.config\.ts · no profile · run \S+ · attempt fake\/traced\/fake#1$/m,
+      / plan {6}config reeval\.config\.ts · no profile · run \S+ · attempt fake\/traced\/fake#1$/m,
     )
     assert.match(r.stdout, / plan {6}environment traced \(evaluate\("traces every phase"\)\)$/m)
     assert.match(r.stdout, / env {7}file notes\.md \(6 bytes\)$/m)
@@ -82,7 +82,7 @@ describe('verbosity', () => {
     assert.match(r.stdout, / judge {5}fake · \d+m?s · score 0\.90 ≥ 0\.8 · pass · reason: /m)
     assert.match(
       r.stdout,
-      / teardown {2}record \.es\/runs\/\S+\.json · artifacts .* · debug \.es\/debug\//m,
+      / teardown {2}record \.reeval\/runs\/\S+\.json · artifacts .* · debug \.reeval\/debug\//m,
     )
     // -v doesn't print -vv's payloads or millisecond times.
     assert.doesNotMatch(r.stdout, /resolved config|\d{2}:\d{2}:\d{2}\.\d{3}/)
@@ -90,21 +90,21 @@ describe('verbosity', () => {
 
   test('canary: without -v, no phase line prints', async () => {
     const p = await project('debug-quiet', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
     })
     const r = await runCli(p.dir, ['run'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     for (const phase of PHASES) assert.doesNotMatch(r.stdout, phaseLine(phase), phase)
     // Twin: the attempt's own lines still print, under the same prefix.
-    assert.match(r.stdout, /^\[traces#1 [^\]]+\] ✓ evals\/a\.es\.ts › traces every phase/m)
+    assert.match(r.stdout, /^\[traces#1 [^\]]+\] ✓ evals\/a\.eval\.ts › traces every phase/m)
   })
 
   test('grouped logs keep each attempt’s debug lines in its own block', async () => {
     const p = await project('debug-grouped', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
-      'evals/b.es.ts': failing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
+      'evals/b.eval.ts': failing,
     })
     const r = await runCli(p.dir, ['run', '-v', '--log-order', 'grouped'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -125,21 +125,21 @@ describe('verbosity', () => {
 
   test('agent mode prints -v lines too, under the attempt tag', async () => {
     const p = await project('debug-agent', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
     })
-    const r = await runCli(p.dir, ['run', '-v'], { env: { ES_UI: 'agent' } })
+    const r = await runCli(p.dir, ['run', '-v'], { env: { REEVAL_UI: 'agent' } })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     for (const phase of PHASES) assert.match(r.stdout, phaseLine(phase), phase)
     // Twin: agent mode's own output is still there, and nothing else of plain mode's.
     assert.match(r.stdout, /^1 passed$/m)
-    assert.doesNotMatch(r.stdout, /✓ evals\/a\.es\.ts/)
+    assert.doesNotMatch(r.stdout, /✓ evals\/a\.eval\.ts/)
   })
 
   test('-vv adds raw payloads with millisecond times', async () => {
     const p = await project('debug-vv', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
     })
     const r = await runCli(p.dir, ['run', '-vv'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -156,16 +156,16 @@ describe('verbosity', () => {
 })
 
 describe('local debug data', () => {
-  test('debug.log is always written to .es/debug, and nothing of it lands in the history', async () => {
+  test('debug.log is always written to .reeval/debug, and nothing of it lands in the history', async () => {
     const p = await project('debug-log', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
     })
     const r = await runCli(p.dir, ['run', '--record'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run } = readRun(p.dir)
     const dir = attemptDir(p.dir, 'traces-every-phase')
-    assert.ok(dir.includes(join('.es', 'debug', run.runId)), dir)
+    assert.ok(dir.includes(join('.reeval', 'debug', run.runId)), dir)
     const log = read(join(dir, 'debug.log'))
     for (const phase of PHASES) {
       assert.match(log, new RegExp(`^\\d{4}-\\d{2}-\\d{2}T[\\d:.]+Z ${phase}\\s`, 'm'), phase)
@@ -181,15 +181,15 @@ describe('local debug data', () => {
       [],
     )
     for (const f of recorded) {
-      assert.doesNotMatch(read(join(history, f)), /\.es\/debug|debug\.log/, f)
+      assert.doesNotMatch(read(join(history, f)), /\.reeval\/debug|debug\.log/, f)
     }
   })
 
   test('trace.ndjson is kept for a failing attempt, not a passing one unless --trace', async () => {
     const p = await project('debug-trace', {
-      'es.config.ts': fakeConfig({ harness: script }),
-      'evals/a.es.ts': passing,
-      'evals/b.es.ts': failing,
+      'reeval.config.ts': fakeConfig({ harness: script }),
+      'evals/a.eval.ts': passing,
+      'evals/b.eval.ts': failing,
     })
     const r = await runCli(p.dir, ['run'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -217,8 +217,11 @@ describe('local debug data', () => {
 
   test('a small trace buffer drops the oldest entries and says how many', async () => {
     const p = await project('debug-buffer', {
-      'es.config.ts': fakeConfig({ harness: script, extra: 'debug: { traceBufferMb: 0.002 },' }),
-      'evals/b.es.ts': failing,
+      'reeval.config.ts': fakeConfig({
+        harness: script,
+        extra: 'debug: { traceBufferMb: 0.002 },',
+      }),
+      'evals/b.eval.ts': failing,
     })
     const r = await runCli(p.dir, ['run'])
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -247,13 +250,13 @@ describe('local debug data', () => {
       `node -e 'console.log(encodeURIComponent(process.env.LEAKY))'`,
     ].join('; ')
     const p = await project('debug-redact', {
-      'es.config.ts': fakeConfig({
+      'reeval.config.ts': fakeConfig({
         harness: `{ script: [[{ exec: ${JSON.stringify(leak)} }]] }`,
       })
         .replace('export default defineConfig({', 'export default defineConfig(({ secret }) => ({')
         .replace(/\}\)\n$/, '}))\n')
-        .replace('judge:', "env: { LEAKY: secret.fromEnv('ES_DEBUG_LEAKY') },\n  judge:"),
-      'evals/b.es.ts': `import { evaluate, expect } from 'evalsuite'
+        .replace('judge:', "env: { LEAKY: secret.fromEnv('REEVAL_DEBUG_LEAKY') },\n  judge:"),
+      'evals/b.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('leaks', async (t) => {
   await t.send('print it')
   const r = await t.exec(${JSON.stringify(leak)})
@@ -261,7 +264,7 @@ evaluate('leaks', async (t) => {
 })
 `,
     })
-    const r = await runCli(p.dir, ['run', '-vv'], { env: { ES_DEBUG_LEAKY: LEAKY } })
+    const r = await runCli(p.dir, ['run', '-vv'], { env: { REEVAL_DEBUG_LEAKY: LEAKY } })
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const dir = attemptDir(p.dir, 'leaks')
     const outputs = {
@@ -284,10 +287,10 @@ evaluate('leaks', async (t) => {
   test("a declared secret under a plain name is masked in an eval's logs and failures on screen", async () => {
     const DSN = 'dsn_7c1d9ab04e4f2a6b8c'
     const p = await project('debug-redact-declared', {
-      'es.config.ts': fakeConfig(),
-      'evals/b.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/b.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('sentry', ({ secret }) => ({
-  env: { SENTRY_DSN: secret.fromEnv('ES_DEBUG_DSN') },
+  env: { SENTRY_DSN: secret.fromEnv('REEVAL_DEBUG_DSN') },
 }))
 evaluate('prints the dsn', { environment: env }, async (t) => {
   await t.sandbox()
@@ -299,7 +302,7 @@ evaluate('prints the dsn', { environment: env }, async (t) => {
 `,
     })
     for (const ui of ['plain', 'agent']) {
-      const r = await runCli(p.dir, ['run', '--ui', ui], { env: { ES_DEBUG_DSN: DSN } })
+      const r = await runCli(p.dir, ['run', '--ui', ui], { env: { REEVAL_DEBUG_DSN: DSN } })
       assert.equal(r.code, 1, r.stdout + r.stderr)
       const screen = r.stdout + r.stderr
       for (const n of [DSN.length, 12, 8]) {
@@ -316,21 +319,21 @@ evaluate('prints the dsn', { environment: env }, async (t) => {
   })
 
   test("a secret in an error that stops the run is masked, config's and an eval file's", async () => {
-    const KEY = 'es-fatal-7c1d9ab04e4f2a6b8c9d0e'
+    const KEY = 'reeval-fatal-7c1d9ab04e4f2a6b8c9d0e'
     const p = await project('debug-redact-fatal', {
-      'es.config.ts': fakeConfig().replace(
+      'reeval.config.ts': fakeConfig().replace(
         'export default',
-        `if (process.env.ES_FATAL_WHERE === 'config') throw new Error('config refused ' + process.env.ES_FATAL_API_KEY)\nexport default`,
+        `if (process.env.REEVAL_FATAL_WHERE === 'config') throw new Error('config refused ' + process.env.REEVAL_FATAL_API_KEY)\nexport default`,
       ),
-      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
-if (process.env.ES_FATAL_WHERE === 'eval') throw new Error(\`eval refused \${process.env.ES_FATAL_API_KEY}\`)
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'
+if (process.env.REEVAL_FATAL_WHERE === 'eval') throw new Error(\`eval refused \${process.env.REEVAL_FATAL_API_KEY}\`)
 evaluate('e', async () => {})
 `,
     })
     for (const where of ['config', 'eval']) {
-      for (const debug of [{}, { ES_DEBUG: '1' }]) {
+      for (const debug of [{}, { REEVAL_DEBUG: '1' }]) {
         const r = await runCli(p.dir, ['run'], {
-          env: { ES_FATAL_WHERE: where, ES_FATAL_API_KEY: KEY, ...debug },
+          env: { REEVAL_FATAL_WHERE: where, REEVAL_FATAL_API_KEY: KEY, ...debug },
         })
         const screen = r.stdout + r.stderr
         assert.equal(r.code, 2, screen)
@@ -347,19 +350,19 @@ evaluate('e', async () => {})
     // What a leak check that searches the sandbox for the key's tail would run and print.
     const search = `echo searching for ${tail}; grep -rlsF -e '${tail}' . || true`
     const p = await project('debug-redact-tail', {
-      'es.config.ts': fakeConfig({
+      'reeval.config.ts': fakeConfig({
         harness: `{ script: [[{ exec: ${JSON.stringify(search)} }]] }`,
       }),
-      'evals/b.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'evals/b.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('searches for the tail', async (t) => {
   await t.send('search')
-  const tail = (process.env.ES_DEBUG_PROVIDER_API_KEY ?? '').slice(-12)
+  const tail = (process.env.REEVAL_DEBUG_PROVIDER_API_KEY ?? '').slice(-12)
   const r = await t.exec(\`echo searching for \${tail}; grep -rlsF -e '\${tail}' . || true\`)
   expect(r.exitCode).toBe(0)
 })
 `,
     })
-    const env = { ES_DEBUG_PROVIDER_API_KEY: KEY }
+    const env = { REEVAL_DEBUG_PROVIDER_API_KEY: KEY }
     for (const flag of ['-v', '-vv']) {
       const r = await runCli(p.dir, ['run', flag, '--trace'], { env })
       assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -383,10 +386,10 @@ evaluate('searches for the tail', async (t) => {
     }
   })
 
-  test('keeps the newest debug.keep runs, and es clean clears them', async () => {
+  test('keeps the newest debug.keep runs, and reeval clean clears them', async () => {
     const p = await project('debug-keep', {
-      'es.config.ts': fakeConfig({ extra: 'debug: { keep: 2 },' }),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('e', async (t) => { await t.send('go') })\n`,
+      'reeval.config.ts': fakeConfig({ extra: 'debug: { keep: 2 },' }),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', async (t) => { await t.send('go') })\n`,
     })
     const runs = () => (existsSync(debugRoot(p.dir)) ? readdirSync(debugRoot(p.dir)).sort() : [])
     const ids: string[] = []
@@ -402,7 +405,7 @@ evaluate('searches for the tail', async (t) => {
     assert.equal(some.code, 0, some.stderr)
     assert.match(
       some.stdout,
-      /^Removed debug data for 1 run \(\d+(\.\d)? [KM]?B\) from \.es\/debug$/m,
+      /^Removed debug data for 1 run \(\d+(\.\d)? [KM]?B\) from \.reeval\/debug$/m,
     )
     assert.deepEqual(runs(), ids.slice(2))
     const all = await runCli(p.dir, ['clean'])
@@ -410,7 +413,7 @@ evaluate('searches for the tail', async (t) => {
     assert.deepEqual(runs(), [])
     assert.match(
       (await runCli(p.dir, ['clean'])).stdout,
-      /^No debug data to remove in \.es\/debug$/m,
+      /^No debug data to remove in \.reeval\/debug$/m,
     )
     assert.equal(readRun(p.dir).run.runId, ids[2], 'scratch runs are left alone')
     const bad = await runCli(p.dir, ['clean', '--keep', 'x'])

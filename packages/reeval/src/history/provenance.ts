@@ -12,8 +12,8 @@ const text = async (cwd: string, args: string[]) => {
 }
 
 /**
- * The code under test. Null outside a git repo or before the first commit. ES's own output
- * (`.es/` and the history folder, given in `ignore` as absolute paths) never makes a run dirty.
+ * The code under test. Null outside a git repo or before the first commit. reeval's own output
+ * (`.reeval/` and the history folder, given in `ignore` as absolute paths) never makes a run dirty.
  */
 export async function gitInfo(
   root: string,
@@ -25,7 +25,7 @@ export async function gitInfo(
   const top = (await repoTop(root)) ?? root
   const ignored = ignore.map((dir) => `${relative(top, dir).split(sep).join('/')}/`)
   const isEsOutput = (path: string) =>
-    path.split('/').includes('.es') || ignored.some((dir) => path.startsWith(dir))
+    path.split('/').includes('.reeval') || ignored.some((dir) => path.startsWith(dir))
   const status = await git(root, ['status', '--porcelain=v1', '-z', '--untracked-files=all'])
   const entries = status.stdout
     .toString('utf8')

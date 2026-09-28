@@ -1,6 +1,6 @@
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
   harness: fakeHarness({}),

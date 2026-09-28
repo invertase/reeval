@@ -71,13 +71,13 @@ export const isEnvironment = (value: unknown): value is Environment =>
   (value as Environment).kind === 'environment' &&
   Array.isArray((value as Environment).layers)
 
-// ES's own files, so a stack trace's first frame outside them is the file that called us.
-// Compiled, all of ES's code is one module at the root of the executable's filesystem.
+// reeval's own files, so a stack trace's first frame outside them is the file that called us.
+// Compiled, all of reeval's code is one module at the root of the executable's filesystem.
 const OWN_DIRS = COMPILED
   ? [join(PACKAGE_DIR, sep)]
   : ['src', 'dist'].map((dir) => join(PACKAGE_DIR, dir, sep))
 
-/** The directory of the file that called into ES, from the stack; relative paths resolve here. */
+/** The directory of the file that called into reeval, from the stack; relative paths resolve here. */
 export function callerDir(): string | undefined {
   const limit = Error.stackTraceLimit
   Error.stackTraceLimit = 30
@@ -104,7 +104,7 @@ const toPath = (value: string | URL, base: string) => {
 
 /**
  * A tarball or folder spec (`./x.tgz`, `../pkg`, `/abs`, `file:…`) as an absolute path, resolved
- * like `file()`; npm resolves relative ones against its working directory, ES's cache.
+ * like `file()`; npm resolves relative ones against its working directory, reeval's cache.
  */
 const localNpmSpec = (spec: string, base: string) => {
   const path = spec.startsWith('file:') ? spec.slice('file:'.length) : spec
@@ -377,7 +377,7 @@ function gitHelper(base: string): GitHelper {
     const masked = credentialsIn(written)
     if (masked) {
       throw new DefinitionError(
-        `git(${JSON.stringify(masked)}): the URL has a password or token in it. ES fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.`,
+        `git(${JSON.stringify(masked)}): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.`,
       )
     }
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
@@ -453,9 +453,9 @@ function gitHelper(base: string): GitHelper {
 
 /**
  * What a skill directory leaves out of the sandbox unless `exclude` says otherwise: eval material
- * (skill-creator keeps `evals/` in the skill), run history and ES eval files. `.git` is always left out.
+ * (skill-creator keeps `evals/` in the skill), run history and reeval eval files. `.git` is always left out.
  */
-export const DEFAULT_SKILL_EXCLUDE: readonly string[] = ['/evals/', '.history/', '*.es.ts']
+export const DEFAULT_SKILL_EXCLUDE: readonly string[] = ['/evals/', '.history/', '*.eval.ts']
 
 function skillHelper(base: string): SkillHelper {
   const placement = (p: string | undefined) => {
@@ -466,7 +466,7 @@ function skillHelper(base: string): SkillHelper {
     if (e === undefined) return {}
     if (!Array.isArray(e) || e.some((p) => typeof p !== 'string' || !p.replace(/\//g, ''))) {
       throw new DefinitionError(
-        `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.es.ts'] (got ${JSON.stringify(e)})`,
+        `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.eval.ts'] (got ${JSON.stringify(e)})`,
       )
     }
     return { exclude: [...e] }

@@ -36,7 +36,7 @@ async function resolveImport(from: string, specifier: string): Promise<string | 
 /**
  * The eval file and every local module it imports, transitively, by path from `root` and
  * content hash, sorted by path. Only relative and absolute specifiers are followed: packages
- * (`evalsuite`, `node:*`, anything in `node_modules`) aren't traced.
+ * (`reeval`, `node:*`, anything in `node_modules`) aren't traced.
  */
 export async function traceSources(root: string, file: string): Promise<Source[]> {
   const seen = new Map<string, Source>()

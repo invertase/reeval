@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 // A dry run never fetches, so these repositories don't have to exist.
 export const pinned = defineEnvironment('pinned', ({ git }) => ({

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
 import {
   type AttemptRecord,
   activityLabel,
@@ -7,8 +8,7 @@ import {
   findEval,
   formatDuration,
   formatUsage,
-} from 'evalsuite/view'
-import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
+} from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { OutcomeBadge, OutcomeIcon } from '@/components/status'
@@ -80,7 +80,7 @@ export function AttemptPage() {
   const { data: studio } = useStudio()
   const found = record && findEval(record, slug)
   const key = (found && findAttempt(found, attemptId)?.key) ?? ''
-  // Only `es studio` serves .es/debug, and only for attempts that wrote it.
+  // Only `reeval studio` serves .reeval/debug, and only for attempts that wrote it.
   const { data: debug } = useQuery(debugQuery(runId, key, !!studio?.features.debug && !!key))
 
   if (error) return <ErrorState error={error} />

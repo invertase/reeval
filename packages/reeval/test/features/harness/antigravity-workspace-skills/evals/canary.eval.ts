@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Must fail: Antigravity's workspace skills don't go to Gemini CLI's .gemini/skills.

@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { houseRules } from './env.ts'
 
 // Must fail: Goose reads AGENTS.md, so nothing is written to Claude Code's CLAUDE.md.

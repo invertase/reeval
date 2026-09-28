@@ -7,7 +7,7 @@ const GIT = 'git -c user.name=es -c user.email=es@localhost -c core.hooksPath=/d
 /** Records the workspace state before the agent runs, in a git dir outside the workspace. */
 export async function snapshot(sandbox: Sandbox, signal?: AbortSignal): Promise<void> {
   const r = await sandbox.exec(
-    `export GIT_DIR="$PWD/../.es-git-$(basename "$PWD")" GIT_WORK_TREE="$PWD" && ` +
+    `export GIT_DIR="$PWD/../.reeval-git-$(basename "$PWD")" GIT_WORK_TREE="$PWD" && ` +
       `${GIT} init -q && ${GIT} add -A && ${GIT} commit -q --allow-empty -m base`,
     { signal },
   )
@@ -15,7 +15,7 @@ export async function snapshot(sandbox: Sandbox, signal?: AbortSignal): Promise<
 }
 
 export async function diffSinceSnapshot(sandbox: Sandbox, signal?: AbortSignal): Promise<Diff> {
-  const env = `export GIT_DIR="$PWD/../.es-git-$(basename "$PWD")" GIT_WORK_TREE="$PWD" && ${GIT} add -A && `
+  const env = `export GIT_DIR="$PWD/../.reeval-git-$(basename "$PWD")" GIT_WORK_TREE="$PWD" && ${GIT} add -A && `
   const patch = await sandbox.exec(`${env}${GIT} diff --cached --binary HEAD`, { signal })
   const names = await sandbox.exec(`${env}${GIT} diff --cached --name-status --no-renames HEAD`, {
     signal,

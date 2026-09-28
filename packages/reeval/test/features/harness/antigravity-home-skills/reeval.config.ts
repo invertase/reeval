@@ -1,8 +1,8 @@
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker, fakeSandbox } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker, fakeSandbox } from 'reeval/sandbox'
 
-// ES_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D). The fake
+// REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D). The fake
 // agent takes antigravity's layout (and image), so no key is needed. As the agent: read the skill
 // where the adapter puts it (and CLI 1.2.11 reads it), then where the CLI's docs say it goes.
 export default defineConfig({
@@ -17,7 +17,7 @@ export default defineConfig({
     ],
   }),
   sandbox:
-    process.env.ES_FIXTURE_SANDBOX === 'docker'
+    process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
       ? docker()
       : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })

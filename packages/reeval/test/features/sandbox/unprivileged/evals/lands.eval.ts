@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { agentSaw, plain } from './env.ts'
 
 // The agent and checks run as the unprivileged `es` user (uid 10001), with no capabilities.

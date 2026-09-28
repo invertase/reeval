@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { forms, leaky } from './env.ts'
 
 // The agent leaks the secret in every form, and the judge reads it all; the oracle then checks
@@ -6,6 +6,6 @@ import { forms, leaky } from './env.ts'
 evaluate('lands', { environment: leaky }, async (t) => {
   await t.send('print LEAKY_TOKEN every way you can')
   const leaked = (await t.readFile('leak.txt'))?.split('\n')
-  expect(leaked).toEqual(forms(process.env.ES_FIXTURE_LEAKY ?? ''))
+  expect(leaked).toEqual(forms(process.env.REEVAL_FIXTURE_LEAKY ?? ''))
   expect(await t.judge('Did the agent print the token?')).toPass()
 })

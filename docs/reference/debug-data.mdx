@@ -1,31 +1,31 @@
 ---
 title: Debug data
-description: The files ES keeps under .es/debug for each attempt, when each is written, how long they're kept, and the debug config.
+description: The files reeval keeps under .reeval/debug for each attempt, when each is written, how long they're kept, and the debug config.
 ---
 
-Every attempt leaves a debug log under `.es/debug`, and a failing one also leaves a full trace. They're local, redacted, and never recorded to history.
+Every attempt leaves a debug log under `.reeval/debug`, and a failing one also leaves a full trace. They're local, redacted, and never recorded to history.
 
 ```text
-.es/debug/<runId>/<eval slug>/<cell slug>/<n>/
+.reeval/debug/<runId>/<eval slug>/<cell slug>/<n>/
   debug.log         every -v line, always
   requests.ndjson   one line per egress gateway request
   trace.ndjson      raw payloads, for failing attempts or with -vv
 ```
 
-`.es/debug` sits next to `es.config.ts`. Studio's Debug tab shows the same data for an attempt.
+`.reeval/debug` sits next to `reeval.config.ts`. Studio's Debug tab shows the same data for an attempt.
 
 ## debug.log
 
-Always written. One line per step, with its time and phase: what `es run -v` prints for the attempt.
+Always written. One line per step, with its time and phase: what `reeval run -v` prints for the attempt.
 
 ```text
-2026-09-26T17:32:55.369Z plan      config es.jx.config.ts · no profile · run 20260926T173254Z_nogit_cursor-agent_p7qt · attempt fake/-/fake#1
-2026-09-26T17:32:55.370Z plan      harness fake (es.jx.config.ts or its default)
+2026-09-26T17:32:55.369Z plan      config reeval.jx.config.ts · no profile · run 20260926T173254Z_nogit_cursor-agent_p7qt · attempt fake/-/fake#1
+2026-09-26T17:32:55.370Z plan      harness fake (reeval.jx.config.ts or its default)
 …
 2026-09-26T17:32:55.371Z plan      judge fake judge · threshold 0.9 (group("greet"))
 2026-09-26T17:32:55.373Z env       environment - (digest eca09e8f139f)
 2026-09-26T17:32:55.373Z image     none: the fake sandbox runs on the host
-2026-09-26T17:32:55.375Z container fake sandbox at /tmp/es-sandbox-yPD9eE/work
+2026-09-26T17:32:55.375Z container fake sandbox at /tmp/reeval-sandbox-yPD9eE/work
 2026-09-26T17:32:55.386Z env       workspace snapshot taken: the diff starts here
 …
 ```
@@ -70,11 +70,11 @@ The other fields are `at`, `method`, `url`, `host`, `port`, `status` (when there
 
 ## trace.ndjson
 
-A flight recorder. During the attempt ES keeps raw payloads in memory: prompts, every transcript event, judge inputs and provider responses, request headers, DNS decisions and docker commands. The buffer holds `debug.traceBufferMb` megabytes, dropping the oldest entries first. It's written to disk only when the attempt doesn't pass, or for every attempt with `-vv` (`--trace`).
+A flight recorder. During the attempt reeval keeps raw payloads in memory: prompts, every transcript event, judge inputs and provider responses, request headers, DNS decisions and docker commands. The buffer holds `debug.traceBufferMb` megabytes, dropping the oldest entries first. It's written to disk only when the attempt doesn't pass, or for every attempt with `-vv` (`--trace`).
 
 ```text
 {"kind":"trace","startedAt":"2026-09-26T17:15:36.464Z","limitBytes":8388608,"dropped":0}
-{"at":"2026-09-26T17:15:36.464Z","ms":0,"phase":"plan","kind":"log","data":{"text":"config es.rt.config.ts · no profile · run 20260926T171535Z_nogit_cursor-agent_9jx6 · attempt fake/-/fake#1"}}
+{"at":"2026-09-26T17:15:36.464Z","ms":0,"phase":"plan","kind":"log","data":{"text":"config reeval.rt.config.ts · no profile · run 20260926T171535Z_nogit_cursor-agent_9jx6 · attempt fake/-/fake#1"}}
 …
 ```
 
@@ -82,19 +82,19 @@ The first line is a header: `limitBytes` is the buffer size and `dropped` how ma
 
 ## Retention
 
-At the end of each `es run`, ES keeps the newest `debug.keep` runs (default 20) and removes older ones. `es clean` removes them all, or all but the newest `--keep n`:
+At the end of each `reeval run`, reeval keeps the newest `debug.keep` runs (default 20) and removes older ones. `reeval clean` removes them all, or all but the newest `--keep n`:
 
 ```bash
-npx es clean --keep 1
+npx reeval clean --keep 1
 ```
 
 ```text
-Removed debug data for 4 runs (106.9 KB) from .es/debug
+Removed debug data for 4 runs (106.9 KB) from .reeval/debug
 ```
 
 ## Config
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 
 export default defineConfig({
@@ -115,15 +115,15 @@ export default defineConfig({
 | An unknown key | `Unknown option "keepRuns" in config.debug. Use keep, traceBufferMb.` |
 | A bad `keep` | `config.debug.keep must be a whole number of at least 1 (got 0)` |
 | A bad buffer size | `config.debug.traceBufferMb must be a number of megabytes above 0 (got 0)` |
-| A bad `es clean --keep` | `--keep must be a whole number (got x)` |
+| A bad `reeval clean --keep` | `--keep must be a whole number (got x)` |
 
 <Info>
-  Everything in `.es/debug` is redacted like the rest of ES's output, but it holds full prompts, outputs and headers. Keep `.es/` out of git.
+  Everything in `.reeval/debug` is redacted like the rest of reeval's output, but it holds full prompts, outputs and headers. Keep `.reeval/` out of git.
 </Info>
 
 ## Related
 
 - [Debugging guide](/guide/debugging)
-- [es image build and es clean](/reference/cli/image-clean)
+- [reeval image build and reeval clean](/reference/cli/image-clean)
 - [Transcripts](/reference/transcript)
 - [Egress](/reference/egress)

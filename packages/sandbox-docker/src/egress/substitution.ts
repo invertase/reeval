@@ -6,9 +6,9 @@ import { hostAllowed } from './policy.ts'
 
 const BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
-/** A fresh `es_secret_<32 base62>`: URL-safe, so it survives any encoding a client applies. */
+/** A fresh `reeval_secret_<32 base62>`: URL-safe, so it survives any encoding a client applies. */
 export function placeholder(): string {
-  let out = 'es_secret_'
+  let out = 'reeval_secret_'
   for (let i = 0; i < 32; i++) out += BASE62[randomInt(BASE62.length)]
   return out
 }

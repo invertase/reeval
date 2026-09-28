@@ -1,5 +1,5 @@
-import { evaluate, group } from 'evalsuite'
-import { docker, fakeSandbox } from 'evalsuite/sandbox'
+import { evaluate, group } from 'reeval'
+import { docker, fakeSandbox } from 'reeval/sandbox'
 
 // Two evals inherit the config's sandbox: one warning, naming the config.
 evaluate('pings a host', async () => {})

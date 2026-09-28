@@ -1,4 +1,4 @@
-// Every user-facing feature of ES, and what covers it on each tier. The feature matrix
+// Every user-facing feature of reeval, and what covers it on each tier. The feature matrix
 // (COVERAGE.md, `pnpm features:matrix`) is generated from this, the fixture table in
 // features.test.ts and the plan cases in plan.test.ts; matrix.test.ts fails when a feature has
 // nothing on any tier and isn't a known gap, when a fixture or plan case covers no feature, or
@@ -39,18 +39,17 @@ export const AREAS = [
 ] as const
 export type Area = (typeof AREAS)[number]
 
-const unit = (name: string) => `evalsuite/test/unit.test.ts › ${name}`
-const options = (name: string) => `evalsuite/test/options.test.ts › ${name}`
-const engine = (name: string) => `evalsuite/test/engine.test.ts › ${name}`
-const secrets = (name: string) => `evalsuite/test/secrets.test.ts › ${name}`
-const harness = (name: string) => `evalsuite/test/harness.test.ts › ${name}`
-const docker = (name: string) => `evalsuite/test/docker.test.ts › ${name}`
-const prepareContract = (name: string) =>
-  `evalsuite/test/sandbox-prepare-contract.test.ts › ${name}`
-const debug = (name: string) => `evalsuite/test/debug.test.ts › ${name}`
-const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
-const analysis = (name: string) => `evalsuite/test/analysis.test.ts › ${name}`
-const workspace = (name: string) => `evalsuite/test/workspace.test.ts › ${name}`
+const unit = (name: string) => `reeval/test/unit.test.ts › ${name}`
+const options = (name: string) => `reeval/test/options.test.ts › ${name}`
+const engine = (name: string) => `reeval/test/engine.test.ts › ${name}`
+const secrets = (name: string) => `reeval/test/secrets.test.ts › ${name}`
+const harness = (name: string) => `reeval/test/harness.test.ts › ${name}`
+const docker = (name: string) => `reeval/test/docker.test.ts › ${name}`
+const prepareContract = (name: string) => `reeval/test/sandbox-prepare-contract.test.ts › ${name}`
+const debug = (name: string) => `reeval/test/debug.test.ts › ${name}`
+const studio = (name: string) => `reeval/test/studio.test.ts › ${name}`
+const analysis = (name: string) => `reeval/test/analysis.test.ts › ${name}`
+const workspace = (name: string) => `reeval/test/workspace.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -85,12 +84,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'config.discovery',
     area: 'Config and selection',
-    name: 'Finding the nearest `es.config.*` upward from the current directory; `--config` wins',
+    name: 'Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins',
     fixtures: ['config/found-from-subdirectory'],
     tests: [
       unit('findConfig takes the nearest config at or above the directory'),
-      'evalsuite/test/history.test.ts › every command run from a nested subdirectory finds the project config',
-      "evalsuite/test/history.test.ts › a nested project's own config wins over the parent's",
+      'reeval/test/history.test.ts › every command run from a nested subdirectory finds the project config',
+      "reeval/test/history.test.ts › a nested project's own config wins over the parent's",
     ],
   },
   {
@@ -121,7 +120,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['compare/control-and-variants'],
     tests: [
       options('variants run next to the control, lift is stored'),
-      'evalsuite/test/results.test.ts › Newcombe',
+      'reeval/test/results.test.ts › Newcombe',
     ],
   },
   {
@@ -136,7 +135,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Config and selection',
     name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",
     tests: [
-      'evalsuite/test/results.test.ts › the option takes all or { passRate }',
+      'reeval/test/results.test.ts › the option takes all or { passRate }',
       options('a config-level gate applies to every eval'),
     ],
   },
@@ -146,7 +145,7 @@ export const inventory: InventoryFeature[] = [
     name: 'Profiles: `defaults`, `limit`, `pin`, selection and typos',
     plan: ['profiles/local-none', 'profiles/pr-in-ci', 'profiles/nightly'],
     tests: [
-      unit('selectProfile: --profile, then ES_PROFILE'),
+      unit('selectProfile: --profile, then REEVAL_PROFILE'),
       unit('cascade: profile defaults sit under evals'),
       options('a profile name typo exits 2'),
     ],
@@ -160,11 +159,11 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'plan.json',
     area: 'Config and selection',
-    name: '`es run --dry-run` and `--dry-run --json`',
+    name: '`reeval run --dry-run` and `--dry-run --json`',
     plan: ['matrix/default'],
     tests: [
-      'evalsuite/test/plan.test.ts › is one document with the host-dependent fields',
-      'evalsuite/test/plan.test.ts › --json without --dry-run exits 2',
+      'reeval/test/plan.test.ts › is one document with the host-dependent fields',
+      'reeval/test/plan.test.ts › --json without --dry-run exits 2',
     ],
   },
   {
@@ -196,7 +195,7 @@ export const inventory: InventoryFeature[] = [
       options('tags filter, todo, for'),
       options('common mistakes'),
       engine('skip is reported as skipped'),
-      'evalsuite/test/plan.test.ts › .only in CI exits 2 before any plan prints',
+      'reeval/test/plan.test.ts › .only in CI exits 2 before any plan prints',
     ],
   },
   {
@@ -225,8 +224,8 @@ export const inventory: InventoryFeature[] = [
       engine('filters match paths, then eval names'),
       engine('a path filter and a cell filter together run only that cell of that file'),
       options('a filter that matches nothing exits 2'),
-      "evalsuite/test/plan.test.ts › a cell filter narrows each row's counts in the text plan",
-      'evalsuite/test/plan.test.ts › a filter part that matches no file, eval name or cell exits 2',
+      "reeval/test/plan.test.ts › a cell filter narrows each row's counts in the text plan",
+      'reeval/test/plan.test.ts › a filter part that matches no file, eval name or cell exits 2',
     ],
   },
 
@@ -375,8 +374,8 @@ export const inventory: InventoryFeature[] = [
     name: '`mcp.sse`',
     plan: ['egress/cascade'],
     tests: [
-      'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
-      'evalsuite/test/plan.test.ts › an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time',
+      'reeval/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
+      'reeval/test/plan.test.ts › an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time',
     ],
   },
   {
@@ -384,7 +383,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Environments',
     name: 'MCP servers on a harness with no MCP client (pi) refused at plan time',
     tests: [
-      'evalsuite/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
+      'reeval/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
     ],
   },
   {
@@ -480,7 +479,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'redaction',
     area: 'Environments',
-    name: 'Secrets masked in everything ES writes',
+    name: 'Secrets masked in everything reeval writes',
     fixtures: ['secrets/redaction-coverage'],
     tests: [
       unit('redactSecrets masks secret-looking env values'),
@@ -528,7 +527,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       docker('runs checks in the container, diffs, and removes it'),
       docker('a timeout removes the container'),
-      docker("npm installs the packed ES tarball in ES's image"),
+      docker("npm installs the packed reeval tarball in reeval's image"),
     ],
   },
   {
@@ -536,7 +535,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Sandbox',
     name: 'Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker',
     tests: [
-      'evalsuite/test/sandbox-contract.test.ts › writeFile then exec reads it',
+      'reeval/test/sandbox-contract.test.ts › writeFile then exec reads it',
       unit('the fake sandbox reads and writes ~/ paths'),
     ],
   },
@@ -554,7 +553,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'docker.dockerfile',
     area: 'Sandbox',
-    name: '`docker({ dockerfile })` and `ES_BASE`',
+    name: '`docker({ dockerfile })` and `REEVAL_BASE`',
     fixtures: [
       'harness/claude-code-dockerfile',
       'harness/antigravity-dockerfile',
@@ -565,9 +564,9 @@ export const inventory: InventoryFeature[] = [
     ],
     plan: ['images/install-from-dockerfile'],
     tests: [
-      docker('dockerfile: FROM the ES_BASE arg'),
+      docker('dockerfile: FROM the REEVAL_BASE arg'),
       sandboxDocker('unit', 'the Dockerfile tag hashes the Dockerfile'),
-      sandboxDocker('build-failure', 'a rebuilt ES image (a new id) is a new tag'),
+      sandboxDocker('build-failure', 'a rebuilt reeval image (a new id) is a new tag'),
     ],
   },
   {
@@ -606,10 +605,10 @@ export const inventory: InventoryFeature[] = [
     name: 'Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them',
     plan: ['privileges/levels', 'privileges/profile'],
     tests: [
-      'evalsuite/test/plan.test.ts › are structured in the JSON plan, one per level that set the sandbox',
-      'evalsuite/test/plan.test.ts › print in the text plan, the agent output and as GitHub annotations',
-      'evalsuite/test/plan.test.ts › canary: an eval without root gets no warning, so the check fails',
-      docker('a root sandbox warns at the start of es run, in the record and in summary.md'),
+      'reeval/test/plan.test.ts › are structured in the JSON plan, one per level that set the sandbox',
+      'reeval/test/plan.test.ts › print in the text plan, the agent output and as GitHub annotations',
+      'reeval/test/plan.test.ts › canary: an eval without root gets no warning, so the check fails',
+      docker('a root sandbox warns at the start of reeval run, in the record and in summary.md'),
     ],
   },
   {
@@ -629,7 +628,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Sandbox',
     name: '`docker({ from })` toolchain images',
     tests: [
-      options('es image build --dry-run lists every image'),
+      options('reeval image build --dry-run lists every image'),
       docker('from: a toolchain image gets Node, git and the harness baked on'),
     ],
   },
@@ -659,14 +658,14 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'image.from-digest',
     area: 'Sandbox',
-    name: '`from` digests: recorded, kept by `es run`, flagged by `--dry-run` and rebuilt by `es image build` when the tag moves',
+    name: '`from` digests: recorded, kept by `reeval run`, flagged by `--dry-run` and rebuilt by `reeval image build` when the tag moves',
     tests: [docker('a from tag that moves upstream')],
   },
   {
     id: 'run.dry-run-images',
     area: 'CLI and runner',
-    name: '`es run --dry-run` checks each sandbox image: ready, to build, stale or missing',
-    tests: [docker('es image build builds every image, reports every failure and exits 3')],
+    name: '`reeval run --dry-run` checks each sandbox image: ready, to build, stale or missing',
+    tests: [docker('reeval image build builds every image, reports every failure and exits 3')],
   },
   {
     id: 'image.failures',
@@ -685,19 +684,19 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'image.clean',
     area: 'Sandbox',
-    name: '`es clean --images`, and no `-base` tag or replaced image left behind',
+    name: '`reeval clean --images`, and no `-base` tag or replaced image left behind',
     tests: [
-      docker('es clean --images removes the images ES left dangling'),
+      docker('reeval clean --images removes the images reeval left dangling'),
       docker('from: a toolchain image gets Node, git and the harness baked on'),
     ],
   },
   {
     id: 'image.build',
     area: 'Sandbox',
-    name: '`es image build` (every image, every failure, exit 3, `--force`) and its `--dry-run`',
+    name: '`reeval image build` (every image, every failure, exit 3, `--force`) and its `--dry-run`',
     tests: [
-      options('es image build --dry-run lists every image'),
-      docker('es image build builds every image, reports every failure and exits 3'),
+      options('reeval image build --dry-run lists every image'),
+      docker('reeval image build builds every image, reports every failure and exits 3'),
     ],
   },
   {
@@ -740,7 +739,7 @@ export const inventory: InventoryFeature[] = [
       unit('an auth failure names the credential; other errors get no hint'),
       docker('Cursor attempts broker the key; without brokering the attempt fails closed'),
       docker('Claude Code attempts broker the key on its endpoints'),
-      'evalsuite/test/docker-antigravity.test.ts › Antigravity attempts broker the key on its model endpoint only',
+      'reeval/test/docker-antigravity.test.ts › Antigravity attempts broker the key on its model endpoint only',
       docker('Goose gets the key on the model list it fetches each turn'),
       docker('Gemini refusing the key fails the turn and names the host variable'),
     ],
@@ -760,7 +759,7 @@ export const inventory: InventoryFeature[] = [
     name: 'No container or sandbox left after a failure, timeout or abort',
     tests: [
       sandboxDocker('session', 'an abort at any point while creating leaves no container'),
-      'evalsuite/test/concurrency.test.ts › timeouts under concurrency fail every attempt and destroy every sandbox',
+      'reeval/test/concurrency.test.ts › timeouts under concurrency fail every attempt and destroy every sandbox',
     ],
     real: ['contract › clean teardown', 'e2e › no container outlives the runs'],
   },
@@ -847,7 +846,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['harness/opencode-provider-key'],
     plan: ['opencode/opencode', 'opencode/bedrock-region'],
     tests: [
-      "evalsuite/test/plan.test.ts › OpenCode on a provider ES can't broker exits 2 at plan time",
+      "reeval/test/plan.test.ts › OpenCode on a provider reeval can't broker exits 2 at plan time",
       harness('is plain data with its own cell id, and needs a model on a provider it can broker'),
       harness("the config refuses a hand-made descriptor on a provider it can't broker"),
       harness("needs only the model's provider's key"),
@@ -872,7 +871,7 @@ export const inventory: InventoryFeature[] = [
         'unit',
         "the model's provider calls over HTTP, where the gateway reads the served model",
       ),
-      "evalsuite/test/replay.test.ts › GPT's patch tool is an edit, and the files it changed are file edits",
+      "reeval/test/replay.test.ts › GPT's patch tool is an edit, and the files it changed are file edits",
     ],
   },
   {
@@ -946,7 +945,7 @@ export const inventory: InventoryFeature[] = [
       ),
       codexAdapter(
         'unit',
-        "the config turns off analytics and plugins, and uses ES's HTTP provider on the key",
+        "the config turns off analytics and plugins, and uses reeval's HTTP provider on the key",
       ),
       sandboxDocker(
         'proxy',
@@ -995,10 +994,10 @@ export const inventory: InventoryFeature[] = [
         'the live conversation from SDK 1.0.32 has every field the runner reads',
       ),
       cursorAdapter('unit', 'each field it reads, gone or renamed, is named in the problem'),
-      "evalsuite/test/cursor-sdk-shape.test.ts › the image's @cursor/sdk declares every field the runner reads",
-      'evalsuite/test/replay.test.ts › upstream fixed, same ids: each web call once',
-      'evalsuite/test/replay.test.ts › upstream fixed, other ids: each web call once',
-      'evalsuite/test/matchers.test.ts › refuse a turn whose harness',
+      "reeval/test/cursor-sdk-shape.test.ts › the image's @cursor/sdk declares every field the runner reads",
+      'reeval/test/replay.test.ts › upstream fixed, same ids: each web call once',
+      'reeval/test/replay.test.ts › upstream fixed, other ids: each web call once',
+      'reeval/test/matchers.test.ts › refuse a turn whose harness',
     ],
     real: ['contract › nothing silently unreported'],
   },
@@ -1026,7 +1025,7 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: 'Transcripts, normalised per harness',
     tests: [
-      "evalsuite/test/replay.test.ts › ES's normaliser still finds its signals",
+      "reeval/test/replay.test.ts › reeval's normaliser still finds its signals",
       harness('a real turn normalises: relative edits, mcp__ names, timed tools'),
       harness('its Edit and Write tools are file edits'),
       docker('Claude Code attempts broker the key on its endpoints'),
@@ -1039,8 +1038,8 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: "Each agent CLI's native stream: replayed through the adapters, and checked for format drift",
     tests: [
-      'evalsuite/test/replay.test.ts › the same tool calls, text and tokens as when it was captured',
-      'evalsuite/test/replay.test.ts › a new event kind, step type, key or tool is a format change',
+      'reeval/test/replay.test.ts › the same tool calls, text and tokens as when it was captured',
+      'reeval/test/replay.test.ts › a new event kind, step type, key or tool is a format change',
     ],
     real: ['contract › native stream format unchanged'],
   },
@@ -1048,7 +1047,7 @@ export const inventory: InventoryFeature[] = [
     id: 'record.served-model',
     area: 'Harnesses',
     name: "The models a harness's API requests named on the wire (`servedModels`)",
-    tests: ['evalsuite/test/harness.test.ts › its brokered requests name the served model'],
+    tests: ['reeval/test/harness.test.ts › its brokered requests name the served model'],
     real: ['contract › served model recorded'],
   },
   {
@@ -1084,9 +1083,9 @@ export const inventory: InventoryFeature[] = [
     area: 'Judges and matchers',
     name: '`toHaveFile`, `toSucceed` and `toPass`',
     tests: [
-      'evalsuite/test/matchers.test.ts › passes when the file exists',
-      'evalsuite/test/matchers.test.ts › passes on exit 0',
-      'evalsuite/test/matchers.test.ts › passes on a pass verdict',
+      'reeval/test/matchers.test.ts › passes when the file exists',
+      'reeval/test/matchers.test.ts › passes on exit 0',
+      'reeval/test/matchers.test.ts › passes on a pass verdict',
       engine('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown'),
       engine('a failure with megabytes of output prints and records a bounded tail'),
     ],
@@ -1098,8 +1097,8 @@ export const inventory: InventoryFeature[] = [
     tests: [
       engine('a failing assertion exits 1'),
       engine('expect.soft, expect.poll and expect.assertions work inside an attempt'),
-      "evalsuite/test/engine-expect.test.ts › Vitest's matchers, asymmetric matchers, .not and diffs work unchanged",
-      'evalsuite/test/engine-errors.test.ts › message, diff, the stack with a code frame at the first project frame',
+      "reeval/test/engine-expect.test.ts › Vitest's matchers, asymmetric matchers, .not and diffs work unchanged",
+      'reeval/test/engine-errors.test.ts › message, diff, the stack with a code frame at the first project frame',
     ],
   },
 
@@ -1107,59 +1106,59 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'history',
     area: 'Records and studio',
-    name: 'Recording, merges across branches, rebases and `es checkout`',
+    name: 'Recording, merges across branches, rebases and `reeval checkout`',
     tests: [
-      'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
-      'evalsuite/test/history.test.ts › two branches record, merge with zero conflicts',
-      'evalsuite/test/history.test.ts › a dirty run saves worktree.patch',
+      'reeval/test/history.test.ts › reeval run writes scratch; reeval record promotes it',
+      'reeval/test/history.test.ts › two branches record, merge with zero conflicts',
+      'reeval/test/history.test.ts › a dirty run saves worktree.patch',
     ],
   },
   {
     id: 'history.commands',
     area: 'Records and studio',
-    name: '`es history`, `es show` and `es compare`, with `--json` and `--md`',
+    name: '`reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md`',
     tests: [
-      'evalsuite/test/history.test.ts › es run writes scratch; es record promotes it',
-      'evalsuite/test/history.test.ts › an imported helper is part of the fingerprint',
+      'reeval/test/history.test.ts › reeval run writes scratch; reeval record promotes it',
+      'reeval/test/history.test.ts › an imported helper is part of the fingerprint',
       unit('compare classifies an eval on the cells both runs have, and lists the rest'),
-      'evalsuite/test/history.test.ts › a history file that is not a readable record is named on stderr',
+      'reeval/test/history.test.ts › a history file that is not a readable record is named on stderr',
       docker('two runs with the same agent context are comparable'),
     ],
-    real: ['e2e › a second identical run', 'e2e › es history and es show'],
+    real: ['e2e › a second identical run', 'e2e › reeval history and reeval show'],
   },
   {
     id: 'compare.fail-on-regression',
     area: 'Records and studio',
-    name: '`es compare --fail-on-regression`',
+    name: '`reeval compare --fail-on-regression`',
     tests: [
-      'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a regression and on a failing new eval',
-      'evalsuite/test/history.test.ts › es compare --fail-on-regression fails on a failing eval that changed (not comparable)',
+      'reeval/test/history.test.ts › reeval compare --fail-on-regression fails on a regression and on a failing new eval',
+      'reeval/test/history.test.ts › reeval compare --fail-on-regression fails on a failing eval that changed (not comparable)',
     ],
   },
   {
     id: 'query',
     area: 'Records and studio',
-    name: '`es query`',
-    tests: ['evalsuite/test/query.test.ts › the projection matches the record'],
-    real: ['e2e › es query'],
+    name: '`reeval query`',
+    tests: ['reeval/test/query.test.ts › the projection matches the record'],
+    real: ['e2e › reeval query'],
   },
   {
     id: 'mcp',
     area: 'Records and studio',
-    name: '`es mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP',
+    name: '`reeval mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP',
     tests: [
-      'evalsuite/test/mcp.test.ts › speaks the stateless 2026-07-28 protocol and the 2025 handshake',
-      "evalsuite/test/mcp.test.ts › each query_<view> tool answers what es query <view> does, with its columns' filters",
-      'evalsuite/test/mcp.test.ts › query runs one read-only SELECT',
-      'evalsuite/test/mcp.test.ts › show, compare and history answer what their --json does',
-      'evalsuite/test/mcp.test.ts › masks secret-looking values',
-      'evalsuite/test/mcp.test.ts › --http serves stateless Streamable HTTP',
+      'reeval/test/mcp.test.ts › speaks the stateless 2026-07-28 protocol and the 2025 handshake',
+      "reeval/test/mcp.test.ts › each query_<view> tool answers what reeval query <view> does, with its columns' filters",
+      'reeval/test/mcp.test.ts › query runs one read-only SELECT',
+      'reeval/test/mcp.test.ts › show, compare and history answer what their --json does',
+      'reeval/test/mcp.test.ts › masks secret-looking values',
+      'reeval/test/mcp.test.ts › --http serves stateless Streamable HTTP',
     ],
   },
   {
     id: 'query.facts',
     area: 'Records and studio',
-    name: '`es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context`',
+    name: '`reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context`',
     tests: [
       analysis('es-good cuts tool calls 3/3 evals at p = 0.029'),
       analysis('harness contrasts are controlled within a run'),
@@ -1175,36 +1174,36 @@ export const inventory: InventoryFeature[] = [
       analysis('drift: only Cursor runtime state changed, so it is noise'),
       analysis('a real context file (a skill) that changed is drift, not noise'),
       analysis('mixed outcomes over enough comparable attempts are flaky'),
-      'evalsuite/test/query.test.ts › drift names the changed part',
+      'reeval/test/query.test.ts › drift names the changed part',
     ],
   },
   {
     id: 'effort',
     area: 'Records and studio',
-    name: 'Effort (tool calls, agent time) next to lift in the `es run` summary, `summary.md`, `es compare` and the studio',
+    name: 'Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio',
     tests: [
       analysis('the rank test is exact'),
-      analysis('es run, summary.md and es compare show each variant cell'),
+      analysis('reeval run, summary.md and reeval compare show each variant cell'),
       unit('effort under 10s reads in tenths, so a ratio matches its times'),
     ],
   },
   {
     id: 'analyze',
     area: 'Records and studio',
-    name: '`es analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation',
+    name: '`reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation',
     tests: [
       analysis('the digest is facts with ids, evidence by rule'),
       analysis('claims with invented citations or quotes are dropped'),
-      analysis('verify commands must parse as ES commands'),
-      analysis('es run and es image build verify commands must select an eval of the run'),
-      analysis('the spec and es --help name the same commands and flags'),
+      analysis('verify commands must parse as reeval commands'),
+      analysis('reeval run and reeval image build verify commands must select an eval of the run'),
+      analysis('the spec and reeval --help name the same commands and flags'),
       analysis('without a language model or its key, it exits 2'),
     ],
   },
   {
     id: 'analyze.store',
     area: 'Records and studio',
-    name: '`es analyze` caches in `.es/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them',
+    name: '`reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them',
     tests: [
       analysis('a cached analysis makes no call; --no-cache does'),
       analysis('--save writes two new files under <run>/analysis/ and nothing else'),
@@ -1213,41 +1212,41 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'studio',
     area: 'Records and studio',
-    name: '`es studio` and `es studio build`',
+    name: '`reeval studio` and `reeval studio build`',
     tests: [
-      'evalsuite/test/studio.test.ts › serves the app with a strict CSP',
-      'evalsuite/test/studio.test.ts › writes a static site',
-      'evalsuite/test/studio.test.ts › a run whose only failures are ungated is passed',
-      'evalsuite/test/studio.test.ts › tool calls and file edits are counted apart',
+      'reeval/test/studio.test.ts › serves the app with a strict CSP',
+      'reeval/test/studio.test.ts › writes a static site',
+      'reeval/test/studio.test.ts › a run whose only failures are ungated is passed',
+      'reeval/test/studio.test.ts › tool calls and file edits are counted apart',
       studio('runs list: a run over a subset of cells is no drift, before or after it'),
     ],
-    real: ['e2e › es studio build'],
+    real: ['e2e › reeval studio build'],
   },
   {
     id: 'studio.debug',
     area: 'Records and studio',
-    name: "The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.es/debug`, in `es studio` only",
+    name: "The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only",
     tests: [
       studio("serves an attempt's local debug data, and null where there is none"),
       studio('writes a static site with the same paths the server answers'),
-      'studio-web/test/e2e.test.ts › es studio needs its token, then shows new runs as they land',
+      'studio-web/test/e2e.test.ts › reeval studio needs its token, then shows new runs as they land',
       'studio-web/test/e2e.test.ts › a static build works from a subpath',
     ],
   },
   {
     id: 'studio.live',
     area: 'Records and studio',
-    name: "Runs in progress in `es studio`: `es run`'s `.es/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it",
+    name: "Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it",
     tests: [
-      'evalsuite/test/live.test.ts › starts with every planned attempt queued',
-      'evalsuite/test/live.test.ts › is replaced whole',
-      'evalsuite/test/live.test.ts › anything it cannot read is null',
-      'evalsuite/test/live.test.ts › running, stopped (process gone, or quiet), corrupt and landed runs',
-      'evalsuite/test/live.test.ts › a finished attempt serves its redacted transcript',
-      'evalsuite/test/live.test.ts › /api/events streams run.progress',
-      'evalsuite/test/live.test.ts › from 0/N to done, then the record replaces it',
-      'evalsuite/test/live.test.ts › a killed run is shown as stopped',
-      'studio-web/test/e2e.test.ts › es studio shows a run in progress attempt by attempt',
+      'reeval/test/live.test.ts › starts with every planned attempt queued',
+      'reeval/test/live.test.ts › is replaced whole',
+      'reeval/test/live.test.ts › anything it cannot read is null',
+      'reeval/test/live.test.ts › running, stopped (process gone, or quiet), corrupt and landed runs',
+      'reeval/test/live.test.ts › a finished attempt serves its redacted transcript',
+      'reeval/test/live.test.ts › /api/events streams run.progress',
+      'reeval/test/live.test.ts › from 0/N to done, then the record replaces it',
+      'reeval/test/live.test.ts › a killed run is shown as stopped',
+      'studio-web/test/e2e.test.ts › reeval studio shows a run in progress attempt by attempt',
     ],
   },
 
@@ -1269,7 +1268,7 @@ export const inventory: InventoryFeature[] = [
       engine('a tsconfig that extends a missing file fails every eval file loudly, once'),
       engine('.only narrows only the file it is in'),
       engine('a name declared twice in one file is a usage error naming it'),
-      "evalsuite/test/pack.test.ts › the packed package installs with Yarn Berry's Plug'n'Play and runs es",
+      "reeval/test/pack.test.ts › the packed package installs with Yarn Berry's Plug'n'Play and runs reeval",
     ],
   },
   {
@@ -1318,8 +1317,8 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: 'Output modes, renderers and GitHub Actions groups',
     tests: [
-      'evalsuite/test/ui.test.ts › grouped: start lines stream',
-      'evalsuite/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
+      'reeval/test/ui.test.ts › grouped: start lines stream',
+      'reeval/test/ui.test.ts › GitHub Actions: passing attempts collapse into groups',
       engine('agent mode prints failures only'),
       engine("a turn's error message shows in the summary, agent output and summary.md without -v"),
     ],
@@ -1327,8 +1326,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'output.flags',
     area: 'CLI and runner',
-    name: '`--log-order`, `--log-prefix` and `--output-logs` through `es run`',
-    tests: [engine('--log-order, --log-prefix and --output-logs shape what es run prints')],
+    name: '`--log-order`, `--log-prefix` and `--output-logs` through `reeval run`',
+    tests: [engine('--log-order, --log-prefix and --output-logs shape what reeval run prints')],
   },
   {
     id: 'verbose',
@@ -1347,7 +1346,7 @@ export const inventory: InventoryFeature[] = [
         'reports each request once done, with bytes and names, and each DNS decision',
       ),
     ],
-    real: ['e2e › es run --record -v'],
+    real: ['e2e › reeval run --record -v'],
   },
   {
     id: 'trace',
@@ -1361,13 +1360,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'debug.files',
     area: 'CLI and runner',
-    name: 'Local debug data: `.es/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder',
+    name: 'Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder',
     tests: [
-      debug('debug.log is always written to .es/debug, and nothing of it lands in the history'),
+      debug('debug.log is always written to .reeval/debug, and nothing of it lands in the history'),
       debug('trace.ndjson is kept for a failing attempt, not a passing one unless --trace'),
       debug('a small trace buffer drops the oldest entries and says how many'),
     ],
-    real: ['e2e › es run --record -v'],
+    real: ['e2e › reeval run --record -v'],
   },
   {
     id: 'debug.redaction',
@@ -1382,9 +1381,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'debug.retention',
     area: 'CLI and runner',
-    name: '`config.debug` (`keep`, `traceBufferMb`) and `es clean`',
+    name: '`config.debug` (`keep`, `traceBufferMb`) and `reeval clean`',
     tests: [
-      debug('keeps the newest debug.keep runs, and es clean clears them'),
+      debug('keeps the newest debug.keep runs, and reeval clean clears them'),
       options('common mistakes'),
     ],
   },
@@ -1393,10 +1392,10 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: 'Concurrency caps, order and queue time',
     tests: [
-      'evalsuite/test/concurrency.test.ts › --concurrency caps attempts across files',
-      'evalsuite/test/concurrency.test.ts › a sandbox cap holds on top of the run cap',
-      'evalsuite/test/concurrency.test.ts › time spent queued counts toward neither',
-      'evalsuite/test/concurrency.test.ts › --dry-run sizes the default concurrency from the Docker VM',
+      'reeval/test/concurrency.test.ts › --concurrency caps attempts across files',
+      'reeval/test/concurrency.test.ts › a sandbox cap holds on top of the run cap',
+      'reeval/test/concurrency.test.ts › time spent queued counts toward neither',
+      'reeval/test/concurrency.test.ts › --dry-run sizes the default concurrency from the Docker VM',
     ],
   },
   {
@@ -1404,7 +1403,7 @@ export const inventory: InventoryFeature[] = [
     area: 'CLI and runner',
     name: 'Eval timeouts, Ctrl-C and SIGTERM',
     tests: [
-      'evalsuite/test/concurrency.test.ts › Ctrl-C cancels running attempts',
+      'reeval/test/concurrency.test.ts › Ctrl-C cancels running attempts',
       engine('a timeout aborts the agent and destroys the sandbox'),
       engine('a turn whose agent ignores the abort is cut off shortly after the timeout'),
       engine('records the run and destroys the sandbox'),
@@ -1415,6 +1414,6 @@ export const inventory: InventoryFeature[] = [
     id: 'pack',
     area: 'CLI and runner',
     name: 'The packed package installs into a clean project and runs',
-    tests: ['evalsuite/test/pack.test.ts › the packed package installs into a clean project'],
+    tests: ['reeval/test/pack.test.ts › the packed package installs into a clean project'],
   },
 ]

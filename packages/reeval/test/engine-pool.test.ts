@@ -77,7 +77,7 @@ process.on('message', (m) => {
       assert.match(
         e.message,
         new RegExp(
-          `engine protocol ${PROTOCOL + 1}, but this es speaks ${PROTOCOL}\\. Run the project's own es`,
+          `engine protocol ${PROTOCOL + 1}, but this reeval speaks ${PROTOCOL}\\. Run the project's own es`,
         ),
       )
       return true
@@ -96,27 +96,27 @@ process.on('message', (m) => {
   })
 })
 
-test("es __worker, which isn't a command, refuses to start without the engine", () => {
+test("reeval __worker, which isn't a command, refuses to start without the engine", () => {
   const r = spawnSync(process.execPath, [join(DIST_DIR, 'cli.js'), '__worker'], {
     encoding: 'utf8',
   })
   assert.equal(r.status, 2)
-  assert.match(r.stderr, /es __worker is the process ES starts for each eval file/)
+  assert.match(r.stderr, /reeval __worker is the process reeval starts for each eval file/)
 })
 
 describe('workerEntry', () => {
-  test("the project's own copy of ES, when it has a CLI; else this ES's", () => {
+  test("the project's own copy of reeval, when it has a CLI; else this reeval's", () => {
     const root = tempDir('entry')
-    const pkg = join(root, 'node_modules/evalsuite')
+    const pkg = join(root, 'node_modules/reeval')
     mkdirSync(join(pkg, 'dist'), { recursive: true })
     writeFileSync(
       join(pkg, 'package.json'),
-      JSON.stringify({ name: 'evalsuite', exports: { './package.json': './package.json' } }),
+      JSON.stringify({ name: 'reeval', exports: { './package.json': './package.json' } }),
     )
-    assert.equal(workerEntry(root, ['@invertase/foobar', 'evalsuite']), join(DIST_DIR, 'cli.js'))
+    assert.equal(workerEntry(root, ['reeval', 'reeval']), join(DIST_DIR, 'cli.js'))
     writeFileSync(join(pkg, 'dist/cli.js'), '')
-    assert.equal(workerEntry(root, ['@invertase/foobar', 'evalsuite']), join(pkg, 'dist/cli.js'))
-    assert.equal(workerEntry(tempDir('none'), ['evalsuite']), join(DIST_DIR, 'cli.js'))
+    assert.equal(workerEntry(root, ['reeval', 'reeval']), join(pkg, 'dist/cli.js'))
+    assert.equal(workerEntry(tempDir('none'), ['reeval']), join(DIST_DIR, 'cli.js'))
   })
 })
 

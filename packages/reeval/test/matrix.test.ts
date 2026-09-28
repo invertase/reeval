@@ -49,7 +49,7 @@ describe('the matrix check (twins: it can fail)', () => {
     planCases: ['matrix/default'],
     contract: [],
     testSource: (path) =>
-      path === 'evalsuite/test/unit.test.ts'
+      path === 'reeval/test/unit.test.ts'
         ? "// covers a comment\nconst label = 'a helper string'\ntest('parses a thing', () => {})"
         : null,
   }
@@ -62,7 +62,7 @@ describe('the matrix check (twins: it can fail)', () => {
   const everything = feature({
     fixtures: ['skills/a', 'skills/b'],
     plan: ['matrix/default'],
-    tests: ['evalsuite/test/unit.test.ts › parses a thing'],
+    tests: ['reeval/test/unit.test.ts › parses a thing'],
   })
 
   test('a fully covered inventory has no problems, and each tier counts what covers it', () => {
@@ -116,8 +116,8 @@ describe('the matrix check (twins: it can fail)', () => {
         { name: 'clean teardown', canary: false },
       ],
       testSource: (path: string) =>
-        path === 'evalsuite/test/e2e-real.test.ts'
-          ? "test('es query: every view answers', () => {})"
+        path === 'reeval/test/e2e-real.test.ts'
+          ? "test('reeval query: every view answers', () => {})"
           : sources.testSource(path),
     }
     const m = buildMatrix(
@@ -125,7 +125,7 @@ describe('the matrix check (twins: it can fail)', () => {
         everything,
         feature({
           id: 'y',
-          real: ['contract › rules read', 'contract › clean teardown', 'e2e › es query'],
+          real: ['contract › rules read', 'contract › clean teardown', 'e2e › reeval query'],
         }),
       ],
       real,
@@ -159,24 +159,24 @@ describe('the matrix check (twins: it can fail)', () => {
           fixtures: ['skills/nope'],
           plan: ['matrix/nope'],
           tests: [
-            'evalsuite/test/unit.test.ts › a test that is not there',
-            'evalsuite/test/unit.test.ts › covers a comment',
-            'evalsuite/test/unit.test.ts › a helper string',
-            'evalsuite/test/nope.test.ts › anything',
+            'reeval/test/unit.test.ts › a test that is not there',
+            'reeval/test/unit.test.ts › covers a comment',
+            'reeval/test/unit.test.ts › a helper string',
+            'reeval/test/nope.test.ts › anything',
             'no title',
           ],
         }),
-        feature({ id: 'y', tests: ['evalsuite/test/unit.test.ts › parses a thing'] }),
+        feature({ id: 'y', tests: ['reeval/test/unit.test.ts › parses a thing'] }),
       ],
       sources,
     )
     assert.deepEqual(m.problems, [
       "inventory y: fixture skills/nope isn't in features.test.ts",
       "inventory y: plan case matrix/nope isn't in plan.test.ts",
-      'inventory y: evalsuite/test/unit.test.ts has no test "a test that is not there"',
-      'inventory y: evalsuite/test/unit.test.ts has no test "covers a comment"',
-      'inventory y: evalsuite/test/unit.test.ts has no test "a helper string"',
-      "inventory y: evalsuite/test/nope.test.ts doesn't exist",
+      'inventory y: reeval/test/unit.test.ts has no test "a test that is not there"',
+      'inventory y: reeval/test/unit.test.ts has no test "covers a comment"',
+      'inventory y: reeval/test/unit.test.ts has no test "a helper string"',
+      "inventory y: reeval/test/nope.test.ts doesn't exist",
       'inventory y: "no title" isn\'t "<file> › <title>"',
       'inventory y: nothing covers it on any tier. Add a fixture, plan case or test, or mark it a known gap with the reason',
       'inventory y: the id is used twice',

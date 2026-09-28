@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from LiveProgress in src/view/live.ts by `pnpm schema:update`; don't edit. A running es run's progress: .es/staging/<run>/live.json, read by es studio.",
+  "$comment": "Generated from LiveProgress in src/view/live.ts by `pnpm schema:update`; don't edit. A running reeval run's progress: .reeval/staging/<run>/live.json, read by reeval studio.",
   "title": "LiveProgress",
   "$ref": "#/$defs/LiveProgress",
   "$defs": {

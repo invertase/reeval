@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { closed } from './env.ts'
 
 // Must fail: expecting a host doesn't let it through.

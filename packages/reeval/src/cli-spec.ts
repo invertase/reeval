@@ -1,5 +1,5 @@
-// ES's CLI as data: every command, subcommand, flag and help line. `es` builds its parser
-// (`cli-parse.ts`) and its `--help` from it, and `es analyze` checks each suggested verify
+// reeval's CLI as data: every command, subcommand, flag and help line. `reeval` builds its parser
+// (`cli-parse.ts`) and its `--help` from it, and `reeval analyze` checks each suggested verify
 // command against it, so a model can't invent a flag.
 
 export type FlagSpec = { type: 'string' | 'boolean'; short?: string; multiple?: boolean }
@@ -72,7 +72,7 @@ export type CommandSpec = {
   flags: FlagName[]
   /** How many positional arguments it takes; `Infinity` for filters or SQL. */
   positionals: number
-  /** Its lines in `es --help`, the first naming the command; empty when it has none. */
+  /** Its lines in `reeval --help`, the first naming the command; empty when it has none. */
   help: string
   sub?: Record<string, Omit<CommandSpec, 'sub'>>
 }
@@ -99,147 +99,147 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['harness', 'yes', 'force', 'dry-run'],
     positionals: 1,
     help: `
-  es init [dir]             Scaffold a project in dir (default: here): es.config.ts, a passing
-                            eval, .gitignore entries and a package.json script; asks which agent
-    --harness <name>        cursor, claude-code, antigravity, opencode, goose, pi, codex or none
-                            (fake agent only); the config's harness, with a fake profile for no
-                            keys
-    -y, --yes               Don't ask: take the defaults (--harness cursor)
-    --force                 Overwrite es.config.ts and the eval when they differ
-    --dry-run               Print what it would create or change, and write nothing`,
+  reeval init [dir]             Scaffold a project in dir (default: here): reeval.config.ts, a passing
+                                eval, .gitignore entries and a package.json script; asks which agent
+    --harness <name>            cursor, claude-code, antigravity, opencode, goose, pi, codex or none
+                                (fake agent only); the config's harness, with a fake profile for no
+                                keys
+    -y, --yes                   Don't ask: take the defaults (--harness cursor)
+    --force                     Overwrite reeval.config.ts and the eval when they differ
+    --dry-run                   Print what it would create or change, and write nothing`,
   },
   doctor: {
     flags: ['online', 'json'],
     positionals: 0,
     help: `
-  es doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
-                            images, each harness's and the judge's key, egress and .gitignore;
-                            exit 1 on a problem, each with its fix. Never prints a key
-    --online                Also try each key with one tiny authenticated request
-    --json                  The checks as JSON`,
+  reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
+                                images, each harness's and the judge's key, egress and .gitignore;
+                                exit 1 on a problem, each with its fix. Never prints a key
+    --online                    Also try each key with one tiny authenticated request
+    --json                      The checks as JSON`,
   },
   run: {
     flags: RUN_FLAGS,
     positionals: Number.POSITIVE_INFINITY,
     help: `
-  es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
-    --profile <name>        Size the run with a profile from es.config.ts (also ES_PROFILE;
-                            default: defaultProfile.ci in CI, else defaultProfile.local)
-    --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0;
-                            with --json, as one JSON document (every cell, and what's excluded)
-    --force                 Run even when the plan is over budget.attempts
-    --runs <n>              Attempts per cell, overriding the config, groups and evals
-    --concurrency <n>       Attempts running at once across evals and cells (default 8, at
-                            most one per CPU and GB of Docker memory; also ES_CONCURRENCY)
-    --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
-    --record                Also record the run into the history folder (see config.record)
-    --ui <mode>             live, plain or agent (default: agent under a coding agent, plain
-                            in CI or when piped, else live; live prints plain for now)
-    --log-order <order>     stream (every line as it happens) or grouped (each attempt as one
-                            block when it ends); default grouped in CI, else stream
-    --log-prefix <prefix>   task or none: the [eval#n harness] prefix on detail lines
-                            (default task, none inside GitHub Actions groups)
-    --output-logs <level>   full, errors-only or none: whose detail lines print (default full)
-    -v, --verbose           Print each attempt's phase trace as it happens: plan, image,
-                            container, environment, brokering, turns and tool calls, checks,
-                            judge calls, gateway requests and teardown
-    -vv, --trace            Also raw payloads, docker commands, headers and DNS decisions, and
-                            keep every attempt's trace.ndjson (else only failing attempts')
-                            Either way each attempt's debug.log is in .es/debug/<run>/ (local only)`,
+  reeval run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+    --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
+                                default: defaultProfile.ci in CI, else defaultProfile.local)
+    --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
+                                with --json, as one JSON document (every cell, and what's excluded)
+    --force                     Run even when the plan is over budget.attempts
+    --runs <n>                  Attempts per cell, overriding the config, groups and evals
+    --concurrency <n>           Attempts running at once across evals and cells (default 8, at
+                                most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
+    --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
+    --record                    Also record the run into the history folder (see config.record)
+    --ui <mode>                 live, plain or agent (default: agent under a coding agent, plain
+                                in CI or when piped, else live; live prints plain for now)
+    --log-order <order>         stream (every line as it happens) or grouped (each attempt as one
+                                block when it ends); default grouped in CI, else stream
+    --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
+                                (default task, none inside GitHub Actions groups)
+    --output-logs <level>       full, errors-only or none: whose detail lines print (default full)
+    -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
+                                container, environment, brokering, turns and tool calls, checks,
+                                judge calls, gateway requests and teardown
+    -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
+                                keep every attempt's trace.ndjson (else only failing attempts')
+                                Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)`,
   },
   clean: {
     flags: ['keep', 'images'],
     positionals: 0,
     help: `
-  es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
-    --images                Also remove the Docker images ES built that nothing tags any more,
-                            and the intermediate -base tags of from builds`,
+  reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
+    --images                    Also remove the Docker images reeval built that nothing tags any more,
+                                and the intermediate -base tags of from builds`,
   },
   record: {
     flags: ['artifacts', 'allow-incomplete', 'skip-secret-scan'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
-  es record [run...]        Copy runs (default: latest) from .es/runs into the history folder
-                            --artifacts all|failures|none --allow-incomplete --skip-secret-scan`,
+  reeval record [run...]        Copy runs (default: latest) from .reeval/runs into the history folder
+                                --artifacts all|failures|none --allow-incomplete --skip-secret-scan`,
   },
   history: {
     flags: ['limit', 'all', 'json'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
-  es history [filter]       Pass/fail per recorded eval over recent runs
-                            --limit <n> --all (include unrecorded runs) --json`,
+  reeval history [filter]       Pass/fail per recorded eval over recent runs
+                                --limit <n> --all (include unrecorded runs) --json`,
   },
   show: {
     flags: ['json', 'md'],
     positionals: 1,
     help: `
-  es show [run]             One run: table, --md (summary.md) or --json (the record)`,
+  reeval show [run]             One run: table, --md (summary.md) or --json (the record)`,
   },
   compare: {
     flags: ['md', 'json', 'fail-on-regression'],
     positionals: 2,
     help: `
-  es compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
-                            --md --json --fail-on-regression`,
+  reeval compare [base] [head]  Diff two runs; base defaults to head's nearest recorded ancestor
+                                --md --json --fail-on-regression`,
   },
   checkout: {
     flags: [],
     positionals: 2,
     help: `
-  es checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
-                            (default dir: .es/checkouts/<run>)`,
+  reeval checkout [run] [dir]   A git worktree at the run's commit, with its worktree.patch applied
+                                (default dir: .reeval/checkouts/<run>)`,
   },
   query: {
     flags: ['json', 'schema', 'rebuild'],
     positionals: Number.POSITIVE_INFINITY,
     help: `
-  es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
-                            rebuilt from the records); views: lift, effort, factor_effects,
-                            skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                            verdict_flips. No argument lists them
-    --json                  Rows as JSON; --schema every table and column; --rebuild from scratch`,
+  reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
+                                rebuilt from the records); views: lift, effort, factor_effects,
+                                skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
+                                verdict_flips. No argument lists them
+    --json                      Rows as JSON; --schema every table and column; --rebuild from scratch`,
   },
   analyze: {
     flags: ['vs', 'eval', 'json', 'md', 'save', 'context', 'dry-run', 'no-cache'],
     positionals: 1,
     help: `
-  es analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
-                            nearest recorded ancestor), citations and commands checked; cached
-                            in .es/analysis (model: config.analysis.model)
-    --vs <run>              The run to compare with; --eval <filter> only matching evals
-    --save                  Also write it into the run's history folder: <run>/analysis/
-    --context               Print the digest and rules for your own coding agent (no key, no call)
-    --dry-run               Print the digest's size and the cache key, without calling the model
-    --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again`,
+  reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
+                                nearest recorded ancestor), citations and commands checked; cached
+                                in .reeval/analysis (model: config.analysis.model)
+    --vs <run>                  The run to compare with; --eval <filter> only matching evals
+    --save                      Also write it into the run's history folder: <run>/analysis/
+    --context                   Print the digest and rules for your own coding agent (no key, no call)
+    --dry-run                   Print the digest's size and the cache key, without calling the model
+    --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again`,
   },
   mcp: {
     flags: ['http', 'port', 'host', 'token'],
     positionals: 0,
     help: `
-  es mcp                    Serve the run history to other agents over MCP (stdio): read-only
-                            tools for es query's views and SQL, history, show, compare,
-                            transcripts and saved analyses, and runs as resources
-    --http                  Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
-                            --port <n> (default 4986), --host <addr>
-    --token <value>         With --http, require it as a bearer token (also ES_MCP_TOKEN)`,
+  reeval mcp                    Serve the run history to other agents over MCP (stdio): read-only
+                                tools for reeval query's views and SQL, history, show, compare,
+                                transcripts and saved analyses, and runs as resources
+    --http                      Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
+                                --port <n> (default 4986), --host <addr>
+    --token <value>             With --http, require it as a bearer token (also REEVAL_MCP_TOKEN)`,
   },
   studio: {
     flags: ['port', 'host', 'open', 'no-scratch', 'no-token'],
     positionals: 0,
     help: `
-  es studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
-    --port <n>              First port to try (default 4984); --host <addr> (default 127.0.0.1)
-    --open                  Open the browser; --no-scratch hides unrecorded runs from .es/runs
-    --no-token              Skip the session token (for scripts; anyone local can then read it)`,
+  reeval studio                 Browse runs, evals and transcripts in the web studio (127.0.0.1)
+    --port <n>                  First port to try (default 4984); --host <addr> (default 127.0.0.1)
+    --open                      Open the browser; --no-scratch hides unrecorded runs from .reeval/runs
+    --no-token                  Skip the session token (for scripts; anyone local can then read it)`,
     sub: {
       build: {
         flags: ['out', 'scratch', 'no-artifacts'],
         positionals: 0,
         help: `
-  es studio build           Write the studio as a static site for Pages, Netlify or any host
-    --out <dir>             Output folder (default studio-dist beside the config); --scratch
-                            adds unrecorded runs
-    --no-artifacts          Records and index only: no transcripts, diffs, logs or judge inputs`,
+  reeval studio build           Write the studio as a static site for Pages, Netlify or any host
+    --out <dir>                 Output folder (default studio-dist beside the config); --scratch
+                                adds unrecorded runs
+    --no-artifacts              Records and index only: no transcripts, diffs, logs or judge inputs`,
       },
     },
   },
@@ -247,17 +247,17 @@ export const COMMANDS: Record<string, CommandSpec> = {
     flags: ['out', 'json', 'last', 'issue', 'yes'],
     positionals: 1,
     help: `
-  es report [run]           Collect a bug report: versions, es doctor, the config's shape, the
-                            last es command's error and stack, the run's failures and their
-                            .es/debug logs, redacted. Prints a summary, writes it to .es/reports
-                            and uploads nothing
-    --out <dir|file>        Write report.md, report.json and report-logs.tar.gz there instead
-                            (a .md or .json file writes the others beside it)
-    --json                  The bundle as JSON on stdout
-    --last                  Report the last es command that failed, and its run
-    --issue                 Open a pre-filled GitHub issue for ES in the browser, or with gh
-                            installed, file it with gh issue create once you confirm
-    -y, --yes               With --issue, file it with gh without asking`,
+  reeval report [run]           Collect a bug report: versions, reeval doctor, the config's shape, the
+                                last reeval command's error and stack, the run's failures and their
+                                .reeval/debug logs, redacted. Prints a summary, writes it to .reeval/reports
+                                and uploads nothing
+    --out <dir|file>            Write report.md, report.json and report-logs.tar.gz there instead
+                                (a .md or .json file writes the others beside it)
+    --json                      The bundle as JSON on stdout
+    --last                      Report the last reeval command that failed, and its run
+    --issue                     Open a pre-filled GitHub issue for reeval in the browser, or with gh
+                                installed, file it with gh issue create once you confirm
+    -y, --yes                   With --issue, file it with gh without asking`,
   },
   image: {
     flags: [],
@@ -268,36 +268,36 @@ export const COMMANDS: Record<string, CommandSpec> = {
         flags: ['dry-run', 'force'],
         positionals: Number.POSITIVE_INFINITY,
         help: `
-  es image build [filter...]
-                            Build every image the evals' Docker sandboxes need, per harness: ES's
-                            image (bakes in its CLI), from and dockerfile images, install layers.
-                            Builds what's missing or stale (a from tag that moved upstream), three
-                            at a time, and reports every failure; exit 3 if any image failed
-    --force                 Rebuild every image, pulling each base again
-    --dry-run               List the images, how each is made and how each stands, building
-                            nothing (a from tag is looked up in its registry, not pulled)`,
+  reeval image build [filter...]
+                                Build every image the evals' Docker sandboxes need, per harness: reeval's
+                                image (bakes in its CLI), from and dockerfile images, install layers.
+                                Builds what's missing or stale (a from tag that moved upstream), three
+                                at a time, and reports every failure; exit 3 if any image failed
+    --force                     Rebuild every image, pulling each base again
+    --dry-run                   List the images, how each is made and how each stands, building
+                                nothing (a from tag is looked up in its registry, not pulled)`,
       },
     },
   },
 }
 
-/** Flags every command takes; without `--config`, `es` finds the nearest config. */
+/** Flags every command takes; without `--config`, `reeval` finds the nearest config. */
 export const GLOBAL: FlagName[] = ['config', 'help', 'version']
 
-/** `es --help`: every command's help lines, in the order of `COMMANDS`. */
+/** `reeval --help`: every command's help lines, in the order of `COMMANDS`. */
 export function helpText(version: string): string {
   const commands = Object.values(COMMANDS).flatMap((spec) => [
     spec.help,
     ...Object.values(spec.sub ?? {}).map((sub) => sub.help),
   ])
-  return `es ${version} — eval runner for coding agents
+  return `reeval ${version} — eval runner for coding agents
 
 Usage:${commands.join('')}
-  es --version
-  es --help
+  reeval --version
+  reeval --help
 
 Runs are latest, latest~N, a run id (or unique prefix), or a git SHA prefix.
-Options: --config <path> (default: the nearest es.config.ts, or .mts, .cts, .js, .mjs or .cjs,
+Options: --config <path> (default: the nearest reeval.config.ts, or .mts, .cts, .js, .mjs or .cjs,
 in the current directory or above)
 Exit codes: 0 passed, 1 failed, 2 usage/config error, 3 infra error, 130 interrupted (Ctrl-C),
 143 terminated (SIGTERM)
@@ -333,13 +333,13 @@ export function shellWords(line: string): string[] | null {
 
 const RUNNERS = [['npx'], ['pnpm', 'exec'], ['pnpm'], ['npm', 'exec', '--'], ['yarn']]
 
-/** An eval as `es run` selects it: by file path, by name (with its groups) or cell, and by tag. */
+/** An eval as `reeval run` selects it: by file path, by name (with its groups) or cell, and by tag. */
 export type SelectableEval = { file: string; name: string; tags: string[]; cells: string[] }
 
 /**
- * Why `line` isn't a valid ES command line, or null when it is. It may chain `es` commands with
- * `&&` or `;` and start with `npx` or `pnpm`; `es query <name>` must name a view or table in
- * `tables`, when given; `es run` and `es image build` must select at least one of `evals`, when
+ * Why `line` isn't a valid reeval command line, or null when it is. It may chain `reeval` commands with
+ * `&&` or `;` and start with `npx` or `pnpm`; `reeval query <name>` must name a view or table in
+ * `tables`, when given; `reeval run` and `reeval image build` must select at least one of `evals`, when
  * given, with their filters and `--tag`s.
  */
 export function checkCommand(
@@ -357,7 +357,7 @@ export function checkCommand(
 }
 
 /**
- * Why `filters` and `tags` select nothing among `evals`, or null. As `es run` does: a filter that
+ * Why `filters` and `tags` select nothing among `evals`, or null. As `reeval run` does: a filter that
  * names an eval file picks files, any other picks evals by name or cell, and the two narrow each
  * other; every `--tag` must hold (`!tag` excludes).
  */
@@ -399,7 +399,7 @@ function checkOne(
   evals?: readonly SelectableEval[],
 ): string | null {
   if (/[|<>`$]/.test(segment.replace(/"[^"]*"|'[^']*'/g, ''))) {
-    return `"${segment}" pipes or substitutes; verify commands are plain es commands`
+    return `"${segment}" pipes or substitutes; verify commands are plain reeval commands`
   }
   let words = shellWords(segment)
   if (!words) return `unbalanced quotes in "${segment}"`
@@ -410,16 +410,18 @@ function checkOne(
       break
     }
   }
-  if (words[0] !== 'es') return `"${segment}" isn't an es command`
+  if (words[0] !== 'reeval' && words[0] !== 're') return `"${segment}" isn't a reeval command`
   const [, command, ...rest] = words
   if (!command || command.startsWith('-')) {
-    return command && ['--help', '-h', '--version'].includes(command) ? null : 'no es command given'
+    return command && ['--help', '-h', '--version'].includes(command)
+      ? null
+      : 'no reeval command given'
   }
   const spec = COMMANDS[command]
   if (!spec)
-    return `es ${command} isn't an ES command (commands: ${Object.keys(COMMANDS).join(', ')})`
+    return `reeval ${command} isn't a reeval command (commands: ${Object.keys(COMMANDS).join(', ')})`
   let args = rest
-  let name = `es ${command}`
+  let name = `reeval ${command}`
   let target: Omit<CommandSpec, 'sub'> = spec
   if (spec.sub) {
     const sub = args[0] && spec.sub[args[0]]
@@ -427,7 +429,7 @@ function checkOne(
       name = `${name} ${args[0]}`
       target = sub
       args = args.slice(1)
-    } else if (command === 'image') return 'es image needs a subcommand: es image build'
+    } else if (command === 'image') return 'reeval image needs a subcommand: reeval image build'
   }
   const allowed = new Set<string>([...target.flags, ...GLOBAL])
   const positionals: string[] = []
@@ -445,7 +447,7 @@ function checkOne(
       const flag = arg.startsWith('--')
         ? raw
         : Object.entries(FLAGS).find(([, s]) => 'short' in s && s.short === raw)?.[0]
-      if (!flag || !(flag in FLAGS)) return `${arg} isn't an ES flag`
+      if (!flag || !(flag in FLAGS)) return `${arg} isn't a reeval flag`
       if (!allowed.has(flag)) return `--${flag} isn't an option of ${name}`
       const type = FLAGS[flag as FlagName].type
       if (type === 'string' && eq === -1) {
@@ -462,14 +464,14 @@ function checkOne(
   if (positionals.length > target.positionals) {
     return `${name} takes at most ${target.positionals} argument${target.positionals === 1 ? '' : 's'} (got ${positionals.join(' ')})`
   }
-  if (evals && (name === 'es run' || name === 'es image build')) {
+  if (evals && (name === 'reeval run' || name === 'reeval image build')) {
     const problem = selectionProblem(name, evals, positionals, tags)
     if (problem) return problem
   }
   if (command === 'query' && tables && positionals.length === 1) {
     const text = positionals[0] as string
     if (/^[A-Za-z_]\w*$/.test(text) && !tables.includes(text)) {
-      return `es query ${text}: no view or table named ${text} (views: ${tables.join(', ')})`
+      return `reeval query ${text}: no view or table named ${text} (views: ${tables.join(', ')})`
     }
   }
   return null
@@ -478,7 +480,7 @@ function checkOne(
 /** One line per command, for the analysis prompt and `--context`. */
 export function commandSummary(): string[] {
   const line = (name: string, spec: Omit<CommandSpec, 'sub'>) =>
-    `es ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? ' <v>' : ''}`).join(' ')}` : ''}`
+    `reeval ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? ' <v>' : ''}`).join(' ')}` : ''}`
   return Object.entries(COMMANDS).flatMap(([name, spec]) => [
     ...(name === 'image' ? [] : [line(name, spec)]),
     ...Object.entries(spec.sub ?? {}).map(([sub, s]) => line(`${name} ${sub}`, s)),

@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, prompt, shellOutput } from './env.ts'
 
 // A harness-placed skill is in the agent's home, where the Cursor adapter puts it.

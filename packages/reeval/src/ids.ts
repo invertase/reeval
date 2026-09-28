@@ -6,7 +6,7 @@ export const relativeFile = (root: string, file: string) =>
   relative(root, file).split(sep).join('/')
 
 /**
- * `path` from the current directory, as ES prints it. The current directory is always spelled
+ * `path` from the current directory, as reeval prints it. The current directory is always spelled
  * physically (macOS's `/var/…` is `/private/var/…`), so `path` is too, through its nearest part
  * that exists.
  */

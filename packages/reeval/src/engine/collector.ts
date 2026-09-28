@@ -56,7 +56,7 @@ export function registerTest(
 function current(): Suite {
   if (!collecting)
     throw new UsageError(
-      "evaluate() and group() declare evals while ES loads the file; they can't be called inside an eval.",
+      "evaluate() and group() declare evals while reeval loads the file; they can't be called inside an eval.",
     )
   return collecting.current
 }
@@ -103,7 +103,7 @@ async function collectSuite(suite: Suite): Promise<void> {
   )
 }
 
-/** Vitest's `interpretTaskModes`, without the filters ES applies itself. */
+/** Vitest's `interpretTaskModes`, without the filters reeval applies itself. */
 function interpretModes(suite: Suite, onlyMode: boolean, parentIsOnly: boolean): void {
   const suiteIsOnly = parentIsOnly || suite.mode === 'only'
   const someOnly = onlyMode && suite.containsOnly

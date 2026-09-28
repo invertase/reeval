@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, staged } from './env.ts'
 
 // Must fail: the source frontmatter's other keys aren't copied.

@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { plain } from './env.ts'
 
 // A turn the eval's timeout cuts off is recorded as aborted, not completed (features.test.ts

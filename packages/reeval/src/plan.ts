@@ -165,7 +165,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 /**
  * `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …`, led by
- * `config ../es.config.ts` when `config` is given (the config isn't in the current directory).
+ * `config ../reeval.config.ts` when `config` is given (the config isn't in the current directory).
  */
 export function planLine(plan: RunPlan, config?: string): string {
   const parts: string[] = config ? [`config ${config}`] : []
@@ -248,7 +248,7 @@ export type PlanEval = {
   cells: PlanCell[]
 }
 
-/** A Docker sandbox image the plan needs, and how it's made, as `es image build --dry-run` lists it. */
+/** A Docker sandbox image the plan needs, and how it's made, as `reeval image build --dry-run` lists it. */
 export type PlanImage = {
   id: string
   /** Whose CLI the image carries. */
@@ -257,7 +257,7 @@ export type PlanImage = {
   stages: Array<{ what: string; ref: string; action: string }>
 }
 
-/** `es run --dry-run --json`: the plan as one document. */
+/** `reeval run --dry-run --json`: the plan as one document. */
 export type PlanDocument = {
   profile: { name: string; reason: string } | null
   totals: { evals: number; skipped: number; cells: number; attempts: number }

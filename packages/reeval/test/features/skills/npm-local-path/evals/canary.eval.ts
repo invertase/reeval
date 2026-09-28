@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { staged, vendored } from './env.ts'
 
 // Must fail: the other vendored tarball's greeting isn't what 1.2.3 holds.

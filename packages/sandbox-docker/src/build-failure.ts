@@ -4,7 +4,7 @@
 /** Which part of making a sandbox image failed. */
 export type ImageStage = 'image' | 'from' | 'dockerfile' | 'harness' | 'install'
 
-/** A cause ES recognises and names in the headline. */
+/** A cause reeval recognises and names in the headline. */
 export type FailureCause = 'enospc' | 'oom'
 
 export type ImageFailure = {
@@ -14,7 +14,7 @@ export type ImageFailure = {
   /** A registry or network error that may pass; everything else fails the same way again. */
   transient: boolean
   cause: FailureCause | null
-  /** The build's full output, when ES wrote one. */
+  /** The build's full output, when reeval wrote one. */
   log: string | null
 }
 
@@ -74,12 +74,12 @@ export function failureCause(text: string, exitCode: number | null): FailureCaus
 
 export const causeLine = (cause: FailureCause) =>
   cause === 'enospc'
-    ? 'out of disk space (ENOSPC): free space for Docker (docker system df, es clean --images) and rerun'
+    ? 'out of disk space (ENOSPC): free space for Docker (docker system df, reeval clean --images) and rerun'
     : 'killed (exit 137): usually out of memory; give Docker more memory or lower the concurrency'
 
 // What a user's step did wrong fails the same way however often it runs.
 const DETERMINISTIC =
-  /did not complete successfully|dockerfile parse error|unknown instruction|should not be blank|pull access denied|repository does not exist|manifest unknown|not found: manifest|: not found\b|unauthorized|denied:|ES needs a Debian or Ubuntu based image/i
+  /did not complete successfully|dockerfile parse error|unknown instruction|should not be blank|pull access denied|repository does not exist|manifest unknown|not found: manifest|: not found\b|unauthorized|denied:|reeval needs a Debian or Ubuntu based image/i
 const TRANSIENT =
   /EAI_AGAIN|ECONNRESET|ETIMEDOUT|ECONNREFUSED|i\/o timeout|TLS handshake timeout|no such host|temporary failure in name resolution|connection reset by peer|dial tcp|net\/http: request canceled|unexpected EOF|\b(?:500|502|503|504) |429 Too Many Requests|toomanyrequests|Service Unavailable|Bad Gateway|Gateway Timeout|ENOTFOUND/i
 

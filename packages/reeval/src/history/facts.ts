@@ -1,4 +1,4 @@
-// The derived facts behind `es query effort`, `factor_effects`, `flaky_cells` and `drift`: computed
+// The derived facts behind `reeval query effort`, `factor_effects`, `flaky_cells` and `drift`: computed
 // in TypeScript after each sync (SQLite has no rank test or Newcombe interval) and materialised in
 // `*_m` tables that those views select from. Every verdict here is a fixed rule over the lift
 // interval, `within_noise` and an exact rank test, so the analysis step is told, not asked.

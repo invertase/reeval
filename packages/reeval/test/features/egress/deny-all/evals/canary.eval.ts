@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { agentSaw, open } from './env.ts'
 
 // Must fail: under allow-all the same direct connection reaches the listener, and names resolve.

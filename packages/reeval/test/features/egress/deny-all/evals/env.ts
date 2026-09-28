@@ -1,4 +1,4 @@
-import { defineEnvironment, type Turn } from 'evalsuite'
+import { defineEnvironment, type Turn } from 'reeval'
 
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })
 export const open = defineEnvironment('open', { egress: 'allow-all' })

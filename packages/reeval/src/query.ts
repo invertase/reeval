@@ -1,4 +1,4 @@
-// `es query`: read-only SQL over `.es/history.db`, the projection of every recorded and scratch run.
+// `reeval query`: read-only SQL over `.reeval/history.db`, the projection of every recorded and scratch run.
 import { UsageError } from './errors.ts'
 import type { QueryResult } from './history/db.ts'
 import { clip } from './text.ts'
@@ -14,12 +14,12 @@ type Ctx = {
 }
 
 const EXAMPLES = [
-  'es query lift',
-  `es query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"`,
-  `es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting' AND model LIKE 'composer%'"`,
-  `es query "SELECT eval_key, cell_key, first_seen, flaky_runs FROM flaky_cells"`,
-  `es query "SELECT run_id, eval_key, changed FROM drift ORDER BY run_id DESC LIMIT 20"`,
-  `es query "SELECT branch, outcome, COUNT(*) AS n FROM eval_trend GROUP BY branch, outcome" --json`,
+  'reeval query lift',
+  `reeval query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"`,
+  `reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting' AND model LIKE 'composer%'"`,
+  `reeval query "SELECT eval_key, cell_key, first_seen, flaky_runs FROM flaky_cells"`,
+  `reeval query "SELECT run_id, eval_key, changed FROM drift ORDER BY run_id DESC LIMIT 20"`,
+  `reeval query "SELECT branch, outcome, COUNT(*) AS n FROM eval_trend GROUP BY branch, outcome" --json`,
 ]
 
 const cell = (value: unknown) =>
@@ -86,7 +86,7 @@ export function statementCount(sql: string): number {
 }
 
 /**
- * `es query [sql | view] [--json] [--schema] [--rebuild]`. With no statement it lists the views
+ * `reeval query [sql | view] [--json] [--schema] [--rebuild]`. With no statement it lists the views
  * and tables; a bare name selects everything from that view or table.
  */
 export async function queryCommand(ctx: Ctx, args: string[]): Promise<number> {
@@ -107,15 +107,17 @@ export async function queryCommand(ctx: Ctx, args: string[]): Promise<number> {
     }
     let sql = text
     if (statementCount(text) > 1) {
-      throw new UsageError('es query runs one statement at a time; drop the extra ones after ";".')
+      throw new UsageError(
+        'reeval query runs one statement at a time; drop the extra ones after ";".',
+      )
     }
     if (/^[A-Za-z_]\w*$/.test(text)) {
       if (!schema.some((o) => o.name === text)) {
         throw new UsageError(
-          `es query: no view or table named "${text}". Views: ${schema
+          `reeval query: no view or table named "${text}". Views: ${schema
             .filter((o) => o.type === 'view')
             .map((o) => o.name)
-            .join(', ')}. Run es query --schema for every column.`,
+            .join(', ')}. Run reeval query --schema for every column.`,
         )
       }
       sql = `SELECT * FROM "${text}"`

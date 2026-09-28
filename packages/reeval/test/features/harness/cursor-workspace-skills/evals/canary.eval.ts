@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Must fail: Cursor's workspace skills don't go to .claude/skills.

@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { repo } from './env.ts'
 
 // The workspace is a git repository: one commit of the fetched tree, clean, with no remote.

@@ -1,4 +1,4 @@
-// The persisted-shape guard: schema/ snapshots every shape ES writes and reads back, and a change
+// The persisted-shape guard: schema/ snapshots every shape reeval writes and reads back, and a change
 // that would stop older files from loading fails here and in CI's `pnpm schema:check`.
 import assert from 'node:assert/strict'
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -51,7 +51,7 @@ describe('persisted shapes', () => {
     })
     assert.equal(explain(reports), '')
     const stale = reports.filter((r) => r.stale).map((r) => r.shape.type)
-    assert.deepEqual(stale, [], 'run `pnpm --filter @invertase/foobar schema:update`')
+    assert.deepEqual(stale, [], 'run `pnpm --filter reeval schema:update`')
   })
 
   test('a required field added without a read default fails, and the message says the three fixes', () => {
@@ -143,7 +143,7 @@ describe('persisted shapes', () => {
     )
   })
 
-  test('widening passes: an older ES reading the new file is the forward-direction test', () => {
+  test('widening passes: an older reeval reading the new file is the forward-direction test', () => {
     const now = snapshot('run-record')
     const wider = copy(now)
     const status = def(wider, 'RunRecord').properties?.status as Schema
@@ -260,14 +260,14 @@ describe('read defaults', () => {
     assert.deepEqual(record.evals, [{ todo: true }, { todo: false }])
   })
 
-  test('a file from a newer ES throws NewerSchemaError naming both versions', () => {
+  test('a file from a newer reeval throws NewerSchemaError naming both versions', () => {
     const record = copy(records[0]?.value) as Record<string, unknown>
     record.schemaVersion = 2
     assert.throws(
       () => readableRecord(record as never),
       (e: Error) =>
         e instanceof NewerSchemaError &&
-        /written by a newer ES \(schemaVersion 2; this ES reads up to 1\)\. Upgrade ES to read it\./.test(
+        /written by a newer reeval \(schemaVersion 2; this reeval reads up to 1\)\. Upgrade reeval to read it\./.test(
           e.message,
         ),
     )

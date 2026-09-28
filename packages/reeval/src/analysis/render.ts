@@ -22,7 +22,7 @@ export function footer(doc: AnalysisDoc): string {
 export function renderMarkdown(doc: AnalysisDoc): string {
   const a = doc.analysis
   const md = [
-    `## ES analysis · ${doc.scope.head}${doc.scope.base ? ` vs ${doc.scope.base}` : ''}`,
+    `## reeval analysis · ${doc.scope.head}${doc.scope.base ? ` vs ${doc.scope.base}` : ''}`,
     '',
     `**TL;DR.** ${a.tldr}`,
     '',
@@ -51,7 +51,7 @@ export function renderMarkdown(doc: AnalysisDoc): string {
       `   Expect: ${x.expectedEffect}  `,
       x.verify
         ? `   Verify: \`${x.verify}\`${cite(x.cites)}`
-        : `   Verify: none (the suggested command isn't ES's CLI: ${x.verifyProblem ?? 'unknown'})${cite(x.cites)}`,
+        : `   Verify: none (the suggested command isn't reeval's CLI: ${x.verifyProblem ?? 'unknown'})${cite(x.cites)}`,
     )
   })
   md.push(

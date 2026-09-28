@@ -1,6 +1,6 @@
 // The shape of each agent CLI's native stream, as signatures: which events and step types it
 // sends, the key paths in each, the states it reports and the tools it advertises. Taken from the
-// `raw` parts of a raw transcript (ES_RAW_TRANSCRIPT=1), which carry the native events. The known
+// `raw` parts of a raw transcript (REEVAL_RAW_TRANSCRIPT=1), which carry the native events. The known
 // signatures are committed in test/replay/formats/<harness>.json; a signature outside them means
 // the CLI's output format changed, and the contract fails on it (the drift job's loud failure).
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -61,7 +61,7 @@ const ACP_DEFINED = {
 // pi's assistant messages: pi-ai's StopReason, but `deferred` (pi's one-shot `-p` loop never defers
 // a call) and `pending` (only while a message streams), and a failed call's `errorMessage`. A
 // contract run shows `error` only when the provider fails a call (a 503), `length` and `aborted`
-// only when the model runs out of tokens or ES stops the turn.
+// only when the model runs out of tokens or reeval stops the turn.
 const PI_MESSAGES = ['message_start/assistant', 'message_end/assistant', 'turn_end/assistant']
 const PI_STOP = ['stop', 'toolUse', 'length', 'aborted', 'error']
 const PI_DEFINED = Object.fromEntries(
@@ -74,7 +74,7 @@ const PI_OPTIONAL = PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`)
 
 // The Cursor runner's lines, as CursorSdkRunnerLine types them, and the SDK's (1.0.32) own values:
 // SDKStatusMessage's status and message, SDKToolUseMessage's status and truncated, RunResult's
-// status and error. A run ES cancels streams CANCELLED; a failed one ERROR with the error; a turn
+// status and error. A run reeval cancels streams CANCELLED; a failed one ERROR with the error; a turn
 // that throws (a rejected key) is the runner's `error` line; `unreported` and `recovered` come only
 // with web calls.
 const CURSOR_DEFINED = {
@@ -383,7 +383,7 @@ const committedSignatures = (harness: string): string[] =>
 export const knownSignatures = (harness: string): string[] =>
   [...new Set([...committedSignatures(harness), ...definedSignatures(harness)])].sort()
 
-/** Adds `seen` to the known signatures (ES_UPDATE_FORMATS=1); the protocol's values aren't kept. */
+/** Adds `seen` to the known signatures (REEVAL_UPDATE_FORMATS=1); the protocol's values aren't kept. */
 export function learnSignatures(harness: string, seen: string[]): void {
   const defined = definedSignatures(harness)
   const all = [...new Set([...committedSignatures(harness), ...seen])]

@@ -106,7 +106,7 @@ export type AssembledRun = {
 export function capText(text: string, cap = OUTPUT_CAP): string {
   if (text.length <= cap) return text
   const omitted = text.length - HEAD - TAIL
-  return `${text.slice(0, HEAD)}\n[es: truncated ${omitted} of ${text.length} characters, sha256 ${sha256(text)}]\n${text.slice(-TAIL)}`
+  return `${text.slice(0, HEAD)}\n[reeval: truncated ${omitted} of ${text.length} characters, sha256 ${sha256(text)}]\n${text.slice(-TAIL)}`
 }
 
 const readRecord = async (path: string): Promise<EvalRecord | null> =>
@@ -219,7 +219,7 @@ export function transcriptLines(record: EvalRecord): string {
   return `${lines.join('\n')}\n`
 }
 
-/** Every stream part the harness sent, for debugging the normaliser (`ES_RAW_TRANSCRIPT=1`). */
+/** Every stream part the harness sent, for debugging the normaliser (`REEVAL_RAW_TRANSCRIPT=1`). */
 function rawLines(record: EvalRecord): string | null {
   if (!record.turns.some((t) => t.raw)) return null
   const lines = record.turns.flatMap((turn, index) =>
@@ -510,7 +510,7 @@ function attemptEvidence(
       error: turnError(t.transcript),
       text:
         t.text.length > TURN_TEXT_LIMIT
-          ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [es: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
+          ? `${t.text.slice(0, TURN_TEXT_LIMIT)}… [reeval: truncated ${t.text.length} characters; the whole message is the turn's last text event in transcript.jsonl]`
           : t.text,
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),

@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 /** The house-greeting skill, handed to the agent through its harness's native skills support. */
 export const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) => ({

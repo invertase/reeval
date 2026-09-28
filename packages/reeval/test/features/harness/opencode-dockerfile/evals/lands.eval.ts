@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { plain } from './env.ts'
 
-// A Dockerfile FROM ${ES_BASE} under OpenCode is built on OpenCode's image: its CLI is there, and
+// A Dockerfile FROM ${REEVAL_BASE} under OpenCode is built on OpenCode's image: its CLI is there, and
 // it's OpenCode 2.
 evaluate('lands', { environment: plain }, async (t) => {
   await t.sandbox()

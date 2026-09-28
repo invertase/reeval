@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from CliInvocation in src/report/types.ts by `pnpm schema:update`; don't edit. One line of .es/cli.jsonl, the last es commands es report reads.",
+  "$comment": "Generated from CliInvocation in src/report/types.ts by `pnpm schema:update`; don't edit. One line of .reeval/cli.jsonl, the last reeval commands reeval report reads.",
   "title": "CliInvocation",
   "$ref": "#/$defs/CliInvocation",
   "$defs": {

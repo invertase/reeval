@@ -8,11 +8,11 @@ import type { RunRecord } from './history/types.ts'
 const STALE_STAGING_MS = 24 * 60 * 60 * 1000
 
 /** Where workers write raw per-eval records before the run is assembled. */
-export const stagingDir = (root: string, runId: string) => join(root, '.es', 'staging', runId)
+export const stagingDir = (root: string, runId: string) => join(root, '.reeval', 'staging', runId)
 
 /** Removes staging left behind by runs that were killed before they could clean up. */
 export async function sweepStaging(root: string): Promise<void> {
-  const dir = join(root, '.es', 'staging')
+  const dir = join(root, '.reeval', 'staging')
   const entries = await readdir(dir).catch(() => [])
   for (const name of entries) {
     const age = await stat(join(dir, name)).then(
@@ -23,7 +23,7 @@ export async function sweepStaging(root: string): Promise<void> {
   }
 }
 
-/** Assembles the run into `.es/runs/`, with every artifact and a summary.md. */
+/** Assembles the run into `.reeval/runs/`, with every artifact and a summary.md. */
 export async function writeScratchRun(
   input: AssembleInput,
   landed?: () => void,

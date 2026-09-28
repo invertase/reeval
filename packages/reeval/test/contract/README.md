@@ -1,7 +1,7 @@
 # The harness contract
 
 Every real harness must pass the same behaviours against a real agent, in Docker. This directory
-is one ES project; `contract.test.ts` runs it once per harness and checks each behaviour from
+is one reeval project; `contract.test.ts` runs it once per harness and checks each behaviour from
 outside, in three ways: its eval passed, its canary failed on its assertion, and the record says
 what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses.ts).
 
@@ -31,27 +31,27 @@ anything.
 1. A row in [`../support/harnesses.ts`](../support/harnesses.ts): its key, the cheapest model,
    its image, where its skills show up in `context`, its automatic egress hosts, the host it
    reaches every turn, whether it reports tokens and what its served model looks like.
-2. A case in [`es.config.ts`](./es.config.ts) (and `../e2e/es.config.ts`).
+2. A case in [`reeval.config.ts`](./reeval.config.ts) (and `../e2e/reeval.config.ts`).
 3. A format in [`../support/stream-formats.ts`](../support/stream-formats.ts), then a real run with
-   `ES_UPDATE_FORMATS=1 ES_UPDATE_CAPTURES=1` to learn its format and capture its replays.
+   `REEVAL_UPDATE_FORMATS=1 REEVAL_UPDATE_CAPTURES=1` to learn its format and capture its replays.
 4. Its secret in `contract.yml`, and its latest version in `scripts/drift/latest-images.sh`.
 
 ## Running it
 
 ```bash
 pnpm build
-cd packages/evalsuite
-ES_CONTRACT_HARNESSES=fake node --test --experimental-strip-types --no-warnings test/contract.test.ts
+cd packages/reeval
+REEVAL_CONTRACT_HARNESSES=fake node --test --experimental-strip-types --no-warnings test/contract.test.ts
 pnpm test:contract          # the real rows, and the e2e CLI suite (CURSOR_API_KEY, GEMINI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY)
 pnpm test:replay            # the captured streams, key-free
 ```
 
-Without `ES_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
-anything, naming the variable it needs: narrow the run with `ES_CONTRACT_HARNESSES=cursor`, which
+Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
+anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
 picks rows. Each real row is 12 attempts (10 on pi, which skips the MCP pair), 6 of them (5 on pi) with one short agent turn, at `--concurrency
-2`; es.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
-(`ES_REAL_ATTEMPT_BUDGET`). `ES_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
-and `ES_UPDATE_FORMATS=1` accepts the formats it saw.
+2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
+(`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
+and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
 
 ## Flake policy
 
@@ -69,7 +69,7 @@ fake or phrase differently:
 | egress | the CONNECT status the `curl` wrote, and the gateway's record | the agent's account of what happened |
 | tokens, served model | the record's numbers and ids, by shape (> 0, a pattern) | exact counts change every run |
 | stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons; pi's stop reasons and `errorMessage`; the Cursor SDK's statuses and the runner's failure lines; agy's `error_message` steps; Codex's item types and statuses) | which values a run shows is the model's or the provider's doing: a stray write outside the workspace makes a tool call `failed`, a Gemini 503 makes pi's call `error` |
-| e2e | exit codes, JSON from `es compare`/`es query`, files on disk | the CLI's text output changes with the run |
+| e2e | exit codes, JSON from `reeval compare`/`reeval query`, files on disk | the CLI's text output changes with the run |
 
 Prompts name the exact action and ask for one short turn. The e2e eval allows a trailing period in
 `hello.txt`: its check is that the agent wrote the file, not its punctuation. A flake that still

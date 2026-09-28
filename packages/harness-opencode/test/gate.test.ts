@@ -6,13 +6,13 @@ import { join } from 'node:path'
 import { after, test } from 'node:test'
 import { OPENCODE_GATE, OPENCODE_GATE_SERVERS_ENV } from '../src/opencode-gate.ts'
 
-// The gate runs in ES's Linux sandbox, where it execs OpenCode's bin by path; Windows can't run
+// The gate runs in reeval's Linux sandbox, where it execs OpenCode's bin by path; Windows can't run
 // it or the stand-in, extensionless scripts with a shebang.
 const skip = process.platform === 'win32' ? 'the gate and its stand-in are POSIX scripts' : false
 
 const dir = mkdtempSync(join(tmpdir(), 'opencode-gate-'))
 after(() => rmSync(dir, { recursive: true, force: true }))
-const gate = join(dir, 'es-opencode-gate')
+const gate = join(dir, 'reeval-opencode-gate')
 writeFileSync(gate, OPENCODE_GATE)
 chmodSync(gate, 0o755)
 

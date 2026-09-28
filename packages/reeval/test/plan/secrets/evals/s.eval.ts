@@ -1,5 +1,5 @@
-import { defineEnvironment, evaluate } from 'evalsuite'
-import { fakeSandbox } from 'evalsuite/sandbox'
+import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 
 const gemini = defineEnvironment('gemini', ({ secret }) => ({
   env: { GEMINI_API_KEY: secret.fromEnv('GEMINI_API_KEY', { hosts: secret.hosts.gemini }) },

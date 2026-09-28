@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 
-// A tool the agent needs, baked onto ES's image once and cached by the exact command list.
+// A tool the agent needs, baked onto reeval's image once and cached by the exact command list.
 // Install commands have no secrets and no workspace; per-attempt steps belong in setup.
 const withJq = docker({
   install: [

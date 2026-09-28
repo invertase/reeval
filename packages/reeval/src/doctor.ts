@@ -1,9 +1,9 @@
-// `es doctor`: checks what a run needs, each with the fix, without running anything. It names
+// `reeval doctor`: checks what a run needs, each with the fix, without running anything. It names
 // every key it checks and never prints a key's value.
 import { execFile } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { DockerState } from '@evalsuite/sandbox-docker'
+import type { DockerState } from '@reeval/sandbox-docker'
 import type { Flags } from './cli-spec.ts'
 import {
   badCharacterAt,
@@ -62,7 +62,7 @@ const run = (command: string, args: string[], cwd?: string) =>
   })
 
 export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
-  const sandbox = () => import('@evalsuite/sandbox-docker')
+  const sandbox = () => import('@reeval/sandbox-docker')
   return {
     env,
     nodeVersion: process.versions.node,
@@ -108,11 +108,11 @@ export function checkNode(nodeVersion: string): Check {
   const engines = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')).engines.node
   const min = (/(\d+(?:\.\d+)*)/.exec(engines)?.[1] ?? '0').split('.').map(Number)
   return newer(nodeVersion, min)
-    ? { id: 'node', status: 'ok', summary: `${nodeVersion} (ES needs ${engines})` }
+    ? { id: 'node', status: 'ok', summary: `${nodeVersion} (reeval needs ${engines})` }
     : {
         id: 'node',
         status: 'fail',
-        summary: `${nodeVersion}, but ES needs ${engines}`,
+        summary: `${nodeVersion}, but reeval needs ${engines}`,
         fix: `install Node ${min.join('.')} or later (https://nodejs.org)`,
       }
 }
@@ -171,7 +171,7 @@ export async function checkDocker(
         {
           id: 'docker',
           status: 'fail',
-          summary: "is running Windows containers, but ES's sandboxes are Linux containers",
+          summary: "is running Windows containers, but reeval's sandboxes are Linux containers",
           fix: 'switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers), on the WSL 2 backend',
         },
       ],
@@ -216,12 +216,12 @@ export async function checkDocker(
 
 export type MissingImage = { ref: string }
 
-/** ES's sandbox image for each Docker harness in the config: present, missing or left from an older ES. */
+/** reeval's sandbox image for each Docker harness in the config: present, missing or left from an older reeval. */
 export async function checkImages(
   config: ResolvedConfig,
   deps: DoctorDeps,
 ): Promise<{ checks: Check[]; missing: string[] }> {
-  const { imageFor } = await import('@evalsuite/sandbox-docker')
+  const { imageFor } = await import('@reeval/sandbox-docker')
   const { imageTargets, esImages } = await import('./sandbox/images.ts')
   const targets = imageTargets(
     configuredUses(config).map((u) => ({ id: '', harness: u.harness, sandbox: u.sandbox })),
@@ -238,7 +238,7 @@ export async function checkImages(
         id: 'image',
         status: 'fail',
         summary: `${ref} (${harness}) isn't built`,
-        fix: 'es image build',
+        fix: 'reeval image build',
       })
     }
     const [repository] = ref.split(':')
@@ -251,7 +251,7 @@ export async function checkImages(
       checks.push({
         id: 'image',
         status: 'warn',
-        summary: `${stale.join(', ')}: built by another ES version, unused by this one`,
+        summary: `${stale.join(', ')}: built by another reeval version, unused by this one`,
         fix: `docker image rm ${stale.join(' ')}`,
       })
     }
@@ -268,7 +268,7 @@ export async function checkImages(
     }
   }
   if (!checks.length)
-    checks.push({ id: 'image', status: 'skip', summary: 'no ES sandbox images to check' })
+    checks.push({ id: 'image', status: 'skip', summary: 'no reeval sandbox images to check' })
   return { checks, missing }
 }
 
@@ -461,24 +461,24 @@ export function checkEgress(config: ResolvedConfig): Check[] {
 }
 
 export async function checkGitignore(root: string, deps: DoctorDeps): Promise<Check> {
-  const ignored = await deps.gitIgnored(root, ['.env', '.env.local', '.es/runs'])
+  const ignored = await deps.gitIgnored(root, ['.env', '.env.local', '.reeval/runs'])
   let missing: string[]
   if (ignored) {
-    missing = [...(ignored[0] && ignored[1] ? [] : ['.env*']), ...(ignored[2] ? [] : ['.es/'])]
+    missing = [...(ignored[0] && ignored[1] ? [] : ['.env*']), ...(ignored[2] ? [] : ['.reeval/'])]
   } else {
     const path = join(root, '.gitignore')
     const absent = missingGitignoreEntries(existsSync(path) ? readFileSync(path, 'utf8') : '')
-    missing = ['.env*', '.es/'].filter((e) => absent.includes(e))
+    missing = ['.env*', '.reeval/'].filter((e) => absent.includes(e))
   }
   if (!missing.length) {
-    return { id: 'gitignore', status: 'ok', summary: '.env* and .es/ are ignored' }
+    return { id: 'gitignore', status: 'ok', summary: '.env* and .reeval/ are ignored' }
   }
   const keys = missing.includes('.env*')
   return {
     id: 'gitignore',
     status: keys ? 'fail' : 'warn',
     summary: `${missing.join(' and ')} ${missing.length === 1 ? "isn't" : "aren't"} ignored${keys ? ': a commit could include your keys' : ''}`,
-    fix: `add ${missing.join(' and ')} to .gitignore (es init adds them)`,
+    fix: `add ${missing.join(' and ')} to .gitignore (reeval init adds them)`,
   }
 }
 
@@ -506,7 +506,7 @@ export async function doctor(
       id: 'config',
       status: 'fail',
       summary: `no ${CONFIG_FILES[0]} (or ${CONFIG_FILES.slice(1).join(', ')}) here or above`,
-      fix: 'es init',
+      fix: 'reeval init',
     })
   } else {
     try {
@@ -521,7 +521,7 @@ export async function doctor(
         id: 'config',
         status: 'fail',
         summary: redactSecrets((error as Error).message),
-        fix: `fix ${configLabel(configPath)}, then es run --dry-run`,
+        fix: `fix ${configLabel(configPath)}, then reeval run --dry-run`,
       })
     }
   }
@@ -565,7 +565,7 @@ export function renderReport(report: DoctorReport, color: boolean): string[] {
   const { green, red, yellow, dim } = colors(color)
   const mark = { ok: green('✓'), warn: yellow('!'), fail: red('✗'), skip: dim('-') }
   const width = Math.max(...report.checks.map((c) => c.id.length))
-  const lines = [`es doctor${report.config ? ` · ${report.config}` : ''}`]
+  const lines = [`reeval doctor${report.config ? ` · ${report.config}` : ''}`]
   for (const c of report.checks) {
     const text = c.status === 'skip' ? dim(c.summary) : c.summary
     lines.push(`${mark[c.status]} ${c.id.padEnd(width)}  ${text}`)
@@ -576,7 +576,7 @@ export function renderReport(report: DoctorReport, color: boolean): string[] {
     '',
     report.problems
       ? red(
-          `${count(report.problems, 'problem')}, ${count(report.warnings, 'warning')}. Fix them and run es doctor again.`,
+          `${count(report.problems, 'problem')}, ${count(report.warnings, 'warning')}. Fix them and run reeval doctor again.`,
         )
       : report.warnings
         ? yellow(`No problems, ${count(report.warnings, 'warning')}.`)
@@ -592,7 +592,7 @@ export type DoctorIO = {
   confirm?: (question: string) => Promise<boolean>
 }
 
-/** `es doctor`: exit 0 when nothing failed, 1 otherwise. */
+/** `reeval doctor`: exit 0 when nothing failed, 1 otherwise. */
 export async function doctorCommand(
   flags: Flags,
   io: DoctorIO,
@@ -606,7 +606,7 @@ export async function doctorCommand(
   for (const line of renderReport(report, io.color)) io.out(line)
   if (config && missingImages.length && io.confirm) {
     const build = await io.confirm(
-      `Build ${missingImages.join(', ')} now with es image build? [y/N] `,
+      `Build ${missingImages.join(', ')} now with reeval image build? [y/N] `,
     )
     if (build) {
       const { buildImages, imageTargets } = await import('./sandbox/images.ts')
@@ -617,8 +617,8 @@ export async function doctorCommand(
       for (const b of built) if (!b.ok) io.out(`✗ ${b.id}: ${b.failure.message.split('\n')[0]}`)
       io.out(
         built.every((b) => b.ok)
-          ? 'Built. Run es doctor again to check.'
-          : 'Some images failed to build; es image build shows why.',
+          ? 'Built. Run reeval doctor again to check.'
+          : 'Some images failed to build; reeval image build shows why.',
       )
     }
   }

@@ -1,4 +1,4 @@
-import { evaluate, expect, group } from 'evalsuite'
+import { evaluate, expect, group } from 'reeval'
 import { withHouseGreeting } from './environments.ts'
 
 // The core AX comparison: the same task with and without a skill. The house style can't be

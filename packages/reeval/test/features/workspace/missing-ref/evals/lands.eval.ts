@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { missing } from './env.ts'
 
 // A workspace that can't be fetched fails its attempts as an infra error naming the ref

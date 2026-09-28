@@ -1,6 +1,6 @@
-import { evaluate } from 'evalsuite'
-import { codex } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate } from 'reeval'
+import { codex } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 evaluate('both harnesses', async () => {})
 evaluate('Codex only, own id', { harness: codex({ model: 'gpt-5.5', id: 'cx' }) }, async () => {})

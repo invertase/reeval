@@ -1,6 +1,6 @@
 /**
- * The studio's data API is a file layout: `es studio` serves these relative paths and
- * `es studio build` writes them to disk, so the web client reads both the same way.
+ * The studio's data API is a file layout: `reeval studio` serves these relative paths and
+ * `reeval studio build` writes them to disk, so the web client reads both the same way.
  *
  *   studio.json                         mode, project and features
  *   data/index/manifest.json            shard list and eval catalog

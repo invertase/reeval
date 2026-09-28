@@ -29,7 +29,7 @@ export class RefError extends Error {
  * at that commit). `entries` are sorted oldest first.
  */
 export function resolveRun(entries: HistoryEntry[], ref = 'latest'): HistoryEntry {
-  if (entries.length === 0) throw new RefError('No runs yet. Run es run.')
+  if (entries.length === 0) throw new RefError('No runs yet. Run reeval run.')
   const back = /^latest(?:~(\d+))?$/.exec(ref)
   if (back) {
     const entry = entries[entries.length - 1 - Number(back[1] ?? 0)]
@@ -130,7 +130,8 @@ export function history(
 }
 
 export function formatHistory({ runs, rows, orphaned }: ReturnType<typeof history>): string {
-  if (runs.length === 0) return 'No recorded runs yet. Run es run --record, or es record latest.'
+  if (runs.length === 0)
+    return 'No recorded runs yet. Run reeval run --record, or reeval record latest.'
   const first = runs[0] as HistoryEntry
   const last = runs[runs.length - 1] as HistoryEntry
   const lines = [
@@ -199,7 +200,7 @@ export function formatCompare(
   const cells = sorted.flatMap((r) => (r.perCell ?? []).map((c) => ({ row: r, cell: c })))
   if (md) {
     return [
-      `### ES: ${head.runId} vs ${base.runId}`,
+      `### reeval: ${head.runId} vs ${base.runId}`,
       '',
       `Base ${describeRun(base, reach)} → head ${describeRun(head, reach)}. ${tally}.`,
       '',
@@ -239,14 +240,14 @@ export function formatCompare(
   ].join('\n')
 }
 
-/** `es compare` when head has no earlier recorded run: every eval is new. */
+/** `reeval compare` when head has no earlier recorded run: every eval is new. */
 export function formatNoBaseline(head: HistoryEntry, rows: CompareRow[], md: boolean): string {
   const failing = rows.filter((r) => r.head === 'fail').length
   const note = `No earlier recorded run to compare ${head.runId} with: every eval is new${failing ? `, and ${failing} fail${failing === 1 ? 's' : ''}` : ''}.`
   const mark = (o: Outcome | null) => (o ? OUTCOME_MARK[o] : '·')
   if (md) {
     return [
-      `### ES: ${head.runId}`,
+      `### reeval: ${head.runId}`,
       '',
       note,
       '',

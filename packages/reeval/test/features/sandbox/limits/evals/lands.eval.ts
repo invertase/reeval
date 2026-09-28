@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { LIMITS, plain } from './env.ts'
 
 // docker({ memory, cpus, pids }) reach the container's cgroup.

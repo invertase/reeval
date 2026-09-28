@@ -1,9 +1,9 @@
 {
   "$schema": "https://docs.page/schema.json",
-  "name": "ES",
+  "name": "reeval",
   "description": "Evals for coding agents: does an agent use your SDK, skills and docs correctly?",
   "variables": {
-    "pkg": "@invertase/foobar",
+    "pkg": "reeval",
     "cli": "es",
     "node": "22.13"
   },
@@ -14,12 +14,12 @@
     {
       "icon": "github",
       "title": "GitHub",
-      "href": "https://github.com/invertase/evalsuite"
+      "href": "https://github.com/invertase/reeval"
     },
     {
       "icon": "npm",
       "title": "npm",
-      "href": "https://www.npmjs.com/package/@invertase/foobar"
+      "href": "https://www.npmjs.com/package/reeval"
     }
   ],
   "tabs": [
@@ -70,7 +70,7 @@
       ]
     },
     {
-      "group": "How ES works",
+      "group": "How reeval works",
       "tab": "concepts",
       "pages": [
         { "title": "Overview", "href": "/concepts" },
@@ -142,7 +142,7 @@
     {
       "group": "Case studies",
       "tab": "recipes",
-      "pages": [{ "title": "ES evaluating ES", "href": "/recipes/case-study-dogfood" }]
+      "pages": [{ "title": "reeval evaluating reeval", "href": "/recipes/case-study-dogfood" }]
     },
     {
       "group": "Overview",
@@ -203,17 +203,17 @@
       "tab": "reference",
       "pages": [
         { "title": "Overview and exit codes", "href": "/reference/cli" },
-        { "title": "es init", "href": "/reference/cli/init" },
-        { "title": "es doctor", "href": "/reference/cli/doctor" },
-        { "title": "es run", "href": "/reference/cli/run" },
-        { "title": "es record", "href": "/reference/cli/record" },
-        { "title": "es history, show, compare", "href": "/reference/cli/history" },
-        { "title": "es query", "href": "/reference/cli/query" },
-        { "title": "es analyze", "href": "/reference/cli/analyze" },
-        { "title": "es mcp", "href": "/reference/cli/mcp" },
-        { "title": "es studio", "href": "/reference/cli/studio" },
-        { "title": "es image build, es clean", "href": "/reference/cli/image-clean" },
-        { "title": "es report", "href": "/reference/cli/report" }
+        { "title": "reeval init", "href": "/reference/cli/init" },
+        { "title": "reeval doctor", "href": "/reference/cli/doctor" },
+        { "title": "reeval run", "href": "/reference/cli/run" },
+        { "title": "reeval record", "href": "/reference/cli/record" },
+        { "title": "reeval history, show, compare", "href": "/reference/cli/history" },
+        { "title": "reeval query", "href": "/reference/cli/query" },
+        { "title": "reeval analyze", "href": "/reference/cli/analyze" },
+        { "title": "reeval mcp", "href": "/reference/cli/mcp" },
+        { "title": "reeval studio", "href": "/reference/cli/studio" },
+        { "title": "reeval image build, reeval clean", "href": "/reference/cli/image-clean" },
+        { "title": "reeval report", "href": "/reference/cli/report" }
       ]
     },
     {

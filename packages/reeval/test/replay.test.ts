@@ -1,9 +1,9 @@
 // Replays real agent streams, captured from the contract suite (test/replay/<harness>/, refreshed
-// with ES_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: ES's normaliser must
+// with REEVAL_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: reeval's normaliser must
 // still find each behaviour's signals, each adapter (Antigravity, the Cursor SDK) must still translate the native events
 // to the same tool calls, text and token counts, and every native event must match the committed
 // format (test/replay/formats/). Claude Code's adapter translates inside its bridge, so its
-// captured SDK messages (test/fixtures/claude-code-bridge/) replay through the bridge ES ships.
+// captured SDK messages (test/fixtures/claude-code-bridge/) replay through the bridge reeval ships.
 // Each check has a twin that proves it can fail.
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -11,12 +11,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { HarnessV1StreamPart } from '@ai-sdk/harness'
-import { AntigravityStreamTranslator } from '@evalsuite/harness-antigravity'
-import { CodexStreamTranslator } from '@evalsuite/harness-codex'
-import { CursorSdkStreamTranslator } from '@evalsuite/harness-cursor-sdk'
-import { GooseStreamTranslator } from '@evalsuite/harness-goose'
-import { OpenCodeStreamTranslator } from '@evalsuite/harness-opencode'
-import { PiStreamTranslator } from '@evalsuite/harness-pi'
+import { AntigravityStreamTranslator } from '@reeval/harness-antigravity'
+import { CodexStreamTranslator } from '@reeval/harness-codex'
+import { CursorSdkStreamTranslator } from '@reeval/harness-cursor-sdk'
+import { GooseStreamTranslator } from '@reeval/harness-goose'
+import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
+import { PiStreamTranslator } from '@reeval/harness-pi'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { replayBridge } from './support/claude-code-bridge.ts'
@@ -91,7 +91,7 @@ for (const harness of harnesses) {
     })
     for (const file of files) {
       const name = file.replace('.raw.jsonl', '')
-      test(`${name}: ES's normaliser still finds its signals`, () => {
+      test(`${name}: reeval's normaliser still finds its signals`, () => {
         const check = signals[name]
         assert.ok(check, `no signals for ${name}`)
         check(events(parse(read(harness, file))))
@@ -411,7 +411,7 @@ const rawLine = (value: unknown) =>
   JSON.stringify({ turn: 0, ms: 1, part: { type: 'raw', rawValue: value } })
 
 describe("replay: the Cursor runner's format holds every failure it can report", () => {
-  // Real runner output (SDK 1.0.32): a rejected key, a turn ES cancelled, and web calls the runner
+  // Real runner output (SDK 1.0.32): a rejected key, a turn reeval cancelled, and web calls the runner
   // recovered from the stored conversation.
   for (const file of ['bad-key.ndjson', 'cancelled.ndjson', 'web-recovered.ndjson'])
     test(`${file} is not a format change`, () => {
@@ -587,7 +587,7 @@ describe('replay: the Claude Code bridge, from the SDK’s own messages', () => 
   test('twin: without the patch, command_lifecycle starts the stream and the model is lost', async () => {
     const source = readFileSync(shipped, 'utf8')
     assert.ok(source.includes(fix), 'the shipped bridge has the patch')
-    const dir = mkdtempSync(join(tmpdir(), 'es-unpatched-'))
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-unpatched-'))
     const unpatched = join(dir, 'bridge.mjs')
     writeFileSync(unpatched, source.replace(fix, '!streamStarted'))
     try {

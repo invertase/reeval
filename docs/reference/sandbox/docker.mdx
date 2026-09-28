@@ -1,11 +1,11 @@
 ---
 title: docker()
-description: The Docker sandbox, its image options, how ES tags and caches images, and the errors it raises.
+description: The Docker sandbox, its image options, how reeval tags and caches images, and the errors it raises.
 ---
 
 `docker()` runs each attempt in its own local Docker container. It's the default sandbox, and the only one real harnesses run in.
 
-```ts title="evals/python.es.ts"
+```ts title="evals/python.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 
@@ -25,22 +25,22 @@ evaluate('counts orders with jq', { sandbox: withJq }, async (t) => {
 })
 ```
 
-Without options, `docker()` uses ES's sandbox image for the harness, which `es image build` makes.
+Without options, `docker()` uses reeval's sandbox image for the harness, which `reeval image build` makes.
 
 ## Options
 
 `image`, `from` and `dockerfile` choose the base; set at most one.
 
 <Property name="from" type="string" optional>
-  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. On first use ES bakes Node, git and the harness on top, and caches the result.
+  A Debian or Ubuntu based toolchain image, such as `python:3.12-slim`. On first use reeval bakes Node, git and the harness on top, and caches the result.
 </Property>
 
 <Property name="dockerfile" type="string | URL" optional>
-  Your Dockerfile, relative to the file that calls `docker()` (or an absolute path or `URL`). ES builds it from its directory with `--build-arg ES_BASE=<ES's sandbox image>`. Start it with `ARG ES_BASE` and `FROM ${ES_BASE}` to layer on ES's image; from any other Debian or Ubuntu base, ES bakes Node and the harness on top, as for `from`.
+  Your Dockerfile, relative to the file that calls `docker()` (or an absolute path or `URL`). reeval builds it from its directory with `--build-arg REEVAL_BASE=<reeval's sandbox image>`. Start it with `ARG REEVAL_BASE` and `FROM ${REEVAL_BASE}` to layer on reeval's image; from any other Debian or Ubuntu base, reeval bakes Node and the harness on top, as for `from`.
 </Property>
 
 <Property name="image" type="string" optional>
-  An image that already has the harness baked in, used as is. ES doesn't build or pull it.
+  An image that already has the harness baked in, used as is. reeval doesn't build or pull it.
 </Property>
 
 <Property name="install" type="Array<string | { run: string, timeout?: string | number }>" optional>
@@ -79,69 +79,69 @@ These set what the container runs with, not what's in its image, so changing the
 
 ## Privilege warnings
 
-`root` and `capabilities` stay opt-in, and ES says so whenever a run uses them:
+`root` and `capabilities` stay opt-in, and reeval says so whenever a run uses them:
 
 ```text
 plan  2 evals · 2 cells · 2 attempts · ~2s serial (~1s at concurrency 4)
 WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))
-warning: extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))
+warning: extra capabilities in the sandbox: reeval.config.ts (docker({ capabilities: ['NET_RAW'] }))
 ```
 
 There's one line per place that set the sandbox: the config file, a profile's `defaults`, a `group` or an `evaluate`, however many evals inherit it. A sandbox with both gets both lines.
 
 | Where | What you see |
 |---|---|
-| `es run` and `es run --dry-run` | The lines under the plan, before any attempt starts, in every `--ui` |
+| `reeval run` and `reeval run --dry-run` | The lines under the plan, before any attempt starts, in every `--ui` |
 | GitHub Actions | Also a `::warning` annotation each, on the eval file for a group or eval |
-| `es run --dry-run --json` | `sandboxWarnings`: `kind` (`root` or `capabilities`), `level` (`config`, `profile`, `group` or `eval`), `where`, `file`, `capabilities` and `message` |
+| `reeval run --dry-run --json` | `sandboxWarnings`: `kind` (`root` or `capabilities`), `level` (`config`, `profile`, `group` or `eval`), `where`, `file`, `capabilities` and `message` |
 | The run record | The same list in `plan.sandboxWarnings`, shown in `summary.md` and on the studio's run page |
 
 ## Images and caching
 
-Each harness has its own sandbox image. `es image build` builds the images the config's evals need that are missing or stale; `es image build --dry-run` lists them and how each step stands (`✓` ready, `+` to build, `~` stale, `✗` missing), building and pulling nothing:
+Each harness has its own sandbox image. `reeval image build` builds the images the config's evals need that are missing or stale; `reeval image build --dry-run` lists them and how each step stands (`✓` ready, `+` to build, `~` stale, `✗` missing), building and pulling nothing:
 
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  ✓ base  evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  ✓ base  reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
 docker + install · 1 eval
-  ✓ base               evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
-  + install 1 command  evalsuite-install:<base id + commands>  (to build: not built yet)
+  ✓ base               reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  + from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
 docker:sqlite · 1 eval
-  + dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-<context + ES image id>  (to build: not built yet (evalsuite-dockerfile:sqlite-6030a60be3d263ca))
-  ✓ harness                              evalsuite-dockerfile:sqlite-<context + ES image id>  (ready: evalsuite-sandbox:cursor-0.1.0 built (e04d443bc8e2))
+  + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-6030a60be3d263ca))
+  ✓ harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (ready: reeval-sandbox:cursor-0.1.0 built (e04d443bc8e2))
 ```
 
 | Image | Tag | Rebuilt when |
 |---|---|---|
-| ES's sandbox image | `evalsuite-sandbox:<harness>-<adapter version>` | Missing, or ES's base build context changed (its `dev.evalsuite.context` label); its toolchain layer is `evalsuite-sandbox-base:latest` |
-| `from` | `evalsuite-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, on the digest the tag names then (its `dev.evalsuite.from-digest` label, and `image.from.digest` in the record); `es image build` rebuilds it when the tag has moved upstream |
-| `install` | `evalsuite-install:<hash of base id and commands>` | The base image's id or a command changes |
-| `dockerfile` | `evalsuite-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${ES_BASE}`, ES's image is rebuilt (the hash has its id) |
+| reeval's sandbox image | `reeval-sandbox:<harness>-<adapter version>` | Missing, or reeval's base build context changed (its `ai.reeval.context` label); its toolchain layer is `reeval-sandbox-base:latest` |
+| `from` | `reeval-sandbox:<harness>-<version>-<image slug>-<hash>` | First use, on the digest the tag names then (its `ai.reeval.from-digest` label, and `image.from.digest` in the record); `reeval image build` rebuilds it when the tag has moved upstream |
+| `install` | `reeval-install:<hash of base id and commands>` | The base image's id or a command changes |
+| `dockerfile` | `reeval-dockerfile:<name>-<hash>` | The Dockerfile or its context (less `.dockerignore`) changes, or, `FROM ${REEVAL_BASE}`, reeval's image is rebuilt (the hash has its id) |
 
-`es image build --force` rebuilds every image and pulls each base again. A `from` pinned to a digest (`node:22@sha256:…`) never moves.
+`reeval image build --force` rebuilds every image and pulls each base again. A `from` pinned to a digest (`node:22@sha256:…`) never moves.
 
 A rebuild removes the image its tag pointed at before, unless a container or another tag still uses it, and a `from` build drops its intermediate `…-base` tag once the harness is committed, so rebuilds leave no dangling images behind.
 
-Adapter versions: Cursor `0.1.0` (`@evalsuite/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
+Adapter versions: Cursor `0.1.0` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
-What ES adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `es` user, and the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.es/cache/images/<tag>.log`.
+What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `es` user, and the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
 
 Image builds don't count toward the eval timeout.
 
 ## Inside the container
 
-Every attempt gets a fresh container with the workspace at `/es/workspace`. The agent, setup steps and checks run as `es` (uid 10001, home `/home/es`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image ES builds has.
+Every attempt gets a fresh container with the workspace at `/es/workspace`. The agent, setup steps and checks run as `es` (uid 10001, home `/home/es`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image reeval builds has.
 
-Every image ES builds has the `es` user. `docker({ image })` with an image that doesn't fails with `<image> has no es user to run the sandbox as. …`: rebuild it with ES, or pass `root: true`.
+Every image reeval builds has the `es` user. `docker({ image })` with an image that doesn't fails with `<image> has no es user to run the sandbox as. …`: rebuild it with reeval, or pass `root: true`.
 
 ## Errors
 
 | Mistake | Message |
 |---|---|
-| Two bases | `docker() takes one base image, but got image and from. Use image (has the harness), from (a toolchain image ES bakes the harness onto) or dockerfile.` |
+| Two bases | `docker() takes one base image, but got image and from. Use image (has the harness), from (a toolchain image reeval bakes the harness onto) or dockerfile.` |
 | `dockerfile` and `install` | `docker() takes dockerfile or install, not both: put the install commands in the Dockerfile as RUN lines, so there's one recipe for the image.` |
 | A missing Dockerfile | `docker({ dockerfile: "./Dockerfile" }): <full path> doesn't exist. Paths are relative to the file that calls docker().` |
 | `env` on the sandbox | `Unknown docker() option "env". The sandbox is what's baked into the image; variables and secrets belong in defineEnvironment({ env }).` |
@@ -155,26 +155,26 @@ Every image ES builds has the `es` user. `docker({ image })` with an image that 
 | A bad install timeout | `docker({ install }) command "x": Invalid duration "5 min". Use e.g. "90s" or "15m".` (zero or negative: `A duration is more than zero`) |
 | An empty `image` | `docker({ image }) must be a non-empty string (got "")` |
 
-Before any attempt starts, ES builds every image the plan needs that isn't there, including its own image for each harness, three at a time, once each (see [Sandbox providers](/reference/sandbox/providers)). An image a group or eval sets that fails fails only its attempts; one the config sets stops the run.
+Before any attempt starts, reeval builds every image the plan needs that isn't there, including its own image for each harness, three at a time, once each (see [Sandbox providers](/reference/sandbox/providers)). An image a group or eval sets that fails fails only its attempts; one the config sets stops the run.
 
 | Situation | Message |
 |---|---|
 | Docker isn't running | `Docker is not running. Start Docker and try again.` (exit 2); on Windows, `… Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.` |
-| Docker runs Windows containers | `Docker is running Windows containers, but ES's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again.` (exit 2) |
+| Docker runs Windows containers | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again.` (exit 2) |
 | An `image` that isn't there | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` |
-| The config's image fails | The failure, then `The sandbox docker + install is set by es.config.ts for every eval, so nothing ran.` (exit 3) |
-| A non-Debian base | `Building the toolchain layer FROM alpine:3.20 failed: ES needs a Debian or Ubuntu based image (glibc and apt-get)` |
+| The config's image fails | The failure, then `The sandbox docker + install is set by reeval.config.ts for every eval, so nothing ran.` (exit 3) |
+| A non-Debian base | `Building the toolchain layer FROM alpine:3.20 failed: reeval needs a Debian or Ubuntu based image (glibc and apt-get)` |
 | A failing install step | `Building the install layer (N commands) failed: install i/N exited <code>: <command>` |
 | A failing Dockerfile | `Building evals/x.Dockerfile failed: a RUN step exited 42`, or BuildKit's error (`dockerfile parse error on line 2: unknown instruction: COPYY …`) |
 | A harness bootstrap that fails | `Baking the Cursor CLI onto <base> failed: Bootstrap command failed …` |
 
-Every build failure starts with that headline. A named cause follows when ES recognises one, then the failing step's own last lines (`  | …`, never ES's generated Dockerfile), then `(full log: .es/cache/images/<tag>.log)`:
+Every build failure starts with that headline. A named cause follows when reeval recognises one, then the failing step's own last lines (`  | …`, never reeval's generated Dockerfile), then `(full log: .reeval/cache/images/<tag>.log)`:
 
 ```text
 Building the install layer (1 command) failed: install 1/1 exited 1: dd if=/dev/zero …
-out of disk space (ENOSPC): free space for Docker (docker system df, es clean --images) and rerun
+out of disk space (ENOSPC): free space for Docker (docker system df, reeval clean --images) and rerun
   | dd: error writing '/dev/shm/fill': No space left on device
-(full log: .es/cache/images/evalsuite-install-4f0c2a1e9b7d3c55.log)
+(full log: .reeval/cache/images/reeval-install-4f0c2a1e9b7d3c55.log)
 ```
 
 | Cause | Named when |
@@ -188,6 +188,6 @@ A registry or network error (`no such host`, `i/o timeout`, `TLS handshake timeo
 ## Related
 
 - [Sandboxes guide](/guide/sandboxes)
-- [es image build and es clean](/reference/cli/image-clean)
+- [reeval image build and reeval clean](/reference/cli/image-clean)
 - [Egress](/reference/egress)
 - [fakeSandbox()](/reference/sandbox/fake)

@@ -24,13 +24,13 @@ const sh = (cwd: string, ...args: string[]) =>
   execFileSync('git', args, { cwd, env: GIT_ENV, encoding: 'utf8' }).trim()
 
 const HISTORY = 'evals/.history'
-const agent = (name = 'agent') => `import { evaluate, expect } from 'evalsuite'
+const agent = (name = 'agent') => `import { evaluate, expect } from 'reeval'
 evaluate('${name}', async (t) => {
   await t.send('write hello.txt')
   expect(await t.judge('Did it write hello.txt?')).toPass()
 })
 `
-const failing = `import { evaluate, expect } from 'evalsuite'
+const failing = `import { evaluate, expect } from 'reeval'
 evaluate('broken', async (t) => {
   await t.send('write hello.txt')
   await expect(t.exec('exit 4')).toSucceed()
@@ -38,11 +38,11 @@ evaluate('broken', async (t) => {
 `
 const harness = (text = 'Wrote it') => `{ files: { 'hello.txt': 'hi\\n' }, text: '${text}' }`
 
-/** An ES project that is its own committed git repo, with a known author. */
+/** A reeval project that is its own committed git repo, with a known author. */
 async function gitProject(name: string, files: Record<string, string>, extra = '') {
   const p = await project(name, {
-    '.gitignore': '.es/\nnode_modules/\nsandboxes/\n',
-    'es.config.ts': fakeConfig({ harness: harness(), extra }),
+    '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+    'reeval.config.ts': fakeConfig({ harness: harness(), extra }),
     ...files,
   })
   sh(p.dir, 'init', '-q', '-b', 'main')
@@ -64,8 +64,8 @@ const historyJson = async (dir: string, args: string[] = []) => {
 }
 
 describe('recording runs into evals/.history', () => {
-  test('es run writes scratch; es record promotes it next to the evals', async () => {
-    const p = await gitProject('record-basic', { 'evals/agent.es.ts': agent() })
+  test('reeval run writes scratch; reeval record promotes it next to the evals', async () => {
+    const p = await gitProject('record-basic', { 'evals/agent.eval.ts': agent() })
     assert.equal((await runCli(p.dir)).code, 0)
     assert.deepEqual(recordedRuns(p.dir), [], 'nothing recorded without --record')
     const { run } = readRun(p.dir)
@@ -90,7 +90,7 @@ describe('recording runs into evals/.history', () => {
     }
     assert.match(
       recorded.read('summary.md'),
-      /### ✓ evals\/agent\.es\.ts › agent/,
+      /### ✓ evals\/agent\.eval\.ts › agent/,
       'passes get detail',
     )
     assert.match(recorded.read('summary.md'), /Last message:\n\n> Wrote it/)
@@ -100,22 +100,22 @@ describe('recording runs into evals/.history', () => {
 
     assert.match((await runCli(p.dir, ['record', run.runId])).stdout, /already recorded/)
 
-    // The history folder and .es/ never make the next run dirty.
+    // The history folder and .reeval/ never make the next run dirty.
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     assert.equal(readRun(p.dir).run.git?.dirty, false)
     assert.equal(recordedRuns(p.dir).length, 2)
 
     const shown = await runCli(p.dir, ['show', 'latest', '--json'])
     assert.equal((JSON.parse(shown.stdout) as RunRecord).kind, 'es-run')
-    assert.match((await runCli(p.dir, ['show', run.runId, '--md'])).stdout, /^# ES run /)
+    assert.match((await runCli(p.dir, ['show', run.runId, '--md'])).stdout, /^# reeval run /)
     assert.match(
       (await runCli(p.dir, ['history'])).stdout,
-      /✓✓ +2\/2 +evals\/agent\.es\.ts › agent/,
+      /✓✓ +2\/2 +evals\/agent\.eval\.ts › agent/,
     )
   })
 
   test('a history file that is not a readable record is named on stderr, not silently skipped', async () => {
-    const p = await gitProject('record-unreadable', { 'evals/agent.es.ts': agent() })
+    const p = await gitProject('record-unreadable', { 'evals/agent.eval.ts': agent() })
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     const [good] = recordedRuns(p.dir)
     // What a merge that went wrong, or a copy cut short, leaves behind.
@@ -127,7 +127,7 @@ describe('recording runs into evals/.history', () => {
       const r = await runCli(p.dir, args)
       assert.equal(r.code, 0, `${args.join(' ')}: ${r.stderr}`)
       for (const file of [conflicted, truncated]) {
-        const warning = `warning: skipped ${file}: not a readable ES run record`
+        const warning = `warning: skipped ${file}: not a readable reeval run record`
         assert.equal(
           r.stderr.split(warning).length - 1,
           1,
@@ -142,7 +142,7 @@ describe('recording runs into evals/.history', () => {
   test('artifact levels, and config.record modes', async () => {
     const p = await gitProject(
       'record-levels',
-      { 'evals/agent.es.ts': agent(), 'evals/broken.es.ts': failing },
+      { 'evals/agent.eval.ts': agent(), 'evals/broken.eval.ts': failing },
       `history: { artifacts: 'failures' }, record: 'always',`,
     )
     assert.equal((await runCli(p.dir)).code, 1)
@@ -158,14 +158,14 @@ describe('recording runs into evals/.history', () => {
     assert.ok(pass?.trial.judgements.length, 'verdicts stay in the record')
 
     const scratch = readRun(p.dir).run.runId
-    await runCli(p.dir, ['run', 'agent.es'])
+    await runCli(p.dir, ['run', 'agent.eval'])
     const again = await runCli(p.dir, ['record', scratch])
     assert.match(again.stdout, /already recorded/)
     const none = await runCli(p.dir, ['record', scratch, '--artifacts', 'none'])
     assert.equal(none.code, 2)
     assert.match(none.stderr, /already recorded with different content.*never rewritten/)
 
-    const q = await gitProject('record-ci', { 'evals/agent.es.ts': agent() })
+    const q = await gitProject('record-ci', { 'evals/agent.eval.ts': agent() })
     assert.equal((await runCli(q.dir)).code, 0)
     const local = readRun(q.dir).run.runId
     assert.deepEqual(recordedRuns(q.dir), [], "record: 'ci' is the default, and this isn't CI")
@@ -181,7 +181,7 @@ describe('recording runs into evals/.history', () => {
   })
 
   test('two branches record, merge with zero conflicts, and old checkouts show old history', async () => {
-    const p = await gitProject('record-merge', { 'evals/agent.es.ts': agent() })
+    const p = await gitProject('record-merge', { 'evals/agent.eval.ts': agent() })
     sh(p.dir, 'checkout', '-q', '-b', 'a')
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
     sh(p.dir, 'add', '-A')
@@ -192,7 +192,7 @@ describe('recording runs into evals/.history', () => {
     sh(p.dir, 'checkout', '-q', 'main')
     sh(p.dir, 'checkout', '-q', '-b', 'b')
     assert.deepEqual(recordedRuns(p.dir), [], "b doesn't see a's run")
-    await writeFile(join(p.dir, 'evals/second.es.ts'), agent('second'))
+    await writeFile(join(p.dir, 'evals/second.eval.ts'), agent('second'))
     sh(p.dir, 'add', '-A')
     sh(p.dir, 'commit', '-q', '-m', 'add an eval')
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
@@ -212,7 +212,7 @@ describe('recording runs into evals/.history', () => {
       merged,
     )
     assert.deepEqual(view.orphaned, [])
-    const agentRow = view.rows.find((r) => r.id === 'evals/agent.es.ts › agent')
+    const agentRow = view.rows.find((r) => r.id === 'evals/agent.eval.ts › agent')
     assert.deepEqual(agentRow?.outcomes, ['pass', 'pass', 'pass'])
 
     sh(p.dir, 'checkout', '-q', commitA)
@@ -226,7 +226,7 @@ describe('recording runs into evals/.history', () => {
   })
 
   test('runs recorded before a rebase are flagged but still compared', async () => {
-    const p = await gitProject('record-rebase', { 'evals/agent.es.ts': agent() })
+    const p = await gitProject('record-rebase', { 'evals/agent.eval.ts': agent() })
     sh(p.dir, 'checkout', '-q', '-b', 'feature')
     await writeFile(join(p.dir, 'feature.txt'), 'x\n')
     sh(p.dir, 'add', '-A')
@@ -265,8 +265,11 @@ describe('recording runs into evals/.history', () => {
 
   test('recording refuses files that look like secrets, or that changed after the run', async () => {
     const leaked = 'totally-private-value-4242'
-    const p = await gitProject('record-secret', { 'evals/agent.es.ts': agent() })
-    await writeFile(join(p.dir, 'es.config.ts'), fakeConfig({ harness: harness(`Used ${leaked}`) }))
+    const p = await gitProject('record-secret', { 'evals/agent.eval.ts': agent() })
+    await writeFile(
+      join(p.dir, 'reeval.config.ts'),
+      fakeConfig({ harness: harness(`Used ${leaked}`) }),
+    )
     sh(p.dir, 'commit', '-qam', 'config')
     assert.equal((await runCli(p.dir)).code, 0)
     // A token that wasn't in the environment during the run, but is now.
@@ -283,7 +286,7 @@ describe('recording runs into evals/.history', () => {
     assert.equal(tampered.code, 2)
     assert.match(tampered.stderr, /changed since the run wrote it/)
 
-    const scan = readdirSync(join(p.dir, '.es/runs'), { recursive: true, withFileTypes: true })
+    const scan = readdirSync(join(p.dir, '.reeval/runs'), { recursive: true, withFileTypes: true })
       .filter((f) => f.isFile())
       .map((f) => readFileSync(join(f.parentPath, f.name), 'utf8'))
     assert.ok(
@@ -292,9 +295,9 @@ describe('recording runs into evals/.history', () => {
     )
   })
 
-  test('a dirty run saves worktree.patch, lockfile hashes and state; es checkout reproduces it', async () => {
+  test('a dirty run saves worktree.patch, lockfile hashes and state; reeval checkout reproduces it', async () => {
     const p = await gitProject('record-state', {
-      'evals/agent.es.ts': agent(),
+      'evals/agent.eval.ts': agent(),
       'package-lock.json': '{"lockfileVersion":3}\n',
       'src/app.js': 'export const v = 1\n',
     })
@@ -307,7 +310,7 @@ describe('recording runs into evals/.history', () => {
     const patch = read('worktree.patch')
     assert.match(patch, /\+export const v = 2/)
     assert.match(patch, /src\/new\.js/, 'untracked files are included')
-    assert.doesNotMatch(patch, /evals\/\.history|\.es\//, "ES's own output is not")
+    assert.doesNotMatch(patch, /evals\/\.history|\.reeval\//, "reeval's own output is not")
     assert.equal(run.git?.worktreePatch?.sha256, run.git?.diffHash)
     assert.deepEqual(
       run.dependencies.lockfiles.map((l) => l.path),
@@ -344,15 +347,15 @@ describe('recording runs into evals/.history', () => {
 
   test('a project reached through another spelling of its path records like any other', async () => {
     // A symlink here; on Windows an 8.3 short name (C:\\Users\\RUNNER~1). git reports its top
-    // level canonically, so paths ES works out against it must be spelled from the project's root.
+    // level canonically, so paths reeval works out against it must be spelled from the project's root.
     const p = await gitProject('record-symlink', {
-      'evals/agent.es.ts': agent(),
+      'evals/agent.eval.ts': agent(),
       'package-lock.json': '{"lockfileVersion":3}\n',
     })
     const link = join(tempDir('record-symlink-link'), 'project')
     symlinkSync(p.dir, link, 'junction')
     // Through --config: a symlinked cwd would be resolved by the OS.
-    const config = ['--config', join(link, 'es.config.ts')]
+    const config = ['--config', join(link, 'reeval.config.ts')]
     for (let i = 0; i < 2; i++) {
       const clean = await runCli(p.dir, ['run', '--record', ...config])
       assert.equal(clean.code, 0, clean.stdout + clean.stderr)
@@ -373,18 +376,18 @@ describe('recording runs into evals/.history', () => {
 
   test('paths print from the current directory when the config is reached through a symlink', async () => {
     // As on macOS, where the temp dir is /var/… and the current directory /private/var/….
-    const p = await gitProject('display-symlink', { 'evals/agent.es.ts': agent() })
+    const p = await gitProject('display-symlink', { 'evals/agent.eval.ts': agent() })
     const link = join(tempDir('display-symlink-link'), 'project')
     symlinkSync(p.dir, link, 'junction')
-    const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'es.config.ts')])
+    const r = await runCli(p.dir, ['run', '--record', '--config', join(link, 'reeval.config.ts')])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^ Results {2}\.es\/runs\/\S+\/summary\.md$/m)
+    assert.match(r.stdout, /^ Results {2}\.reeval\/runs\/\S+\/summary\.md$/m)
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
 
   test('a secret in the uncommitted changes stops the record', async () => {
-    const p = await gitProject('record-patch-secret', { 'evals/agent.es.ts': agent() })
+    const p = await gitProject('record-patch-secret', { 'evals/agent.eval.ts': agent() })
     await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)
     assert.equal((await runCli(p.dir)).code, 0)
     const r = await runCli(p.dir, ['record'])
@@ -395,7 +398,7 @@ describe('recording runs into evals/.history', () => {
 })
 
 describe('what a record says about comparability', () => {
-  const importing = `import { evaluate, expect } from 'evalsuite'
+  const importing = `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
 evaluate('agent', async (t) => {
   await t.send(prompt)
@@ -408,9 +411,9 @@ evaluate('agent', async (t) => {
     return JSON.parse(r.stdout) as { rows: Array<{ status: string; changes?: string[] }> }
   }
 
-  test('an imported helper is part of the fingerprint, and es compare names what changed', async () => {
+  test('an imported helper is part of the fingerprint, and reeval compare names what changed', async () => {
     const p = await gitProject('traced', {
-      'evals/agent.es.ts': importing,
+      'evals/agent.eval.ts': importing,
       'evals/helpers.ts': "export const prompt = 'write hello.txt'\n",
       'evals/unrelated.ts': 'export const x = 1\n',
     })
@@ -419,7 +422,7 @@ evaluate('agent', async (t) => {
     const [entry] = base.run.evals
     assert.deepEqual(
       entry?.sources.map((s) => s.path),
-      ['evals/agent.es.ts', 'evals/helpers.ts'],
+      ['evals/agent.eval.ts', 'evals/helpers.ts'],
     )
     for (const cell of entry?.cells ?? []) {
       assert.equal(cell.fingerprint, fingerprintOf(cell.fingerprintParts))
@@ -441,12 +444,12 @@ evaluate('agent', async (t) => {
     const text = await runCli(p.dir, ['compare'])
     assert.match(
       text.stdout,
-      /changed \(not comparable\) +evals\/agent\.es\.ts › agent: evals\/helpers\.ts changed/,
+      /changed \(not comparable\) +evals\/agent\.eval\.ts › agent: evals\/helpers\.ts changed/,
     )
 
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'write hello.txt'\n")
     await writeFile(
-      join(p.dir, 'es.config.ts'),
+      join(p.dir, 'reeval.config.ts'),
       fakeConfig({ harness: harness('Wrote it, differently') }),
     )
     assert.equal((await runCli(p.dir)).code, 0)
@@ -454,15 +457,15 @@ evaluate('agent', async (t) => {
     assert.deepEqual(config?.changes, ['harness config changed'])
   })
 
-  test('es compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
-    const flip = `import { evaluate, expect } from 'evalsuite'
+  test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
+    const flip = `import { evaluate, expect } from 'reeval'
 evaluate('flips', async (t) => {
   await t.send('write hello.txt')
-  expect(process.env.ES_TEST_BREAK ?? 'ok').toBe('ok')
+  expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
-    const p = await gitProject('fail-on-regression', { 'evals/a.es.ts': flip })
-    const broken = { env: { ES_TEST_BREAK: '1' } }
+    const p = await gitProject('fail-on-regression', { 'evals/a.eval.ts': flip })
+    const broken = { env: { REEVAL_TEST_BREAK: '1' } }
     const compareCode = async (...args: string[]) => {
       const r = await runCli(p.dir, ['compare', ...args])
       return { code: r.code, out: r.stdout + r.stderr }
@@ -473,14 +476,14 @@ evaluate('flips', async (t) => {
     const first = await compareCode()
     assert.equal(first.code, 0, first.out)
     assert.match(first.out, /No earlier recorded run to compare \S+ with: every eval is new\./)
-    assert.match(first.out, /✓ {2}new {2}evals\/a\.es\.ts › flips/)
+    assert.match(first.out, /✓ {2}new {2}evals\/a\.eval\.ts › flips/)
     assert.equal((await compareCode('--fail-on-regression')).code, 0)
     assert.equal(JSON.parse((await compareCode('--json')).out).base, null)
     assert.equal((await runCli(p.dir, ['run'], broken)).code, 1)
     const newFailing = await compareCode('--fail-on-regression')
     assert.equal(newFailing.code, 1, newFailing.out)
     assert.match(newFailing.out, /every eval is new, and 1 fails\./)
-    assert.match((await compareCode('--md')).out, /^### ES: \S+\n\nNo earlier recorded run/)
+    assert.match((await compareCode('--md')).out, /^### reeval: \S+\n\nNo earlier recorded run/)
 
     // With a recorded base: pass → fail regresses.
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
@@ -489,35 +492,35 @@ evaluate('flips', async (t) => {
     assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
 
     // A new eval that fails fails the check too; one that passes doesn't.
-    await writeFile(join(p.dir, 'evals/b.es.ts'), failing)
+    await writeFile(join(p.dir, 'evals/b.eval.ts'), failing)
     assert.equal((await runCli(p.dir)).code, 1)
     const added = await compareCode('--fail-on-regression')
     assert.equal(added.code, 1, added.out)
-    assert.match(added.out, /· → ✗ {2}new +evals\/b\.es\.ts › broken/)
-    await writeFile(join(p.dir, 'evals/b.es.ts'), agent('fresh'))
+    assert.match(added.out, /· → ✗ {2}new +evals\/b\.eval\.ts › broken/)
+    await writeFile(join(p.dir, 'evals/b.eval.ts'), agent('fresh'))
     assert.equal((await runCli(p.dir)).code, 0)
     const twin = await compareCode('--fail-on-regression')
     assert.equal(twin.code, 0, twin.out)
   })
 
-  test('es compare --fail-on-regression fails on a failing eval that changed (not comparable); a passing one is fine', async () => {
-    const edited = (prompt: string) => `import { evaluate, expect } from 'evalsuite'
+  test('reeval compare --fail-on-regression fails on a failing eval that changed (not comparable); a passing one is fine', async () => {
+    const edited = (prompt: string) => `import { evaluate, expect } from 'reeval'
 evaluate('edited', async (t) => {
   await t.send('${prompt}')
-  expect(process.env.ES_TEST_BREAK ?? 'ok').toBe('ok')
+  expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
-    const p = await gitProject('fail-on-drift', { 'evals/a.es.ts': edited('write hello.txt') })
+    const p = await gitProject('fail-on-drift', { 'evals/a.eval.ts': edited('write hello.txt') })
     const compareCode = async (...args: string[]) => {
       const r = await runCli(p.dir, ['compare', ...args])
       return { code: r.code, out: r.stdout + r.stderr }
     }
     assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
 
-    await writeFile(join(p.dir, 'evals/a.es.ts'), edited('write hello.txt!'))
-    assert.equal((await runCli(p.dir, ['run'], { env: { ES_TEST_BREAK: '1' } })).code, 1)
+    await writeFile(join(p.dir, 'evals/a.eval.ts'), edited('write hello.txt!'))
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_BREAK: '1' } })).code, 1)
     const failing = await compareCode('--fail-on-regression')
-    assert.match(failing.out, /✓ → ✗ {2}changed \(not comparable\) +evals\/a\.es\.ts › edited/)
+    assert.match(failing.out, /✓ → ✗ {2}changed \(not comparable\) +evals\/a\.eval\.ts › edited/)
     assert.equal(failing.code, 1, failing.out)
     assert.equal((await compareCode()).code, 0, 'without the flag, compare exits 0')
 
@@ -531,21 +534,21 @@ evaluate('edited', async (t) => {
   test("a turn's text is cut at 8 KB in the record; transcript.jsonl keeps it whole", async () => {
     const long = 'x'.repeat(20_000)
     const p = await project('turn-cap', {
-      'es.config.ts': fakeConfig({ harness: `{ text: '${long}' }` }),
-      'evals/t.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('long', async (t) => { await t.send('x') })\n`,
+      'reeval.config.ts': fakeConfig({ harness: `{ text: '${long}' }` }),
+      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (t) => { await t.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const [e] = readRun(p.dir).evals
     const text = e?.trial.turns[0]?.text ?? ''
     assert.ok(text.startsWith('x'.repeat(8 * 1024)) && !text.startsWith('x'.repeat(8 * 1024 + 1)))
-    assert.match(text, /\[es: truncated 20000 characters;/)
+    assert.match(text, /\[reeval: truncated 20000 characters;/)
     assert.ok(e?.read(e.trial.files.transcript?.path ?? '').includes(long))
   })
 
   test('cells join environments by digest, not name; attempts and verdicts have keys', async () => {
     const p = await project('joins', {
-      'es.config.ts': fakeConfig({ extra: 'concurrency: 1,' }),
-      'evals/e.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig({ extra: 'concurrency: 1,' }),
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const one = defineEnvironment('tools', { env: { FLAVOUR: 'one' } })
 const two = defineEnvironment('tools', { env: { FLAVOUR: 'two' } })
 evaluate('uses one', { environment: one, runs: 3 }, async (t) => {
@@ -589,43 +592,43 @@ evaluate('uses none', async (t) => { await t.send('x') })
 })
 
 describe('config discovery', () => {
-  const passing = (name: string) => `import { evaluate } from 'evalsuite'
+  const passing = (name: string) => `import { evaluate } from 'reeval'
 evaluate('${name}', async () => {})
 `
-  const wrongConfig = (name: string) => `import { evaluate, expect } from 'evalsuite'
+  const wrongConfig = (name: string) => `import { evaluate, expect } from 'reeval'
 evaluate('${name}', async () => expect('this config').toBe('never run'))
 `
 
   test('every command run from a nested subdirectory finds the project config and acts from its directory', async () => {
     const p = await gitProject('found-upward', {
-      'es.config.ts': fakeConfig({
-        harness: `{ id: process.env.ES_T_WHERE ?? 'unset', files: { 'hello.txt': 'hi\\n' }, text: 'Wrote it' }`,
+      'reeval.config.ts': fakeConfig({
+        harness: `{ id: process.env.REEVAL_T_WHERE ?? 'unset', files: { 'hello.txt': 'hi\\n' }, text: 'Wrote it' }`,
       }),
-      'evals/agent.es.ts': agent(),
+      'evals/agent.eval.ts': agent(),
       // Decoys a run that resolved from the current directory would pick up.
-      'src/deep/nested/evals/decoy.es.ts': wrongConfig('decoy'),
+      'src/deep/nested/evals/decoy.eval.ts': wrongConfig('decoy'),
       'src/deep/nested/marker.txt': 'here\n',
     })
-    await writeFile(join(p.dir, '.env.local'), 'ES_T_WHERE=root\n')
-    await writeFile(join(p.dir, 'src/deep/nested/.env.local'), 'ES_T_WHERE=cwd\n')
+    await writeFile(join(p.dir, '.env.local'), 'REEVAL_T_WHERE=root\n')
+    await writeFile(join(p.dir, 'src/deep/nested/.env.local'), 'REEVAL_T_WHERE=cwd\n')
     const sub = join(p.dir, 'src/deep/nested')
-    const config = '../../../es.config.ts'
+    const config = '../../../reeval.config.ts'
     const ok = async (args: string[]) => {
       const r = await runCli(sub, args)
-      assert.equal(r.code, 0, `es ${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.equal(r.code, 0, `reeval ${args.join(' ')}\n${r.stdout}${r.stderr}`)
       return r
     }
 
     const plan = await ok(['run', '--dry-run'])
-    assert.match(plan.stdout, /^plan {2}config \.\.\/\.\.\/\.\.\/es\.config\.ts · 1 eval · /m)
+    assert.match(plan.stdout, /^plan {2}config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · 1 eval · /m)
     assert.doesNotMatch(plan.stdout, /decoy/)
 
     const run = await ok(['run', '-v'])
-    assert.match(run.stdout, /plan +config \.\.\/\.\.\/\.\.\/es\.config\.ts · no profile · /)
+    assert.match(run.stdout, /plan +config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · no profile · /)
     const first = readRun(p.dir).run
     assert.deepEqual(
       first.evals.flatMap((e) => e.attempts.map((a) => `${e.id} ${a.id}`)),
-      ['evals/agent.es.ts › agent root/-/fake#1'],
+      ['evals/agent.eval.ts › agent root/-/fake#1'],
       "the config's .env.local, not the current directory's",
     )
 
@@ -636,12 +639,12 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     const history = JSON.parse((await ok(['history', '--json'])).stdout)
     assert.deepEqual(
       history.rows.map((r: { id: string }) => r.id),
-      ['evals/agent.es.ts › agent'],
+      ['evals/agent.eval.ts › agent'],
     )
     assert.equal(JSON.parse((await ok(['show', 'latest', '--json'])).stdout).kind, 'es-run')
     assert.match((await ok(['compare'])).stdout, /same/i)
     assert.deepEqual(JSON.parse((await ok(['query', 'failing_attempts', '--json'])).stdout), [])
-    assert.ok(existsSync(join(p.dir, '.es/history.db')))
+    assert.ok(existsSync(join(p.dir, '.reeval/history.db')))
     await ok(['analyze', '--context'])
     assert.match((await ok(['studio', 'build'])).stdout, /built \.\.\/\.\.\/\.\.\/studio-dist\//)
     assert.match(
@@ -649,7 +652,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
       /No eval runs in a Docker sandbox/,
       "the config's fake sandbox, not the default docker()",
     )
-    assert.match((await ok(['clean'])).stdout, / from \.\.\/\.\.\/\.\.\/\.es\/debug$/m)
+    assert.match((await ok(['clean'])).stdout, / from \.\.\/\.\.\/\.\.\/\.reeval\/debug$/m)
 
     assert.deepEqual(readdirSync(sub).sort(), ['.env.local', 'evals', 'marker.txt'])
     assert.equal((await ok(['run', '--dry-run', '--config', config])).code, 0)
@@ -657,10 +660,10 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
 
   test("a nested project's own config wins over the parent's, and --config wins over both", async () => {
     const p = await project('nearest-wins', {
-      'es.config.ts': fakeConfig(),
-      'evals/parent.es.ts': wrongConfig('parent'),
-      'packages/app/es.config.mjs': fakeConfig(),
-      'packages/app/evals/app.es.ts': passing('app'),
+      'reeval.config.ts': fakeConfig(),
+      'evals/parent.eval.ts': wrongConfig('parent'),
+      'packages/app/reeval.config.mjs': fakeConfig(),
+      'packages/app/evals/app.eval.ts': passing('app'),
       'packages/app/src/lib/index.ts': '',
     })
     const app = join(p.dir, 'packages/app')
@@ -670,19 +673,19 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     assert.equal(nested.code, 0, nested.stdout + nested.stderr)
     assert.deepEqual(
       readRun(app).run.evals.map((e) => e.id),
-      ['evals/app.es.ts › app'],
+      ['evals/app.eval.ts › app'],
     )
-    assert.equal(existsSync(join(p.dir, '.es')), false, "nothing under the parent's config")
+    assert.equal(existsSync(join(p.dir, '.reeval')), false, "nothing under the parent's config")
 
     // Twin: the parent's config, found from its own tree or named with --config, runs its eval.
     const parent = await runCli(join(p.dir, 'evals'))
     assert.equal(parent.code, 1, parent.stdout + parent.stderr)
-    assert.match(parent.stdout, /✗ evals\/parent\.es\.ts › parent/)
-    const named = await runCli(lib, ['run', '--config', '../../../../es.config.ts'])
+    assert.match(parent.stdout, /✗ evals\/parent\.eval\.ts › parent/)
+    const named = await runCli(lib, ['run', '--config', '../../../../reeval.config.ts'])
     assert.equal(named.code, 1, named.stdout + named.stderr)
     assert.deepEqual(
       readRun(p.dir).run.evals.map((e) => e.id),
-      ['evals/parent.es.ts › parent'],
+      ['evals/parent.eval.ts › parent'],
     )
   })
 })
@@ -736,7 +739,7 @@ describe('records from before a field existed', () => {
   test('a newer record keeps what it has', () => {
     const r = raw()
     r.plan.sandboxWarnings = [
-      { kind: 'root', level: 'config', where: 'es.config.ts', file: null, message: 'm' },
+      { kind: 'root', level: 'config', where: 'reeval.config.ts', file: null, message: 'm' },
     ]
     r.evals[1] = { ...(r.evals[1] as RunRecord['evals'][number]), todo: true }
     const read = readableRecord(r)
@@ -744,15 +747,15 @@ describe('records from before a field existed', () => {
     assert.equal(read.evals[1]?.todo, true)
   })
 
-  test('es show, show --md, history, query and compare read it next to a new run', async () => {
+  test('reeval show, show --md, history, query and compare read it next to a new run', async () => {
     const p = await fixture(OLD)
     const ok = async (args: string[]) => {
       const r = await runCli(p.dir, args)
-      assert.equal(r.code, 0, `es ${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.equal(r.code, 0, `reeval ${args.join(' ')}\n${r.stdout}${r.stderr}`)
       return r.stdout
     }
     assert.match(await ok(['show', oldRun]), /writes greet\.js/)
-    assert.match(await ok(['show', oldRun, '--md']), /# ES run 20260927T151935Z/)
+    assert.match(await ok(['show', oldRun, '--md']), /# reeval run 20260927T151935Z/)
     assert.match(await ok(['show', oldRun, '--json']), /"sandboxWarnings": \[\]/)
     await ok(['run', '--record', '--ui', 'plain'])
     const runs = recordedRuns(p.dir)
@@ -768,7 +771,7 @@ describe('records from before a field existed', () => {
   })
 })
 
-describe('records from a newer ES', () => {
+describe('records from a newer reeval', () => {
   const OLD = 'fixtures/records/before-100'
   const oldRun = '20260927T151935Z_facb81b_cursor-agent_07sv'
   const newRun = '20270101T000000Z_facb81b_cursor-agent_zz01'
@@ -783,13 +786,13 @@ describe('records from a newer ES', () => {
     execFileSync('cp', ['-R', join(history, oldRun), join(history, newRun)])
   }
 
-  test('a newer schemaVersion: es show says to upgrade ES, and the other readers skip it with a warning', async () => {
+  test('a newer schemaVersion: reeval show says to upgrade reeval, and the other readers skip it with a warning', async () => {
     const p = await fixture(OLD)
     await future(p.dir, (r) => {
       r.schemaVersion = 2
     })
     const upgrade =
-      /written by a newer ES \(schemaVersion 2; this ES reads up to 1\)\. Upgrade ES to read it\./
+      /written by a newer reeval \(schemaVersion 2; this reeval reads up to 1\)\. Upgrade reeval to read it\./
     const shown = await runCli(p.dir, ['show', newRun])
     assert.notEqual(shown.code, 0, shown.stdout + shown.stderr)
     assert.match(shown.stderr, upgrade)
@@ -799,7 +802,7 @@ describe('records from a newer ES', () => {
       ['studio', 'build', '--out', join(p.dir, 'site')],
     ]) {
       const r = await runCli(p.dir, args)
-      assert.equal(r.code, 0, `es ${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      assert.equal(r.code, 0, `reeval ${args.join(' ')}\n${r.stdout}${r.stderr}`)
       assert.match(r.stderr, new RegExp(`skipped ${HISTORY}/${newRun}\\.json: ${upgrade.source}`))
       assert.doesNotMatch(r.stderr, /Restore it from git/)
     }
@@ -812,18 +815,18 @@ describe('records from a newer ES', () => {
     assert.match(compared.stderr, upgrade)
   })
 
-  test('fields, values and transcript events a newer ES added are ignored by every reader', async () => {
+  test('fields, values and transcript events a newer reeval added are ignored by every reader', async () => {
     const p = await fixture(OLD)
     const schema = JSON.parse(
       readFileSync(join(testDir, '../schema/run-record.schema.json'), 'utf8'),
     )
     await future(p.dir, (r) => {
-      withUnknownFields(schema, r, () => ({ by: 'a newer ES', list: [1] }))
+      withUnknownFields(schema, r, () => ({ by: 'a newer reeval', list: [1] }))
       const record = r as unknown as RunRecord
       record.status = 'paused' as RunRecord['status']
       const attempt = record.evals[0]?.attempts[0] as RunRecord['evals'][number]['attempts'][number]
       attempt.outcome = 'cancelled' as typeof attempt.outcome
-      attempt.error = { kind: 'quota' as never, message: 'a kind this ES does not know' }
+      attempt.error = { kind: 'quota' as never, message: 'a kind this reeval does not know' }
       attempt.turns[0] = {
         ...(attempt.turns[0] as (typeof attempt.turns)[number]),
         status: 'paused' as never,
@@ -856,22 +859,22 @@ describe('records from a newer ES', () => {
       const r = await runCli(p.dir, args)
       assert.ok(
         r.code === 0 || (args[0] === 'compare' && r.code === 1),
-        `es ${args.join(' ')}\n${r.stdout}${r.stderr}`,
+        `reeval ${args.join(' ')}\n${r.stdout}${r.stderr}`,
       )
       assert.doesNotMatch(
         r.stderr,
         /TypeError|Cannot read|undefined is not|skipped/,
-        `es ${args.join(' ')}\n${r.stderr}`,
+        `reeval ${args.join(' ')}\n${r.stderr}`,
       )
     }
   })
 })
 
-describe('caches another ES wrote', () => {
-  test('.es/history-cache.json from another ES version is rebuilt, even at the same mtime', async () => {
+describe('caches another reeval wrote', () => {
+  test('.reeval/history-cache.json from another reeval version is rebuilt, even at the same mtime', async () => {
     const p = await fixture('fixtures/records/before-100')
     assert.equal((await runCli(p.dir, ['history'])).code, 0)
-    const file = join(p.dir, '.es/history-cache.json')
+    const file = join(p.dir, '.reeval/history-cache.json')
     const cache = JSON.parse(readFileSync(file, 'utf8'))
     for (const hit of Object.values(cache.files) as Array<{ entry: { author: string } }>) {
       hit.entry.author = 'from-a-stale-cache'

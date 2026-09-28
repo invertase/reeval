@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { LABEL } from '@evalsuite/sandbox-docker'
+import { LABEL } from '@reeval/sandbox-docker'
 
 /**
  * The containers a run left, as ids ('' when none), after waiting up to `deadlineMs`: they're

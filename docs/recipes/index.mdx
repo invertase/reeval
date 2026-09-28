@@ -3,10 +3,10 @@ title: Recipes
 description: Complete, copyable solutions to common eval tasks, each with its files, command and real output.
 ---
 
-Each recipe is one task end to end: a goal, the files, the command, the output and a few variations. Every eval and config on these pages was checked with `es run --dry-run`, and with the fake harness where it can run them.
+Each recipe is one task end to end: a goal, the files, the command, the output and a few variations. Every eval and config on these pages was checked with `reeval run --dry-run`, and with the fake harness where it can run them.
 
 ```bash
-npx es run --dry-run
+npx reeval run --dry-run
 ```
 
 ## Skills and docs
@@ -56,14 +56,14 @@ npx es run --dry-run
     Run every agent nightly and publish the studio.
   </Card>
   <Card title="Query history from your agent" icon="plug" href="/recipes/agent-mcp">
-    Point Cursor or Claude Code at `es mcp`.
+    Point Cursor or Claude Code at `reeval mcp`.
   </Card>
 </CardGroup>
 
 ## Case studies
 
 <CardGroup cols={2}>
-  <Card title="ES evaluating ES" icon="bug" href="/recipes/case-study-dogfood">
+  <Card title="reeval evaluating reeval" icon="bug" href="/recipes/case-study-dogfood">
     Lift +0, yet 4× fewer tool calls: what a real suite showed.
   </Card>
 </CardGroup>

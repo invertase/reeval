@@ -67,7 +67,7 @@ const ghEscape = (s: string, property = false) => {
   return property ? out.replace(/:/g, '%3A').replace(/,/g, '%2C') : out
 }
 
-/** The eval file's line in Vitest's formatted error (`❯ evals/a.es.ts:7:33`), if any. */
+/** The eval file's line in Vitest's formatted error (`❯ evals/a.eval.ts:7:33`), if any. */
 function locate(result: EvalResult): { line: string; col: string } | undefined {
   const text = stripAnsi(result.formattedErrors[0] ?? '')
   const file = result.file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -137,7 +137,7 @@ export class PlainRenderer implements Renderer {
         const files = `${e.files} eval file${e.files === 1 ? '' : 's'}`
         const order = `${this.#o.output.logOrder} logs`
         const setup = `harness ${e.harness} · sandbox ${e.sandbox} · concurrency ${e.concurrency}`
-        this.#write(c.dim(`es ${e.version} · ${files} · ${setup} · ${order}`))
+        this.#write(c.dim(`reeval ${e.version} · ${files} · ${setup} · ${order}`))
         return
       }
       case 'plan':

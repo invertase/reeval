@@ -550,7 +550,7 @@ describe('brokered endpoints through the proxy', () => {
       const started = Date.now()
       const r = await viaProxy(gw, HOST, h1.port, { method, path, headers: auth })
       assert.equal(r.status, 403, `${method} ${path}`)
-      assert.match(r.body, /refused .* isn't one of the endpoints ES brokers it for/)
+      assert.match(r.body, /refused .* isn't one of the endpoints reeval brokers it for/)
       assert.ok(Date.now() - started < 5_000, 'refused, not left hanging')
     }
     assert.equal(seen.length, 0, 'nothing reached upstream')
@@ -594,7 +594,7 @@ describe('egress policy through the proxy', () => {
       const r = await connect(gw, HOST, h1.port)
       assert.equal(r.ok, false)
       assert.equal(!r.ok && r.status, 403)
-      assert.match(!r.ok ? r.body : '', /blocked by the ES egress policy/)
+      assert.match(!r.ok ? r.body : '', /blocked by the reeval egress policy/)
       assert.ok(gw.lines.some((l) => l.includes('denied')))
     } finally {
       gw.close()
@@ -741,7 +741,7 @@ describe('egress policy through the proxy', () => {
 
 describe('brokered secrets through the proxy', () => {
   const SECRET = 'AIza-real-secret-value-0123456789abcdef'
-  const HOLDER = `es_secret_${'Q'.repeat(32)}`
+  const HOLDER = `reeval_secret_${'Q'.repeat(32)}`
   const sub = (over: Partial<Substitution> = {}): Substitution => ({
     name: 'GEMINI_API_KEY',
     placeholder: HOLDER,
@@ -1034,7 +1034,7 @@ describe('brokered secrets through the proxy', () => {
     try {
       const b = sub({
         name: 'OTHER_KEY',
-        placeholder: `es_secret_${'B'.repeat(32)}`,
+        placeholder: `reeval_secret_${'B'.repeat(32)}`,
         value: 'b-real-value-9876543210',
         hosts: [OTHER],
       })
@@ -1252,7 +1252,7 @@ describe('derived tokens through the proxy', () => {
       const body = JSON.parse(r.body) as Record<string, string>
       const access = body.accessToken ?? ''
       assert.doesNotMatch(r.body, /real-(access|refresh)-signature/)
-      assert.match(access, /^[\w-]+\.[\w-]+\.es_secret_[0-9A-Za-z]{32}$/)
+      assert.match(access, /^[\w-]+\.[\w-]+\.reeval_secret_[0-9A-Za-z]{32}$/)
       assert.deepEqual(parts(access).slice(0, 2), parts(ACCESS).slice(0, 2), 'header and claims')
       assert.notEqual(body.refreshToken, access, 'one placeholder per token')
       assert.equal(body.kind, 'user', 'other fields untouched')
@@ -1261,7 +1261,7 @@ describe('derived tokens through the proxy', () => {
         gw.lines.some((l) => l.includes('tokenised accessToken, refreshToken (CURSOR_API_KEY)')),
         gw.lines.join('\n'),
       )
-      assert.doesNotMatch(gw.lines.join('\n'), /real-(access|refresh)-signature|es_secret_/)
+      assert.doesNotMatch(gw.lines.join('\n'), /real-(access|refresh)-signature|reeval_secret_/)
     } finally {
       gw.close()
     }
@@ -1269,7 +1269,13 @@ describe('derived tokens through the proxy', () => {
     const plain = await startProxy()
     try {
       plain.proxy.setSubstitutions([
-        { name: 'X', placeholder: 'es_secret_x', value: 'x-value', hosts: [HOST], in: ['header'] },
+        {
+          name: 'X',
+          placeholder: 'reeval_secret_x',
+          value: 'x-value',
+          hosts: [HOST],
+          in: ['header'],
+        },
       ])
       assert.match((await exchange(plain)).body, /real-access-signature/)
     } finally {
@@ -1282,7 +1288,7 @@ describe('derived tokens through the proxy', () => {
     try {
       const r = await viaProxyH2(gw, HOST, h2.port, '/tokens/exchange')
       const { accessToken } = JSON.parse(r.body) as { accessToken: string }
-      assert.match(accessToken, /\.es_secret_[0-9A-Za-z]{32}$/)
+      assert.match(accessToken, /\.reeval_secret_[0-9A-Za-z]{32}$/)
       assert.doesNotMatch(r.body, /real-access-signature/)
     } finally {
       gw.close()
@@ -1338,7 +1344,7 @@ describe('derived tokens through the proxy', () => {
   test('the brokered key is scrubbed from the exchange response, as from any other', async () => {
     const gw = await startProxy(undefined, { derivedTokens })
     try {
-      const key = { name: 'CURSOR_API_KEY', placeholder: 'es_secret_key', value: REAL }
+      const key = { name: 'CURSOR_API_KEY', placeholder: 'reeval_secret_key', value: REAL }
       gw.proxy.setSubstitutions([{ ...key, hosts: [HOST], in: ['header'] }])
       const headers = { authorization: `Bearer ${key.placeholder}` }
       for (const path of ['/tokens/echo', '/tokens/denied']) {

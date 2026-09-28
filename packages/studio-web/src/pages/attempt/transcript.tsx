@@ -1,12 +1,5 @@
 import { useWindowVirtualizer } from '@tanstack/react-virtual'
 import {
-  formatDuration,
-  parseTranscript,
-  type TranscriptItem,
-  type TranscriptLine,
-  transcriptItems,
-} from 'evalsuite/view'
-import {
   Brain,
   ChevronRight,
   CircleAlert,
@@ -22,6 +15,13 @@ import {
   Wrench,
 } from 'lucide-react'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  formatDuration,
+  parseTranscript,
+  type TranscriptItem,
+  type TranscriptLine,
+  transcriptItems,
+} from 'reeval/view'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'

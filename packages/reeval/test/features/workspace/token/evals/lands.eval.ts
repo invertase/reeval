@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { privateRepo } from './env.ts'
 
 // The token fetched the repository on the host; the sandbox has the tree and not the token.

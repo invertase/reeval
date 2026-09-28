@@ -2,7 +2,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 
 export type Theme = 'light' | 'dark' | 'system'
 
-const KEY = 'es-studio-theme'
+const KEY = 'reeval-studio-theme'
 const media = () => window.matchMedia('(prefers-color-scheme: dark)')
 const listeners = new Set<() => void>()
 

@@ -1,5 +1,5 @@
-// A run in progress, as the studio shows it. Browser-safe. The running `es run` keeps one
-// `.es/staging/<runId>/live.json` (a `LiveProgress`) and replaces it whole on every change; it's
+// A run in progress, as the studio shows it. Browser-safe. The running `reeval run` keeps one
+// `.reeval/staging/<runId>/live.json` (a `LiveProgress`) and replaces it whole on every change; it's
 // never part of a run record, and it goes when the record lands.
 
 import { fillDefaults } from './record.ts'
@@ -42,7 +42,7 @@ export type LiveProgress = {
   schemaVersion: 1
   runId: string
   startedAt: string
-  /** The `es run` process and the host it runs on, so a killed run can be told apart. */
+  /** The `reeval run` process and the host it runs on, so a killed run can be told apart. */
   pid: number
   host: string
   /** Rewritten every few seconds while the run is alive. */
@@ -109,7 +109,7 @@ function readableAttempt(v: unknown): LiveAttempt | null {
 
 /**
  * A progress file as the studio reads it, or null when it isn't one it can read: half-written,
- * corrupt, or from a newer ES. Counts are recomputed from the attempts, never trusted.
+ * corrupt, or from a newer reeval. Counts are recomputed from the attempts, never trusted.
  */
 export function readableLiveProgress(value: unknown): LiveProgress | null {
   if (!isObj(value) || value.schemaVersion !== LIVE_SCHEMA_VERSION) return null

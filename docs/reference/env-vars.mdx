@@ -1,9 +1,9 @@
 ---
 title: Environment variables
-description: Every environment variable ES reads, and the flag each one stands in for.
+description: Every environment variable reeval reads, and the flag each one stands in for.
 ---
 
-`es run` loads `.env.local`, then `.env`, from the config's directory: where the `es.config.ts` ES found (or the `--config` file) lives, not the current directory. Variables already set in your shell win over both files, and `.env.local` wins over `.env`. `es analyze` loads them the same way, for its model key; other commands don't read env files.
+`reeval run` loads `.env.local`, then `.env`, from the config's directory: where the `reeval.config.ts` reeval found (or the `--config` file) lives, not the current directory. Variables already set in your shell win over both files, and `.env.local` wins over `.env`. `reeval analyze` loads them the same way, for its model key; other commands don't read env files.
 
 ```bash title=".env.local"
 CURSOR_API_KEY=...
@@ -25,23 +25,23 @@ TYPESAFE_AI_API_KEY=...
 
 A credential with whitespace or a line break in it (a key copied from a wrapped terminal line) stops the run with exit 2, naming the variable and the character.
 
-## ES settings
+## reeval settings
 
 | Variable | Same as | Effect |
 |---|---|---|
-| `ES_PROFILE` | `--profile` | The profile to size the run with; the flag wins |
-| `ES_CONCURRENCY` | `--concurrency` | Beats the config's `concurrency`, loses to the flag |
-| `ES_UI` | `--ui` | `live`, `plain` or `agent` |
-| `ES_LOG_ORDER` | `--log-order` | `stream` or `grouped` |
-| `ES_LOG_PREFIX` | `--log-prefix` | `task` or `none` |
-| `ES_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none` |
-| `ES_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
-| `ES_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
-| `ES_MCP_TOKEN` | `--token` | `es mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
-| `ES_NO_REPORT_HINT` | | `1` hides the line suggesting `es report` after an infra error or a crash |
-| `ES_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
-| `ES_FAKE_EXEC` | | Not read from your shell: on Windows, a random id ES sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
-| `ES_BASE` | | Not read from your shell: the build argument ES passes to a `docker({ dockerfile })` build, naming ES's image for the cell's harness. Start a Dockerfile `ARG ES_BASE` / `FROM ${ES_BASE}` |
+| `REEVAL_PROFILE` | `--profile` | The profile to size the run with; the flag wins |
+| `REEVAL_CONCURRENCY` | `--concurrency` | Beats the config's `concurrency`, loses to the flag |
+| `REEVAL_UI` | `--ui` | `live`, `plain` or `agent` |
+| `REEVAL_LOG_ORDER` | `--log-order` | `stream` or `grouped` |
+| `REEVAL_LOG_PREFIX` | `--log-prefix` | `task` or `none` |
+| `REEVAL_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none` |
+| `REEVAL_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
+| `REEVAL_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
+| `REEVAL_MCP_TOKEN` | `--token` | `reeval mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
+| `REEVAL_NO_REPORT_HINT` | | `1` hides the line suggesting `reeval report` after an infra error or a crash |
+| `REEVAL_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
+| `REEVAL_FAKE_EXEC` | | Not read from your shell: on Windows, a random id reeval sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
+| `REEVAL_BASE` | | Not read from your shell: the build argument reeval passes to a `docker({ dockerfile })` build, naming reeval's image for the cell's harness. Start a Dockerfile `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` |
 
 ## CI and agent detection
 
@@ -52,7 +52,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `GITHUB_ACTIONS=true` | `::group::` blocks for passing attempts, `::error` annotations for failing ones, colour on |
 | `GITHUB_STEP_SUMMARY` | `summary.md` is appended to it |
 | `GITHUB_*`, `GITLAB_CI`, `CI_JOB_URL`, `CI_COMMIT_REF_NAME` | Branch, PR and CI run URL in the record |
-| `CURSOR_AGENT`, `CLAUDECODE`, `AI_AGENT=<name>`, … | Agent output (std-env's agent detection). Set `ES_UI=plain` to see everything |
+| `CURSOR_AGENT`, `CLAUDECODE`, `AI_AGENT=<name>`, … | Agent output (std-env's agent detection). Set `REEVAL_UI=plain` to see everything |
 | `NO_COLOR`, `FORCE_COLOR` | Colour off or on. Otherwise on for a TTY or GitHub Actions, never in agent mode |
 
 ## Related

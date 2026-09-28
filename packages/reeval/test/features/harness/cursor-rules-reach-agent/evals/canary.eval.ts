@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { noRules, prompt } from './env.ts'
 
 // Must fail: without the rules, the agent can't know the word.

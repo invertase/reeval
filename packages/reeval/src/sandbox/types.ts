@@ -1,4 +1,4 @@
-import type { EgressTraffic, Substitution } from '@evalsuite/sandbox-docker'
+import type { EgressTraffic, Substitution } from '@reeval/sandbox-docker'
 import type { ExecResult } from '../types.ts'
 
 export type ExecOptions = { signal?: AbortSignal; env?: Record<string, string>; cwd?: string }

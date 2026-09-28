@@ -2,7 +2,7 @@
 // scheduler (useSchedulerChannel); anywhere else, an in-process scheduler with the same rules.
 import { type Limits, type Rank, Scheduler } from './core.ts'
 
-/** What a worker sends the run's scheduler (ES's engine, over the worker's IPC channel). */
+/** What a worker sends the run's scheduler (reeval's engine, over the worker's IPC channel). */
 export type ClientMessage =
   | { t: 'request'; id: string; limits: Limits; rank?: Rank }
   | { t: 'release'; id: string }
@@ -34,7 +34,7 @@ class LocalTransport implements Transport {
   }
 }
 
-/** Over the worker's IPC channel to ES's own engine: requests out, grants back. */
+/** Over the worker's IPC channel to reeval's own engine: requests out, grants back. */
 class ChannelTransport implements Transport {
   readonly #pending = new Map<string, Pending>()
   readonly #send: (message: ClientMessage) => void

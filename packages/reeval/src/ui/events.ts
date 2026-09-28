@@ -13,7 +13,7 @@ export type EvalResult = {
   /** Enclosing group names, outermost first. */
   group: string[]
   name: string
-  /** Absent only for tests ES didn't register (there are none today). */
+  /** Absent only for tests reeval didn't register (there are none today). */
   attempt: AttemptMeta | undefined
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number

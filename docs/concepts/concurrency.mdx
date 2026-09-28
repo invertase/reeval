@@ -5,7 +5,7 @@ description: How many attempts run at once, in what order, and how to choose a v
 
 Every attempt has its own sandbox, so attempts run in parallel: up to `concurrency` of them at once, across every eval, cell and file in the run. Tighter caps can sit on top for resources several attempts share.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 export default defineConfig({
   concurrency: 8,
   // Docker containers at once, whatever their image
@@ -32,11 +32,11 @@ The default is 8, but no more than one per CPU or per GB of memory where the san
 | Precedence | Set with |
 |---|---|
 | 1 | `--concurrency <n>` |
-| 2 | `ES_CONCURRENCY` |
-| 3 | `concurrency` in `es.config.ts` |
+| 2 | `REEVAL_CONCURRENCY` |
+| 3 | `concurrency` in `reeval.config.ts` |
 | 4 | The default, `min(8, CPUs, GB)` |
 
-The plan line and the run header show the value. With the config above, `ES_CONCURRENCY` beats the config's 8 and the flag beats both:
+The plan line and the run header show the value. With the config above, `REEVAL_CONCURRENCY` beats the config's 8 and the flag beats both:
 
 ```text
 plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 8)
@@ -44,7 +44,7 @@ plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~6m 00s at concurrency
 plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 6)
 ```
 
-Those are `es run --dry-run`, then with `ES_CONCURRENCY=2`, then with `--concurrency 6`. A dry run measures the Docker VM too when Docker is running, so its default matches the real run's; without Docker it measures the host.
+Those are `reeval run --dry-run`, then with `REEVAL_CONCURRENCY=2`, then with `--concurrency 6`. A dry run measures the Docker VM too when Docker is running, so its default matches the real run's; without Docker it measures the host.
 
 ## Caps per kind
 
@@ -60,7 +60,7 @@ Caps change how fast a run goes, not what it measures, so they're left out of th
 
 ## Which attempt goes next
 
-Among the attempts that could start, ES picks in this order:
+Among the attempts that could start, reeval picks in this order:
 
 | Order | Picks | So that |
 |---|---|---|
@@ -79,7 +79,7 @@ An attempt's [timeout](/concepts/attempt-lifecycle) starts when it gets a slot, 
 | Image builds (`from`, `dockerfile`, `install`) | Once, one at a time; attempts needing an image another is building wait and reuse it |
 | Ctrl-C | Running attempts are cancelled, queued ones skipped, every sandbox destroyed |
 
-Two `es run`s at once don't share caps: each has its own scheduler.
+Two `reeval run`s at once don't share caps: each has its own scheduler.
 
 ## Measured
 
@@ -96,7 +96,7 @@ A real benchmark: 16 Cursor `composer-2.5` attempts (a 2-environment matrix × `
 Per-attempt agent time was 12 to 28 s at every level, so there was no sign of rate limiting. At 8, one slow attempt set the wall time.
 
 <Info>
-  This benchmark ran on an earlier ES, when `examples/hello/es.bench.config.ts` crossed every eval with two environments. Today's bench config has two runs per cell and only the skill eval compares.
+  This benchmark ran on an earlier reeval, when `examples/hello/reeval.bench.config.ts` crossed every eval with two environments. Today's bench config has two runs per cell and only the skill eval compares.
 </Info>
 
 ## Choose a value

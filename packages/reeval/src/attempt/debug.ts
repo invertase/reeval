@@ -1,6 +1,6 @@
 // What an attempt's debug trace says about its plan and environment. The lines name secrets,
 // never their values; the payloads leave values out too, and are redacted besides.
-import type { EndpointMatch } from '@evalsuite/sandbox-docker'
+import type { EndpointMatch } from '@reeval/sandbox-docker'
 import type { AttemptDebug } from '../debug/attempt.ts'
 import { egressLabel } from '../egress.ts'
 import type { ResolvedEnvironment } from '../environment/resolve.ts'

@@ -1,5 +1,5 @@
 {
-  "name": "@evalsuite/harness-opencode",
+  "name": "@reeval/harness-opencode",
   "version": "0.2.0",
   "private": true,
   "description": "An AI SDK harness adapter for OpenCode 2 on any provider whose key a gateway can broker, over its ACP server (opencode acp)",

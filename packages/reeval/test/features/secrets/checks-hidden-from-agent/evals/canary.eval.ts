@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { agentSaw, tokens } from './env.ts'
 
 // Must fail: the agent doesn't see what the checks see.

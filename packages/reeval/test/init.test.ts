@@ -1,4 +1,4 @@
-// `es init`: from an empty directory to a passing `es run`, for every agent it offers; it never
+// `reeval init`: from an empty directory to a passing `reeval run`, for every agent it offers; it never
 // overwrites a file that differs without --force, and a second run changes nothing.
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -22,7 +22,7 @@ async function empty(name: string, sub = '') {
   return { root, dir, read: (path: string) => readFileSync(join(dir, path), 'utf8') }
 }
 
-const FILES = ['es.config.ts', 'evals/greet.es.ts', '.gitignore', 'package.json']
+const FILES = ['reeval.config.ts', 'evals/greet.eval.ts', '.gitignore', 'package.json']
 
 const planOf = async (dir: string, args: string[] = []) => {
   const r = await runCli(dir, ['run', '--dry-run', '--json', ...args])
@@ -30,22 +30,22 @@ const planOf = async (dir: string, args: string[] = []) => {
   return JSON.parse(r.stdout)
 }
 
-describe('es init', () => {
-  test('an empty directory, --harness none, then es run passes', async () => {
+describe('reeval init', () => {
+  test('an empty directory, --harness none, then reeval run passes', async () => {
     const p = await empty('init-none')
     const init = await runCli(p.dir, ['init', '--harness', 'none'])
     assert.equal(init.code, 0, init.stderr)
     for (const file of FILES) assert.match(init.stdout, new RegExp(`create +${file}`), file)
-    assert.match(init.stdout, /npx es run +passes now/)
+    assert.match(init.stdout, /npx reeval run +passes now/)
     const run = await runCli(p.dir, ['run'])
     assert.equal(run.code, 0, run.stdout + run.stderr)
-    assert.match(run.stdout, /✓ evals\/greet\.es\.ts › creates greet\.js/)
+    assert.match(run.stdout, /✓ evals\/greet\.eval\.ts › creates greet\.js/)
     const manifest = JSON.parse(p.read('package.json'))
-    assert.deepEqual(manifest.scripts, { eval: 'es run' })
+    assert.deepEqual(manifest.scripts, { eval: 'reeval run' })
     assert.deepEqual(manifest.devDependencies, { [pkg]: `^${version}` })
     assert.equal(
       p.read('.gitignore'),
-      '# ES: scratch runs and debug data; local keys\n.es/\n.env*\n',
+      '# reeval: scratch runs and debug data; local keys\n.reeval/\n.env*\n',
     )
   })
 
@@ -75,7 +75,7 @@ describe('es init', () => {
     })
   }
 
-  test('a second es init changes nothing', async () => {
+  test('a second reeval init changes nothing', async () => {
     const p = await empty('init-twice')
     await runCli(p.dir, ['init', '--harness', 'pi'])
     const before = FILES.map(p.read)
@@ -87,32 +87,32 @@ describe('es init', () => {
 
   test('refuses to overwrite a file that differs, writing nothing, until --force', async () => {
     const p = await empty('init-refuse')
-    await writeFile(join(p.dir, 'es.config.ts'), 'export default {}\n')
+    await writeFile(join(p.dir, 'reeval.config.ts'), 'export default {}\n')
     const refused = await runCli(p.dir, ['init', '--yes'])
     assert.equal(refused.code, 2)
     assert.match(
       refused.stderr,
-      /^es: es init won't overwrite files in \.: es\.config\.ts exists and differs\. Nothing was written\. Pass --force to overwrite them\.\n$/,
+      /^reeval: reeval init won't overwrite files in \.: reeval\.config\.ts exists and differs\. Nothing was written\. Pass --force to overwrite them\.\n$/,
     )
-    assert.equal(p.read('es.config.ts'), 'export default {}\n')
+    assert.equal(p.read('reeval.config.ts'), 'export default {}\n')
     for (const file of FILES.slice(1)) assert.ok(!existsSync(join(p.dir, file)), file)
     const forced = await runCli(p.dir, ['init', '--yes', '--force'])
     assert.equal(forced.code, 0, forced.stderr)
-    assert.match(forced.stdout, /overwrite +es\.config\.ts/)
-    assert.match(p.read('es.config.ts'), /cursor\(\{ model: 'composer-2\.5' \}\)/)
+    assert.match(forced.stdout, /overwrite +reeval\.config\.ts/)
+    assert.match(p.read('reeval.config.ts'), /cursor\(\{ model: 'composer-2\.5' \}\)/)
 
     const other = await empty('init-other-config')
-    await writeFile(join(other.dir, 'es.config.mjs'), 'export default {}\n')
+    await writeFile(join(other.dir, 'reeval.config.mjs'), 'export default {}\n')
     const shadowed = await runCli(other.dir, ['init', '--yes'])
     assert.equal(shadowed.code, 2)
-    assert.match(shadowed.stderr, /es\.config\.mjs exists already/)
+    assert.match(shadowed.stderr, /reeval\.config\.mjs exists already/)
   })
 
   test('merges into an existing package.json and .gitignore', async () => {
     const p = await empty('init-merge')
     const manifest = { name: 'mine', scripts: { test: 'node --test' }, dependencies: { a: '1' } }
     await writeFile(join(p.dir, 'package.json'), JSON.stringify(manifest, null, 4))
-    await writeFile(join(p.dir, '.gitignore'), 'node_modules\n/.es')
+    await writeFile(join(p.dir, '.gitignore'), 'node_modules\n/.reeval')
     const r = await runCli(p.dir, ['init', '--yes'])
     assert.equal(r.code, 0, r.stderr)
     assert.match(r.stdout, /update +package\.json +script eval, devDependency/)
@@ -122,7 +122,7 @@ describe('es init', () => {
       `${JSON.stringify(
         {
           ...manifest,
-          scripts: { test: 'node --test', eval: 'es run' },
+          scripts: { test: 'node --test', eval: 'reeval run' },
           devDependencies: { [pkg]: `^${version}` },
         },
         null,
@@ -131,10 +131,10 @@ describe('es init', () => {
     )
     assert.equal(
       p.read('.gitignore'),
-      'node_modules\n/.es\n\n# ES: scratch runs and debug data; local keys\n.env*\n',
+      'node_modules\n/.reeval\n\n# reeval: scratch runs and debug data; local keys\n.env*\n',
     )
 
-    // Its own eval script and ES dependency stay.
+    // Its own eval script and reeval dependency stay.
     const own = await empty('init-own')
     const mine = { scripts: { eval: 'vitest' }, dependencies: { [pkg]: '1.0.0' } }
     await writeFile(join(own.dir, 'package.json'), `${JSON.stringify(mine, null, 2)}\n`)
@@ -152,7 +152,7 @@ describe('es init', () => {
     const p = await empty('init-dry', 'a b/evals project')
     const dry = await runCli(p.root, ['init', 'a b/evals project', '--yes', '--dry-run'])
     assert.equal(dry.code, 0, dry.stderr)
-    assert.match(dry.stdout, /^es init · a b\/evals project \(nothing written: --dry-run\)\n/)
+    assert.match(dry.stdout, /^reeval init · a b\/evals project \(nothing written: --dry-run\)\n/)
     assert.ok(!existsSync(join(p.root, 'a b')))
     const real = await runCli(p.root, ['init', 'a b/evals project', '--harness', 'none'])
     assert.equal(real.code, 0, real.stderr)
@@ -175,7 +175,7 @@ describe('es init', () => {
     const bad = await runCli(p.dir, ['init', '--harness', 'gemini'])
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--harness must be one of cursor, claude-code, .*none \(got gemini\)/)
-    assert.ok(!existsSync(join(p.dir, 'es.config.ts')))
+    assert.ok(!existsSync(join(p.dir, 'reeval.config.ts')))
   })
 
   test('the prompt takes a number, a name or Enter, and asks again', async () => {

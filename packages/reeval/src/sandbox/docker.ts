@@ -12,7 +12,7 @@ import {
   SANDBOX_ROOT,
   type Substitution,
   WORKSPACE_DIR,
-} from '@evalsuite/sandbox-docker'
+} from '@reeval/sandbox-docker'
 import { type AttemptDebug, attemptDebug } from '../debug/attempt.ts'
 import '../debug/docker.ts'
 import { allowedHosts, egressLabel } from '../egress.ts'
@@ -84,7 +84,7 @@ export async function createDockerSandbox(
 ): Promise<DockerSandbox> {
   const image = options.image ?? descriptor.image ?? DEFAULT_IMAGE
   if (!(await imageInfo(image))) {
-    throw new InfraError(`Docker image ${image} not found. Build it with: es image build`)
+    throw new InfraError(`Docker image ${image} not found. Build it with: reeval image build`)
   }
   const { brokering, substitutions = [] } = options
   const brokered = [
@@ -125,7 +125,7 @@ export async function createDockerSandbox(
     // Always, so every attempt's egress is recorded; a restricted policy can't start without it.
     egress: {
       policy,
-      log: process.env.ES_DEBUG ? (line) => console.error(line) : undefined,
+      log: process.env.REEVAL_DEBUG ? (line) => console.error(line) : undefined,
       onEvent,
       onUnsubstituted: ({ name, where, in: places, method, url }) =>
         console.warn(
@@ -137,7 +137,7 @@ export async function createDockerSandbox(
         ...(brokering.tokens ? { derivedTokens: [brokering.tokens] } : {}),
         onRefused: ({ method, url }) =>
           console.warn(
-            `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints ES brokers it for`,
+            `warning: the egress gateway refused ${method} ${url}: it carries ${brokering.credential}'s placeholder and isn't one of the endpoints reeval brokers it for`,
           ),
       }),
     },
@@ -160,7 +160,7 @@ export async function createDockerSandbox(
   if (network.egress?.active === false && brokered.length > 0) {
     await Promise.resolve(network.destroy()).catch(() => {})
     throw new InfraError(
-      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and ES adds it.`,
+      `Can't keep ${brokered.join(', ')} out of the sandbox: credential brokering could not start (${network.egress.reason}). The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker({ from: '${image}' }) or docker({ dockerfile }), and reeval adds it.`,
     )
   }
   const workdir = posix.join(SANDBOX_ROOT, WORKSPACE_DIR)

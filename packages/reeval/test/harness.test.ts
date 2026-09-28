@@ -15,12 +15,12 @@ import {
   AntigravityStreamTranslator,
   antigravityEndpoints,
   toUsage as antigravityUsage,
-} from '@evalsuite/harness-antigravity'
+} from '@reeval/harness-antigravity'
 import {
   CODEX_ENDPOINTS,
   CODEX_HOME_SKILLS_DIR,
   CODEX_WORKSPACE_SKILLS_DIR,
-} from '@evalsuite/harness-codex'
+} from '@reeval/harness-codex'
 import {
   CURSOR_SDK_BUILTIN_TOOLS,
   CURSOR_SDK_HOME_SKILLS_DIR,
@@ -30,19 +30,19 @@ import {
   CursorSdkStreamTranslator,
   cursorSdkEndpoints,
   toUsage as cursorUsage,
-} from '@evalsuite/harness-cursor-sdk'
+} from '@reeval/harness-cursor-sdk'
 import {
   GOOSE_ENDPOINTS,
   GOOSE_HOME_SKILLS_DIR,
   GOOSE_WORKSPACE_SKILLS_DIR,
-} from '@evalsuite/harness-goose'
+} from '@reeval/harness-goose'
 import {
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
   openCodeEndpoints,
-} from '@evalsuite/harness-opencode'
-import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@evalsuite/harness-pi'
-import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
+} from '@reeval/harness-opencode'
+import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@reeval/harness-pi'
+import { applyTransformations, hostAllowed, onEndpoint } from '@reeval/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
@@ -326,7 +326,7 @@ describe('the OpenCode harness', () => {
     )
     assert.throws(
       () => opencode({ model: 'google-vertex/gemini-3.8-flash' }),
-      /^UsageError: opencode\(\): ES can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
+      /^UsageError: opencode\(\): reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
     )
     assert.throws(() => opencode({ model: 'nope/m' }), /OpenCode has no provider "nope"/)
   })
@@ -335,7 +335,7 @@ describe('the OpenCode harness', () => {
     assert.throws(
       () =>
         resolveConfig({ harness: [{ kind: 'opencode', model: 'google-vertex/x' }] } as never, '/p'),
-      /^UsageError: opencode\(\) in es\.config\.ts: ES can't run OpenCode on Vertex/,
+      /^UsageError: opencode\(\) in reeval\.config\.ts: reeval can't run OpenCode on Vertex/,
     )
   })
 
@@ -880,7 +880,7 @@ const HOST_CREDENTIALS = [
 ]
 
 /**
- * The rules an agent's real adapter asks the sandbox for, given the auth ES passes it, while the
+ * The rules an agent's real adapter asks the sandbox for, given the auth reeval passes it, while the
  * host has `env` set (which the adapter must not read).
  */
 async function adapterRules(kind: AgentKind, env: Record<string, string>, model = 'm') {
@@ -1532,8 +1532,8 @@ describe('a failed tool call keeps its error', () => {
 })
 
 /**
- * A harness that emits `parts` for every turn, through a real HarnessAgent, as ES drives it.
- * `stream` is the agent's `fullStream`, stamped as ES stamps it for `normaliseStream`.
+ * A harness that emits `parts` for every turn, through a real HarnessAgent, as reeval drives it.
+ * `stream` is the agent's `fullStream`, stamped as reeval stamps it for `normaliseStream`.
  */
 async function turnThrough(
   parts: HarnessV1StreamPart[],
@@ -1581,7 +1581,7 @@ async function turnThrough(
   try {
     return { usage: tokenUsage(await result.totalUsage), served, stream, text: await result.text }
   } catch {
-    // A harness's `error` part fails the turn, as it fails ES's; `stream` has it.
+    // A harness's `error` part fails the turn, as it fails reeval's; `stream` has it.
     return { usage: null, served, stream, text: null }
   }
 }
@@ -1606,7 +1606,7 @@ describe("agy's retried model calls, through HarnessAgent and the normaliser", (
 
   test("a retry that answered: the turn's text and transcript hold its reply once, and a retry", async () => {
     // agy ends this real turn ERROR ("The stream was interrupted") though the retry answered; as
-    // SUCCESS, the turn's text is what ES records for it.
+    // SUCCESS, the turn's text is what reeval records for it.
     const parts = agyParts('provider-retried.ndjson', (s) =>
       s.replace('"status":"ERROR"', '"status":"SUCCESS"'),
     )

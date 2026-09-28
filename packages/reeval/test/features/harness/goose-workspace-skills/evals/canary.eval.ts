@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Must fail: Goose's workspace skills go to its own .goose/skills, not .agents/skills.

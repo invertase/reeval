@@ -1,6 +1,6 @@
-import { evaluate } from 'evalsuite'
-import { opencode } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate } from 'reeval'
+import { opencode } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 evaluate('both harnesses', async () => {})
 evaluate(

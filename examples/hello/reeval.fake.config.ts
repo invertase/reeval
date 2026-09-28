@@ -1,16 +1,16 @@
 // Runs the evals that need no credentials, Docker or network: a fake agent writes canned files
 // into a temp dir, and the judge returns a canned verdict. The fake agent writes the house-style
-// greeting only when it's given a skill, so skill.es.ts shows the compare and its lift.
-// (python.es.ts needs the real agent and custom.es.ts needs a Gemini key in the sandbox.)
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeJudge } from 'evalsuite/judge'
-import { fakeSandbox } from 'evalsuite/sandbox'
+// greeting only when it's given a skill, so skill.eval.ts shows the compare and its lift.
+// (python.eval.ts needs the real agent and custom.eval.ts needs a Gemini key in the sandbox.)
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
 
 const packageJson = '{ "type": "module" }\n'
 
 export default defineConfig({
-  include: ['evals/hello.es.ts', 'evals/preferences.es.ts', 'evals/skill.es.ts'],
+  include: ['evals/hello.eval.ts', 'evals/preferences.eval.ts', 'evals/skill.eval.ts'],
   harness: fakeHarness({
     files: {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: this is the fake agent's file content

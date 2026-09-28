@@ -1,4 +1,4 @@
-// `es init`: scaffolds a project that passes on the fake agent, with one real agent configured.
+// `reeval init`: scaffolds a project that passes on the fake agent, with one real agent configured.
 // It plans every file first and writes nothing when one would overwrite a file that differs.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join, relative, resolve, sep } from 'node:path'
@@ -12,7 +12,7 @@ import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { AgentHarnessDescriptor } from './types.ts'
 
-/** The agents `es init` offers, in the order it lists them, with the model it pins. */
+/** The agents `reeval init` offers, in the order it lists them, with the model it pins. */
 export const INIT_HARNESSES: ReadonlyArray<{
   kind: AgentKind
   label: string
@@ -44,8 +44,8 @@ const cellOf = (h: { kind: AgentKind; model: string }) => harnessId(descriptorOf
 
 const CHOICES: InitChoice[] = [...INIT_HARNESSES.map((h) => h.kind), 'none']
 const DEFAULT_CHOICE: InitChoice = 'cursor'
-const GITIGNORE = ['.es/', '.env*']
-const EVAL_FILE = 'evals/greet.es.ts'
+const GITIGNORE = ['.reeval/', '.env*']
+const EVAL_FILE = 'evals/greet.eval.ts'
 
 export type InitAction = {
   /** Relative to the project, with `/` on every platform. */
@@ -89,7 +89,7 @@ const fakeAgent = fakeHarness({
   // with GOOGLE_GENERATIVE_AI_API_KEY.
   defaultProfile: { ci: 'pr' },
   profiles: {
-    // es run --profile fake: the evals on the fake agent.
+    // reeval run --profile fake: the evals on the fake agent.
     fake: { defaults: { harness: fakeAgent, sandbox: fakeSandbox() } },
 ${profiles}
   },`
@@ -105,7 +105,7 @@ import { ${sandboxImports} } from '${pkg}/sandbox'
 
 ${fakeAgent}
 export default defineConfig({
-  include: ['evals/**/*.es.ts'],
+  include: ['evals/**/*.eval.ts'],
 ${body}
 })
 `
@@ -131,7 +131,7 @@ evaluate('creates greet.js', async (t) => {
 
 const read = (path: string) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined)
 
-/** A file ES owns: created when missing, kept when the same, overwritten only with `force`. */
+/** A file reeval owns: created when missing, kept when the same, overwritten only with `force`. */
 function owned(
   dir: string,
   path: string,
@@ -142,12 +142,13 @@ function owned(
 ): InitAction {
   const existing = read(join(dir, path))
   if (existing === undefined) return { path, action: 'create', note, content }
-  if (existing === content) return { path, action: 'keep', note: 'already as es init writes it' }
+  if (existing === content)
+    return { path, action: 'keep', note: 'already as reeval init writes it' }
   if (!force) conflicts.push(`${path} exists and differs`)
   return { path, action: 'overwrite', note, content }
 }
 
-/** The entries ES needs (`.es/`, `.env*`) that a `.gitignore`'s text doesn't list. */
+/** The entries reeval needs (`.reeval/`, `.env*`) that a `.gitignore`'s text doesn't list. */
 export function missingGitignoreEntries(text: string): string[] {
   const lines = new Set(text.split(/\r?\n/).map((l) => l.trim().replace(/^\//, '')))
   return GITIGNORE.filter((e) => !lines.has(e) && !lines.has(e.replace(/\/$/, '')))
@@ -158,7 +159,7 @@ function gitignore(dir: string): InitAction {
   const missing = missingGitignoreEntries(existing ?? '')
   if (!missing.length) return { path: '.gitignore', action: 'keep', note: GITIGNORE.join(', ') }
   const lead = existing && !existing.endsWith('\n') ? '\n' : ''
-  const block = `${existing ? `${lead}\n` : ''}# ES: scratch runs and debug data; local keys\n${missing.join('\n')}\n`
+  const block = `${existing ? `${lead}\n` : ''}# reeval: scratch runs and debug data; local keys\n${missing.join('\n')}\n`
   return {
     path: '.gitignore',
     action: existing === undefined ? 'create' : 'update',
@@ -177,7 +178,7 @@ function packageJson(dir: string, pkg: string, version: string): InitAction {
       name: name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-') || 'evals',
       private: true,
       type: 'module',
-      scripts: { eval: 'es run' },
+      scripts: { eval: 'reeval run' },
       devDependencies: { [pkg]: range },
     }
     return {
@@ -196,7 +197,7 @@ function packageJson(dir: string, pkg: string, version: string): InitAction {
   const notes: string[] = []
   const scripts = { ...(manifest.scripts as Record<string, string> | undefined) }
   if (!scripts.eval) {
-    scripts.eval = 'es run'
+    scripts.eval = 'reeval run'
     manifest.scripts = scripts
     notes.push('script eval')
   }
@@ -219,7 +220,7 @@ function packageJson(dir: string, pkg: string, version: string): InitAction {
   }
 }
 
-/** Everything `es init` would do in `dir`, without writing. */
+/** Everything `reeval init` would do in `dir`, without writing. */
 export function planInit(options: {
   dir: string
   choice: InitChoice
@@ -229,13 +230,13 @@ export function planInit(options: {
 }): InitPlan {
   const { dir, choice, force, pkg, version } = options
   const conflicts: string[] = []
-  const other = CONFIG_FILES.filter((f) => f !== 'es.config.ts' && existsSync(join(dir, f)))
+  const other = CONFIG_FILES.filter((f) => f !== 'reeval.config.ts' && existsSync(join(dir, f)))
   if (other.length && !force) conflicts.push(`${other.join(', ')} exists already`)
   const real = harnessOf(choice)
   const actions = [
     owned(
       dir,
-      'es.config.ts',
+      'reeval.config.ts',
       configSource(pkg, choice),
       real
         ? `harness ${cellOf(real)}; profiles fake, pr, nightly`
@@ -253,7 +254,7 @@ export function planInit(options: {
 /** Asks which agent to configure, by number or name; the empty answer takes the default. */
 export async function askHarness(input: Readable, output: Writable): Promise<InitChoice> {
   const lines = [
-    'Which agent should es.config.ts run? The fake profile needs no keys or Docker.',
+    'Which agent should reeval.config.ts run? The fake profile needs no keys or Docker.',
     ...INIT_HARNESSES.map((h, i) => `  ${i + 1}) ${h.label.padEnd(12)} ${cellOf(h)}, ${keyOf(h)}`),
     `  ${CHOICES.length}) None         the fake agent only`,
   ]
@@ -264,7 +265,8 @@ export async function askHarness(input: Readable, output: Writable): Promise<Ini
     for (;;) {
       output.write(`Agent [1]: `)
       const next = await answers.next()
-      if (next.done) throw new UsageError('es init got no answer. Pass --harness <name> or --yes.')
+      if (next.done)
+        throw new UsageError('reeval init got no answer. Pass --harness <name> or --yes.')
       const answer = String(next.value).trim().toLowerCase()
       if (!answer) return DEFAULT_CHOICE
       const byNumber = CHOICES[Number(answer) - 1]
@@ -282,12 +284,13 @@ export async function askHarness(input: Readable, output: Writable): Promise<Ini
 
 function packageManager(dir: string): { install: string; exec: string } {
   for (let d = resolve(dir); ; d = dirname(d)) {
-    if (existsSync(join(d, 'pnpm-lock.yaml'))) return { install: 'pnpm install', exec: 'pnpm es' }
-    if (existsSync(join(d, 'yarn.lock'))) return { install: 'yarn', exec: 'yarn es' }
-    if (existsSync(join(d, 'bun.lock'))) return { install: 'bun install', exec: 'bunx es' }
+    if (existsSync(join(d, 'pnpm-lock.yaml')))
+      return { install: 'pnpm install', exec: 'pnpm reeval' }
+    if (existsSync(join(d, 'yarn.lock'))) return { install: 'yarn', exec: 'yarn reeval' }
+    if (existsSync(join(d, 'bun.lock'))) return { install: 'bun install', exec: 'bunx reeval' }
     if (existsSync(join(d, 'package-lock.json')) || dirname(d) === d) break
   }
-  return { install: 'npm install', exec: 'npx es' }
+  return { install: 'npm install', exec: 'npx reeval' }
 }
 
 export type InitIO = {
@@ -297,7 +300,7 @@ export type InitIO = {
   cwd: string
 }
 
-/** `es init [dir]`: plans the scaffold, refuses conflicts without `--force`, then writes it. */
+/** `reeval init [dir]`: plans the scaffold, refuses conflicts without `--force`, then writes it. */
 export async function initCommand(flags: Flags, args: string[], io: InitIO): Promise<number> {
   const manifest = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'))
   const dir = resolve(io.cwd, args[0] ?? '.')
@@ -312,7 +315,7 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
   else if (io.input.isTTY) choice = await askHarness(io.input, io.output)
   else {
     throw new UsageError(
-      'es init asks which agent to configure, and there is no terminal to ask in. Pass --harness <name> or --yes.',
+      'reeval init asks which agent to configure, and there is no terminal to ask in. Pass --harness <name> or --yes.',
     )
   }
   const plan = planInit({
@@ -325,11 +328,11 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
   const where = posix(relative(io.cwd, dir)) || '.'
   if (plan.conflicts.length) {
     throw new UsageError(
-      `es init won't overwrite files in ${where}: ${plan.conflicts.join('; ')}. Nothing was written. Pass --force to overwrite them.`,
+      `reeval init won't overwrite files in ${where}: ${plan.conflicts.join('; ')}. Nothing was written. Pass --force to overwrite them.`,
     )
   }
   const dry = !!flags['dry-run']
-  io.out(`es init · ${where}${dry ? ' (nothing written: --dry-run)' : ''}`)
+  io.out(`reeval init · ${where}${dry ? ' (nothing written: --dry-run)' : ''}`)
   const width = Math.max(...plan.actions.map((a) => a.path.length))
   for (const a of plan.actions) {
     io.out(`  ${a.action.padEnd(9)} ${a.path.padEnd(width)}  ${a.note}`)

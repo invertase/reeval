@@ -6,7 +6,7 @@
 117 features: 117 covered on at least one tier, 0 known gaps. Features per tier: unit 107, plan 28, fake 32, docker 37, real 20.
 
 - **unit**: plain `node:test` cases, including runner-level tests through the CLI
-- **plan**: `es run --dry-run --json` snapshots in `plan.test.ts`
+- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`
 - **fake**, **docker**: feature fixtures in `features.test.ts` on the fake sandbox and in Docker
 - **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness
 - `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing
@@ -18,7 +18,7 @@
 | `defineConfig` (object or function) and its defaults | ✓ 1 | ✓ 1 | — | — | — |
 | Config and option mistakes exit 2 with the fix | ✓ 2 | — | — | — | — |
 | `.env` and `.env.local` loading, from the config's directory | ✓ 1 | — | — | — | — |
-| Finding the nearest `es.config.*` upward from the current directory; `--config` wins | ✓ 3 | — | ● 1 | ● 1 | — |
+| Finding the nearest `reeval.config.*` upward from the current directory; `--config` wins | ✓ 3 | — | ● 1 | ● 1 | — |
 | `harness` lists × `runs`, and `--runs` | ✓ 2 | ✓ 2 | — | — | — |
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 3 | ✓ 1 | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 1 | — | — | — |
@@ -26,7 +26,7 @@
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 2 | — | — | — | — |
 | Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 3 | — | — | — |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — |
-| `es run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — |
+| `reeval run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — |
 | `budget.attempts`, `budget.duration` and `--force` | ✓ 2 | ✓ 1 | — | — | — |
 | `evaluate.only`, `.skip`, `.todo` and `.for`; `group.only` | ✓ 5 | ✓ 1 | — | — | — |
 | `group.skip` and `group.todo`, and todo shown in the plan, summary, record and studio | ✓ 2 | ✓ 1 | — | — | — |
@@ -62,7 +62,7 @@
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | — |
 | `secrets: { unbrokered }` and the unbrokered warning | ✓ 4 | — | — | — | — |
-| Secrets masked in everything ES writes | ✓ 6 | — | ● 1 | ● 1 | — |
+| Secrets masked in everything reeval writes | ✓ 6 | — | ● 1 | ● 1 | — |
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — |
 | `extend`, overrides and the environment digest | ✓ 2 | — | ● 1 | ● 1 | — |
@@ -75,17 +75,17 @@
 | Docker: run, diff, and removal, on timeout too | ✓ 3 | — | — | — | — |
 | Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker | ✓ 2 | — | — | — | — |
 | `docker({ install })` layers | ✓ 3 | ✓ 1 | — | — | — |
-| `docker({ dockerfile })` and `ES_BASE` | ✓ 3 | ✓ 1 | — | ● 6 | — |
+| `docker({ dockerfile })` and `REEVAL_BASE` | ✓ 3 | ✓ 1 | — | ● 6 | — |
 | Docker confinement: the `es` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 7 | — | — | ● 1 | — |
 | Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them | ✓ 4 | ✓ 2 | — | — | — |
 | `docker({ memory, cpus, pids })` and their defaults | ✓ 4 | — | — | ● 1 | — |
 | `docker({ from })` toolchain images | ✓ 2 | — | — | — | — |
 | Preflight: every sandbox prepared before any attempt; a failure fails only its cells, or stops the run from the config | ✓ 3 | — | — | — | — |
 | The sandbox provider prepare contract: check, key, prepare, classify (a scripted provider and Docker) | ✓ 6 | — | — | — | — |
-| `from` digests: recorded, kept by `es run`, flagged by `--dry-run` and rebuilt by `es image build` when the tag moves | ✓ 1 | — | — | — | — |
+| `from` digests: recorded, kept by `reeval run`, flagged by `--dry-run` and rebuilt by `reeval image build` when the tag moves | ✓ 1 | — | — | — | — |
 | Image build failures: the headline first, ENOSPC and exit 137 named, transient errors retried | ✓ 7 | — | — | — | — |
-| `es clean --images`, and no `-base` tag or replaced image left behind | ✓ 2 | — | — | — | — |
-| `es image build` (every image, every failure, exit 3, `--force`) and its `--dry-run` | ✓ 2 | — | — | — | — |
+| `reeval clean --images`, and no `-base` tag or replaced image left behind | ✓ 2 | — | — | — | — |
+| `reeval image build` (every image, every failure, exit 3, `--force`) and its `--dry-run` | ✓ 2 | — | — | — | — |
 | `egress`: allowlist or deny-all, enforced in Docker and recorded per attempt | ✓ 3 | ✓ 2 | — | ● 6 | ● 2 |
 | The harness's key never enters the container | ✓ 3 | — | — | — | ● 2 |
 | Ports: through the tunnel, or published without the gateway | ✓ 2 | — | — | — | — |
@@ -128,37 +128,37 @@
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
 | Budget-stopped runs are recorded with status `budget` | ✓ 2 | — | — | — | — |
-| Recording, merges across branches, rebases and `es checkout` | ✓ 3 | — | — | — | — |
-| `es history`, `es show` and `es compare`, with `--json` and `--md` | ✓ 5 | — | — | — | ◐ 2 (2 without a canary) |
-| `es compare --fail-on-regression` | ✓ 2 | — | — | — | — |
-| `es query` | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
-| `es mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP | ✓ 6 | — | — | — | — |
-| `es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
+| Recording, merges across branches, rebases and `reeval checkout` | ✓ 3 | — | — | — | — |
+| `reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md` | ✓ 5 | — | — | — | ◐ 2 (2 without a canary) |
+| `reeval compare --fail-on-regression` | ✓ 2 | — | — | — | — |
+| `reeval query` | ✓ 1 | — | — | — | ◐ 1 (1 without a canary) |
+| `reeval mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP | ✓ 6 | — | — | — | — |
+| `reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
-| Effort (tool calls, agent time) next to lift in the `es run` summary, `summary.md`, `es compare` and the studio | ✓ 3 | — | — | — | — |
-| `es analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 6 | — | — | — | — |
-| `es analyze` caches in `.es/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
-| `es studio` and `es studio build` | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
-| The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.es/debug`, in `es studio` only | ✓ 4 | — | — | — | — |
-| Runs in progress in `es studio`: `es run`'s `.es/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 9 | — | — | — | — |
+| Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio | ✓ 3 | — | — | — | — |
+| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 6 | — | — | — | — |
+| `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
+| `reeval studio` and `reeval studio build` | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
+| The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 4 | — | — | — | — |
+| Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 9 | — | — | — | — |
 
 ## CLI and runner
 
 | Feature | unit | plan | fake | docker | real |
 |---|:-:|:-:|:-:|:-:|:-:|
-| `es run --dry-run` checks each sandbox image: ready, to build, stale or missing | ✓ 1 | — | — | — | — |
+| `reeval run --dry-run` checks each sandbox image: ready, to build, stale or missing | ✓ 1 | — | — | — | — |
 | Eval files load as TypeScript, ESM, CommonJS and JSON (extensionless, circular, top-level await), each file in a process of its own; a broken tsconfig or syntax error fails loudly | ✓ 7 | — | — | — | — |
 | A harness session that doesn't become ready within `startTimeout` (default 90s) is retried once, then an infra error; its sandbox goes and the other attempts carry on | ✓ 3 | — | — | — | — |
 | A worker that dies, throws or runs out of memory fails its attempts; a CLI that crashes or is killed takes its workers and sandboxes with it | ✓ 4 | — | — | — | — |
 | Exit codes 0, 1, 2, 3, 130 and 143 | ✓ 5 | — | — | — | — |
 | Exit code precedence (a failure and an infra error in one run) | ✓ 1 | — | — | — | — |
 | Output modes, renderers and GitHub Actions groups | ✓ 4 | — | — | — | — |
-| `--log-order`, `--log-prefix` and `--output-logs` through `es run` | ✓ 1 | — | — | — | — |
+| `--log-order`, `--log-prefix` and `--output-logs` through `reeval run` | ✓ 1 | — | — | — | — |
 | `-v`/`--verbose`: the timestamped per-attempt phase trace (plan, image, container, environment, brokering, turns and tool calls, checks, judge, gateway requests, teardown) | ✓ 8 | — | — | — | ◐ 1 (1 without a canary) |
 | `-vv`/`--trace`: raw payloads, docker commands with their output, gateway headers, DNS decisions, the resolved config and environment, millisecond times | ✓ 2 | — | — | — | — |
-| Local debug data: `.es/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 3 | — | — | — | ◐ 1 (1 without a canary) |
+| Local debug data: `.reeval/debug/<run>/…/debug.log` always, `trace.ndjson` (a capped buffer) on failure or with `--trace`, never in the history folder | ✓ 3 | — | — | — | ◐ 1 (1 without a canary) |
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — |
-| `config.debug` (`keep`, `traceBufferMb`) and `es clean` | ✓ 2 | — | — | — | — |
+| `config.debug` (`keep`, `traceBufferMb`) and `reeval clean` | ✓ 2 | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 4 | — | — | — | — |
 | Eval timeouts, Ctrl-C and SIGTERM | ✓ 5 | — | — | — | — |
 | The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — |

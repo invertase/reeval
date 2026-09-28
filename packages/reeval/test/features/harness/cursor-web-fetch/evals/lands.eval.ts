@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { plain, prompt, traceId } from './env.ts'
 
 // The agent really fetched the page, and the transcript shows the fetch. The Cursor SDK drops

@@ -219,7 +219,7 @@ export function forwarderMain(
     linkStreams(socket, mux.open(proxyPort)),
   )
   server.on('error', (error) => {
-    io.error(`evalsuite egress forwarder: ${error.message}`)
+    io.error(`reeval egress forwarder: ${error.message}`)
     io.exit(1)
   })
   server.listen(proxyPort, '127.0.0.1', () => mux.ready())

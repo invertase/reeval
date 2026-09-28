@@ -3,7 +3,7 @@ title: Harnesses
 description: Run evals on Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex, or on several at once as separate cells.
 ---
 
-A harness is the coding agent ES drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
+A harness is the coding agent reeval drives. The same eval runs on any of them, so you can see whether your skill helps one agent and not another.
 
 ```ts title="evals/harnesses.ts"
 import { antigravity, claudeCode, codex, cursor, goose, opencode, pi } from '{{ pkg }}/harness'
@@ -39,7 +39,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=...
 OPENAI_API_KEY=...
 ```
 
-Each harness authenticates only with its own key, which stays on the host. ES never falls back to an `AI_GATEWAY_API_KEY`, a subscription or a keychain login. Real harnesses need `docker()`.
+Each harness authenticates only with its own key, which stays on the host. reeval never falls back to an `AI_GATEWAY_API_KEY`, a subscription or a keychain login. Real harnesses need `docker()`.
 
 ## Run OpenCode on any provider
 
@@ -48,17 +48,17 @@ export const ocClaude = opencode({ model: 'anthropic/claude-haiku-4-5' })
 export const ocRouter = opencode({ model: 'openrouter/openai/gpt-5.4-mini' })
 ```
 
-OpenCode's model id names its provider, and the provider picks the key: `anthropic/…` needs `ANTHROPIC_API_KEY`, and only that key is brokered. ES runs it on any of the providers whose key OpenCode sends in a header, and refuses the rest (Vertex, Azure, subscriptions, local servers) at plan time. Bedrock runs on a Bedrock API key (`AWS_BEARER_TOKEN_BEDROCK`) in its `AWS_REGION`. The [OpenCode reference](/reference/harness/opencode#supported-providers) lists both.
+OpenCode's model id names its provider, and the provider picks the key: `anthropic/…` needs `ANTHROPIC_API_KEY`, and only that key is brokered. reeval runs it on any of the providers whose key OpenCode sends in a header, and refuses the rest (Vertex, Azure, subscriptions, local servers) at plan time. Bedrock runs on a Bedrock API key (`AWS_BEARER_TOKEN_BEDROCK`) in its `AWS_REGION`. The [OpenCode reference](/reference/harness/opencode#supported-providers) lists both.
 
 ## Run under another harness
 
-```ts title="es.claude.config.ts"
+```ts title="reeval.claude.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 import { claude } from './evals/harnesses.ts'
 
 export default defineConfig({
-  include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+  include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
   harness: claude,
   sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
@@ -67,21 +67,21 @@ export default defineConfig({
 ```
 
 ```bash
-npx es image build --config es.claude.config.ts
-npx es run --config es.claude.config.ts
+npx reeval image build --config reeval.claude.config.ts
+npx reeval run --config reeval.claude.config.ts
 ```
 
-Each harness has its own sandbox image with its agent baked in, such as `evalsuite-sandbox:antigravity-0.1.0` or `evalsuite-sandbox:cursor-0.1.0`. `es image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity, pi and Codex run their CLIs, and OpenCode and Goose their ACP servers.
+Each harness has its own sandbox image with its agent baked in, such as `reeval-sandbox:antigravity-0.1.0` or `reeval-sandbox:cursor-0.1.0`. `reeval image build` builds the images for the harnesses the config plans. Cursor's agent runs through the Cursor TypeScript SDK; Claude Code, Antigravity, pi and Codex run their CLIs, and OpenCode and Goose their ACP servers.
 
 ## Run several harnesses as cells
 
-```ts title="es.agents.config.ts"
+```ts title="reeval.agents.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 import { agy, composer } from './evals/harnesses.ts'
 
 export default defineConfig({
-  include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+  include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
   harness: [composer, agy],
   sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
@@ -93,15 +93,15 @@ export default defineConfig({
 `harness` is the one option that takes a list: each harness is its own [cell](/concepts/matrix), and each compare variant runs on every one. The `greet` evals and the house-greeting compare on Cursor and Antigravity, twice each:
 
 ```bash
-npx es run --config es.agents.config.ts --runs 2 --log-order grouped
+npx reeval run --config reeval.agents.config.ts --runs 2 --log-order grouped
 ```
 
 ```text
 plan  3 evals · 8 cells · 16 attempts · ~12m 31s serial (~3m 08s at concurrency 4)
-es 0.0.1 · 2 eval files · harness cursor:composer-2.5, antigravity:gemini-3.8-flash-medium · sandbox docker · concurrency 4 · grouped logs
+reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5, antigravity:gemini-3.8-flash-medium · sandbox docker · concurrency 4 · grouped logs
 …
 Summary
- evals/hello.es.ts
+ evals/hello.eval.ts
    greet module
      ✓ creates a tested greet module                4/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
@@ -109,7 +109,7 @@ Summary
      ✓ adds a default name in a follow-up turn      4/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
          antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
- evals/skill.es.ts
+ evals/skill.eval.ts
    house greeting
      ✓ greets in the house style                    4/8 · 100% gated  8 attempts
          cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
@@ -129,7 +129,7 @@ Lift and effort are always against the control on the same harness. Without the 
 
 ## Name cells with ids
 
-```ts title="evals/guide-matrix.es.ts"
+```ts title="evals/guide-matrix.eval.ts"
 harness: [
   cursor({ model: 'composer-2.5' }), // id cursor:composer-2.5
   cursor({ model: 'composer-2.5', params: { fast: 'true' }, id: 'fast' }),
@@ -139,16 +139,16 @@ harness: [
 A harness's id defaults to `<kind>:<model>`. It names the cell (`cursor:composer-2.5/with-house-greeting/docker`), so two harnesses of the same kind and model need distinct ids, even when their `params` differ:
 
 ```text
-es: evals/guide-matrix.es.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
+reeval: evals/guide-matrix.eval.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
 ```
 
-`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalog lists (`fast=true` for `composer-2.5`), and ES records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
+`params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalog lists (`fast=true` for `composer-2.5`), and reeval records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
 
-Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit.harness` lists ids too.
+Filter a run by id, as in `npx reeval run skill antigravity`, and a profile's `limit.harness` lists ids too.
 
 ## Compare on some harnesses
 
-```ts title="evals/guide-matrix.es.ts"
+```ts title="evals/guide-matrix.eval.ts"
 {
   harness: [composer, claude, agy],
   compare: {
@@ -161,7 +161,7 @@ Filter a run by id, as in `npx es run skill antigravity`, and a profile's `limit
 
 ```text
 eval                                                         harnesses  variants  runs  attempts  notes
-evals/guide-matrix.es.ts › house greeting on every agent ›…  3          1         5     20
+evals/guide-matrix.eval.ts › house greeting on every agent ›…  3          1         5     20
 ```
 
 `compare.harness` runs the variants only on the listed harnesses; the others run the control alone. Here that's three controls and one variant, five times each: 20 attempts instead of 30.
@@ -189,7 +189,7 @@ A list replaces the inherited harnesses. `add` appends one or a list to them, an
 | [pi](/reference/harness/pi) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
 | [Codex](/reference/harness/codex) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 
-- **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; ES recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
+- **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
 - **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
 - **Antigravity**: Its CLI always tries `play.googleapis.com` and `antigravity-unleash.goog`; a restricted egress policy refuses them and records them under the record's `egress.expectedBlocked`.
 - **OpenCode**: Its key is the model's provider's (`anthropic/claude-haiku-4-5` takes `ANTHROPIC_API_KEY`), on any of the 199 providers whose key OpenCode sends in a header on known hosts; the other 22 are refused at plan time. No `mcp.sse` transport: those servers are refused at plan time (exit 2). No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: `mcp.exa.ai` is one of its automatic hosts. MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its `execute` tool; the first prompt waits until they've connected.
@@ -199,7 +199,7 @@ A list replaces the inherited harnesses. `add` appends one or a list to them, an
 
 [//]: # (/generated:harness-matrix)
 
-Partial means ES records the served model from the gateway's requests only. Each harness's page has the details.
+Partial means reeval records the served model from the gateway's requests only. Each harness's page has the details.
 
 ## Where each agent reads context
 
@@ -217,7 +217,7 @@ Partial means ES records the served model from the gateway's requests only. Each
 
 [//]: # (/generated:harness-layout)
 
-ES writes an environment's rules and skills where each agent looks, so one environment works on every harness. The environment's digest hashes content, not paths, so it's the same on each.
+reeval writes an environment's rules and skills where each agent looks, so one environment works on every harness. The environment's digest hashes content, not paths, so it's the same on each.
 
 ## Next
 

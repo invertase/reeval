@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 /** A setup step that reads the repository the workspace starts as. */
 export const built = defineEnvironment('built', ({ git }) => ({

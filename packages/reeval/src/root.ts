@@ -14,7 +14,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-// ES's one resource locator: every other module finds ES's own files (package.json, dist/,
+// reeval's one resource locator: every other module finds reeval's own files (package.json, dist/,
 // docker/, assets/) and requires through here. The build rewrites the inlined packages'
 // `new URL(…, import.meta.url)` lookups to `ownFileURL` and fails on any other import.meta.url.
 // This file is directly in src/, and the build puts every chunk directly in dist/, so the
@@ -22,7 +22,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const HERE = import.meta.url
 
 /**
- * Whether ES runs as a single-file executable (`bun build --compile`, scripts/bun-compile.mjs).
+ * Whether reeval runs as a single-file executable (`bun build --compile`, scripts/bun-compile.mjs).
  * Its own files are embedded in it, in a package's layout, at the root of Bun's virtual
  * filesystem, beside the bundled code.
  */
@@ -31,7 +31,7 @@ export const COMPILED = /^file:\/\/\/(?:\$bunfs|[A-Za-z]:\/~BUN)\//.test(HERE)
 export const PACKAGE_DIR = fileURLToPath(new URL(COMPILED ? './' : '../', HERE))
 export const DIST_DIR = join(PACKAGE_DIR, 'dist')
 
-/** One of ES's own files, by its path in the package (`docker`, `dist/studio-app`, …). */
+/** One of reeval's own files, by its path in the package (`docker`, `dist/studio-app`, …). */
 export const ownFile = (path: string): string => join(PACKAGE_DIR, path)
 
 /**
@@ -48,7 +48,7 @@ export function ownFileURL(path: string): URL {
 const extracted = new Map<string, string>()
 
 /**
- * One of ES's own directories, as a real one on disk. Compiled, it's copied out of the
+ * One of reeval's own directories, as a real one on disk. Compiled, it's copied out of the
  * executable once, to a cache directory named for its contents: `docker build` and copying the
  * studio app need real files.
  */
@@ -90,16 +90,16 @@ function cacheDir(): string {
       : process.platform === 'darwin'
         ? join(homedir(), 'Library', 'Caches')
         : join(homedir(), '.cache'))
-  return join(base, 'evalsuite')
+  return join(base, 'reeval')
 }
 
-/** `require` as seen from ES's package: its dependencies and Node's built-ins. */
+/** `require` as seen from reeval's package: its dependencies and Node's built-ins. */
 export const ownRequire = createRequire(ownFile('package.json'))
 
 let versions: Record<string, string> | undefined
 
 /**
- * The version of one of ES's dependencies, as installed; compiled, as bundled, from the
+ * The version of one of reeval's dependencies, as installed; compiled, as bundled, from the
  * `versions.json` embedded beside its files. Throws for a package it doesn't have.
  */
 export function ownVersion(name: string): string {
@@ -112,21 +112,21 @@ export function ownVersion(name: string): string {
 
 const manifest = JSON.parse(readFileSync(ownFile('package.json'), 'utf8'))
 
-/** This ES's package name and version, from its package.json. */
+/** This reeval's package name and version, from its package.json. */
 export const PACKAGE_NAME: string = manifest.name
 export const PACKAGE_VERSION: string = manifest.version
 
-/** The names a project imports ES by: the package's, and the monorepo's alias for it. */
-export const PACKAGE_NAMES: readonly string[] = [...new Set([PACKAGE_NAME, 'evalsuite'])]
+/** The names a project imports reeval by: the package's, and the monorepo's alias for it. */
+export const PACKAGE_NAMES: readonly string[] = [...new Set([PACKAGE_NAME, 'reeval'])]
 
 /**
- * This build of ES: its version and its code's mtime. npm gives every installed file the same
+ * This build of reeval: its version and its code's mtime. npm gives every installed file the same
  * mtime, so the version tells releases apart; a rebuild moves the mtime.
  */
 export const BUILD_ID = `${PACKAGE_VERSION}:${statSync(COMPILED ? process.execPath : fileURLToPath(HERE)).mtimeMs}`
 
 /**
- * The command that runs the `es` at `cli` (a package's `dist/cli.js`) with `args`: Node with
+ * The command that runs the `reeval` at `cli` (a package's `dist/cli.js`) with `args`: Node with
  * `nodeArgs` and the file, or, compiled, this executable, which runs its own code.
  */
 export function esCommand(

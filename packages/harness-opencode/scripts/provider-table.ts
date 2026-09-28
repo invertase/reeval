@@ -1,6 +1,6 @@
 // Writes src/opencode-provider-table.ts from a probe-providers.ts result: each provider whose key
 // OpenCode sends in a header on known hosts, with the hosts, paths and headers it was seen to
-// use, and every other provider with the reason ES refuses it. `buildTable` is the same table as
+// use, and every other provider with the reason reeval refuses it. `buildTable` is the same table as
 // data, for the drift check (scripts/drift/opencode-providers.mjs).
 //
 //   node --experimental-strip-types scripts/provider-table.ts <probe.json> <catalog.json>
@@ -65,7 +65,7 @@ function reasonFor(id: string, p: Probed, version: string): string | undefined {
       ...(/requires accountId/.test(errors) ? ['CLOUDFLARE_ACCOUNT_ID'] : []),
       ...(/requires resourceName/.test(errors) ? ['AZURE_RESOURCE_NAME'] : []),
     ].filter((e, i, all) => all.indexOf(e) === i)
-    return `its API host is per account${extra.length ? ` (${extra.join(', ')})` : ''}, which ES doesn't pass`
+    return `its API host is per account${extra.length ? ` (${extra.join(', ')})` : ''}, which reeval doesn't pass`
   }
   if (requests.some((r) => r.key.includes('query'))) {
     return 'OpenCode sends its key in the URL, which the gateway only swaps in headers'
@@ -180,7 +180,7 @@ export const PROBED_VERSION = ${JSON.stringify(version)}
 /** Every provider whose key OpenCode sends in a header on known hosts, as the probe saw it. */
 export const OPENCODE_PROVIDERS: readonly OpenCodeProvider[] = ${list(table.supported)}
 
-/** Every other provider OpenCode knows, and why ES can't broker its key. */
+/** Every other provider OpenCode knows, and why reeval can't broker its key. */
 export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = ${list(table.refused)}
 `
 }

@@ -1,6 +1,6 @@
-// The CLI end to end with each real harness (support/harnesses.ts): `es run --record -v` twice on
-// one tiny eval (test/e2e/), then `es compare` says "same", every `es query` view answers, the
-// `-v` trace and `.es/debug` log exist, and `es studio build` builds the recorded history. The fake
+// The CLI end to end with each real harness (support/harnesses.ts): `reeval run --record -v` twice on
+// one tiny eval (test/e2e/), then `reeval compare` says "same", every `reeval query` view answers, the
+// `-v` trace and `.reeval/debug` log exist, and `reeval studio build` builds the recorded history. The fake
 // row runs it key-free in Docker. Assertions are on exit codes, files and JSON, never model text.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -42,7 +42,7 @@ for (const row of harnesses.filter((r) => !r.harness)) {
     let dir = ''
     const runs: string[] = []
 
-    test('es run --record -v: passes, prints the phase trace, writes .es/debug', {
+    test('reeval run --record -v: passes, prints the phase trace, writes .reeval/debug', {
       timeout: 600_000,
     }, async () => {
       reserveAttempts(row, 2, 'e2e')
@@ -52,29 +52,29 @@ for (const row of harnesses.filter((r) => !r.harness)) {
       git(dir, 'add', '-A')
       git(dir, 'commit', '-qm', 'e2e')
       const r = await runCli(dir, ['run', '--record', '-v'], { env, timeoutMs: 540_000 })
-      ok(r, 'es run --record -v')
+      ok(r, 'reeval run --record -v')
       for (const phase of ['plan', 'image', 'container', 'harness', 'teardown'])
         assert.match(r.stdout, new RegExp(`\\d\\d:\\d\\d:\\d\\d ${phase} `), `no ${phase} line`)
       const { run } = readRun(dir, { history: HISTORY })
       runs.push(run.runId)
-      const logs = filesUnder(join(dir, '.es/debug', run.runId)).filter((f) =>
+      const logs = filesUnder(join(dir, '.reeval/debug', run.runId)).filter((f) =>
         f.endsWith('debug.log'),
       )
       assert.equal(logs.length, 1, `one attempt's debug.log: ${logs}`)
-      const log = join(dir, '.es/debug', run.runId, logs[0] as string)
+      const log = join(dir, '.reeval/debug', run.runId, logs[0] as string)
       assert.ok(statSync(log).size > 0)
       assert.match(readFileSync(log, 'utf8'), /Z teardown /)
     })
 
-    test('a second identical run: es compare says "same"', { timeout: 600_000 }, async () => {
+    test('a second identical run: reeval compare says "same"', { timeout: 600_000 }, async () => {
       assert.ok(dir, 'the first run failed')
-      ok(await runCli(dir, ['run', '--record'], { env, timeoutMs: 540_000 }), 'es run --record')
+      ok(await runCli(dir, ['run', '--record'], { env, timeoutMs: 540_000 }), 'reeval run --record')
       assert.deepEqual(recordedRuns(dir).length, 2)
       const { run } = readRun(dir, { history: HISTORY })
       runs.push(run.runId)
       const cmp = json<{ rows: Array<{ status: string; changes?: string[] }> }>(
         await runCli(dir, ['compare', runs[0] as string, runs[1] as string, '--json'], { env }),
-        'es compare',
+        'reeval compare',
       )
       assert.deepEqual(
         cmp.rows.map((r) => [r.status, r.changes ?? []]),
@@ -82,7 +82,7 @@ for (const row of harnesses.filter((r) => !r.harness)) {
       )
     })
 
-    test('es query: every view answers, and the tables hold both runs', async () => {
+    test('reeval query: every view answers, and the tables hold both runs', async () => {
       assert.equal(runs.length, 2, 'the runs failed')
       for (const view of VIEWS) json(await runCli(dir, ['query', view, '--json'], { env }), view)
       const trend = json<Array<{ run_id: string; outcome: string }>>(
@@ -100,25 +100,25 @@ for (const row of harnesses.filter((r) => !r.harness)) {
       assert.equal(attempts?.n, 2)
     })
 
-    test('es history and es show read the recorded runs', async () => {
+    test('reeval history and reeval show read the recorded runs', async () => {
       assert.equal(runs.length, 2, 'the runs failed')
       const history = await runCli(dir, ['history', '--json'], { env })
-      ok(history, 'es history')
+      ok(history, 'reeval history')
       assert.ok(
         runs.every((id) => history.stdout.includes(id)),
         history.stdout,
       )
       const shown = json<{ runId: string }>(
         await runCli(dir, ['show', 'latest', '--json'], { env }),
-        'es show',
+        'reeval show',
       )
       assert.equal(shown.runId, runs[1])
     })
 
-    test('es studio build: a static site with both runs and their transcripts', async () => {
+    test('reeval studio build: a static site with both runs and their transcripts', async () => {
       assert.equal(runs.length, 2, 'the runs failed')
       const site = join(dir, 'site')
-      ok(await runCli(dir, ['studio', 'build', '--out', site], { env }), 'es studio build')
+      ok(await runCli(dir, ['studio', 'build', '--out', site], { env }), 'reeval studio build')
       assert.ok(existsSync(join(site, 'index.html')))
       for (const id of runs) assert.ok(existsSync(join(site, 'data/runs', `${id}.json`)), id)
       assert.ok(

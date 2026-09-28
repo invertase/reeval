@@ -12,9 +12,9 @@ import type { Substitution } from '../src/egress/substitution.ts'
 import { BRIDGE_PORT, DEFAULT_IMAGE } from '../src/image.ts'
 import { createDockerSession, type DockerSession, type EgressOptions } from '../src/session.ts'
 
-// ES_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
+// REEVAL_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
 const dockerReady =
-  process.env.ES_TEST_REQUIRE_DOCKER === '1' ||
+  process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ||
   (() => {
     try {
       execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
@@ -24,8 +24,8 @@ const dockerReady =
     }
   })()
 
-/** ES's image with Python on top, built once and then from Docker's layer cache. */
-const PYTHON_IMAGE = `evalsuite-test-python:${DEFAULT_IMAGE.split(':')[1]}`
+/** reeval's image with Python on top, built once and then from Docker's layer cache. */
+const PYTHON_IMAGE = `reeval-test-python:${DEFAULT_IMAGE.split(':')[1]}`
 const pythonImage = () => {
   try {
     execFileSync('docker', ['build', '-q', '-t', PYTHON_IMAGE, '-'], {
@@ -225,7 +225,7 @@ describe('egress gateway in Docker', {
 
   test('a brokered secret: the upstream gets the value, the container only ever the placeholder', async () => {
     const secret = 'user-secret-docker-8a7b6c5d4e3f2a1b0c9d'
-    const holder = `es_secret_${'D'.repeat(32)}`
+    const holder = `reeval_secret_${'D'.repeat(32)}`
     const s = await open({
       image: DEFAULT_IMAGE,
       egress: egress(),
@@ -241,7 +241,7 @@ describe('egress gateway in Docker', {
       },
     ])
     seen.length = 0
-    // No --cacert: curl trusts the gateway through the system bundle ES points it at.
+    // No --cacert: curl trusts the gateway through the system bundle reeval points it at.
     const r = await sh(
       s,
       `curl -sS -H "Authorization: Bearer $GEMINI_API_KEY" https://upstream.test:${upstream.port}/v1`,
@@ -304,7 +304,10 @@ describe('egress gateway in Docker', {
     assert.equal(used.exitCode, 0, used.stderr)
     assert.equal(seen[0]?.authorization, `Bearer ${TOKENS.accessToken}`, 'upstream got the token')
     const auth = (await sh(s, 'cat ~/.config/cursor/auth.json')).stdout
-    assert.match(auth, /"accessToken":"eyJhbGciOiJIUzI1NiJ9\.eyJleHAiOjIwMDAwMDAwMDB9\.es_secret_/)
+    assert.match(
+      auth,
+      /"accessToken":"eyJhbGciOiJIUzI1NiJ9\.eyJleHAiOjIwMDAwMDAwMDB9\.reeval_secret_/,
+    )
     const files = await sh(
       s,
       `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo end`,
@@ -312,7 +315,7 @@ describe('egress gateway in Docker', {
     )
     assert.equal(files.stdout.trim(), 'end', `files containing a real token: ${files.stdout}`)
     // Twin: the same search for the placeholder's signature finds auth.json.
-    const signature = /\.(es_secret_\w+)"/.exec(auth)?.[1] ?? ''
+    const signature = /\.(reeval_secret_\w+)"/.exec(auth)?.[1] ?? ''
     const twin = await sh(
       s,
       `grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev "$N" / ; echo end`,
@@ -322,7 +325,7 @@ describe('egress gateway in Docker', {
   })
 
   const token = 'user-token-docker-1f2e3d4c5b6a79880a1b'
-  const tokenHolder = `es_secret_${'T'.repeat(32)}`
+  const tokenHolder = `reeval_secret_${'T'.repeat(32)}`
   const brokered = async (
     image: string,
     over: Partial<EgressOptions> = {},
@@ -471,13 +474,13 @@ describe('egress gateway in Docker', {
     await assert.rejects(
       createDockerSession({
         image: 'busybox:1.37',
-        labels: { 'dev.evalsuite.test': 'no-user' },
+        labels: { 'ai.reeval.test': 'no-user' },
       }),
       /busybox:1\.37 has no es user to run the sandbox as[\s\S]*docker\(\{ root: true \}\)/,
     )
     await retry(async () =>
       assert.equal(
-        execFileSync('docker', ['ps', '-aq', '--filter', 'label=dev.evalsuite.test=no-user'], {
+        execFileSync('docker', ['ps', '-aq', '--filter', 'label=ai.reeval.test=no-user'], {
           encoding: 'utf8',
         }).trim(),
         '',
@@ -492,14 +495,14 @@ describe('egress gateway in Docker', {
       createDockerSession({
         image: 'busybox:1.37',
         root: true,
-        labels: { 'dev.evalsuite.test': 'fallback' },
+        labels: { 'ai.reeval.test': 'fallback' },
         egress: egress({ policy: { mode: 'deny-all' } }),
       }),
       /Can't enforce the egress policy/,
     )
     const left = execFileSync(
       'docker',
-      ['ps', '-aq', '--filter', 'label=dev.evalsuite.test=fallback'],
+      ['ps', '-aq', '--filter', 'label=ai.reeval.test=fallback'],
       { encoding: 'utf8' },
     )
     assert.equal(left.trim(), '', 'the refused container was removed')
@@ -648,7 +651,7 @@ describe('egress policy in Docker', {
         from = to
       }
     }
-    const network = `evalsuite-test-${process.pid}`
+    const network = `reeval-test-${process.pid}`
     execFileSync('docker', ['network', 'create', network], { stdio: 'ignore' })
     const s = await createDockerSession({ image: DEFAULT_IMAGE, egress: egress() })
     try {
@@ -750,7 +753,7 @@ describe('image info', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE
   test('reads labelled images and images without labels', async () => {
     const { imageInfo } = await import('../src/docker-cli.ts')
     const ours = await imageInfo(DEFAULT_IMAGE)
-    assert.match(ours?.labels['dev.evalsuite.agent-version'] ?? '', /\d/)
+    assert.match(ours?.labels['ai.reeval.agent-version'] ?? '', /\d/)
     // Built here, so no registry digest, on the classic and the containerd image store alike.
     assert.deepEqual(ours?.repoDigests, [])
     try {
@@ -761,6 +764,6 @@ describe('image info', { skip: !dockerReady && `needs Docker and ${DEFAULT_IMAGE
     const plain = await imageInfo('busybox:1.37')
     assert.deepEqual(plain?.labels, {})
     assert.match(plain?.id ?? '', /^sha256:/)
-    assert.equal(await imageInfo('evalsuite-no-such-image:missing'), null)
+    assert.equal(await imageInfo('reeval-no-such-image:missing'), null)
   })
 })

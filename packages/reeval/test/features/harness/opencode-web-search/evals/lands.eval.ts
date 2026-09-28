@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { closed, prompt, references } from './env.ts'
 
 // Under deny-all, the agent searched with its web tool and the search came back with results:

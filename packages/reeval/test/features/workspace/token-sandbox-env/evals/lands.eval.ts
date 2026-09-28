@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { privateRepo } from './env.ts'
 
-const token = process.env.ES_FIXTURE_GIT_TOKEN as string
+const token = process.env.REEVAL_FIXTURE_GIT_TOKEN as string
 
 // The token fetched the workspace on the host and never reached the sandbox's processes.
 evaluate('lands', { environment: privateRepo }, async (t) => {

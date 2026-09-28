@@ -156,7 +156,7 @@ export function compare(
         path,
         'widened',
         false,
-        `${shown(path)} can now also be ${values(gained)}. An older ES reading a new file sees a value it doesn't know, which the forward-compatibility test covers.`,
+        `${shown(path)} can now also be ${values(gained)}. An older reeval reading a new file sees a value it doesn't know, which the forward-compatibility test covers.`,
       )
     }
   }
@@ -174,7 +174,7 @@ export function compare(
             p,
             'removed',
             true,
-            `${shown(p)} was removed or renamed. Files written before have it, and an older ES reading a new file needs it.`,
+            `${shown(p)} was removed or renamed. Files written before have it, and an older reeval reading a new file needs it.`,
           )
         }
         continue

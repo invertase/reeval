@@ -1,4 +1,4 @@
-// Picks how `es run` prints, following Turborepo's flag names and defaults where they fit
+// Picks how `reeval run` prints, following Turborepo's flag names and defaults where they fit
 // (`--log-order`, `--log-prefix`, `--output-logs`) and its CI detection.
 import { UsageError } from '../config.ts'
 
@@ -66,7 +66,7 @@ function pick<T extends string>(
 function parseHeartbeat(value: string | undefined): number {
   if (!value) return 60_000
   const match = /^(\d+(?:\.\d+)?)(ms|s|m)?$/.exec(value)
-  if (!match) throw new UsageError(`ES_HEARTBEAT must be a duration like 30s or 0`)
+  if (!match) throw new UsageError(`REEVAL_HEARTBEAT must be a duration like 30s or 0`)
   const unit = { ms: 1, s: 1000, m: 60_000 }[match[2] ?? 's'] ?? 1000
   return Number(match[1]) * unit
 }
@@ -82,26 +82,26 @@ export function resolveOutput(input: {
   const ci = isCI(env)
   const githubActions = set(env, 'GITHUB_ACTIONS')
 
-  const ui = pick('--ui', flags.ui ?? env.ES_UI, ['live', 'plain', 'agent'] as const)
+  const ui = pick('--ui', flags.ui ?? env.REEVAL_UI, ['live', 'plain', 'agent'] as const)
   const requested: UiMode =
     ui && ui !== 'auto' ? ui : input.agent ? 'agent' : ci || !input.isTTY ? 'plain' : 'live'
   const mode = requested === 'live' ? 'plain' : requested
 
-  const order = pick('--log-order', flags.logOrder ?? env.ES_LOG_ORDER, [
+  const order = pick('--log-order', flags.logOrder ?? env.REEVAL_LOG_ORDER, [
     'stream',
     'grouped',
   ] as const)
   const logOrder: LogOrder = order && order !== 'auto' ? order : ci ? 'grouped' : 'stream'
 
   // As in Turborepo, GitHub Actions' group headers name the attempt, so lines inside drop it.
-  const prefix = pick('--log-prefix', flags.logPrefix ?? env.ES_LOG_PREFIX, [
+  const prefix = pick('--log-prefix', flags.logPrefix ?? env.REEVAL_LOG_PREFIX, [
     'task',
     'none',
   ] as const)
   const logPrefix: LogPrefix =
     prefix && prefix !== 'auto' ? prefix : githubActions && logOrder === 'grouped' ? 'none' : 'task'
 
-  const logs = pick('--output-logs', flags.outputLogs ?? env.ES_OUTPUT_LOGS, [
+  const logs = pick('--output-logs', flags.outputLogs ?? env.REEVAL_OUTPUT_LOGS, [
     'full',
     'errors-only',
     'none',
@@ -125,6 +125,6 @@ export function resolveOutput(input: {
     outputLogs,
     color,
     githubActions,
-    heartbeatMs: mode === 'agent' ? 0 : parseHeartbeat(env.ES_HEARTBEAT),
+    heartbeatMs: mode === 'agent' ? 0 : parseHeartbeat(env.REEVAL_HEARTBEAT),
   }
 }

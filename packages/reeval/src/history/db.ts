@@ -1,5 +1,5 @@
-// `.es/history.db`: a gitignored SQLite projection of the run records, for `es query`. Nothing in
-// it isn't in `evals/.history` or `.es/runs`; it's rebuilt incrementally from them on every query
+// `.reeval/history.db`: a gitignored SQLite projection of the run records, for `reeval query`. Nothing in
+// it isn't in `evals/.history` or `.reeval/runs`; it's rebuilt incrementally from them on every query
 // and can be deleted at any time.
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -14,10 +14,10 @@ import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
 const DB_VERSION = 2
-/** This build of ES, like the header cache: another ES re-derives every row. */
+/** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
-export const historyDbPath = (root: string) => join(root, '.es', 'history.db')
+export const historyDbPath = (root: string) => join(root, '.reeval', 'history.db')
 
 /** `node:sqlite` is in Node from 22.13 (package `engines`); before 24 it warns on load. */
 export const SQLITE_NODE = '22.13.0'
@@ -31,7 +31,7 @@ export function nodeAtLeast(version: string, min = SQLITE_NODE): boolean {
 function loadSqlite(): typeof import('node:sqlite') {
   if (!nodeAtLeast(process.versions.node)) {
     throw new UsageError(
-      `es query needs Node ${SQLITE_NODE} or later for node:sqlite (this is Node ${process.versions.node}).`,
+      `reeval query needs Node ${SQLITE_NODE} or later for node:sqlite (this is Node ${process.versions.node}).`,
     )
   }
   const emit = process.emitWarning
@@ -457,7 +457,7 @@ function insertRun(
         )
       }
       for (const [kind, ref] of Object.entries(a.files)) {
-        // A newer ES may add other fields here; only file refs are artifacts.
+        // A newer reeval may add other fields here; only file refs are artifacts.
         if (typeof ref?.path !== 'string') continue
         run(
           'INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?)',
@@ -554,7 +554,7 @@ export type SyncResult = { runs: number; added: number; removed: number; rebuilt
 
 /**
  * Brings the projection up to date with the record files: recorded runs in `historyDir` win over
- * the same run's scratch copy in `.es/runs`. Only new, changed or removed files are touched.
+ * the same run's scratch copy in `.reeval/runs`. Only new, changed or removed files are touched.
  */
 async function sync(db: DatabaseSync, root: string, historyDir: string): Promise<SyncResult> {
   const rebuilt = !current(db)
@@ -629,7 +629,7 @@ export type HistoryDb = {
   close(): void
 }
 
-/** Opens `.es/history.db`, synced with the records; statements after this are read-only. */
+/** Opens `.reeval/history.db`, synced with the records; statements after this are read-only. */
 export async function openHistoryDb(
   root: string,
   historyDir: string,
@@ -666,8 +666,8 @@ export async function openHistoryDb(
         const message = (error as Error).message
         throw new UsageError(
           /readonly|read-only/i.test(message)
-            ? `es query is read-only: .es/history.db is a projection of the run records (${message})`
-            : `es query: ${message}`,
+            ? `reeval query is read-only: .reeval/history.db is a projection of the run records (${message})`
+            : `reeval query: ${message}`,
         )
       }
     },

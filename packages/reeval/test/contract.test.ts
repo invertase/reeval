@@ -1,5 +1,5 @@
 // The harness contract: every real harness passes the same behaviours against a real agent, in
-// Docker, from one ES project (test/contract/) run once per harness. The rows are in
+// Docker, from one reeval project (test/contract/) run once per harness. The rows are in
 // support/harnesses.ts, the behaviours below; each behaviour is its eval's outcome, its canary's
 // failure, and a host-side check of the record. The fake row runs the same suite key-free, so the
 // suite's own checks are proven on every PR's Docker job. See test/contract/README.md.
@@ -102,7 +102,7 @@ type TurnRecord = AttemptRecord['turns'][number] & {
   model?: string | null
 }
 
-/** What one contract run starts: es.config.ts's budget.attempts, which es run enforces too. */
+/** What one contract run starts: reeval.config.ts's budget.attempts, which reeval run enforces too. */
 const CONTRACT_ATTEMPTS = 12
 
 export const behaviours: Behaviour[] = [
@@ -138,7 +138,7 @@ export const behaviours: Behaviour[] = [
         // Refused at plan time, naming the eval, the harness and the server: nothing runs.
         const plan = (file: string) =>
           runCli(ran.project, ['run', '--dry-run', file], { env: rowEnv(row) })
-        const refused = await plan('evals/mcp.es.ts')
+        const refused = await plan('evals/mcp.eval.ts')
         assert.equal(refused.code, 2, refused.stdout + refused.stderr)
         assert.equal(refused.stdout, '')
         assert.match(
@@ -148,7 +148,7 @@ export const behaviours: Behaviour[] = [
           ),
         )
         // The twin: an eval without MCP servers plans on the same harness.
-        const plain = await plan('evals/rules.es.ts')
+        const plain = await plan('evals/rules.eval.ts')
         assert.equal(plain.code, 0, plain.stdout + plain.stderr)
         assert.equal(evalsNamed(ran.run, /^mcp/).length, 0, 'the MCP evals were left out')
         return 'refused at plan time'
@@ -273,13 +273,13 @@ export const behaviours: Behaviour[] = [
       )
       assert.ok(events.length > 0, 'no native events in the raw transcripts')
       const seen = signatures(cli, events)
-      if (process.env.ES_UPDATE_FORMATS === '1') learnSignatures(cli, seen)
+      if (process.env.REEVAL_UPDATE_FORMATS === '1') learnSignatures(cli, seen)
       const known = new Set(knownSignatures(cli))
       const unknown = seen.filter((s) => !known.has(s))
       assert.deepEqual(
         unknown,
         [],
-        `${row.id}'s CLI sent what test/replay/formats/${cli}.json doesn't know: its output format changed. Check the adapter handles it, then accept it with ES_UPDATE_FORMATS=1.`,
+        `${row.id}'s CLI sent what test/replay/formats/${cli}.json doesn't know: its output format changed. Check the adapter handles it, then accept it with REEVAL_UPDATE_FORMATS=1.`,
       )
     },
   },
@@ -293,7 +293,7 @@ export const behaviours: Behaviour[] = [
   },
 ]
 
-/** The evals whose streams test/replay keeps, per harness (ES_UPDATE_CAPTURES=1). */
+/** The evals whose streams test/replay keeps, per harness (REEVAL_UPDATE_CAPTURES=1). */
 const CAPTURED = ['skill', 'mcp', 'edit and run', 'egress']
 
 /**
@@ -337,9 +337,9 @@ for (const row of harnesses) {
           env: {
             ...rowEnv(row),
             // Kept for the format check and the replay captures; the files are small.
-            ES_RAW_TRANSCRIPT: '1',
-            ES_CONTRACT_KEY_TARGETS: scanTargets(keyOf(row) ?? `no key ${Date.now()}`),
-            ES_CONTRACT_PLANTED_TARGETS: scanTargets(PLANTED),
+            REEVAL_RAW_TRANSCRIPT: '1',
+            REEVAL_CONTRACT_KEY_TARGETS: scanTargets(keyOf(row) ?? `no key ${Date.now()}`),
+            REEVAL_CONTRACT_PLANTED_TARGETS: scanTargets(PLANTED),
           },
           timeoutMs: 25 * 60_000,
         })
@@ -347,7 +347,7 @@ for (const row of harnesses) {
         ran = { cli, run, runDir: dir, project: p.dir }
         spent.set(row.id, withTurns(run).length)
         // One set of captures per CLI: its row on another provider sends the same stream.
-        if (process.env.ES_UPDATE_CAPTURES === '1' && !row.harness) capture(ran, row)
+        if (process.env.REEVAL_UPDATE_CAPTURES === '1' && !row.harness) capture(ran, row)
       },
       { timeout: 26 * 60_000 },
     )
@@ -361,7 +361,7 @@ for (const row of harnesses) {
     for (const b of behaviours) {
       test(b.name, async () => {
         try {
-          assert.ok(ran, 'es run didn’t finish')
+          assert.ok(ran, 'reeval run didn’t finish')
           mark(row, b.name, (await b.check(ran, row)) ?? 'pass')
         } catch (e) {
           mark(row, b.name, 'FAIL')
@@ -373,7 +373,7 @@ for (const row of harnesses) {
   if (skip) for (const b of behaviours) mark(row, b.name, `skip: ${skip}`)
 }
 
-/** The contract table, printed and appended to `ES_CONTRACT_SUMMARY` (CI's job summary). */
+/** The contract table, printed and appended to `REEVAL_CONTRACT_SUMMARY` (CI's job summary). */
 after(() => {
   const rows = harnesses.map((h) => h.id)
   const lines = [
@@ -387,5 +387,6 @@ after(() => {
   ]
   const table = `### Harness contract\n\n${lines.join('\n')}\n`
   console.log(`\n${table}`)
-  if (process.env.ES_CONTRACT_SUMMARY) appendFileSync(process.env.ES_CONTRACT_SUMMARY, `${table}\n`)
+  if (process.env.REEVAL_CONTRACT_SUMMARY)
+    appendFileSync(process.env.REEVAL_CONTRACT_SUMMARY, `${table}\n`)
 })

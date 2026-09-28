@@ -1,4 +1,4 @@
-import { defineEnvironment, evaluate, expect, group } from 'evalsuite'
+import { defineEnvironment, evaluate, expect, group } from 'reeval'
 
 const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) => ({
   skills: [skill.local('../skills/house-greeting')],

@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, shellOutput } from './env.ts'
 
 // Under Goose, a harness-placed skill is in .config/goose/skills under the private home it runs with.

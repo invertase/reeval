@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { plain } from './env.ts'
 
 // Must fail: a turn that ends inside the timeout is completed, not aborted.

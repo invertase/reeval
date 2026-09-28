@@ -5,7 +5,7 @@ description: The pi harness, its options and id, its Gemini API key, the tokens 
 
 `pi()` runs [pi](https://github.com/earendil-works/pi) in the Docker sandbox, one `pi --mode json` process per turn, on its `google` provider with a Gemini API key. `model` is required.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { pi } from '{{ pkg }}/harness'
 
@@ -38,10 +38,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`) |
-| Adapter | `@evalsuite/harness-pi` 0.1.0, bundled with ES |
+| Adapter | `@reeval/harness-pi` 0.1.0, bundled with reeval |
 | CLI | `@earendil-works/pi-coding-agent` 0.87.1, from a pinned lockfile |
 | Sandbox | `docker()` only |
-| Image | `evalsuite-sandbox:pi-0.1.0` |
+| Image | `reeval-sandbox:pi-0.1.0` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.pi/agent/skills` |
 | Skills (`placement: 'workspace'`) | `.pi/skills` in the workspace |
@@ -49,15 +49,15 @@ export default defineConfig({
 | Tokens | Reported for each model call |
 | MCP | None (refused, below) |
 
-Build its image once with `es image build` in a project whose config uses `pi()`.
+Build its image once with `reeval image build` in a project whose config uses `pi()`.
 
 ## Why not `@ai-sdk/harness-pi`
 
-That adapter runs pi's agent loop in ES's own process on the host: its model calls leave from the host with the real key, its MCP servers start on the host, and it patches Node's global `fs` to reach the sandbox's files, which isn't safe with attempts running side by side. ES's adapter runs the pi CLI inside the sandbox instead, so its model calls go through the gateway like every other harness's.
+That adapter runs pi's agent loop in reeval's own process on the host: its model calls leave from the host with the real key, its MCP servers start on the host, and it patches Node's global `fs` to reach the sandbox's files, which isn't safe with attempts running side by side. reeval's adapter runs the pi CLI inside the sandbox instead, so its model calls go through the gateway like every other harness's.
 
 ## The key
 
-ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives pi a placeholder as `GEMINI_API_KEY`. The gateway swaps the real key in on one kind of request, the only one pi 0.87.1 sends it on:
+reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives pi a placeholder as `GEMINI_API_KEY`. The gateway swaps the real key in on one kind of request, the only one pi 0.87.1 sends it on:
 
 | Host | Endpoint |
 |---|---|
@@ -67,7 +67,7 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 ## Tokens
 
-Each model call pi makes is one step, with the tokens pi reports for it (uncached input, cache reads and writes, output and reasoning); each turn has their sum. pi also computes a USD cost from its own price table, which ES ignores: it prices no models.
+Each model call pi makes is one step, with the tokens pi reports for it (uncached input, cache reads and writes, output and reasoning); each turn has their sum. pi also computes a USD cost from its own price table, which reeval ignores: it prices no models.
 
 ## Turns and settings
 

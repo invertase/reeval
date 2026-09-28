@@ -67,7 +67,7 @@ const invocation: { flags?: Flags; runId: string | null; unhandledErrors: string
   unhandledErrors: [],
 }
 
-/** Set by the first Ctrl-C or SIGTERM of `es run`. */
+/** Set by the first Ctrl-C or SIGTERM of `reeval run`. */
 let interrupted = false
 /** The last signal that cancelled the run: 130 after SIGINT, 143 after SIGTERM. */
 let stopCode: number = EXIT.interrupted
@@ -114,7 +114,7 @@ async function run(argv: string[]): Promise<number> {
   if (command === 'image') {
     if (filters[0] !== 'build') {
       throw new UsageError(
-        `Unknown command "image ${filters[0] ?? ''}". Did you mean es image build?`,
+        `Unknown command "image ${filters[0] ?? ''}". Did you mean reeval image build?`,
       )
     }
     return imageBuildCommand(values, configPath, filters.slice(1))
@@ -158,7 +158,7 @@ async function run(argv: string[]): Promise<number> {
     }
   }
   if (command === 'clean') return cleanCommand(values, configPath)
-  if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run es --help.`)
+  if (command !== 'run') throw new UsageError(`Unknown command "${command}". Run reeval --help.`)
   return runCommand(values, configPath, filters)
 }
 
@@ -173,7 +173,7 @@ async function confirm(question: string): Promise<boolean> {
   }
 }
 
-/** `es clean`: removes local debug data, all of it or all but the newest `--keep` runs. */
+/** `reeval clean`: removes local debug data, all of it or all but the newest `--keep` runs. */
 async function cleanCommand(flags: Flags, configPath: string | undefined): Promise<number> {
   const config = await loadConfig(configPath, 'clean')
   let keep = 0
@@ -193,13 +193,13 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
       : `No debug data to remove in ${where}`,
   )
   if (flags.images) {
-    const { pruneImages } = await import('@evalsuite/sandbox-docker')
+    const { pruneImages } = await import('@reeval/sandbox-docker')
     const { requireDocker } = await import('./sandbox/providers.ts')
     await requireDocker()
     const removed = await pruneImages()
     console.log(
       removed
-        ? `Removed ${removed} image${removed === 1 ? '' : 's'} ES built that nothing uses`
+        ? `Removed ${removed} image${removed === 1 ? '' : 's'} reeval built that nothing uses`
         : 'No leftover images to remove',
     )
   }
@@ -213,8 +213,8 @@ function verbosityOf(flags: Flags): 0 | 1 | 2 {
 }
 
 /**
- * `es image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
- * sandboxes need; with `--dry-run`, lists them instead. Without a config, just ES's image.
+ * `reeval image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
+ * sandboxes need; with `--dry-run`, lists them instead. Without a config, just reeval's image.
  */
 async function imageBuildCommand(
   flags: Flags,
@@ -225,7 +225,7 @@ async function imageBuildCommand(
   const { docker } = await import('./sandbox.ts')
   let root = process.cwd()
   const { fakeHarness } = await import('./harness.ts')
-  // The fake harness runs in Cursor's image, so without a config this builds ES's default image.
+  // The fake harness runs in Cursor's image, so without a config this builds reeval's default image.
   let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
     { id: '', harness: fakeHarness(), sandbox: docker() },
   ]
@@ -295,7 +295,7 @@ async function imageBuildCommand(
   return failed.every((b) => !b.ok && b.failure.usage) ? EXIT.usage : EXIT.infra
 }
 
-/** `es run`: check, plan, run the engine, then write the run and pick the exit code. */
+/** `reeval run`: check, plan, run the engine, then write the run and pick the exit code. */
 async function runCommand(
   flags: Flags,
   configPath: string | undefined,
@@ -408,11 +408,11 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
   })
   if (flags.json && !flags['dry-run']) {
     throw new UsageError(
-      'es run --json only prints the plan: add --dry-run. A run writes its record to .es/runs; read it with es show --json.',
+      'reeval run --json only prints the plan: add --dry-run. A run writes its record to .reeval/runs; read it with reeval show --json.',
     )
   }
   loadEnvFiles(configPath)
-  const named = flags.profile ?? (process.env.ES_PROFILE || undefined)
+  const named = flags.profile ?? (process.env.REEVAL_PROFILE || undefined)
   const config = await loadConfig(configPath, 'run', named)
   const profile = selectProfile(config, flags.profile)
   let runs: number | undefined
@@ -429,7 +429,7 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
     // Sized from the Docker VM when Docker answers, as a real run is, so --dry-run shows the same.
     if (!sandboxes.some((s) => s.kind === 'docker')) return hostCapacity()
-    const { dockerCapacity } = await import('@evalsuite/sandbox-docker')
+    const { dockerCapacity } = await import('@reeval/sandbox-docker')
     return (await dockerCapacity()) ?? hostCapacity()
   })
   return {
@@ -458,7 +458,7 @@ type StartedRun = RunContext & {
   git: GitInfo | null
   worktreePatch: Buffer | null
   author: string
-  /** `.es/runs`, where the run is written. */
+  /** `.reeval/runs`, where the run is written. */
   scratch: string
 }
 
@@ -588,7 +588,7 @@ async function executeRun(
       const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
       lines.push(...planTable(plan, todos))
       const { imageStatusLines } = await import('./sandbox/images.ts')
-      const { dockerAvailable } = await import('@evalsuite/sandbox-docker')
+      const { dockerAvailable } = await import('@reeval/sandbox-docker')
       if (targets.length && (await dockerAvailable())) {
         lines.push(...(await imageStatusLines(targets, config.root)))
       } else if (targets.length) {
@@ -796,14 +796,14 @@ async function executeRun(
   return { engineRun, plan, sandboxVersions, budgetReached: () => reached, live }
 }
 
-// `es run | head` closes stdout early; that isn't an error.
+// `reeval run | head` closes stdout early; that isn't an error.
 process.stdout.on('error', (error: NodeJS.ErrnoException) => {
   if (error.code !== 'EPIPE') throw error
 })
 
 /**
- * Logs the command for `es report` and, when it looks like ES broke (a crash, an unexpected
- * error or an infra error), prints one line suggesting `es report`. Not for agents or JSON.
+ * Logs the command for `reeval report` and, when it looks like reeval broke (a crash, an unexpected
+ * error or an infra error), prints one line suggesting `reeval report`. Not for agents or JSON.
  */
 function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation['error']>['kind']) {
   const flags = invocation.flags
@@ -834,25 +834,27 @@ function finish(code: number, error?: unknown, kind?: NonNullable<CliInvocation[
   })
   const broke = kind === 'crash' || code === EXIT.infra || invocation.unhandledErrors.length > 0
   const quiet =
-    !!process.env.ES_NO_REPORT_HINT ||
+    !!process.env.REEVAL_NO_REPORT_HINT ||
     command === 'report' ||
     !!flags?.json ||
     flags?.ui === 'agent' ||
-    process.env.ES_UI === 'agent' ||
-    (!flags?.ui && !process.env.ES_UI && !!detectAgent().name)
+    process.env.REEVAL_UI === 'agent' ||
+    (!flags?.ui && !process.env.REEVAL_UI && !!detectAgent().name)
   if (broke && !quiet) {
     console.error(
       dim(
-        'hint: if this looks like a bug in ES, es report collects a redacted report to file (ES_NO_REPORT_HINT=1 hides this)',
+        'hint: if this looks like a bug in reeval, reeval report collects a redacted report to file (REEVAL_NO_REPORT_HINT=1 hides this)',
       ),
     )
   }
 }
 
-// An error nothing awaited, from ES or from code the config runs, ends the run as an infra error.
+// An error nothing awaited, from reeval or from code the config runs, ends the run as an infra error.
 const crash = (error: unknown) => {
-  console.error(red(`es: ${redactSecrets(error instanceof Error ? error.message : String(error))}`))
-  if (process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
+  console.error(
+    red(`reeval: ${redactSecrets(error instanceof Error ? error.message : String(error))}`),
+  )
+  if (process.env.REEVAL_DEBUG) console.error(redactSecrets(inspect(error)))
   finish(EXIT.infra, error, 'crash')
   process.exit(EXIT.infra)
 }
@@ -866,7 +868,7 @@ process.on('exit', (code) => {
   if (settled || code !== 0) return
   process.stderr.write(
     red(
-      "es: stopped before it finished: nothing was left for it to wait on. That's a bug in ES, or in code the config or an eval ran; es report collects a redacted report.\n",
+      "reeval: stopped before it finished: nothing was left for it to wait on. That's a bug in reeval, or in code the config or an eval ran; reeval report collects a redacted report.\n",
     ),
   )
   process.exitCode = EXIT.infra
@@ -887,8 +889,8 @@ run(process.argv.slice(2))
         error instanceof UsageError ||
         EXPECTED_ERRORS.includes(name) ||
         name === 'PreflightInfraError'
-      console.error(red(`es: ${redactSecrets((error as Error).message)}`))
-      if (!expected && process.env.ES_DEBUG) console.error(redactSecrets(inspect(error)))
+      console.error(red(`reeval: ${redactSecrets((error as Error).message)}`))
+      if (!expected && process.env.REEVAL_DEBUG) console.error(redactSecrets(inspect(error)))
       const code = name === 'PreflightInfraError' ? EXIT.infra : EXIT.usage
       finish(code, error, error instanceof UsageError ? 'usage' : expected ? 'expected' : 'crash')
       process.exitCode = code

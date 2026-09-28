@@ -1,4 +1,4 @@
-// `evalsuite/judge`: judge helpers and types. Models are `'provider/model'` strings or AI SDK
+// `reeval/judge`: judge helpers and types. Models are `'provider/model'` strings or AI SDK
 // evaluation model objects, e.g. `openai.evaluationModel('…')`.
 import type { FakeAnalysisModel, FakeJudgeModel } from './types.ts'
 
@@ -9,7 +9,7 @@ export const fakeJudge = ({ score = 1 }: { score?: number } = {}): FakeJudgeMode
 })
 
 /**
- * An analysis model for tests: `es analyze` gets `output` (or `output(digest)`) back as the
+ * An analysis model for tests: `reeval analyze` gets `output` (or `output(digest)`) back as the
  * model's structured answer, through the same parsing and validation as a real one.
  */
 export const fakeAnalysis = ({

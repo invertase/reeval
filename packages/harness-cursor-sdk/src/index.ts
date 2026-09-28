@@ -1,4 +1,4 @@
-// `@evalsuite/harness-cursor-sdk`: Cursor's agent, through the Cursor TypeScript SDK, as an AI SDK harness.
+// `@reeval/harness-cursor-sdk`: Cursor's agent, through the Cursor TypeScript SDK, as an AI SDK harness.
 import { createCursorSdk } from './cursor-sdk-harness.ts'
 
 /** Default Cursor SDK harness instance. Equivalent to `createCursorSdk()`. */

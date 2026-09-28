@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, shellOutput } from './env.ts'
 
 // Must fail: the skill isn't in the sandbox user's ~/.config/goose/skills, since Goose runs with

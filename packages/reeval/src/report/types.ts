@@ -1,19 +1,19 @@
-// The shapes `es report` reads and writes. `CliInvocation` is persisted (one line of
-// `.es/cli.jsonl`) and snapshotted in `schema/`; the bundle is written for people to read.
+// The shapes `reeval report` reads and writes. `CliInvocation` is persisted (one line of
+// `.reeval/cli.jsonl`) and snapshotted in `schema/`; the bundle is written for people to read.
 
-/** One `es` command, as the CLI logs it when it ends: redacted and path-scrubbed on disk too. */
+/** One `reeval` command, as the CLI logs it when it ends: redacted and path-scrubbed on disk too. */
 export type CliInvocation = {
   at: string
   es: string
-  /** The arguments after `es`, with every flag value and argument replaced by `<value>` or `<arg>`. */
+  /** The arguments after `reeval`, with every flag value and argument replaced by `<value>` or `<arg>`. */
   argv: string[]
   /** `run`, `studio build`, …; null when the command line didn't parse. */
   command: string | null
   exitCode: number
   durationMs: number
-  /** The run `es run` wrote, when it got that far. */
+  /** The run `reeval run` wrote, when it got that far. */
   runId: string | null
-  /** What ended the command with an error: a usage error, one ES expects, or a crash. */
+  /** What ended the command with an error: a usage error, one reeval expects, or a crash. */
   error: {
     kind: 'usage' | 'expected' | 'crash'
     name: string
@@ -29,7 +29,7 @@ export type ReportAttempt = {
   outcome: string
   error: { kind: string; message: string } | null
   turnErrors: string[]
-  /** The debug files kept for the attempt, relative to its `.es/debug` directory. */
+  /** The debug files kept for the attempt, relative to its `.reeval/debug` directory. */
   debugFiles: string[]
   /** The last lines of its debug.log. */
   debugLog: string[]
@@ -39,9 +39,9 @@ export type ReportAttempt = {
   requests: string[]
 }
 
-/** Everything `es report` collected: versions and settings, never a value from the config. */
+/** Everything `reeval report` collected: versions and settings, never a value from the config. */
 export type ReportBundle = {
-  kind: 'es-report'
+  kind: 'reeval-report'
   version: 1
   createdAt: string
   es: string
@@ -51,7 +51,7 @@ export type ReportBundle = {
   packageManager: { name: string; version: string | null; from: string } | null
   ci: boolean
   agent: string | null
-  /** Names of the `ES_*` and secret-looking variables set; never their values. */
+  /** Names of the `REEVAL_*` and secret-looking variables set; never their values. */
   env: string[]
   invocation: CliInvocation | null
   doctor: unknown
@@ -76,7 +76,7 @@ export type ReportBundle = {
   runError: string | null
   /**
    * `masked` counts every masked value in the bundle and its attached logs; `upstream` how many
-   * of them ES had masked already, in the records and logs the report read.
+   * of them reeval had masked already, in the records and logs the report read.
    */
   redaction: { masked: number; upstream: number; paths: string[] }
 }

@@ -34,39 +34,41 @@ const pathRe = (path: string) =>
 describe('findEvalFiles and filterFiles', () => {
   test('globs include minus exclude, dotfiles included, sorted and absolute', async () => {
     const root = tree({
-      'evals/b.es.ts': '',
-      'evals/a.es.ts': '',
-      'evals/.hidden/c.es.ts': '',
-      'evals/.history/old.es.ts': '',
-      'node_modules/x/evals/d.es.ts': '',
+      'evals/b.eval.ts': '',
+      'evals/a.eval.ts': '',
+      'evals/.hidden/c.eval.ts': '',
+      'evals/.history/old.eval.ts': '',
+      'node_modules/x/evals/d.eval.ts': '',
       'other.ts': '',
     })
     const files = await findEvalFiles(
       root,
-      ['**/*.es.ts'],
+      ['**/*.eval.ts'],
       ['**/node_modules/**', 'evals/.history/**'],
     )
     assert.deepEqual(
       files.map((f) => relative(root, f).split(sep).join('/')),
-      ['evals/.hidden/c.es.ts', 'evals/a.es.ts', 'evals/b.es.ts'],
+      ['evals/.hidden/c.eval.ts', 'evals/a.eval.ts', 'evals/b.eval.ts'],
     )
   })
 
   test('a filter picks files whose path contains it, ignoring case, from the root or the cwd', () => {
     const root = '/p'
-    const files = ['/p/evals/Greet.es.ts', '/p/evals/sub/skill.es.ts', '/p/other/x.es.ts']
+    const files = ['/p/evals/Greet.eval.ts', '/p/evals/sub/skill.eval.ts', '/p/other/x.eval.ts']
     assert.deepEqual(filterFiles(files, [], root), files)
-    assert.deepEqual(filterFiles(files, ['greet'], root), ['/p/evals/Greet.es.ts'])
-    assert.deepEqual(filterFiles(files, ['/p/evals/sub'], root), ['/p/evals/sub/skill.es.ts'])
-    assert.deepEqual(filterFiles(files, ['evals/sub/'], root), ['/p/evals/sub/skill.es.ts'])
-    assert.deepEqual(filterFiles(files, ['nope', 'x.es'], root), ['/p/other/x.es.ts'])
+    assert.deepEqual(filterFiles(files, ['greet'], root), ['/p/evals/Greet.eval.ts'])
+    assert.deepEqual(filterFiles(files, ['/p/evals/sub'], root), ['/p/evals/sub/skill.eval.ts'])
+    assert.deepEqual(filterFiles(files, ['evals/sub/'], root), ['/p/evals/sub/skill.eval.ts'])
+    assert.deepEqual(filterFiles(files, ['nope', 'x.eval'], root), ['/p/other/x.eval.ts'])
     // Typed with backslashes, as on Windows, it picks the same files.
-    assert.deepEqual(filterFiles(files, ['evals\\sub\\'], root), ['/p/evals/sub/skill.es.ts'])
+    assert.deepEqual(filterFiles(files, ['evals\\sub\\'], root), ['/p/evals/sub/skill.eval.ts'])
     const cwd = process.cwd()
     process.chdir(tempDir('cwd'))
     try {
       // Resolved from the current directory, "sub/" is still under the root: /p/<cwd>/sub/.
-      assert.deepEqual(filterFiles(['/q/evals/a.es.ts'], ['/q/evals/'], '/q'), ['/q/evals/a.es.ts'])
+      assert.deepEqual(filterFiles(['/q/evals/a.eval.ts'], ['/q/evals/'], '/q'), [
+        '/q/evals/a.eval.ts',
+      ])
     } finally {
       process.chdir(cwd)
     }
@@ -74,17 +76,17 @@ describe('findEvalFiles and filterFiles', () => {
 
   test('a name filter matches part of the eval id or cell#n', () => {
     const attempt = { cell: { key: 'fake/-/fake' }, n: 2 }
-    assert.equal(matchesFilter({ id: 'evals/a.es.ts › g › x' }, 'g › x'), true)
-    assert.equal(matchesFilter({ id: 'evals/a.es.ts › g › x', attempt }, 'fake#2'), true)
-    assert.equal(matchesFilter({ id: 'evals/a.es.ts › g › x', attempt }, 'fake#3'), false)
-    assert.equal(matchesFilter({ id: 'evals/a.es.ts › x' }, 'fake#1'), false)
+    assert.equal(matchesFilter({ id: 'evals/a.eval.ts › g › x' }, 'g › x'), true)
+    assert.equal(matchesFilter({ id: 'evals/a.eval.ts › g › x', attempt }, 'fake#2'), true)
+    assert.equal(matchesFilter({ id: 'evals/a.eval.ts › g › x', attempt }, 'fake#3'), false)
+    assert.equal(matchesFilter({ id: 'evals/a.eval.ts › x' }, 'fake#1'), false)
   })
 })
 
 describe('loadEvalFile', () => {
   test('TypeScript, ESM, CommonJS, JSON, .mts and .cts, extensionless and circular imports, top-level await', async () => {
     const root = tree({
-      'evals/main.es.ts': `import { a, fromB } from './circ-a'
+      'evals/main.eval.ts': `import { a, fromB } from './circ-a'
 import cjs, { named } from './lib.cjs'
 import data from './data.json'
 import { m } from './mod.mts'
@@ -106,7 +108,7 @@ export const out = { a, fromB: fromB(), cjs, named, data, m, c, waited, req: req
         "const sync: string = require('./required.ts').value\nexport = 'cts' + sync.length\n",
       'evals/required.ts': "export const value: string = ''\n",
     })
-    const loaded = (await loadEvalFile(join(root, 'evals/main.es.ts'), root)) as { out: unknown }
+    const loaded = (await loadEvalFile(join(root, 'evals/main.eval.ts'), root)) as { out: unknown }
     assert.deepEqual(loaded.out, {
       a: 'A',
       fromB: 'B sees A',
@@ -127,42 +129,44 @@ export const out = { a, fromB: fromB(), cjs, named, data, m, c, waited, req: req
       'tsconfig.json':
         '{ "compilerOptions": { "baseUrl": ".", "paths": { "@lib/*": ["src/*"] } } }',
       'src/lib.ts': 'export const lib = 1\n',
-      'evals/p.es.ts': "import { lib } from '@lib/lib'\nexport { lib }\n",
+      'evals/p.eval.ts': "import { lib } from '@lib/lib'\nexport { lib }\n",
     })
-    await assert.rejects(loadEvalFile(join(root, 'evals/p.es.ts'), root), /@lib\/lib/)
+    await assert.rejects(loadEvalFile(join(root, 'evals/p.eval.ts'), root), /@lib\/lib/)
   })
 
   test('a syntax error names the file and position, with a code frame', async () => {
-    const root = tree({ 'evals/bad.es.ts': "const x = 1\nevaluate('f' async () => {})\n" })
-    await assert.rejects(loadEvalFile(join(root, 'evals/bad.es.ts'), root), (error: Error) => {
+    const root = tree({ 'evals/bad.eval.ts': "const x = 1\nevaluate('f' async () => {})\n" })
+    await assert.rejects(loadEvalFile(join(root, 'evals/bad.eval.ts'), root), (error: Error) => {
       assert.equal(error.name, 'SyntaxError')
       assert.match(
         error.message,
-        /^Unexpected token, expected "," \(evals\/bad\.es\.ts:2:14\)\n {2}1\| const x = 1\n/,
+        /^Unexpected token, expected "," \(evals\/bad\.eval\.ts:2:14\)\n {2}1\| const x = 1\n/,
       )
       return true
     })
     // Anything else passes through unchanged.
     await assert.rejects(
-      loadEvalFile(join(root, 'evals/missing.es.ts'), root),
+      loadEvalFile(join(root, 'evals/missing.eval.ts'), root),
       (e: Error) => e.name !== 'SyntaxError',
     )
   })
 
   test("a missing import reads as Vite's did: which module, imported from where", async () => {
     const root = tree({
-      'evals/m.es.ts': "import './nope.ts'\n",
-      'evals/throws.es.ts': "throw Object.assign(new Error('odd'), { code: 'MODULE_NOT_FOUND' })\n",
+      'evals/m.eval.ts': "import './nope.ts'\n",
+      'evals/throws.eval.ts':
+        "throw Object.assign(new Error('odd'), { code: 'MODULE_NOT_FOUND' })\n",
     })
     await assert.rejects(
-      loadEvalFile(join(root, 'evals/m.es.ts'), root),
+      loadEvalFile(join(root, 'evals/m.eval.ts'), root),
       (e: Error) =>
-        e.message === `Cannot find module './nope.ts' imported from ${join(root, 'evals/m.es.ts')}`,
+        e.message ===
+        `Cannot find module './nope.ts' imported from ${join(root, 'evals/m.eval.ts')}`,
     )
-    await assert.rejects(loadEvalFile(join(root, 'evals/throws.es.ts'), root), /^Error: odd$/)
-    const other = tree({ 'evals/nothing.es.ts': 'throw undefined\n' })
+    await assert.rejects(loadEvalFile(join(root, 'evals/throws.eval.ts'), root), /^Error: odd$/)
+    const other = tree({ 'evals/nothing.eval.ts': 'throw undefined\n' })
     await assert.rejects(
-      loadEvalFile(join(other, 'evals/nothing.es.ts'), other),
+      loadEvalFile(join(other, 'evals/nothing.eval.ts'), other),
       (e) => e === undefined,
     )
   })

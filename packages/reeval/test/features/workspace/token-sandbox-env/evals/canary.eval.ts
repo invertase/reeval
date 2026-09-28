@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { privateRepo } from './env.ts'
 
-const token = process.env.ES_FIXTURE_GIT_TOKEN as string
+const token = process.env.REEVAL_FIXTURE_GIT_TOKEN as string
 
 // Must fail: the sandbox's processes don't have the token.
 evaluate('canary', { environment: privateRepo }, async (t) => {

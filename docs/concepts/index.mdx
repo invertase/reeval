@@ -1,29 +1,29 @@
 ---
-title: How ES works
-description: How ES turns an eval file into attempts, a record and the studio.
+title: How reeval works
+description: How reeval turns an eval file into attempts, a record and the studio.
 ---
 
-ES reads your eval files, plans every attempt they ask for, runs each one in a fresh sandbox, and writes what happened to a record you can commit and browse. These pages explain each step and why it works the way it does.
+reeval reads your eval files, plans every attempt they ask for, runs each one in a fresh sandbox, and writes what happened to a record you can commit and browse. These pages explain each step and why it works the way it does.
 
 ```mermaid
 flowchart LR
-  E["evals/*.es.ts"] --> P[plan]
+  E["evals/*.eval.ts"] --> P[plan]
   P --> A["attempts, each in its own sandbox"]
-  A --> R["record: .es/runs, then .history"]
+  A --> R["record: .reeval/runs, then .history"]
   R --> S["studio, history, compare"]
 ```
 
 ## From eval file to studio
 
-Every `es run` goes through the same five steps. `--dry-run` stops after the plan.
+Every `reeval run` goes through the same five steps. `--dry-run` stops after the plan.
 
-| Step | What ES does | Read more |
+| Step | What reeval does | Read more |
 |---|---|---|
 | Eval file | Loads `group` and `evaluate` calls and resolves their options | [Options and inheritance](/concepts/options) |
 | Plan | Expands each eval into cells and attempts, and prints the plan line | [The matrix](/concepts/matrix) |
 | Attempts | Runs each attempt in its own sandbox: agent turns, then checks and the judge | [Attempt lifecycle](/concepts/attempt-lifecycle) |
 | Record | Writes each attempt's outcome, transcript, diff and timings, and each cell's pass rate and lift | [Gates and lift](/concepts/lift) |
-| Studio | Shows runs, cells and attempts; `es compare` diffs two runs | [Fingerprints and drift](/concepts/fingerprints) |
+| Studio | Shows runs, cells and attempts; `reeval compare` diffs two runs | [Fingerprints and drift](/concepts/fingerprints) |
 
 ## The vocabulary
 
@@ -39,7 +39,7 @@ The code, the CLI and these docs use the same words.
 | variant | The eval with one `compare` environment layered on the control |
 | cell | One harness × environment × sandbox of an eval, e.g. `cursor:composer-2.5/-/docker` |
 | attempt | One run of a cell in a fresh sandbox, e.g. `cursor:composer-2.5/-/docker#1` |
-| run | One `es run`: every attempt it started, saved as one record |
+| run | One `reeval run`: every attempt it started, saved as one record |
 | lift | A variant's pass rate minus its control's, with a 95% interval |
 
 A cell passes or fails by its [gate](/concepts/lift); an eval fails when any of its gated cells fails.
@@ -47,12 +47,12 @@ A cell passes or fails by its [gate](/concepts/lift); an eval fails when any of 
 ## Where results go
 
 ```text
-.es/runs/<runId>.json          every run, scratch (gitignore .es/)
+.reeval/runs/<runId>.json          every run, scratch (gitignore .reeval/)
 evals/.history/<runId>.json    recorded runs, which you commit
-.es/debug/<runId>/…            local debug traces, never recorded
+.reeval/debug/<runId>/…            local debug traces, never recorded
 ```
 
-`es record` (or `record: 'ci'` in CI) copies a scratch run into the history folder. `es history`, `es compare`, `es query` and the studio read both.
+`reeval record` (or `record: 'ci'` in CI) copies a scratch run into the history folder. `reeval history`, `reeval compare`, `reeval query` and the studio read both.
 
 ## Next
 

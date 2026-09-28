@@ -110,7 +110,7 @@ export type DockerSession = HarnessV1NetworkSandboxSession & {
 }
 
 /** Set on every exec, so a kill can find the command's whole process tree in the container. */
-const EXEC_MARKER = 'ES_EXEC_ID'
+const EXEC_MARKER = 'REEVAL_EXEC_ID'
 
 /** The Docker networks a container is attached to. */
 async function networksOf(id: string): Promise<string[]> {
@@ -153,7 +153,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
     if (/unable to find user/i.test((error as Error).message)) {
       sweepLabelDetached(`${LABEL.session}=${nonce}`)
       throw new Error(
-        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images ES builds have one: rebuild it (es image build), or start from ES's image or docker({ from }). An eval that needs root at run time can opt in with docker({ root: true }).`,
+        `${options.image} has no ${SANDBOX_USER} user to run the sandbox as. Images reeval builds have one: rebuild it (reeval image build), or start from reeval's image or docker({ from }). An eval that needs root at run time can opt in with docker({ root: true }).`,
       )
     }
     throw error
@@ -411,7 +411,7 @@ export async function createDockerSession(options: SessionOptions): Promise<Dock
 /** The session as an AI SDK harness sandbox provider. */
 export const dockerSandboxProvider = (options: SessionOptions): HarnessV1SandboxProvider => ({
   specificationVersion: 'harness-sandbox-v1',
-  providerId: 'evalsuite-docker',
+  providerId: 'reeval-docker',
   async createSession(o) {
     const session = await createDockerSession({ ...options, abortSignal: o?.abortSignal })
     await o?.onFirstCreate?.(session, { abortSignal: o.abortSignal })

@@ -25,7 +25,7 @@ import { readableDebugRequest } from '../view/record.ts'
 import { listLive, liveTranscript } from './live.ts'
 import { listHeaders, resolveFile, type StudioSource } from './source.ts'
 
-export const COOKIE = 'es_studio_token'
+export const COOKIE = 'reeval_studio_token'
 
 export type StudioServerOptions = {
   source: StudioSource
@@ -142,7 +142,7 @@ export function createStudioApp(options: StudioServerOptions) {
     const cookie = getCookie(c, COOKIE)
     if (!cookie || !sameToken(cookie, token)) {
       return c.text(
-        'This studio needs its session token. Open the full URL that es studio printed.',
+        'This studio needs its session token. Open the full URL that reeval studio printed.',
         401,
       )
     }
@@ -170,7 +170,7 @@ export function createStudioApp(options: StudioServerOptions) {
     })
   })
 
-  // Runs in progress, from .es/staging: only here, never in a static build.
+  // Runs in progress, from .reeval/staging: only here, never in a static build.
   app.get('/api/live', async (c) => {
     const index: LiveIndex = { runs: await listLive(source) }
     return c.json(index, 200, { 'Cache-Control': 'no-cache' })
@@ -185,7 +185,7 @@ export function createStudioApp(options: StudioServerOptions) {
     })
   })
 
-  // Local debug data from .es/debug: only here, never in a static build.
+  // Local debug data from .reeval/debug: only here, never in a static build.
   const debugDir = (runId: string, key: string | undefined) => {
     const attempt = key ? parseAttemptKey(key) : null
     if (!RUN_ID.test(runId) || !attempt) return null

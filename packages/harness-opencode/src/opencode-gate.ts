@@ -2,13 +2,13 @@
  * The gate's name, `executable` for `harness-acp`, which takes a bare name and runs
  * `<implementation>/node_modules/.bin/<executable>`: the gate goes beside OpenCode's own bin.
  */
-export const OPENCODE_GATE_EXECUTABLE = 'es-opencode-gate'
+export const OPENCODE_GATE_EXECUTABLE = 'reeval-opencode-gate'
 
 /** Where the gate goes, under the sandbox home. */
 export const OPENCODE_GATE_PATH = `.ai-sdk-harness/.harness-bootstrap/opencode/implementation/node_modules/.bin/${OPENCODE_GATE_EXECUTABLE}`
 
 /** The variable that names the MCP servers the gate waits for, as a JSON list. */
-export const OPENCODE_GATE_SERVERS_ENV = 'ES_OPENCODE_MCP_SERVERS'
+export const OPENCODE_GATE_SERVERS_ENV = 'REEVAL_OPENCODE_MCP_SERVERS'
 
 /** How long the first prompt waits for the MCP servers at most, in ms. */
 export const OPENCODE_GATE_TIMEOUT_MS = 30_000
@@ -24,7 +24,7 @@ export const OPENCODE_GATE_SETTLE_MS = 250
  * in its config in the background once `session/new` has returned, and a prompt sent before
  * they're connected runs its first step without their tools. The gate holds the first
  * `session/prompt` (and what follows it) until each server named in
- * `ES_OPENCODE_MCP_SERVERS` has logged `mcp connected` or `mcp connect failed` (and
+ * `REEVAL_OPENCODE_MCP_SERVERS` has logged `mcp connected` or `mcp connect failed` (and
  * {@link OPENCODE_GATE_SETTLE_MS} has passed), or the timeout passes. With servers to wait for, OpenCode runs with its info logs on stderr, which the gate
  * reads and keeps; anything else on stderr passes through.
  */

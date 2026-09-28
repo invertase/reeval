@@ -15,7 +15,7 @@
     "types": ["vite/client"],
     "paths": {
       "@/*": ["./src/*"],
-      "evalsuite/view": ["../evalsuite/src/view/index.ts"]
+      "reeval/view": ["../reeval/src/view/index.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

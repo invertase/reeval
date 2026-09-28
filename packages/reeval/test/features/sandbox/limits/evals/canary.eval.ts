@@ -1,5 +1,5 @@
-import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 import { LIMITS, plain } from './env.ts'
 
 // Must fail: plain docker() has the default limits (4g memory, 1024 processes).

@@ -143,8 +143,8 @@ describe('traced sources', () => {
       writeFileSync(join(root, path), text)
     }
     write(
-      'evals/a.es.ts',
-      `import { evaluate } from 'evalsuite'\nimport { h } from './helpers.ts'\n`,
+      'evals/a.eval.ts',
+      `import { evaluate } from 'reeval'\nimport { h } from './helpers.ts'\n`,
     )
     write(
       'evals/helpers.ts',
@@ -155,10 +155,15 @@ describe('traced sources', () => {
     write('evals/unrelated.ts', 'export {}\n')
     write('node_modules/pkg/index.js', 'export {}\n')
     symlinkSync(join(root, 'node_modules/pkg'), join(root, 'evals/pkg'))
-    write('evals/b.es.ts', `import './pkg/index.js'\n`)
-    const paths = (await traceSources(root, 'evals/a.es.ts')).map((s) => s.path)
-    assert.deepEqual(paths, ['evals/a.es.ts', 'evals/helpers.ts', 'evals/lazy.ts', 'shared/env.ts'])
-    const own = await traceSources(root, 'evals/b.es.ts')
+    write('evals/b.eval.ts', `import './pkg/index.js'\n`)
+    const paths = (await traceSources(root, 'evals/a.eval.ts')).map((s) => s.path)
+    assert.deepEqual(paths, [
+      'evals/a.eval.ts',
+      'evals/helpers.ts',
+      'evals/lazy.ts',
+      'shared/env.ts',
+    ])
+    const own = await traceSources(root, 'evals/b.eval.ts')
     assert.equal(own.length, 2, 'a symlinked package is traced by its link path, once')
   })
 })

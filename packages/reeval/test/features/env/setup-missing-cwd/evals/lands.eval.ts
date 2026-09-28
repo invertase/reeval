@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { missing } from './env.ts'
 
 // A setup step whose cwd doesn't exist fails at once: the attempt is an infra error that says the

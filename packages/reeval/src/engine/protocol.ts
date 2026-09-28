@@ -1,6 +1,6 @@
 // Messages between the main process (./pool.ts) and a worker (./worker.ts): JSON over Node's IPC
 // channel, specified in ./PROTOCOL.md, with JSON Schemas in schema/plan/. A worker may come from
-// another copy of ES (the project's own), so both check PROTOCOL before anything else.
+// another copy of reeval (the project's own), so both check PROTOCOL before anything else.
 import type { Limits, Rank } from '../scheduler/core.ts'
 import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'

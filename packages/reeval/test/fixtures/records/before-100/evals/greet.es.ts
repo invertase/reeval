@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 
 evaluate('writes greet.js', async (t) => {
   const turn = await t.send('Write greet.js')

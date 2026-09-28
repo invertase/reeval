@@ -77,7 +77,7 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
     recordFileName(attemptKey(id, spec.cell.key, spec.n)),
   )
   await mkdir(join(stagingDir, 'evals'), { recursive: true })
-  // Replaced whole: es studio reads it while the run goes on.
+  // Replaced whole: reeval studio reads it while the run goes on.
   const tmp = `${recordPath}.${process.pid}.tmp`
   await writeFile(tmp, redactSecrets(JSON.stringify(record, null, 2)))
   await rename(tmp, recordPath)

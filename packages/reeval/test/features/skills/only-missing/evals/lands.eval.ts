@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { typo } from './env.ts'
 
 // `only` naming a skill the source doesn't have is an infra error that names it and lists what

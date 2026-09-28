@@ -1,4 +1,4 @@
-import { evaluate, expect, group } from 'evalsuite'
+import { evaluate, expect, group } from 'reeval'
 
 // Exits 0 only if greet() with no arguments returns "Hello, world!".
 const callGreetWithNoArgs = `node -e "import('./greet.js').then((m) => {

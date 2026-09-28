@@ -1,4 +1,4 @@
-import type { Substitution } from '@evalsuite/sandbox-docker'
+import type { Substitution } from '@reeval/sandbox-docker'
 import type { BrokeredSecret } from '../environment/resolve.ts'
 import type { Sandbox } from './types.ts'
 

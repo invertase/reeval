@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, shellOutput } from './env.ts'
 
 // Under OpenCode, a harness-placed skill is in ~/.config/opencode/skills, its own global directory.

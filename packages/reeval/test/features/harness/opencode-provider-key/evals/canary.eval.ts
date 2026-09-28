@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { closed, keysSeen, prompt } from './env.ts'
 
 // Must fail: the agent's shell has a second provider's key too.

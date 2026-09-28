@@ -56,7 +56,7 @@ test('the config turns off updates, sharing and the tools an eval has no use for
   const config = openCodeConfig()
   assert.equal(config.update, 'disable')
   assert.equal(config.share, 'disabled')
-  // Appended to an eval's own rules, where the last match wins: ES only denies.
+  // Appended to an eval's own rules, where the last match wins: reeval only denies.
   assert.deepEqual(config.permissions, [
     { action: 'question', resource: '*', effect: 'deny' },
     { action: 'browser', resource: '*', effect: 'deny' },
@@ -88,10 +88,10 @@ test("session titles run on the turn's model, not a second one", () => {
   )
   // Only variables 2.0.18 still reads, and the gate's.
   assert.deepEqual(Object.keys(env).sort(), [
-    'ES_OPENCODE_MCP_SERVERS',
     'OPENCODE_CONFIG_CONTENT',
     'OPENCODE_DISABLE_AUTOUPDATE',
     'OPENCODE_DISABLE_MODELS_FETCH',
+    'REEVAL_OPENCODE_MCP_SERVERS',
   ])
 })
 
@@ -117,11 +117,11 @@ test('MCP servers go in the config with codemode off, and the gate waits for the
       },
     },
   })
-  assert.deepEqual(JSON.parse(openCodeEnv({ mcpServers }).ES_OPENCODE_MCP_SERVERS), [
+  assert.deepEqual(JSON.parse(openCodeEnv({ mcpServers }).REEVAL_OPENCODE_MCP_SERVERS), [
     'stamp',
     'docs',
   ])
-  assert.deepEqual(JSON.parse(openCodeEnv().ES_OPENCODE_MCP_SERVERS), [])
+  assert.deepEqual(JSON.parse(openCodeEnv().REEVAL_OPENCODE_MCP_SERVERS), [])
 })
 
 test("the catalog names 2.0.18's tools, with its path inputs", () => {

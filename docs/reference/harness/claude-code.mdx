@@ -1,11 +1,11 @@
 ---
 title: claudeCode()
-description: The Claude Code harness, its options and id, the key it needs, and the endpoints ES brokers it on.
+description: The Claude Code harness, its options and id, the key it needs, and the endpoints reeval brokers it on.
 ---
 
 `claudeCode()` runs the Claude Code CLI in the Docker sandbox. `model` is required.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { claudeCode, cursor } from '{{ pkg }}/harness'
 
@@ -41,17 +41,17 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `ANTHROPIC_API_KEY` |
-| Adapter | `@ai-sdk/harness-claude-code` 1.0.128, with a fix ES patches in (below) |
+| Adapter | `@ai-sdk/harness-claude-code` 1.0.128, with a fix reeval patches in (below) |
 | Sandbox | `docker()` only |
-| Image | `evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c` |
+| Image | `reeval-sandbox:claude-code-1.0.128-patch.5d1c985c` |
 | Rules file | `CLAUDE.md` |
 | Skills (default placement) | `~/.claude/skills` |
 | Skills (`placement: 'workspace'`) | `.claude/skills` in the workspace |
 | Egress hosts added | `api.anthropic.com`, `*.anthropic.com` |
 
-Build its image once with `es image build` in a project whose config uses `claudeCode()`.
+Build its image once with `reeval image build` in a project whose config uses `claudeCode()`.
 
-ES ships the adapter with one fix, which its image bakes: 1.0.128 never reports the served model, because its bridge starts the stream on the `command_lifecycle` message Claude Code sends before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.5d1c985c` names that patch.
+reeval ships the adapter with one fix, which its image bakes: 1.0.128 never reports the served model, because its bridge starts the stream on the `command_lifecycle` message Claude Code sends before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.5d1c985c` names that patch.
 
 ## The key
 
@@ -70,7 +70,7 @@ A request carrying the placeholder anywhere else gets a 403 and a `warning: the 
 
 ## Environment
 
-ES starts the CLI with two variables:
+reeval starts the CLI with two variables:
 
 | Variable | Why |
 |---|---|
@@ -85,7 +85,7 @@ Rules go to `CLAUDE.md` in the workspace. Skills go to `~/.claude/skills` by def
 
 ## Tokens
 
-Each turn records the tokens the CLI reports for each model call, cache reads and writes (cache creation) included. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; ES prices no models. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+Each turn records the tokens the CLI reports for each model call, cache reads and writes (cache creation) included. The summary totals them on its `Tokens` line and the record keeps them per turn, per attempt and for the run; reeval prices no models. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
 
 ## Errors
 
@@ -101,7 +101,7 @@ A turn that the API rejects (no credit, for example) ends with `status: 'error'`
 ```text
 [creates#1 claude-code]  +0:01 turn 1 error: Credit balance is too low to access the Anthropic API 1s · 0 tool calls, 0 file edits
 …
- ✗ evals/hello.es.ts › greet module › creates a tested greet module
+ ✗ evals/hello.eval.ts › greet module › creates a tested greet module
    Error: expected file greet.js to exist
    turn 1 error: Credit balance is too low to access the Anthropic API
 ```

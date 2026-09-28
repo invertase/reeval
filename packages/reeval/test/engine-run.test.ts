@@ -37,7 +37,7 @@ function recorder() {
 type Spec = [string, Partial<TestOptions>, (h: TestHandle) => Promise<void>]
 
 async function tests(...specs: Spec[]): Promise<CollectedTest[]> {
-  return collect('/f.es.ts', async () => {
+  return collect('/f.eval.ts', async () => {
     for (const [name, options, body] of specs) registerTest(name, { mode: 'run', ...options }, body)
   })
 }

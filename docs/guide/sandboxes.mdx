@@ -1,15 +1,15 @@
 ---
 title: Sandboxes and toolchains
-description: Run the agent on Python, your own Dockerfile or ES's image with extra tools, using docker().
+description: Run the agent on Python, your own Dockerfile or reeval's image with extra tools, using docker().
 ---
 
-Every attempt runs in a fresh Docker container. `docker()` with no options uses ES's image: Node 22, git and the harness's agent. When the task needs another toolchain, give the sandbox another base.
+Every attempt runs in a fresh Docker container. `docker()` with no options uses reeval's image: Node 22, git and the harness's agent. When the task needs another toolchain, give the sandbox another base.
 
 ```ts
 import { docker } from '{{ pkg }}/sandbox'
 
-docker()                                        // ES's image
-docker({ from: 'python:3.12-slim' })            // ES adds Node, git, the agent
+docker()                                        // reeval's image
+docker({ from: 'python:3.12-slim' })            // reeval adds Node, git, the agent
 docker({ install: ['npm i -g firebase-tools@14'] }) // extra tools
 docker({ dockerfile: './sandbox/Dockerfile' })  // your own, from this file
 docker({ image: 'ghcr.io/acme/agent:1' })       // already has the agent
@@ -19,7 +19,7 @@ A sandbox has one base (`image`, `from` or `dockerfile`), and optionally `instal
 
 ## Start from a toolchain image
 
-```ts title="evals/python.es.ts"
+```ts title="evals/python.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 
@@ -38,11 +38,11 @@ evaluate(
 )
 ```
 
-`from` takes any Debian or Ubuntu based image. ES bakes Node, pnpm, git and the harness's agent on top the first time, and caches the result. `id: 'python'` names the sandbox in the cell key.
+`from` takes any Debian or Ubuntu based image. reeval bakes Node, pnpm, git and the harness's agent on top the first time, and caches the result. `id: 'python'` names the sandbox in the cell key.
 
 ## Add tools with install
 
-```ts title="evals/jq.es.ts"
+```ts title="evals/jq.eval.ts"
 const withJq = docker({
   install: [
     'apt-get update && apt-get install -y --no-install-recommends jq ' +
@@ -57,13 +57,13 @@ evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
 })
 ```
 
-`install` runs its commands in order, as root, in one build container, with `HOME` set to `/home/es`: what an installer puts in `~` is where the agent runs, and ES hands it to the `es` user. ES caches the result as one image, keyed on the base image and the exact list, so any edit builds anew. Install commands never see secrets or the workspace; anything that needs them is an environment `setup` step.
+`install` runs its commands in order, as root, in one build container, with `HOME` set to `/home/es`: what an installer puts in `~` is where the agent runs, and reeval hands it to the `es` user. reeval caches the result as one image, keyed on the base image and the exact list, so any edit builds anew. Install commands never see secrets or the workspace; anything that needs them is an environment `setup` step.
 
 ## Bring a Dockerfile
 
 ```dockerfile title="docker/sqlite/Dockerfile"
-ARG ES_BASE
-FROM ${ES_BASE}
+ARG REEVAL_BASE
+FROM ${REEVAL_BASE}
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends sqlite3 \
@@ -72,7 +72,7 @@ RUN apt-get update \
 COPY seed.sql /opt/seed.sql
 ```
 
-```ts title="evals/sqlite.es.ts"
+```ts title="evals/sqlite.eval.ts"
 evaluate(
   'queries a seeded SQLite database',
   { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },
@@ -85,40 +85,40 @@ evaluate(
 )
 ```
 
-ES builds the Dockerfile from its directory with `docker build`, and passes `ES_BASE`: its own image for the harness. `FROM ${ES_BASE}` layers on it, so the result already has the harness and is used as is. From any other Debian or Ubuntu base, ES adds the harness on top, as it does for `from`.
+reeval builds the Dockerfile from its directory with `docker build`, and passes `REEVAL_BASE`: its own image for the harness. `FROM ${REEVAL_BASE}` layers on it, so the result already has the harness and is used as is. From any other Debian or Ubuntu base, reeval adds the harness on top, as it does for `from`.
 
 <Warning>
-  Keep `root` as the user and leave `/es` alone in your Dockerfile. `RUN` lines build as root, but the agent runs as the `es` user (see [Sandbox security](#sandbox-security)), so install tools system-wide or under `/home/es` and `chown` them to `es`. `install` doesn't combine with `dockerfile`: write the commands as `RUN` lines.
+  Keep `root` as the user and leave `/es` alone in your Dockerfile. `RUN` lines build as root, but the agent runs as the `es` user (see [Sandbox security](#sandbox-security)), so install tools system-wide or under `/home/es` and `chown` them to `reeval`. `install` doesn't combine with `dockerfile`: write the commands as `RUN` lines.
 </Warning>
 
 ## Build the images
 
 ```bash
-npx es image build --dry-run
+npx reeval image build --dry-run
 ```
 
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  ✓ base  evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  ✓ base  reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
 docker + install · 1 eval
-  ✓ base               evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
-  + install 1 command  evalsuite-install:<base id + commands>  (to build: not built yet)
+  ✓ base               reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  + from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
 docker:sqlite · 1 eval
-  + dockerfile docker/sqlite/Dockerfile  evalsuite-dockerfile:sqlite-<context + ES image id>  (to build: not built yet (evalsuite-dockerfile:sqlite-6030a60be3d263ca))
-  ✓ harness                              evalsuite-dockerfile:sqlite-<context + ES image id>  (ready: evalsuite-sandbox:cursor-0.1.0 built (e04d443bc8e2))
+  + dockerfile docker/sqlite/Dockerfile  reeval-dockerfile:sqlite-<context + reeval image id>  (to build: not built yet (reeval-dockerfile:sqlite-6030a60be3d263ca))
+  ✓ harness                              reeval-dockerfile:sqlite-<context + reeval image id>  (ready: reeval-sandbox:cursor-0.1.0 built (e04d443bc8e2))
 ```
 
-Each step says how it stands: `✓` ready, `+` to build, `~` stale, `✗` missing. `es image build` builds what's missing or stale, three at a time, and reports every image that failed (exit 3). Filters, `--tag` and `--profile` apply, as for `es run`. You don't have to run it first: `es run` builds whatever is missing before any attempt starts, and `es run --dry-run` ends with the same check, one line per image.
+Each step says how it stands: `✓` ready, `+` to build, `~` stale, `✗` missing. `reeval image build` builds what's missing or stale, three at a time, and reports every image that failed (exit 3). Filters, `--tag` and `--profile` apply, as for `reeval run`. You don't have to run it first: `reeval run` builds whatever is missing before any attempt starts, and `reeval run --dry-run` ends with the same check, one line per image.
 
-A `from` tag such as `node:22` is looked up once, and ES builds on the digest it names then. Later runs reuse that build even when the tag moves; `--dry-run` says when it has, and `es image build` rebuilds it. Pin a digest (`node:22@sha256:…`) to never move, or run `es image build --force` to rebuild and pull everything.
+A `from` tag such as `node:22` is looked up once, and reeval builds on the digest it names then. Later runs reuse that build even when the tag moves; `--dry-run` says when it has, and `reeval image build` rebuilds it. Pin a digest (`node:22@sha256:…`) to never move, or run `reeval image build --force` to rebuild and pull everything.
 
 ## When an image fails
 
 ```bash
-npx es run --ui plain
+npx reeval run --ui plain
 ```
 
 ```text
@@ -130,38 +130,38 @@ preparing 2 sandboxes: docker, docker + install
     | Building dependency tree...
     | Reading state information...
     | E: Unable to locate package jqq
-  (full log: .es/cache/images/evalsuite-install-a2eeb3bf29b33bdd.log)
+  (full log: .reeval/cache/images/reeval-install-a2eeb3bf29b33bdd.log)
 …
-[greets#1 fake] ✓ evals/greet.es.ts › greets  1s
+[greets#1 fake] ✓ evals/greet.eval.ts › greets  1s
 …
    Evals  1 passed · 1 infra error (2)
 ```
 
-An image that fails fails only the attempts that need it, once each: they're infra errors that name the image and the level that set it, and everything else runs. When the config (or a profile) sets the failing sandbox, every eval needs it, so `es run` stops before any attempt with exit 3 (exit 2 for a missing `docker({ image })`).
+An image that fails fails only the attempts that need it, once each: they're infra errors that name the image and the level that set it, and everything else runs. When the config (or a profile) sets the failing sandbox, every eval needs it, so `reeval run` stops before any attempt with exit 3 (exit 2 for a missing `docker({ image })`).
 
 The headline says which step failed and why, then the step's own last lines and the build log. Out of disk space and exit 137 (out of memory) are named. Network and registry errors are retried twice; a failing `install` or `RUN` step isn't, since it would fail the same way. The attempt's record has the failure in `error.prepare`.
 
 ## Run them
 
 ```bash
-npx es run python sqlite jq --log-order grouped
+npx reeval run python sqlite jq --log-order grouped
 ```
 
 ```text
 plan  3 evals · 3 cells · 3 attempts · ~35s serial (~12s at concurrency 4)
 …
-[writes#1 cursor] ✓ evals/python.es.ts › writes and tests fizzbuzz in python  10s
+[writes#1 cursor] ✓ evals/python.eval.ts › writes and tests fizzbuzz in python  10s
 [writes#1 cursor]  +0:00 sandbox ready 2s
 [writes#1 cursor]  +0:01 turn 1 done 7s · 1 tool call, 2 file edits
 [writes#1 cursor]  +0:09 $ python3 --version  exit 0 149ms
 [writes#1 cursor]  +0:09 $ python3 -m unittest -q  exit 0 119ms
 …
 Summary
- evals/jq.es.ts
+ evals/jq.eval.ts
    ✓ summarises a JSON file with jq           10s  1 turn
- evals/python.es.ts
+ evals/python.eval.ts
    ✓ writes and tests fizzbuzz in python      10s  1 turn
- evals/sqlite.es.ts
+ evals/sqlite.eval.ts
    ✓ queries a seeded SQLite database         13s  1 turn
 …
 ```
@@ -199,7 +199,7 @@ Either one is printed at the start of every run that uses it, naming where it wa
 
 ```text
 WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))
-warning: extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))
+warning: extra capabilities in the sandbox: reeval.config.ts (docker({ capabilities: ['NET_RAW'] }))
 ```
 
 Everything else works as the `es` user: `npm i`, `pip install` (as a user install), `git`, `curl`, and `npm i -g`, which goes to `~/.local`, on `PATH`.

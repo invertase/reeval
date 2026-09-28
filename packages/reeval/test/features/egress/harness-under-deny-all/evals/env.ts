@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })
 

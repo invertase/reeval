@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { prompts, RULES_WORD, ruled, trimmed } from './probes.ts'
 
 // The agent reads the environment's rules (AGENTS.md or CLAUDE.md) without being told where they

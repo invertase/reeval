@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
-import { formatDuration, type LiveRun, type LiveStatus } from 'evalsuite/view'
 import { LoaderCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { formatDuration, type LiveRun, type LiveStatus } from 'reeval/view'
 import { OutcomeIcon } from '@/components/status'
 import { Badge } from '@/components/ui/badge'
 import { formatDate, timeAgo } from '@/lib/format'

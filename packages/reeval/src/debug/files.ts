@@ -2,8 +2,8 @@ import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { evalSlug, RUN_ID } from '../ids.ts'
 
-/** Local debug data, one directory per run. Gitignored with `.es/`, never recorded. */
-export const debugRoot = (root: string) => join(root, '.es', 'debug')
+/** Local debug data, one directory per run. Gitignored with `.reeval/`, never recorded. */
+export const debugRoot = (root: string) => join(root, '.reeval', 'debug')
 
 /** Where one attempt's debug data goes: the same layout as its artifacts in the run. */
 export const attemptDebugDir = (

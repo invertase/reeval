@@ -18,20 +18,23 @@ import {
 } from './helpers.ts'
 
 const math = (value: number) => `
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 evaluate('math', async () => expect(1).toBe(${value}))
 `
 
 describe('engine', () => {
   test('a passing eval exits 0 with no Vitest branding', async () => {
-    const p = await project('pass', { 'es.config.ts': fakeConfig(), 'evals/math.es.ts': math(1) })
+    const p = await project('pass', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/math.eval.ts': math(1),
+    })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stderr)
-    assert.match(r.stdout, /✓ evals\/math\.es\.ts › math/)
+    assert.match(r.stdout, /✓ evals\/math\.eval\.ts › math/)
     assert.match(r.stdout, /Evals {2}1 passed \(1\)/)
     assert.match(
       r.stdout,
-      /Results {2}\.es\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+_[0-9a-z]{4}\/summary\.md/,
+      /Results {2}\.reeval\/runs\/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+_[0-9a-z]{4}\/summary\.md/,
     )
     for (const leak of [/vitest/i, /RUN v/, /testTimeout/]) {
       assert.doesNotMatch(r.stdout + r.stderr, leak)
@@ -48,16 +51,19 @@ describe('engine', () => {
       infraError: 0,
       skipped: 0,
     })
-    assert.equal(run.evals[0]?.id, 'evals/math.es.ts › math')
-    assert.ok(!existsSync(join(p.dir, '.es/attachments')), 'no copies of the records')
-    assert.ok(!existsSync(join(p.dir, '.es/staging', run.runId)), 'staging cleaned up')
+    assert.equal(run.evals[0]?.id, 'evals/math.eval.ts › math')
+    assert.ok(!existsSync(join(p.dir, '.reeval/attachments')), 'no copies of the records')
+    assert.ok(!existsSync(join(p.dir, '.reeval/staging', run.runId)), 'staging cleaned up')
   })
 
   test('a failing assertion exits 1', async () => {
-    const p = await project('fail', { 'es.config.ts': fakeConfig(), 'evals/math.es.ts': math(2) })
+    const p = await project('fail', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/math.eval.ts': math(2),
+    })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /✗ evals\/math\.es\.ts › math/)
+    assert.match(r.stdout, /✗ evals\/math\.eval\.ts › math/)
     assert.doesNotMatch(r.stdout + r.stderr, /vitest/i)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'fail')
@@ -67,40 +73,40 @@ describe('engine', () => {
 
   test('filters match paths, then eval names', async () => {
     const p = await project('filter', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': math(1),
-      'evals/b.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('named thing', async () => {})\n`,
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': math(1),
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'\nevaluate('named thing', async () => {})\n`,
     })
-    const byPath = await runCli(p.dir, ['run', 'a.es'])
+    const byPath = await runCli(p.dir, ['run', 'a.eval'])
     assert.equal(byPath.code, 0)
-    assert.match(byPath.stdout, /a\.es\.ts › math/)
+    assert.match(byPath.stdout, /a\.eval\.ts › math/)
     assert.doesNotMatch(byPath.stdout, /named thing/)
 
     const byName = await runCli(p.dir, ['run', 'named thing'])
     assert.equal(byName.code, 0)
-    assert.match(byName.stdout, /b\.es\.ts › named thing/)
+    assert.match(byName.stdout, /b\.eval\.ts › named thing/)
     assert.doesNotMatch(byName.stdout, /› math/)
 
     const { runId } = readRun(p.dir).run
     const none = await runCli(p.dir, ['run', 'nope'])
     assert.equal(none.code, 2, none.stdout + none.stderr)
-    assert.match(none.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts with filter "nope"/)
+    assert.match(none.stderr, /No evals matched evals\/\*\*\/\*\.eval\.ts with filter "nope"/)
     assert.equal(readRun(p.dir).run.runId, runId, 'no empty run written')
-    assert.deepEqual(readdirSync(join(p.dir, '.es/staging')), [], 'no staging left behind')
+    assert.deepEqual(readdirSync(join(p.dir, '.reeval/staging')), [], 'no staging left behind')
   })
 
   test('a path filter and a cell filter together run only that cell of that file', async () => {
     const p = await project('mixed-filter', {
-      'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })
 `,
-      'evals/scaffold.es.ts': math(1),
-      'evals/other.es.ts': math(1),
+      'evals/scaffold.eval.ts': math(1),
+      'evals/other.eval.ts': math(1),
     })
     const r = await runCli(p.dir, ['run', 'scaffold', 'right/', '--ui', 'plain'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -108,65 +114,65 @@ export default defineConfig({
     const { evals } = readRun(p.dir)
     assert.deepEqual(
       evals.map((e) => [e.id, e.cells.map((c) => c.key)]),
-      [['evals/scaffold.es.ts › math', ['right/-/fake']]],
+      [['evals/scaffold.eval.ts › math', ['right/-/fake']]],
     )
   })
 
   test('eval files that declare no evals exit 2 instead of writing an empty run', async () => {
     const p = await project('no-evals', {
-      'es.config.ts': fakeConfig(),
-      'evals/empty.es.ts': `import { evaluate } from 'evalsuite'\nvoid evaluate\n`,
+      'reeval.config.ts': fakeConfig(),
+      'evals/empty.eval.ts': `import { evaluate } from 'reeval'\nvoid evaluate\n`,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts/)
-    assert.ok(!existsSync(join(p.dir, '.es/runs')), 'no run written')
+    assert.match(r.stderr, /No evals matched evals\/\*\*\/\*\.eval\.ts/)
+    assert.ok(!existsSync(join(p.dir, '.reeval/runs')), 'no run written')
   })
 
   for (const [what, body, message] of [
-    ['throws', `throw new Error('boom at import')`, /evals\/bad\.es\.ts: boom at import/],
-    ['imports a missing file', `import './nope.ts'`, /evals\/bad\.es\.ts: .*nope\.ts/],
+    ['throws', `throw new Error('boom at import')`, /evals\/bad\.eval\.ts: boom at import/],
+    ['imports a missing file', `import './nope.ts'`, /evals\/bad\.eval\.ts: .*nope\.ts/],
     [
       'has a syntax error',
       `evaluate('f' async () => {})`,
-      /evals\/bad\.es\.ts: Unexpected token, expected "," \(evals\/bad\.es\.ts:2:14\)\n.*\n.*\n {3}\| {14}\^/,
+      /evals\/bad\.eval\.ts: Unexpected token, expected "," \(evals\/bad\.eval\.ts:2:14\)\n.*\n.*\n {3}\| {14}\^/,
     ],
   ] as const) {
     test(`an eval file that ${what} exits 2 naming it, next to a good file`, async () => {
       const p = await project('bad-eval-file', {
-        'es.config.ts': fakeConfig(),
-        'evals/good.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('good', async () => {})\n`,
-        'evals/bad.es.ts': `import { evaluate } from 'evalsuite'\n${body}\nevaluate('bad', async () => {})\n`,
+        'reeval.config.ts': fakeConfig(),
+        'evals/good.eval.ts': `import { evaluate } from 'reeval'\nevaluate('good', async () => {})\n`,
+        'evals/bad.eval.ts': `import { evaluate } from 'reeval'\n${body}\nevaluate('bad', async () => {})\n`,
       })
       for (const args of [['run'], ['run', '--dry-run']]) {
         const r = await runCli(p.dir, args)
         assert.equal(r.code, 2, `${args.join(' ')}: ${r.stdout}${r.stderr}`)
         assert.match(r.stderr, message)
-        assert.ok(!existsSync(join(p.dir, '.es/runs')), 'no run written')
+        assert.ok(!existsSync(join(p.dir, '.reeval/runs')), 'no run written')
       }
     })
   }
 
   test('a tsconfig that extends a missing file fails every eval file loudly, once', async () => {
     const p = await project('bad-tsconfig', {
-      'es.config.ts': fakeConfig(),
+      'reeval.config.ts': fakeConfig(),
       'tsconfig.json': '{ "extends": "../../tsconfig.base.json" }',
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async () => {})\n`,
-      'evals/b.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('b', async () => {})\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async () => {})\n`,
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'\nevaluate('b', async () => {})\n`,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(
       r.stderr,
-      /2 eval files failed to load:\nevals\/a\.es\.ts, evals\/b\.es\.ts: [\s\S]*Failed to load tsconfig '\.\.\/\.\.\/tsconfig\.base\.json'/,
+      /2 eval files failed to load:\nevals\/a\.eval\.ts, evals\/b\.eval\.ts: [\s\S]*Failed to load tsconfig '\.\.\/\.\.\/tsconfig\.base\.json'/,
     )
     assert.equal(r.stderr.includes('\u001b['), false, 'no terminal colours')
   })
 
   test('groups nest, cascade options and appear in ids and result.json', async () => {
     const p = await project('groups', {
-      'es.config.ts': fakeConfig(),
-      'evals/g.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/g.eval.ts': `import { evaluate, expect, group } from 'reeval'
 group('outer', { timeout: '1s' }, () => {
   group('inner', () => {
     evaluate('slow', async ({ signal }) => {
@@ -180,8 +186,8 @@ evaluate('top level', async () => {})
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /✗ evals\/g\.es\.ts › outer › inner › slow/)
-    assert.match(r.stdout, /✓ evals\/g\.es\.ts › outer › fast/)
+    assert.match(r.stdout, /✗ evals\/g\.eval\.ts › outer › inner › slow/)
+    assert.match(r.stdout, /✓ evals\/g\.eval\.ts › outer › fast/)
     const evals = readRun(p.dir).evals
     assert.deepEqual(
       evals.map((e) => [e.group, e.name, e.outcome]),
@@ -203,14 +209,17 @@ evaluate('top level', async () => {})
     const { runId } = readRun(p.dir).run
     const spaced = await runCli(p.dir, ['run', 'outer fast'])
     assert.equal(spaced.code, 2, spaced.stdout + spaced.stderr)
-    assert.match(spaced.stderr, /No evals matched evals\/\*\*\/\*\.es\.ts with filter "outer fast"/)
+    assert.match(
+      spaced.stderr,
+      /No evals matched evals\/\*\*\/\*\.eval\.ts with filter "outer fast"/,
+    )
     assert.equal(readRun(p.dir).run.runId, runId, 'no run written')
   })
 
   test('skip is reported as skipped', async () => {
     const p = await project('skip', {
-      'es.config.ts': fakeConfig(),
-      'evals/s.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/s.eval.ts': `import { evaluate } from 'reeval'
 evaluate('runs', async () => {})
 evaluate.skip('skipped', async () => { throw new Error('nope') })
 `,
@@ -230,8 +239,8 @@ evaluate.skip('skipped', async () => { throw new Error('nope') })
 
   test("a skipped group's evals, nested ones too, are recorded as skipped and never run", async () => {
     const p = await project('group-skip', {
-      'es.config.ts': fakeConfig(),
-      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/g.eval.ts': `import { evaluate, group } from 'reeval'
 group.skip('parked', () => {
   evaluate('inside', async () => { throw new Error('the body ran') })
   group('nested', () => {
@@ -248,10 +257,10 @@ evaluate('kept', async () => {})
     assert.deepEqual(
       run.evals.map((e) => [e.id, e.outcome]),
       [
-        ['evals/g.es.ts › parked › inside', 'skipped'],
-        ['evals/g.es.ts › parked › nested › deeper', 'skipped'],
-        ['evals/g.es.ts › someday', 'skipped'],
-        ['evals/g.es.ts › kept', 'pass'],
+        ['evals/g.eval.ts › parked › inside', 'skipped'],
+        ['evals/g.eval.ts › parked › nested › deeper', 'skipped'],
+        ['evals/g.eval.ts › someday', 'skipped'],
+        ['evals/g.eval.ts › kept', 'pass'],
       ],
     )
     assert.equal(run.summary.skipped, 3)
@@ -259,8 +268,8 @@ evaluate('kept', async () => {})
 
   test('group.todo shows as todo, like evaluate.todo: the plan, the summary and the record', async () => {
     const p = await project('group-todo', {
-      'es.config.ts': fakeConfig(),
-      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/g.eval.ts': `import { evaluate, group } from 'reeval'
 evaluate('kept', async () => {})
 evaluate.todo('later')
 group.todo('someday')
@@ -270,9 +279,9 @@ group('area', () => {
 `,
     })
     const todos = [
-      'evals/g.es.ts › later',
-      'evals/g.es.ts › someday',
-      'evals/g.es.ts › area › nested someday',
+      'evals/g.eval.ts › later',
+      'evals/g.eval.ts › someday',
+      'evals/g.eval.ts › area › nested someday',
     ]
 
     const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
@@ -284,7 +293,7 @@ group('area', () => {
     const text = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(text.code, 0, text.stdout + text.stderr)
     for (const id of todos) assert.match(text.stdout, new RegExp(`^${id} .* todo$`, 'm'), id)
-    assert.doesNotMatch(text.stdout, /^evals\/g\.es\.ts › kept .* todo$/m, 'canary: kept runs')
+    assert.doesNotMatch(text.stdout, /^evals\/g\.eval\.ts › kept .* todo$/m, 'canary: kept runs')
 
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -295,45 +304,45 @@ group('area', () => {
     assert.deepEqual(
       run.evals.map((e) => [e.id, e.outcome, e.todo]),
       [
-        ['evals/g.es.ts › kept', 'pass', false],
-        ['evals/g.es.ts › later', 'skipped', true],
-        ['evals/g.es.ts › someday', 'skipped', true],
-        ['evals/g.es.ts › area › nested someday', 'skipped', true],
+        ['evals/g.eval.ts › kept', 'pass', false],
+        ['evals/g.eval.ts › later', 'skipped', true],
+        ['evals/g.eval.ts › someday', 'skipped', true],
+        ['evals/g.eval.ts › area › nested someday', 'skipped', true],
       ],
     )
-    assert.match(read('summary.md'), /\| ↓ \| evals\/g\.es\.ts › someday \| todo \|/)
+    assert.match(read('summary.md'), /\| ↓ \| evals\/g\.eval\.ts › someday \| todo \|/)
   })
 
   test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
     const p = await project('dotenv', {
-      'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
 const id = (name: string) => process.env[name] ?? 'unset'
 export default defineConfig({
-  harness: [fakeHarness({ id: id('ES_T_BOTH') }), fakeHarness({ id: id('ES_T_ENV') }), fakeHarness({ id: id('ES_T_SHELL') })],
+  harness: [fakeHarness({ id: id('REEVAL_T_BOTH') }), fakeHarness({ id: id('REEVAL_T_ENV') }), fakeHarness({ id: id('REEVAL_T_SHELL') })],
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })
 `,
-      '.env': 'ES_T_BOTH=from-env\nES_T_ENV=only-env\nES_T_SHELL=from-env\n',
-      '.env.local': 'ES_T_BOTH=from-local\nES_T_SHELL=from-local\n',
-      'evals/sees.es.ts': `import { evaluate, expect } from 'evalsuite'
-evaluate('sees', async () => expect(process.env.ES_T_BOTH).toBe('from-local'))
+      '.env': 'REEVAL_T_BOTH=from-env\nREEVAL_T_ENV=only-env\nREEVAL_T_SHELL=from-env\n',
+      '.env.local': 'REEVAL_T_BOTH=from-local\nREEVAL_T_SHELL=from-local\n',
+      'evals/sees.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('sees', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-local'))
 `,
-      'evals/canary.es.ts': `import { evaluate, expect } from 'evalsuite'
-evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
+      'evals/canary.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'))
 `,
     })
-    const env = { ES_T_SHELL: 'from-shell' }
+    const env = { REEVAL_T_SHELL: 'from-shell' }
     const plan = await runCli(p.dir, ['run', '--dry-run', '--json'], { env })
     assert.equal(plan.code, 0, plan.stdout + plan.stderr)
     const cells = JSON.parse(plan.stdout).evals[0].cells.map((c: { key: string }) => c.key)
     assert.deepEqual(cells, ['from-local/-/fake', 'only-env/-/fake', 'from-shell/-/fake'])
 
-    await writeFile(join(p.dir, 'evals/.env.local'), 'ES_T_ENV=from-cwd\n')
+    await writeFile(join(p.dir, 'evals/.env.local'), 'REEVAL_T_ENV=from-cwd\n')
     const fromSub = await runCli(
       join(p.dir, 'evals'),
-      ['run', '--config', '../es.config.ts', '--dry-run', '--json'],
+      ['run', '--config', '../reeval.config.ts', '--dry-run', '--json'],
       { env },
     )
     assert.equal(fromSub.code, 0, fromSub.stdout + fromSub.stderr)
@@ -343,9 +352,9 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
       "run from a subdirectory, the env files still come from the config's directory",
     )
 
-    const sees = await runCli(p.dir, ['run', 'sees.es'], { env })
+    const sees = await runCli(p.dir, ['run', 'sees.eval'], { env })
     assert.equal(sees.code, 0, sees.stdout + sees.stderr)
-    const canary = await runCli(p.dir, ['run', 'canary.es'], { env })
+    const canary = await runCli(p.dir, ['run', 'canary.eval'], { env })
     assert.equal(canary.code, 1, canary.stdout + canary.stderr)
     assert.match(
       readRun(p.dir).evals[0]?.error?.message ?? '',
@@ -353,24 +362,24 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     )
   })
 
-  test('es that runs out of things to wait on, unfinished, exits 3 and says so, never 0', async () => {
+  test('reeval that runs out of things to wait on, unfinished, exits 3 and says so, never 0', async () => {
     // A config that awaits a promise nothing will settle: Node's loop empties with the run unfinished.
     const p = await project('drained', {
-      'es.config.ts': `${fakeConfig()}\nawait new Promise(() => {})\n`,
-      'evals/a.es.ts': math(1),
+      'reeval.config.ts': `${fakeConfig()}\nawait new Promise(() => {})\n`,
+      'evals/a.eval.ts': math(1),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 3, r.stdout + r.stderr)
-    assert.match(r.stderr, /es: stopped before it finished: nothing was left for it to wait on/)
+    assert.match(r.stderr, /reeval: stopped before it finished: nothing was left for it to wait on/)
   })
 
   test('usage errors exit 2', async () => {
-    const empty = await project('empty', { 'es.config.ts': fakeConfig() })
+    const empty = await project('empty', { 'reeval.config.ts': fakeConfig() })
     const none = await runCli(empty.dir)
     assert.equal(none.code, 2)
     assert.match(
       none.stderr,
-      /No eval files match evals\/\*\*\/\*\.es\.ts \(config\.include\) in \S*empty\S*\. Name eval files to match it, or set include in es\.config\.ts\./,
+      /No eval files match evals\/\*\*\/\*\.eval\.ts \(config\.include\) in \S*empty\S*\. Name eval files to match it, or set include in reeval\.config\.ts\./,
     )
 
     assert.equal((await runCli(empty.dir, ['run', '--config', 'missing.ts'])).code, 2)
@@ -378,8 +387,8 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
     assert.equal((await runCli(empty.dir, ['--help'])).code, 0)
 
     const real = await project('creds', {
-      'es.config.ts': `import { defineConfig } from 'evalsuite'\nexport default defineConfig({})\n`,
-      'evals/math.es.ts': math(1),
+      'reeval.config.ts': `import { defineConfig } from 'reeval'\nexport default defineConfig({})\n`,
+      'evals/math.eval.ts': math(1),
     })
     const creds = await runCli(real.dir)
     assert.equal(creds.code, 2)
@@ -398,25 +407,25 @@ evaluate('canary', async () => expect(process.env.ES_T_BOTH).toBe('from-env'))
 
   test("a project's own vitest, for its own tests, coexists without a warning", async () => {
     const p = await project('coexist', {
-      'es.config.ts': fakeConfig(),
-      'evals/math.es.ts': math(1),
+      'reeval.config.ts': fakeConfig(),
+      'evals/math.eval.ts': math(1),
       'node_modules/vitest/package.json': '{ "name": "vitest", "version": "3.2.0" }',
       'vitest.config.ts': 'export default {}\n',
-      'src/sum.test.ts': "throw new Error('ES must not run the project tests')\n",
+      'src/sum.test.ts': "throw new Error('reeval must not run the project tests')\n",
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.doesNotMatch(r.stderr, /warning/)
     assert.deepEqual(
       readRun(p.dir).evals.map((e) => e.id),
-      ['evals/math.es.ts › math'],
+      ['evals/math.eval.ts › math'],
     )
   })
 
   test('eval files mix TypeScript, ESM, CommonJS and JSON, with extensionless, circular imports and top-level await', async () => {
     const p = await project('module-mix', {
-      'es.config.ts': fakeConfig(),
-      'evals/mix.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/mix.eval.ts': `import { evaluate, expect } from 'reeval'
 import { a, fromB } from './circ-a'
 import cjs, { named } from './lib.cjs'
 import data from './data.json'
@@ -443,7 +452,7 @@ evaluate('mixed', async () => {
   })
 
   test('each eval file runs in a process of its own: module state and globals never cross files', async () => {
-    const body = (name: string) => `import { evaluate, expect } from 'evalsuite'
+    const body = (name: string) => `import { evaluate, expect } from 'reeval'
 import { state } from './shared'
 state.n++
 ;(globalThis as Record<string, unknown>)['${name}'] = true
@@ -453,10 +462,10 @@ evaluate('${name}', async () => {
 })
 `
     const p = await project('isolation', {
-      'es.config.ts': fakeConfig(),
+      'reeval.config.ts': fakeConfig(),
       'evals/shared.ts': 'export const state = { n: 0 }\n',
-      'evals/a.es.ts': body('a'),
-      'evals/b.es.ts': body('b'),
+      'evals/a.eval.ts': body('a'),
+      'evals/b.eval.ts': body('b'),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '1'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -464,13 +473,13 @@ evaluate('${name}', async () => {
 
   test("a tsconfig that isn't JSON fails every eval file loudly; comments and trailing commas are fine", async () => {
     const p = await project('tsconfig-json', {
-      'es.config.ts': fakeConfig(),
+      'reeval.config.ts': fakeConfig(),
       'tsconfig.json': '{ bad json',
-      'evals/a.es.ts': math(1),
+      'evals/a.eval.ts': math(1),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /evals\/a\.es\.ts: .*Failed to load tsconfig 'tsconfig\.json'/)
+    assert.match(r.stderr, /evals\/a\.eval\.ts: .*Failed to load tsconfig 'tsconfig\.json'/)
     await writeFile(
       join(p.dir, 'tsconfig.json'),
       '{\n  // ok\n  "compilerOptions": { "strict": true, },\n}\n',
@@ -481,12 +490,12 @@ evaluate('${name}', async () => {
 
   test('.only narrows only the file it is in', async () => {
     const p = await project('only-per-file', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
 evaluate('a kept', async () => {})
 evaluate.only('a focused', async () => {})
 `,
-      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'
 evaluate('b runs', async () => {})
 `,
     })
@@ -495,17 +504,17 @@ evaluate('b runs', async () => {})
     assert.deepEqual(
       readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
       [
-        ['evals/a.es.ts › a kept', 'skipped'],
-        ['evals/a.es.ts › a focused', 'pass'],
-        ['evals/b.es.ts › b runs', 'pass'],
+        ['evals/a.eval.ts › a kept', 'skipped'],
+        ['evals/a.eval.ts › a focused', 'pass'],
+        ['evals/b.eval.ts › b runs', 'pass'],
       ],
     )
   })
 
   test("an uncaught exception or unhandled rejection in an eval's worker fails the run; the other evals still finish", async () => {
     const p = await project('worker-uncaught', {
-      'es.config.ts': fakeConfig(),
-      'evals/stray.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/stray.eval.ts': `import { evaluate } from 'reeval'
 evaluate('throws later', async () => {
   setTimeout(() => { throw new Error('stray throw') }, 0)
   void Promise.reject(new Error('stray rejection'))
@@ -526,36 +535,36 @@ evaluate('fine', async () => {})
 
   test('a worker killed mid-attempt fails its attempts, names the file, and the run goes on', async () => {
     const p = await project('worker-killed', {
-      'es.config.ts': fakeConfig(),
-      'evals/dies.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/dies.eval.ts': `import { evaluate } from 'reeval'
 evaluate('killed', async (t) => {
   await t.sandbox()
   process.kill(process.pid, 'SIGKILL')
 })
 `,
-      'evals/lives.es.ts': math(1),
+      'evals/lives.eval.ts': math(1),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
       process.platform === 'win32'
-        ? /The worker running evals\/dies\.es\.ts exited unexpectedly \(exit code 1\)/
-        : /The worker running evals\/dies\.es\.ts exited unexpectedly \(signal SIGKILL\)/,
+        ? /The worker running evals\/dies\.eval\.ts exited unexpectedly \(exit code 1\)/
+        : /The worker running evals\/dies\.eval\.ts exited unexpectedly \(signal SIGKILL\)/,
     )
     assert.deepEqual(
       readRun(p.dir).evals.map((e) => [e.id, e.outcome]),
       [
-        ['evals/dies.es.ts › killed', 'fail'],
-        ['evals/lives.es.ts › math', 'pass'],
+        ['evals/dies.eval.ts › killed', 'fail'],
+        ['evals/lives.eval.ts › math', 'pass'],
       ],
     )
   })
 
   test('a worker that runs out of memory fails its attempts too', async () => {
     const p = await project('worker-oom', {
-      'es.config.ts': fakeConfig(),
-      'evals/oom.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/oom.eval.ts': `import { evaluate } from 'reeval'
 import { setFlagsFromString } from 'node:v8'
 evaluate('grows', async () => {
   setFlagsFromString('--max-old-space-size=32')
@@ -566,24 +575,24 @@ evaluate('grows', async () => {
     })
     const r = await runCli(p.dir, ['run'], { timeoutMs: 120_000 })
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /The worker running evals\/oom\.es\.ts exited unexpectedly/)
+    assert.match(r.stdout, /The worker running evals\/oom\.eval\.ts exited unexpectedly/)
     assert.equal(readRun(p.dir).evals[0]?.outcome, 'fail')
   })
 
   test('a name declared twice in one file is a usage error naming it', async () => {
     const p = await project('duplicate-name', {
-      'es.config.ts': fakeConfig(),
-      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('same', async () => {})
 evaluate('same', async () => {})
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /evals\/d\.es\.ts: evaluate\("same"\) is declared twice in this file/)
+    assert.match(r.stderr, /evals\/d\.eval\.ts: evaluate\("same"\) is declared twice in this file/)
   })
 
-  test('nothing ES ships imports vitest or vite; only engine/ imports @vitest/*', () => {
+  test('nothing reeval ships imports vitest or vite; only engine/ imports @vitest/*', () => {
     const src = join(pkgRoot, 'src')
     const files = readdirSync(src, { recursive: true, withFileTypes: true })
       .filter((entry) => entry.isFile())
@@ -604,8 +613,8 @@ evaluate('same', async () => {})
 
 describe('evaluate wrapper with the fake harness', () => {
   const agentEval = (body: string, options = '') => `
-import { evaluate, expect } from 'evalsuite'
-import { fakeJudge } from 'evalsuite/judge'
+import { evaluate, expect } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
 evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
   const turn = await t.send('write hello.txt')
   ${body}
@@ -615,10 +624,10 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
   test('turns, diff, checks and verdicts land in the run directory', async () => {
     const big = 'x'.repeat(200_000)
     const p = await project('data-out', {
-      'es.config.ts': fakeConfig({
+      'reeval.config.ts': fakeConfig({
         harness: `{ files: { 'hello.txt': 'hi\\n', 'big.txt': '${big}' }, text: 'Wrote hello.txt' }`,
       }),
-      'evals/agent.es.ts': agentEval(`
+      'evals/agent.eval.ts': agentEval(`
   await expect(turn).toHaveFile('hello.txt', /hi/)
   await expect(t).toHaveFile('big.txt')
   await expect(t.exec('cat hello.txt')).toSucceed()
@@ -705,8 +714,8 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
 
   test('a second t.send continues the same sandbox and session', async () => {
     const p = await project('multi-turn', {
-      'es.config.ts': fakeConfig({ harness: `{ files: { 'n.txt': 'x' }, text: 'ok' }` }),
-      'evals/agent.es.ts': agentEval(`
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'n.txt': 'x' }, text: 'ok' }` }),
+      'evals/agent.eval.ts': agentEval(`
   await t.exec('echo 1 > counter')
   const second = await t.send('again')
   expect(second.prompt).toBe('again')
@@ -727,9 +736,9 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
 
   test('judge options cascade from config to group, eval and call', async () => {
     const p = await project('judge-cascade', {
-      'es.config.ts': fakeConfig(),
-      'evals/j.es.ts': `import { evaluate, expect, group } from 'evalsuite'
-import { fakeJudge } from 'evalsuite/judge'
+      'reeval.config.ts': fakeConfig(),
+      'evals/j.eval.ts': `import { evaluate, expect, group } from 'reeval'
+import { fakeJudge } from 'reeval/judge'
 group('strict', { judge: { threshold: 0.95 } }, () => {
   evaluate('group threshold', async (t) => {
     await t.send('x')
@@ -756,8 +765,8 @@ evaluate('on a value', async (t) => {
 
   test('plain output streams worker progress and console.log from inside the eval', async () => {
     const p = await project('plain-progress', {
-      'es.config.ts': fakeConfig({ harness: "{ files: { 'hello.txt': 'hi' } }" }),
-      'evals/agent.es.ts': agentEval(`console.log('hello from', 'the eval')
+      'reeval.config.ts': fakeConfig({ harness: "{ files: { 'hello.txt': 'hi' } }" }),
+      'evals/agent.eval.ts': agentEval(`console.log('hello from', 'the eval')
   await expect(t.exec('cat hello.txt')).toSucceed()`),
     })
     const r = await runCli(p.dir)
@@ -780,14 +789,14 @@ evaluate('on a value', async (t) => {
         'cleaning up',
       ],
     )
-    assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.es\.ts › agent eval {2}\d+m?s$/m)
+    assert.match(r.stdout, /^\[agent#1 fake\] ✓ evals\/agent\.eval\.ts › agent eval {2}\d+m?s$/m)
   })
 
-  test('--log-order, --log-prefix and --output-logs shape what es run prints', async () => {
+  test('--log-order, --log-prefix and --output-logs shape what reeval run prints', async () => {
     // Two attempts of one file run at once in one worker; each logs after the other has started.
     const p = await project('output-flags', {
-      'es.config.ts': fakeConfig(),
-      'evals/o.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { evaluate, expect } from 'reeval'
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
 evaluate('passes', async (t) => {
   await t.send('go')
@@ -828,7 +837,7 @@ evaluate('fails', async (t) => {
     assert.match(grouped.stdout, / · grouped logs$/m)
     const out = lines(grouped.stdout)
     assert.ok(!out.some((l) => l.includes('log from passes')), 'a passing attempt prints no detail')
-    const head = out.findIndex((l) => l.startsWith('[fails#1 fake] ✗ evals/o.es.ts › fails'))
+    const head = out.findIndex((l) => l.startsWith('[fails#1 fake] ✗ evals/o.eval.ts › fails'))
     const rest = out.slice(head + 1)
     const next = rest.findIndex((l) => l.startsWith('['))
     const block = next < 0 ? rest : rest.slice(0, next)
@@ -843,9 +852,9 @@ evaluate('fails', async (t) => {
     assert.doesNotMatch(lines(none.stdout).join('\n'), /log from|sandbox ready|AssertionError/)
 
     const byEnv = await runCli(p.dir, ['run', '--ui', 'plain'], {
-      env: { ES_LOG_ORDER: 'grouped' },
+      env: { REEVAL_LOG_ORDER: 'grouped' },
     })
-    assert.match(byEnv.stdout, / · grouped logs$/m, 'ES_LOG_ORDER stands in for the flag')
+    assert.match(byEnv.stdout, / · grouped logs$/m, 'REEVAL_LOG_ORDER stands in for the flag')
     const bad = await run('--log-order', 'sideways')
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--log-order must be one of stream, grouped, auto/)
@@ -853,26 +862,26 @@ evaluate('fails', async (t) => {
 
   test('agent mode prints failures only, with record and summary paths, and no colour', async () => {
     const p = await project('agent-mode', {
-      'es.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
-      'evals/agent.es.ts': `${agentEval(`expect(await t.judge('ok?')).toPass()`)}
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
+      'evals/agent.eval.ts': `${agentEval(`expect(await t.judge('ok?')).toPass()`)}
 evaluate('passes', async () => {})
 `,
     })
     const r = await runCli(p.dir, ['run'], {
-      env: { ES_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
+      env: { REEVAL_UI: 'agent', NO_COLOR: '', FORCE_COLOR: '' },
     })
     assert.equal(r.code, 1)
     const [plan, ...out] = r.stdout.trimEnd().split('\n')
     assert.match(plan ?? '', /^plan {2}2 evals · 2 cells · 2 attempts · ~/)
-    assert.equal(out[0], 'es run: 1 eval file')
-    assert.match(out[1] ?? '', /^FAIL evals\/agent\.es\.ts › agent eval \(\d+m?s, judge\)$/)
+    assert.equal(out[0], 'reeval run: 1 eval file')
+    assert.match(out[1] ?? '', /^FAIL evals\/agent\.eval\.ts › agent eval \(\d+m?s, judge\)$/)
     assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
     assert.match(
       out[3] ?? '',
-      /^ {2}record: \.es\/runs\/[^/]+\/evals-agent-es-ts-agent-eval-[0-9a-f]{6}\/fake-fake-[0-9a-f]{6}\/1$/,
+      /^ {2}record: \.reeval\/runs\/[^/]+\/evals-agent-eval-ts-agent-eval-[0-9a-f]{6}\/fake-fake-[0-9a-f]{6}\/1$/,
     )
     assert.equal(out[4], '1 passed, 1 failed')
-    assert.match(out[5] ?? '', /^summary: \.es\/runs\/[^/]+\/summary\.md$/)
+    assert.match(out[5] ?? '', /^summary: \.reeval\/runs\/[^/]+\/summary\.md$/)
     assert.equal(out.length, 6)
     assert.ok(existsSync(join(p.dir, (out[3] ?? '').replace('  record: ', ''))))
     assert.ok(!r.stdout.includes('\x1b['))
@@ -880,13 +889,13 @@ evaluate('passes', async () => {})
 
   test('a failing judge fails the eval as a judge error', async () => {
     const p = await project('judge-fail', {
-      'es.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
-      'evals/agent.es.ts': agentEval(`expect(await t.judge('ok?')).toPass()`),
+      'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
+      'evals/agent.eval.ts': agentEval(`expect(await t.judge('ok?')).toPass()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
     assert.match(r.stdout, /judge {2}fail 0\.30/)
-    assert.match(r.stdout, /Judge failures \(1\)\n ✗ evals\/agent\.es\.ts › agent eval/)
+    assert.match(r.stdout, /Judge failures \(1\)\n ✗ evals\/agent\.eval\.ts › agent eval/)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.trial.judgements[0]?.verdict, 'fail')
     assert.equal(e?.error?.kind, 'judge')
@@ -925,10 +934,10 @@ evaluate('passes', async () => {})
     try {
       const google = pathToFileURL(join(pkgRoot, 'node_modules/@ai-sdk/google/dist/index.js')).href
       const p = await project('judge-model', {
-        'es.config.ts': fakeConfig({ harness: `{ text: 'Hello, friend!' }` }),
-        'evals/judged.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+        'reeval.config.ts': fakeConfig({ harness: `{ text: 'Hello, friend!' }` }),
+        'evals/judged.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { createGoogleGenerativeAI } from '${google}'
-const gemini = createGoogleGenerativeAI({ baseURL: 'http://127.0.0.1:${port}/v1beta', apiKey: 'es-judge-test-key' })
+const gemini = createGoogleGenerativeAI({ baseURL: 'http://127.0.0.1:${port}/v1beta', apiKey: 'reeval-judge-test-key' })
 group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test') } }, () => {
   evaluate('friendly', async (t) => {
     await t.send('greet me')
@@ -956,7 +965,7 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       assert.equal(requests.length, 2, 'one call per judge, no retries')
       for (const req of requests) {
         assert.equal(req.path, '/v1beta/models/gemini-under-test:generateContent')
-        assert.equal(req.key, 'es-judge-test-key')
+        assert.equal(req.key, 'reeval-judge-test-key')
         assert.match(req.body, /Hello, friend!/, 'the transcript is in the state the judge sees')
       }
     } finally {
@@ -966,8 +975,8 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
 
   test('a judge that errors fails the eval as a judge error', async () => {
     const p = await project('judge-error', {
-      'es.config.ts': fakeConfig(),
-      'evals/agent.es.ts': agentEval(`await t.judge('ok?', { model: 'no-provider' })`),
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': agentEval(`await t.judge('ok?', { model: 'no-provider' })`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
@@ -977,8 +986,8 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
 
   test('a judge call retries a transient provider error and records it', async () => {
     const p = await project('judge-retry', {
-      'es.config.ts': fakeConfig(),
-      'evals/agent.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
 let calls = 0
 const flaky = {
   specificationVersion: 'v4',
@@ -1010,8 +1019,8 @@ evaluate('agent eval', async (t) => {
 
   test('t.judge before any turn is an assertion error', async () => {
     const p = await project('judge-early', {
-      'es.config.ts': fakeConfig(),
-      'evals/j.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/j.eval.ts': `import { evaluate } from 'reeval'
 evaluate('early', async (t) => { await t.judge('?') })
 `,
     })
@@ -1022,8 +1031,8 @@ evaluate('early', async (t) => { await t.judge('?') })
 
   test('t.judge with an empty question or a threshold outside 0…1 fails without asking the judge', async () => {
     const p = await project('judge-bad-call', {
-      'es.config.ts': fakeConfig(),
-      'evals/j.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('empty', async (t) => { await t.send('go'); await t.judge('  ') })
 evaluate('over one', async (t) => { await t.send('go'); await t.judge('Is it ok?', { threshold: 2 }) })
 evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it ok?', { threshold: 0.5 })).toPass() })
@@ -1042,8 +1051,8 @@ evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it 
 
   test('a failing check shows the tail of stderr', async () => {
     const p = await project('check-fail', {
-      'es.config.ts': fakeConfig(),
-      'evals/agent.es.ts': agentEval(`await expect(t.exec('echo boom >&2; exit 3')).toSucceed()`),
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': agentEval(`await expect(t.exec('echo boom >&2; exit 3')).toSucceed()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
@@ -1053,8 +1062,8 @@ evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it 
 
   test('a failure with megabytes of output prints and records a bounded tail', async () => {
     const p = await project('huge-failure', {
-      'es.config.ts': fakeConfig(),
-      'evals/h.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/h.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('noisy check', async (t) => {
   await t.send('go')
   await expect(t.exec('head -c 3000000 /dev/zero | tr "\\\\0" b; echo boom >&2; exit 3')).toSucceed()
@@ -1085,8 +1094,8 @@ evaluate('huge diff', async (t) => {
   test("a turn's error message shows in the summary, agent output and summary.md without -v", async () => {
     const billing = 'Credit balance is too low to access the Anthropic API'
     const p = await project('turn-error', {
-      'es.config.ts': fakeConfig({ harness: `{ script: [[{ error: '${billing}' }]] }` }),
-      'evals/agent.es.ts': agentEval(`expect(turn.status).toBe('completed')`),
+      'reeval.config.ts': fakeConfig({ harness: `{ script: [[{ error: '${billing}' }]] }` }),
+      'evals/agent.eval.ts': agentEval(`expect(turn.status).toBe('completed')`),
     })
     const plain = await runCli(p.dir)
     assert.equal(plain.code, 1, plain.stdout + plain.stderr)
@@ -1096,15 +1105,15 @@ evaluate('huge diff', async (t) => {
     const { run, read } = readRun(p.dir)
     assert.equal(run.evals[0]?.attempts[0]?.turns[0]?.error, billing)
     assert.match(read('summary.md'), new RegExp(`- Error: ${billing}`))
-    const agent = await runCli(p.dir, ['run'], { env: { ES_UI: 'agent' } })
+    const agent = await runCli(p.dir, ['run'], { env: { REEVAL_UI: 'agent' } })
     assert.match(agent.stdout, new RegExp(`\\n {2}turn 1 error: ${billing}\\n`))
   })
 
   test('the resolved model variant is in the record, the stack, -v and summary.md', async () => {
     const served = 'composer-2.5[fast=true]'
     const p = await project('served-model', {
-      'es.config.ts': fakeConfig({ harness: `{ servedModel: '${served}' }` }),
-      'evals/agent.es.ts': agentEval(''),
+      'reeval.config.ts': fakeConfig({ harness: `{ servedModel: '${served}' }` }),
+      'evals/agent.eval.ts': agentEval(''),
     })
     const r = await runCli(p.dir, ['run', '-v'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -1123,7 +1132,7 @@ evaluate('huge diff', async (t) => {
     )
 
     // Canary: a harness that reports no model shows none.
-    await writeFile(join(p.dir, 'es.config.ts'), fakeConfig())
+    await writeFile(join(p.dir, 'reeval.config.ts'), fakeConfig())
     const quiet = await runCli(p.dir, ['run', '-v'])
     assert.equal(quiet.code, 0, quiet.stdout + quiet.stderr)
     assert.doesNotMatch(quiet.stdout, / · model /)
@@ -1134,12 +1143,12 @@ evaluate('huge diff', async (t) => {
 
   test('an unawaited toHaveFile or toSucceed fails its eval, and runs before teardown', async () => {
     const p = await project('unawaited', {
-      'es.config.ts': fakeConfig(),
-      'evals/file.es.ts': agentEval(`expect(turn).toHaveFile('missing.txt')`),
-      'evals/exec.es.ts': agentEval(
+      'reeval.config.ts': fakeConfig(),
+      'evals/file.eval.ts': agentEval(`expect(turn).toHaveFile('missing.txt')`),
+      'evals/exec.eval.ts': agentEval(
         `expect(t.exec('sleep 0.3; echo ran > late.txt')).toSucceed()`,
       ).replace("'agent eval'", "'unawaited pass'"),
-      'evals/awaited.es.ts': agentEval(
+      'evals/awaited.eval.ts': agentEval(
         `await expect(t.exec('exit 2')).not.toSucceed()\n  await expect(turn).not.toHaveFile('missing.txt')`,
       ).replace("'agent eval'", "'awaited'"),
     })
@@ -1166,8 +1175,8 @@ evaluate('huge diff', async (t) => {
 
   test('expect.soft, expect.poll and expect.assertions work inside an attempt', async () => {
     const p = await project('expect-extras', {
-      'es.config.ts': fakeConfig(),
-      'evals/x.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/x.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('soft', async () => {
   expect.soft(1).toBe(2)
   expect(3).toBe(3)
@@ -1204,9 +1213,9 @@ evaluate('asserted nothing', async () => {
 
   test('an eval with not-gated cells labels its pass rate gated; an all-gated one does not', async () => {
     const p = await project('gated-label', {
-      'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
-      'evals/c.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
 evaluate('compared', { compare: [skilled], runs: 2 }, async (t) => {
   await t.send('go')
@@ -1227,9 +1236,9 @@ evaluate('repeated', { runs: 4 }, async (t) => {
 
   test("a harness whose session never becomes ready is an infra error, once retried; its sandbox goes, other evals don't wait", async () => {
     const p = await project('start-hangs', {
-      'es.config.ts': fakeConfig(),
-      'evals/hang.es.ts': `import { evaluate, expect } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+      'reeval.config.ts': fakeConfig(),
+      'evals/hang.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 evaluate('stuck start', { harness: fakeHarness({ startHangs: true, startTimeout: '1s' }) }, async (t) => {
   await t.send('go')
 })
@@ -1256,9 +1265,9 @@ evaluate('fine', async () => expect(1).toBe(1))
 
   test('a session that hangs once becomes ready on its retry, recorded; one that starts at once is not retried', async () => {
     const p = await project('start-hangs-once', {
-      'es.config.ts': fakeConfig(),
-      'evals/once.es.ts': `import { evaluate } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+      'reeval.config.ts': fakeConfig(),
+      'evals/once.eval.ts': `import { evaluate } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 evaluate('recovers', { harness: fakeHarness({ id: 'flaky', startHangs: 1, startTimeout: '1s' }) }, async (t) => {
   await t.send('go')
 })
@@ -1282,16 +1291,16 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
 
   test('startTimeout must be a duration', async () => {
     const p = await project('start-timeout-bad', {
-      'es.config.ts': fakeConfig({ harness: "{ startTimeout: 'soon' }" }),
-      'evals/math.es.ts': math(1),
+      'reeval.config.ts': fakeConfig({ harness: "{ startTimeout: 'soon' }" }),
+      'evals/math.eval.ts': math(1),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /startTimeout of harness in es\.config\.ts: Invalid duration "soon"/)
+    assert.match(r.stderr, /startTimeout of harness in reeval\.config\.ts: Invalid duration "soon"/)
 
     // An operational limit, like maxConcurrent: results with and without it stay comparable.
     const fingerprint = async (harness: string) => {
-      await writeFile(join(p.dir, 'es.config.ts'), fakeConfig({ harness }))
+      await writeFile(join(p.dir, 'reeval.config.ts'), fakeConfig({ harness }))
       const run = await runCli(p.dir)
       assert.equal(run.code, 0, run.stdout + run.stderr)
       return readRun(p.dir).evals[0]?.cells[0]?.fingerprint
@@ -1301,12 +1310,12 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
 
   test('a harness failure is an infra error and exits 3', async () => {
     const p = await project('infra', {
-      'es.config.ts': fakeConfig({ harness: `{ failWith: 'agent CLI failed to start' }` }),
-      'evals/agent.es.ts': agentEval(''),
+      'reeval.config.ts': fakeConfig({ harness: `{ failWith: 'agent CLI failed to start' }` }),
+      'evals/agent.eval.ts': agentEval(''),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 3, r.stdout)
-    assert.match(r.stdout, /! evals\/agent\.es\.ts › agent eval/)
+    assert.match(r.stdout, /! evals\/agent\.eval\.ts › agent eval/)
     const [e] = readRun(p.dir).evals
     assert.equal(e?.outcome, 'infra_error')
     assert.deepEqual(e?.error, { kind: 'infra', message: 'agent CLI failed to start' })
@@ -1315,9 +1324,9 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
 
   test('a failure outranks an infra error in the same run: exit 1, not 3', async () => {
     const p = await project('precedence', {
-      'es.config.ts': fakeConfig(),
-      'evals/agent.es.ts': `import { evaluate, expect } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 evaluate('broken agent', { harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (t) => {
   await t.send('go')
 })
@@ -1342,8 +1351,8 @@ evaluate('fine', async () => {})
 
   test('a turn whose agent ignores the abort is cut off shortly after the timeout', async () => {
     const p = await project('stuck-turn', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000, ignoreAbort: true }' }),
-      'evals/agent.es.ts': agentEval('', `{ timeout: '2s' }`),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000, ignoreAbort: true }' }),
+      'evals/agent.eval.ts': agentEval('', `{ timeout: '2s' }`),
     })
     const started = Date.now()
     const r = await runCli(p.dir)
@@ -1362,8 +1371,8 @@ evaluate('fine', async () => {})
 
   test('a timeout aborts the agent and destroys the sandbox', async () => {
     const p = await project('timeout', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
-      'evals/agent.es.ts': agentEval('', `{ timeout: '1s' }`),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+      'evals/agent.eval.ts': agentEval('', `{ timeout: '1s' }`),
     })
     const started = Date.now()
     const r = await runCli(p.dir)
@@ -1396,8 +1405,8 @@ evaluate('fine', async () => {})
   ] as const) {
     test(`${target}, records the run and destroys the sandbox`, { skip: noSignals }, async () => {
       const p = await project('sigint', {
-        'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
-        'evals/agent.es.ts': agentEval(''),
+        'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+        'evals/agent.eval.ts': agentEval(''),
       })
       const r = await runCli(p.dir, ['run'], {
         onOutput: (stdout, pid) => {
@@ -1413,7 +1422,7 @@ evaluate('fine', async () => {})
       assert.equal(run.status, 'interrupted')
       assert.equal(evals[0]?.outcome, 'fail')
       assert.equal(evals[0]?.error?.kind, 'aborted')
-      assert.match(r.stdout, /Cancelled \(1\)\n ✗ evals\/agent\.es\.ts › agent eval/)
+      assert.match(r.stdout, /Cancelled \(1\)\n ✗ evals\/agent\.eval\.ts › agent eval/)
       assert.match(r.stdout, /Evals {2}1 cancelled/)
       assert.deepEqual(liveSandboxes(p), [])
     })
@@ -1422,20 +1431,20 @@ evaluate('fine', async () => {})
   test('an unhandled rejection in the main process mid-run prints it, redacted, and exits 3', async () => {
     const secret = 'sk-live-0123456789abcdefghij'
     const p = await project('unhandled', {
-      'es.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
+      'reeval.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
 import { existsSync } from 'node:fs'
 // The test writes ./boom (a signal would do, but Windows has none to send); workers have process.send.
 const boom = setInterval(() => {
   if (process.send || !existsSync('boom')) return
   clearInterval(boom)
-  Promise.reject(new Error(\`main process boom with \${process.env.ES_TEST_API_KEY}\`))
+  Promise.reject(new Error(\`main process boom with \${process.env.REEVAL_TEST_API_KEY}\`))
 }, 50)
 boom.unref()
 `,
-      'evals/agent.es.ts': agentEval(''),
+      'evals/agent.eval.ts': agentEval(''),
     })
     const r = await runCli(p.dir, ['run'], {
-      env: { ES_TEST_API_KEY: secret },
+      env: { REEVAL_TEST_API_KEY: secret },
       onOutput: (stdout) => {
         if (!/\] {2}\+\d+:\d\d turn 1 started$/m.test(stdout)) return false
         writeFileSync(join(p.dir, 'boom'), '')
@@ -1443,7 +1452,7 @@ boom.unref()
       },
     })
     assert.equal(r.code, 3, r.stdout + r.stderr)
-    assert.match(r.stderr, /es: main process boom with /)
+    assert.match(r.stderr, /reeval: main process boom with /)
     assert.doesNotMatch(r.stdout + r.stderr, new RegExp(secret))
   })
 
@@ -1458,7 +1467,7 @@ boom.unref()
   ] as const) {
     test(`when the main process ${how} mid-turn, its worker cancels, destroys the sandbox and exits`, async () => {
       const p = await project('main-gone', {
-        'es.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
+        'reeval.config.ts': `${fakeConfig({ harness: '{ delayMs: 60_000 }' })}
 import { existsSync } from 'node:fs'
 // The test writes ./boom (a signal would do, but Windows has none to send); workers have process.send.
 const boom = setInterval(() => {
@@ -1468,8 +1477,8 @@ const boom = setInterval(() => {
 }, 50)
 boom.unref()
 `,
-        'evals/agent.es.ts': `import { writeFileSync } from 'node:fs'
-import { evaluate } from 'evalsuite'
+        'evals/agent.eval.ts': `import { writeFileSync } from 'node:fs'
+import { evaluate } from 'reeval'
 evaluate('agent eval', async (t) => {
   writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
   await t.send('write hello.txt')
@@ -1505,13 +1514,13 @@ evaluate('agent eval', async (t) => {
     skip: noSignals,
   }, async () => {
     const p = await project('sigint-early', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
-      'evals/agent.es.ts': agentEval(''),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+      'evals/agent.eval.ts': agentEval(''),
     })
     const r = await runCli(p.dir, ['run'], {
       timeoutMs: 20_000,
       onOutput: (stdout, pid) => {
-        if (!/^es /m.test(stdout)) return false
+        if (!/^reeval /m.test(stdout)) return false
         process.kill(pid, 'SIGINT')
         return true
       },

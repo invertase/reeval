@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { picked } from './env.ts'
 
 // Must fail: with a name that is there, only that skill is staged, not its sibling.

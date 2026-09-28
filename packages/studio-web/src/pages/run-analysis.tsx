@@ -1,13 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import {
-  type AnalysisClaim,
-  type AnalysisDoc,
-  type AnalysisEntry,
-  isSuperseded,
-} from 'evalsuite/view'
 import { Sparkles } from 'lucide-react'
 import { useState } from 'react'
+import { type AnalysisClaim, type AnalysisDoc, type AnalysisEntry, isSuperseded } from 'reeval/view'
 import { CopyButton } from '@/components/copy-button'
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
@@ -101,7 +96,7 @@ function AnalysisView({ entry }: { entry: AnalysisEntry }) {
         </Badge>
         {isSuperseded(doc) ? (
           <Badge variant="outline" className="text-infra">
-            superseded: re-run es analyze
+            superseded: re-run reeval analyze
           </Badge>
         ) : null}
         <span>
@@ -164,7 +159,7 @@ function AnalysisView({ entry }: { entry: AnalysisEntry }) {
                     </>
                   ) : (
                     <span className="text-infra">
-                      Verify command rejected: {x.verifyProblem ?? 'not ES’s CLI'}
+                      Verify command rejected: {x.verifyProblem ?? 'not reeval’s CLI'}
                     </span>
                   )}
                   <Cites doc={doc} ids={x.cites} />
@@ -189,7 +184,7 @@ function AnalysisView({ entry }: { entry: AnalysisEntry }) {
   )
 }
 
-/** The run's saved analyses, and in `es studio` the locally cached ones; read-only. */
+/** The run's saved analyses, and in `reeval studio` the locally cached ones; read-only. */
 export function RunAnalysis({ runId }: { runId: string }) {
   const { data, error, isPending } = useQuery(analysisQuery(runId))
   const [picked, setPicked] = useState<string | undefined>()
@@ -199,9 +194,10 @@ export function RunAnalysis({ runId }: { runId: string }) {
   if (entries.length === 0) {
     return (
       <EmptyState icon={Sparkles} title="No analysis for this run yet">
-        Run <code className="font-mono text-xs">es analyze {runId} --save</code> to write one into
-        the run's history folder, or <code className="font-mono text-xs">es analyze --context</code>{' '}
-        to hand the digest to your own coding agent.
+        Run <code className="font-mono text-xs">reeval analyze {runId} --save</code> to write one
+        into the run's history folder, or{' '}
+        <code className="font-mono text-xs">reeval analyze --context</code> to hand the digest to
+        your own coding agent.
       </EmptyState>
     )
   }

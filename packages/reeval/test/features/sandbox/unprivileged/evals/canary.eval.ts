@@ -1,5 +1,5 @@
-import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 import { agentSaw, plain } from './env.ts'
 
 // Must fail: with docker({ root: true }) both run as root, with the capabilities apt-get needs.

@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // A workspace-placed skill's directory lands in the agent's repo skill directory, whole.

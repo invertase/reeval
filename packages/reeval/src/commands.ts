@@ -103,7 +103,7 @@ export async function recordCommand(ctx: Ctx, refs: string[]): Promise<number> {
   return 0
 }
 
-/** `es history --json`: recent runs (recorded, or with `all` scratch ones too) and each eval's strip. */
+/** `reeval history --json`: recent runs (recorded, or with `all` scratch ones too) and each eval's strip. */
 export async function historyView(
   config: ResolvedConfig,
   options: { filter?: string; limit?: number; all?: boolean } = {},
@@ -142,7 +142,7 @@ export async function showCommand(ctx: Ctx, refs: string[]): Promise<number> {
 
 /**
  * Two runs and their rows: `base` and `head` when both are given, else `head` (default latest)
- * against its nearest recorded ancestor. `json` is what `es compare --json` prints.
+ * against its nearest recorded ancestor. `json` is what `reeval compare --json` prints.
  */
 export async function compareView(config: ResolvedConfig, refs: string[]) {
   const { root } = config
@@ -210,7 +210,7 @@ export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number>
       `Commit ${sha.slice(0, 12)} isn't in this clone (rebased or not fetched). Fetch it, then try again.`,
     )
   }
-  const target = resolve(args[1] ?? join(root, '.es', 'checkouts', run.runId))
+  const target = resolve(args[1] ?? join(root, '.reeval', 'checkouts', run.runId))
   if (existsSync(target)) throw new CommandError(`${rel(target)} already exists`)
   await gitText(root, ['worktree', 'add', '--detach', '-q', target, sha])
   const patchRef = run.git.worktreePatch

@@ -1,4 +1,4 @@
-// `@evalsuite/harness-goose`: Goose on a Gemini API key, as an AI SDK harness over ACP.
+// `@reeval/harness-goose`: Goose on a Gemini API key, as an AI SDK harness over ACP.
 export {
   createGoose,
   GEMINI_API_KEY_HEADER,

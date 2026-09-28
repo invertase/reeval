@@ -129,7 +129,7 @@ async function attemptBody(
     const error = record.error ? ` · ${record.error.kind}: ${record.error.message}` : ''
     debug.log('teardown', `outcome ${record.outcome}${error}`)
     const rel = (path: string) => relativeFile(config.root, path) || '.'
-    const scratch = `.es/runs/${runId}`
+    const scratch = `.reeval/runs/${runId}`
     debug.log(
       'teardown',
       `record ${scratch}.json · artifacts ${scratch}/${evalSlug(id)}/${evalSlug(spec.cell.key)}/${spec.n} · debug ${rel(debug.dir)}`,

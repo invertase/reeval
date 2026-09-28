@@ -1,4 +1,4 @@
-// `es report`'s bundle as text: the terminal summary, report.md, and the shorter issue body.
+// `reeval report`'s bundle as text: the terminal summary, report.md, and the shorter issue body.
 import type { DoctorReport } from '../doctor.ts'
 import type { ReportBundle } from './types.ts'
 
@@ -10,7 +10,7 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 export function versionsLine(b: ReportBundle): string {
   const pm = b.packageManager
   return [
-    `ES ${b.es}`,
+    `reeval ${b.es}`,
     `Node ${b.node}`,
     b.npm ? `npm ${b.npm}` : 'no npm',
     ...(pm ? [`${pm.name}${pm.version ? ` ${pm.version}` : ''}`] : []),
@@ -23,7 +23,7 @@ export function versionsLine(b: ReportBundle): string {
 export function commandLine(b: ReportBundle): string | null {
   const i = b.invocation
   if (!i) return null
-  return `es ${i.argv.join(' ')} → exit ${i.exitCode}${i.runId ? ` (run ${i.runId})` : ''}, ${i.at}`
+  return `reeval ${i.argv.join(' ')} → exit ${i.exitCode}${i.runId ? ` (run ${i.runId})` : ''}, ${i.at}`
 }
 
 /** The error the report is about: the last command's, else the run's first failure. */
@@ -77,9 +77,9 @@ export function redactionLine(b: ReportBundle): string {
   const { masked, upstream } = b.redaction
   const already =
     upstream && upstream < masked
-      ? `, ${upstream} of them already by ES's records and logs`
+      ? `, ${upstream} of them already by reeval's records and logs`
       : upstream
-        ? ", all already by ES's records and logs"
+        ? ", all already by reeval's records and logs"
         : ''
   return `${plural(masked, 'secret value')} masked${already}; ${paths.join(', ')}`
 }
@@ -119,15 +119,15 @@ function stackLines(b: ReportBundle, max = Number.POSITIVE_INFINITY): string[] {
 /** report.md: everything in the bundle, for a person to read and attach. */
 export function renderMarkdown(b: ReportBundle, attachedFiles: string[]): string {
   const out = [
-    '# es report',
+    '# reeval report',
     '',
-    `Collected by \`es report\` at ${b.createdAt}. ${redactionLine(b)}. Review it before you share it.`,
+    `Collected by \`reeval report\` at ${b.createdAt}. ${redactionLine(b)}. Review it before you share it.`,
     '',
     '## Environment',
     '',
     '| | |',
     '|---|---|',
-    `| ES | ${b.es} |`,
+    `| reeval | ${b.es} |`,
     `| Node | ${b.node} |`,
     `| npm | ${b.npm ?? 'not found'} |`,
     `| Package manager | ${b.packageManager ? `${b.packageManager.name} ${b.packageManager.version ?? ''} (from ${b.packageManager.from})` : 'unknown'} |`,
@@ -139,8 +139,8 @@ export function renderMarkdown(b: ReportBundle, attachedFiles: string[]): string
     '## Last command',
     '',
     b.invocation
-      ? `\`es ${b.invocation.argv.join(' ')}\` exited ${b.invocation.exitCode} after ${b.invocation.durationMs} ms, at ${b.invocation.at}${b.invocation.runId ? `, run \`${b.invocation.runId}\`` : ''}.`
-      : 'No `es` command is logged in this project (`.es/cli.jsonl`).',
+      ? `\`reeval ${b.invocation.argv.join(' ')}\` exited ${b.invocation.exitCode} after ${b.invocation.durationMs} ms, at ${b.invocation.at}${b.invocation.runId ? `, run \`${b.invocation.runId}\`` : ''}.`
+      : 'No `reeval` command is logged in this project (`.reeval/cli.jsonl`).',
   ]
   if (b.invocation?.error) out.push(...fence('text', stackLines(b)))
   for (const e of b.invocation?.unhandledErrors ?? []) out.push(...fence('text', e.split('\n')))
@@ -162,7 +162,7 @@ export function renderMarkdown(b: ReportBundle, attachedFiles: string[]): string
     }
     out.push('', '### Sandbox and images', ...fence('json', [JSON.stringify(b.run.stack, null, 2)]))
   }
-  out.push('', '## es doctor')
+  out.push('', '## reeval doctor')
   if (isDoctor(b.doctor)) {
     out.push(
       ...fence(
@@ -182,7 +182,13 @@ export function renderMarkdown(b: ReportBundle, attachedFiles: string[]): string
     }
   }
   if (attachedFiles.length) {
-    out.push('', '## Attached logs', '', 'In `report-logs.tar.gz`, by path under `.es/debug`:', '')
+    out.push(
+      '',
+      '## Attached logs',
+      '',
+      'In `report-logs.tar.gz`, by path under `.reeval/debug`:',
+      '',
+    )
     out.push(...attachedFiles.map((f) => `- \`${f}\``))
   }
   return `${out.join('\n')}\n`
@@ -193,7 +199,7 @@ export function renderIssueBody(b: ReportBundle, reportDir: string | null): stri
   const out = [
     `**Environment:** ${versionsLine(b)}`,
     '',
-    `**Command:** ${b.invocation ? `\`es ${b.invocation.argv.join(' ')}\` → exit ${b.invocation.exitCode}` : 'none logged'}`,
+    `**Command:** ${b.invocation ? `\`reeval ${b.invocation.argv.join(' ')}\` → exit ${b.invocation.exitCode}` : 'none logged'}`,
   ]
   const stack = stackLines(b, 25)
   if (stack.length) out.push(...fence('text', stack))
@@ -204,7 +210,7 @@ export function renderIssueBody(b: ReportBundle, reportDir: string | null): stri
       `- \`${f.key}\`: ${f.error ? `${f.error.kind}: ${f.error.message.split('\n')[0]}` : f.outcome}`,
     )
   }
-  out.push('', `**es doctor:** ${doctorLine(b)}`)
+  out.push('', `**reeval doctor:** ${doctorLine(b)}`)
   if (isDoctor(b.doctor)) {
     for (const c of b.doctor.checks.filter((c) => c.status === 'fail' || c.status === 'warn')) {
       out.push(`- ${c.status} ${c.id}: ${c.summary}`)
@@ -215,14 +221,14 @@ export function renderIssueBody(b: ReportBundle, reportDir: string | null): stri
     '',
     reportDir
       ? `The full report is in \`${reportDir}\`: attach \`report.md\` (and \`report-logs.tar.gz\`, if it's there) to this issue.`
-      : 'Run `es report --out <dir>` and attach `report.md` to this issue.',
+      : 'Run `reeval report --out <dir>` and attach `report.md` to this issue.',
   )
   return out.join('\n')
 }
 
 /** The issue's title, from the error. */
 export function issueTitle(b: ReportBundle): string {
-  const command = b.invocation?.command ? `es ${b.invocation.command}` : 'es'
+  const command = b.invocation?.command ? `reeval ${b.invocation.command}` : 'es'
   const what = headline(b) ?? (b.run ? `run ended ${b.run.outcome}` : 'bug report')
   const title = `${command}: ${what}`
   return title.length > 100 ? `${title.slice(0, 99)}…` : title

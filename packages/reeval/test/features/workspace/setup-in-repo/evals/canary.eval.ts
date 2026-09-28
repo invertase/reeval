@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { built } from './env.ts'
 
 // Must fail: setup saw the v1 tag, not main.

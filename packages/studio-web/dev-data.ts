@@ -4,24 +4,26 @@ import type { Plugin } from 'vite'
 const DATA = /^\/(?:data\/|studio\.json|api\/)/
 
 /**
- * Dev only: serves the studio data routes from `ES_STUDIO_PROJECT` (an ES project folder) on the
- * Vite origin, through the same Hono app as `es studio`. Needs `pnpm --filter evalsuite build`.
+ * Dev only: serves the studio data routes from `REEVAL_STUDIO_PROJECT` (a reeval project folder) on the
+ * Vite origin, through the same Hono app as `reeval studio`. Needs `pnpm --filter reeval build`.
  */
 export function studioDevData(): Plugin {
   return {
-    name: 'es-studio-dev-data',
+    name: 'reeval-studio-dev-data',
     apply: 'serve',
     async configureServer(server) {
-      const project = process.env.ES_STUDIO_PROJECT
+      const project = process.env.REEVAL_STUDIO_PROJECT
       if (!project) {
-        server.config.logger.warn('Set ES_STUDIO_PROJECT=<es project dir> to load run history.')
+        server.config.logger.warn(
+          'Set REEVAL_STUDIO_PROJECT=<reeval project dir> to load run history.',
+        )
         return
       }
       const root = resolve(project)
-      const dist = new URL('../evalsuite/dist/', import.meta.url)
+      const dist = new URL('../reeval/dist/', import.meta.url)
       const { loadConfig } = await import(new URL('config.js', dist).href)
       const { devListener } = await import(new URL('studio/index.js', dist).href)
-      const config = await loadConfig(join(root, 'es.config.ts'), 'studio')
+      const config = await loadConfig(join(root, 'reeval.config.ts'), 'studio')
       const listener = devListener(
         { root: config.root, historyDir: config.history.dir, scratch: true },
         'dev',

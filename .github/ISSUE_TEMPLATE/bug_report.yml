@@ -1,23 +1,23 @@
 name: Bug report
-description: Something in ES broke. Run `es report --issue` to fill this in.
+description: Something in reeval broke. Run `reeval report --issue` to fill this in.
 labels: [bug]
 body:
   - type: markdown
     attributes:
       value: |
-        `es report --issue` fills in the report below from your project, redacted: versions, `es doctor`, the config's shape, the last command's error and the run's failures. Review it before you submit.
+        `reeval report --issue` fills in the report below from your project, redacted: versions, `reeval doctor`, the config's shape, the last command's error and the run's failures. Review it before you submit.
   - type: textarea
     id: what-happened
     attributes:
       label: What happened
-      description: What you ran, what you expected, and what ES did instead.
+      description: What you ran, what you expected, and what reeval did instead.
     validations:
       required: true
   - type: textarea
     id: report
     attributes:
-      label: es report
-      description: The summary from `es report`. Attach `report.md` (and `report-logs.tar.gz`, if there is one) from the folder it names, for the rest.
+      label: reeval report
+      description: The summary from `reeval report`. Attach `report.md` (and `report-logs.tar.gz`, if there is one) from the folder it names, for the rest.
     validations:
       required: false
   - type: textarea

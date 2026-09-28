@@ -1,5 +1,5 @@
 // Drives the built studio in a real browser: a static build served from a subpath, and a live
-// `es studio` that picks up a new run over SSE. Skips when no Chrome or Chromium is installed.
+// `reeval studio` that picks up a new run over SSE. Skips when no Chrome or Chromium is installed.
 import assert from 'node:assert/strict'
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process'
 import {
@@ -20,13 +20,13 @@ import { extname, join, normalize } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { type Browser, chromium, type Page } from 'playwright-core'
-import { withUnknownFields } from '../../evalsuite/scripts/schema/validate.ts'
+import { withUnknownFields } from '../../reeval/scripts/schema/validate.ts'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
-const cli = join(repo, 'packages/evalsuite/dist/cli.js')
-const demo = join(tmpdir(), `es-studio-e2e-${process.pid}`)
-const config = join(demo, 'es.demo.config.ts')
-const corpus = join(repo, 'packages/evalsuite/test/fixtures/records')
+const cli = join(repo, 'packages/reeval/dist/cli.js')
+const demo = join(tmpdir(), `reeval-studio-e2e-${process.pid}`)
+const config = join(demo, 'reeval.demo.config.ts')
+const corpus = join(repo, 'packages/reeval/test/fixtures/records')
 
 let browser: Browser | null = null
 const children: ChildProcess[] = []
@@ -101,7 +101,7 @@ after(async () => {
   await rm(demo, { recursive: true, force: true })
 })
 
-/** A saved analysis as `es analyze --save` writes it, citing one failing attempt. */
+/** A saved analysis as `reeval analyze --save` writes it, citing one failing attempt. */
 function savedAnalysis(runId: string, attempt: { slug: string; id: string }) {
   const doc = {
     kind: 'es-analysis',
@@ -109,7 +109,7 @@ function savedAnalysis(runId: string, attempt: { slug: string; id: string }) {
     scope: { kind: 'run', head: runId, base: null, evals: null },
     anchor: runId,
     inputs: { records: [], digestVersion: 1, digestHash: 'sha256:0' },
-    promptVersion: 'analysis-v1',
+    promptVersion: 'analysis-v2',
     model: 'fake',
     resolvedModel: null,
     route: 'fake',
@@ -122,7 +122,7 @@ function savedAnalysis(runId: string, attempt: { slug: string; id: string }) {
       invalid: [],
       dropped: 0,
       commands: 1,
-      invalidCommands: ['es run --nope'],
+      invalidCommands: ['reeval run --nope'],
       unverifiedNumbers: 0,
     },
     analysis: {
@@ -136,12 +136,12 @@ function savedAnalysis(runId: string, attempt: { slug: string; id: string }) {
       actions: [
         {
           title: 'Retry it',
-          target: 'evals/greet.es.ts',
+          target: 'evals/greet.eval.ts',
           kind: 'eval',
           change: 'Run it again',
           expectedEffect: 'It passes',
           verify: null,
-          verifyProblem: 'es run --nope',
+          verifyProblem: 'reeval run --nope',
           impact: 'low',
           effort: 'low',
           cites: ['F1'],
@@ -194,7 +194,7 @@ describe('studio in a browser', () => {
 
     await page.getByRole('tab', { name: 'Analysis' }).click()
     await page.getByText('The greet module regressed in one attempt.').waitFor()
-    await page.getByText('Verify command rejected: es run --nope').waitFor()
+    await page.getByText('Verify command rejected: reeval run --nope').waitFor()
     await page.getByRole('link', { name: 'r1/greet/control#1' }).click()
     await page.waitForSelector('[role=tablist]')
     assert.match(page.url(), /\/attempts\//, 'a citation opens its attempt')
@@ -230,7 +230,7 @@ describe('studio in a browser', () => {
     cpSync(join(corpus, name), project, { recursive: true })
     extra?.(join(project, 'evals/.history'))
     mkdirSync(join(project, 'node_modules'), { recursive: true })
-    symlinkSync(join(repo, 'packages/evalsuite'), join(project, 'node_modules/evalsuite'), 'dir')
+    symlinkSync(join(repo, 'packages/reeval'), join(project, 'node_modules/reeval'), 'dir')
     const out = join(project, 'site')
     const built = spawnSync(process.execPath, [cli, 'studio', 'build', '--out', out], {
       cwd: project,
@@ -297,18 +297,18 @@ describe('studio in a browser', () => {
     for (const name of names) await readEverything(await buildCorpus(name), name)
   })
 
-  test('a run from a newer ES, with fields and values this one lacks, still renders', async (t) => {
+  test('a run from a newer reeval, with fields and values this one lacks, still renders', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
     const schema = JSON.parse(
-      readFileSync(join(repo, 'packages/evalsuite/schema/run-record.schema.json'), 'utf8'),
+      readFileSync(join(repo, 'packages/reeval/schema/run-record.schema.json'), 'utf8'),
     )
     const out = await buildCorpus('real-harnesses', (history) => {
       const [name] = readdirSync(history).filter((n) => n.endsWith('.json'))
       const r = JSON.parse(readFileSync(join(history, name as string), 'utf8'))
-      withUnknownFields(schema, r, () => ({ by: 'a newer ES' }))
+      withUnknownFields(schema, r, () => ({ by: 'a newer reeval' }))
       r.status = 'paused'
       r.evals[0].attempts[0].outcome = 'cancelled'
-      r.evals[0].attempts[0].error = { kind: 'quota', message: 'a kind this ES does not know' }
+      r.evals[0].attempts[0].error = { kind: 'quota', message: 'a kind this reeval does not know' }
       r.evals[0].attempts[1].turns[0].status = 'paused'
       writeFileSync(join(history, name as string), JSON.stringify(r, null, 2))
       for (const f of readdirSync(history, { recursive: true }) as string[]) {
@@ -323,7 +323,7 @@ describe('studio in a browser', () => {
     await readEverything(out, 'newer')
   })
 
-  test('es studio needs its token, then shows new runs as they land', async (t) => {
+  test('reeval studio needs its token, then shows new runs as they land', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
     // Only the run made below has local debug data.
     const cleaned = spawnSync(process.execPath, [cli, 'clean', '--config', config], {
@@ -357,7 +357,7 @@ describe('studio in a browser', () => {
 
     const run = spawnSync(process.execPath, [cli, 'run', '--config', config], {
       cwd: demo,
-      env: { ...process.env, NO_COLOR: '1', ES_UI: 'plain', CI: '' },
+      env: { ...process.env, NO_COLOR: '1', REEVAL_UI: 'plain', CI: '' },
       encoding: 'utf8',
     })
     assert.equal(run.status, 0, run.stdout + run.stderr)
@@ -365,14 +365,14 @@ describe('studio in a browser', () => {
       timeout: 10_000,
     })
 
-    // An attempt of the new run has a Debug tab: its phase timeline, from .es/debug.
+    // An attempt of the new run has a Debug tab: its phase timeline, from .reeval/debug.
     await page.locator('tbody tr').first().click()
     await page.waitForSelector('h2')
     await page.locator('a[href*="/attempts/"]').first().click()
     await page.getByRole('tab', { name: 'Debug' }).click()
     await page.getByText('Phase timeline').waitFor()
     await page.getByRole('button', { name: /^plan/ }).first().click()
-    await page.locator('pre', { hasText: 'config es.demo.config.ts · no profile' }).waitFor()
+    await page.locator('pre', { hasText: 'config reeval.demo.config.ts · no profile' }).waitFor()
     await page.getByText('Network requests').waitFor()
 
     // An older run's attempt has none, so no tab.
@@ -392,7 +392,7 @@ describe('studio in a browser', () => {
   const waitForLive = (page: Page, timeout: number) =>
     page.locator('[data-live-run]', { hasText: /Running 0\/4/ }).waitFor({ timeout })
 
-  test('es studio shows a run in progress attempt by attempt, until its record replaces it', async (t) => {
+  test('reeval studio shows a run in progress attempt by attempt, until its record replaces it', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
     // Four attempts, two at a time, each held until the test writes its gate: the run is in
     // progress for as long as the test needs, however slow the machine.
@@ -402,20 +402,23 @@ describe('studio in a browser', () => {
     }
     mkdirSync(gates, { recursive: true })
     writeFileSync(
-      join(demo, 'evals/gated.es.ts'),
+      join(demo, 'evals/gated.eval.ts'),
       `import { existsSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 evaluate('waits for its gate', async (t) => {
   while (!existsSync(new URL(\`../live-gate/\${t.attempt.n}\`, import.meta.url))) await sleep(50)
   await expect(await t.send('Create greet.js')).toHaveFile('greet.js')
 })
 `,
     )
-    const gated = join(demo, 'es.gated.config.ts')
+    const gated = join(demo, 'reeval.gated.config.ts')
     writeFileSync(
       gated,
-      readFileSync(config, 'utf8').replace(/include: \[[^\]]*\]/, 'include: ["evals/gated.es.ts"]'),
+      readFileSync(config, 'utf8').replace(
+        /include: \[[^\]]*\]/,
+        'include: ["evals/gated.eval.ts"]',
+      ),
     )
     const child = spawn(process.execPath, [cli, 'studio', '--config', config, '--port', '47433'], {
       env: { ...process.env, NO_COLOR: '1' },
@@ -439,7 +442,7 @@ evaluate('waits for its gate', async (t) => {
     const run = spawn(
       process.execPath,
       [cli, 'run', '--config', gated, '--runs', '4', '--concurrency', '2'],
-      { cwd: demo, env: { ...process.env, NO_COLOR: '1', ES_UI: 'plain', CI: '' } },
+      { cwd: demo, env: { ...process.env, NO_COLOR: '1', REEVAL_UI: 'plain', CI: '' } },
     )
     children.push(run)
     let runOut = ''
@@ -486,7 +489,7 @@ evaluate('waits for its gate', async (t) => {
       null,
       { timeout: 30_000 },
     )
-    const shot = process.env.ES_STUDIO_LIVE_SCREENSHOT
+    const shot = process.env.REEVAL_STUDIO_LIVE_SCREENSHOT
     if (shot) await page.screenshot({ path: shot })
     assert.equal(await page.getByText(/^Running \d\/4$/).textContent(), 'Running 1/4')
 

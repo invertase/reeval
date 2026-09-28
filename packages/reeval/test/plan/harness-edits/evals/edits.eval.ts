@@ -1,5 +1,5 @@
-import { evaluate, group } from 'evalsuite'
-import { cursor } from 'evalsuite/harness'
+import { evaluate, group } from 'reeval'
+import { cursor } from 'reeval/harness'
 
 // The data forms of a harness edit plan the same cells as the functions they stand for.
 const fast = cursor({ model: 'composer-2', id: 'fast' })

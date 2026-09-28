@@ -9,7 +9,7 @@ Keep a second config next to your real one. It swaps in `fakeHarness()`, `fakeSa
 
 ## The files
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 import { docker } from '{{ pkg }}/sandbox'
@@ -21,7 +21,7 @@ export default defineConfig({
 })
 ```
 
-```ts title="es.fake.config.ts"
+```ts title="reeval.fake.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
@@ -55,15 +55,15 @@ export default defineConfig({
 ```json title="package.json (scripts)"
 {
   "scripts": {
-    "eval": "es run",
-    "eval:fake": "es run --config es.fake.config.ts"
+    "eval": "reeval run",
+    "eval:fake": "reeval run --config reeval.fake.config.ts"
   }
 }
 ```
 
-The evals are `examples/hello/evals/hello.es.ts` and this one, which checks the second scripted turn:
+The evals are `examples/hello/evals/hello.eval.ts` and this one, which checks the second scripted turn:
 
-```ts title="evals/scripted.es.ts"
+```ts title="evals/scripted.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('runs the tests after a follow-up', async (t) => {
@@ -80,21 +80,21 @@ evaluate('runs the tests after a follow-up', async (t) => {
 ## Run it
 
 ```bash
-npx es run --config es.fake.config.ts --log-order grouped
+npx reeval run --config reeval.fake.config.ts --log-order grouped
 ```
 
 ```text
-[runs#1 fake] ✓ evals/scripted.es.ts › runs the tests after a follow-up  131ms
+[runs#1 fake] ✓ evals/scripted.eval.ts › runs the tests after a follow-up  131ms
 [runs#1 fake]  +0:00 sandbox ready 18ms
 [runs#1 fake]  +0:00 turn 1 done 2ms · 0 tool calls, 3 file edits
 [runs#1 fake]  +0:00 turn 2 done 76ms · 1 tool call, 3 file edits
 …
 Summary
- evals/hello.es.ts
+ evals/hello.eval.ts
    greet module
      ✓ creates a tested greet module              134ms  judge 0.95  1 turn
      ✓ adds a default name in a follow-up turn    153ms  judge 0.95  2 turns
- evals/scripted.es.ts
+ evals/scripted.eval.ts
    ✓ runs the tests after a follow-up             131ms  2 turns
 
    Evals  3 passed (3)
@@ -103,20 +103,20 @@ Duration  944ms
 
 The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`t.exec`, `toHaveFile`, `t.judge`) run for real against what it wrote.
 
-When a coding agent runs ES for you, agent output prints only the failures, and the expected misses of ungated cells as `MISS`. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose:
+When a coding agent runs reeval for you, agent output prints only the failures, and the expected misses of ungated cells as `MISS`. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose:
 
 ```bash
-ES_UI=agent npx es run --config es.fake.config.ts
+REEVAL_UI=agent npx reeval run --config reeval.fake.config.ts
 ```
 
 ```text
 plan  10 evals · 11 cells · 11 attempts · ~3s serial (~633ms at concurrency 4)
-es run: 3 eval files
-MISS evals/skill.es.ts › house greeting › greets in the house style [control] (152ms, assertion, not gated)
+reeval run: 3 eval files
+MISS evals/skill.eval.ts › house greeting › greets in the house style [control] (152ms, assertion, not gated)
   Error: expected command to succeed, exit code 1
-  record: .es/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
+  record: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/evals-skill-eval-ts-house-greeting-greets-in-the-house-style-55be48/fake-fake-70e87d/1
 10 passed, 1 missed, not gated (11 attempts, 10 evals)
-summary: .es/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
+summary: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
 ```
 
 <Warning>
@@ -140,25 +140,25 @@ summary: .es/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
 
 ## Simulate an infra failure
 
-```ts title="es.fail.config.ts"
+```ts title="reeval.fail.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
 
 export default defineConfig({
-  include: ['evals/scripted.es.ts'],
+  include: ['evals/scripted.eval.ts'],
   harness: fakeHarness({ failWith: 'the agent CLI crashed on start' }),
   sandbox: fakeSandbox(),
 })
 ```
 
 ```bash
-npx es run --config es.fail.config.ts
+npx reeval run --config reeval.fail.config.ts
 ```
 
 ```text
 Infra errors (1)
- ! evals/scripted.es.ts › runs the tests after a follow-up
+ ! evals/scripted.eval.ts › runs the tests after a follow-up
    infra error
    the agent CLI crashed on start
 …
@@ -172,7 +172,7 @@ The run exits 3, so you can check how your CI treats an infrastructure error bef
 
 `layout` makes the fake agent read rules and skills where a real one would. With `layout: 'claude-code'`, rules go to `CLAUDE.md`:
 
-```ts title="evals/rules.es.ts"
+```ts title="evals/rules.eval.ts"
 import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 
 const houseRules = defineEnvironment('house-rules', {
@@ -203,9 +203,9 @@ Both configs plan the same evals, so `--dry-run` under either shows the same eva
 
 - **A flaky agent:** `fakeHarness({ files, flakeRate: 0.3 })` writes nothing in about 30% of attempts, for trying `gate: { passRate }`.
 - **Canned tool calls:** `tools: [{ tool: 'read', input: {…}, output: '…' }]` adds tool events to every turn, for transcript checks.
-- **Only some files:** `include: ['evals/hello.es.ts']` in the fake config leaves out evals that need a real agent or Docker.
-- **Profiles:** the fake config needs its own `profiles` if you pass `--profile`; `examples/hello/es.fake.config.ts` has `smoke` and `nightly`.
-- **Record fake runs:** `es run --config es.fake.config.ts --record` writes history you can open in `es studio`, handy for trying the studio or `es query`.
+- **Only some files:** `include: ['evals/hello.eval.ts']` in the fake config leaves out evals that need a real agent or Docker.
+- **Profiles:** the fake config needs its own `profiles` if you pass `--profile`; `examples/hello/reeval.fake.config.ts` has `smoke` and `nightly`.
+- **Record fake runs:** `reeval run --config reeval.fake.config.ts --record` writes history you can open in `reeval studio`, handy for trying the studio or `reeval query`.
 
 ## Next
 

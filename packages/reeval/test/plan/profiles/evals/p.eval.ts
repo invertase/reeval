@@ -1,5 +1,5 @@
-import { defineEnvironment, evaluate } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+import { defineEnvironment, evaluate } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 
 const skilled = defineEnvironment('skilled', { env: { MODE: 'x' } })
 

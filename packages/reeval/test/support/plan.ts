@@ -13,19 +13,19 @@ export type PlanCase = {
   env?: NodeJS.ProcessEnv
 }
 
-/** `es run --dry-run --json` in a copy of the case's directory: exit 0 and one JSON document. */
+/** `reeval run --dry-run --json` in a copy of the case's directory: exit 0 and one JSON document. */
 export async function planJson(c: Omit<PlanCase, 'name'>): Promise<PlanDocument> {
   const p = await fixture(`plan/${c.dir}`)
   const r = await runCli(p.dir, ['run', '--dry-run', '--json', ...c.args], {
     ...(c.env ? { env: c.env } : {}),
   })
   assert.equal(r.code, 0, r.stdout + r.stderr)
-  assert.equal(existsSync(join(p.dir, '.es/runs')), false, 'a dry run writes no run')
+  assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
   try {
     return JSON.parse(r.stdout) as PlanDocument
   } catch (error) {
     throw new Error(
-      `es run --dry-run --json printed ${r.stdout.length} characters that aren't one JSON document (${(error as Error).message}):\n${r.stdout.slice(0, 400)}\n…\n${r.stdout.slice(-400)}\nstderr:\n${r.stderr}`,
+      `reeval run --dry-run --json printed ${r.stdout.length} characters that aren't one JSON document (${(error as Error).message}):\n${r.stdout.slice(0, 400)}\n…\n${r.stdout.slice(-400)}\nstderr:\n${r.stderr}`,
     )
   }
 }
@@ -115,20 +115,22 @@ export function renderPlan(plan: PlanDocument): string {
   ].join('\n')
 }
 
-/** Compares with the snapshot at `test/<path>`; `ES_UPDATE_SNAPSHOTS=1` writes it instead. */
+/** Compares with the snapshot at `test/<path>`; `REEVAL_UPDATE_SNAPSHOTS=1` writes it instead. */
 export function matchFile(path: string, actual: string): void {
   const file = join(testDir, path)
-  if (process.env.ES_UPDATE_SNAPSHOTS === '1') {
+  if (process.env.REEVAL_UPDATE_SNAPSHOTS === '1') {
     mkdirSync(dirname(file), { recursive: true })
     writeFileSync(file, actual)
     return
   }
   if (!existsSync(file)) {
-    assert.fail(`No snapshot at test/${path}. Write it with ES_UPDATE_SNAPSHOTS=1, then review it.`)
+    assert.fail(
+      `No snapshot at test/${path}. Write it with REEVAL_UPDATE_SNAPSHOTS=1, then review it.`,
+    )
   }
   assert.equal(
     actual,
     readFileSync(file, 'utf8'),
-    `test/${path} (ES_UPDATE_SNAPSHOTS=1 rewrites it)`,
+    `test/${path} (REEVAL_UPDATE_SNAPSHOTS=1 rewrites it)`,
   )
 }

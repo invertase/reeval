@@ -1,4 +1,4 @@
-# Releases @invertase/foobar. release-please keeps a release PR open from the Conventional
+# Releases reeval. release-please keeps a release PR open from the Conventional
 # Commits on main (version, CHANGELOG.md); merging it tags vX.Y.Z and creates the GitHub release.
 # Then ci.yml runs on that commit, and the tarball its pack job uploads is published to npm with
 # trusted publishing (OIDC, no token). npm's trusted publisher for the package names this file
@@ -18,7 +18,7 @@ concurrency:
 jobs:
   release-please:
     name: release-please
-    if: github.repository == 'invertase/evalsuite'
+    if: github.repository == 'invertase/reeval'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 export const typo = defineEnvironment('typo', ({ skill }) => ({
   skills: [skill.local('../skills', { only: ['house-greting'], placement: 'workspace' })],

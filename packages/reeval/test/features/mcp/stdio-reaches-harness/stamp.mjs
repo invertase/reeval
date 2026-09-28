@@ -3,7 +3,7 @@
 import { appendFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 
-const LOG = '/tmp/es-mcp-stamp.log'
+const LOG = '/tmp/reeval-mcp-stamp.log'
 const send = (m) => process.stdout.write(`${JSON.stringify(m)}\n`)
 createInterface({ input: process.stdin }).on('line', (line) => {
   let m

@@ -5,8 +5,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, posix, sep } from 'node:path'
 import { test } from 'node:test'
-import { VERSION } from '@evalsuite/harness-antigravity'
-import { VERSION as CURSOR_VERSION } from '@evalsuite/harness-cursor-sdk'
+import { VERSION } from '@reeval/harness-antigravity'
+import { VERSION as CURSOR_VERSION } from '@reeval/harness-cursor-sdk'
 import { baseEnv, fakeConfig, pkgRoot, readRun, spawnTool, tempDir } from './helpers.ts'
 
 const sh = (cmd: string, cwd: string, args: string[], timeout = 120_000) =>
@@ -27,7 +27,7 @@ const berry = (cwd: string, args: string[], timeout = 240_000) =>
     encoding: 'utf8',
     timeout,
   })
-// Linux containers: Windows runners' Docker runs Windows containers only, which ES refuses.
+// Linux containers: Windows runners' Docker runs Windows containers only, which reeval refuses.
 const hasDocker =
   sh('docker', pkgRoot, ['info', '--format', '{{.OSType}}']).stdout?.trim() === 'linux'
 
@@ -47,9 +47,9 @@ async function makeApp(dir: string, pkg: string) {
   const app = join(dir, 'app')
   await mkdir(join(app, 'evals'), { recursive: true })
   await writeFile(join(app, 'package.json'), '{ "name": "app", "private": true, "type": "module" }')
-  await writeFile(join(app, 'es.config.ts'), fakeConfig().replaceAll("'evalsuite", `'${pkg}`))
+  await writeFile(join(app, 'reeval.config.ts'), fakeConfig().replaceAll("'reeval", `'${pkg}`))
   await writeFile(
-    join(app, 'evals/hello.es.ts'),
+    join(app, 'evals/hello.eval.ts'),
     `import { evaluate, expect } from '${pkg}'
 evaluate('hello', async (t) => {
   await t.send('say hi')
@@ -94,7 +94,7 @@ const installers = [
 ]
 
 for (const installer of installers) {
-  test(`the packed package installs with ${installer.name} and runs es`, {
+  test(`the packed package installs with ${installer.name} and runs reeval`, {
     skip: noTools || installer.skip,
     timeout: 600_000,
   }, async () => {
@@ -102,11 +102,11 @@ for (const installer of installers) {
     const app = await makeApp(dir, pkg)
     const added = sh(installer.cmd, app, installer.args(tarball), 240_000)
     assert.equal(added.status, 0, added.stdout + added.stderr)
-    const es = (...args: string[]) => sh(join(app, 'node_modules/.bin/es'), app, args, 60_000)
+    const es = (...args: string[]) => sh(join(app, 'node_modules/.bin/reeval'), app, args, 60_000)
     assert.equal(es('--version').stdout.trim(), manifest.version)
     const run = es('run')
     assert.equal(run.status, 0, run.stdout + run.stderr)
-    assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+    assert.match(run.stdout, /✓ evals\/hello\.eval\.ts › hello/)
   })
 }
 
@@ -132,9 +132,9 @@ test("the packed package runs beside the project's own, different vitest", {
   assert.equal(added.status, 0, added.stdout + added.stderr)
   const theirs = JSON.parse(readFileSync(join(app, 'node_modules/vitest/package.json'), 'utf8'))
   assert.equal(theirs.version, '3.2.4')
-  const run = sh(join(app, 'node_modules/.bin/es'), app, ['run', '--ui', 'plain'], 60_000)
+  const run = sh(join(app, 'node_modules/.bin/reeval'), app, ['run', '--ui', 'plain'], 60_000)
   assert.equal(run.status, 0, run.stdout + run.stderr)
-  assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+  assert.match(run.stdout, /✓ evals\/hello\.eval\.ts › hello/)
   assert.doesNotMatch(run.stdout + run.stderr, /sum\.test|warning/)
   // The canary: the project's own vitest still runs its own tests.
   const unit = sh(join(app, 'node_modules/.bin/vitest'), app, ['run', 'src'], 120_000)
@@ -143,9 +143,9 @@ test("the packed package runs beside the project's own, different vitest", {
 })
 
 // Plug'n'Play has no node_modules: the CLI, its worker and jiti resolve everything through
-// .pnp.cjs, and ES asks to be unplugged so its files (the worker, Docker's build context) are
+// .pnp.cjs, and reeval asks to be unplugged so its files (the worker, Docker's build context) are
 // on disk rather than inside Yarn's zip cache.
-test("the packed package installs with Yarn Berry's Plug'n'Play and runs es", {
+test("the packed package installs with Yarn Berry's Plug'n'Play and runs reeval", {
   skip: noTools || (!hasCorepack && !process.env.CI && 'needs corepack'),
   timeout: 600_000,
 }, async () => {
@@ -165,15 +165,15 @@ test("the packed package installs with Yarn Berry's Plug'n'Play and runs es", {
   assert.ok(!existsSync(join(app, 'node_modules')), 'no node_modules under PnP')
   assert.ok(
     readdirSync(join(app, '.yarn/unplugged')).some((d) => d.startsWith(pkg.replace('/', '-'))),
-    'ES is unplugged',
+    'reeval is unplugged',
   )
-  assert.equal(berry(app, ['es', '--version']).stdout.trim(), manifest.version)
-  const run = berry(app, ['es', 'run', '--ui', 'plain'], 60_000)
+  assert.equal(berry(app, ['reeval', '--version']).stdout.trim(), manifest.version)
+  const run = berry(app, ['reeval', 'run', '--ui', 'plain'], 60_000)
   assert.equal(run.status, 0, run.stdout + run.stderr)
-  assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+  assert.match(run.stdout, /✓ evals\/hello\.eval\.ts › hello/)
 })
 
-test('the packed package installs into a clean project and runs es', {
+test('the packed package installs into a clean project and runs reeval', {
   skip: noTools,
   timeout: 900_000,
 }, async () => {
@@ -192,11 +192,11 @@ test('the packed package installs into a clean project and runs es', {
   assert.doesNotMatch(listing, /^package\/(src|test)\//m)
   assert.doesNotMatch(listing, /^package\/dist\/studio-app\/third-party\.json$/m)
 
-  // The @evalsuite/* packages are bundled into dist, so nothing in the manifest points at the
+  // The @reeval/* packages are bundled into dist, so nothing in the manifest points at the
   // workspace.
   assert.equal(manifest.license, 'Apache-2.0')
   assert.doesNotMatch(JSON.stringify(manifest), /workspace:/)
-  assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@evalsuite/')))
+  assert.ok(!Object.keys(manifest.dependencies).some((d) => d.startsWith('@reeval/')))
 
   // THIRD_PARTY_NOTICES.md: the third-party code inlined into the tarball, each package with
   // its licence text, and none of the dependencies npm installs.
@@ -245,18 +245,18 @@ test('the packed package installs into a clean project and runs es', {
   )
   assert.equal(added.status, 0, added.stdout + added.stderr)
 
-  const es = (...args: string[]) => sh(join(app, 'node_modules/.bin/es'), app, args, 60_000)
+  const es = (...args: string[]) => sh(join(app, 'node_modules/.bin/reeval'), app, args, 60_000)
   assert.equal(es('--version').stdout.trim(), manifest.version)
   assert.equal(es('image', 'build', '--help').status, 0)
   const run = es('run')
   assert.equal(run.status, 0, run.stdout + run.stderr)
-  assert.match(run.stdout, /✓ evals\/hello\.es\.ts › hello/)
+  assert.match(run.stdout, /✓ evals\/hello\.eval\.ts › hello/)
   assert.equal(es('show').status, 0)
   // Adapters the package bundles can't be resolved by name, but the run still records them.
-  assert.equal(readRun(app).run.stack.packages['@evalsuite/harness-antigravity'], VERSION)
+  assert.equal(readRun(app).run.stack.packages['@reeval/harness-antigravity'], VERSION)
 
-  // Nothing that ships imports an @evalsuite/* package, and every chunk loads with the installed
-  // package's dependencies alone. cli.js runs `es` or `es __worker` by importing the CLI's chunk
+  // Nothing that ships imports an @reeval/* package, and every chunk loads with the installed
+  // package's dependencies alone. cli.js runs `reeval` or `reeval __worker` by importing the CLI's chunk
   // or the worker's; those run on import, and so do the chunks only they reach, which import them.
   const dist = join(app, 'node_modules', pkg, 'dist')
   const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' }).map((f) =>
@@ -265,7 +265,7 @@ test('the packed package installs into a clean project and runs es', {
   const code = shipped.filter((f) => /\.(js|d\.ts)$/.test(f) && !f.startsWith('studio-app/'))
   const source = (file: string) => readFileSync(join(dist, file), 'utf8')
   for (const file of code)
-    assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//, file)
+    assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//, file)
   const dispatched = [...source('cli.js').matchAll(/\bimport\("\.\/([^"]+)"\)/g)].map(
     (m) => m[1] as string,
   )
@@ -288,7 +288,7 @@ test('the packed package installs into a clean project and runs es', {
   ])
   assert.equal(loaded.status, 0, loaded.stderr)
 
-  // What users and ES's workers load (every export, and the worker's chunk) never reaches the
+  // What users and reeval's workers load (every export, and the worker's chunk) never reaches the
   // CLI's chunk, whose import runs the CLI, following import() as well as static imports.
   const reached = (entry: string, dynamic = true) => {
     const via = new Map<string, string | null>([[entry, null]])
@@ -321,9 +321,9 @@ test('the packed package installs into a clean project and runs es', {
   assert.ok(reached('cli.js').size > reached('cli.js', false).size)
 
   if (hasDocker) {
-    // `es image build` builds Cursor's image from the docker/ directory in the installed package.
+    // `reeval image build` builds Cursor's image from the docker/ directory in the installed package.
     await writeFile(
-      join(app, 'es.cursor.config.ts'),
+      join(app, 'reeval.cursor.config.ts'),
       `import { defineConfig } from '${pkg}'
 import { cursor } from '${pkg}/harness'
 import { docker } from '${pkg}/sandbox'
@@ -331,9 +331,9 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), sandbo
 `,
     )
     const built = sh(
-      join(app, 'node_modules/.bin/es'),
+      join(app, 'node_modules/.bin/reeval'),
       app,
-      ['image', 'build', '--config', 'es.cursor.config.ts'],
+      ['image', 'build', '--config', 'reeval.cursor.config.ts'],
       600_000,
     )
     assert.equal(built.status, 0, built.stdout + built.stderr)
@@ -341,10 +341,10 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), sandbo
       'image',
       'inspect',
       '--format',
-      '{{ index .Config.Labels "dev.evalsuite.harness" }}',
-      `evalsuite-sandbox:cursor-${CURSOR_VERSION}`,
+      '{{ index .Config.Labels "ai.reeval.harness" }}',
+      `reeval-sandbox:cursor-${CURSOR_VERSION}`,
     ])
-    assert.equal(label.stdout.trim(), `@evalsuite/harness-cursor-sdk@${CURSOR_VERSION}`)
+    assert.equal(label.stdout.trim(), `@reeval/harness-cursor-sdk@${CURSOR_VERSION}`)
   }
 })
 

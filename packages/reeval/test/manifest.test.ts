@@ -39,7 +39,7 @@ test('the packed manifest names nothing that only exists in this workspace', () 
   assert.equal(read.status, 0, read.stderr)
   const manifest = JSON.parse(read.stdout)
 
-  assert.equal(manifest.name, '@invertase/foobar')
+  assert.equal(manifest.name, 'reeval')
   assert.equal(manifest.devDependencies, undefined)
   assert.equal(manifest.scripts, undefined)
   assert.equal(manifest.packageManager, undefined)
@@ -49,7 +49,7 @@ test('the packed manifest names nothing that only exists in this workspace', () 
     const names = Array.isArray(deps) ? deps : Object.keys(deps)
     for (const name of names) {
       assert.ok(!workspacePackages.has(name), `${field} names workspace package ${name}`)
-      assert.ok(!name.startsWith('@evalsuite/'), `${field} names ${name}`)
+      assert.ok(!name.startsWith('@reeval/'), `${field} names ${name}`)
     }
     if (!Array.isArray(deps)) {
       for (const [name, spec] of Object.entries(deps)) {

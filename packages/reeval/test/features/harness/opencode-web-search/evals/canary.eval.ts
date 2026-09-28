@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { closed, prompt } from './env.ts'
 
 // Must fail: the agent searched the web.

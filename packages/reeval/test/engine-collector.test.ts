@@ -21,7 +21,7 @@ const modes = (tests: CollectedTest[]) =>
 describe('collect', () => {
   test('group bodies run after the code around them, in order, and tests keep declaration order', async () => {
     const order: string[] = []
-    const tests = await collect('/f.es.ts', async () => {
+    const tests = await collect('/f.eval.ts', async () => {
       order.push(`top ${collectingFile()}`)
       g('outer', () => {
         order.push('outer')
@@ -35,7 +35,7 @@ describe('collect', () => {
       t('first')
       order.push('after outer')
     })
-    assert.deepEqual(order, ['top /f.es.ts', 'after outer', 'outer', 'inner'])
+    assert.deepEqual(order, ['top /f.eval.ts', 'after outer', 'outer', 'inner'])
     assert.deepEqual(modes(tests), ['outer/inner/deep:run', 'outer/mid:run', 'first:run'])
     assert.deepEqual(
       tests.map((x) => x.index),
@@ -51,7 +51,7 @@ describe('collect', () => {
 
   test("a group body's error fails the collection, and collecting stops", async () => {
     await assert.rejects(
-      collect('/f.es.ts', async () =>
+      collect('/f.eval.ts', async () =>
         g('bad', () => {
           throw new Error('in the group')
         }),
@@ -59,7 +59,7 @@ describe('collect', () => {
       /in the group/,
     )
     await assert.rejects(
-      collect('/f.es.ts', async () => {
+      collect('/f.eval.ts', async () => {
         throw new Error('at import')
       }),
       /at import/,

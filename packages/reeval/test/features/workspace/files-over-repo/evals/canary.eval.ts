@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { patched } from './env.ts'
 
 // Must fail: the repository's own greet.js was replaced.

@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 export const slow = defineEnvironment('slow', {
   setup: [{ run: 'sleep 30 && touch slept', timeout: '1s' }],

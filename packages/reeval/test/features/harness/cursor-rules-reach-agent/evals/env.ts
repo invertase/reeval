@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 export const houseRules = defineEnvironment('house-rules', {
   rules: 'The house rule word is MARMALADE.',

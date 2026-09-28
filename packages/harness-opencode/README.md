@@ -1,4 +1,4 @@
-# @evalsuite/harness-opencode
+# @reeval/harness-opencode
 
 [OpenCode](https://opencode.ai) 2 on any provider whose key a gateway can broker, as an
 [AI SDK harness](https://ai-sdk.dev/docs): thin config over `@ai-sdk/harness-acp`, which runs
@@ -6,7 +6,7 @@
 
 ```ts
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { createOpenCode } from '@evalsuite/harness-opencode'
+import { createOpenCode } from '@reeval/harness-opencode'
 
 const agent = new HarnessAgent({
   harness: createOpenCode({
@@ -37,7 +37,7 @@ A provider can also take variables that aren't secret: Bedrock's hosts are built
 pattern a value must match (`scripts/provider-vars.ts`; the probe runs with a recognisable region).
 `resolveOpenCodeProvider(model, env)` gives a model's provider, with its hosts filled in and the
 variables' values (which `createOpenCode`'s `vars` passes into the sandbox), or that reason, and
-`@evalsuite/harness-opencode/providers` exports the table and its helpers without the harness.
+`@reeval/harness-opencode/providers` exports the table and its helpers without the harness.
 
 The table is generated, not written: `scripts/probe-providers.ts` runs the pinned `opencode run`
 through a local MITM proxy that answers every request itself (nothing leaves the host), once per
@@ -90,7 +90,7 @@ would generate differs from this one.
   tool. It has no SSE transport.
 - **Gate.** OpenCode connects config MCP servers in the background after `session/new`, and a
   prompt sent before they connect runs its first step without their tools. `harness-acp` runs
-  `es-opencode-gate` (`OPENCODE_GATE`, written beside OpenCode's bin at start), which runs
+  `reeval-opencode-gate` (`OPENCODE_GATE`, written beside OpenCode's bin at start), which runs
   `opencode acp` with its info logs on and holds the first `session/prompt` until each server has
   logged `mcp connected` or `mcp connect failed`, at most 30 seconds.
 - **Usage.** None. OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's

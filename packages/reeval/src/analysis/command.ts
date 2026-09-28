@@ -1,4 +1,4 @@
-// `es analyze [run] [--vs base] [--eval filter]`: a digest of the run's facts, one structured call,
+// `reeval analyze [run] [--vs base] [--eval filter]`: a digest of the run's facts, one structured call,
 // validation, then the cache (always) and the run's history folder (with --save).
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -59,27 +59,27 @@ export const promptOf = (d: Digest) =>
 /** `--context`: the same digest and rules, for the user's own coding agent. */
 export function contextMarkdown(d: Digest, head: string, base: string | null): string {
   return [
-    `# ES analysis context: ${head}${base ? ` vs ${base}` : ''}`,
+    `# reeval analysis context: ${head}${base ? ` vs ${base}` : ''}`,
     '',
-    'Analyse this ES run for the engineer who wrote the evals. The digest below holds facts ES computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with an es command from the CLI list.',
+    'Analyse this reeval run for the engineer who wrote the evals. The digest below holds facts reeval computed (F…), evidence excerpts (E…, transcript lines as L<n>) and the attempts table. Cite those ids for every claim, keep to the verdicts in the facts, and suggest at most 5 concrete actions, each verified with a reeval command from the CLI list.',
     '',
-    '## How ES decided each verdict',
+    '## How reeval decided each verdict',
     '',
     ...RULES.map((r) => `- ${r}`),
     '',
-    '## Instructions ES gives its own analysis model',
+    '## Instructions reeval gives its own analysis model',
     '',
     SYSTEM_PROMPT,
     '',
-    '## ES CLI (verify commands must be one of these)',
+    '## reeval CLI (verify commands must be one of these)',
     '',
     ...commandSummary().map((c) => `- \`${c}\``),
     '',
     '## To dig further',
     '',
-    '- `es query effort`, `es query factor_effects`, `es query skill_reads`, `es query flaky_cells`, `es query drift`',
-    `- \`es query "SELECT line, tool, target FROM tool_calls WHERE attempt_key = '<key>'"\`: an attempt's tool calls`,
-    "- `es show <run> --json`: the whole record; transcripts are under the run's artifact folder",
+    '- `reeval query effort`, `reeval query factor_effects`, `reeval query skill_reads`, `reeval query flaky_cells`, `reeval query drift`',
+    `- \`reeval query "SELECT line, tool, target FROM tool_calls WHERE attempt_key = '<key>'"\`: an attempt's tool calls`,
+    "- `reeval show <run> --json`: the whole record; transcripts are under the run's artifact folder",
     '',
     '## Digest',
     '',
@@ -114,9 +114,9 @@ function citedSummary(d: Digest, cites: string[]): Record<string, string> {
 
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
-  if (flags.json && flags.md) throw new UsageError('es analyze takes --json or --md, not both')
+  if (flags.json && flags.md) throw new UsageError('reeval analyze takes --json or --md, not both')
   if (flags.context && flags.save) {
-    throw new UsageError('es analyze --context makes no analysis to save; drop --save')
+    throw new UsageError('reeval analyze --context makes no analysis to save; drop --save')
   }
   const entries = await allRuns(config)
   let evalFilter = flags.eval ?? null
@@ -148,10 +148,10 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
       ancestry,
     )
   }
-  if (base?.runId === head.runId) throw new UsageError('es analyze --vs names the run itself')
+  if (base?.runId === head.runId) throw new UsageError('reeval analyze --vs names the run itself')
   if (flags.save && !head.recorded) {
     throw new CommandError(
-      `${head.runId} isn't recorded, so there's no history folder to save into. Run es record ${head.runId} first, then es analyze ${head.runId} --save.`,
+      `${head.runId} isn't recorded, so there's no history folder to save into. Run reeval record ${head.runId} first, then reeval analyze ${head.runId} --save.`,
     )
   }
   // Fail on a missing model or key before any work, unless no call is coming.
@@ -208,7 +208,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
       [
         `digest ${head.runId}${base ? ` vs ${base.runId}` : ''}: ${digest.facts.length} facts, ${digest.evidence.length} evidence items${digest.dropped.length ? ` (${digest.dropped.length} dropped to fit)` : ''}, ${Object.keys(digest.attempts).length} attempts`,
         `size ${chars} characters ≈ ${Math.ceil(chars / 4)} tokens (cap ${config.analysis.maxInputTokens} in, ${config.analysis.maxOutputTokens} out)`,
-        `model ${modelName} · ${ANALYSIS_PROMPT_VERSION} · cache ${cached ? 'hit' : 'miss'} (.es/analysis/${key}.json)`,
+        `model ${modelName} · ${ANALYSIS_PROMPT_VERSION} · cache ${cached ? 'hit' : 'miss'} (.reeval/analysis/${key}.json)`,
       ].join('\n'),
     )
     return 0
@@ -218,7 +218,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   if (cached) {
     doc = cached
     ctx.err(
-      `cached analysis from ${cached.createdAt} (.es/analysis/${key}.json); --no-cache calls the model again`,
+      `cached analysis from ${cached.createdAt} (.reeval/analysis/${key}.json); --no-cache calls the model again`,
     )
   } else {
     const resolved = model ?? resolveAnalysisModel(config)

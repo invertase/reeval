@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { defineEnvironment, evaluate, expect } from 'evalsuite'
+import { defineEnvironment, evaluate, expect } from 'reeval'
 
-// The harness's key stays on the host. The sandbox only holds a placeholder that ES's egress
+// The harness's key stays on the host. The sandbox only holds a placeholder that reeval's egress
 // gateway swaps for the key on the way out, so neither the agent nor a check can read it. A
 // completed turn proves the agent authenticated through the gateway; the checks below prove the
 // key isn't in the sandbox, whatever the agent chooses to print.
@@ -38,7 +38,7 @@ const targets = JSON.stringify(
 const holdsAKey = (text: string) => keys.some((key) => text.includes(key))
 
 const scanned = defineEnvironment('scanned', ({ file }) => ({
-  files: { '~/.es-scan/scan.mjs': file('../scan/scan.mjs') },
+  files: { '~/.reeval-scan/scan.mjs': file('../scan/scan.mjs') },
 }))
 
 evaluate(
@@ -58,7 +58,7 @@ evaluate(
     expect(seen).toMatch(/^\w+_API_KEY=aisdkhc_[\w-]{43}$/m)
     expect(holdsAKey(`${seen}\n${environ.stdout}`), 'env or /proc holds a key').toBe(false)
 
-    const scan = await t.exec(`node ~/.es-scan/scan.mjs '${targets}'`)
+    const scan = await t.exec(`node ~/.reeval-scan/scan.mjs '${targets}'`)
     expect(scan.exitCode).toBe(0)
     const found = JSON.parse(scan.stdout) as { files: number; hits: string[] }
     expect(found.files).toBeGreaterThan(0)

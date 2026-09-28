@@ -7,7 +7,7 @@ description: How the config, profiles, groups and evals combine into each eval's
 
 ```mermaid
 flowchart LR
-  C[es.config.ts] --> D[profile defaults]
+  C[reeval.config.ts] --> D[profile defaults]
   D --> G1[outer group]
   G1 --> G2[inner group]
   G2 --> E[eval]
@@ -19,7 +19,7 @@ flowchart LR
 
 A config, a profile that sets `runs`, a group that lowers the judge threshold and an eval that sets its own timeout:
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 export default defineConfig({
   harness: fakeHarness({
     files: { 'add.js': 'export const add = (a, b) => a + b\n' },
@@ -33,7 +33,7 @@ export default defineConfig({
 })
 ```
 
-```ts title="evals/add.es.ts"
+```ts title="evals/add.eval.ts"
 group('maths', { judge: { threshold: 0.7 }, tags: ['maths'] }, () => {
   evaluate('adds two numbers', { timeout: '5m' }, async (t) => {
     await t.send('Create add.js exporting add(a, b).')
@@ -43,14 +43,14 @@ group('maths', { judge: { threshold: 0.7 }, tags: ['maths'] }, () => {
 })
 ```
 
-`es run --profile nightly -v` prints where each option came from:
+`reeval run --profile nightly -v` prints where each option came from:
 
 ```text
-[adds#3 fake]  17:15:24 plan      config es.config.ts · profile nightly (--profile) · run 20260926T171524Z_nogit_cursor-agent_vhan · attempt fake/-/fake#3
-[adds#3 fake]  17:15:24 plan      harness fake (es.config.ts or its default)
-[adds#3 fake]  17:15:24 plan      sandbox fake (es.config.ts or its default)
+[adds#3 fake]  17:15:24 plan      config reeval.config.ts · profile nightly (--profile) · run 20260926T171524Z_nogit_cursor-agent_vhan · attempt fake/-/fake#3
+[adds#3 fake]  17:15:24 plan      harness fake (reeval.config.ts or its default)
+[adds#3 fake]  17:15:24 plan      sandbox fake (reeval.config.ts or its default)
 [adds#3 fake]  17:15:24 plan      environment - (none set)
-[adds#3 fake]  17:15:24 plan      egress allow-all (es.config.ts or its default)
+[adds#3 fake]  17:15:24 plan      egress allow-all (reeval.config.ts or its default)
 [adds#3 fake]  17:15:24 plan      run 3 · runs (profiles.nightly.defaults) · gate all · timeout 5m 00s (evaluate("maths › adds two numbers"))
 [adds#3 fake]  17:15:24 plan      judge fake judge · threshold 0.7 (group("maths"))
 ```
@@ -61,7 +61,7 @@ The profile's `defaults` sit under the groups and evals: they fill in what the e
 
 | Level | Set in | Role |
 |---|---|---|
-| Config | `es.config.ts` | The base for every eval; with no `harness`, `cursor({ model: 'composer-2.5' })` |
+| Config | `reeval.config.ts` | The base for every eval; with no `harness`, `cursor({ model: 'composer-2.5' })` |
 | Profile `defaults` | `profiles.<name>.defaults` | Fills in what groups and evals don't set |
 | Groups | `group(name, options, fn)`, outer then inner | Applies to every eval inside |
 | Eval | `evaluate(name, options, fn)` | The eval's own values |
@@ -81,13 +81,13 @@ Most options replace: the nearest level wins outright. Four merge instead.
 | `judge` | Merge field by field | The group sets `threshold: 0.7`, the model still comes from the config |
 | `tags`, `pin` | Union | A group's `['slow']` and an eval's `['maths']` give `['slow', 'maths']` |
 
-`compare` can't be set in `es.config.ts`, since it would multiply every eval. Unknown keys are errors with a hint, such as `Unknown option "repeat" … Did you mean "runs"?`.
+`compare` can't be set in `reeval.config.ts`, since it would multiply every eval. Unknown keys are errors with a hint, such as `Unknown option "repeat" … Did you mean "runs"?`.
 
 ## Edit the inherited harness list
 
 `harness` is the one option that's a list: each harness is its own [cell](/concepts/matrix). A list replaces the inherited one, and a function receives it and returns a new one:
 
-```ts title="evals/offline.es.ts"
+```ts title="evals/offline.eval.ts"
 evaluate('installs from npm only', {
   harness: (inherited) => inherited.slice(0, 1),
   egress: { allow: [...DEFAULT_EGRESS_ALLOW] },
@@ -103,7 +103,7 @@ Under a config with Cursor and Claude Code, this eval runs on Cursor only. The s
 
 A profile's `limit` sits over every eval and only narrows: `runs` becomes at most the limit, `harness` keeps the listed ids, and `compare: false` runs the control only. `pin` on a group or eval exempts a key.
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 group(
   'house greeting',
   { compare: [withHouseGreeting], pin: ['compare'] },
@@ -116,7 +116,7 @@ With `examples/hello`'s `pr` profile (`limit: { runs: 1, compare: false }`), eve
 ```text
 plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
 …
-evals/skill.es.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
 ```
 
 `pin` accepts `harness`, `runs` and `compare`, the keys a limit can touch. `--runs` beats pins too, since you typed it.

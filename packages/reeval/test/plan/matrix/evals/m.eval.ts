@@ -1,5 +1,5 @@
-import { evaluate, group } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+import { evaluate, group } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 
 group('grouped', { runs: 2 }, () => {
   evaluate('inherits runs', async () => {})

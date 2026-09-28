@@ -8,7 +8,7 @@ export const RULES_WORD = 'TANGERINE-41'
 export const COMMAND = 'echo contract-$((6*7))'
 export const COMMAND_OUTPUT = 'contract-42'
 /** The stdio MCP server logs every request here, outside the workspace. */
-export const MCP_LOG = '/tmp/es-mcp-stamp.log'
+export const MCP_LOG = '/tmp/reeval-mcp-stamp.log'
 /** A host the deny-all policy refuses; the curl's CONNECT status lands in blocked.txt. */
 export const BLOCKED_HOST = 'example.com'
 export const reach = (host: string) =>

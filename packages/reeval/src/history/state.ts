@@ -2,13 +2,13 @@ import { randomBytes } from 'node:crypto'
 import { readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative, resolve, sep } from 'node:path'
-import { VERSION as ANTIGRAVITY_VERSION } from '@evalsuite/harness-antigravity'
-import { VERSION as CODEX_VERSION } from '@evalsuite/harness-codex'
-import { VERSION as CURSOR_SDK_VERSION } from '@evalsuite/harness-cursor-sdk'
-import { VERSION as GOOSE_VERSION } from '@evalsuite/harness-goose'
-import { VERSION as OPENCODE_VERSION } from '@evalsuite/harness-opencode'
-import { VERSION as PI_VERSION } from '@evalsuite/harness-pi'
-import { adapterVersion } from '@evalsuite/sandbox-docker'
+import { VERSION as ANTIGRAVITY_VERSION } from '@reeval/harness-antigravity'
+import { VERSION as CODEX_VERSION } from '@reeval/harness-codex'
+import { VERSION as CURSOR_SDK_VERSION } from '@reeval/harness-cursor-sdk'
+import { VERSION as GOOSE_VERSION } from '@reeval/harness-goose'
+import { VERSION as OPENCODE_VERSION } from '@reeval/harness-opencode'
+import { VERSION as PI_VERSION } from '@reeval/harness-pi'
+import { adapterVersion } from '@reeval/sandbox-docker'
 import { git, repoTop } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
@@ -57,15 +57,15 @@ export const WORKTREE_PATCH_LIMIT = 5 * 1024 * 1024
 /**
  * Uncommitted changes, tracked and untracked (ignored files excluded), as one binary patch that
  * `git apply` recreates on top of HEAD. Built through a temporary index so the user's index is
- * never touched. ES's own output (`ignore`, absolute paths) is left out.
+ * never touched. reeval's own output (`ignore`, absolute paths) is left out.
  */
 export async function worktreePatch(root: string, ignore: string[]): Promise<Buffer | null> {
   const top = await repoTop(root)
   if (!top) return null
-  const index = join(tmpdir(), `es-index-${process.pid}-${randomBytes(4).toString('hex')}`)
+  const index = join(tmpdir(), `reeval-index-${process.pid}-${randomBytes(4).toString('hex')}`)
   const env = { GIT_INDEX_FILE: index }
   const exclude = [
-    ':(exclude,glob)**/.es/**',
+    ':(exclude,glob)**/.reeval/**',
     ...ignore.map((d) => `:(exclude)${relative(top, d).split(sep).join('/')}`),
   ]
   try {
@@ -86,13 +86,13 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
   // Bundled into dist, so the published package can't resolve their package.json.
   const out: Record<string, string> = {
     ...engine,
-    '@evalsuite/harness-antigravity': ANTIGRAVITY_VERSION,
-    '@evalsuite/harness-opencode': OPENCODE_VERSION,
-    '@evalsuite/harness-goose': GOOSE_VERSION,
-    '@evalsuite/harness-pi': PI_VERSION,
-    '@evalsuite/harness-cursor-sdk': CURSOR_SDK_VERSION,
+    '@reeval/harness-antigravity': ANTIGRAVITY_VERSION,
+    '@reeval/harness-opencode': OPENCODE_VERSION,
+    '@reeval/harness-goose': GOOSE_VERSION,
+    '@reeval/harness-pi': PI_VERSION,
+    '@reeval/harness-cursor-sdk': CURSOR_SDK_VERSION,
     '@ai-sdk/harness-claude-code': adapterVersion('claude-code'),
-    '@evalsuite/harness-codex': CODEX_VERSION,
+    '@reeval/harness-codex': CODEX_VERSION,
   }
   for (const name of PACKAGES) {
     try {

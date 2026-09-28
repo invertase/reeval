@@ -1,9 +1,9 @@
-// Bundles @invertase/foobar with tsdown. The workspace's @evalsuite/* packages are private and
+// Bundles reeval with tsdown. The workspace's @reeval/* packages are private and
 // inlined from their TypeScript sources, so the published package imports only its own
 // `dependencies`. What ships next to the code: each of those packages' other `files` (such as
 // sandbox-docker's `docker/` build context), at the package root beside `dist/`, where their
 // `../<dir>` from a module names the same place, and the prebuilt studio app (`dist/studio-app`).
-// Those lookups go through src/root.ts, ES's one resource locator: the build rewrites each
+// Those lookups go through src/root.ts, reeval's one resource locator: the build rewrites each
 // `new URL('<path>', import.meta.url)` in an inlined package to root.ts's `ownFileURL`, and fails
 // on any other import.meta.url, so a compiled es (scripts/bun-compile.mjs) finds them too. THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
 // that inlines (scripts/third-party.mjs).
@@ -31,13 +31,13 @@ const here = import.meta.dirname
 const require = createRequire(import.meta.url)
 const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
 
-/** `@evalsuite/<name>[/sub]` → its source file, from each workspace package's `exports`. */
+/** `@reeval/<name>[/sub]` → its source file, from each workspace package's `exports`. */
 const sources = new Map()
 /** Each workspace package's shipped directories besides `dist/`, by name, → where they are. */
 const assets = new Map()
-/** Each inlined package's directory → the paths in it that ship with ES, at the same place. */
+/** Each inlined package's directory → the paths in it that ship with reeval, at the same place. */
 const shipped = new Map()
-for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('@evalsuite/'))) {
+for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('@reeval/'))) {
   const dir = dirname(realpathSync(require.resolve(`${name}/package.json`)))
   const { exports, files } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
   for (const [sub, target] of Object.entries(exports)) {
@@ -106,7 +106,7 @@ function ownFiles(code, id) {
       .split(sep)
       .join(posix.sep)
     if (!shipped.get(dir).some((f) => file === f || file.startsWith(`${f}/`)))
-      throw new Error(`${id} finds ${file} from import.meta.url, but ES doesn't ship it`)
+      throw new Error(`${id} finds ${file} from import.meta.url, but reeval doesn't ship it`)
     const lines = '\n'.repeat(match.split('\n').length - 1)
     return `__esOwnFileURL(${lines}${JSON.stringify(path.endsWith('/') ? `${file}/` : file)})`
   })
@@ -127,7 +127,7 @@ export default defineConfig({
     sandbox: 'src/sandbox.ts',
     judge: 'src/judge.ts',
     'view/index': 'src/view/index.ts',
-    // `es`, and `es __worker`, which the engine starts for each eval file (src/engine/pool.ts).
+    // `reeval`, and `reeval __worker`, which the engine starts for each eval file (src/engine/pool.ts).
     cli: 'src/bin.ts',
   },
   platform: 'node',
@@ -137,13 +137,13 @@ export default defineConfig({
   // c8 reads the sources from the checkout; the tarball doesn't need a second copy.
   outputOptions: { sourcemapExcludeSources: true },
   deps: {
-    alwaysBundle: [/^@evalsuite\//, ...patched],
+    alwaysBundle: [/^@reeval\//, ...patched],
     onlyBundle: false,
     onlyImport: Object.keys(pkg.dependencies),
   },
   plugins: [
     {
-      name: 'evalsuite-sources',
+      name: 'reeval-sources',
       resolveId: {
         order: 'pre',
         handler: (id) => sources.get(id),
@@ -163,7 +163,7 @@ export default defineConfig({
         const isRoot = chunk.moduleIds.includes(root)
         if (uses > (isRoot ? 1 : 0) || (isRoot && chunk.fileName.includes('/')))
           throw new Error(
-            `${chunk.facadeModuleId ?? chunk.moduleIds.at(-1)} (in dist/${chunk.name}) uses import.meta.url: find ES's files from src/root.ts`,
+            `${chunk.facadeModuleId ?? chunk.moduleIds.at(-1)} (in dist/${chunk.name}) uses import.meta.url: find reeval's files from src/root.ts`,
           )
         return null
       },
@@ -177,8 +177,8 @@ export default defineConfig({
       for (const chunk of chunks) {
         const file = relative(dist, join(chunk.outDir, chunk.fileName))
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
-        if (/(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//.test(code))
-          throw new Error(`dist/${file} imports an @evalsuite/* package`)
+        if (/(?:\bfrom|\bimport)\s*\(?\s*['"]@reeval\//.test(code))
+          throw new Error(`dist/${file} imports an @reeval/* package`)
       }
       const thirdParty = [...bundled]
       for (const name of patched) {
@@ -218,7 +218,7 @@ export default defineConfig({
         thirdParty.push(...JSON.parse(readFileSync(studioLicenses, 'utf8')))
       } else
         console.warn(
-          "studio-web isn't built; es studio will have no app. Run pnpm build from the repo root.",
+          "studio-web isn't built; reeval studio will have no app. Run pnpm build from the repo root.",
         )
       const shadcn = markedFiles(join(studioWeb, 'src'), 'shadcn/ui', join(here, '../..'))
       writeFileSync(

@@ -53,11 +53,11 @@ function fakeChannel() {
 function evalFile(body: string): { root: string; file: string; run: RunContext } {
   const root = tempDir('worker')
   mkdirSync(join(root, 'evals'), { recursive: true })
-  const file = join(root, 'evals/w.es.ts')
+  const file = join(root, 'evals/w.eval.ts')
   writeFileSync(file, `const { registerTest, registerGroup } = (globalThis as any).__es\n${body}\n`)
   const run = {
     config: { root },
-    stagingDir: join(root, '.es/staging/run'),
+    stagingDir: join(root, '.reeval/staging/run'),
   } as unknown as RunContext
   return { root, file, run }
 }

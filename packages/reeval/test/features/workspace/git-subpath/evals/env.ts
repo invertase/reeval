@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 /** The monorepo's `app/` directory at the v1 tag, as the whole workspace. */
 export const app = defineEnvironment('app-v1', ({ git }) => ({

@@ -1,6 +1,6 @@
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   harness: [fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })],

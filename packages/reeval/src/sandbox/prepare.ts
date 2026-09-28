@@ -17,7 +17,7 @@ import {
   LABEL,
   resolveFrom,
   usesEsBase,
-} from '@evalsuite/sandbox-docker'
+} from '@reeval/sandbox-docker'
 import { parseDuration } from '../config.ts'
 import '../debug/docker.ts'
 import { stepCommand } from '../environment.ts'
@@ -54,8 +54,8 @@ export type Builds = {
   retry: <T>(step: () => Promise<T>) => Promise<T>
   log: (line: string) => void
   /**
-   * `none` (`es run`): use what's built. `check` (`es image build`): also rebuild a `from` image
-   * whose tag moved upstream. `force` (`es image build --force`): rebuild and pull everything.
+   * `none` (`reeval run`): use what's built. `check` (`reeval image build`): also rebuild a `from` image
+   * whose tag moved upstream. `force` (`reeval image build --force`): rebuild and pull everything.
    */
   refresh: Refresh
 }
@@ -80,7 +80,7 @@ export function createBuilds(options: Partial<Omit<Builds, 'once'>> = {}): Build
 }
 
 const buildLogger = (root: string, ref: string) => {
-  const dir = join(root, '.es', 'cache', 'images')
+  const dir = join(root, '.reeval', 'cache', 'images')
   const file = join(dir, `${ref.replace(/[^A-Za-z0-9._-]+/g, '-')}.log`)
   return {
     file,
@@ -98,14 +98,14 @@ const built = async (ref: string) => {
   return info
 }
 
-/** ES's image for the harness: built when it's missing, or when ES's base context changed. */
+/** reeval's image for the harness: built when it's missing, or when reeval's base context changed. */
 export const esImage = (harness: BakedHarness, root: string, signal: AbortSignal, b: Builds) => {
   const ref = imageFor(harness)
   return b.once(ref, async () => {
     const info = await imageInfo(ref)
     const current = info?.labels[LABEL.context] === contextHash()
     if (info && current && b.refresh !== 'force') return info
-    b.log(info && !current ? `Rebuilding ${ref}: ES's base image changed` : `Building ${ref}`)
+    b.log(info && !current ? `Rebuilding ${ref}: reeval's base image changed` : `Building ${ref}`)
     const output = buildLogger(root, ref)
     const pull = b.refresh === 'force'
     await b.retry(() => buildImage(b.log, { harness, signal, output, pull }))
@@ -114,7 +114,7 @@ export const esImage = (harness: BakedHarness, root: string, signal: AbortSignal
 }
 
 /**
- * The image with the harness in it that the sandbox's `install` layer (if any) goes on: ES's
+ * The image with the harness in it that the sandbox's `install` layer (if any) goes on: reeval's
  * image for the harness, `image` as is, `from` with Node and the harness baked on, or the built
  * Dockerfile (with them baked on unless it's built on that harness's image).
  */
@@ -130,7 +130,7 @@ async function harnessBase(
     return b.once(ref, async () => {
       const cached = b.refresh === 'force' ? null : await imageInfo(ref)
       if (cached && b.refresh === 'check') {
-        // `es image build` refreshes a tag that moved upstream; a pinned digest never moves.
+        // `reeval image build` refreshes a tag that moved upstream; a pinned digest never moves.
         const now = await resolveFrom(from, signal)
         const was = cached.labels[LABEL.fromDigest]
         if ('digest' in now && was && now.digest !== was) {
@@ -156,7 +156,7 @@ async function harnessBase(
         cause: null,
         log: null,
         usage: true,
-        message: `Docker image ${image} not found. docker({ image }) is used as is, so pull or build it first (or use from or dockerfile to have ES build it).`,
+        message: `Docker image ${image} not found. docker({ image }) is used as is, so pull or build it first (or use from or dockerfile to have reeval build it).`,
       })
     })
     return { ref: image, info, dockerfile: null }
@@ -202,7 +202,7 @@ async function harnessBase(
 /**
  * The image an attempt's container starts from: the sandbox's image for the harness, plus a
  * cached layer with its `install` commands, each built if missing. Each build's log goes to
- * `.es/cache/images/` under `root`.
+ * `.reeval/cache/images/` under `root`.
  */
 export async function prepareImage(
   sandbox: DockerSandboxDescriptor,

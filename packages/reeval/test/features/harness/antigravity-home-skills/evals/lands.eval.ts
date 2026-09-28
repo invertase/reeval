@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, shellOutput } from './env.ts'
 
 // Under Antigravity, a harness-placed skill is in ~/.gemini/config/skills, where the CLI reads it.

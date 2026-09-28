@@ -110,7 +110,7 @@ export type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue }
 
-/** A canned judge for tests and dry runs; see `fakeJudge()` in `evalsuite/judge`. */
+/** A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. */
 export type FakeJudgeModel = { kind: 'fake-judge'; score: number }
 
 /**
@@ -231,7 +231,7 @@ export type FakeScriptStep =
   | { error: string }
 /**
  * Cursor's agent through the Cursor TypeScript SDK's local runtime
- * (`@evalsuite/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.
+ * (`@reeval/harness-cursor-sdk`), made by `cursor()`. It reports each turn's tokens.
  */
 export type CursorHarnessDescriptor = {
   kind: 'cursor'
@@ -267,7 +267,7 @@ export type ClaudeCodeHarnessDescriptor = {
    */
   startTimeout?: Duration
 }
-/** The Antigravity CLI through `@evalsuite/harness-antigravity`, made by `antigravity()`. */
+/** The Antigravity CLI through `@reeval/harness-antigravity`, made by `antigravity()`. */
 export type AntigravityHarnessDescriptor = {
   kind: 'antigravity'
   /** A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`. */
@@ -283,7 +283,7 @@ export type AntigravityHarnessDescriptor = {
   startTimeout?: Duration
 }
 /**
- * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
+ * OpenCode through `@reeval/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
  * on any provider whose key OpenCode sends in a header on known hosts, with that provider's key,
  * and reports no usage (its ACP server counts one call).
  */
@@ -305,7 +305,7 @@ export type OpenCodeHarnessDescriptor = {
   startTimeout?: Duration
 }
 /**
- * Goose through `@evalsuite/harness-goose` (`goose acp`), made by `goose()`. It runs Google models
+ * Goose through `@reeval/harness-goose` (`goose acp`), made by `goose()`. It runs Google models
  * on a Gemini API key, and reports no usage (its ACP server counts one call).
  */
 export type GooseHarnessDescriptor = {
@@ -323,7 +323,7 @@ export type GooseHarnessDescriptor = {
   startTimeout?: Duration
 }
 /**
- * pi through `@evalsuite/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
+ * pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
  * Google models on a Gemini API key and reports each model call's tokens. It has no MCP client.
  */
 export type PiHarnessDescriptor = {
@@ -341,7 +341,7 @@ export type PiHarnessDescriptor = {
   startTimeout?: Duration
 }
 /**
- * OpenAI's Codex CLI through `@evalsuite/harness-codex` (`codex exec --json`), made by `codex()`.
+ * OpenAI's Codex CLI through `@reeval/harness-codex` (`codex exec --json`), made by `codex()`.
  * It runs OpenAI models on an OpenAI API key and reports each turn's tokens, reasoning included.
  */
 export type CodexHarnessDescriptor = {
@@ -383,11 +383,11 @@ export type DockerSandboxDescriptor = {
   id?: string
   /** An image that already has the harness baked in, used as is. */
   image?: string
-  /** A Debian or Ubuntu based toolchain image; ES bakes Node and the harness on top, cached. */
+  /** A Debian or Ubuntu based toolchain image; reeval bakes Node and the harness on top, cached. */
   from?: string
   /**
    * An absolute path to a Dockerfile (`docker()` resolves it against the calling file), built from
-   * its directory with `ES_BASE` set to ES's sandbox image and cached by content hash.
+   * its directory with `REEVAL_BASE` set to reeval's sandbox image and cached by content hash.
    */
   dockerfile?: string
   /** Baked onto the sandbox image in one build container: in order, no secrets, no workspace. */
@@ -411,7 +411,7 @@ export type DockerSandboxDescriptor = {
 export type SandboxDescriptor = FakeSandboxDescriptor | DockerSandboxDescriptor
 
 /**
- * A host environment variable, redacted everywhere ES writes and recorded by name only. Made by
+ * A host environment variable, redacted everywhere reeval writes and recorded by name only. Made by
  * the `secret` helper of `defineEnvironment` and `defineConfig` callbacks.
  */
 export type Secret = {
@@ -495,7 +495,7 @@ export type EgressPolicy = 'allow-all' | 'deny-all' | { allow: readonly string[]
 
 /**
  * A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url`
- * is what ES fetches: the clone URL, or an absolute path for a local repository.
+ * is what reeval fetches: the clone URL, or an absolute path for a local repository.
  */
 export type GitWorkspace = {
   kind: 'git'
@@ -580,7 +580,7 @@ type SkillDirOptions = SkillCommon & {
    * Paths in each skill directory to leave out of the sandbox, gitignore-style: `*` matches within
    * a name, a leading or inner `/` anchors to the skill root, a trailing `/` matches directories
    * only, and anything else matches a name at any depth. Replaces `DEFAULT_SKILL_EXCLUDE`
-   * (`/evals/`, `.history/`, `*.es.ts`); spread it to add to it. `.git` is always left out.
+   * (`/evals/`, `.history/`, `*.eval.ts`); spread it to add to it. `.git` is always left out.
    */
   exclude?: readonly string[]
 }
@@ -734,7 +734,7 @@ export type ProfileLimit = {
   harness?: string[]
 }
 
-/** How a run is sized: chosen with `--profile`, `ES_PROFILE` or `defaultProfile`. */
+/** How a run is sized: chosen with `--profile`, `REEVAL_PROFILE` or `defaultProfile`. */
 export type Profile = {
   defaults?: ProfileDefaults
   limit?: ProfileLimit
@@ -745,22 +745,22 @@ export type Profile = {
   tags?: string[]
 }
 
-/** A canned analysis for tests; see `fakeAnalysis()` in `evalsuite/judge`. */
+/** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
 export type FakeAnalysisModel = {
   kind: 'fake-analysis'
   /** The model's structured answer, or a function of the digest it was given. */
   output: unknown | ((digest: unknown) => unknown)
 }
 
-/** `es analyze`: a language model (not an evaluation model) and what matters in this project. */
+/** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
   /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
   model?: string | FakeAnalysisModel
-  /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is es-good." */
+  /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */
   maxInputTokens?: number
-  /** The most tokens the model may answer with (default 8000). ES has no prices, so tokens are the cap. */
+  /** The most tokens the model may answer with (default 8000). reeval has no prices, so tokens are the cap. */
   maxOutputTokens?: number
 }
 
@@ -776,19 +776,19 @@ export type EsConfig = {
   egress?: EgressPolicy
   judge?: ConfigJudgeOptions
   timeout?: Duration
-  /** How many attempts run at once. `--concurrency` and `ES_CONCURRENCY` override it. */
+  /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
-  /** When runs are copied into the history folder: `es record` only, in CI, or on every run. */
+  /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
   record?: RecordMode
   history?: HistoryConfig
   budget?: Budget
   profiles?: Record<string, Profile>
-  /** The profile when neither `--profile` nor `ES_PROFILE` names one: `ci` when `CI` is set. */
+  /** The profile when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set. */
   defaultProfile?: { ci?: string; local?: string }
   /** `unbrokered: 'error'` refuses Docker secrets without `hosts` instead of warning (default `'warn'`). */
   secrets?: { unbrokered?: 'warn' | 'error' }
   /**
-   * Local debug data in `.es/debug`: how many runs to keep (default 20), and how many MB of raw
+   * Local debug data in `.reeval/debug`: how many runs to keep (default 20), and how many MB of raw
    * trace each attempt buffers for trace.ndjson (default 8; the oldest entries go first).
    */
   debug?: { keep?: number; traceBufferMb?: number }
@@ -799,18 +799,18 @@ export type EsConfig = {
 export type ConfigHelpers = EnvironmentHelpers & {
   /** True when `CI` is set and isn't `false`. */
   ci: boolean
-  /** The `es` command that's running, e.g. `run`. */
+  /** The `reeval` command that's running, e.g. `run`. */
   command: string
   /** `process.env`. */
   hostEnv: NodeJS.ProcessEnv
-  /** The profile named by `--profile` or `ES_PROFILE` (not `defaultProfile`), else undefined. */
+  /** The profile named by `--profile` or `REEVAL_PROFILE` (not `defaultProfile`), else undefined. */
   profile: string | undefined
 }
 
 /** A profile as the run uses it, with why it was chosen. */
 export type ResolvedProfile = {
   name: string
-  /** `--profile`, `ES_PROFILE`, `auto: CI is set` or `default`. */
+  /** `--profile`, `REEVAL_PROFILE`, `auto: CI is set` or `default`. */
   reason: string
   defaults: ProfileDefaults
   limit: ProfileLimit
@@ -822,9 +822,9 @@ export type ResolvedProfile = {
 
 export type ResolvedConfig = {
   root: string
-  /** The config file as typed from the current directory, or `es.config.ts` without one. */
+  /** The config file as typed from the current directory, or `reeval.config.ts` without one. */
   file: string
-  /** The keys the config sets, for `es report`'s config shape. */
+  /** The keys the config sets, for `reeval report`'s config shape. */
   optionKeys?: string[]
   include: string[]
   harness: HarnessDescriptor[]
@@ -976,7 +976,7 @@ export type EgressRecord = {
   expectedBlocked: Array<{ host: string; port: number; connections: number; reason: string }>
 }
 
-/** The image an attempt's container started from, and how ES made it. */
+/** The image an attempt's container started from, and how reeval made it. */
 export type AttemptImage = {
   ref: string
   /** Content-addressed image id (`sha256:…`). */
@@ -990,7 +990,7 @@ export type AttemptImage = {
   dockerfile: { path: string; sha256: string } | null
   /**
    * `docker({ from })`: the base as written and the digest the image was built on (a local-only
-   * base's image id); `es image build` rebuilds it when the tag has moved since.
+   * base's image id); `reeval image build` rebuilds it when the tag has moved since.
    */
   from?: { ref: string; digest: string | null }
 }
@@ -1074,13 +1074,13 @@ export type SandboxWarning = {
   kind: 'root' | 'capabilities'
   /** Which level set the sandbox. */
   level: 'config' | 'profile' | 'group' | 'eval'
-  /** That level as ES names it: `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`. */
+  /** That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`. */
   where: string
   /** The eval file that sets it, for a group or eval; null for the config or a profile. */
   file: string | null
   /** The capabilities added back, for `capabilities`. */
   capabilities?: string[]
-  /** The line ES prints, after `WARNING: ` (root) or `warning: ` (capabilities). */
+  /** The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities). */
   message: string
 }
 
@@ -1098,7 +1098,7 @@ export type AttemptMeta = {
   label: string
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** The levels that set its sandbox and harness: `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
+  /** The levels that set its sandbox and harness: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
   setBy: { sandbox: string; harness: string }
   /** How its cell's attempts decide the cell's outcome; `'none'` when they don't fail the run. */
   gate: CellGate
@@ -1132,9 +1132,9 @@ export type RunContext = {
   runId: string
   stagingDir: string
   config: ResolvedConfig
-  /** `es run --runs n`: overrides every level. */
+  /** `reeval run --runs n`: overrides every level. */
   runs?: number
-  /** `es run --tag` and the profile's tags: each is a tag, or `!tag` to exclude; all must hold. */
+  /** `reeval run --tag` and the profile's tags: each is a tag, or `!tag` to exclude; all must hold. */
   tags: string[]
   /** How many attempts run at once, across the run. */
   concurrency: number

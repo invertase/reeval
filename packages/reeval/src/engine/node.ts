@@ -1,6 +1,6 @@
 // The engine's main process: finds the eval files, collects each in a fresh worker for the plan,
 // then runs each in a fresh worker again, at most one per CPU at once, handing out the
-// scheduler's leases over IPC and turning what workers report into ES's events and results.
+// scheduler's leases over IPC and turning what workers report into reeval's events and results.
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
@@ -58,7 +58,7 @@ export async function runEngine(
   const root = config.root
   const files = await findEvalFiles(root, config.include, [
     ...DEFAULT_EXCLUDE,
-    '**/.es/**',
+    '**/.reeval/**',
     `${relativeFile(root, config.history.dir)}/**`,
   ])
   // A part that names an eval file picks files; any other part picks evals by name or cell.
@@ -257,9 +257,9 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
           ? undefined
           : identify(rel, state.tests[index]).key
       // What an eval writes to process.stdout or stderr directly, as under Vitest, only shows
-      // with ES_DEBUG; console output reaches its attempt.
+      // with REEVAL_DEBUG; console output reaches its attempt.
       worker.onOutput((_stream, text) => {
-        if (process.env.ES_DEBUG) process.stderr.write(text)
+        if (process.env.REEVAL_DEBUG) process.stderr.write(text)
       })
       worker.onMessage((m: FromWorker) => {
         switch (m.t) {

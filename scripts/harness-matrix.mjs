@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
-const src = join(root, 'packages/evalsuite/src')
+const src = join(root, 'packages/reeval/src')
 const { AGENTS, agentFor, gooseMcpServers, refusedMcp } = await import(
   join(src, 'harness/agents.ts')
 )
@@ -14,7 +14,7 @@ const { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } = await import(
   join(root, 'packages/harness-opencode/src/opencode-providers.ts')
 )
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
-const { harnesses } = await import(join(root, 'packages/evalsuite/test/support/harnesses.ts'))
+const { harnesses } = await import(join(root, 'packages/reeval/test/support/harnesses.ts'))
 
 const TRANSPORTS = ['stdio', 'http', 'sse']
 const PROBE = {
@@ -23,7 +23,7 @@ const PROBE = {
   sse: { transport: 'sse', url: 'https://mcp.example/sse', headers: {} },
 }
 
-/** Whether the agent takes an MCP server of each transport, and when ES refuses one it can't. */
+/** Whether the agent takes an MCP server of each transport, and when reeval refuses one it can't. */
 function mcpSupport(kind, agent) {
   const out = {}
   for (const transport of TRANSPORTS) {
@@ -41,7 +41,7 @@ function mcpSupport(kind, agent) {
   return out
 }
 
-/** The web events ES records for an agent: its adapter's tools that the transcript maps to them. */
+/** The web events reeval records for an agent: its adapter's tools that the transcript maps to them. */
 async function webEvents(kind, agent, model) {
   const adapter = await agent.adapter({
     auth: { [agent.credential]: 'probe' },
@@ -99,7 +99,7 @@ const NOTES = [
   (h) =>
     h.agent.unreported &&
     h.kind === 'cursor' &&
-    `Its SDK leaves web search and fetch calls out of the stream; ES recovers them from the stored conversation, and a turn it can't recover is marked ${code('unreported')} so web matchers refuse it.`,
+    `Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked ${code('unreported')} so web matchers refuse it.`,
   (h) =>
     h.kind === 'opencode' &&
     h.web.search &&
@@ -237,7 +237,7 @@ export function renderLayout(facts) {
 
 const cell = (s) => s.replaceAll('|', '\\|')
 
-/** Every provider OpenCode runs on in ES: its model ids, key, the header it goes in, its hosts. */
+/** Every provider OpenCode runs on in reeval: its model ids, key, the header it goes in, its hosts. */
 export function renderOpenCodeProviders() {
   return [
     '| Provider | Model ids | Key | Header | Hosts |',
@@ -252,10 +252,10 @@ export function renderOpenCodeProviders() {
   ].join('\n')
 }
 
-/** Every provider ES refuses for OpenCode, and why. */
+/** Every provider reeval refuses for OpenCode, and why. */
 export function renderOpenCodeRefused() {
   return [
-    '| Provider | Model ids | Why ES refuses it |',
+    '| Provider | Model ids | Why reeval refuses it |',
     '|---|---|---|',
     ...REFUSED_OPENCODE_PROVIDERS.map(
       (p) =>

@@ -2,10 +2,10 @@
 // covers what a record can hold (a compare with lift, judges that pass and fail, a failed check,
 // an infra error, todo and skipped evals, tool calls and reasoning), a run that `budget` stops,
 // and a saved analysis.
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeAnalysis, fakeJudge } from 'evalsuite/judge'
-import { fakeSandbox } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
 
 const greet = "export const greet = (name) => 'Hello, ' + name + '!'\n"
 
@@ -41,11 +41,11 @@ export default defineConfig({
           actions: [
             {
               title: 'Rerun the compare',
-              target: 'evals/skill.es.ts',
+              target: 'evals/skill.eval.ts',
               kind: 'eval',
               change: 'Run it three times.',
               expectedEffect: 'A tighter interval.',
-              verify: 'es run skill --runs 3',
+              verify: 'reeval run skill --runs 3',
               impact: 'medium',
               effort: 'low',
               cites,

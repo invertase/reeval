@@ -23,11 +23,11 @@ export function analysisModelName(config: ResolvedConfig): string | FakeAnalysis
   const judge = config.judge.model
   if (typeof judge === 'string' && !judge.startsWith('typesafe-ai/')) return judge
   throw new UsageError(
-    `es analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${
+    `reeval analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${
       typeof judge === 'string' || isFakeJudge(judge)
         ? ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't write an analysis)`
         : ''
-    }, or run es analyze --context to hand the digest to your own coding agent.`,
+    }, or run reeval analyze --context to hand the digest to your own coding agent.`,
   )
 }
 
@@ -44,7 +44,7 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
     return { name: model, route: judgeRoute(model).kind }
   } catch (error) {
     throw new UsageError(
-      `${(error as Error).message.replace('judge model', 'analysis model')} Or run es analyze --context, which needs no key.`,
+      `${(error as Error).message.replace('judge model', 'analysis model')} Or run reeval analyze --context, which needs no key.`,
     )
   }
 }

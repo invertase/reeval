@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { prompts, SKILL_PROOF, skilled, trimmed } from './probes.ts'
 
 // The skill is placed where this harness's agent reads it, and the agent uses it: the proof it

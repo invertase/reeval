@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { agentSaw, tokens } from './env.ts'
 
 // A `to: 'checks'` secret isn't in the agent's environment.

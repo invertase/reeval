@@ -1,4 +1,4 @@
-import { defineEnvironment, evaluate } from 'evalsuite'
+import { defineEnvironment, evaluate } from 'reeval'
 
 // A restricted policy allows what the environment itself sends traffic to.
 const services = defineEnvironment('services', ({ mcp, secret }) => ({

@@ -1,8 +1,8 @@
-// What `es analyze` writes: one LLM reading of a digest of facts, with every claim's citations
+// What `reeval analyze` writes: one LLM reading of a digest of facts, with every claim's citations
 // checked. Browser-safe, so the studio's Analysis tab renders the same document the CLI prints.
 
 /** Bumped when the system prompt or output schema changes: an older analysis is superseded. */
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v1'
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v2'
 /** Bumped when the digest's shape or selection rules change. */
 export const DIGEST_VERSION = 1
 
@@ -10,7 +10,7 @@ export type Confidence = 'high' | 'medium' | 'low'
 
 export type AnalysisClaim = {
   text: string
-  /** Fact (`F3`), evidence (`E2`, `E2:L39`), attempt (`r2/scaffold/es-good#1`) or check ids. */
+  /** Fact (`F3`), evidence (`E2`, `E2:L39`), attempt (`r2/scaffold/reeval-good#1`) or check ids. */
   cites: string[]
   confidence: Confidence
   /** Exact spans from the cited evidence; a claim whose quote isn't there is dropped. */
@@ -31,7 +31,7 @@ export type AnalysisAction = {
   kind: ActionKind
   change: string
   expectedEffect: string
-  /** An `es` command that shows the effect; null when the model's didn't parse as ES's CLI. */
+  /** An `reeval` command that shows the effect; null when the model's didn't parse as reeval's CLI. */
   verify: string | null
   /** Why the model's verify command was rejected. */
   verifyProblem?: string

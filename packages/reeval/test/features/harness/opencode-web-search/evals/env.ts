@@ -1,4 +1,4 @@
-import { defineEnvironment, type Turn } from 'evalsuite'
+import { defineEnvironment, type Turn } from 'reeval'
 
 // deny-all: the search host is one the adapter's automatic hosts let through.
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })

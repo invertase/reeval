@@ -1,7 +1,7 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 export const leaky = defineEnvironment('leaky', ({ secret }) => ({
-  env: { LEAKY_TOKEN: secret.fromEnv('ES_FIXTURE_LEAKY') },
+  env: { LEAKY_TOKEN: secret.fromEnv('REEVAL_FIXTURE_LEAKY') },
 }))
 
 /** The forms the scripted agent prints: raw, base64, URL-encoded and JSON-escaped. */

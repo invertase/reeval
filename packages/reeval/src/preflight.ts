@@ -1,4 +1,4 @@
-import { imageInfo, LABEL } from '@evalsuite/sandbox-docker'
+import { imageInfo, LABEL } from '@reeval/sandbox-docker'
 import { UsageError } from './errors.ts'
 import { sandboxId } from './options.ts'
 import {
@@ -64,7 +64,7 @@ export async function preflight(
       ...(options.signal ? { signal: options.signal } : {}),
       ...(options.delays ? { delays: options.delays } : {}),
       ...(options.onEvent ? { onEvent: options.onEvent } : {}),
-      log: (line) => process.env.ES_DEBUG && console.error(line),
+      log: (line) => process.env.REEVAL_DEBUG && console.error(line),
     })
   } catch (error) {
     if (error instanceof PrepareError) {

@@ -1,6 +1,6 @@
 // Every docker command an attempt runs, into its trace (`-vv`, and trace.ndjson). Imported for its
 // side effect by the modules that drive Docker; commands outside an attempt aren't traced.
-import { onDockerCommand } from '@evalsuite/sandbox-docker'
+import { onDockerCommand } from '@reeval/sandbox-docker'
 import { attemptDebug } from './attempt.ts'
 
 const word = (arg: string) =>

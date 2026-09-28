@@ -32,7 +32,7 @@ function listen(app: ReturnType<typeof createStudioApp>, host: string, port: num
   })
 }
 
-/** Starts `es studio`: the next free port from `port`, a fresh token, and a history watcher. */
+/** Starts `reeval studio`: the next free port from `port`, a fresh token, and a history watcher. */
 export async function startStudio(options: StartOptions) {
   const { source, host } = options
   const token = options.token ? newToken() : null

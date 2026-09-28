@@ -1,6 +1,6 @@
-// The main process's side of one worker: a fresh `es __worker` per eval file, in its own process
+// The main process's side of one worker: a fresh `reeval __worker` per eval file, in its own process
 // group (a terminal's Ctrl-C reaches the CLI, which cancels over IPC), with its output piped
-// rather than mixed into ES's own.
+// rather than mixed into reeval's own.
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -14,13 +14,13 @@ export type Exit = { code: number | null; signal: NodeJS.Signals | null }
 export type WorkerProcess = {
   send(message: ToWorker): void
   onMessage(listener: (message: FromWorker) => void): void
-  /** Text the worker wrote to stdout or stderr outside ES's console routing. */
+  /** Text the worker wrote to stdout or stderr outside reeval's console routing. */
   onOutput(listener: (stream: 'stdout' | 'stderr', text: string) => void): void
   exited: Promise<Exit>
   kill(): void
 }
 
-/** Starts a worker from `entry`, an ES's `dist/cli.js`, in `cwd`. */
+/** Starts a worker from `entry`, a reeval's `dist/cli.js`, in `cwd`. */
 export type Spawn = (entry: string, cwd: string) => WorkerProcess
 
 export const forkWorker: Spawn = (entry, cwd) => {
@@ -64,8 +64,8 @@ export const forkWorker: Spawn = (entry, cwd) => {
 }
 
 /**
- * The `dist/cli.js` of the ES the project resolves, so the worker and the eval files share one
- * copy of ES; ES's own when the project resolves none.
+ * The `dist/cli.js` of the reeval the project resolves, so the worker and the eval files share one
+ * copy of reeval; reeval's own when the project resolves none.
  */
 export function workerEntry(root: string, names: readonly string[]): string {
   for (const name of names) {
@@ -91,7 +91,7 @@ export function handshake(worker: WorkerProcess, entry: string): Promise<void> {
         worker.kill()
         reject(
           new UsageError(
-            `The ES at ${dirname(dirname(entry))} runs eval files with engine protocol ${message.protocol}, but this es speaks ${PROTOCOL}. Run the project's own es, e.g. npx es.`,
+            `The reeval at ${dirname(dirname(entry))} runs eval files with engine protocol ${message.protocol}, but this reeval speaks ${PROTOCOL}. Run the project's own es, e.g. npx es.`,
           ),
         )
       }

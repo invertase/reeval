@@ -1,7 +1,7 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { plain } from './env.ts'
 
-// A Dockerfile FROM ${ES_BASE} under Claude Code is built on Claude Code's image, so the claude CLI is there.
+// A Dockerfile FROM ${REEVAL_BASE} under Claude Code is built on Claude Code's image, so the claude CLI is there.
 evaluate('lands', { environment: plain }, async (t) => {
   await t.sandbox()
   const found = await t.exec(

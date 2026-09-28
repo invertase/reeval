@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { pinned, staged } from './env.ts'
 
 // skill.registry('owner/repo@skill', { version }) stages that one skill from the repository's

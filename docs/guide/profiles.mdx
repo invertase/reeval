@@ -5,7 +5,7 @@ description: Size runs with pr and nightly profiles, check the plan with --dry-r
 
 A PR run should be quick and cheap, and a nightly run thorough. Profiles size a run without touching the eval files:
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 export default defineConfig({
   // …
   defaultProfile: { ci: 'pr' },
@@ -28,12 +28,12 @@ This is `examples/hello`'s config. `pr` runs every cell once, drops compare vari
 ## Choose a profile
 
 ```bash
-npx es run --profile nightly
-ES_PROFILE=nightly npx es run
-CI=1 npx es run               # defaultProfile.ci: pr
+npx reeval run --profile nightly
+REEVAL_PROFILE=nightly npx reeval run
+CI=1 npx reeval run               # defaultProfile.ci: pr
 ```
 
-`--profile` wins, then `ES_PROFILE`, then `defaultProfile.ci` when `CI` is set (or `defaultProfile.local` when it isn't). With none of those, no profile applies. The plan line says which profile ran and why, and the record keeps it.
+`--profile` wins, then `REEVAL_PROFILE`, then `defaultProfile.ci` when `CI` is set (or `defaultProfile.local` when it isn't). With none of those, no profile applies. The plan line says which profile ran and why, and the record keeps it.
 
 ## Defaults fill in, limits narrow
 
@@ -48,7 +48,7 @@ An eval that sets `runs: 5` still runs five times under `nightly`, because defau
 
 ## Pin what a profile can't change
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 group(
   'house greeting',
   { compare: [withHouseGreeting], pin: ['compare'] },
@@ -61,32 +61,32 @@ Without its variant, the house-greeting eval means nothing, so it pins `compare`
 ## Check the plan first
 
 ```bash
-CI=1 npx es run --dry-run
+CI=1 npx reeval run --dry-run
 ```
 
 ```text
 plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
 eval                                                              harnesses  variants  runs  attempts  notes
-evals/brokering.es.ts › the agent authenticates without seeing…   1          —         1     1
+evals/brokering.eval.ts › the agent authenticates without seeing…   1          —         1     1
 …
-evals/hello.es.ts › greet module › creates a tested greet module  1          —         1     1
-evals/hello.es.ts › greet module › adds a default name in a…      1          —         1     1
+evals/hello.eval.ts › greet module › creates a tested greet module  1          —         1     1
+evals/hello.eval.ts › greet module › adds a default name in a…      1          —         1     1
 …
-evals/skill.es.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
-evals/sqlite.es.ts › queries a seeded SQLite database             1          —         1     1
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         1     2         pinned: compare
+evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
 `--dry-run` prints the plan and exits 0, without Docker or keys. Each row shows the harnesses, variants, runs and attempts, and notes what the profile changed. The estimate is the median of each eval's recent attempts, or 3 minutes for one with no history.
 
 ```bash
-npx es run --dry-run --profile nightly
+npx reeval run --dry-run --profile nightly
 ```
 
 ```text
 plan  profile nightly (--profile) · 18 evals · 19 cells · 57 attempts · ~171m 00s serial (~42m 45s at concurrency 4) · budget 80 attempts ✓, 2h
 …
-evals/skill.es.ts › house greeting › greets in the house style    1          1         3     6
-evals/sqlite.es.ts › queries a seeded SQLite database             1          —         3     3
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         3     6
+evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         3     3
 hint: 18 evals run more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
 ```
 
@@ -95,24 +95,24 @@ hint: 18 evals run more than once with the default gate, so every attempt must p
 ## Cap a run with a budget
 
 ```bash
-npx es run --config es.fake.config.ts --profile smoke --runs 20
+npx reeval run --config reeval.fake.config.ts --profile smoke --runs 20
 ```
 
 ```text
 plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · ~13s serial (~3s at concurrency 4) · budget 12 attempts ✗
 …
-es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
+reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```
 
-`budget.attempts` is checked against the plan before anything starts. Over it, `es run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run ends with status `budget` (exit 1). When the run records (`--record`, `record: 'always'`, or in CI), it's recorded with that status, and `es compare` never takes it as a base.
+`budget.attempts` is checked against the plan before anything starts. Over it, `reeval run` exits 2 and says what to narrow. `budget.duration` counts from the first attempt: once it's reached, running attempts finish, queued ones are skipped, and the run ends with status `budget` (exit 1). When the run records (`--record`, `record: 'always'`, or in CI), it's recorded with that status, and `reeval compare` never takes it as a base.
 
 There's no cost or token budget. `budget: { usd: 5 }` stops the run before it starts:
 
 ```text
-es: budget.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.
+reeval: budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.
 ```
 
-`cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` report tokens (`opencode()` and `goose()` can't), and the summary prints the total, but ES has no model prices to turn them into a cost.
+`cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` report tokens (`opencode()` and `goose()` can't), and the summary prints the total, but reeval has no model prices to turn them into a cost.
 
 ## Next
 

@@ -1,5 +1,5 @@
-import { DEFAULT_EGRESS_ALLOW, defineEnvironment, evaluate, group } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+import { DEFAULT_EGRESS_ALLOW, defineEnvironment, evaluate, group } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 
 const closed = defineEnvironment('closed', { egress: 'deny-all' })
 const reopened = closed.extend('reopened', { egress: 'allow-all' })

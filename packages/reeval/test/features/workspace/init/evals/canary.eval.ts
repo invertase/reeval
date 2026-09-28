@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { repo } from './env.ts'
 
 // Must fail: the source repository's history (two commits) isn't copied in, only its tree.

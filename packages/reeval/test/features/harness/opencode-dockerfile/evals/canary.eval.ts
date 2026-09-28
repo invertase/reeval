@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { plain } from './env.ts'
 
 // Must fail: it isn't built on Cursor's image, so the Cursor SDK isn't there.

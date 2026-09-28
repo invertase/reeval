@@ -1,10 +1,10 @@
-// ES's side of the sandbox prepare contract (provider.ts), the same for every provider: check
+// reeval's side of the sandbox prepare contract (provider.ts), the same for every provider: check
 // each provider once, prepare every distinct environment the plan needs in parallel before any
 // attempt starts, retry transient failures, and cache each result for the run, failures too.
 // Attempts, in the engine's workers, only read the results (`preparedFor`).
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { RETRY_DELAYS } from '@evalsuite/sandbox-docker'
+import { RETRY_DELAYS } from '@reeval/sandbox-docker'
 import { levelOf } from '../options.ts'
 import type { HarnessDescriptor, SandboxDescriptor } from '../types.ts'
 import {
@@ -18,7 +18,7 @@ import {
 export type PrepareUse = {
   harness: HarnessDescriptor
   sandbox: SandboxDescriptor
-  /** `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
+  /** `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("x")`. */
   setBy: { sandbox: string; harness: string }
 }
 
@@ -199,7 +199,7 @@ type Entry =
   | { handle: PreparedHandle }
   | { failure: PrepareFailure; label: string; setBy: string[] }
 
-const preparedDir = (root: string) => join(root, '.es', 'cache', 'prepared')
+const preparedDir = (root: string) => join(root, '.reeval', 'cache', 'prepared')
 const preparedFile = (root: string, runId: string) => join(preparedDir(root), `${runId}.json`)
 
 /** Writes what the attempts start from, by provider and key, for the run's workers. */

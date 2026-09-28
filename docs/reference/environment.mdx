@@ -27,7 +27,7 @@ export const withSkill = base.extend('with-skill', ({ file, mcp, skill }) => ({
 
 Use it with the `environment` option, or as a `compare` variant:
 
-```ts title="evals/style.es.ts"
+```ts title="evals/style.eval.ts"
 group('house style', { environment: base, compare: [withSkill] }, () => {
   evaluate('formats with tabs', async (t) => {
     await t.send('Format src/index.ts.')
@@ -55,7 +55,7 @@ It returns a frozen `Environment` with `name`, `layers` and an `extend` method.
 ## Fields
 
 <Property name="workspace" type="GitWorkspace" optional>
-  The code every attempt's workspace starts as: a git repository, or one directory of it, from the `git` helper (`git(repo, { ref, path, init, token })`; see [Helpers](/reference/helpers#git)). ES fetches it on the host once per run, before any attempt, and copies its tree in before `files` and `setup`: without `.git`, or with a new one holding one commit of the tree when `init: true`. Submodules and Git LFS files aren't fetched. The record's `workspace` keeps the commit the ref resolved to and the tree's hash, which is in the environment's digest.
+  The code every attempt's workspace starts as: a git repository, or one directory of it, from the `git` helper (`git(repo, { ref, path, init, token })`; see [Helpers](/reference/helpers#git)). reeval fetches it on the host once per run, before any attempt, and copies its tree in before `files` and `setup`: without `.git`, or with a new one holding one commit of the tree when `init: true`. Submodules and Git LFS files aren't fetched. The record's `workspace` keeps the commit the ref resolved to and the tree's hash, which is in the environment's digest.
 </Property>
 
 <Property name="env" type="Record<string, string | Secret>" optional>
@@ -95,13 +95,13 @@ Every attempt applies an environment in the same order:
     The sandbox's image is ready (built once and cached; see [docker()](/reference/sandbox/docker)).
   </Step>
   <Step title="Variables, workspace, files and rules">
-    The sandbox starts with `env`; ES unpacks the `workspace` repository's tree, then writes `files` (over it) and `rules`.
+    The sandbox starts with `env`; reeval unpacks the `workspace` repository's tree, then writes `files` (over it) and `rules`.
   </Step>
   <Step title="Setup">
     `setup` steps run in order, outside the eval timeout.
   </Step>
   <Step title="Snapshot">
-    ES snapshots the workspace, so the repository, files, rules and setup never show in the agent's diff.
+    reeval snapshots the workspace, so the repository, files, rules and setup never show in the agent's diff.
   </Step>
   <Step title="Agent">
     The harness starts with the environment's `skills` and `mcp` servers.
@@ -134,7 +134,7 @@ Every key the child replaced is listed in the environment's `overrides` in the r
 An environment has no image of its own. What's baked into the image belongs to the sandbox:
 
 ```text
-es: evals/e.es.ts: "image" isn't an environment field (defineEnvironment("e")). What's baked into the image is the sandbox's: docker({ install: … }). An environment only runs setup steps, in every attempt, with its secrets.
+reeval: evals/e.eval.ts: "image" isn't an environment field (defineEnvironment("e")). What's baked into the image is the sandbox's: docker({ install: … }). An environment only runs setup steps, in every attempt, with its secrets.
 ```
 
 `install`, `dockerfile` and `from` get the same message, naming their own key; `image` set to a string, such as `'node:22'`, names `docker({ from: … })`. Near misses get a hint: `steps`, `exec` and `run` point to `setup`; `vars` and `secrets` to `env`; `network` and `networkPolicy` to `egress`; `skill` to `skills`; `file` to `files`; `agents` to `rules`; `use` to `extend`; `repo`, `git` and `template` to `workspace`.

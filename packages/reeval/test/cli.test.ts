@@ -26,33 +26,33 @@ const usage = (argv: string[], message: RegExp) =>
   )
 
 describe('cli', () => {
-  test('es --help matches the golden file', () => {
+  test('reeval --help matches the golden file', () => {
     // As console.log prints it.
     const text = `${helpText('VERSION')}\n`
-    if (process.env.ES_UPDATE_SNAPSHOTS) writeFileSync(GOLDEN, text)
+    if (process.env.REEVAL_UPDATE_SNAPSHOTS) writeFileSync(GOLDEN, text)
     assert.equal(text, readFileSync(GOLDEN, 'utf8'))
   })
 
   test('every command prints the same help with --help and -h, exit 0', async () => {
-    const p = await project('cli-help', { 'es.config.ts': fakeConfig() })
-    const golden = readFileSync(GOLDEN, 'utf8').replace('es VERSION', `es ${version}`)
+    const p = await project('cli-help', { 'reeval.config.ts': fakeConfig() })
+    const golden = readFileSync(GOLDEN, 'utf8').replace('reeval VERSION', `reeval ${version}`)
     const lines = [[], ...PATHS.map((c) => c.path), ['image']]
     await Promise.all(
       lines.flatMap((path) =>
         ['--help', '-h'].map(async (flag) => {
           const r = await runCli(p.dir, [...path, flag])
-          assert.equal(r.code, 0, `es ${path.join(' ')} ${flag}: ${r.stderr}`)
-          assert.equal(r.stdout, golden, `es ${path.join(' ')} ${flag}`)
+          assert.equal(r.code, 0, `reeval ${path.join(' ')} ${flag}: ${r.stderr}`)
+          assert.equal(r.stdout, golden, `reeval ${path.join(' ')} ${flag}`)
         }),
       ),
     )
   })
 
-  test('es alone prints the help and exits 2; --version prints the version', async () => {
-    const p = await project('cli-bare', { 'es.config.ts': fakeConfig() })
+  test('reeval alone prints the help and exits 2; --version prints the version', async () => {
+    const p = await project('cli-bare', { 'reeval.config.ts': fakeConfig() })
     const bare = await runCli(p.dir, [])
     assert.equal(bare.code, 2)
-    assert.match(bare.stdout, /^es \S+ — eval runner for coding agents\n/)
+    assert.match(bare.stdout, /^reeval \S+ — eval runner for coding agents\n/)
     for (const argv of [['--version'], ['run', '--version'], ['--version', '--help']]) {
       const r = await runCli(p.dir, argv)
       assert.equal(r.code, 0, argv.join(' '))
@@ -120,29 +120,29 @@ describe('cli', () => {
   })
 
   test('bad flags and arguments are usage errors', () => {
-    usage(['--bogus'], /^Unknown option '--bogus'\. Run es --help\.$/)
+    usage(['--bogus'], /^Unknown option '--bogus'\. Run reeval --help\.$/)
     usage(['run', '--dry-runn'], /^Unknown option '--dry-runn'\. Did you mean --dry-run\?/)
     usage(['run', '-x'], /^Unknown option '-x'/)
     usage(['run', '--runs'], /^Option '--runs <value>' argument missing$/)
     usage(['run', '--json=1'], /^Option '--json' does not take an argument$/)
-    usage(['run', '--port', '3'], /^--port isn't an option of es run\. Run es --help\.$/)
-    usage(['show', '-v'], /^--verbose isn't an option of es show/)
-    usage(['--dry-run', 'run'], /^--dry-run isn't an option of es\b/)
-    usage(['studio', '--out', 'x'], /^--out isn't an option of es studio\b/)
-    usage(['studio', 'build', '--port', '1'], /^--port isn't an option of es studio build/)
-    usage(['clean', 'extra'], /^es clean takes no arguments \(got extra\)$/)
-    usage(['show', 'a', 'b'], /^es show takes at most 1 argument \(got a b\)$/)
-    usage(['compare', 'a', 'b', 'c'], /^es compare takes at most 2 arguments \(got a b c\)$/)
-    usage(['studio', 'foo'], /^es studio takes no arguments \(got foo\)$/)
-    usage(['mcp', 'x'], /^es mcp takes no arguments \(got x\)$/)
-    usage(['mcp', '--json'], /^--json isn't an option of es mcp\b/)
-    usage(['mcp', '--no-token'], /^--no-token isn't an option of es mcp\b/)
+    usage(['run', '--port', '3'], /^--port isn't an option of reeval run\. Run reeval --help\.$/)
+    usage(['show', '-v'], /^--verbose isn't an option of reeval show/)
+    usage(['--dry-run', 'run'], /^--dry-run isn't an option of reeval\b/)
+    usage(['studio', '--out', 'x'], /^--out isn't an option of reeval studio\b/)
+    usage(['studio', 'build', '--port', '1'], /^--port isn't an option of reeval studio build/)
+    usage(['clean', 'extra'], /^reeval clean takes no arguments \(got extra\)$/)
+    usage(['show', 'a', 'b'], /^reeval show takes at most 1 argument \(got a b\)$/)
+    usage(['compare', 'a', 'b', 'c'], /^reeval compare takes at most 2 arguments \(got a b c\)$/)
+    usage(['studio', 'foo'], /^reeval studio takes no arguments \(got foo\)$/)
+    usage(['mcp', 'x'], /^reeval mcp takes no arguments \(got x\)$/)
+    usage(['mcp', '--json'], /^--json isn't an option of reeval mcp\b/)
+    usage(['mcp', '--no-token'], /^--no-token isn't an option of reeval mcp\b/)
     // Every command refuses every flag that isn't its own.
     for (const { path, spec } of PATHS) {
       for (const flag of Object.keys(FLAGS) as FlagName[]) {
         if (spec.flags.includes(flag) || GLOBAL.includes(flag)) continue
         const value = FLAGS[flag].type === 'string' ? ['x'] : []
-        usage([...path, `--${flag}`, ...value], /isn't an option of es /)
+        usage([...path, `--${flag}`, ...value], /isn't an option of reeval /)
       }
       for (const flag of spec.flags.filter((f) => FLAGS[f].type === 'string')) {
         usage([...path, `--${flag}`], /argument missing/)
@@ -154,24 +154,30 @@ describe('cli', () => {
   })
 
   test('bad command lines exit 2 with one es: line', async () => {
-    const p = await project('cli-usage', { 'es.config.ts': fakeConfig() })
+    const p = await project('cli-usage', { 'reeval.config.ts': fakeConfig() })
     const cases: Array<[string[], RegExp]> = [
-      [['bogus'], /^es: Unknown command "bogus"\. Run es --help\.\n$/],
-      [['help'], /^es: Unknown command "help"\./],
-      [['image'], /^es: Unknown command "image "\. Did you mean es image build\?\n$/],
-      [['image', 'foo'], /^es: Unknown command "image foo"\. Did you mean es image build\?\n$/],
-      [['--bogus'], /^es: Unknown option '--bogus'\. Run es --help\.\n$/],
-      [['run', '--runs'], /^es: Option '--runs <value>' argument missing\n$/],
-      [['run', '--runs', '0'], /^es: --runs must be a whole number of at least 1 \(got 0\)\n$/],
-      [['run', '--json'], /^es: es run --json only prints the plan: add --dry-run\./],
-      [['clean', '--keep', 'x'], /^es: --keep must be a whole number \(got x\)\n$/],
-      [['run', '--port', '3'], /^es: --port isn't an option of es run\. Run es --help\.\n$/],
-      [['show', 'a', 'b'], /^es: es show takes at most 1 argument \(got a b\)\n$/],
+      [['bogus'], /^reeval: Unknown command "bogus"\. Run reeval --help\.\n$/],
+      [['help'], /^reeval: Unknown command "help"\./],
+      [['image'], /^reeval: Unknown command "image "\. Did you mean reeval image build\?\n$/],
+      [
+        ['image', 'foo'],
+        /^reeval: Unknown command "image foo"\. Did you mean reeval image build\?\n$/,
+      ],
+      [['--bogus'], /^reeval: Unknown option '--bogus'\. Run reeval --help\.\n$/],
+      [['run', '--runs'], /^reeval: Option '--runs <value>' argument missing\n$/],
+      [['run', '--runs', '0'], /^reeval: --runs must be a whole number of at least 1 \(got 0\)\n$/],
+      [['run', '--json'], /^reeval: reeval run --json only prints the plan: add --dry-run\./],
+      [['clean', '--keep', 'x'], /^reeval: --keep must be a whole number \(got x\)\n$/],
+      [
+        ['run', '--port', '3'],
+        /^reeval: --port isn't an option of reeval run\. Run reeval --help\.\n$/,
+      ],
+      [['show', 'a', 'b'], /^reeval: reeval show takes at most 1 argument \(got a b\)\n$/],
     ]
     await Promise.all(
       cases.map(async ([argv, stderr]) => {
         const r = await runCli(p.dir, argv)
-        assert.equal(r.code, 2, `es ${argv.join(' ')}: ${r.stderr}`)
+        assert.equal(r.code, 2, `reeval ${argv.join(' ')}: ${r.stderr}`)
         assert.match(r.stderr, stderr, argv.join(' '))
       }),
     )

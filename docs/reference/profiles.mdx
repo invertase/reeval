@@ -1,11 +1,11 @@
 ---
 title: Profiles and budgets
-description: Named presets in es.config.ts that fill in defaults, narrow what runs and cap a run's size.
+description: Named presets in reeval.config.ts that fill in defaults, narrow what runs and cap a run's size.
 ---
 
-A profile is a named preset under `profiles` in `es.config.ts`. You pick one with `--profile`, `ES_PROFILE` or `defaultProfile`.
+A profile is a named preset under `profiles` in `reeval.config.ts`. You pick one with `--profile`, `REEVAL_PROFILE` or `defaultProfile`.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 
 export default defineConfig({
@@ -30,15 +30,15 @@ The first of these that names a profile wins. The plan line says which one and w
 
 | Source | Plan says |
 |---|---|
-| `es run --profile nightly` | `profile nightly (--profile)` |
-| `ES_PROFILE=nightly` | `profile nightly (ES_PROFILE)` |
+| `reeval run --profile nightly` | `profile nightly (--profile)` |
+| `REEVAL_PROFILE=nightly` | `profile nightly (REEVAL_PROFILE)` |
 | `defaultProfile.ci`, when `CI` is set | `profile pr (auto: CI is set)` |
 | `defaultProfile.local`, when `CI` isn't set | `profile dev (default)` |
 
 With none of them, no profile applies. `CI=false` counts as unset. A name that isn't in `profiles` is an error:
 
 ```text
-es: Unknown profile "nigthly". Profiles in es.config.ts: smoke, nightly.
+reeval: Unknown profile "nigthly". Profiles in reeval.config.ts: smoke, nightly.
 ```
 
 ## Profile keys
@@ -90,17 +90,17 @@ The plan shows what `limit` changed in the notes column. This is the `pr` profil
 ```text
 plan  profile pr (auto: CI is set) · 3 evals (1 skipped) · 4 cells · 4 attempts · …
 eval                                    harnesses  variants  runs  attempts  notes
-pf/sized.es.ts › sized › narrowed       1          0 of 1    1     1         runs 3 → 1 (profile pr) · compare off (profile pr)
-pf/sized.es.ts › sized › pinned         1          1         1     2         runs 3 → 1 (profile pr) · pinned: compare
-pf/sized.es.ts › sized › two harnesses  1          0 of 1    1     1         runs 3 → 1 (profile pr) · harnesses 2 → 1 (profile pr) · compare off (profile pr)
-pf/sized.es.ts › sized › other only     0          0 of 1    1     0         skipped: no harness left: profile pr allows fake · …
+pf/sized.eval.ts › sized › narrowed       1          0 of 1    1     1         runs 3 → 1 (profile pr) · compare off (profile pr)
+pf/sized.eval.ts › sized › pinned         1          1         1     2         runs 3 → 1 (profile pr) · pinned: compare
+pf/sized.eval.ts › sized › two harnesses  1          0 of 1    1     1         runs 3 → 1 (profile pr) · harnesses 2 → 1 (profile pr) · compare off (profile pr)
+pf/sized.eval.ts › sized › other only     0          0 of 1    1     0         skipped: no harness left: profile pr allows fake · …
 ```
 
 ## pin
 
 An eval that must keep a key whatever the profile says lists it in `pin`: `'runs'`, `'harness'` or `'compare'`. The plan notes `pinned: compare` when a pin blocked a limit. `--runs` still overrides `runs`, pinned or not.
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 evaluate('keeps its variants', { pin: ['compare'] }, async (t) => {
   // …
 })
@@ -115,7 +115,7 @@ evaluate('keeps its variants', { pin: ['compare'] }, async (t) => {
 </Property>
 
 <Property name="duration" type="string | number" optional>
-  The longest the run may take, from the first attempt's start: `'2h'`, `'45m'`, or milliseconds. When it's reached, running attempts finish and queued ones are skipped, and the run ends with status `budget` (exit 1). It's still recorded when the run would be (`--record`, `record: 'always'`, or `'ci'` in CI): the skipped attempts show as skipped, and `es compare` never takes it as a base.
+  The longest the run may take, from the first attempt's start: `'2h'`, `'45m'`, or milliseconds. When it's reached, running attempts finish and queued ones are skipped, and the run ends with status `budget` (exit 1). It's still recorded when the run would be (`--record`, `record: 'always'`, or `'ci'` in CI): the skipped attempts show as skipped, and `reeval compare` never takes it as a base.
 </Property>
 
 The plan line shows the budget and whether the plan fits:
@@ -123,10 +123,10 @@ The plan line shows the budget and whether the plan fits:
 ```text
 plan  profile smoke (--profile) · 10 evals · 11 cells · 220 attempts · … · budget 12 attempts ✗
 …
-es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
+reeval: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow it with --tag or --runs, or raise the budget. (--force runs it anyway)
 ```
 
-`usd` and `tokens` are refused. ES records the tokens that `cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` report, per turn, per attempt and for the run, but it prices no models and enforces no token budget.
+`usd` and `tokens` are refused. reeval records the tokens that `cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` report, per turn, per attempt and for the run, but it prices no models and enforces no token budget.
 
 ## Errors
 
@@ -140,7 +140,7 @@ es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow
 | A bad `limit.compare` | `profiles.pr.limit.compare must be false or { maxVariants: n }` |
 | A bad `limit.runs` | `profiles.pr.limit.runs must be a whole number of at least 1` |
 | Tags that aren't strings | `profiles.pr.tags must be a list of tag filters` |
-| `budget.usd` | `profiles.pr.budget.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` |
+| `budget.usd` | `profiles.pr.budget.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.` |
 | A bad `budget.attempts` | `profiles.pr.budget.attempts must be a whole number of at least 1 (got 0)` |
 
 ## Related
@@ -148,4 +148,4 @@ es: this run plans 220 attempts, over budget.attempts 12 (profile smoke). Narrow
 - [Profiles guide](/guide/profiles)
 - [Options](/reference/options)
 - [defineConfig](/reference/config)
-- [es run](/reference/cli/run)
+- [reeval run](/reference/cli/run)

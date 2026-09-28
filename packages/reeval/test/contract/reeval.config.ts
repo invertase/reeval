@@ -1,4 +1,4 @@
-import { defineConfig } from 'evalsuite'
+import { defineConfig } from 'reeval'
 import {
   antigravity,
   claudeCode,
@@ -8,16 +8,16 @@ import {
   goose,
   opencode,
   pi,
-} from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+} from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 import { fakeScript } from './evals/probes.ts'
 
 // The harness contract: every real harness runs these evals in Docker. contract.test.ts picks the
-// harness and model (ES_CONTRACT_HARNESS, ES_CONTRACT_MODEL) from its table; without one it's the
+// harness and model (REEVAL_CONTRACT_HARNESS, REEVAL_CONTRACT_MODEL) from its table; without one it's the
 // scripted fake agent with Cursor's layout, the key-free row that checks the suite itself.
-const model = process.env.ES_CONTRACT_MODEL ?? ''
+const model = process.env.REEVAL_CONTRACT_MODEL ?? ''
 const harness = () => {
-  switch (process.env.ES_CONTRACT_HARNESS) {
+  switch (process.env.REEVAL_CONTRACT_HARNESS) {
     case 'cursor':
       // fast=false: the cheaper variant; an unset parameter takes the catalog's default (fast=true).
       return cursor({ model, params: { fast: 'false' } })

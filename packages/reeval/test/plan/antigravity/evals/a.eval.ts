@@ -1,6 +1,6 @@
-import { evaluate } from 'evalsuite'
-import { antigravity, claudeCode, cursor } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate } from 'reeval'
+import { antigravity, claudeCode, cursor } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 evaluate('both harnesses', async () => {})
 evaluate(

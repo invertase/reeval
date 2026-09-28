@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { houseRules } from './env.ts'
 
 // Under pi, `rules` become the workspace's AGENTS.md, word for word.

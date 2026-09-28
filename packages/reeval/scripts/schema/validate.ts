@@ -1,5 +1,5 @@
 // Checks a value against a generated shape schema (the subset `generate.ts` writes). Unknown
-// properties are allowed: an older ES ignores fields a newer one added.
+// properties are allowed: an older reeval ignores fields a newer one added.
 import { resolve, type Schema, type ShapeSchema } from './generate.ts'
 
 /** Where `value` doesn't fit `doc`, as `path: problem` lines; empty when it fits. */
@@ -83,7 +83,7 @@ function check(doc: ShapeSchema, schema: Schema, value: unknown, path: string, o
 }
 
 /**
- * Adds `extra` as a new field to every fixed-shape object in `value`, as a newer ES that added
+ * Adds `extra` as a new field to every fixed-shape object in `value`, as a newer reeval that added
  * fields would write it. Records (`Record<string, …>`) are left alone: a new key there is data.
  */
 export function withUnknownFields(doc: ShapeSchema, value: unknown, extra: () => unknown): void {

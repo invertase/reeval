@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 // blob.tgz is a gzip that features.test.ts writes before the run: bytes that aren't UTF-8.
 export const binaryFile = defineEnvironment('binary-file', ({ file }) => ({

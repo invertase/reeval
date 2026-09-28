@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { genkit } from './environments.ts'
 
 // The Genkit apps' Gemini key is brokered (see environments.ts): the agent's request carries a
@@ -14,7 +14,7 @@ evaluate(
         'https://generativelanguage.googleapis.com/v1beta/models',
     )
     expect(turn.status).toBe('completed')
-    expect((await t.exec('printenv GEMINI_API_KEY')).stdout).toMatch(/^es_secret_/)
+    expect((await t.exec('printenv GEMINI_API_KEY')).stdout).toMatch(/^reeval_secret_/)
     const status = await t.exec(
       'curl -s -o /dev/null -w "%{http_code}" -H "x-goog-api-key: $GEMINI_API_KEY" https://generativelanguage.googleapis.com/v1beta/models',
     )

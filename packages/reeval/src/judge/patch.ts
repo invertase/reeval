@@ -50,13 +50,15 @@ export function patchForJudge(patch: string): string {
       if (!marked.has(dir)) {
         marked.add(dir)
         out.push(
-          `[es: dropped ${dir} (${plural(dirCounts.get(dir) ?? 0, 'file')}): installed dependencies]\n`,
+          `[reeval: dropped ${dir} (${plural(dirCounts.get(dir) ?? 0, 'file')}): installed dependencies]\n`,
         )
       }
     } else if (LOCKFILE.test(path)) {
-      out.push(`[es: dropped ${path}: lockfile, ${plural(changedLines(part), 'changed line')}]\n`)
+      out.push(
+        `[reeval: dropped ${path}: lockfile, ${plural(changedLines(part), 'changed line')}]\n`,
+      )
     } else if (part.includes('\nGIT binary patch\n')) {
-      out.push(`[es: dropped ${path}: binary]\n`)
+      out.push(`[reeval: dropped ${path}: binary]\n`)
     } else {
       out.push(part)
     }

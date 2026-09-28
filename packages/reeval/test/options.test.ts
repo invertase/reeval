@@ -8,10 +8,10 @@ import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts
 import { fixture } from './support/fixture.ts'
 
 const config = (extra: string, harness = 'fakeHarness({})') => `
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: ${harness},
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
@@ -38,11 +38,11 @@ const SKILLED = `fakeHarness({ withSkill: { files: { 'ok.txt': 'yes' } } })`
 describe('harness matrix, cascade and runs', () => {
   test('harness lists and runs expand into attempts with per-cell pass rates', async () => {
     const p = await project('matrix', {
-      'es.config.ts': config(
+      'reeval.config.ts': config(
         '',
         `[fakeHarness({ id: 'good', files: { 'ok.txt': 'yes' } }), fakeHarness({ id: 'bad' })]`,
       ),
-      'evals/m.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+      'evals/m.eval.ts': `import { evaluate, expect, group } from 'reeval'
 group('g', { runs: 2 }, () => {
   evaluate('writes ok.txt', async (t) => {
     await t.send('go')
@@ -55,8 +55,8 @@ group('g', { runs: 2 }, () => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(r.stdout, /^plan {2}1 eval · 2 cells · 4 attempts · ~/m)
-    assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.es\.ts › g › writes ok\.txt/m)
-    assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.es\.ts › g › writes ok\.txt/m)
+    assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.eval\.ts › g › writes ok\.txt/m)
+    assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.eval\.ts › g › writes ok\.txt/m)
     assert.match(r.stdout, /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/-\/fake +2\/2 +100%/)
     assert.match(r.stdout, /bad\/-\/fake +0\/2 +0%/)
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
@@ -99,9 +99,9 @@ group('g', { runs: 2 }, () => {
 
   test('groups replace the harness list, evals can edit it, and options may come last', async () => {
     const p = await project('cascade', {
-      'es.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
-      'evals/c.es.ts': `import { evaluate, group } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+      'reeval.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
+      'evals/c.eval.ts': `import { evaluate, group } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 group('only c', () => {
   evaluate('replaced', async (t) => { await t.send('x') })
   evaluate('added', { harness: (h) => [...h, fakeHarness({ id: 'd' })] }, async (t) => { await t.send('x') })
@@ -119,9 +119,9 @@ evaluate('inherits', async (t) => { await t.send('x') })
 
   test('harness edits as data: { add } appends to the inherited list, { only } keeps by id', async () => {
     const p = await project('harness-edits', {
-      'es.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
-      'evals/e.es.ts': `import { evaluate, group } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+      'reeval.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
+      'evals/e.eval.ts': `import { evaluate, group } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 group('only a', { harness: { only: 'a' } }, () => {
   evaluate('kept', async (t) => { await t.send('x') })
   evaluate('added', { harness: { add: [fakeHarness({ id: 'd' })] } }, async (t) => { await t.send('x') })
@@ -139,8 +139,8 @@ evaluate('kept both', { harness: { only: ['b', 'a'] } }, async (t) => { await t.
 
   test('tags filter, todo, for, and a filter that matches nothing exits 2', async () => {
     const p = await project('tags', {
-      'es.config.ts': fakeConfig(),
-      'evals/t.es.ts': `import { evaluate, group } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/t.eval.ts': `import { evaluate, group } from 'reeval'
 group('slow things', { tags: ['slow'] }, () => {
   evaluate('big', async () => {})
   evaluate('bigger', { tags: ['flaky'] }, async () => {})
@@ -176,8 +176,8 @@ evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (t, 
 
   test('.only runs alone locally and exits 2 in CI', async () => {
     const p = await project('only', {
-      'es.config.ts': fakeConfig(),
-      'evals/o.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { evaluate } from 'reeval'
 evaluate.only('focused', async () => {})
 evaluate('other', async () => {})
 `,
@@ -194,13 +194,13 @@ evaluate('other', async () => {})
     const { runId } = readRun(p.dir).run
     const ci = await runCli(p.dir, ['run'], { env: { CI: 'true' } })
     assert.equal(ci.code, 2, ci.stdout + ci.stderr)
-    assert.match(ci.stderr, /evaluate\.only\/group\.only in evals\/o\.es\.ts isn't allowed in CI/)
+    assert.match(ci.stderr, /evaluate\.only\/group\.only in evals\/o\.eval\.ts isn't allowed in CI/)
     assert.equal(readRun(p.dir).run.runId, runId, 'no run written for a usage error')
-    assert.deepEqual(readdirSync(join(p.dir, '.es/staging')), [], 'no staging left behind')
+    assert.deepEqual(readdirSync(join(p.dir, '.reeval/staging')), [], 'no staging left behind')
 
     const groupOnly = await project('group-only', {
-      'es.config.ts': fakeConfig(),
-      'evals/o.es.ts': `import { evaluate, group } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { evaluate, group } from 'reeval'
 group.only('focused', () => { evaluate('inside', async () => {}) })
 evaluate('other', async () => {})
 `,
@@ -215,8 +215,8 @@ evaluate('other', async () => {})
 
   test('t.judge without a model names where to set one', async () => {
     const p = await project('no-judge', {
-      'es.config.ts': config('').replace('judge: { model: fakeJudge({ score: 0.9 }) },', ''),
-      'evals/j.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': config('').replace('judge: { model: fakeJudge({ score: 0.9 }) },', ''),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('judged', async (t) => {
   await t.send('x')
   expect(await t.judge('ok?')).toPass()
@@ -227,14 +227,14 @@ evaluate('judged', async (t) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /t\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in es\.config\.ts/,
+      /t\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.config\.ts/,
     )
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
 })
 
 describe('compare', () => {
-  const envs = `import { defineEnvironment } from 'evalsuite'
+  const envs = `import { defineEnvironment } from 'reeval'
 export const base = defineEnvironment('base', { env: { MODE: 'base' } })
 export const skilled = base.extend('skilled', ({ skill }) => ({
   env: { MODE: 'skilled' },
@@ -244,10 +244,10 @@ export const skilled = base.extend('skilled', ({ skill }) => ({
 
   test('variants run next to the control, lift is stored, and the control is not gated', async () => {
     const p = await project('compare', {
-      'es.config.ts': config('', SKILLED),
+      'reeval.config.ts': config('', SKILLED),
       'skills/house-greeting/SKILL.md': SKILL,
       'evals/envs.ts': envs,
-      'evals/c.es.ts': `import { evaluate, expect, group } from 'evalsuite'
+      'evals/c.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { base, skilled } from './envs.ts'
 group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
   evaluate('writes ok.txt', async (t) => {
@@ -270,7 +270,7 @@ group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
     // A successful compare reads as one: the control's expected misses aren't failures.
     assert.doesNotMatch(r.stdout, /✗|Failures|Assertion failures|failed/)
     assert.match(r.stdout, /^Expected misses, not gated \(2\)$/m)
-    assert.match(r.stdout, /^ ○ evals\/c\.es\.ts › g › writes ok\.txt {2}fake\/base\/fake#1$/m)
+    assert.match(r.stdout, /^ ○ evals\/c\.eval\.ts › g › writes ok\.txt {2}fake\/base\/fake#1$/m)
     const section = r.stdout.slice(
       r.stdout.indexOf('Expected misses'),
       r.stdout.indexOf('Attempts'),
@@ -287,7 +287,7 @@ group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
     assert.doesNotMatch(agent.stdout, /^FAIL /m)
     assert.match(
       agent.stdout,
-      /^MISS evals\/c\.es\.ts › g › writes ok\.txt \[.*\] \(.*, assertion, not gated\)$/m,
+      /^MISS evals\/c\.eval\.ts › g › writes ok\.txt \[.*\] \(.*, assertion, not gated\)$/m,
     )
     assert.match(agent.stdout, /^2 passed, 2 missed, not gated \(4 attempts, 1 evals\)$/m)
 
@@ -334,10 +334,10 @@ group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
 
   test("gate 'all' gates the control, and minLift fails a variant cell below it", async () => {
     const p = await project('compare-gates', {
-      'es.config.ts': config('', SKILLED),
+      'reeval.config.ts': config('', SKILLED),
       'skills/house-greeting/SKILL.md': SKILL,
       'evals/envs.ts': envs,
-      'evals/c.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'evals/c.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
 evaluate('all gated', { environment: base, compare: { variants: [skilled], gate: 'all' } }, async (t) => {
   await t.send('go')
@@ -359,9 +359,9 @@ evaluate('no worse', { compare: { variants: [skilled], minLift: 0.5, gate: 'none
     assert.equal(noWorse?.outcome, 'pass', "gate 'none' reports but never fails")
     // The canary: a gated control's failure is still a failure; only the ungated miss moves.
     assert.match(r.stdout, /^Failures \(1\)$/m)
-    assert.match(r.stdout, /^ ✗ evals\/c\.es\.ts › all gated {2}fake\/base\/fake#1$/m)
+    assert.match(r.stdout, /^ ✗ evals\/c\.eval\.ts › all gated {2}fake\/base\/fake#1$/m)
     assert.match(r.stdout, /^Expected misses, not gated \(1\)$/m)
-    assert.match(r.stdout, /^ ○ evals\/c\.es\.ts › no worse {2}fake\/skilled\/fake#1$/m)
+    assert.match(r.stdout, /^ ○ evals\/c\.eval\.ts › no worse {2}fake\/skilled\/fake#1$/m)
     assert.match(
       r.stdout,
       /lift −100 pts \(95% −100…\+12, 0\/1 vs 1\/1\), within noise \(minLift 50\) ✗/,
@@ -370,10 +370,10 @@ evaluate('no worse', { compare: { variants: [skilled], minLift: 0.5, gate: 'none
 
   test('compare.harness scopes variants; other harnesses run the control only', async () => {
     const p = await project('compare-scope', {
-      'es.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
+      'reeval.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
       'skills/house-greeting/SKILL.md': SKILL,
       'evals/envs.ts': envs,
-      'evals/c.es.ts': `import { evaluate } from 'evalsuite'
+      'evals/c.eval.ts': `import { evaluate } from 'reeval'
 import { skilled } from './envs.ts'
 evaluate('scoped', { compare: { variants: [skilled], harness: ['b'] } }, async (t) => { await t.send('x') })
 `,
@@ -398,8 +398,8 @@ describe('gate policies', () => {
 
   test("'all' by default, { passRate } per eval or group, with a hint when runs > 1 and no gate", async () => {
     const p = await project('gates', {
-      'es.config.ts': fakeConfig(),
-      'evals/g.es.ts': `import { evaluate, group } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/g.eval.ts': `import { evaluate, group } from 'reeval'
 ${flaky('default', '')}
 ${flaky('at 0.8', ', gate: { passRate: 0.8 }')}
 ${flaky('at 0.9', ', gate: { passRate: 0.9 }')}
@@ -438,8 +438,8 @@ group('rated', { gate: { passRate: 0.6 } }, () => {
 
   test('a config-level gate applies to every eval', async () => {
     const p = await project('config-gate', {
-      'es.config.ts': fakeConfig({ extra: 'gate: { passRate: 0.8 },' }),
-      'evals/g.es.ts': `import { evaluate } from 'evalsuite'\n${flaky('steady', '')}\n`,
+      'reeval.config.ts': fakeConfig({ extra: 'gate: { passRate: 0.8 },' }),
+      'evals/g.eval.ts': `import { evaluate } from 'reeval'\n${flaky('steady', '')}\n`,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -457,7 +457,7 @@ describe('profiles', () => {
       /^plan {2}profile pr \(auto: CI is set\) · 3 evals \(1 skipped\) · 4 cells · 6 attempts · ~.* · budget 5 attempts ✗$/m,
     )
     assert.match(r.stdout, /^eval +harnesses +variants +runs +attempts +notes$/m)
-    assert.equal(existsSync(join(p.dir, '.es/runs')), false, 'a dry run writes no run')
+    assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')
 
     const over = await runCli(p.dir, ['run'], { env: { CI: 'true' } })
     assert.equal(over.code, 2, over.stdout + over.stderr)
@@ -489,17 +489,17 @@ describe('profiles', () => {
     assert.equal(typo.code, 2)
     assert.match(
       typo.stderr,
-      /es: Unknown profile "nigthly"\. Profiles in es\.config\.ts: pr, nightly\./,
+      /reeval: Unknown profile "nigthly"\. Profiles in reeval\.config\.ts: pr, nightly\./,
     )
   })
 
   test('budget.duration stops new attempts; the run is marked budget and exits 1', async () => {
     const p = await project('budget-duration', {
-      'es.config.ts': config(
+      'reeval.config.ts': config(
         `concurrency: 1, budget: { duration: '1s' },`,
         'fakeHarness({ delayMs: 700 })',
       ),
-      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'
 evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
 `,
     })
@@ -523,11 +523,11 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
 
   test('a budget-stopped run is auto-recorded in CI and by record: always, with status budget, and is never a compare base', async () => {
     const files = (record: string) => ({
-      'es.config.ts': config(
+      'reeval.config.ts': config(
         `concurrency: 1, budget: { duration: '1s' },${record}`,
         'fakeHarness({ delayMs: 700 })',
       ),
-      'evals/b.es.ts': `import { evaluate } from 'evalsuite'
+      'evals/b.eval.ts': `import { evaluate } from 'reeval'
 evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
 `,
     })
@@ -545,7 +545,7 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
     assert.ok(runId, 'recorded by record: always')
     assert.equal(readRun(always.dir, { history: 'evals/.history' }).run.status, 'budget')
 
-    // Canary: record: 'manual' leaves it to es record, which refuses it without --allow-incomplete.
+    // Canary: record: 'manual' leaves it to reeval record, which refuses it without --allow-incomplete.
     const manual = await project('budget-record-manual', files(` record: 'manual',`))
     assert.equal((await runCli(manual.dir, ['run'], { env: { CI: '1' } })).code, 1)
     assert.deepEqual(recordedRuns(manual.dir), [])
@@ -575,8 +575,8 @@ describe('common mistakes', () => {
     ],
     [
       'importing baseline',
-      `evaluate('e', { compare: [(await import('evalsuite') as never as { baseline: never }).baseline] }, async () => {})`,
-      /compare lists undefined in evaluate\("e"\)\. evalsuite has no baseline: the inherited environment is the control of compare; with none, the control is empty\./,
+      `evaluate('e', { compare: [(await import('reeval') as never as { baseline: never }).baseline] }, async () => {})`,
+      /compare lists undefined in evaluate\("e"\)\. reeval has no baseline: the inherited environment is the control of compare; with none, the control is empty\./,
     ],
     [
       'pinning something that cannot be pinned',
@@ -724,22 +724,22 @@ describe('common mistakes', () => {
       /harness is an empty list in evaluate\("e"\)/,
     ],
     [
-      'a harness kind ES does not know',
+      'a harness kind reeval does not know',
       `evaluate('e', { harness: { kind: 'cline' } as never }, async () => {})`,
       /harness in evaluate\("e"\) must be like cursor\(\{ model: 'composer-2\.5' \}\) \(got an object with "kind"\)/,
     ],
     [
       'Claude Code without a model',
-      `evaluate('e', { harness: (await import('evalsuite/harness')).claudeCode({} as never) }, async () => {})`,
+      `evaluate('e', { harness: (await import('reeval/harness')).claudeCode({} as never) }, async () => {})`,
       /claudeCode\(\) needs a model, e\.g\. claudeCode\(\{ model: 'claude-sonnet-5' \}\)/,
     ],
     [
       'Antigravity without a model',
-      `evaluate('e', { harness: (await import('evalsuite/harness')).antigravity({} as never) }, async () => {})`,
+      `evaluate('e', { harness: (await import('reeval/harness')).antigravity({} as never) }, async () => {})`,
       /antigravity\(\) needs a model, e\.g\. antigravity\(\{ model: 'gemini-3\.8-flash-medium' \}\)/,
     ],
     [
-      'a fake agent layout ES does not know',
+      'a fake agent layout reeval does not know',
       `evaluate('e', { harness: fakeHarness({ layout: 'cline' as never }) }, async () => {})`,
       /fakeHarness\(\{ layout \}\) is one of 'cursor', 'claude-code', 'antigravity', 'opencode', 'goose', 'pi', 'codex' \(got "cline"\)/,
     ],
@@ -851,16 +851,16 @@ describe('common mistakes', () => {
     [
       'a token in the workspace URL',
       `defineEnvironment('app', ({ git }) => ({ workspace: git('https://x-access-token:ghp_abc123@github.com/acme/app') }))`,
-      /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. ES fetches the repository on the host with your own git credentials/,
+      /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. reeval fetches the repository on the host with your own git credentials/,
     ],
   ]
   for (const [what, body, message] of cases) {
     test(`${what} exits 2 with a fix`, async () => {
       const p = await project('mistake', {
-        'es.config.ts': fakeConfig(),
-        'evals/o.es.ts': `import { defineEnvironment, evaluate, group } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker, fakeSandbox } from 'evalsuite/sandbox'
+        'reeval.config.ts': fakeConfig(),
+        'evals/o.eval.ts': `import { defineEnvironment, evaluate, group } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker, fakeSandbox } from 'reeval/sandbox'
 const a = defineEnvironment('a', {})
 const b = defineEnvironment('b', {})
 ${body}
@@ -876,12 +876,12 @@ ${body}
     [
       'compare in the config',
       `compare: [defineEnvironment('x', {})],`,
-      /compare can't be set in es\.config\.ts: it would multiply every eval\. Put it on the group or eval that asks the question\./,
+      /compare can't be set in reeval\.config\.ts: it would multiply every eval\. Put it on the group or eval that asks the question\./,
     ],
     [
       'a literal secret',
       `env: { GOOGLE_API_KEY: 'AIza-not-really' },`,
-      /env\.GOOGLE_API_KEY in es\.config\.ts is a literal string\. Pass secrets with secret\.fromEnv\(\) so they're redacted and never recorded\./,
+      /env\.GOOGLE_API_KEY in reeval\.config\.ts is a literal string\. Pass secrets with secret\.fromEnv\(\) so they're redacted and never recorded\./,
     ],
     [
       'widening in a profile limit',
@@ -891,22 +891,22 @@ ${body}
     [
       'a usd budget',
       `budget: { usd: 20 },`,
-      /budget\.usd isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
+      /budget\.usd isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget\. Cap the run with attempts or duration\./,
     ],
     [
-      'an unbrokered policy ES does not know',
+      'an unbrokered policy reeval does not know',
       `secrets: { unbrokered: 'deny' as never },`,
       /config\.secrets\.unbrokered is 'warn' or 'error' \(got "deny"\)/,
     ],
     [
       'maxConcurrent 0 on a config harness',
       `harness: fakeHarness({ maxConcurrent: 0 }),`,
-      /maxConcurrent must be a whole number of at least 1 \(got 0\) for harness in es\.config\.ts/,
+      /maxConcurrent must be a whole number of at least 1 \(got 0\) for harness in reeval\.config\.ts/,
     ],
     [
       'a judge threshold as text in the config',
       `judge: { model: fakeJudge({ score: 0.9 }), threshold: '0.8' as never },`,
-      /judge\.threshold must be between 0 and 1 \(got 0\.8\) in es\.config\.ts/,
+      /judge\.threshold must be between 0 and 1 \(got 0\.8\) in reeval\.config\.ts/,
     ],
     [
       'keeping no debug runs',
@@ -932,11 +932,11 @@ ${body}
   for (const [what, extra, message] of configCases) {
     test(`${what} exits 2 with a fix`, async () => {
       const p = await project('config-mistake', {
-        'es.config.ts': config(extra).replace(
-          "import { defineConfig } from 'evalsuite'",
-          "import { defineConfig, defineEnvironment } from 'evalsuite'",
+        'reeval.config.ts': config(extra).replace(
+          "import { defineConfig } from 'reeval'",
+          "import { defineConfig, defineEnvironment } from 'reeval'",
         ),
-        'evals/o.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('e', async () => {})\n`,
+        'evals/o.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', async () => {})\n`,
       })
       const r = await runCli(p.dir)
       assert.equal(r.code, 2, `${extra}\n${r.stdout}${r.stderr}`)
@@ -947,26 +947,29 @@ ${body}
   test('config errors name the config file that was read, as typed from the current directory', async () => {
     const bad = (extra: string) =>
       config(extra).replace(
-        "import { defineConfig } from 'evalsuite'",
-        "import { defineConfig, defineEnvironment } from 'evalsuite'",
+        "import { defineConfig } from 'reeval'",
+        "import { defineConfig, defineEnvironment } from 'reeval'",
       )
     const p = await project('config-path', {
-      'es.config.ts': bad('harnesses: [],'),
-      'es.compare.config.ts': bad(`compare: [defineEnvironment('x', {})],`),
-      'es.secret.config.ts': bad(`env: { GOOGLE_API_KEY: 'AIza-not-really' },`),
-      'es.empty.config.ts': bad('harness: [],'),
-      'es.none.config.ts': fakeConfig().replace('export default defineConfig({', 'defineConfig({'),
-      'es.profile.config.ts': bad(`profiles: { pr: {} },`),
-      'es.budget.config.ts': bad('budget: { attempts: 1 },'),
-      'es.include.config.ts': bad(`include: ['nothing/**/*.es.ts'],`),
-      'es.judge.config.ts': bad('').replace('judge: { model: fakeJudge({ score: 0.9 }) },', ''),
-      'es.unbrokered.config.ts': bad(`secrets: { unbrokered: 'error' },`),
-      'evals/o.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('e', { runs: 2 }, async () => {})\n`,
-      'evals/j.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': bad('harnesses: [],'),
+      'reeval.compare.config.ts': bad(`compare: [defineEnvironment('x', {})],`),
+      'reeval.secret.config.ts': bad(`env: { GOOGLE_API_KEY: 'AIza-not-really' },`),
+      'reeval.empty.config.ts': bad('harness: [],'),
+      'reeval.none.config.ts': fakeConfig().replace(
+        'export default defineConfig({',
+        'defineConfig({',
+      ),
+      'reeval.profile.config.ts': bad(`profiles: { pr: {} },`),
+      'reeval.budget.config.ts': bad('budget: { attempts: 1 },'),
+      'reeval.include.config.ts': bad(`include: ['nothing/**/*.eval.ts'],`),
+      'reeval.judge.config.ts': bad('').replace('judge: { model: fakeJudge({ score: 0.9 }) },', ''),
+      'reeval.unbrokered.config.ts': bad(`secrets: { unbrokered: 'error' },`),
+      'evals/o.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', { runs: 2 }, async () => {})\n`,
+      'evals/j.eval.ts': `import { evaluate } from 'reeval'
 evaluate('judged', async (t) => { await t.send('x'); await t.judge('ok?') })
 `,
-      'evals/s.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const env = defineEnvironment('s', ({ secret }) => ({
   env: { AWS_SECRET_ACCESS_KEY: secret.fromEnv('AWS_SECRET_ACCESS_KEY') },
 }))
@@ -974,47 +977,51 @@ evaluate('one', { sandbox: docker(), environment: env }, async () => {})
 `,
     })
     const cases: Array<[string, string[], RegExp]> = [
-      ['.', [], /Unknown option "harnesses" in es\.config\.ts\. Did you mean "harness"\?/],
+      ['.', [], /Unknown option "harnesses" in reeval\.config\.ts\. Did you mean "harness"\?/],
       [
         'evals',
         [],
-        /Unknown option "harnesses" in \.\.\/es\.config\.ts\. Did you mean "harness"\?/,
+        /Unknown option "harnesses" in \.\.\/reeval\.config\.ts\. Did you mean "harness"\?/,
       ],
       [
         '.',
-        ['--config', 'es.compare.config.ts'],
-        /compare can't be set in es\.compare\.config\.ts:/,
+        ['--config', 'reeval.compare.config.ts'],
+        /compare can't be set in reeval\.compare\.config\.ts:/,
       ],
       [
         '.',
-        ['--config', 'es.secret.config.ts'],
-        /env\.GOOGLE_API_KEY in es\.secret\.config\.ts is a literal string/,
+        ['--config', 'reeval.secret.config.ts'],
+        /env\.GOOGLE_API_KEY in reeval\.secret\.config\.ts is a literal string/,
       ],
       [
         '.',
-        ['--config', 'es.empty.config.ts'],
-        /harness is an empty list in es\.empty\.config\.ts\./,
+        ['--config', 'reeval.empty.config.ts'],
+        /harness is an empty list in reeval\.empty\.config\.ts\./,
       ],
       [
         'evals',
-        ['--config', '../es.none.config.ts'],
-        /^es: \.\.\/es\.none\.config\.ts has no default export/m,
+        ['--config', '../reeval.none.config.ts'],
+        /^reeval: \.\.\/reeval\.none\.config\.ts has no default export/m,
       ],
       [
         '.',
-        ['--config', 'es.profile.config.ts', '--profile', 'nope'],
-        /Profiles in es\.profile\.config\.ts: pr\./,
+        ['--config', 'reeval.profile.config.ts', '--profile', 'nope'],
+        /Profiles in reeval\.profile\.config\.ts: pr\./,
       ],
       [
         '.',
-        ['--config', 'es.budget.config.ts', 'o.es'],
-        /over budget\.attempts 1 \(es\.budget\.config\.ts\)/,
+        ['--config', 'reeval.budget.config.ts', 'o.eval'],
+        /over budget\.attempts 1 \(reeval\.budget\.config\.ts\)/,
       ],
-      ['.', ['--config', 'es.include.config.ts'], /or set include in es\.include\.config\.ts\./],
       [
         '.',
-        ['--config', 'es.unbrokered.config.ts', 's.es'],
-        /secrets\.unbrokered is 'error' in es\.unbrokered\.config\.ts\./,
+        ['--config', 'reeval.include.config.ts'],
+        /or set include in reeval\.include\.config\.ts\./,
+      ],
+      [
+        '.',
+        ['--config', 'reeval.unbrokered.config.ts', 's.eval'],
+        /secrets\.unbrokered is 'error' in reeval\.unbrokered\.config\.ts\./,
       ],
     ]
     for (const [cwd, args, message] of cases) {
@@ -1023,13 +1030,14 @@ evaluate('one', { sandbox: docker(), environment: env }, async () => {})
       })
       assert.equal(r.code, 2, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
       assert.match(r.stderr, message)
-      if (args.length) assert.doesNotMatch(r.stderr, /(?<![\w./])es\.config\.ts/, args.join(' '))
+      if (args.length)
+        assert.doesNotMatch(r.stderr, /(?<![\w./])reeval\.config\.ts/, args.join(' '))
     }
-    const judged = await runCli(p.dir, ['run', '--config', 'es.judge.config.ts', 'j.es'])
+    const judged = await runCli(p.dir, ['run', '--config', 'reeval.judge.config.ts', 'j.eval'])
     assert.equal(judged.code, 1, judged.stdout + judged.stderr)
     assert.match(
       readRun(p.dir).evals[0]?.error?.message ?? '',
-      /Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in es\.judge\.config\.ts,/,
+      /Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.judge\.config\.ts,/,
     )
   })
 
@@ -1037,18 +1045,18 @@ evaluate('one', { sandbox: docker(), environment: env }, async () => {})
     [
       'no export',
       'defineConfig({',
-      /es\.config\.ts has no default export\. Write export default defineConfig\(\{…\}\)\./,
+      /reeval\.config\.ts has no default export\. Write export default defineConfig\(\{…\}\)\./,
     ],
     [
       'a named export',
       'export const config = defineConfig({',
-      /es\.config\.ts has no default export \(it exports config\)\. Write export default defineConfig\(\{…\}\)\./,
+      /reeval\.config\.ts has no default export \(it exports config\)\. Write export default defineConfig\(\{…\}\)\./,
     ],
   ] as const) {
     test(`a config with ${what} exits 2 instead of running the default harness`, async () => {
       const p = await project('config-no-default', {
-        'es.config.ts': fakeConfig().replace('export default defineConfig({', replacement),
-        'evals/o.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('e', async () => {})\n`,
+        'reeval.config.ts': fakeConfig().replace('export default defineConfig({', replacement),
+        'evals/o.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', async () => {})\n`,
       })
       const r = await runCli(p.dir, ['run', '--dry-run'])
       assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -1056,8 +1064,8 @@ evaluate('one', { sandbox: docker(), environment: env }, async () => {})
     })
   }
 
-  const unbrokeredEval = `import { defineEnvironment, evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+  const unbrokeredEval = `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const keys = defineEnvironment('keys', ({ secret }) => ({
   env: {
     GEMINI_API_KEY: secret.fromEnv('HOST_GEMINI', { hosts: secret.hosts.gemini }),
@@ -1070,11 +1078,11 @@ evaluate('two', { sandbox: docker(), environment: keys }, async () => {})
 
   test("an optional secret that isn't set gets no real-value warning; set, it does", async () => {
     const p = await project('unbrokered-optional', {
-      'es.config.ts': fakeConfig(),
-      'evals/o.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
-  env: { SENTRY_TOKEN: secret.fromEnv('ES_TEST_MAYBE_TOKEN', { optional: true }) },
+  env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
 evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
 `,
@@ -1085,25 +1093,25 @@ evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
     assert.doesNotMatch(unset.stdout, warning)
     // The canary: set on the host, it does reach the sandbox as its real value.
     const set = await runCli(p.dir, ['run', '--dry-run'], {
-      env: { ES_TEST_MAYBE_TOKEN: 'set-for-the-canary' },
+      env: { REEVAL_TEST_MAYBE_TOKEN: 'set-for-the-canary' },
     })
     assert.match(set.stdout, warning)
   })
 
   test("secrets: { unbrokered: 'error' } refuses an optional secret whether or not it's set", async () => {
     const p = await project('unbrokered-optional-strict', {
-      'es.config.ts': fakeConfig({ extra: "secrets: { unbrokered: 'error' }," }),
-      'evals/o.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'reeval.config.ts': fakeConfig({ extra: "secrets: { unbrokered: 'error' }," }),
+      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
-  env: { SENTRY_TOKEN: secret.fromEnv('ES_TEST_MAYBE_TOKEN', { optional: true }) },
+  env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
 evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
 `,
     })
     const refused =
       /SENTRY_TOKEN in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error'/
-    for (const env of [{}, { ES_TEST_MAYBE_TOKEN: 'set-on-this-host' }]) {
+    for (const env of [{}, { REEVAL_TEST_MAYBE_TOKEN: 'set-on-this-host' }]) {
       const r = await runCli(p.dir, ['run', '--dry-run'], { env })
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(r.stderr, refused)
@@ -1112,8 +1120,8 @@ evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
 
   test('a Docker secret without hosts warns once in the plan', async () => {
     const p = await project('unbrokered', {
-      'es.config.ts': fakeConfig(),
-      'evals/o.es.ts': unbrokeredEval,
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': unbrokeredEval,
     })
     const r = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -1125,21 +1133,21 @@ evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
 
   test("secrets: { unbrokered: 'error' } refuses a Docker secret without hosts", async () => {
     const p = await project('unbrokered-strict', {
-      'es.config.ts': fakeConfig({ extra: "secrets: { unbrokered: 'error' }," }),
-      'evals/o.es.ts': unbrokeredEval,
+      'reeval.config.ts': fakeConfig({ extra: "secrets: { unbrokered: 'error' }," }),
+      'evals/o.eval.ts': unbrokeredEval,
     })
     const r = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(
       r.stderr,
-      /AWS_SECRET_ACCESS_KEY in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error' in es\.config\.ts\. To broker it, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\./,
+      /AWS_SECRET_ACCESS_KEY in evaluate\("one"\) isn't brokered, and secrets\.unbrokered is 'error' in reeval\.config\.ts\. To broker it, add the hosts it's sent to, e\.g\. secret\.fromEnv\('AWS_SECRET_ACCESS_KEY', \{ hosts: \['api\.example\.com'\] \}\)\./,
     )
   })
 
   test('a moving git ref warns in the plan', async () => {
     const p = await project('moving-ref', {
-      'es.config.ts': fakeConfig(),
-      'evals/o.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const main = defineEnvironment('skill@main', ({ skill }) => ({
   skills: [skill.git('github:invertase/genkit-skills', { ref: 'main' })],
 }))
@@ -1158,22 +1166,22 @@ evaluate('e', { environment: main }, async () => {})
 describe('environments and secrets', () => {
   test('skills, MCP, rules, files, setup steps and secrets reach the sandbox and the record', async () => {
     const p = await project('environments', {
-      'es.config.ts': `
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+      'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig(({ secret }) => ({
   harness: fakeHarness({}),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
-  env: { APP_TOKEN: secret.fromEnv('ES_TEST_HOST_TOKEN'), MODE: 'test' },
+  env: { APP_TOKEN: secret.fromEnv('REEVAL_TEST_HOST_TOKEN'), MODE: 'test' },
 }))
 `,
       'skills/house-greeting/SKILL.md': SKILL,
       'skills/house-greeting/examples.md': 'Ahoy, Ada!\n',
       'docs/api.md': '# API\n',
-      'evals/envs.ts': `import { defineEnvironment } from 'evalsuite'
+      'evals/envs.ts': `import { defineEnvironment } from 'reeval'
 export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, skill }) => ({
   skills: [skill.local('../skills')],
   mcp: { docs: mcp.stdio('npx', ['-y', 'docs-mcp', '--port', '0']) },
@@ -1181,14 +1189,14 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
   files: { 'notes/readme.txt': 'hello', 'docs/api.md': file('../docs/api.md') },
   env: {
     FLAVOUR: 'mint',
-    EXTRA_TOKEN: secret.fromEnv('ES_TEST_HOST_TOKEN'),
-    CHECK_TOKEN: secret.fromEnv('ES_TEST_HOST_TOKEN', { to: 'checks' }),
-    MAYBE_TOKEN: secret.fromEnv('ES_TEST_NOT_SET', { optional: true }),
+    EXTRA_TOKEN: secret.fromEnv('REEVAL_TEST_HOST_TOKEN'),
+    CHECK_TOKEN: secret.fromEnv('REEVAL_TEST_HOST_TOKEN', { to: 'checks' }),
+    MAYBE_TOKEN: secret.fromEnv('REEVAL_TEST_NOT_SET', { optional: true }),
   },
   setup: [{ run: 'printf %s "$EXTRA_TOKEN$CHECK_TOKEN" | wc -c > secret-length.txt', timeout: '10s' }],
 }))
 `,
-      'evals/e.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
 import { withSkill } from './envs.ts'
 evaluate('greets', { compare: [withSkill] }, async (t) => {
   const turn = await t.send('greet')
@@ -1212,9 +1220,9 @@ evaluate('greets', { compare: [withSkill] }, async (t) => {
 })
 `,
     })
-    const r = await runCli(p.dir, ['run'], { env: { ES_TEST_HOST_TOKEN: 's3cret-value-123' } })
+    const r = await runCli(p.dir, ['run'], { env: { REEVAL_TEST_HOST_TOKEN: 's3cret-value-123' } })
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^\[greets#1 with-skill\] ✓ evals\/e\.es\.ts › greets/m)
+    assert.match(r.stdout, /^\[greets#1 with-skill\] ✓ evals\/e\.eval\.ts › greets/m)
     assert.match(r.stdout, /with-skill\/fake +variant +1\/1 +100% +lift \+100 pts/)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
@@ -1249,9 +1257,9 @@ evaluate('greets', { compare: [withSkill] }, async (t) => {
 
   test('a missing secret is an infra error; a failing setup step names itself', async () => {
     const p = await project('missing-secret', {
-      'es.config.ts': fakeConfig(),
-      'evals/s.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
-const needs = defineEnvironment('needs', ({ secret }) => ({ env: { NEEDED: secret.fromEnv('ES_TEST_NOT_SET') } }))
+      'reeval.config.ts': fakeConfig(),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+const needs = defineEnvironment('needs', ({ secret }) => ({ env: { NEEDED: secret.fromEnv('REEVAL_TEST_NOT_SET') } }))
 evaluate('needs it', { environment: needs }, async (t) => { await t.send('x') })
 `,
     })
@@ -1259,12 +1267,12 @@ evaluate('needs it', { environment: needs }, async (t) => { await t.send('x') })
     assert.equal(r.code, 3, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /Secret NEEDED \(from ES_TEST_NOT_SET\) for environment needs .* isn't set\. Set it in the environment or \.env\.local\./,
+      /Secret NEEDED \(from REEVAL_TEST_NOT_SET\) for environment needs .* isn't set\. Set it in the environment or \.env\.local\./,
     )
 
     const failing = await project('setup-fails', {
-      'es.config.ts': fakeConfig(),
-      'evals/s.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const broken = defineEnvironment('broken', { setup: [{ run: 'true' }, { run: 'echo nope >&2; exit 4' }] })
 evaluate('x', { environment: broken, timeout: '1s' }, async (t) => { await t.send('x') })
 `,
@@ -1278,7 +1286,7 @@ evaluate('x', { environment: broken, timeout: '1s' }, async (t) => { await t.sen
   })
 
   test('skills come from a git URL at a ref, with the commit recorded; workspace placement', async () => {
-    const p = await project('git-skill', { 'es.config.ts': fakeConfig() })
+    const p = await project('git-skill', { 'reeval.config.ts': fakeConfig() })
     const repo = join(p.dir, 'skill-repo')
     mkdirSync(join(repo, 'skills/house-greeting'), { recursive: true })
     writeFileSync(join(repo, 'skills/house-greeting/SKILL.md'), SKILL)
@@ -1294,8 +1302,8 @@ evaluate('x', { environment: broken, timeout: '1s' }, async (t) => { await t.sen
     const sha = git('rev-parse', 'HEAD')
     mkdirSync(join(p.dir, 'evals'))
     writeFileSync(
-      join(p.dir, 'evals/g.es.ts'),
-      `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      join(p.dir, 'evals/g.eval.ts'),
+      `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('remote', ({ skill }) => ({
   skills: [
     skill.git('${pathToFileURL(repo).href}', { ref: 'v1', path: 'skills', only: ['house-greeting'] }),
@@ -1324,10 +1332,10 @@ evaluate('loads it', { environment: env }, async (t) => {
     )
   })
 
-  test("a local skill's evals/ and *.es.ts stay out of the sandbox; a block description parses", async () => {
+  test("a local skill's evals/ and *.eval.ts stay out of the sandbox; a block description parses", async () => {
     const p = await project('skill-hygiene', {
-      'es.config.ts': fakeConfig(),
-      'evals/h.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/h.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('reviewer', ({ skill }) => ({
   skills: [skill.local('../skills/skill-reviewer', { placement: 'workspace' })],
 }))
@@ -1352,7 +1360,7 @@ evaluate('staged', { environment: env }, async (t) => {
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const [s] = readRun(p.dir).run.environments[0]?.skills ?? []
-    assert.deepEqual([s?.name, s?.excluded], ['skill-reviewer', ['evals/', 'review.es.ts']])
+    assert.deepEqual([s?.name, s?.excluded], ['skill-reviewer', ['evals/', 'review.eval.ts']])
   })
 })
 
@@ -1361,7 +1369,7 @@ describe('sandbox images', () => {
     [
       'two bases',
       `docker({ image: 'x:1', dockerfile: './Dockerfile' })`,
-      /docker\(\) takes one base image, but got image and dockerfile\. Use image \(has the harness\), from \(a toolchain image ES bakes the harness onto\) or dockerfile\./,
+      /docker\(\) takes one base image, but got image and dockerfile\. Use image \(has the harness\), from \(a toolchain image reeval bakes the harness onto\) or dockerfile\./,
     ],
     [
       'image and from',
@@ -1437,10 +1445,10 @@ describe('sandbox images', () => {
   for (const [what, sandbox, message] of sandboxCases) {
     test(`${what} exits 2 with a fix`, async () => {
       const p = await project('sandbox-mistake', {
-        'es.config.ts': fakeConfig(),
+        'reeval.config.ts': fakeConfig(),
         'evals/Dockerfile': 'FROM debian:bookworm-slim\n',
-        'evals/o.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'evals/o.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('e', { sandbox: ${sandbox} }, async () => {})
 `,
       })
@@ -1450,29 +1458,29 @@ evaluate('e', { sandbox: ${sandbox} }, async () => {})
     })
   }
 
-  test('es image build --dry-run lists every image the planned sandboxes need', async () => {
+  test('reeval image build --dry-run lists every image the planned sandboxes need', async () => {
     const p = await project('image-plan', {
-      'es.config.ts': `
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+      'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness({}),
   sandbox: docker({ install: ['apt-get update && apt-get install -y jq', { run: 'jq --version', timeout: '1m' }] }),
   judge: { model: fakeJudge() },
 })
 `,
-      'docker/tools/Dockerfile': `ARG ES_BASE\nFROM \${ES_BASE}\nRUN echo tools\n`,
+      'docker/tools/Dockerfile': `ARG REEVAL_BASE\nFROM \${REEVAL_BASE}\nRUN echo tools\n`,
       'evals/py.Dockerfile': 'FROM python:3.12-slim\n',
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('default', async () => {})
 evaluate('default again', async () => {})
 evaluate('tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }, async () => {})
 evaluate('py', { sandbox: docker({ dockerfile: new URL('./py.Dockerfile', import.meta.url) }) }, async () => {})
 evaluate('from', { sandbox: docker({ from: 'python:3.12-slim', maxConcurrent: 2 }) }, async () => {})
-evaluate('fake', { sandbox: (await import('evalsuite/sandbox')).fakeSandbox() }, async () => {})
+evaluate('fake', { sandbox: (await import('reeval/sandbox')).fakeSandbox() }, async () => {})
 `,
     })
     const r = await runCli(p.dir, ['image', 'build', '--dry-run'])
@@ -1484,33 +1492,33 @@ evaluate('fake', { sandbox: (await import('evalsuite/sandbox')).fakeSandbox() },
     assert.match(
       out,
       new RegExp(
-        `^docker \\+ install · 2 evals\\n {2}${st}base +evalsuite-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +evalsuite-install:<base id \\+ commands> +\\(`,
+        `^docker \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:tools · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +evalsuite-dockerfile:tools-<context \\+ ES image id> +\\(.+\\)\\n {2}${st}harness +evalsuite-dockerfile:tools-<context \\+ ES image id> +\\(`,
+        `^docker:tools · 1 eval\\n {2}${st}dockerfile docker/tools/Dockerfile +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(.+\\)\\n {2}${st}harness +reeval-dockerfile:tools-<context \\+ reeval image id> +\\(`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:py\\.Dockerfile · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +evalsuite-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +evalsuite-sandbox:cursor-[\\d.]+-evalsuite-dockerfile-py-dockerfile-`,
+        `^docker:py\\.Dockerfile · 1 eval\\n {2}${st}dockerfile evals/py\\.Dockerfile +reeval-dockerfile:py-dockerfile-[0-9a-f]{16} .*\\n {2}${st}harness +reeval-sandbox:cursor-[\\d.]+-reeval-dockerfile-py-dockerfile-`,
         'm',
       ),
     )
     assert.match(
       out,
       new RegExp(
-        `^docker:python:3\\.12-slim · 1 eval\\n {2}${st}from python:3\\.12-slim +evalsuite-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
+        `^docker:python:3\\.12-slim · 1 eval\\n {2}${st}from python:3\\.12-slim +reeval-sandbox:cursor-[\\d.]+-python-3-12-slim-[0-9a-f]{8}`,
         'm',
       ),
     )
     assert.doesNotMatch(out, /fake/)
-    const runs = join(p.dir, '.es', 'runs')
+    const runs = join(p.dir, '.reeval', 'runs')
     assert.equal(existsSync(runs) ? readdirSync(runs).length : 0, 0, 'a dry run writes no run')
   })
 })

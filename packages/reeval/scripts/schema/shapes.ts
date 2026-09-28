@@ -6,8 +6,8 @@ export const PACKAGE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 export const SNAPSHOT_DIR = fileURLToPath(new URL('../../schema/', import.meta.url))
 
 /**
- * A shape ES writes to disk and reads back later, perhaps from an older or newer ES. Caches that
- * ES rebuilds when its version changes (`.es/history-cache.json`, `.es/history.db`) aren't here.
+ * A shape reeval writes to disk and reads back later, perhaps from an older or newer reeval. Caches that
+ * reeval rebuilds when its version changes (`.reeval/history-cache.json`, `.reeval/history.db`) aren't here.
  */
 export type PersistedShape = {
   name: ShapeName
@@ -24,7 +24,7 @@ export const SHAPES: PersistedShape[] = [
     name: 'run-record',
     file: 'src/history/types.ts',
     type: 'RunRecord',
-    where: 'A run record: evals/.history/<run>.json and .es/runs/<run>.json',
+    where: 'A run record: evals/.history/<run>.json and .reeval/runs/<run>.json',
     versionField: 'schemaVersion',
   },
   {
@@ -37,27 +37,28 @@ export const SHAPES: PersistedShape[] = [
     name: 'analysis',
     file: 'src/view/analysis.ts',
     type: 'AnalysisDoc',
-    where: 'An es analyze document: <run>/analysis/*.json and .es/analysis/<key>.json',
+    where: 'A reeval analyze document: <run>/analysis/*.json and .reeval/analysis/<key>.json',
     versionField: 'schemaVersion',
   },
   {
     name: 'debug-request',
     file: 'src/view/debug.ts',
     type: 'DebugRequest',
-    where: "One line of an attempt's .es/debug/…/requests.ndjson",
+    where: "One line of an attempt's .reeval/debug/…/requests.ndjson",
   },
   {
     name: 'live-progress',
     file: 'src/view/live.ts',
     type: 'LiveProgress',
-    where: "A running es run's progress: .es/staging/<run>/live.json, read by es studio",
+    where:
+      "A running reeval run's progress: .reeval/staging/<run>/live.json, read by reeval studio",
     versionField: 'schemaVersion',
   },
   {
     name: 'cli-invocation',
     file: 'src/report/types.ts',
     type: 'CliInvocation',
-    where: 'One line of .es/cli.jsonl, the last es commands es report reads',
+    where: 'One line of .reeval/cli.jsonl, the last reeval commands reeval report reads',
   },
 ]
 
@@ -65,7 +66,7 @@ export const SHAPES: PersistedShape[] = [
 export const PLAN_SNAPSHOT_DIR = fileURLToPath(new URL('../../schema/plan/', import.meta.url))
 
 /**
- * A shape the engine sends, not one ES persists: the spec a runner in another language codes
+ * A shape the engine sends, not one reeval persists: the spec a runner in another language codes
  * against. Its snapshot only has to match the code; `PROTOCOL` in src/engine/protocol.ts versions
  * a change.
  */

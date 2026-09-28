@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { present } from './env.ts'
 
 // Must fail: a step whose cwd exists runs there.

@@ -1,4 +1,4 @@
-// `evalsuite/sandbox`: sandbox descriptors. The implementations load lazily in workers.
+// `reeval/sandbox`: sandbox descriptors. The implementations load lazily in workers.
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -110,15 +110,15 @@ function checkInstall(install: unknown): InstallStep[] {
 }
 
 /**
- * One local Docker container per attempt. By default it's the image `es image build` makes. One
+ * One local Docker container per attempt. By default it's the image `reeval image build` makes. One
  * base at most:
  *
  * - `image`: another image that already has the harness baked in, used as is.
- * - `from`: a Debian or Ubuntu based toolchain image (e.g. `python:3.12-slim`); ES bakes Node and
+ * - `from`: a Debian or Ubuntu based toolchain image (e.g. `python:3.12-slim`); reeval bakes Node and
  *   the harness on top on first use.
  * - `dockerfile`: your Dockerfile, built with `docker build` from its directory. Start it
- *   `ARG ES_BASE` / `FROM ${ES_BASE}` to layer on ES's sandbox image; from any other Debian or
- *   Ubuntu base, ES bakes Node and the harness on top, as for `from`.
+ *   `ARG REEVAL_BASE` / `FROM ${REEVAL_BASE}` to layer on reeval's sandbox image; from any other Debian or
+ *   Ubuntu base, reeval bakes Node and the harness on top, as for `from`.
  *
  * `install` bakes shell commands onto the base in one cached layer (not with `dockerfile`: put
  * them in it). They run as root from `/`, in order, and never see secrets or the workspace; what
@@ -145,7 +145,7 @@ export function docker(options: DockerOptions = {}): DockerSandboxDescriptor {
   const bases = (['image', 'from', 'dockerfile'] as const).filter((k) => options[k] !== undefined)
   if (bases.length > 1) {
     throw new UsageError(
-      `docker() takes one base image, but got ${bases.join(' and ')}. Use image (has the harness), from (a toolchain image ES bakes the harness onto) or dockerfile.`,
+      `docker() takes one base image, but got ${bases.join(' and ')}. Use image (has the harness), from (a toolchain image reeval bakes the harness onto) or dockerfile.`,
     )
   }
   for (const key of ['id', 'image', 'from'] as const) {

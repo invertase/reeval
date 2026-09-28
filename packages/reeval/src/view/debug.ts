@@ -1,6 +1,6 @@
 /**
- * An attempt's local debug data, as `es run` writes it to `.es/debug/<runId>/<eval>/<cell>/<n>/`
- * and `es studio` serves it. Browser-safe. Never part of a record or the history folder.
+ * An attempt's local debug data, as `reeval run` writes it to `.reeval/debug/<runId>/<eval>/<cell>/<n>/`
+ * and `reeval studio` serves it. Browser-safe. Never part of a record or the history folder.
  *
  *   debug.log        the `-v` trace, one line per event, always written
  *   requests.ndjson  one line per egress gateway request, always written
@@ -67,7 +67,7 @@ export type DebugView = {
 }
 
 /**
- * The studio server's debug API (`es studio` only): an attempt's DebugView (null when it has no
+ * The studio server's debug API (`reeval studio` only): an attempt's DebugView (null when it has no
  * local data), and its raw trace.
  */
 export const debugApiPath = (runId: string, attemptKey: string) =>
@@ -77,7 +77,7 @@ export const traceApiPath = (runId: string, attemptKey: string) =>
 
 const PHASE_WIDTH = Math.max(...DEBUG_PHASES.map((p) => p.length))
 
-/** `12:50:01`, or `12:50:01.234` with milliseconds, in UTC like every ES timestamp. */
+/** `12:50:01`, or `12:50:01.234` with milliseconds, in UTC like every reeval timestamp. */
 export const debugTime = (at: number, ms: boolean) =>
   new Date(at).toISOString().slice(11, ms ? 23 : 19)
 

@@ -13,7 +13,7 @@ import type { Substitution } from './substitution.ts'
 /** Where the forwarder listens inside the container; every exec gets it as its HTTP(S) proxy. */
 export const PROXY_PORT = 43128
 /** The gateway's CA certificate in the container. The private key never leaves the host. */
-export const CA_PATH = '/usr/local/share/ca-certificates/evalsuite-egress.crt'
+export const CA_PATH = '/usr/local/share/ca-certificates/reeval-egress.crt'
 /** Debian's system bundle, which `update-ca-certificates` rebuilds with the gateway's CA in it. */
 export const CA_BUNDLE = '/etc/ssl/certs/ca-certificates.crt'
 const BUNDLED = 'es:ca-bundle'
@@ -84,7 +84,7 @@ export async function startGateway(
     forwarderScript(PROXY_PORT),
   ]
   const startedAt = Date.now()
-  // Own process group, like every docker call: ES handles Ctrl-C and tears the gateway down.
+  // Own process group, like every docker call: reeval handles Ctrl-C and tears the gateway down.
   const child = spawn('docker', args, { stdio: 'pipe', detached: true })
   child.once('close', (code) => traceDocker(args, startedAt, { exitCode: code, stderr }))
   let stderr = ''

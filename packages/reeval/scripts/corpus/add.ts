@@ -1,12 +1,12 @@
 // Adds an entry to the record corpus, test/fixtures/records/<name>/: real recorded runs that every
-// reader is tested against (test/corpus.test.ts), so a later change to what ES persists is checked
+// reader is tested against (test/corpus.test.ts), so a later change to what reeval persists is checked
 // against files that really have today's shape.
 //
-//   pnpm build && pnpm --filter @invertase/foobar corpus:add <name> [--note "why"]
+//   pnpm build && pnpm --filter reeval corpus:add <name> [--note "why"]
 //     records scripts/corpus/project (the fake harness: a compare, judges, a failure, an infra
 //     error, todo and skipped evals, a budget-stopped run and a saved analysis) with this build
 //
-//   pnpm --filter @invertase/foobar corpus:add <name> --from <project> [<runId>…] [--note "why"]
+//   pnpm --filter reeval corpus:add <name> --from <project> [<runId>…] [--note "why"]
 //     copies recorded runs (every one, or those named), their artifacts and the evals they ran
 //     from another project's history folder, e.g. runs on real harnesses
 import { execFileSync, spawnSync } from 'node:child_process'
@@ -33,16 +33,12 @@ const HISTORY = 'evals/.history'
 const RUN_FILE = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}\.json$/
 
 /** The corpus's own config: enough for every reader, and nothing that needs a key or Docker. */
-const config = (
-  note: string,
-  es: string,
-  commit: string,
-) => `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeAnalysis } from 'evalsuite/judge'
-import { fakeSandbox } from 'evalsuite/sandbox'
+const config = (note: string, es: string, commit: string) => `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
 
-// A record corpus entry (${note}), recorded by ES ${es} at ${commit}.
+// A record corpus entry (${note}), recorded by reeval ${es} at ${commit}.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
   harness: fakeHarness(),
@@ -53,22 +49,22 @@ export default defineConfig({
 })
 `
 
-/** Runs `es`; the recipe's runs fail some evals on purpose, so exit 1 is fine. */
+/** Runs `reeval`; the recipe's runs fail some evals on purpose, so exit 1 is fine. */
 function es(dir: string, args: string[]): void {
   const r = spawnSync(process.execPath, [join(PACKAGE_DIR, 'dist/cli.js'), ...args], {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, ES_UI: 'plain', NO_COLOR: '1' },
+    env: { ...process.env, REEVAL_UI: 'plain', NO_COLOR: '1' },
   })
   if (r.status !== 0 && r.status !== 1) {
-    throw new Error(`es ${args.join(' ')} exited ${r.status}\n${r.stdout}${r.stderr}`)
+    throw new Error(`reeval ${args.join(' ')} exited ${r.status}\n${r.stdout}${r.stderr}`)
   }
 }
 
 const git = (dir: string, ...args: string[]) =>
   execFileSync(
     'git',
-    ['-c', 'user.name=ES corpus', '-c', 'user.email=corpus@evalsuite.dev', ...args],
+    ['-c', 'user.name=reeval corpus', '-c', 'user.email=corpus@reeval.dev', ...args],
     {
       cwd: dir,
       encoding: 'utf8',
@@ -77,11 +73,11 @@ const git = (dir: string, ...args: string[]) =>
 
 /** Records the recipe project in a temp git repo and returns its directory. */
 function recordRecipe(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'es-corpus-'))
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-corpus-'))
   cpSync(RECIPE, dir, { recursive: true })
   mkdirSync(join(dir, 'node_modules'))
-  symlinkSync(PACKAGE_DIR, join(dir, 'node_modules/evalsuite'), 'dir')
-  writeFileSync(join(dir, '.gitignore'), 'node_modules\n.es\n')
+  symlinkSync(PACKAGE_DIR, join(dir, 'node_modules/reeval'), 'dir')
+  writeFileSync(join(dir, '.gitignore'), 'node_modules\n.reeval\n')
   git(dir, 'init', '-q')
   git(dir, 'add', '-A')
   git(dir, 'commit', '-qm', 'corpus recipe')
@@ -118,7 +114,7 @@ function main(): number {
     return 2
   }
   if (!existsSync(join(PACKAGE_DIR, 'dist/cli.js'))) {
-    process.stderr.write('Build ES first: pnpm build\n')
+    process.stderr.write('Build reeval first: pnpm build\n')
     return 2
   }
   const project = values.from ? resolve(values.from) : recordRecipe()
@@ -135,7 +131,7 @@ function main(): number {
   const note =
     values.note ?? (values.from ? `runs copied from ${values.from}` : 'the corpus recipe')
   mkdirSync(join(target, HISTORY), { recursive: true })
-  writeFileSync(join(target, 'es.config.ts'), config(note, version, commit))
+  writeFileSync(join(target, 'reeval.config.ts'), config(note, version, commit))
   const files = new Set<string>()
   for (const runId of runs) {
     cpSync(join(history, `${runId}.json`), join(target, HISTORY, `${runId}.json`))

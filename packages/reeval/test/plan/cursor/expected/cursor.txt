@@ -1,10 +1,10 @@
 no profile · 3 evals · 4 cells · 4 attempts
-evals/a.es.ts › standard and fast    cursor:composer-2.5/-/docker                   control  gated  ×1
-                                     composer-fast/-/docker                         control  gated  ×1
-evals/a.es.ts › another model        cursor:gpt-5.2/-/docker                        control  gated  ×1
-evals/a.es.ts › on a toolchain base  cursor:composer-2.5/-/docker:python:3.12-slim  control  gated  ×1
+evals/a.eval.ts › standard and fast    cursor:composer-2.5/-/docker                   control  gated  ×1
+                                       composer-fast/-/docker                         control  gated  ×1
+evals/a.eval.ts › another model        cursor:gpt-5.2/-/docker                        control  gated  ×1
+evals/a.eval.ts › on a toolchain base  cursor:composer-2.5/-/docker:python:3.12-slim  control  gated  ×1
 excluded: —
 image docker · 2 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
 image docker:python:3.12-slim · 1 evals
-  from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; es image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

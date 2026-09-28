@@ -1,5 +1,5 @@
 // The pinned @opencode/cli install the bootstrap runs, from a lockfile. pnpm runs only its
-// postinstall, which links the platform binary. The musl builds are left out: ES images are
+// postinstall, which links the platform binary. The musl builds are left out: reeval images are
 // glibc, and the package marks none of its builds with a libc, so pnpm would install all four
 // (about 200 MB each). On a bump, regenerate the lockfile with `pnpm install --lockfile-only`
 // from these files; a test checks the versions agree.

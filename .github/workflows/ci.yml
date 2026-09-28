@@ -1,4 +1,4 @@
-# ES's own gate: lint, typecheck and the test tiers as parallel jobs. The packages' tests run
+# reeval's own gate: lint, typecheck and the test tiers as parallel jobs. The packages' tests run
 # dist/, so every test job builds first (about 2 s). The real-agent tier is in real.yml.
 # release.yml calls this on the release commit and publishes the tarball the pack job uploads.
 # The test jobs collect V8 coverage from every process they start (NODE_V8_COVERAGE, set after
@@ -45,11 +45,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
-      # evalsuite and examples/hello resolve their workspace dependencies' types from dist/.
+      # reeval and examples/hello resolve their workspace dependencies' types from dist/.
       - run: pnpm build
       - run: pnpm typecheck
       - name: persisted shapes (schema/ snapshots)
-        run: pnpm --filter @invertase/foobar schema:check
+        run: pnpm --filter reeval schema:check
 
   docs:
     name: docs
@@ -84,27 +84,27 @@ jobs:
       # Coverage on one leg is enough: both run the same code.
       - if: matrix.node == ''
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - name: evalsuite (every test file but the fixture, Docker, studio, pack and real-agent ones)
-        working-directory: packages/evalsuite
+      - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
+        working-directory: packages/reeval
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
             test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real).test.ts
       # Its real-container tests skip here: there's no sandbox image. The docker job runs them.
       - name: sandbox-docker (without containers)
-        run: pnpm --filter @evalsuite/sandbox-docker test
+        run: pnpm --filter @reeval/sandbox-docker test
       - name: harness-antigravity
-        run: pnpm --filter @evalsuite/harness-antigravity test
+        run: pnpm --filter @reeval/harness-antigravity test
       - name: harness-cursor-sdk
-        run: pnpm --filter @evalsuite/harness-cursor-sdk test
+        run: pnpm --filter @reeval/harness-cursor-sdk test
       - name: harness-opencode
-        run: pnpm --filter @evalsuite/harness-opencode test
+        run: pnpm --filter @reeval/harness-opencode test
       - name: harness-goose
-        run: pnpm --filter @evalsuite/harness-goose test
+        run: pnpm --filter @reeval/harness-goose test
       - name: harness-pi
-        run: pnpm --filter @evalsuite/harness-pi test
+        run: pnpm --filter @reeval/harness-pi test
       - name: harness-codex
-        run: pnpm --filter @evalsuite/harness-codex test
+        run: pnpm --filter @reeval/harness-codex test
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: unit }
@@ -119,9 +119,9 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - working-directory: packages/evalsuite
+      - working-directory: packages/reeval
         env:
-          ES_FIXTURE_TIERS: fake
+          REEVAL_FIXTURE_TIERS: fake
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/features.test.ts
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
@@ -134,9 +134,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: ['@invertase/foobar', '@evalsuite/sandbox-docker']
+        package: ['reeval', '@reeval/sandbox-docker']
     env:
-      ES_TEST_REQUIRE_DOCKER: '1'
+      REEVAL_TEST_REQUIRE_DOCKER: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
@@ -144,11 +144,11 @@ jobs:
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
       - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      # evalsuite: the fixtures' Docker tier, test/docker.test.ts, the Docker sandbox contract, and
+      # reeval: the fixtures' Docker tier, test/docker.test.ts, the Docker sandbox contract, and
       # the harness contract and e2e CLI suites on their key-free fake row (real rows run in real.yml).
       # sandbox-docker: its whole suite, real containers included. All fail rather than skip
       # without Docker.
-      - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == '@invertase/foobar' && 'test:docker test/sandbox-contract.test.ts' || 'test' }}
+      - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == 'reeval' && 'test:docker test/sandbox-contract.test.ts' || 'test' }}
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with:
@@ -164,7 +164,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - working-directory: packages/evalsuite
+      - working-directory: packages/reeval
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/studio.test.ts
       # The browser test skips without Chrome, so check it's there rather than pass silently.
       - run: google-chrome --version
@@ -174,7 +174,7 @@ jobs:
         with: { name: studio }
 
   # Windows and macOS: every tier that needs no Docker, through scripts/ci-os.sh. The Docker tier
-  # runs on Linux only: GitHub's Windows runners have Windows containers only, while ES's sandboxes
+  # runs on Linux only: GitHub's Windows runners have Windows containers only, while reeval's sandboxes
   # are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners have no
   # Docker. Windows starts processes slowly, so its unit files run in six shards.
   windows-tests:
@@ -199,7 +199,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - if: matrix.part == 'tiers'
-        run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and ES's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
+        run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and reeval's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
       - run: scripts/ci-os.sh ${{ matrix.part }}
 
   # The required Windows check: passes only when every part of windows-tests passed.
@@ -244,7 +244,7 @@ jobs:
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
 
-  # ES's engine against the Vitest engine's captured runs (scripts/differential.mjs): the replay
+  # reeval's engine against the Vitest engine's captured runs (scripts/differential.mjs): the replay
   # of the side-by-side comparison made before Vitest was removed.
   engine-differential:
     name: engine differential
@@ -255,10 +255,10 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - name: ES's engine does what the Vitest engine did
+      - name: reeval's engine does what the Vitest engine did
         run: |
           node --experimental-strip-types --no-warnings scripts/differential.mjs record "$RUNNER_TEMP/es"
-          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
+          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/reeval/test/differential/vitest "$RUNNER_TEMP/es"
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -288,7 +288,7 @@ jobs:
           node scripts/coverage.mjs report "$RUNNER_TEMP"/coverage/*
           cat coverage/report/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: feature matrix
-        working-directory: packages/evalsuite
+        working-directory: packages/reeval
         run: pnpm -s features:matrix >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -297,7 +297,7 @@ jobs:
           retention-days: 14
 
   # Installs the tarball with Node 22's npm 10.9 and with npm 11. npm before 11.6 crashed
-  # ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which ES no longer depends on;
+  # ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which reeval no longer depends on;
   # this leg keeps it that way.
   pack:
     name: packed install (npm ${{ matrix.npm }})
@@ -319,7 +319,7 @@ jobs:
       - run: pnpm build
       # pnpm pack rewrites workspace: ranges, and .pnpmfile.cjs drops devDependencies and
       # scripts. On a release commit, release.yml publishes the npm 11 leg's tarball.
-      - run: pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/package"
+      - run: pnpm --filter reeval pack --pack-destination "$RUNNER_TEMP/package"
       - if: matrix.npm == '11'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -329,7 +329,7 @@ jobs:
           retention-days: 7
       # Besides npm, the pack test installs with the runner's Yarn 1 and with strict pnpm, which
       # install no peers.
-      - working-directory: packages/evalsuite
+      - working-directory: packages/reeval
         run: |
           yarn --version
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
@@ -337,7 +337,7 @@ jobs:
       # throwaway prerelease of it.
       - name: npm publish --dry-run
         if: matrix.npm == '11'
-        working-directory: packages/evalsuite
+        working-directory: packages/reeval
         run: |
           npm version --no-git-tag-version "$(node -p "require('./package.json').version")-ci.$GITHUB_RUN_ID"
           pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"

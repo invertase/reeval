@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { ordered } from './env.ts'
 
 // Must fail: the extending environment's step doesn't run first.

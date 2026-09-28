@@ -3,7 +3,7 @@ title: The matrix
 description: How harnesses, compare variants and runs multiply into cells and attempts.
 ---
 
-ES never runs an eval once. It runs it once per cell, and `runs` times per cell, each time in a fresh sandbox:
+reeval never runs an eval once. It runs it once per cell, and `runs` times per cell, each time in a fresh sandbox:
 
 ```text
 attempts = harnesses × (control + variants) × runs
@@ -23,7 +23,7 @@ flowchart LR
 
 Two harnesses in the config, one `compare` variant and `runs: 2` on the group:
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 export default defineConfig({
   harness: [
     cursor({ model: 'composer-2.5' }),
@@ -34,7 +34,7 @@ export default defineConfig({
 })
 ```
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 group('house greeting', { compare: [withHouseGreeting], runs: 2 }, () => {
   evaluate('greets in the house style', async (t) => {
     await t.send('Create greet.js exporting greet(name) in our house style.')
@@ -48,7 +48,7 @@ That's 2 harnesses × (1 control + 1 variant) × 2 runs = 8 attempts in 4 cells.
 ```text
 plan  1 eval · 4 cells · 8 attempts · ~24m 00s serial (~6m 00s at concurrency 4)
 eval                                                            harnesses  variants  runs  attempts  notes
-evals/skill.es.ts › house greeting › greets in the house style  2          1         2     8
+evals/skill.eval.ts › house greeting › greets in the house style  2          1         2     8
 hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
 ```
 
@@ -70,9 +70,9 @@ So `cursor:composer-2.5/with-house-greeting/docker#2` is the second run of the s
 In plain output, each attempt's lines carry a shorter tag: the eval's distinctive word, the run number, and what tells its cells apart.
 
 ```text
-[greets#1 control] ▶ evals/skill.es.ts › house greeting › greets in the house style
-[greets#2 control] ▶ evals/skill.es.ts › house greeting › greets in the house style
-[greets#1 with-house-greeting] ▶ evals/skill.es.ts › house greeting › greets in the house style
+[greets#1 control] ▶ evals/skill.eval.ts › house greeting › greets in the house style
+[greets#2 control] ▶ evals/skill.eval.ts › house greeting › greets in the house style
+[greets#1 with-house-greeting] ▶ evals/skill.eval.ts › house greeting › greets in the house style
 ```
 
 ## Filter by cell
@@ -80,13 +80,13 @@ In plain output, each attempt's lines carry a shorter tag: the eval's distinctiv
 Filters that aren't eval file paths match eval names and cell keys, so a harness id picks its cells. Here `skill` picks the file and `claude-code` the cells:
 
 ```bash
-es run --dry-run skill claude-code
+reeval run --dry-run skill claude-code
 ```
 
 ```text
 plan  1 eval · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 4)
 eval                                                            harnesses  variants  runs  attempts  notes
-evals/skill.es.ts › house greeting › greets in the house style  1          1         2     4
+evals/skill.eval.ts › house greeting › greets in the house style  1          1         2     4
 …
 ```
 
@@ -95,7 +95,7 @@ evals/skill.es.ts › house greeting › greets in the house style  1          1
 `--dry-run --json` prints every cell with its role and gate. From `examples/hello` under the fake config:
 
 ```bash
-es run --dry-run --json --config es.fake.config.ts skill
+reeval run --dry-run --json --config reeval.fake.config.ts skill
 ```
 
 ```text
@@ -110,7 +110,7 @@ es run --dry-run --json --config es.fake.config.ts skill
 …
   "evals": [
     {
-      "id": "evals/skill.es.ts › house greeting › greets in the house style",
+      "id": "evals/skill.eval.ts › house greeting › greets in the house style",
 …
       "cells": [
         {
@@ -150,12 +150,12 @@ The control's `gate` is `"none"`: under the default `compare.gate: 'variants'`, 
 ```text
 plan  18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4)
 eval                                                              harnesses  variants  runs  attempts  notes
-evals/brokering.es.ts › the agent authenticates without seeing…   1          —         1     1
+evals/brokering.eval.ts › the agent authenticates without seeing…   1          —         1     1
 …
-evals/gemini.es.ts › the agent calls Gemini with a brokered key   1          —         1     1         brokered: GOOGLE_GENAI_API_KEY → generativelanguage.googleapis.com; GEMINI_API_KEY → generativelanguage.googleapis.com
+evals/gemini.eval.ts › the agent calls Gemini with a brokered key   1          —         1     1         brokered: GOOGLE_GENAI_API_KEY → generativelanguage.googleapis.com; GEMINI_API_KEY → generativelanguage.googleapis.com
 …
-evals/skill.es.ts › house greeting › greets in the house style    1          1         1     2
-evals/sqlite.es.ts › queries a seeded SQLite database             1          —         1     1
+evals/skill.eval.ts › house greeting › greets in the house style    1          1         1     2
+evals/sqlite.eval.ts › queries a seeded SQLite database             1          —         1     1
 ```
 
 With `--profile nightly` (`defaults: { runs: 3 }`) the same suite is 57 attempts. The estimate is the median of each eval's recent attempts on that harness, else 3 minutes each.

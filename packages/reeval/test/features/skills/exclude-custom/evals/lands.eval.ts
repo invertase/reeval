@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, listStaged } from './env.ts'
 
 // A custom exclude replaces the defaults: its patterns stay out, and evals/ lands.

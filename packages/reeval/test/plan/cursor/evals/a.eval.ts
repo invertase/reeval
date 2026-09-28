@@ -1,6 +1,6 @@
-import { evaluate } from 'evalsuite'
-import { cursor } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 evaluate('standard and fast', async () => {})
 evaluate('another model', { harness: cursor({ model: 'gpt-5.2' }) }, async () => {})

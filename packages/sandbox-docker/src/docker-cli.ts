@@ -103,7 +103,7 @@ export async function dockerCapacity(): Promise<{ cpus: number; memoryBytes: num
 /**
  * Whether a RepoDigest shows the image is in a registry someone can pull from. The containerd
  * image store (Docker 29+, recent Docker Desktop) also gives locally built images a digest, under
- * their bare local name (`evalsuite-sandbox@sha256:…`). A bare name is Docker Hub's `library/`
+ * their bare local name (`reeval-sandbox@sha256:…`). A bare name is Docker Hub's `library/`
  * namespace, which only official images can push to, so only a digest whose name has a registry
  * host or a namespace counts. Official images such as `busybox` count as local; no image with
  * the harness baked in is one.

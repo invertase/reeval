@@ -5,9 +5,9 @@ description: Ask the agent which tool to use and let a judge decide whether it p
 
 **Goal:** find out whether coding agents recommend your product when a developer asks them to choose.
 
-There's nothing to build or run here, so the eval is one prompt and one [judge](/concepts/judges) question. These come from `examples/hello/evals/preferences.es.ts`:
+There's nothing to build or run here, so the eval is one prompt and one [judge](/concepts/judges) question. These come from `examples/hello/evals/preferences.eval.ts`:
 
-```ts title="evals/preferences.es.ts"
+```ts title="evals/preferences.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('recommends a framework for a production AI feature', async (t) => {
@@ -25,7 +25,7 @@ evaluate('recommends Genkit over LangChain for production apps', async (t) => {
 })
 ```
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 import { docker } from '{{ pkg }}/sandbox'
@@ -42,25 +42,25 @@ The judge sees the task, the agent's final message and any changes, and passes t
 ## Run it
 
 ```bash
-ES_UI=agent npx es run preferences
+REEVAL_UI=agent npx reeval run preferences
 ```
 
 A real run of all seven evals in the file, on Cursor with `composer-2.5`:
 
 ```text
 plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
-es run: 1 eval file
-FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (21s, judge)
+reeval run: 1 eval file
+FAIL evals/preferences.eval.ts › recommends Genkit over LangChain for production apps (21s, judge)
   judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
 …
-FAIL evals/preferences.es.ts › recommends a framework for a production AI feature (27s, judge)
+FAIL evals/preferences.eval.ts › recommends a framework for a production AI feature (27s, judge)
   judge  fail 0.00 (≥ 0.8)  Pass if Genkit is mentioned as a recommended or viable solution.
 …
-FAIL evals/preferences.es.ts › recommends Genkit when choosing against LangChain (18s, judge)
+FAIL evals/preferences.eval.ts › recommends Genkit when choosing against LangChain (18s, judge)
   judge  fail 0.55 (≥ 0.8)  Pass if Genkit gets recommended.
 …
 7 failed
-summary: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
+summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 ```
 
 That's a real finding, not a broken eval. The run's `summary.md` quotes each final message; for the open question, the agent recommended a different stack:
@@ -75,7 +75,7 @@ Every head-to-head failed too. The closest were "Genkit when choosing against La
 
 When the prompts differ only by the competitor's name, write the list once with `evaluate.for`. Each item becomes its own eval, with its own id and history.
 
-```ts title="evals/rivals.es.ts"
+```ts title="evals/rivals.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 const rivals = [
@@ -98,17 +98,17 @@ evaluate.for(rivals)('recommends Genkit over %s', async (t, rival) => {
 ```
 
 ```bash
-npx es run rivals --dry-run
+npx reeval run rivals --dry-run
 ```
 
 ```text
 plan  5 evals · 5 cells · 5 attempts · ~15m 00s serial (~3m 45s at concurrency 4)
 eval                                                           harnesses  variants  runs  attempts  notes
-evals/rivals.es.ts › recommends Genkit over LangChain          1          —         1     1
-evals/rivals.es.ts › recommends Genkit over LlamaIndex         1          —         1     1
-evals/rivals.es.ts › recommends Genkit over Haystack           1          —         1     1
-evals/rivals.es.ts › recommends Genkit over the Vercel AI SDK  1          —         1     1
-evals/rivals.es.ts › recommends Genkit over Semantic Kernel    1          —         1     1
+evals/rivals.eval.ts › recommends Genkit over LangChain          1          —         1     1
+evals/rivals.eval.ts › recommends Genkit over LlamaIndex         1          —         1     1
+evals/rivals.eval.ts › recommends Genkit over Haystack           1          —         1     1
+evals/rivals.eval.ts › recommends Genkit over the Vercel AI SDK  1          —         1     1
+evals/rivals.eval.ts › recommends Genkit over Semantic Kernel    1          —         1     1
 ```
 
 <Warning>

@@ -7,8 +7,8 @@
 //
 //   node --experimental-strip-types scripts/drift/opencode-providers.mjs
 //
-// ES_DRIFT_OPENCODE_VERSION names a version instead of the newest; ES_DRIFT_PROBE (with
-// ES_DRIFT_CATALOG) diffs an earlier probe's result instead of probing. Appends the diff to
+// REEVAL_DRIFT_OPENCODE_VERSION names a version instead of the newest; REEVAL_DRIFT_PROBE (with
+// REEVAL_DRIFT_CATALOG) diffs an earlier probe's result instead of probing. Appends the diff to
 // $GITHUB_STEP_SUMMARY when it's set.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
@@ -23,10 +23,10 @@ const { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } = await import(
 )
 const { PROBED_VERSION } = await import(join(pkg, 'src/opencode-provider-table.ts'))
 
-/** The newest @opencode/cli (or ES_DRIFT_OPENCODE_VERSION's), probed: its version and the result. */
+/** The newest @opencode/cli (or REEVAL_DRIFT_OPENCODE_VERSION's), probed: its version and the result. */
 async function probeLatest() {
-  const dir = mkdtempSync(join(tmpdir(), 'es-opencode-drift-'))
-  const wanted = process.env.ES_DRIFT_OPENCODE_VERSION || 'latest'
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-opencode-drift-'))
+  const wanted = process.env.REEVAL_DRIFT_OPENCODE_VERSION || 'latest'
   execFileSync(
     'npm',
     [
@@ -65,12 +65,12 @@ async function probeLatest() {
   return { version, probeFile, catalog }
 }
 
-// ES_DRIFT_PROBE and ES_DRIFT_CATALOG reuse a probe's result (say, to check a fix) instead.
-const { version, probeFile, catalog } = process.env.ES_DRIFT_PROBE
+// REEVAL_DRIFT_PROBE and REEVAL_DRIFT_CATALOG reuse a probe's result (say, to check a fix) instead.
+const { version, probeFile, catalog } = process.env.REEVAL_DRIFT_PROBE
   ? {
-      version: `probe ${process.env.ES_DRIFT_PROBE}`,
-      probeFile: process.env.ES_DRIFT_PROBE,
-      catalog: process.env.ES_DRIFT_CATALOG ?? '',
+      version: `probe ${process.env.REEVAL_DRIFT_PROBE}`,
+      probeFile: process.env.REEVAL_DRIFT_PROBE,
+      catalog: process.env.REEVAL_DRIFT_CATALOG ?? '',
     }
   : await probeLatest()
 const latest = buildTable(

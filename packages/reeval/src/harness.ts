@@ -1,5 +1,5 @@
-// `evalsuite/harness`: agent harness descriptors. The implementations load lazily in workers.
-import { resolveOpenCodeProvider } from '@evalsuite/harness-opencode/providers'
+// `reeval/harness`: agent harness descriptors. The implementations load lazily in workers.
+import { resolveOpenCodeProvider } from '@reeval/harness-opencode/providers'
 import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
@@ -67,7 +67,7 @@ export const antigravity = (
 /**
  * OpenCode, on the model's provider: `model` is OpenCode's `<provider>/<model>`, such as
  * `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`, and only that provider's key is
- * needed and brokered. A provider whose key ES can't broker is refused, saying why. `id` names
+ * needed and brokered. A provider whose key reeval can't broker is refused, saying why. `id` names
  * the cell; it defaults to `opencode:<model>`, the part after the last `/`.
  */
 export const opencode = (

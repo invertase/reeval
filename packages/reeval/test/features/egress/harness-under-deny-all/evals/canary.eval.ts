@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { closed, reach } from './env.ts'
 
 // Must fail: any other host is refused at CONNECT, with no turn needed.

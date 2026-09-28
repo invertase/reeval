@@ -1,5 +1,5 @@
 // The contract a sandbox provider meets before any attempt starts: check it can work, then make
-// each distinct environment the plan needs, and class every failure so ES's generic layer
+// each distinct environment the plan needs, and class every failure so reeval's generic layer
 // (preflight.ts) can order, retry, cache and scope them the same way for every provider.
 import type { HarnessDescriptor, SandboxDescriptor } from '../types.ts'
 import { InfraError } from './types.ts'
@@ -7,7 +7,7 @@ import { InfraError } from './types.ts'
 /**
  * How a failure is classed. `config`: the user's setup is wrong (a bad token, a failing build
  * step, a missing image) and fails the same way again. `transient`: the network, a 5xx or a
- * quota, which may pass, so ES retries it. `resource`: the provider ran out of memory or disk.
+ * quota, which may pass, so reeval retries it. `resource`: the provider ran out of memory or disk.
  */
 export type FailureClass = 'config' | 'transient' | 'resource'
 
@@ -26,7 +26,7 @@ export type PrepareFailure = {
   message: string
   /** Fixing it means changing the config or the environment (exit 2), not rerunning (exit 3). */
   usage?: boolean
-  /** The levels that set the sandbox, once ES knows them. */
+  /** The levels that set the sandbox, once reeval knows them. */
   setBy?: string[]
 }
 
@@ -45,10 +45,10 @@ export type PreparedHandle = { [key: string]: unknown } | null
 export type PrepareContext = {
   root: string
   signal: AbortSignal
-  /** Progress lines, e.g. for `es image build`. */
+  /** Progress lines, e.g. for `reeval image build`. */
   log: (line: string) => void
   /**
-   * Runs one step that may hit the network, retried on a transient failure as ES's policy says.
+   * Runs one step that may hit the network, retried on a transient failure as reeval's policy says.
    * A provider wraps each such step, so a retry repeats only that step.
    */
   retry: <T>(step: () => Promise<T>) => Promise<T>

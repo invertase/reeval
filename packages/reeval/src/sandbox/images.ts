@@ -1,17 +1,17 @@
-// `es image build`: every image the planned attempts' Docker sandboxes need, built or listed.
+// `reeval image build`: every image the planned attempts' Docker sandboxes need, built or listed.
 import {
   type BakedHarness,
   contextHash,
   dockerfileTag,
-  ES_BASE_ARG,
   harnessImageFor,
   imageFor,
   imageInfo,
   installLayerTag,
   isTransient,
   LABEL,
+  REEVAL_BASE_ARG,
   resolveFrom,
-} from '@evalsuite/sandbox-docker'
+} from '@reeval/sandbox-docker'
 import { sandboxId } from '../options.ts'
 import type {
   AttemptImage,
@@ -98,7 +98,7 @@ async function fromStatus(from: string, ref: string): Promise<Pick<Stage, 'statu
   if (was && was !== now.digest) {
     return {
       status: 'stale',
-      detail: `${from} moved upstream (${short(was)} → ${short(now.digest)}): es image build rebuilds it`,
+      detail: `${from} moved upstream (${short(was)} → ${short(now.digest)}): reeval image build rebuilds it`,
     }
   }
   return { status: 'ready', detail: `built on ${short(now.digest)}` }
@@ -124,7 +124,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       : {
           info,
           status: 'stale' as StageStatus,
-          detail: "ES's base changed: rebuilt before the run",
+          detail: "reeval's base changed: rebuilt before the run",
         }
   }
   let parent: string | null = null
@@ -146,15 +146,16 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     stages.push({
       what: `from ${sandbox.from}`,
       ref,
-      action: 'Node, git and the harness bootstrap on top; es image build refreshes a moved tag',
+      action:
+        'Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag',
       ...status,
     })
   } else if (sandbox.dockerfile) {
     const onEs = usesEsBase(sandbox.dockerfile)
     const es = onEs ? await esBase() : null
     const real = dockerfileTag(sandbox.dockerfile, harness, es?.info?.id ?? null).tag
-    // Its tag hashes ES's image id, which is this machine's, so the plan names it by kind.
-    const tag = onEs ? real.replace(/-[0-9a-f]{16}$/, '-<context + ES image id>') : real
+    // Its tag hashes reeval's image id, which is this machine's, so the plan names it by kind.
+    const tag = onEs ? real.replace(/-[0-9a-f]{16}$/, '-<context + reeval image id>') : real
     const built = await exists(real)
     stages.push({
       what: `dockerfile ${projectPath(root, sandbox.dockerfile)}`,
@@ -168,7 +169,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
       stages.push({
         what: 'harness',
         ref: tag,
-        action: `inherited: FROM \${${ES_BASE_ARG}}, which is ${imageFor(harness)}`,
+        action: `inherited: FROM \${${REEVAL_BASE_ARG}}, which is ${imageFor(harness)}`,
         status: es?.status ?? 'build',
         detail: `${imageFor(harness)} ${es?.detail ?? ''}`.trim(),
       })
@@ -189,7 +190,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     stages.push({
       what: 'base',
       ref: imageFor(harness),
-      action: "ES's image: built when missing or when its base changed",
+      action: "reeval's image: built when missing or when its base changed",
       status: es.status,
       detail: es.detail,
     })
@@ -199,7 +200,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
     const layer = parent ? await exists(installLayerTag({ id: parent }, steps)) : null
     stages.push({
       what: `install ${steps.length} command${steps.length === 1 ? '' : 's'}`,
-      ref: 'evalsuite-install:<base id + commands>',
+      ref: 'reeval-install:<base id + commands>',
       action: 'build unless cached',
       status: layer?.status ?? 'build',
       detail: layer?.detail ?? 'not built yet',
@@ -208,7 +209,7 @@ export async function imageStages(target: ImageTarget, root: string): Promise<St
   return stages
 }
 
-/** ES's harness images the targets need: used directly, or as a Dockerfile's `ES_BASE`. */
+/** reeval's harness images the targets need: used directly, or as a Dockerfile's `REEVAL_BASE`. */
 export const esImages = (targets: ImageTarget[]): BakedHarness[] => [
   ...new Set(
     targets
@@ -233,7 +234,7 @@ const WORDS: Record<StageStatus, string> = {
 export const targetStatus = (stages: Stage[]) =>
   WORST.find((w) => stages.some((s) => s.status === w)) ?? 'ready'
 
-/** `es image build --dry-run`: one block per sandbox, each step with how it stands. */
+/** `reeval image build --dry-run`: one block per sandbox, each step with how it stands. */
 export async function imagePlanLines(targets: ImageTarget[], root: string): Promise<string[]> {
   const lines = [
     `images  ${targets.length} sandbox image${targets.length === 1 ? '' : 's'} (nothing built: --dry-run)`,
@@ -252,7 +253,7 @@ export async function imagePlanLines(targets: ImageTarget[], root: string): Prom
   return lines
 }
 
-/** `es run --dry-run`: one line per sandbox the run would prepare. */
+/** `reeval run --dry-run`: one line per sandbox the run would prepare. */
 export async function imageStatusLines(targets: ImageTarget[], root: string): Promise<string[]> {
   if (!targets.length) return []
   const rows = await Promise.all(
@@ -284,7 +285,7 @@ export type BuiltImage = ImageTarget &
   )
 
 /**
- * `es image build`: prepares every target, three at a time, and reports each, failures too.
+ * `reeval image build`: prepares every target, three at a time, and reports each, failures too.
  * `from` images are rebuilt when their tag moved upstream, and everything with `force`.
  */
 export async function buildImages(

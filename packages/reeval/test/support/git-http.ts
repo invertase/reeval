@@ -1,5 +1,5 @@
 // A git smart-HTTP server for tests: `git http-backend` behind a listener on 127.0.0.1 that
-// answers 401 unless the request carries `token` the way ES's `git(…, { token })` sends it.
+// answers 401 unless the request carries `token` the way reeval's `git(…, { token })` sends it.
 // `serve(dir)` gives the URL under which the repositories in `dir` are served by name.
 import { spawn } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
@@ -26,7 +26,7 @@ export async function gitHttpServer(token: string): Promise<GitHttp> {
       return
     }
     if (req.headers.authorization !== expected) {
-      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="es-test"' })
+      res.writeHead(401, { 'WWW-Authenticate': 'Basic realm="reeval-test"' })
       res.end()
       return
     }

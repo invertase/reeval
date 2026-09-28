@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { Bot, GitBranch, History, Search, User } from 'lucide-react'
+import { useMemo } from 'react'
 import {
   formatDuration,
   formatPercent,
@@ -9,9 +11,7 @@ import {
   runOutcome,
   runRows,
   shortSha,
-} from 'evalsuite/view'
-import { Bot, GitBranch, History, Search, User } from 'lucide-react'
-import { useMemo } from 'react'
+} from 'reeval/view'
 import { LiveRuns } from '@/components/live'
 import { Code, EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { DriftBadge, OutcomeIcon, TallyBar } from '@/components/status'
@@ -227,8 +227,8 @@ export function RunsPage() {
 
       {rows.length === 0 && live.length ? null : rows.length === 0 ? (
         <EmptyState icon={History} title="No runs yet">
-          Record one with <Code>es run --record</Code>, or promote your latest scratch run with{' '}
-          <Code>es record latest</Code>.{' '}
+          Record one with <Code>reeval run --record</Code>, or promote your latest scratch run with{' '}
+          <Code>reeval record latest</Code>.{' '}
           {studio?.mode === 'live' ? 'It shows up here as soon as it lands.' : ''}
         </EmptyState>
       ) : (

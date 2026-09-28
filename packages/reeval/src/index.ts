@@ -1,4 +1,4 @@
-// `evalsuite`: the core authoring API. Harnesses, sandboxes and judges live in subpaths.
+// `reeval`: the core authoring API. Harnesses, sandboxes and judges live in subpaths.
 export { defineConfig } from './config.ts'
 export { DEFAULT_EGRESS_ALLOW } from './egress.ts'
 export { expect } from './engine/expect.ts'

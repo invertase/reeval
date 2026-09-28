@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, shellOutput } from './env.ts'
 
 // Under Claude Code's layout, a harness-placed skill is in ~/.claude/skills, not Cursor's ~/.agents.

@@ -17,7 +17,7 @@ export type Sources = {
   contract: { name: string; canary: boolean }[]
 }
 
-const E2E = 'evalsuite/test/e2e-real.test.ts'
+const E2E = 'reeval/test/e2e-real.test.ts'
 
 type Cell = { count: number; canaries: number }
 export type MatrixRow = { feature: InventoryFeature; cells: Record<Tier, Cell> }
@@ -136,7 +136,7 @@ export function renderMarkdown({ rows }: Matrix): string {
     `${rows.length} features: ${rows.length - gaps.length} covered on at least one tier, ${gaps.length} known gaps. Features per tier: ${perTier.join(', ')}.`,
     '',
     '- **unit**: plain `node:test` cases, including runner-level tests through the CLI',
-    '- **plan**: `es run --dry-run --json` snapshots in `plan.test.ts`',
+    '- **plan**: `reeval run --dry-run --json` snapshots in `plan.test.ts`',
     '- **fake**, **docker**: feature fixtures in `features.test.ts` on the fake sandbox and in Docker',
     '- **real**: real-tier fixtures in `features.test.ts` (real Cursor), and the harness contract (`contract.test.ts`) and CLI end to end (`e2e-real.test.ts`) on every real harness',
     '- `● n`: n fixtures or contract behaviours, each with a canary that must fail · `◐ n`: some without one · `✓ n`: n cases or tests · `—`: nothing',

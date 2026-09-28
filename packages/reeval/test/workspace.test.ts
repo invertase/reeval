@@ -32,8 +32,8 @@ function makeRepo(dir: string) {
 
 async function withEval(env: string, body = 'await t.sandbox()', harness?: string) {
   const p = await project('workspace', {
-    'es.config.ts': fakeConfig(harness ? { harness } : {}),
-    'evals/w.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+    'reeval.config.ts': fakeConfig(harness ? { harness } : {}),
+    'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('app', ({ git }) => ({ ${env} }))
 evaluate('works on the repo', { environment: env }, async (t) => {
   ${body}
@@ -116,29 +116,29 @@ describe('git workspaces', { concurrency: true }, () => {
 
   test('a token variable that is not set fails only its attempts, naming the variable', async () => {
     await failsOnlyItsAttempts(
-      `workspace: git('https://git.example.invalid/acme/app', { ref: 'v1', token: 'ES_TEST_UNSET_TOKEN' })`,
-      /Workspace git\("https:\/\/git\.example\.invalid\/acme\/app#v1"\): its token variable ES_TEST_UNSET_TOKEN isn't set\. Set it in the environment or \.env\.local\./,
+      `workspace: git('https://git.example.invalid/acme/app', { ref: 'v1', token: 'REEVAL_TEST_UNSET_TOKEN' })`,
+      /Workspace git\("https:\/\/git\.example\.invalid\/acme\/app#v1"\): its token variable REEVAL_TEST_UNSET_TOKEN isn't set\. Set it in the environment or \.env\.local\./,
     )
   })
 
   test('a token fetches over HTTPS on the host, a wrong one is an auth failure, and neither is written anywhere', async () => {
-    const token = 'es-test-git-token-8d31c6f0a2b4'
+    const token = 'reeval-test-git-token-8d31c6f0a2b4'
     const server = await gitHttpServer(token)
     try {
       const p = await withEval(
-        "workspace: git(process.env.ES_TEST_GIT_URL as string, { ref: 'v1', path: 'app', token: 'ES_TEST_GIT_TOKEN' })",
+        "workspace: git(process.env.REEVAL_TEST_GIT_URL as string, { ref: 'v1', path: 'app', token: 'REEVAL_TEST_GIT_TOKEN' })",
         "await t.sandbox()\n  expect(await t.readFile('greet.js')).toContain('Hello')",
       )
       const url = `${server.serve(p.dir)}/repo`
       const good = await runCli(p.dir, ['run'], {
-        env: { ES_TEST_GIT_URL: url, ES_TEST_GIT_TOKEN: token },
+        env: { REEVAL_TEST_GIT_URL: url, REEVAL_TEST_GIT_TOKEN: token },
       })
       assert.equal(good.code, 0, good.stdout + good.stderr)
-      const wrong = 'es-test-git-wrong-4f19a7'
+      const wrong = 'reeval-test-git-wrong-4f19a7'
       const bad = await runCli(p.dir, ['run'], {
         env: {
-          ES_TEST_GIT_URL: url,
-          ES_TEST_GIT_TOKEN: wrong,
+          REEVAL_TEST_GIT_URL: url,
+          REEVAL_TEST_GIT_TOKEN: wrong,
           GIT_CONFIG_GLOBAL: join(p.dir, 'no-gitconfig'),
           GIT_CONFIG_NOSYSTEM: '1',
         },
@@ -153,7 +153,7 @@ describe('git workspaces', { concurrency: true }, () => {
       for (const out of [good.stdout, good.stderr, bad.stdout, bad.stderr]) {
         for (const leak of leaks) assert.ok(!out.includes(leak), `printed ${leak}`)
       }
-      for (const file of readdirSync(join(p.dir, '.es'), {
+      for (const file of readdirSync(join(p.dir, '.reeval'), {
         recursive: true,
         withFileTypes: true,
       })) {
@@ -168,10 +168,10 @@ describe('git workspaces', { concurrency: true }, () => {
 
   test('init: true gives the workspace a .git that the diff leaves out, and the same HEAD in every attempt', async () => {
     const p = await project('workspace-init', {
-      'es.config.ts': fakeConfig({
+      'reeval.config.ts': fakeConfig({
         harness: `{ script: [[{ exec: 'echo x > NOTES.md && git add -A && git -c user.name=a -c user.email=a@b commit -qm notes' }]] }`,
       }),
-      'evals/w.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('app', ({ git }) => ({
   workspace: git('../repo', { ref: 'v1', init: true }),
   files: { 'app/extra.js': 'x' },
@@ -236,7 +236,7 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
     renameSync(p.repo, join(p.dir, 'gone'))
     const second = await runCli(p.dir, ['run'], { env })
     assert.equal(second.code, 0, second.stdout + second.stderr)
-    const records = readdirSync(join(p.dir, '.es/runs')).filter((f) => f.endsWith('.json'))
+    const records = readdirSync(join(p.dir, '.reeval/runs')).filter((f) => f.endsWith('.json'))
     assert.equal(records.length, 2)
     const workspace = readRun(p.dir).run.environments.find((e) => e.workspace)?.workspace
     assert.deepEqual(workspace, {
@@ -246,15 +246,17 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
       commit: sha,
       tree: git(join(p.dir, 'gone'), 'rev-parse', 'v1:app'),
     })
-    assert.deepEqual(readdirSync(join(p.dir, '.es/cache/git/trees')), [`${workspace?.tree}.tar`])
+    assert.deepEqual(readdirSync(join(p.dir, '.reeval/cache/git/trees')), [
+      `${workspace?.tree}.tar`,
+    ])
   })
 
   test("the agent's diff starts from the repository, and a variant's workspace overrides", async () => {
     const p = await project('workspace-diff', {
-      'es.config.ts': fakeConfig({
+      'reeval.config.ts': fakeConfig({
         harness: `{ script: [[{ write: { 'app/greet.js': "export const greeting = 'Hi'\\n", 'NOTES.md': 'x' } }]] }`,
       }),
-      'evals/w.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const base = defineEnvironment('base', ({ git }) => ({ workspace: git('../repo', { ref: 'v1' }) }))
 const sub = base.extend('sub', ({ git }) => ({ workspace: git('../repo', { ref: 'v1', path: 'app' }) }))
 evaluate('edits the repo', { environment: base }, async (t) => {

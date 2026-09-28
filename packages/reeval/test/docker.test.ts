@@ -9,7 +9,7 @@ import {
   harnessLabel,
   imageFor,
   LABEL,
-} from '@evalsuite/sandbox-docker'
+} from '@reeval/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 
@@ -28,10 +28,10 @@ const liveContainers = (runId: string) =>
   }).trim()
 
 const config = (harness: string) => `
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness(${harness}),
   sandbox: docker(),
@@ -44,7 +44,7 @@ test('the pinned harness versions match the installed adapters', () => {
   for (const { name, version, patch } of Object.values(HARNESS_PACKAGES)) {
     // This repo's own adapters and the patched upstream ones are bundled into dist, so they're
     // pinned as dev dependencies.
-    if (name.startsWith('@evalsuite/')) {
+    if (name.startsWith('@reeval/')) {
       assert.equal(pkg.devDependencies[name], `workspace:${version}`, name)
     } else if (patch) {
       assert.equal(pkg.devDependencies[name], version, name)
@@ -56,8 +56,8 @@ test('the pinned harness versions match the installed adapters', () => {
 // Per test, not on the describe: a skipped describe hides its tests from the summary's count.
 /** A first run may build an environment layer. */
 const slow = { timeoutMs: 240_000 }
-// ES_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
-const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+// REEVAL_TEST_REQUIRE_DOCKER=1 (CI's docker job) fails instead of skipping.
+const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 const docker = {
   skip: !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`,
   timeout: 300_000,
@@ -75,7 +75,7 @@ const harnessImage = (harness: Parameters<typeof imageFor>[0]) => {
     timeout: 300_000,
   }
 }
-/** A `docker` shim on PATH that counts ES's `docker build` calls. */
+/** A `docker` shim on PATH that counts reeval's `docker build` calls. */
 function countBuilds(dir: string, match = '') {
   const shim = join(dir, 'bin')
   const log = join(dir, 'builds.log')
@@ -98,10 +98,10 @@ const claudeImage = harnessImage('claude-code')
 describe('docker sandbox', () => {
   test('runs checks in the container, diffs, and removes it', docker, async () => {
     const p = await project('docker-pass', {
-      'es.config.ts': config(
+      'reeval.config.ts': config(
         `{ files: { 'greet.js': 'export const greet = (n) => \`Hello, \${n}!\`\\n', 'package.json': '{"type":"module"}' } }`,
       ),
-      'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('docker', async (t) => {
   const turn = await t.send('write greet.js')
   await expect(turn).toHaveFile('greet.js', /Hello/)
@@ -133,28 +133,31 @@ evaluate('docker', async (t) => {
     docker,
     async () => {
       const install = [
-        { run: 'pwd > /opt/es-cwd && ls /es/workspace | wc -l > /opt/es-workspace', timeout: '2m' },
-        '(printenv DB_URL || echo none) > /opt/es-secret && echo layer > /opt/es-layer && date +%s%N > /opt/es-built',
+        {
+          run: 'pwd > /opt/reeval-cwd && ls /es/workspace | wc -l > /opt/reeval-workspace',
+          timeout: '2m',
+        },
+        '(printenv DB_URL || echo none) > /opt/reeval-secret && echo layer > /opt/reeval-layer && date +%s%N > /opt/reeval-built',
       ]
-      const eval_ = `import { defineEnvironment, evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      const eval_ = `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const tools = defineEnvironment('tools', ({ secret }) => ({
   files: { '~/.config/es/hint.txt': 'from home' },
   env: {
-    DB_URL: secret.fromEnv('ES_TEST_DB_URL'),
-    CHECK_ONLY: secret.fromEnv('ES_TEST_DB_URL', { to: 'checks' }),
+    DB_URL: secret.fromEnv('REEVAL_TEST_DB_URL'),
+    CHECK_ONLY: secret.fromEnv('REEVAL_TEST_DB_URL', { to: 'checks' }),
   },
   setup: [{ run: 'sleep 6 && printf %s "$CHECK_ONLY" > /tmp/check-only', timeout: '30s' }],
 }))
 evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stringify(install)} }), timeout: '5s' }, async (t) => {
   await t.send('x')
-  expect((await t.exec('cat /opt/es-layer')).stdout).toBe('layer\\n')
-  expect((await t.exec('cat /opt/es-cwd')).stdout).toBe('/\\n')
-  expect((await t.exec('cat /opt/es-workspace')).stdout).toBe('0\\n')
-  expect((await t.exec('cat /opt/es-secret')).stdout).toBe('none\\n')
+  expect((await t.exec('cat /opt/reeval-layer')).stdout).toBe('layer\\n')
+  expect((await t.exec('cat /opt/reeval-cwd')).stdout).toBe('/\\n')
+  expect((await t.exec('cat /opt/reeval-workspace')).stdout).toBe('0\\n')
+  expect((await t.exec('cat /opt/reeval-secret')).stdout).toBe('none\\n')
   expect((await t.exec('printf %s "$DB_URL"')).stdout).toBe('postgres://u:pw-long-enough@db')
   expect((await t.exec('cat ~/.config/es/hint.txt')).stdout).toBe('from home')
-  await t.exec('cat /opt/es-built')
+  await t.exec('cat /opt/reeval-built')
   expect((await t.exec('cat /tmp/check-only')).stdout).toBe('postgres://u:pw-long-enough@db')
   const pid1 = (await t.exec("tr '\\\\0' '\\\\n' < /proc/1/environ")).stdout
   expect(pid1).toContain('DB_URL=')
@@ -162,17 +165,17 @@ evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stri
 })
 `
       const p = await project('docker-env', {
-        'es.config.ts': config('{}'),
-        'evals/d.es.ts': eval_,
+        'reeval.config.ts': config('{}'),
+        'evals/d.eval.ts': eval_,
       })
-      const env = { ES_TEST_DB_URL: 'postgres://u:pw-long-enough@db' }
+      const env = { REEVAL_TEST_DB_URL: 'postgres://u:pw-long-enough@db' }
       const first = await runCli(p.dir, ['run'], { env, ...slow })
       assert.equal(first.code, 0, first.stdout + first.stderr)
       const built = (run: ReturnType<typeof readRun>) =>
         run.evals[0]?.read(run.evals[0].trial.checks[6]?.log.path ?? '') ?? ''
       const a = readRun(p.dir)
       const image = a.evals[0]?.image
-      assert.match(image?.ref ?? '', /^evalsuite-install:[0-9a-f]{16}$/)
+      assert.match(image?.ref ?? '', /^reeval-install:[0-9a-f]{16}$/)
       assert.equal(image?.base, DEFAULT_IMAGE)
       assert.deepEqual(
         image?.install,
@@ -196,19 +199,19 @@ evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stri
   )
 
   test(
-    'a root sandbox warns at the start of es run, in the record and in summary.md; canary: without root, nothing',
+    'a root sandbox warns at the start of reeval run, in the record and in summary.md; canary: without root, nothing',
     docker,
     async () => {
       const p = await project('docker-root-warning', {
-        'es.config.ts': config('{}'),
-        'evals/root.es.ts': `import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': config('{}'),
+        'evals/root.eval.ts': `import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('installs deps', { sandbox: docker({ root: true }) }, async (t) => {
   await t.sandbox()
   expect((await t.exec('id -u')).stdout.trim()).toBe('0')
 })
 `,
-        'evals/plain.es.ts': `import { evaluate, expect } from 'evalsuite'
+        'evals/plain.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('stays unprivileged', async (t) => {
   await t.sandbox()
   expect((await t.exec('id -u')).stdout.trim()).toBe('10001')
@@ -230,7 +233,7 @@ evaluate('stays unprivileged', async (t) => {
             kind: 'root',
             level: 'eval',
             where: 'evaluate("installs deps")',
-            file: 'evals/root.es.ts',
+            file: 'evals/root.eval.ts',
             message,
           },
         ])
@@ -240,12 +243,12 @@ evaluate('stays unprivileged', async (t) => {
         )
       }
 
-      const r = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/root.es.ts'], slow)
+      const r = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/root.eval.ts'], slow)
       assert.equal(r.code, 0, r.stdout + r.stderr)
       const rooted = readRun(p.dir)
       warned(r.stdout, rooted.run, rooted.read('summary.md'))
 
-      const canary = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/plain.es.ts'], slow)
+      const canary = await runCli(p.dir, ['run', '--ui', 'plain', 'evals/plain.eval.ts'], slow)
       assert.equal(canary.code, 0, canary.stdout + canary.stderr)
       const plain = readRun(p.dir)
       assert.notEqual(plain.run.runId, rooted.run.runId)
@@ -263,9 +266,9 @@ evaluate('stays unprivileged', async (t) => {
     docker,
     async () => {
       const p = await project('docker-install-fail', {
-        'es.config.ts': config('{}'),
-        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': config('{}'),
+        'evals/d.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('broken', { sandbox: docker({ install: ['echo one', 'exit 9', 'echo never'] }) }, async (t) => {
   await t.send('x')
 })
@@ -278,7 +281,7 @@ evaluate('broken', { sandbox: docker({ install: ['echo one', 'exit 9', 'echo nev
         /^ +Building the install layer \(3 commands\) failed: install 2\/3 exited 9: exit 9$/m,
       )
       assert.match(r.stdout, /^ {2}\s*\| one$/m, "the step's own output")
-      assert.match(r.stdout, /full log: \.es\/cache\/images\/evalsuite-install-[0-9a-f]{16}\.log/)
+      assert.match(r.stdout, /full log: \.reeval\/cache\/images\/reeval-install-[0-9a-f]{16}\.log/)
       assert.doesNotMatch(r.stdout, /RUN echo [A-Za-z0-9+/=]{16}/, 'no base64 Dockerfile')
       assert.doesNotMatch(r.stdout, /earlier lines/)
     },
@@ -289,9 +292,9 @@ evaluate('broken', { sandbox: docker({ install: ['echo one', 'exit 9', 'echo nev
     docker,
     async () => {
       const p = await project('docker-install-causes', {
-        'es.config.ts': config('{}'),
-        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': config('{}'),
+        'evals/d.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const body = async (t) => { await t.sandbox() }
 evaluate('disk', { sandbox: docker({ install: ['echo filling && dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'] }) }, body)
 evaluate('oom', { sandbox: docker({ install: ['echo dying && kill -9 $$'] }) }, body)
@@ -321,10 +324,10 @@ evaluate('plain', { sandbox: docker({ install: ['echo plain && exit 4'] }) }, bo
     docker,
     async () => {
       const p = await project('docker-bad-images', {
-        'es.config.ts': config('{}'),
+        'reeval.config.ts': config('{}'),
         'evals/bad.Dockerfile': 'FROM debian:bookworm-slim\nCOPYY a b\n',
-        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'evals/d.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('syntax', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }, async (t) => { await t.sandbox() })
 evaluate('alpine', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { await t.sandbox() })
 `,
@@ -340,7 +343,7 @@ evaluate('alpine', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { 
       )
       assert.match(
         message('alpine').split('\n')[0] ?? '',
-        /^Building the toolchain layer FROM alpine:3\.20 failed: ES needs a Debian or Ubuntu based image/,
+        /^Building the toolchain layer FROM alpine:3\.20 failed: reeval needs a Debian or Ubuntu based image/,
       )
       // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escapes.
       assert.doesNotMatch(r.stdout, /\x1b\[/, 'no raw ANSI from BuildKit warnings')
@@ -352,14 +355,14 @@ evaluate('alpine', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { 
     docker,
     async () => {
       const p = await project('docker-retry', {
-        'es.config.ts': config('{}'),
+        'reeval.config.ts': config('{}'),
         'evals/run.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
-        'evals/net.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'evals/net.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('net', { sandbox: docker({ from: 'registry.invalid.example:5000/es/none:1' }) }, async (t) => { await t.sandbox() })
 `,
-        'evals/run.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'evals/run.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (t) => { await t.sandbox() })
 `,
       })
@@ -377,12 +380,12 @@ evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (
   )
 
   test(
-    'es clean --images removes the images ES left dangling; canary: an image ES did not build stays',
+    'reeval clean --images removes the images reeval left dangling; canary: an image reeval did not build stays',
     docker,
     async () => {
-      const p = await project('docker-clean-images', { 'es.config.ts': config('{}') })
+      const p = await project('docker-clean-images', { 'reeval.config.ts': config('{}') })
       const nonce = `${Date.now()}-${process.pid}`
-      // A commit over an existing tag leaves the old image dangling, as rebuilding ES's image did.
+      // A commit over an existing tag leaves the old image dangling, as rebuilding reeval's image did.
       const container = execFileSync('docker', ['create', 'debian:bookworm-slim', 'true'], {
         encoding: 'utf8',
       }).trim()
@@ -394,7 +397,7 @@ evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (
             '--change',
             `LABEL ${ours ? LABEL.harness : 'es.test.other'}="${nonce}-${n}"`,
             container,
-            `es-clean-test-${ours ? 'ours' : 'theirs'}:${nonce}`,
+            `reeval-clean-test-${ours ? 'ours' : 'theirs'}:${nonce}`,
           ],
           { encoding: 'utf8' },
         ).trim()
@@ -409,13 +412,13 @@ evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (
         assert.ok(exists(ours) && exists(theirs), 'both replaced images are dangling')
         const r = await runCli(p.dir, ['clean', '--images'])
         assert.equal(r.code, 0, r.stdout + r.stderr)
-        assert.match(r.stdout, /Removed \d+ images? ES built that nothing uses/)
-        assert.equal(exists(ours), false, "ES's dangling image is removed")
-        assert.equal(exists(theirs), true, "an image ES didn't build is left alone")
+        assert.match(r.stdout, /Removed \d+ images? reeval built that nothing uses/)
+        assert.equal(exists(ours), false, "reeval's dangling image is removed")
+        assert.equal(exists(theirs), true, "an image reeval didn't build is left alone")
       } finally {
         execFileSync('sh', [
           '-c',
-          `docker rmi -f ${theirs} es-clean-test-ours:${nonce} es-clean-test-theirs:${nonce} >/dev/null 2>&1 || true`,
+          `docker rmi -f ${theirs} reeval-clean-test-ours:${nonce} reeval-clean-test-theirs:${nonce} >/dev/null 2>&1 || true`,
         ])
       }
     },
@@ -425,24 +428,24 @@ evaluate('run', { sandbox: docker({ dockerfile: './run.Dockerfile' }) }, async (
     'an eval-level image that fails fails only its cells, each once, built once, annotated once; everything else runs',
     docker,
     async () => {
-      const broken = `import { evaluate, group } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      const broken = `import { evaluate, group } from 'reeval'
+import { docker } from 'reeval/sandbox'
 group('broken tools', { sandbox: docker({ install: ['echo nope && exit 5'] }) }, () => {
   evaluate('a', { runs: 2 }, async (t) => { await t.sandbox() })
   evaluate('b', async (t) => { await t.sandbox() })
 })
 `
       const p = await project('docker-prepare-scoped', {
-        'es.config.ts': config('{}'),
-        'evals/ok.es.ts': `import { evaluate, expect } from 'evalsuite'
+        'reeval.config.ts': config('{}'),
+        'evals/ok.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('ok', async (t) => {
   await t.sandbox()
   expect((await t.exec('echo fine')).stdout).toBe('fine\\n')
 })
 `,
-        'evals/broken.es.ts': broken,
+        'evals/broken.eval.ts': broken,
       })
-      const counter = countBuilds(p.dir, 'evalsuite-install')
+      const counter = countBuilds(p.dir, 'reeval-install')
       const r = await runCli(p.dir, ['run', '--ui', 'plain', '--concurrency', '4'], {
         env: { ...counter.env, GITHUB_ACTIONS: 'true' },
         ...slow,
@@ -462,10 +465,10 @@ evaluate('ok', async (t) => {
         )
         assert.equal(a.error?.prepare?.stage, 'install')
         assert.equal(a.error?.prepare?.class, 'config')
-        assert.match(a.error?.prepare?.ref ?? '', /^evalsuite-install:/)
+        assert.match(a.error?.prepare?.ref ?? '', /^reeval-install:/)
         assert.match(
           a.error?.prepare?.log ?? '',
-          /^\.es\/cache\/images\/evalsuite-install-.+\.log$/,
+          /^\.reeval\/cache\/images\/reeval-install-.+\.log$/,
         )
         assert.deepEqual(a.error?.prepare?.setBy, ['group("broken tools")'])
       }
@@ -485,7 +488,7 @@ evaluate('ok', async (t) => {
         1,
       )
       assert.equal(
-        lines.filter((l) => l.startsWith('::error file=evals/broken.es.ts')).length,
+        lines.filter((l) => l.startsWith('::error file=evals/broken.eval.ts')).length,
         0,
         'no annotation per attempt',
       )
@@ -501,7 +504,7 @@ evaluate('ok', async (t) => {
       )
 
       // Canary: with the install fixed, nothing fails to prepare, so the checks above would fail.
-      writeFileSync(join(p.dir, 'evals/broken.es.ts'), broken.replace('exit 5', 'true'))
+      writeFileSync(join(p.dir, 'evals/broken.eval.ts'), broken.replace('exit 5', 'true'))
       const fixed = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
       assert.equal(fixed.code, 0, fixed.stdout + fixed.stderr)
       assert.doesNotMatch(fixed.stdout, /failed to prepare/)
@@ -513,11 +516,11 @@ evaluate('ok', async (t) => {
     docker,
     async () => {
       const p = await project('docker-prepare-config', {
-        'es.config.ts': config('{}').replace(
+        'reeval.config.ts': config('{}').replace(
           'sandbox: docker()',
           "sandbox: docker({ install: ['echo config && exit 6'] })",
         ),
-        'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+        'evals/a.eval.ts': `import { evaluate } from 'reeval'
 evaluate('a', async (t) => { await t.sandbox() })
 evaluate('b', async (t) => { await t.sandbox() })
 `,
@@ -526,26 +529,26 @@ evaluate('b', async (t) => { await t.sandbox() })
       assert.equal(r.code, 3, r.stdout + r.stderr)
       assert.match(
         r.stderr,
-        /^es: Building the install layer \(1 command\) failed: install 1\/1 exited 6/m,
+        /^reeval: Building the install layer \(1 command\) failed: install 1\/1 exited 6/m,
       )
       assert.match(
         r.stderr,
-        /The sandbox docker \+ install is set by es\.config\.ts for every eval, so nothing ran\./,
+        /The sandbox docker \+ install is set by reeval\.config\.ts for every eval, so nothing ran\./,
       )
       assert.doesNotMatch(r.stdout, /▶/, 'no attempt started')
 
       writeFileSync(
-        join(p.dir, 'es.config.ts'),
+        join(p.dir, 'reeval.config.ts'),
         config('{}').replace(
           'sandbox: docker()',
-          "sandbox: docker({ image: 'es-missing-image:nope' })",
+          "sandbox: docker({ image: 'reeval-missing-image:nope' })",
         ),
       )
       const missing = await runCli(p.dir, ['run', '--ui', 'plain'], slow)
       assert.equal(missing.code, 2, missing.stdout + missing.stderr)
       assert.match(
         missing.stderr,
-        /Docker image es-missing-image:nope not found\. docker\(\{ image \}\) is used as is/,
+        /Docker image reeval-missing-image:nope not found\. docker\(\{ image \}\) is used as is/,
       )
       assert.doesNotMatch(missing.stdout, /▶/)
     },
@@ -556,9 +559,9 @@ evaluate('b', async (t) => { await t.sandbox() })
     docker,
     async () => {
       const p = await project('docker-prepare-cache', {
-        'es.config.ts': config('{}'),
-        'evals/a.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': config('{}'),
+        'evals/a.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('one', { sandbox: docker({ from: 'alpine:3.20', install: ['echo one'] }) }, async (t) => { await t.sandbox() })
 evaluate('two', { sandbox: docker({ from: 'alpine:3.20', install: ['echo two'] }) }, async (t) => { await t.sandbox() })
 evaluate('plain', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { await t.sandbox() })
@@ -572,35 +575,38 @@ evaluate('plain', { sandbox: docker({ from: 'alpine:3.20' }) }, async (t) => { a
       for (const e of run.evals) {
         assert.equal(e.outcome, 'infra_error', e.name)
         assert.equal(e.attempts[0]?.error?.prepare?.stage, 'from')
-        assert.match(e.attempts[0]?.error?.message ?? '', /ES needs a Debian or Ubuntu based image/)
+        assert.match(
+          e.attempts[0]?.error?.message ?? '',
+          /reeval needs a Debian or Ubuntu based image/,
+        )
       }
     },
   )
 
   test(
-    'es image build builds every image, reports every failure and exits 3; --dry-run says how each stands',
+    'reeval image build builds every image, reports every failure and exits 3; --dry-run says how each stands',
     docker,
     async () => {
       const p = await project('docker-image-build-all', {
-        'es.config.ts': config('{}'),
+        'reeval.config.ts': config('{}'),
         'evals/bad.Dockerfile': 'FROM debian:bookworm-slim\nRUN echo broken && exit 42\n',
-        'evals/a.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'evals/a.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('plain', async (t) => { await t.sandbox() })
 evaluate('bad', { sandbox: docker({ dockerfile: './bad.Dockerfile' }) }, async (t) => { await t.sandbox() })
-evaluate('nope', { sandbox: docker({ from: 'nonexistent-es-image-${process.pid}:1' }) }, async (t) => { await t.sandbox() })
+evaluate('nope', { sandbox: docker({ from: 'nonexistent-reeval-image-${process.pid}:1' }) }, async (t) => { await t.sandbox() })
 `,
       })
       const dry = await runCli(p.dir, ['image', 'build', '--dry-run'])
       assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-      assert.match(dry.stdout, /^ {2}✓ base +evalsuite-sandbox:cursor-[\d.]+ +\(ready: built/m)
+      assert.match(dry.stdout, /^ {2}✓ base +reeval-sandbox:cursor-[\d.]+ +\(ready: built/m)
       assert.match(
         dry.stdout,
         /^ {2}\+ dockerfile evals\/bad\.Dockerfile .+\(to build: not built yet\)$/m,
       )
       assert.match(
         dry.stdout,
-        /^ {2}✗ from nonexistent-es-image-\d+:1 .+\(missing: doesn't resolve: .*(denied|not found)/m,
+        /^ {2}✗ from nonexistent-reeval-image-\d+:1 .+\(missing: doesn't resolve: .*(denied|not found)/m,
       )
       const plan = await runCli(p.dir, ['run', '--dry-run'])
       assert.equal(plan.code, 0, plan.stdout + plan.stderr)
@@ -608,14 +614,14 @@ evaluate('nope', { sandbox: docker({ from: 'nonexistent-es-image-${process.pid}:
 
       const r = await runCli(p.dir, ['image', 'build'], slow)
       assert.equal(r.code, 3, r.stdout + r.stderr)
-      assert.match(r.stdout, /^✓ docker: evalsuite-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
+      assert.match(r.stdout, /^✓ docker: reeval-sandbox:cursor-[\d.]+ [0-9a-f]{12}$/m)
       assert.match(
         r.stdout,
         /^✗ docker:bad\.Dockerfile \(1 eval\): Building evals\/bad\.Dockerfile failed: a RUN step exited 42$/m,
       )
       assert.match(
         r.stdout,
-        /^✗ docker:nonexistent-es-image-\d+:1 \(1 eval\): Building the toolchain layer FROM nonexistent-es-image-\d+:1 failed/m,
+        /^✗ docker:nonexistent-reeval-image-\d+:1 \(1 eval\): Building the toolchain layer FROM nonexistent-reeval-image-\d+:1 failed/m,
       )
       assert.match(r.stdout, /^2 of 3 images failed to build$/m)
       // Canary: without the broken images there's nothing to fail.
@@ -625,16 +631,16 @@ evaluate('nope', { sandbox: docker({ from: 'nonexistent-es-image-${process.pid}:
     },
   )
 
-  test('a from tag that moves upstream: es run keeps its build, --dry-run says stale, es image build rebuilds it; --force rebuilds anyway', {
+  test('a from tag that moves upstream: reeval run keeps its build, --dry-run says stale, reeval image build rebuilds it; --force rebuilds anyway', {
     ...docker,
     timeout: 900_000,
   }, async () => {
-    const name = `es-registry-${process.pid}`
+    const name = `reeval-registry-${process.pid}`
     const port = 5100 + (process.pid % 800)
     const tag = `localhost:${port}/es/base:1`
     const push = (version: string) => {
       execFileSync('docker', ['build', '-q', '-t', tag, '-'], {
-        input: `FROM debian:bookworm-slim\nRUN echo ${version} > /etc/es-version\n`,
+        input: `FROM debian:bookworm-slim\nRUN echo ${version} > /etc/reeval-version\n`,
       })
       execFileSync('docker', ['push', '-q', tag], { stdio: 'ignore' })
       execFileSync('docker', ['rmi', tag], { stdio: 'ignore' })
@@ -652,12 +658,12 @@ evaluate('nope', { sandbox: docker({ from: 'nonexistent-es-image-${process.pid}:
       }
       push('v1')
       const p = await project('docker-from-moves', {
-        'es.config.ts': config('{}'),
-        'evals/a.es.ts': `import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': config('{}'),
+        'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('base', { sandbox: docker({ from: '${tag}' }) }, async (t) => {
   await t.sandbox()
-  expect((await t.exec('cat /etc/es-version')).stdout).toBe('v1\\n')
+  expect((await t.exec('cat /etc/reeval-version')).stdout).toBe('v1\\n')
 })
 `,
       })
@@ -672,10 +678,10 @@ evaluate('base', { sandbox: docker({ from: '${tag}' }) }, async (t) => {
       const dry = await runCli(p.dir, ['run', '--dry-run'])
       assert.match(
         dry.stdout,
-        /^ {2}~ \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): es image build rebuilds it$/m,
+        /^ {2}~ \S+ +stale: from .+ moved upstream \([0-9a-f]{12} → [0-9a-f]{12}\): reeval image build rebuilds it$/m,
       )
       const kept = await runCli(p.dir, ['run'], slow)
-      assert.equal(kept.code, 0, 'es run keeps the build it has')
+      assert.equal(kept.code, 0, 'reeval run keeps the build it has')
       assert.equal(readRun(p.dir).evals[0]?.image?.id, image?.id)
 
       const counter = countBuilds(p.dir, '-base')
@@ -708,25 +714,25 @@ evaluate('base', { sandbox: docker({ from: '${tag}' }) }, async (t) => {
 
   test('concurrent attempts in two workers share one build of a new layer', docker, async () => {
     const nonce = `${Date.now()}-${process.pid}`
-    const env = `import { docker } from 'evalsuite/sandbox'
+    const env = `import { docker } from 'reeval/sandbox'
 export const fresh = docker({
-  install: ['echo ${nonce} > /opt/es-nonce && date +%s%N > /opt/es-built'],
+  install: ['echo ${nonce} > /opt/reeval-nonce && date +%s%N > /opt/reeval-built'],
 })
 `
-    const file = (name: string) => `import { evaluate } from 'evalsuite'
+    const file = (name: string) => `import { evaluate } from 'reeval'
 import { fresh } from './env.ts'
 evaluate('${name}', { sandbox: fresh, runs: 2 }, async (t) => {
   await t.send('x')
-  await t.exec('cat /opt/es-built')
+  await t.exec('cat /opt/reeval-built')
 })
 `
     const p = await project('docker-dedupe', {
-      'es.config.ts': config('{}'),
+      'reeval.config.ts': config('{}'),
       'evals/env.ts': env,
-      'evals/a.es.ts': file('a'),
-      'evals/b.es.ts': file('b'),
+      'evals/a.eval.ts': file('a'),
+      'evals/b.eval.ts': file('b'),
     })
-    // BuildKit merges identical builds that overlap, so count ES's `docker build` calls instead.
+    // BuildKit merges identical builds that overlap, so count reeval's `docker build` calls instead.
     const shim = join(p.dir, 'bin')
     const builds = join(p.dir, 'builds.log')
     mkdirSync(shim)
@@ -761,19 +767,19 @@ evaluate('${name}', { sandbox: fresh, runs: 2 }, async (t) => {
     }
   })
 
-  test('dockerfile: FROM the ES_BASE arg inherits the harness; another base gets it baked on; es image build builds them', {
+  test('dockerfile: FROM the REEVAL_BASE arg inherits the harness; another base gets it baked on; reeval image build builds them', {
     ...docker,
     timeout: 900_000,
   }, async () => {
     const nonce = `${Date.now()}-${process.pid}`
     const p = await project('docker-dockerfile', {
-      'es.config.ts': config('{}'),
-      'evals/tools/Dockerfile': `ARG ES_BASE\nFROM \${ES_BASE}\nCOPY greeting.txt /opt/greeting.txt\nRUN echo ${nonce} > /opt/nonce\n`,
+      'reeval.config.ts': config('{}'),
+      'evals/tools/Dockerfile': `ARG REEVAL_BASE\nFROM \${REEVAL_BASE}\nCOPY greeting.txt /opt/greeting.txt\nRUN echo ${nonce} > /opt/nonce\n`,
       'evals/tools/greeting.txt': 'hello\n',
       'evals/tools/.dockerignore': 'scratch\n',
       'evals/deb.Dockerfile': `FROM debian:bookworm-slim\nRUN echo ${nonce} > /opt/deb\n`,
-      'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('tools', { sandbox: docker({ dockerfile: './tools/Dockerfile' }) }, async (t) => {
   await t.send('x')
   const greeting = (await t.exec('cat /opt/greeting.txt')).stdout
@@ -791,14 +797,14 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
     })
     const refs = new Set<string>()
     try {
-      // Only the deb eval, so ES's own image (a FROM \${ES_BASE} Dockerfile needs it) isn't rebuilt.
+      // Only the deb eval, so reeval's own image (a FROM \${REEVAL_BASE} Dockerfile needs it) isn't rebuilt.
       const planned = await runCli(p.dir, ['image', 'build', '--dry-run', 'deb'])
       assert.equal(planned.code, 0, planned.stdout + planned.stderr)
       assert.match(planned.stdout, /^images {2}1 sandbox image/m)
       const build = await runCli(p.dir, ['image', 'build', 'deb'], { timeoutMs: 600_000 })
       assert.equal(build.code, 0, build.stdout + build.stderr)
       const debRef = /^✓ docker:deb\.Dockerfile: (\S+)/m.exec(build.stdout)?.[1] ?? ''
-      assert.match(debRef, /^evalsuite-sandbox:cursor-[\d.]+-evalsuite-dockerfile-deb-dockerfile-/)
+      assert.match(debRef, /^reeval-sandbox:cursor-[\d.]+-reeval-dockerfile-deb-dockerfile-/)
       refs.add(debRef)
 
       const first = await runCli(p.dir, ['run'], slow)
@@ -808,12 +814,12 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       const tools = image('tools')
       const deb = image('deb')
       for (const i of [tools, deb]) if (i) refs.add(i.ref)
-      assert.match(tools?.ref ?? '', /^evalsuite-dockerfile:tools-[0-9a-f]{16}$/)
+      assert.match(tools?.ref ?? '', /^reeval-dockerfile:tools-[0-9a-f]{16}$/)
       assert.equal(tools?.base, tools?.ref)
       assert.equal(tools?.dockerfile?.path, 'evals/tools/Dockerfile')
       assert.match(tools?.dockerfile?.sha256 ?? '', /^[0-9a-f]{64}$/)
-      assert.match(tools?.agentCli ?? '', /\d/, 'the harness label comes from ES_BASE')
-      assert.equal(deb?.ref, debRef, 'the run used the image es image build made')
+      assert.match(tools?.agentCli ?? '', /\d/, 'the harness label comes from REEVAL_BASE')
+      assert.equal(deb?.ref, debRef, 'the run used the image reeval image build made')
       assert.equal(deb?.dockerfile?.path, 'evals/deb.Dockerfile')
       assert.match(deb?.agentCli ?? '', /\d/)
       assert.deepEqual(deb?.install, [])
@@ -834,12 +840,12 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       assert.equal(b?.read(b.trial.checks[0]?.log.path ?? '').includes('bonjour'), true)
     } finally {
       for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
-      for (const ref of [...refs].filter((r) => r.startsWith('evalsuite-sandbox:'))) {
+      for (const ref of [...refs].filter((r) => r.startsWith('reeval-sandbox:'))) {
         execFileSync('docker', ['rmi', '-f', `${ref}-base`], { stdio: 'ignore' })
       }
       execFileSync(
         'sh',
-        ['-c', `docker images -q 'evalsuite-dockerfile:deb-dockerfile-*' | xargs -r docker rmi -f`],
+        ['-c', `docker images -q 'reeval-dockerfile:deb-dockerfile-*' | xargs -r docker rmi -f`],
         { stdio: 'ignore' },
       )
     }
@@ -850,11 +856,11 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
     timeout: 900_000,
   }, async () => {
     const p = await project('docker-from', {
-      'es.config.ts': config(
+      'reeval.config.ts': config(
         `{ script: [[{ exec: 'node -e "process.stdout.write(process.version)"' }]] }`,
       ),
-      'evals/f.es.ts': `import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'evals/f.eval.ts': `import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const bookworm = docker({ from: 'debian:bookworm-slim' })
 evaluate('bakes', { sandbox: bookworm }, async (t) => {
   const turn = await t.send('x')
@@ -881,7 +887,7 @@ evaluate('canary', { sandbox: bookworm }, async (t) => {
       assert.match(byName.canary?.error?.message ?? '', /expected '0\\n' to be '1\\n'/)
       const image = byName.bakes?.image
       ref = image?.ref ?? ''
-      assert.match(ref, /^evalsuite-sandbox:cursor-[\d.]+-debian-bookworm-slim-[0-9a-f]{8}$/)
+      assert.match(ref, /^reeval-sandbox:cursor-[\d.]+-debian-bookworm-slim-[0-9a-f]{8}$/)
       assert.equal(image?.base, ref)
       assert.equal(image?.dockerfile, null)
       assert.match(image?.agentCli ?? '', /\d/, 'the harness is baked on')
@@ -903,22 +909,22 @@ evaluate('canary', { sandbox: bookworm }, async (t) => {
     }
   })
 
-  test("dockerfile + claudeCode(): ES_BASE is Claude Code's image; another base gets the claude CLI baked on", {
+  test("dockerfile + claudeCode(): REEVAL_BASE is Claude Code's image; another base gets the claude CLI baked on", {
     ...claudeImage,
     timeout: 900_000,
   }, async () => {
     const nonce = `${Date.now()}-${process.pid}`
     const p = await project('docker-dockerfile-claude', {
-      'es.config.ts': `
-import { defineConfig } from 'evalsuite'
-import { claudeCode } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+      'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { claudeCode } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: claudeCode({ model: 'claude-sonnet-5' }), sandbox: docker() })
 `,
-      'evals/tools/Dockerfile': `ARG ES_BASE\nFROM \${ES_BASE}\nRUN echo ${nonce} > /opt/nonce\n`,
+      'evals/tools/Dockerfile': `ARG REEVAL_BASE\nFROM \${REEVAL_BASE}\nRUN echo ${nonce} > /opt/nonce\n`,
       'evals/deb.Dockerfile': `FROM debian:bookworm-slim\nRUN echo ${nonce} > /opt/deb\n`,
-      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+      'evals/d.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 evaluate('tools', { sandbox: docker({ dockerfile: './tools/Dockerfile' }) }, async () => {})
 evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async () => {})
 `,
@@ -947,7 +953,7 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
         { encoding: 'utf8' },
       ).trim()
     try {
-      // No credentials: es image build never starts an agent.
+      // No credentials: reeval image build never starts an agent.
       const build = await runCli(p.dir, ['image', 'build', 'tools', 'deb'], {
         timeoutMs: 800_000,
         env: { ANTHROPIC_API_KEY: '' },
@@ -957,10 +963,10 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       const debRef = /^✓ docker:deb\.Dockerfile · claude-code: (\S+)/m.exec(build.stdout)?.[1] ?? ''
       refs.add(toolsRef)
       refs.add(debRef)
-      assert.match(toolsRef, /^evalsuite-dockerfile:tools-[0-9a-f]{16}$/, build.stdout)
+      assert.match(toolsRef, /^reeval-dockerfile:tools-[0-9a-f]{16}$/, build.stdout)
       assert.match(
         debRef,
-        /^evalsuite-sandbox:claude-code-[\d.]+(-patch\.[0-9a-f]{8})?-evalsuite-dockerfile-deb-dockerfile-/,
+        /^reeval-sandbox:claude-code-[\d.]+(-patch\.[0-9a-f]{8})?-reeval-dockerfile-deb-dockerfile-/,
         build.stdout,
       )
       const claudeLabel = harnessLabel('claude-code')
@@ -970,12 +976,12 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
       }
     } finally {
       for (const ref of refs) execFileSync('docker', ['rmi', '-f', ref], { stdio: 'ignore' })
-      for (const ref of [...refs].filter((r) => r.startsWith('evalsuite-sandbox:'))) {
+      for (const ref of [...refs].filter((r) => r.startsWith('reeval-sandbox:'))) {
         execFileSync('docker', ['rmi', '-f', `${ref}-base`], { stdio: 'ignore' })
       }
       execFileSync(
         'sh',
-        ['-c', `docker images -q 'evalsuite-dockerfile:deb-dockerfile-*' | xargs -r docker rmi -f`],
+        ['-c', `docker images -q 'reeval-dockerfile:deb-dockerfile-*' | xargs -r docker rmi -f`],
         { stdio: 'ignore' },
       )
     }
@@ -983,8 +989,8 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
 
   test('a timeout removes the container', docker, async () => {
     const p = await project('docker-timeout', {
-      'es.config.ts': config('{ delayMs: 60_000 }'),
-      'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': config('{ delayMs: 60_000 }'),
+      'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
 `,
     })
@@ -1000,8 +1006,8 @@ evaluate('slow', { timeout: '3s' }, async (t) => { await t.send('wait') })
     docker,
     async () => {
       const p = await project('docker-sigterm', {
-        'es.config.ts': config('{ delayMs: 60_000 }'),
-        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+        'reeval.config.ts': config('{ delayMs: 60_000 }'),
+        'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
 `,
       })
@@ -1016,7 +1022,7 @@ evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
         },
       })
       assert.equal(r.code, 143, r.stdout + r.stderr)
-      const runId = readdirSync(join(p.dir, '.es/runs'))
+      const runId = readdirSync(join(p.dir, '.reeval/runs'))
         .find((f) => f.endsWith('.json'))
         ?.replace(/\.json$/, '')
       assert.ok(runId, 'the run was written')
@@ -1031,20 +1037,20 @@ evaluate('slow', { runs: 2 }, async (t) => { await t.send('wait') })
     docker,
     async () => {
       const cursorConfig = (sandbox: string) => `
-import { defineConfig } from 'evalsuite'
-import { cursor } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), sandbox: ${sandbox}, timeout: '60s' })
 `
-      const eval_ = `import { evaluate } from 'evalsuite'
+      const eval_ = `import { evaluate } from 'reeval'
 evaluate('hi', async (t) => { await t.send('hi') })
 `
       const warning = /CURSOR_API_KEY is passed into the sandbox container/
       // A made-up key: the sandbox and the gateway start, then the Cursor API refuses the key.
       const env = { CURSOR_API_KEY: 'crsr_not_a_real_key_0000000000000000' }
       const brokered = await project('docker-brokered', {
-        'es.config.ts': cursorConfig('docker()'),
-        'evals/d.es.ts': eval_,
+        'reeval.config.ts': cursorConfig('docker()'),
+        'evals/d.eval.ts': eval_,
       })
       const a = await runCli(brokered.dir, ['run'], { env })
       assert.doesNotMatch(a.stdout + a.stderr, warning)
@@ -1062,8 +1068,8 @@ evaluate('hi', async (t) => { await t.send('hi') })
       // No node in the image, so the gateway can't start: by default that's an infra error, and
       // the key never enters the container.
       const refused = await project('docker-no-broker', {
-        'es.config.ts': cursorConfig("docker({ image: 'busybox:1.37', root: true })"),
-        'evals/d.es.ts': eval_,
+        'reeval.config.ts': cursorConfig("docker({ image: 'busybox:1.37', root: true })"),
+        'evals/d.eval.ts': eval_,
       })
       const b = await runCli(refused.dir, ['run'], { env })
       assert.equal(b.code, 3, b.stdout + b.stderr)
@@ -1072,16 +1078,16 @@ evaluate('hi', async (t) => { await t.send('hi') })
       assert.equal(refusedRun.evals[0]?.error?.kind, 'infra')
       assert.match(
         refusedRun.evals[0]?.error?.message ?? '',
-        /^Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and ES adds it\.$/,
+        /^Can't keep CURSOR_API_KEY out of the sandbox: credential brokering could not start \(the forwarder exited \(\d+\)[^)]*\)\. The egress gateway needs Node in the image: start from a Debian or Ubuntu image with docker\(\{ from: 'busybox:1\.37' \}\) or docker\(\{ dockerfile \}\), and reeval adds it\.$/,
       )
       assert.equal(liveContainers(refusedRun.run.runId), '')
 
       // There's no opt-in to pass the real key: the option doesn't exist.
       const optIn = await project('docker-no-opt-in', {
-        'es.config.ts': cursorConfig(
+        'reeval.config.ts': cursorConfig(
           "docker({ image: 'busybox:1.37', credentials: 'allow-real-key' } as never)",
         ),
-        'evals/d.es.ts': eval_,
+        'evals/d.eval.ts': eval_,
       })
       const c = await runCli(optIn.dir, ['run'], { env })
       assert.equal(c.code, 2, c.stdout + c.stderr)
@@ -1094,20 +1100,20 @@ evaluate('hi', async (t) => { await t.send('hi') })
     docker,
     async () => {
       execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
-      const value = 'es-docker-user-secret-5e4d3c2b1a'
+      const value = 'reeval-docker-user-secret-5e4d3c2b1a'
       const p = await project('docker-secret-no-broker', {
-        'es.config.ts': config('{}').replace(
+        'reeval.config.ts': config('{}').replace(
           'docker()',
           "docker({ image: 'busybox:1.37', root: true })",
         ),
-        'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+        'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const keys = defineEnvironment('keys', ({ secret }) => ({
-  env: { GEMINI_API_KEY: secret.fromEnv('ES_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
+  env: { GEMINI_API_KEY: secret.fromEnv('REEVAL_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
 }))
 evaluate('hi', { environment: keys }, async (t) => { await t.sandbox() })
 `,
       })
-      const r = await runCli(p.dir, ['run'], { env: { ES_DOCKER_SECRET: value } })
+      const r = await runCli(p.dir, ['run'], { env: { REEVAL_DOCKER_SECRET: value } })
       assert.equal(r.code, 3, r.stdout + r.stderr)
       const { run, evals, dir } = readRun(p.dir)
       assert.equal(evals[0]?.error?.kind, 'infra')
@@ -1130,10 +1136,10 @@ evaluate('hi', { environment: keys }, async (t) => { await t.sandbox() })
     docker,
     async () => {
       const p = await project('docker-context', {
-        'es.config.ts': config(`{ script: [[{ reply: 'done' }]] }`),
-        'evals/d.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+        'reeval.config.ts': config(`{ script: [[{ reply: 'done' }]] }`),
+        'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const house = defineEnvironment('house', ({ skill }) => ({
-  skills: [skill.inline({ name: 'house', description: 'House style', content: process.env.ES_TEST_SKILL ?? 'v1' })],
+  skills: [skill.inline({ name: 'house', description: 'House style', content: process.env.REEVAL_TEST_SKILL ?? 'v1' })],
 }))
 evaluate('context', { environment: house }, async (t) => { await t.send('go') })
 `,
@@ -1163,14 +1169,14 @@ evaluate('context', { environment: house }, async (t) => { await t.send('go') })
       )
 
       // Twin: the skill the agent reads changes.
-      const third = await run({ ES_TEST_SKILL: 'v2' })
+      const third = await run({ REEVAL_TEST_SKILL: 'v2' })
       const [row] = await compareRows(second.runId, third.runId)
       assert.equal(row?.status, 'drift')
       assert.ok(row?.changes?.includes('agent context changed'), JSON.stringify(row))
     },
   )
 
-  test("npm installs the packed ES tarball in ES's image", {
+  test("npm installs the packed reeval tarball in reeval's image", {
     ...docker,
     timeout: 480_000,
   }, async () => {
@@ -1184,15 +1190,15 @@ evaluate('context', { environment: house }, async (t) => { await t.send('go') })
     assert.ok(tarball, readdirSync(out).join(', '))
     const { version } = JSON.parse(readFileSync(join(pkgRoot, 'package.json'), 'utf8'))
     const p = await project('docker-npm-tarball', {
-      'es.config.ts': config('{}'),
-      'evals/d.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
-const es = defineEnvironment('es-tarball', ({ file }) => ({
+      'reeval.config.ts': config('{}'),
+      'evals/d.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const es = defineEnvironment('reeval-tarball', ({ file }) => ({
   files: { 'es.tgz': file(${JSON.stringify(join(out, tarball))}) },
 }))
 evaluate('installs', { environment: es, timeout: '6m' }, async (t) => {
   await t.sandbox()
   await expect(t.exec('npm install --no-audit --no-fund ./es.tgz')).toSucceed()
-  expect((await t.exec('npx --no-install es --version')).stdout.trim()).toBe('${version}')
+  expect((await t.exec('npx --no-install reeval --version')).stdout.trim()).toBe('${version}')
 })
 `,
     })
@@ -1213,16 +1219,16 @@ evaluate('installs', { environment: es, timeout: '6m' }, async (t) => {
         'true',
       ].join('; ')
       const p = await project('docker-expected-blocked', {
-        'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: fakeHarness({ layout: 'antigravity', script: [[{ exec: ${JSON.stringify(curl)} }]] }),
   sandbox: docker(),
   egress: 'deny-all',
 })
 `,
-        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+        'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('calls home', async (t) => {
   await t.send('call home')
 })
@@ -1257,32 +1263,32 @@ evaluate('calls home', async (t) => {
     '-v and -vv trace the image, container, brokering, gateway and docker commands',
     docker,
     async () => {
-      const TOKEN = 'es-docker-verbose-token-5b8e2c'
+      const TOKEN = 'reeval-docker-verbose-token-5b8e2c'
       const curl = [
         'curl -s -o /dev/null -w "%{http_code} " -H "Authorization: Bearer $API_KEY" https://example.com/',
         'curl -s -o /dev/null -w "%{http_code}" http://blocked.invalid/',
       ].join('; ')
       const p = await project('docker-verbose', {
-        'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig(({ secret }) => ({
   harness: fakeHarness({ script: [[{ exec: ${JSON.stringify(curl)} }]] }),
   sandbox: docker(),
   egress: { allow: ['example.com'] },
-  env: { API_KEY: secret.fromEnv('ES_DOCKER_TOKEN', { hosts: ['example.com'] }) },
+  env: { API_KEY: secret.fromEnv('REEVAL_DOCKER_TOKEN', { hosts: ['example.com'] }) },
   judge: { model: fakeJudge() },
 }))
 `,
-        'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+        'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('calls out', async (t) => {
   await t.send('call the api')
   await expect(t.exec('true')).toSucceed()
 })
 `,
       })
-      const env = { ES_DOCKER_TOKEN: TOKEN }
+      const env = { REEVAL_DOCKER_TOKEN: TOKEN }
       const v = await runCli(p.dir, ['run', '-v'], { env, ...slow })
       assert.equal(v.code, 0, v.stdout + v.stderr)
       const line = (phase: string, text: string) =>
@@ -1315,7 +1321,7 @@ evaluate('calls out', async (t) => {
       }
       assert.doesNotMatch(v.stdout, / docker {4}\$ docker /, '-v leaves the docker commands out')
       const run = readRun(p.dir).run
-      const debugDir = join(p.dir, '.es/debug', run.runId)
+      const debugDir = join(p.dir, '.reeval/debug', run.runId)
       const [requests] = execFileSync('find', [debugDir, '-name', 'requests.ndjson'], {
         encoding: 'utf8',
       }).split('\n')
@@ -1348,11 +1354,13 @@ evaluate('calls out', async (t) => {
         assert.match(vv.stdout, traced(text), text)
       }
       // The headers are as the sandbox sent them: the placeholder, never the key.
-      assert.match(vv.stdout, /"authorization":"Bearer es_secret_[0-9A-Za-z]{32}"/)
+      assert.match(vv.stdout, /"authorization":"Bearer reeval_secret_[0-9A-Za-z]{32}"/)
       const everything = vv.stdout + vv.stderr + v.stdout + v.stderr
       assert.equal(everything.includes(TOKEN), false, 'the key never prints')
-      const leaked = spawnSync('grep', ['-rlF', TOKEN, join(p.dir, '.es')], { encoding: 'utf8' })
-      assert.equal(leaked.stdout.trim(), '', 'no file under .es has the key')
+      const leaked = spawnSync('grep', ['-rlF', TOKEN, join(p.dir, '.reeval')], {
+        encoding: 'utf8',
+      })
+      assert.equal(leaked.stdout.trim(), '', 'no file under .reeval has the key')
       assert.equal(leaked.status, 1, leaked.stderr)
     },
   )
@@ -1362,30 +1370,30 @@ evaluate('calls out', async (t) => {
     gooseImage,
     async () => {
       const p = await project('docker-goose-endpoints', {
-        'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { goose } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { goose } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: goose({ model: 'gemini-3.8-flash' }), sandbox: docker(), timeout: '90s' })
 `,
-        'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+        'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
 `,
       })
       // A made-up key: Goose lists the models, then Gemini refuses the key on the model call.
       const env = {
         GOOGLE_GENERATIVE_AI_API_KEY: 'AIzaSy-not_a_real_key_0000000000000000',
-        ES_DEBUG: '1',
+        REEVAL_DEBUG: '1',
       }
       const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
       const out = r.stdout + r.stderr
       assert.match(
         out,
-        /es:egress GET https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models HTTP\/[\d.]+ \(set x-goog-api-key\)/,
+        /reeval:egress GET https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models HTTP\/[\d.]+ \(set x-goog-api-key\)/,
       )
       // The twin: the model call is brokered the same way, so the search can see a brokered line.
       assert.match(
         out,
-        /es:egress POST \S+:streamGenerateContent HTTP\/[\d.]+ \(set x-goog-api-key\)/,
+        /reeval:egress POST \S+:streamGenerateContent HTTP\/[\d.]+ \(set x-goog-api-key\)/,
       )
       assert.doesNotMatch(out, /refused/)
       // Gemini's refusal fails the turn and names the host variable to fix.
@@ -1408,12 +1416,12 @@ evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
       harnessImage(harness),
       async () => {
         const p = await project(`docker-${factory}-refused-key`, {
-          'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { ${factory} } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+          'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: ${factory}({ model: '${model}' }), sandbox: docker(), timeout: '90s' })
 `,
-          'evals/d.es.ts': `import { evaluate } from 'evalsuite'
+          'evals/d.eval.ts': `import { evaluate } from 'reeval'
 evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
 `,
         })
@@ -1436,12 +1444,12 @@ evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
     harnessImage('codex'),
     async () => {
       const p = await project('docker-codex-refused-key', {
-        'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { codex } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { codex } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: codex({ model: 'gpt-5.4-mini' }), sandbox: docker(), timeout: '3m' })
 `,
-        'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+        'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (t) => {
   await t.send('Reply with the word hi.')
   // Each turn is its own codex process, gone by now: the files it left are what can hold the key.
@@ -1451,12 +1459,12 @@ evaluate('hi', async (t) => {
 })
 `,
       })
-      const env = { OPENAI_API_KEY: 'sk-not_a_real_key_0000000000000000', ES_DEBUG: '1' }
+      const env = { OPENAI_API_KEY: 'sk-not_a_real_key_0000000000000000', REEVAL_DEBUG: '1' }
       const r = await runCli(p.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 300_000 })
       const out = r.stdout + r.stderr
       assert.match(
         out,
-        /es:egress POST https:\/\/api\.openai\.com\/v1\/responses HTTP\/[\d.]+ \(set authorization\)/,
+        /reeval:egress POST https:\/\/api\.openai\.com\/v1\/responses HTTP\/[\d.]+ \(set authorization\)/,
       )
       assert.doesNotMatch(out, /refused/)
       assert.doesNotMatch(out, /chatgpt\.com|github\.com/, 'no analytics or plugin sync')
@@ -1474,16 +1482,16 @@ evaluate('hi', async (t) => {
     claudeImage,
     async () => {
       const claudeConfig = (sandbox: string) => `
-import { defineConfig } from 'evalsuite'
-import { claudeCode } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { claudeCode } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: claudeCode({ model: 'claude-sonnet-5' }),
   sandbox: ${sandbox},
   timeout: '90s',
 })
 `
-      const eval_ = `import { evaluate, expect } from 'evalsuite'
+      const eval_ = `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (t) => {
   const turn = await t.send('Reply with the word hi.')
   expect(turn.transcript.some((e) => e.type === 'error' && /401/.test(e.message ?? ''))).toBe(true)
@@ -1499,11 +1507,11 @@ evaluate('hi', async (t) => {
       const env = {
         ANTHROPIC_API_KEY: 'sk-ant-not_a_real_key_000000000000000000',
         AI_GATEWAY_API_KEY: 'gw-not-used',
-        ES_DEBUG: '1',
+        REEVAL_DEBUG: '1',
       }
       const brokered = await project('docker-claude-brokered', {
-        'es.config.ts': claudeConfig('docker()'),
-        'evals/d.es.ts': eval_,
+        'reeval.config.ts': claudeConfig('docker()'),
+        'evals/d.eval.ts': eval_,
       })
       const started = Date.now()
       const a = await runCli(brokered.dir, ['run', '--ui', 'plain'], { env, timeoutMs: 240_000 })
@@ -1513,10 +1521,10 @@ evaluate('hi', async (t) => {
       assert.match(out, /turn 1 error: The API rejected ANTHROPIC_API_KEY: set a valid key/)
       assert.match(
         out,
-        /es:egress POST https:\/\/api\.anthropic\.com\/v1\/messages HTTP\/[\d.]+ \(set x-api-key\)/,
+        /reeval:egress POST https:\/\/api\.anthropic\.com\/v1\/messages HTTP\/[\d.]+ \(set x-api-key\)/,
       )
       // The twin of the check below: the same search finds the gateway's lines.
-      assert.match(out, /es:egress /)
+      assert.match(out, /reeval:egress /)
       assert.doesNotMatch(
         out,
         /refused|ai-gateway\.vercel\.sh/,
@@ -1531,8 +1539,8 @@ evaluate('hi', async (t) => {
         return
       }
       const refused = await project('docker-claude-no-broker', {
-        'es.config.ts': claudeConfig("docker({ image: 'busybox:1.37', root: true })"),
-        'evals/d.es.ts': eval_,
+        'reeval.config.ts': claudeConfig("docker({ image: 'busybox:1.37', root: true })"),
+        'evals/d.eval.ts': eval_,
       })
       const b = await runCli(refused.dir, ['run'], { env })
       assert.equal(b.code, 3, b.stdout + b.stderr)

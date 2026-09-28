@@ -1,24 +1,25 @@
 {
-  "name": "@invertase/foobar",
+  "name": "reeval",
   "version": "0.0.1",
-  "description": "ES (Eval Suite): an eval runner for coding agents",
+  "description": "reeval: an eval runner for coding agents",
   "license": "Apache-2.0",
   "author": "Invertase <oss@invertase.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/invertase/evalsuite.git",
-    "directory": "packages/evalsuite"
+    "url": "git+https://github.com/invertase/reeval.git",
+    "directory": "packages/reeval"
   },
-  "homepage": "https://github.com/invertase/evalsuite/tree/main/packages/evalsuite#readme",
+  "homepage": "https://github.com/invertase/reeval/tree/main/packages/reeval#readme",
   "bugs": {
-    "url": "https://github.com/invertase/evalsuite/issues"
+    "url": "https://github.com/invertase/reeval/issues"
   },
   "type": "module",
   "engines": {
     "node": ">=22.13"
   },
   "bin": {
-    "es": "./dist/cli.js"
+    "reeval": "./dist/cli.js",
+    "re": "./dist/cli.js"
   },
   "exports": {
     ".": {
@@ -64,9 +65,9 @@
     "test": "node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/*.test.ts",
     "test:plan": "node --test --experimental-strip-types --no-warnings test/plan.test.ts",
     "test:features": "node --test --experimental-strip-types --no-warnings test/features.test.ts",
-    "test:docker": "ES_FIXTURE_TIERS=docker ES_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts",
-    "test:real": "ES_FIXTURE_TIERS=real ES_TEST_REAL=1 node --test --experimental-strip-types --no-warnings test/features.test.ts",
-    "test:contract": "ES_TEST_REAL=1 ES_CONTRACT_HARNESSES=${ES_CONTRACT_HARNESSES:-cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex} node --test --test-concurrency=1 --experimental-strip-types --no-warnings test/contract.test.ts test/e2e-real.test.ts",
+    "test:docker": "REEVAL_FIXTURE_TIERS=docker REEVAL_TEST_REQUIRE_DOCKER=1 node --test --experimental-strip-types --no-warnings test/features.test.ts test/docker.test.ts test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts",
+    "test:real": "REEVAL_FIXTURE_TIERS=real REEVAL_TEST_REAL=1 node --test --experimental-strip-types --no-warnings test/features.test.ts",
+    "test:contract": "REEVAL_TEST_REAL=1 REEVAL_CONTRACT_HARNESSES=${REEVAL_CONTRACT_HARNESSES:-cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex} node --test --test-concurrency=1 --experimental-strip-types --no-warnings test/contract.test.ts test/e2e-real.test.ts",
     "test:replay": "node --test --experimental-strip-types --no-warnings test/replay.test.ts"
   },
   "dependencies": {
@@ -92,13 +93,13 @@
   },
   "devDependencies": {
     "@ai-sdk/harness-claude-code": "1.0.128",
-    "@evalsuite/harness-antigravity": "workspace:0.1.0",
-    "@evalsuite/harness-codex": "workspace:0.1.0",
-    "@evalsuite/harness-cursor-sdk": "workspace:0.1.0",
-    "@evalsuite/harness-goose": "workspace:0.1.0",
-    "@evalsuite/harness-opencode": "workspace:0.2.0",
-    "@evalsuite/harness-pi": "workspace:0.1.0",
-    "@evalsuite/sandbox-docker": "workspace:*",
+    "@reeval/harness-antigravity": "workspace:0.1.0",
+    "@reeval/harness-codex": "workspace:0.1.0",
+    "@reeval/harness-cursor-sdk": "workspace:0.1.0",
+    "@reeval/harness-goose": "workspace:0.1.0",
+    "@reeval/harness-opencode": "workspace:0.2.0",
+    "@reeval/harness-pi": "workspace:0.1.0",
+    "@reeval/sandbox-docker": "workspace:*",
     "@modelcontextprotocol/client": "2.1.0",
     "studio-web": "workspace:*",
     "tsdown": "0.23.0"

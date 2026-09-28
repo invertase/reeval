@@ -1,4 +1,4 @@
-// `es mcp`: serves the run history over MCP, on stdio (the host launches it) or, with `--http`,
+// `reeval mcp`: serves the run history over MCP, on stdio (the host launches it) or, with `--http`,
 // as stateless Streamable HTTP on a local port.
 import { timingSafeEqual } from 'node:crypto'
 import { basename } from 'node:path'
@@ -14,7 +14,7 @@ type Args = { config: ResolvedConfig; flags: McpFlags; version: string }
 
 export const DEFAULT_MCP_PORT = 4986
 
-const report = (error: Error) => console.error(`es mcp: ${redactSecrets(error.message)}`)
+const report = (error: Error) => console.error(`reeval mcp: ${redactSecrets(error.message)}`)
 
 const stopped = () =>
   new Promise<void>((resolve) => {
@@ -63,10 +63,10 @@ async function serveHttp(
   }
   const host = flags.host ?? '127.0.0.1'
   if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
-    console.error(`warning: es mcp is listening on ${host}, reachable beyond this machine`)
+    console.error(`warning: reeval mcp is listening on ${host}, reachable beyond this machine`)
   }
   // Off by default: bound to loopback behind the Host and Origin checks, like any local dev server.
-  const token = flags.token ?? (process.env.ES_MCP_TOKEN || undefined)
+  const token = flags.token ?? (process.env.REEVAL_MCP_TOKEN || undefined)
   if (token !== undefined && !token.trim()) throw new UsageError('--token needs a value')
   registerSecret(token)
   const { createMcpHandler } = await import('@modelcontextprotocol/server')
@@ -85,7 +85,7 @@ async function serveHttp(
     if (token) {
       const offered = /^Bearer (.+)$/.exec(c.req.header('authorization') ?? '')?.[1]
       if (!offered || !sameToken(offered, token)) {
-        return c.text('es mcp needs its bearer token (--token or ES_MCP_TOKEN)', 401, {
+        return c.text('reeval mcp needs its bearer token (--token or REEVAL_MCP_TOKEN)', 401, {
           'WWW-Authenticate': 'Bearer',
         })
       }
@@ -104,9 +104,9 @@ async function serveHttp(
     s.once('listening', () => resolve(s))
   })
   const url = `http://${host.includes(':') ? `[${host}]` : host}:${port}/mcp`
-  console.log(`es mcp · ${basename(config.root)} · ${fromCwd(config.history.dir) || '.'}/`)
+  console.log(`reeval mcp · ${basename(config.root)} · ${fromCwd(config.history.dir) || '.'}/`)
   console.log(`  ${url}`)
-  if (token) console.log('  requires Authorization: Bearer <the --token or ES_MCP_TOKEN value>')
+  if (token) console.log('  requires Authorization: Bearer <the --token or REEVAL_MCP_TOKEN value>')
   console.log('Ctrl-C to stop.')
   await stopped()
   await handler.close()

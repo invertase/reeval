@@ -1,61 +1,61 @@
 ---
-name: es
+name: reeval
 description: >
-  How to write, run and debug evals with ES (Eval Suite), the eval runner for coding agents
-  (npm package @invertase/foobar, a placeholder name; CLI `es`). Use whenever a task mentions ES,
-  evalsuite, @invertase/foobar, es.config.ts, *.es.ts files, `es run`, evals for a coding agent,
-  comparing skills, MCP servers or docs, or lift.
+  How to write, run and debug evals with reeval, the eval runner for coding agents (npm package
+  reeval; CLI `reeval`, alias `re`). Use whenever a task mentions reeval, reeval.config.ts,
+  *.eval.ts files, `reeval run`, evals for a coding agent, comparing skills, MCP servers or
+  docs, or lift.
 ---
 
-# ES (Eval Suite)
+# reeval
 
-ES runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex) on a task
+reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex) on a task
 in a fresh Docker sandbox, then checks the result with deterministic assertions and an LLM judge.
-You write evals in TypeScript; `es run` runs them. The package is `@invertase/foobar` (a
-placeholder name) and the CLI is `es`. Full docs: the `docs/` folder of github.com/invertase/evalsuite (a docs.page
+You write evals in TypeScript; `reeval run` runs them. The package is `reeval` (a
+placeholder name) and the CLI is `reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
 site; its Reference tab has every option, flag and error).
 
 ## Workflow
 
-1. Install: `npm init -y` if there's no `package.json`, then `npm i -D @invertase/foobar`
-   (or a tarball: `npm i -D /path/to/invertase-foobar.tgz`). Pre-release: pin the version.
+1. Install: `npm init -y` if there's no `package.json`, then `npm i -D reeval`
+   (or a tarball: `npm i -D /path/to/reeval.tgz`). Pre-release: pin the version.
    Node 22.13 or later; npm, pnpm or Yarn.
-2. `npx es init --harness <cursor|claude-code|antigravity|opencode|goose|pi|none>` (it only
-   asks in a terminal) writes `es.config.ts` (the agent, plus `fake`, `pr` and `nightly`
-   profiles), `evals/greet.es.ts`, the `.gitignore` entries (`.es/`, `.env*`) and an `eval`
-   script; `npx es run --profile fake` passes with no keys. It never overwrites a file that
-   differs without `--force`. Or write `es.config.ts` and `evals/**/*.es.ts` (the default
+2. `npx reeval init --harness <cursor|claude-code|antigravity|opencode|goose|pi|none>` (it only
+   asks in a terminal) writes `reeval.config.ts` (the agent, plus `fake`, `pr` and `nightly`
+   profiles), `evals/greet.eval.ts`, the `.gitignore` entries (`.reeval/`, `.env*`) and an `eval`
+   script; `npx reeval run --profile fake` passes with no keys. It never overwrites a file that
+   differs without `--force`. Or write `reeval.config.ts` and `evals/**/*.eval.ts` (the default
    `include`) yourself.
-3. `npx es run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
+3. `npx reeval run --dry-run` prints the plan (evals, cells, attempts, estimate) without running
    anything and needs no credentials or Docker. `--dry-run --json` for a program to read.
-4. For real agents: `npx es image build` once (and after upgrading ES), keys in `.env.local` next
-   to `es.config.ts` (not the directory you run from), `npx es doctor` (exit 1 names each
-   problem and its fix; `--json`, `--online` tries the keys), then `npx es run`. Exit 0 means every gated cell passed.
-5. Read failures in the summary, then `.es/runs/<run>/summary.md` and each attempt's directory
+4. For real agents: `npx reeval image build` once (and after upgrading reeval), keys in `.env.local` next
+   to `reeval.config.ts` (not the directory you run from), `npx reeval doctor` (exit 1 names each
+   problem and its fix; `--json`, `--online` tries the keys), then `npx reeval run`. Exit 0 means every gated cell passed.
+5. Read failures in the summary, then `.reeval/runs/<run>/summary.md` and each attempt's directory
    (`transcript.jsonl`, `diff.patch`, `checks/<n>.log`, `judge-input.json`, `setup.log`).
-   `npx es run -v` prints a timestamped trace per attempt; `.es/debug/` keeps it.
+   `npx reeval run -v` prints a timestamped trace per attempt; `.reeval/debug/` keeps it.
 
 Always rerun `--dry-run` after editing: config mistakes are exit-2 usage errors with a precise
 message, one at a time.
 
-## es.config.ts
+## reeval.config.ts
 
 ```ts
-import { defineConfig } from '@invertase/foobar'
-import { cursor } from '@invertase/foobar/harness'
-import { docker } from '@invertase/foobar/sandbox'
+import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
-  include: ['evals/**/*.es.ts'],              // default
+  include: ['evals/**/*.eval.ts'],              // default
   harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY; docker()
-  sandbox: docker(),                          // ES's image: Node 22, git, pnpm, the agent CLI
+  sandbox: docker(),                          // reeval's image: Node 22, git, pnpm, the agent CLI
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // no default model; pin versions
   runs: 1,                                    // attempts per cell
   timeout: '15m',                             // per attempt
 })
 ```
 
-- Harnesses (`@invertase/foobar/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
+- Harnesses (`reeval/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
   Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
   the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
@@ -70,13 +70,13 @@ export default defineConfig({
   `gemini-3.8-flash`; pi has no MCP),
   `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.4-mini`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
-  Keys never enter the sandbox: the agent sees a placeholder that ES's gateway swaps on the
-  harness's own endpoints. Cursor, Claude Code, Antigravity, pi and Codex report tokens, which ES records
+  Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
+  harness's own endpoints. Cursor, Claude Code, Antigravity, pi and Codex report tokens, which reeval records
   per turn, attempt and run (no prices); OpenCode's and Goose's can't be trusted, so it records none for them.
 - Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
   the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.
-- Imports: `@invertase/foobar` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
+- Imports: `reeval` (`defineConfig`, `defineEnvironment`, `group`, `evaluate`,
   `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, types), `/harness`, `/sandbox`
   (`docker`, `fakeSandbox`), `/judge` (`fakeJudge`, `RECOMMENDED_JUDGE_MODEL`,
   `DEFAULT_THRESHOLD`). There is no `test`, `describe`, `baseline`, `secret` or `skill` export.
@@ -84,10 +84,10 @@ export default defineConfig({
 ### Without Docker or API keys: the fake trio
 
 ```ts
-import { defineConfig } from '@invertase/foobar'
-import { fakeHarness } from '@invertase/foobar/harness'
-import { fakeJudge } from '@invertase/foobar/judge'
-import { fakeSandbox } from '@invertase/foobar/sandbox'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   // A scripted "agent": writes these files on every turn and replies with text.
@@ -101,13 +101,13 @@ export default defineConfig({
 a skill), `script` (one list of `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: 'server/tool' }`
 steps per turn), `layout: 'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex'`, `failWith`, `delayMs`,
 `flakeRate`, `reasoning`, `tools` and `id`. Keep a fake config next to the real one and run it
-with `--config es.fake.config.ts`.
+with `--config reeval.fake.config.ts`.
 
 ## Evals
 
 ```ts
-// evals/hello.es.ts
-import { evaluate, expect, group } from '@invertase/foobar'
+// evals/hello.eval.ts
+import { evaluate, expect, group } from 'reeval'
 
 group('hello', () => {
   evaluate('creates hello.txt', async (t) => {
@@ -152,7 +152,7 @@ files, rules, env vars, secrets and setup steps. Pass a spec, or a synchronous c
 
 ```ts
 // evals/envs.ts
-import { defineEnvironment } from '@invertase/foobar'
+import { defineEnvironment } from 'reeval'
 
 export const houseStyle = defineEnvironment('house-style', ({ skill }) => ({
   skills: [skill.local('../skills/house-style')],   // a dir with SKILL.md, relative to this file
@@ -173,7 +173,7 @@ export const app = defineEnvironment('acme-app', ({ git }) => ({
 ```
 
 `workspace: git(repo, { ref, path })` takes a URL, `github:owner/repo`, a GitHub `/tree/` URL or
-a local path (relative to the file). ES fetches it on the host before any attempt, with the
+a local path (relative to the file). reeval fetches it on the host before any attempt, with the
 host's git credentials or `token: 'GITHUB_TOKEN'` (a host variable's name; never a token in the
 URL or the eval), copies the tree in before `files` (which win) and `setup`, and records the
 commit and tree hash. `init: true` adds a `.git` with one commit of the tree (no remote), for
@@ -194,7 +194,7 @@ environment (the **control**: the group's `environment`, or nothing), with the s
 checks:
 
 ```ts
-import { evaluate, expect, group } from '@invertase/foobar'
+import { evaluate, expect, group } from 'reeval'
 import { houseStyle } from './envs.ts'
 
 const greetsAda = `node -e "import('./greet.js').then((m) =>
@@ -226,10 +226,10 @@ group('greetings', { compare: [houseStyle], runs: 2 }, () => {
 ## Sandboxes
 
 ```ts
-docker()                                             // ES's Node image with the agent CLI
+docker()                                             // reeval's Node image with the agent CLI
 docker({ install: ['npm i -g firebase-tools@14'] })  // baked once as a cached layer; no secrets
-docker({ from: 'python:3.12-slim' })                 // Debian/Ubuntu base; ES adds Node + agent
-docker({ dockerfile: './sandbox/Dockerfile' })       // ARG ES_BASE / FROM ${ES_BASE} to layer on ES's
+docker({ from: 'python:3.12-slim' })                 // Debian/Ubuntu base; reeval adds Node + agent
+docker({ dockerfile: './sandbox/Dockerfile' })       // ARG REEVAL_BASE / FROM ${REEVAL_BASE} to layer on reeval's
 docker({ memory: '8g', cpus: 4, pids: 4096 })        // limits; defaults 4g (no swap), 2, 1024
 docker({ root: true })                               // opt in: apt-get at run time (default: user es)
 ```
@@ -237,7 +237,7 @@ docker({ root: true })                               // opt in: apt-get at run t
 The agent, setup and `t.exec` run as `es` (home `/home/es`) with no capabilities; builds run as root.
 `root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
 
-One sandbox per eval (a list is an error). `npx es image build` builds every image the plan needs.
+One sandbox per eval (a list is an error). `npx reeval image build` builds every image the plan needs.
 
 ## Secrets and egress
 
@@ -249,7 +249,7 @@ defineEnvironment('gemini', ({ secret }) => ({
 }))
 ```
 
-With `hosts`, the sandbox only sees a placeholder and ES's gateway swaps in the real value on
+With `hosts`, the sandbox only sees a placeholder and reeval's gateway swaps in the real value on
 HTTPS requests to those hosts. `{ to: 'checks' }` keeps it from the agent. `egress: 'allow-all' |
 'deny-all' | { allow: [hosts] }` limits where the sandbox may connect (the harness's API, brokered
 hosts and MCP hosts are always allowed; `DEFAULT_EGRESS_ALLOW` is npm, Yarn, PyPI and GitHub). A
@@ -258,32 +258,32 @@ blocked request doesn't fail the attempt; it's recorded, and your checks decide.
 ## CLI
 
 ```text
-es run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> --record --ui plain -v
-es record            es history      es show [run]      es compare [base] [head] [--md]
-es query lift        es query effort      es query "SELECT … FROM failing_attempts"
-es analyze           (one checked LLM reading of a run; --context for your own agent)
-es studio            es studio build --out site      es image build [--dry-run]      es clean
-es mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
+reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> --record --ui plain -v
+reeval record            reeval history      reeval show [run]      reeval compare [base] [head] [--md]
+reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
+reeval analyze           (one checked LLM reading of a run; --context for your own agent)
+reeval studio            reeval studio build --out site      reeval image build [--dry-run]      reeval clean
+reeval mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
 ```
 
-If your client has an `es` MCP server (`es mcp`), prefer its tools for reading results: they
+If your client has an `reeval` MCP server (`reeval mcp`), prefer its tools for reading results: they
 return the same JSON as `--json`, and `query_failing_attempts` or `compare` then `transcript` is
 the quickest way from "it failed" to what the agent did.
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
-(`es run skill antigravity`). Every command uses the nearest `es.config.*` in the current directory or
+(`reeval run skill antigravity`). Every command uses the nearest `reeval.config.*` in the current directory or
 above (paths resolve from its directory), or `--config <path>`. Exit codes: 0 pass (and
 `--dry-run`), 1 a gated failure, 2 usage/config error (including a filter that matches nothing),
-3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.es/runs/`; `--record` (or `record: 'ci'` in CI) copies
+3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies
 them to `evals/.history/` to commit.
 
 ## Common mistakes (and the fix)
 
-| Mistake | ES says | Fix |
+| Mistake | reeval says | Fix |
 |---|---|---|
-| `compare` in `es.config.ts` | `compare can't be set in es.config.ts` | Put it on the group or eval |
+| `compare` in `reeval.config.ts` | `compare can't be set in reeval.config.ts` | Put it on the group or eval |
 | `environment: [a, b]` | `environment takes one environment, not a list` | `compare: [b]` with `a` inherited (or nothing) |
-| `import { baseline }` | `evalsuite has no baseline` | Leave `environment` unset; the control is empty |
+| `import { baseline }` | `reeval has no baseline` | Leave `environment` unset; the control is empty |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
@@ -293,5 +293,5 @@ them to `evals/.history/` to commit.
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
 | `workspace: 'https://…'` | `must come from the git helper` | `({ git }) => ({ workspace: git('https://…', { ref }) })` |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
-| Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.es.ts` under `evals/` |
-| `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `es.config.ts` |
+| Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.eval.ts` under `evals/` |
+| `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `reeval.config.ts` |

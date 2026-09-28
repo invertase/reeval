@@ -76,7 +76,7 @@ function judgeCell(e: EvalEntry): string {
 const short = (hash: string) => hash.replace(/^sha256:/, '').slice(0, 12)
 
 /**
- * The state a run executed in, as label/value pairs, shared by summary.md and `es show`. The
+ * The state a run executed in, as label/value pairs, shared by summary.md and `reeval show`. The
  * commit is where the run executed; the commit that adds its history file comes later.
  */
 export function stateRows(run: RunRecord): Array<[string, string]> {
@@ -138,7 +138,7 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
       .map(([name, v]) => `${name} ${v}`)
       .join(' · '),
   ])
-  rows.push(['ES', `${env.es} · node ${env.node} · ${env.os}/${env.arch}`])
+  rows.push(['reeval', `${env.es} · node ${env.node} · ${env.os}/${env.arch}`])
   rows.push([
     'Runner',
     run.runner.kind === 'ci'
@@ -150,7 +150,7 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
 
 export function renderSummary(run: RunRecord): string {
   const lines = [
-    `# ES run ${run.runId}`,
+    `# reeval run ${run.runId}`,
     '',
     `${summaryCounts(run.summary)}${run.status === 'complete' ? '' : ` · **${run.status === 'budget' ? 'budget reached' : run.status}**`} · started ${run.startedAt} (${formatDuration(run.durationMs)})`,
     '',

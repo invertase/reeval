@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Must fail: Cursor's directory isn't where the fake agent's workspace skills go.

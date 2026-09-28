@@ -1,4 +1,4 @@
-// Where analyses live. The cache, `.es/analysis/<key>.json`, is gitignored and always written.
+// Where analyses live. The cache, `.reeval/analysis/<key>.json`, is gitignored and always written.
 // A saved analysis is two new files in the run's history folder, `<run>/analysis/<stamp>_<author>_
 // <hash8>.{json,md}`, written create-only: the record is never touched, so two teammates who save
 // never conflict, and the static studio build picks them up with the run's other files.
@@ -10,13 +10,13 @@ import { countSecrets } from '../redact.ts'
 import type { AnalysisDoc, AnalysisEntry } from '../view/analysis.ts'
 import { NewerSchemaError, readableAnalysis } from '../view/record.ts'
 
-export const analysisCacheDir = (root: string) => join(root, '.es', 'analysis')
+export const analysisCacheDir = (root: string) => join(root, '.reeval', 'analysis')
 export const savedAnalysisDir = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), 'analysis')
 
 const warned = new Set<string>()
 
-/** An analysis file as this ES reads it; null if it isn't one, or (with a warning) is newer. */
+/** An analysis file as this reeval reads it; null if it isn't one, or (with a warning) is newer. */
 const parse = (text: string, file: string): AnalysisDoc | null => {
   try {
     const doc = JSON.parse(text) as AnalysisDoc
@@ -69,7 +69,7 @@ export async function saveAnalysis(
   const json = `${JSON.stringify(doc, null, 2)}\n`
   if (countSecrets(json) > 0 || countSecrets(markdown) > 0) {
     throw new HistoryError(
-      'Refusing to save the analysis: it looks like it contains a secret. Check it with es analyze --json.',
+      'Refusing to save the analysis: it looks like it contains a secret. Check it with reeval analyze --json.',
     )
   }
   const dir = savedAnalysisDir(historyDir, doc.anchor)
@@ -120,7 +120,7 @@ export async function listAnalyses(
       const file = join(cache, name)
       const doc = parse(await readFile(file, 'utf8').catch(() => ''), file)
       if (doc?.anchor === runId)
-        entries.push({ file: `.es/analysis/${name}`, source: 'cached', doc })
+        entries.push({ file: `.reeval/analysis/${name}`, source: 'cached', doc })
     }
   }
   return entries

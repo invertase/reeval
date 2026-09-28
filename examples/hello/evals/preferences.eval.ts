@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 
 // Ports of the Lightsage recommendation evals. Each judge question is unchanged.
 

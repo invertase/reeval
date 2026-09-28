@@ -76,12 +76,12 @@ export const defineConfig = <T extends ConfigInput>(config: T): T => config
 
 export { parseDuration }
 
-/** The file names `es` looks for in each directory, first match first, as Vitest orders its own. */
+/** The file names `reeval` looks for in each directory, first match first, as Vitest orders its own. */
 export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map(
-  (ext) => `es.config.${ext}`,
+  (ext) => `reeval.config.${ext}`,
 )
 
-const DEFAULT_CONFIG_FILE = 'es.config.ts'
+const DEFAULT_CONFIG_FILE = 'reeval.config.ts'
 
 /**
  * The nearest config file in `from` or a directory above it, up to the filesystem root, the way
@@ -151,7 +151,7 @@ export async function loadConfig(
 
 const GLOB = /[*?[\]{}!]/
 
-/** The directory every include pattern starts in: `evals/**\/*.es.ts` → `evals`. */
+/** The directory every include pattern starts in: `evals/**\/*.eval.ts` → `evals`. */
 export function evalRoot(include: string[]): string {
   const dirs = include.map((pattern) => {
     const parts = pattern.split('/')
@@ -187,7 +187,7 @@ export function checkBudget(budget: unknown, where: string): Budget {
   }
   if ('usd' in budget || 'tokens' in budget) {
     throw new UsageError(
-      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported yet: ES records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.`,
+      `${where}.${'usd' in budget ? 'usd' : 'tokens'} isn't supported yet: reeval records the tokens harnesses report, but prices none and enforces no token budget. Cap the run with attempts or duration.`,
     )
   }
   unknownKey(budget, ['attempts', 'duration'], where)
@@ -253,7 +253,7 @@ function checkProfile(name: string, profile: unknown): Profile {
   return p
 }
 
-/** `--profile`, then `ES_PROFILE`, then `defaultProfile.ci` in CI (or `.local`), then none. */
+/** `--profile`, then `REEVAL_PROFILE`, then `defaultProfile.ci` in CI (or `.local`), then none. */
 export function selectProfile(
   config: ResolvedConfig,
   flag: string | undefined,
@@ -261,7 +261,7 @@ export function selectProfile(
 ): ResolvedProfile | null {
   const pick = (): [string, string] | null => {
     if (flag) return [flag, '--profile']
-    if (env.ES_PROFILE) return [env.ES_PROFILE, 'ES_PROFILE']
+    if (env.REEVAL_PROFILE) return [env.REEVAL_PROFILE, 'REEVAL_PROFILE']
     const ci = inCI(env)
     if (ci && config.defaultProfile.ci) return [config.defaultProfile.ci, 'auto: CI is set']
     if (!ci && config.defaultProfile.local) return [config.defaultProfile.local, 'default']
@@ -300,7 +300,7 @@ export function resolveConfig(
     )
   }
   checkOptions(user, file, CONFIG_KEYS)
-  const include = user.include ?? ['evals/**/*.es.ts']
+  const include = user.include ?? ['evals/**/*.eval.ts']
   if (!Array.isArray(include) || include.some((p) => typeof p !== 'string')) {
     throw new UsageError('config.include must be an array of glob strings')
   }
@@ -411,7 +411,7 @@ function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis
   return { ...analysis, maxInputTokens, maxOutputTokens }
 }
 
-/** Runs whose local debug data `.es/debug` keeps, and the trace buffer per attempt. */
+/** Runs whose local debug data `.reeval/debug` keeps, and the trace buffer per attempt. */
 export const DEBUG_DEFAULTS = { keep: 20, traceBufferMb: 8 } as const
 
 function checkDebug(debug: EsConfig['debug']): ResolvedConfig['debug'] {
@@ -473,7 +473,7 @@ function checkConcurrency(value: unknown, where: string): number {
   return n
 }
 
-/** `--concurrency`, then `ES_CONCURRENCY`, then `concurrency` in the config, then the default. */
+/** `--concurrency`, then `REEVAL_CONCURRENCY`, then `concurrency` in the config, then the default. */
 export async function resolveConcurrency(
   config: ResolvedConfig,
   flag: string | undefined,
@@ -481,7 +481,7 @@ export async function resolveConcurrency(
   env = process.env,
 ): Promise<number> {
   if (flag !== undefined) return checkConcurrency(flag, '--concurrency')
-  if (env.ES_CONCURRENCY) return checkConcurrency(env.ES_CONCURRENCY, 'ES_CONCURRENCY')
+  if (env.REEVAL_CONCURRENCY) return checkConcurrency(env.REEVAL_CONCURRENCY, 'REEVAL_CONCURRENCY')
   return config.concurrency ?? defaultConcurrency(await capacity())
 }
 

@@ -1,4 +1,4 @@
-// `es doctor`: every check passing and failing on a machine the tests describe (DoctorDeps), then
+// `reeval doctor`: every check passing and failing on a machine the tests describe (DoctorDeps), then
 // the command end to end. No key's value appears in any output, text or JSON.
 import assert from 'node:assert/strict'
 import { writeFile } from 'node:fs/promises'
@@ -35,24 +35,24 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   ...over,
 })
 
-/** A resolved config from `es.config.ts` source that imports from `evalsuite`. */
+/** A resolved config from `reeval.config.ts` source that imports from `reeval`. */
 async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
-    'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { claudeCode, codex, cursor, fakeHarness, pi } from 'evalsuite/harness'
-import { fakeJudge } from 'evalsuite/judge'
-import { docker, fakeSandbox } from 'evalsuite/sandbox'
+    'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
+import { fakeJudge } from 'reeval/judge'
+import { docker, fakeSandbox } from 'reeval/sandbox'
 export default defineConfig(${body})
 `,
   })
-  return loadConfig(join(p.dir, 'es.config.ts'))
+  return loadConfig(join(p.dir, 'reeval.config.ts'))
 }
 
 const statuses = (checks: Check[]) => checks.map((c) => c.status)
 const noSecret = (checks: Check[]) =>
   assert.doesNotMatch(JSON.stringify(checks), new RegExp(SECRET.slice(8)))
 
-describe('es doctor checks', () => {
+describe('reeval doctor checks', () => {
   test('a run stops on Docker it cannot use, naming the fix for the platform', () => {
     assert.equal(dockerProblem('running'), null)
     assert.equal(
@@ -65,7 +65,7 @@ describe('es doctor checks', () => {
     )
     assert.match(
       dockerProblem('windows-containers', 'win32') ?? '',
-      /running Windows containers, but ES's sandboxes are Linux containers\. Switch Docker Desktop to Linux containers/,
+      /running Windows containers, but reeval's sandboxes are Linux containers\. Switch Docker Desktop to Linux containers/,
     )
   })
 
@@ -74,7 +74,7 @@ describe('es doctor checks', () => {
     assert.equal(checkNode('24.1.0').status, 'ok')
     const old = checkNode('22.12.9')
     assert.equal(old.status, 'fail')
-    assert.match(old.summary, /22\.12\.9, but ES needs >=22\.13/)
+    assert.match(old.summary, /22\.12\.9, but reeval needs >=22\.13/)
     assert.equal(checkNode('20.19.0').status, 'fail')
   })
 
@@ -112,7 +112,7 @@ describe('es doctor checks', () => {
     assert.equal(winContainers.checks[0]?.status, 'fail')
     assert.match(
       winContainers.checks[0]?.summary ?? '',
-      /is running Windows containers, but ES's sandboxes are Linux containers/,
+      /is running Windows containers, but reeval's sandboxes are Linux containers/,
     )
     assert.match(winContainers.checks[0]?.fix ?? '', /Switch to Linux containers/)
     // A profile's Docker sandbox counts too.
@@ -139,7 +139,7 @@ describe('es doctor checks', () => {
       deps({ imageExists: async (ref) => !ref.includes('claude-code') }),
     )
     assert.deepEqual(statuses(missing.checks), ['ok', 'fail'])
-    assert.equal(missing.checks[1]?.fix, 'es image build')
+    assert.equal(missing.checks[1]?.fix, 'reeval image build')
     assert.equal(missing.missing.length, 1)
     const [current] = present.checks[0]?.summary.split(' ') ?? []
     const stale = await checkImages(
@@ -147,14 +147,14 @@ describe('es doctor checks', () => {
       deps({
         imageTags: async () => [
           current as string,
-          'evalsuite-sandbox:cursor-0.0.1',
+          'reeval-sandbox:cursor-0.0.1',
           `${current}-python-3-12-slim-1d044754`,
         ],
       }),
     )
     const warn = stale.checks.find((c) => c.status === 'warn')
-    assert.match(warn?.summary ?? '', /^evalsuite-sandbox:cursor-0\.0\.1: built by another ES/)
-    assert.equal(warn?.fix, 'docker image rm evalsuite-sandbox:cursor-0.0.1')
+    assert.match(warn?.summary ?? '', /^reeval-sandbox:cursor-0\.0\.1: built by another reeval/)
+    assert.equal(warn?.fix, 'docker image rm reeval-sandbox:cursor-0.0.1')
 
     const own = await configOf(
       'own-image',
@@ -321,20 +321,20 @@ describe('es doctor checks', () => {
     assert.equal(es.status, 'warn')
     const noGit = deps({ gitIgnored: async () => null })
     assert.equal((await checkGitignore(root, noGit)).status, 'fail')
-    await writeFile(join(root, '.gitignore'), '.es\n.env*\n')
+    await writeFile(join(root, '.gitignore'), '.reeval\n.env*\n')
     assert.equal((await checkGitignore(root, noGit)).status, 'ok')
   })
 })
 
-describe('es doctor', () => {
+describe('reeval doctor', () => {
   test('a healthy fake project exits 0, as text and JSON', async () => {
     const p = await project('doctor-healthy', {
-      'es.config.ts': fakeConfig(),
-      '.gitignore': '.es/\n.env*\n',
+      'reeval.config.ts': fakeConfig(),
+      '.gitignore': '.reeval/\n.env*\n',
     })
     const r = await runCli(p.dir, ['doctor'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^es doctor · es\.config\.ts\n✓ node/)
+    assert.match(r.stdout, /^reeval doctor · reeval\.config\.ts\n✓ node/)
     assert.match(r.stdout, /No problems/)
     const json = await runCli(p.dir, ['doctor', '--json'])
     assert.equal(json.code, 0)
@@ -348,8 +348,8 @@ describe('es doctor', () => {
 
   test('problems exit 1 with their fixes, and never print a key', async () => {
     const p = await project('doctor-problems', {
-      'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { cursor } from 'evalsuite/harness'
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
 export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), judge: { model: 'google/gemini-3.8-flash' } })
 `,
       '.env.local': `GOOGLE_GENERATIVE_AI_API_KEY=${SECRET}\n`,
@@ -361,27 +361,33 @@ export default defineConfig({ harness: cursor({ model: 'composer-2.5' }), judge:
       assert.ok(!(r.stdout + r.stderr).includes(SECRET.slice(8)), 'no key value in the output')
       assert.match(r.stdout, /CURSOR_API_KEY for cursor:composer-2\.5: set/)
       assert.match(r.stdout, /GOOGLE_GENERATIVE_AI_API_KEY for google\/gemini-3\.8-flash: set/)
-      assert.match(r.stdout, /\.env\* and \.es\/ aren't ignored/)
+      assert.match(r.stdout, /\.env\* and \.reeval\/ aren't ignored/)
     }
     const text = await runCli(p.dir, ['doctor'], { env })
-    assert.match(text.stdout, /fix: add \.env\* and \.es\/ to \.gitignore \(es init adds them\)/)
-    assert.match(text.stdout, /problems?, \d+ warnings?\. Fix them and run es doctor again\./)
+    assert.match(
+      text.stdout,
+      /fix: add \.env\* and \.reeval\/ to \.gitignore \(reeval init adds them\)/,
+    )
+    assert.match(text.stdout, /problems?, \d+ warnings?\. Fix them and run reeval doctor again\./)
   })
 
   test('no config, a broken config and a bad flag', async () => {
     const empty = await project('doctor-empty', {})
     const none = await runCli(empty.dir, ['doctor'])
     assert.equal(none.code, 1)
-    assert.match(none.stdout, /✗ config +no es\.config\.ts .* here or above\n +fix: es init/)
+    assert.match(
+      none.stdout,
+      /✗ config +no reeval\.config\.ts .* here or above\n +fix: reeval init/,
+    )
     const broken = await project('doctor-broken', {
-      'es.config.ts':
-        "import { defineConfig } from 'evalsuite'\nexport default defineConfig({ harnesses: [] })\n",
+      'reeval.config.ts':
+        "import { defineConfig } from 'reeval'\nexport default defineConfig({ harnesses: [] })\n",
     })
     const bad = await runCli(broken.dir, ['doctor'])
     assert.equal(bad.code, 1)
-    assert.match(bad.stdout, /✗ config +Unknown option "harnesses" in es\.config\.ts/)
+    assert.match(bad.stdout, /✗ config +Unknown option "harnesses" in reeval\.config\.ts/)
     const flag = await runCli(empty.dir, ['doctor', '--runs', '2'])
     assert.equal(flag.code, 2)
-    assert.match(flag.stderr, /--runs isn't an option of es doctor/)
+    assert.match(flag.stderr, /--runs isn't an option of reeval doctor/)
   })
 })

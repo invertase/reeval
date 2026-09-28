@@ -1,4 +1,4 @@
-// `es query` over `.es/history.db` (plan-of-attack wave 2b): a projection of the run records, so
+// `reeval query` over `.reeval/history.db` (plan-of-attack wave 2b): a projection of the run records, so
 // every check compares a query with what the records say.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -24,12 +24,12 @@ const one = async (dir: string, sql: string) => (await query(dir, sql))[0] ?? {}
 const skill = (name: string) =>
   `---\nname: ${name}\ndescription: The ${name} skill. Use when testing.\n---\nBody.\n`
 
-describe('es query', () => {
+describe('reeval query', () => {
   test('the projection matches the record, and the views answer from it', async () => {
     const p = await project('query-basics', {
-      'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/house-greeting/SKILL.md': skill('house-greeting'),
-      'evals/s.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }))
 evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
   await t.send('go')
@@ -39,7 +39,7 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const { run } = readRun(p.dir)
-    assert.equal(existsSync(join(p.dir, '.es/history.db')), false, 'es run leaves it alone')
+    assert.equal(existsSync(join(p.dir, '.reeval/history.db')), false, 'reeval run leaves it alone')
 
     const counts = await one(
       p.dir,
@@ -47,7 +47,7 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
         (SELECT COUNT(*) FROM cells) AS cells, (SELECT COUNT(*) FROM attempts) AS attempts`,
     )
     assert.deepEqual(counts, { runs: 1, evals: 1, cells: 2, attempts: 6 })
-    assert.ok(existsSync(join(p.dir, '.es/history.db')), 'es query builds it in .es/')
+    assert.ok(existsSync(join(p.dir, '.reeval/history.db')), 'reeval query builds it in .reeval/')
 
     const variant = run.evals[0]?.cells.find((c) => c.role === 'variant')
     const [lift] = await query(p.dir, 'lift')
@@ -64,17 +64,17 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
     const trend = await query(p.dir, 'eval_trend')
     assert.deepEqual(
       trend.map((t) => [t.eval_key, t.outcome, t.recorded]),
-      [['evals/s.es.ts › greets', 'pass', 0]],
+      [['evals/s.eval.ts › greets', 'pass', 0]],
     )
 
     const text = await runCli(p.dir, ['query', 'SELECT key, outcome FROM evals'])
     assert.equal(text.code, 0, text.stderr)
-    assert.equal(text.stdout, 'key                     outcome\nevals/s.es.ts › greets  pass\n')
+    assert.equal(text.stdout, 'key                     outcome\nevals/s.eval.ts › greets  pass\n')
     assert.match(text.stderr, /history\.db: 1 runs/)
   })
 
   test('with no statement it lists the views, tables and examples; --schema lists columns', async () => {
-    const p = await project('query-schema', { 'es.config.ts': fakeConfig() })
+    const p = await project('query-schema', { 'reeval.config.ts': fakeConfig() })
     const r = await runCli(p.dir, ['query'])
     assert.equal(r.code, 0, r.stderr)
     for (const view of [
@@ -87,7 +87,7 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
     ]) {
       assert.match(r.stdout, new RegExp(`^  ${view}\\(`, 'm'))
     }
-    assert.match(r.stdout, /^Examples:\n {2}es query lift$/m)
+    assert.match(r.stdout, /^Examples:\n {2}reeval query lift$/m)
     const schema = await runCli(p.dir, ['query', '--schema', '--json'])
     const objects = JSON.parse(schema.stdout) as Array<{ name: string; columns: string[] }>
     assert.ok(objects.find((o) => o.name === 'cells')?.columns.includes('environment_digest'))
@@ -95,8 +95,8 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
 
   test('it syncs incrementally; a recorded run wins over its scratch copy; deleted runs drop', async () => {
     const p = await project('query-sync', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('x') })\n`,
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('x') })\n`,
     })
     const git = (...args: string[]) =>
       execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
@@ -104,7 +104,7 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
         env: baseEnv,
       })
     git('init', '-q', '-b', 'main')
-    await writeFile(join(p.dir, '.gitignore'), '.es/\nnode_modules/\nsandboxes/\n')
+    await writeFile(join(p.dir, '.gitignore'), '.reeval/\nnode_modules/\nsandboxes/\n')
     git('add', '-A')
     git('commit', '-q', '-m', 'init')
     assert.equal((await runCli(p.dir)).code, 0)
@@ -122,19 +122,19 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
       [1, 0],
       'the recorded copy replaces the scratch one',
     )
-    rmSync(join(p.dir, '.es/runs', `${readRun(p.dir).run.runId}.json`))
+    rmSync(join(p.dir, '.reeval/runs', `${readRun(p.dir).run.runId}.json`))
     assert.equal((await one(p.dir, 'SELECT COUNT(*) AS n FROM runs')).n, 1)
     assert.equal((await one(p.dir, 'SELECT COUNT(*) AS n FROM attempts')).n, 1)
   })
 
   test('a database from another version, or --rebuild, is rebuilt from the records', async () => {
     const p = await project('query-rebuild', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('x') })\n`,
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     await query(p.dir, 'SELECT 1')
-    const db = new DatabaseSync(join(p.dir, '.es/history.db'))
+    const db = new DatabaseSync(join(p.dir, '.reeval/history.db'))
     db.exec("UPDATE meta SET value = '0' WHERE key = 'version'; DELETE FROM attempts")
     db.close()
     const r = await runCli(p.dir, ['query', 'SELECT COUNT(*) AS n FROM attempts', '--json'])
@@ -146,17 +146,17 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
 
   test('it is read-only and runs one statement; mistakes exit 2 with a fix', async () => {
     const p = await project('query-readonly', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('x') })\n`,
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const cases: Array<[string, RegExp]> = [
       [
         'DELETE FROM runs',
-        /es query is read-only: \.es\/history\.db is a projection of the run records/,
+        /reeval query is read-only: \.reeval\/history\.db is a projection of the run records/,
       ],
-      ['PRAGMA query_only = OFF; DELETE FROM runs', /es query runs one statement at a time/],
-      ['SELEC 1', /es query: near "SELEC": syntax error/],
+      ['PRAGMA query_only = OFF; DELETE FROM runs', /reeval query runs one statement at a time/],
+      ['SELEC 1', /reeval query: near "SELEC": syntax error/],
       [
         'nope',
         /no view or table named "nope"\. Views: drift, effort, eval_trend, factor_effects, failing_attempts/,
@@ -172,10 +172,10 @@ evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
 
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
-      'es.config.ts': fakeConfig(),
+      'reeval.config.ts': fakeConfig(),
       'skills/alpha/SKILL.md': skill('alpha'),
       'skills/beta/SKILL.md': skill('beta'),
-      'evals/j.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+      'evals/j.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const a = defineEnvironment('tools', ({ skill }) => ({ skills: [skill.local('../skills/alpha')] }))
 const b = defineEnvironment('tools', ({ skill }) => ({ skills: [skill.local('../skills/beta')] }))
 evaluate('with alpha', { environment: a }, async (t) => { await t.send('x'); throw new Error('no') })
@@ -204,12 +204,12 @@ evaluate('with beta', { environment: b }, async (t) => { await t.send('x'); thro
 
   test('drift names the changed part; flaky cells and verdict flips are found', async () => {
     const p = await project('query-drift', {
-      'es.config.ts': fakeConfig({
-        judge: '{ model: fakeJudge({ score: Number(process.env.ES_TEST_SCORE ?? 0.9) }) }',
+      'reeval.config.ts': fakeConfig({
+        judge: '{ model: fakeJudge({ score: Number(process.env.REEVAL_TEST_SCORE ?? 0.9) }) }',
       }),
       'evals/helpers.ts': "export const prompt = 'go'\n",
       'evals/unrelated.ts': 'export const x = 1\n',
-      'evals/d.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
 evaluate('flaky', { runs: 3, gate: { passRate: 0.5 } }, async (t) => {
   await t.send(prompt)
@@ -227,17 +227,17 @@ evaluate('judged', async (t) => {
     assert.deepEqual(await query(p.dir, 'drift'), [], 'twin: an unrelated file is no drift')
 
     await writeFile(join(p.dir, 'evals/helpers.ts'), "export const prompt = 'go!'\n")
-    assert.equal((await runCli(p.dir, ['run'], { env: { ES_TEST_SCORE: '0.1' } })).code, 1)
+    assert.equal((await runCli(p.dir, ['run'], { env: { REEVAL_TEST_SCORE: '0.1' } })).code, 1)
     const drift = await query(p.dir, 'SELECT eval_key, changed FROM drift ORDER BY eval_key')
     assert.deepEqual(drift, [
-      { eval_key: 'evals/d.es.ts › flaky', changed: 'sources' },
-      { eval_key: 'evals/d.es.ts › judged', changed: 'sources' },
+      { eval_key: 'evals/d.eval.ts › flaky', changed: 'sources' },
+      { eval_key: 'evals/d.eval.ts › judged', changed: 'sources' },
     ])
 
     const [flaky] = await query(p.dir, 'flaky_cells')
     assert.deepEqual(
       [flaky?.eval_key, flaky?.cell_key, flaky?.pass, flaky?.counted],
-      ['evals/d.es.ts › flaky', 'fake/-/fake', 4, 6],
+      ['evals/d.eval.ts › flaky', 'fake/-/fake', 4, 6],
       'grouped by fingerprint: two runs at the first, one at the second',
     )
     const flips = await query(
@@ -248,7 +248,7 @@ evaluate('judged', async (t) => {
   })
 })
 
-describe('es query plumbing', () => {
+describe('reeval query plumbing', () => {
   test('statements are counted outside quotes and comments', () => {
     const cases: Array<[string, number]> = [
       ['SELECT 1', 1],

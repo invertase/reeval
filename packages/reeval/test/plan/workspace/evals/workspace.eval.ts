@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { moving, next, pinned } from './env.ts'
 
 evaluate('a pinned subdirectory', { environment: pinned }, async () => {})

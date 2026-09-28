@@ -1,4 +1,4 @@
-// jiti as ES uses it, for the config and eval files.
+// jiti as reeval uses it, for the config and eval files.
 
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -11,7 +11,7 @@ let babel: Transform | undefined
 
 /**
  * jiti's own Babel transform. jiti requires it lazily from beside its code, which a compiled es
- * doesn't have, so ES requires the same file: from the jiti package on disk, or, compiled, from
+ * doesn't have, so reeval requires the same file: from the jiti package on disk, or, compiled, from
  * the copy embedded in it (`vendor/jiti/babel.cjs`), copied out to disk.
  */
 export const jitiTransform: Transform = (options) => {
@@ -25,7 +25,7 @@ export const jitiTransform: Transform = (options) => {
 }
 
 /**
- * A jiti that imports from `id`. Compiled, a file's imports of ES itself get this es's own
+ * A jiti that imports from `id`. Compiled, a file's imports of reeval itself get this es's own
  * modules: a copy on disk would register evals, and hold state, the executable can't see.
  */
 export async function esJiti(id: string, options: JitiOptions = {}): Promise<Jiti> {

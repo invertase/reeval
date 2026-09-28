@@ -62,7 +62,7 @@ const request = (over: Partial<OutboundRequest> = {}): OutboundRequest => ({
 test("dockerState: running, down, or Windows containers, from the CLI's own answer", async () => {
   // A docker CLI that answers `info` with $FAKE_DOCKER_INFO, or fails without it; a Node script
   // behind an sh and a .cmd wrapper, so it runs on every OS.
-  const bin = mkdtempSync(join(tmpdir(), 'es-docker-state-'))
+  const bin = mkdtempSync(join(tmpdir(), 'reeval-docker-state-'))
   writeFileSync(
     join(bin, 'docker.js'),
     'const out = process.env.FAKE_DOCKER_INFO; if (out === undefined) process.exit(1); console.log(out)\n',
@@ -90,9 +90,9 @@ test("dockerState: running, down, or Windows containers, from the CLI's own answ
 
 test('imageInfo without a docker CLI at all is no image, not a spawn error', async () => {
   const path = process.env.PATH
-  process.env.PATH = mkdtempSync(join(tmpdir(), 'es-no-docker-'))
+  process.env.PATH = mkdtempSync(join(tmpdir(), 'reeval-no-docker-'))
   try {
-    assert.equal(await imageInfo('evalsuite-sandbox:cursor-0.1.0'), null)
+    assert.equal(await imageInfo('reeval-sandbox:cursor-0.1.0'), null)
   } finally {
     process.env.PATH = path
   }
@@ -195,11 +195,11 @@ describe('request transformations', () => {
         host: 'api.example.com',
         path: { startsWith: '/v1/' },
         queryString: [{ key: { exact: 'key' }, value: { regex: '^ph_' } }],
-        headers: [{ key: { startsWith: 'x-ES' } }],
+        headers: [{ key: { startsWith: 'x-reeval' } }],
       },
       transform: { headers: { 'X-Api-Key': 'real' } },
     }
-    const base = { host: 'api.example.com', method: 'GET', headers: { 'x-es-client': '1' } }
+    const base = { host: 'api.example.com', method: 'GET', headers: { 'x-reeval-client': '1' } }
     assert.ok(matches(rule, { ...base, path: '/v1/models?key=ph_1' }))
     assert.equal(matches(rule, { ...base, path: '/v2/models?key=ph_1' }), false)
     assert.equal(matches(rule, { ...base, path: '/v1/models?key=real' }), false)
@@ -555,10 +555,10 @@ describe('stdio mux', () => {
 test('only registry-qualified or namespaced digests count as pushed', () => {
   const d = `@sha256:${'a'.repeat(64)}`
   // What the containerd image store reports for images built on this machine.
-  assert.equal(isRegistryDigest(`evalsuite-sandbox${d}`), false)
-  assert.equal(isRegistryDigest(`evalsuite-env${d}`), false)
+  assert.equal(isRegistryDigest(`reeval-sandbox${d}`), false)
+  assert.equal(isRegistryDigest(`reeval-env${d}`), false)
   assert.equal(isRegistryDigest(`busybox${d}`), false)
-  assert.equal(isRegistryDigest(`invertase/evalsuite-sandbox${d}`), true)
+  assert.equal(isRegistryDigest(`invertase/reeval-sandbox${d}`), true)
   assert.equal(isRegistryDigest(`ghcr.io/invertase/es${d}`), true)
   assert.equal(isRegistryDigest(`localhost:5000/es${d}`), true)
 })
@@ -581,7 +581,7 @@ describe('package boundary', () => {
       }
     }
     const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-    assert.equal(pkg.dependencies.evalsuite, undefined)
+    assert.equal(pkg.dependencies.reeval, undefined)
   })
 
   test('ships the Docker build context and pins every harness adapter', () => {
@@ -589,17 +589,17 @@ describe('package boundary', () => {
     assert.ok(pkg.files.includes('docker'))
     assert.match(readFileSync(join(root, 'docker/Dockerfile'), 'utf8'), /^FROM node:/m)
     for (const { name, version } of Object.values(HARNESS_PACKAGES)) {
-      const expected = name.startsWith('@evalsuite/') ? `workspace:${version}` : version
+      const expected = name.startsWith('@reeval/') ? `workspace:${version}` : version
       assert.equal(pkg.dependencies[name], expected, name)
     }
   })
 
   test('each harness has its own image, tagged and labelled with its adapter version', () => {
     const { cursor, 'claude-code': claude } = HARNESS_PACKAGES
-    assert.equal(imageFor('cursor'), `evalsuite-sandbox:cursor-${cursor.version}`)
+    assert.equal(imageFor('cursor'), `reeval-sandbox:cursor-${cursor.version}`)
     assert.equal(
       imageFor('claude-code'),
-      `evalsuite-sandbox:claude-code-${claude.version}-patch.${claude.patch}`,
+      `reeval-sandbox:claude-code-${claude.version}-patch.${claude.patch}`,
     )
     assert.equal(DEFAULT_IMAGE, imageFor('cursor'))
     assert.equal(
@@ -608,7 +608,7 @@ describe('package boundary', () => {
     )
     assert.equal(
       imageFor('antigravity'),
-      `evalsuite-sandbox:antigravity-${HARNESS_PACKAGES.antigravity.version}`,
+      `reeval-sandbox:antigravity-${HARNESS_PACKAGES.antigravity.version}`,
     )
   })
 
@@ -638,7 +638,7 @@ describe('package boundary', () => {
 })
 
 describe('image recipes', () => {
-  const tmp = () => mkdtempSync(join(tmpdir(), 'es-recipe-'))
+  const tmp = () => mkdtempSync(join(tmpdir(), 'reeval-recipe-'))
 
   test('.dockerignore rules match as Docker reads them', () => {
     const ignored = dockerignoreMatcher(
@@ -672,7 +672,7 @@ describe('image recipes', () => {
     writeFileSync(join(dir, '.dockerignore'), 'scratch\nDockerfile\n')
     mkdirSync(join(dir, 'scratch'))
     const first = dockerfileTag(file, 'cursor')
-    assert.match(first.tag, /^evalsuite-dockerfile:es-recipe-[a-z0-9]+-[0-9a-f]{16}$/)
+    assert.match(first.tag, /^reeval-dockerfile:reeval-recipe-[a-z0-9]+-[0-9a-f]{16}$/)
     assert.deepEqual(contextFiles(dir, file), ['.dockerignore', 'Dockerfile', 'tool.sh'])
     writeFileSync(join(dir, 'scratch', 'notes.txt'), 'ignored')
     assert.equal(
@@ -691,18 +691,18 @@ describe('image recipes', () => {
     )
     const named = join(dir, 'python.Dockerfile')
     writeFileSync(named, 'FROM python:3.12-slim\n')
-    assert.match(dockerfileTag(named, 'cursor').tag, /^evalsuite-dockerfile:python-dockerfile-/)
+    assert.match(dockerfileTag(named, 'cursor').tag, /^reeval-dockerfile:python-dockerfile-/)
     assert.equal(
       dockerfileTag(file, 'claude-code').tag,
       dockerfileTag(file, 'cursor').tag,
-      'a Dockerfile without ES_BASE builds the same for every harness (each gets its CLI baked on)',
+      'a Dockerfile without REEVAL_BASE builds the same for every harness (each gets its CLI baked on)',
     )
     const onEs = join(dir, 'es.Dockerfile')
-    writeFileSync(onEs, 'ARG ES_BASE\nFROM $ES_BASE\n')
+    writeFileSync(onEs, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
     assert.notEqual(
       dockerfileTag(onEs, 'claude-code', 'sha256:a').tag,
       dockerfileTag(onEs, 'cursor', 'sha256:a').tag,
-      "ES_BASE is the harness's image, so each harness builds its own",
+      "REEVAL_BASE is the harness's image, so each harness builds its own",
     )
   })
 
@@ -719,7 +719,7 @@ describe('image recipes', () => {
     const r = spawnSync('bash', ['-c', script], { encoding: 'utf8' })
     assert.equal(r.status, 7)
     assert.equal(readFileSync(out, 'utf8'), "/\nit's two\nline\n")
-    assert.match(r.stderr, /es: install 3\/4 exited 7: exit 7/)
+    assert.match(r.stderr, /reeval: install 3\/4 exited 7: exit 7/)
     assert.match(
       installScript([{ run: 'sleep 1', timeoutMs: 90_000 }]),
       /timeout --kill-after=10 90 bash -c 'sleep 1'/,
@@ -729,7 +729,7 @@ describe('image recipes', () => {
   test('install layers are keyed on the base image id and the exact list', () => {
     const steps = [{ run: 'apt-get install -y jq' }]
     const tag = installLayerTag({ id: 'sha256:a' }, steps)
-    assert.match(tag, /^evalsuite-install:[0-9a-f]{16}$/)
+    assert.match(tag, /^reeval-install:[0-9a-f]{16}$/)
     assert.notEqual(installLayerTag({ id: 'sha256:b' }, steps), tag)
     assert.notEqual(installLayerTag({ id: 'sha256:a' }, [...steps, { run: 'true' }]), tag)
     assert.equal(installLayerTag({ id: 'sha256:a' }, [{ run: 'apt-get install -y jq' }]), tag)

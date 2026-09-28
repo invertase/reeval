@@ -1,4 +1,4 @@
-// The running `es run`'s progress file, `.es/staging/<runId>/live.json`, for `es studio`. It's
+// The running `reeval run`'s progress file, `.reeval/staging/<runId>/live.json`, for `reeval studio`. It's
 // replaced whole (a temp file, then a rename), so a reader sees the old file or the new one.
 import { mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
@@ -47,7 +47,7 @@ function finished(result: EvalResult): LiveStatus {
 }
 
 /**
- * Renames `from` over `to`. Windows refuses while a reader (`es studio`) has `to` open, for a
+ * Renames `from` over `to`. Windows refuses while a reader (`reeval studio`) has `to` open, for a
  * moment: try again briefly rather than drop the update.
  */
 export function replace(from: string, to: string, rename = renameSync): void {

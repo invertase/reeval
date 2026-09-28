@@ -8,7 +8,7 @@ export const DEFAULT_THRESHOLD = 0.8
 
 const GATEWAY_KEYS = ['AI_GATEWAY_API_KEY', 'VERCEL_OIDC_TOKEN']
 
-/** Providers ES calls directly, through their own AI SDK package, when their key is set. */
+/** Providers reeval calls directly, through their own AI SDK package, when their key is set. */
 export const DIRECT_PROVIDERS: Record<string, { key: string; pkg: string }> = {
   google: { key: 'GOOGLE_GENERATIVE_AI_API_KEY', pkg: '@ai-sdk/google' },
   'typesafe-ai': { key: 'TYPESAFE_AI_API_KEY', pkg: '@ai-sdk/typesafe-ai' },

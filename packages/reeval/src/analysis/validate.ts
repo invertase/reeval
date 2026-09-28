@@ -1,6 +1,6 @@
 // Checks a model's analysis against its digest: citations must name something in it, quotes must be
 // in the cited evidence, numbers should be in the cited facts, and verify commands must parse as
-// ES's own CLI and, for `es run`, select an eval of the run. What fails is dropped (or, for numbers, flagged), and counted in `validation`.
+// reeval's own CLI and, for `reeval run`, select an eval of the run. What fails is dropped (or, for numbers, flagged), and counted in `validation`.
 import { checkCommand, type SelectableEval } from '../cli-spec.ts'
 import type {
   AnalysisAction,

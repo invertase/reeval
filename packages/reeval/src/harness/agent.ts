@@ -1,6 +1,6 @@
 import type { HarnessV1, HarnessV1Session, HarnessV1StreamPart } from '@ai-sdk/harness'
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
+import { WORKSPACE_DIR } from '@reeval/sandbox-docker'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -40,7 +40,7 @@ function traceStreamPart(
   }
 }
 
-/** The AI SDK's usage as ES's, or null when the harness reported none (every field undefined). */
+/** The AI SDK's usage as reeval's, or null when the harness reported none (every field undefined). */
 export function tokenUsage(usage: {
   inputTokens?: number | undefined
   outputTokens?: number | undefined
@@ -166,7 +166,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
               const hint = authHint(catalog, e.message)
               return hint ? { ...e, message: `${hint}. ${e.message}` } : e
             }),
-            ...(process.env.ES_RAW_TRANSCRIPT ? { raw: parts } : {}),
+            ...(process.env.REEVAL_RAW_TRANSCRIPT ? { raw: parts } : {}),
           })
           try {
             // stream(), not generate(): only the stream says when each event happened.

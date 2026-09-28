@@ -26,7 +26,7 @@ test('run collects text or Buffer output, env and stdin', async () => {
 
 test('aborting kills the whole process group, grandchildren included', async () => {
   // Node on both levels, so the pid the grandchild writes is the OS's on Windows too.
-  const pidFile = join(mkdtempSync(join(tmpdir(), 'es-process-')), 'grandchild')
+  const pidFile = join(mkdtempSync(join(tmpdir(), 'reeval-process-')), 'grandchild')
   const grandchild = `require('node:fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setTimeout(() => {}, 30_000)`
   const child = `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}], { stdio: 'ignore' }); setTimeout(() => {}, 30_000)`
   const controller = new AbortController()
@@ -53,7 +53,7 @@ test('on Windows, a .exe runs as itself and a .cmd script through cmd.exe, argum
     'C:\\Program Files\\nodejs\\npm',
     'C:\\Program Files\\nodejs\\npm.cmd',
     'C:\\Program Files\\Git\\cmd\\git.exe',
-    'D:\\app\\node_modules\\.bin\\es.cmd',
+    'D:\\app\\node_modules\\.bin\\reeval.cmd',
   ])
   const exists = (path: string) => files.has(path)
   assert.deepEqual(windowsSpawn('git', ['status', '-z'], env, exists), {
@@ -76,8 +76,8 @@ test('on Windows, a .exe runs as itself and a .cmd script through cmd.exe, argum
   )
   // A node_modules/.bin shim hands its arguments to cmd.exe again, so they're escaped twice.
   assert.equal(
-    windowsSpawn('D:\\app\\node_modules\\.bin\\es', ['a&b'], env, exists).args[3],
-    '"D:\\app\\node_modules\\.bin\\es.cmd ^^^"a^^^&b^^^""',
+    windowsSpawn('D:\\app\\node_modules\\.bin\\reeval', ['a&b'], env, exists).args[3],
+    '"D:\\app\\node_modules\\.bin\\reeval.cmd ^^^"a^^^&b^^^""',
   )
   assert.equal(
     windowsSpawn('nope', [], env, exists).file,

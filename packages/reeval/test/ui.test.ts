@@ -15,8 +15,8 @@ import { pkgRoot } from './helpers.ts'
 const T0 = 1_790_000_000_000
 const s = (seconds: number) => T0 + seconds * 1000
 
-const GREET = 'evals/hello.es.ts › greet module › creates a tested greet module'
-const DEFAULT = 'evals/hello.es.ts › greet module › adds a default name in a follow-up turn'
+const GREET = 'evals/hello.eval.ts › greet module › creates a tested greet module'
+const DEFAULT = 'evals/hello.eval.ts › greet module › adds a default name in a follow-up turn'
 
 const CELL = 'cursor:composer-2.5/-/docker'
 const keyOf = (id: string) => `${id} # ${CELL}#1`
@@ -45,7 +45,7 @@ const progress = (id: string, at: number, p: Omit<Progress, 'at'>): EsEvent =>
 const greetResult: EvalResult = {
   id: GREET,
   key: keyOf(GREET),
-  file: 'evals/hello.es.ts',
+  file: 'evals/hello.eval.ts',
   group: ['greet module'],
   name: 'creates a tested greet module',
   attempt: attempt('creates a tested greet module', ['greet module']),
@@ -70,13 +70,13 @@ const assertion = [
   '- 2',
   '+ 1',
   '',
-  ' ❯ evals/hello.es.ts:31:20',
+  ' ❯ evals/hello.eval.ts:31:20',
 ].join('\n')
 
 const defaultResult: EvalResult = {
   id: DEFAULT,
   key: keyOf(DEFAULT),
-  file: 'evals/hello.es.ts',
+  file: 'evals/hello.eval.ts',
   group: ['greet module'],
   name: 'adds a default name in a follow-up turn',
   attempt: attempt('adds a default name in a follow-up turn', ['greet module']),
@@ -134,7 +134,7 @@ const interleaved: EsEvent[] = [
   {
     type: 'collected',
     at: T0,
-    file: 'evals/hello.es.ts',
+    file: 'evals/hello.eval.ts',
     evals: [
       {
         id: GREET,
@@ -217,7 +217,7 @@ const interleaved: EsEvent[] = [
     type: 'run-end',
     at: s(365),
     record,
-    summaryPath: '.es/runs/run-1/summary.md',
+    summaryPath: '.reeval/runs/run-1/summary.md',
     results: [greetResult, defaultResult],
     unhandledErrors: [],
   },
@@ -245,7 +245,8 @@ function render(events: EsEvent[], output: OutputOptions, color = false): string
     colors: colors(color),
     output,
     harness: 'cursor',
-    attemptDir: (id, _cell, n) => `.es/runs/run-1/${id.split(' › ').at(-1)?.split(' ')[0]}/${n}`,
+    attemptDir: (id, _cell, n) =>
+      `.reeval/runs/run-1/${id.split(' › ').at(-1)?.split(' ')[0]}/${n}`,
     now: () => now,
     timers: false,
   })
@@ -265,7 +266,7 @@ const lines = (...l: string[]) => `${l.join('\n')}\n`
 const SUMMARY = [
   '',
   'Summary',
-  ' evals/hello.es.ts',
+  ' evals/hello.eval.ts',
   '   greet module',
   '     ✓ creates a tested greet module             3m 12s  judge 0.92  1 turn',
   '     ✗ adds a default name in a follow-up turn   6m 03s  2 turns',
@@ -273,7 +274,7 @@ const SUMMARY = [
   'Failures (1)',
   '',
   'Assertion failures (1)',
-  ' ✗ evals/hello.es.ts › greet module › adds a default name in a follow-up turn',
+  ' ✗ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
   '   AssertionError: expected 1 to be 2 // Object.is equality',
   '',
   '   - Expected',
@@ -282,12 +283,12 @@ const SUMMARY = [
   '   - 2',
   '   + 1',
   '',
-  '    ❯ evals/hello.es.ts:31:20',
-  '   record  .es/runs/run-1/adds/1',
+  '    ❯ evals/hello.eval.ts:31:20',
+  '   record  .reeval/runs/run-1/adds/1',
   '',
   '   Evals  1 passed · 1 failed (2)',
   'Duration  6m 05s',
-  ' Results  .es/runs/run-1/summary.md',
+  ' Results  .reeval/runs/run-1/summary.md',
 ]
 
 describe('plain renderer', () => {
@@ -295,20 +296,20 @@ describe('plain renderer', () => {
     assert.equal(
       render(interleaved, options()),
       lines(
-        'es 0.1.0 · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
-        '[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module',
-        '[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn',
+        'reeval 0.1.0 · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
+        '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
+        '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
         '… 2 running after 1m 01s: [creates#1 cursor] turn 1 1m 01s, [adds#1 cursor] turn 1 1m 00s',
         '… 2 running after 2m 01s: [creates#1 cursor] turn 1 2m 01s, [adds#1 cursor] turn 1 2m 00s',
         '… 2 running after 3m 01s: [creates#1 cursor] cleanup 3m 01s, [adds#1 cursor] turn 1 3m 00s',
-        '[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  3m 12s',
+        '[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  3m 12s',
         '[creates#1 cursor]  +0:01 sandbox ready 4s',
         '[creates#1 cursor]  +0:05 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
         '[creates#1 cursor]  +2:50 $ node --test  exit 0 1s',
         '[creates#1 cursor]  +2:52 judge  pass 0.92 (≥ 0.8)  Accurate summary?',
         '… 1 running after 4m 12s: [adds#1 cursor] turn 2 4m 11s',
         '… 1 running after 5m 12s: [adds#1 cursor] turn 2 5m 11s',
-        '[adds#1 cursor] ✗ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  6m 03s',
+        '[adds#1 cursor] ✗ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  6m 03s',
         '[adds#1 cursor]  +0:01 sandbox ready 4s',
         '[adds#1 cursor]  +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file edit',
         '[adds#1 cursor]  +1:09 stdout | seeding greet.js',
@@ -322,7 +323,7 @@ describe('plain renderer', () => {
         '[adds#1 cursor]  - 2',
         '[adds#1 cursor]  + 1',
         '[adds#1 cursor]',
-        '[adds#1 cursor]   ❯ evals/hello.es.ts:31:20',
+        '[adds#1 cursor]   ❯ evals/hello.eval.ts:31:20',
         ...SUMMARY,
       ),
     )
@@ -331,8 +332,8 @@ describe('plain renderer', () => {
   test('stream: every prefixed line prints as it happens, interleaved', () => {
     const out = render(interleaved, options({ logOrder: 'stream' })).split('\n')
     assert.deepEqual(out.slice(1, 16), [
-      '[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module',
-      '[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn',
+      '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
+      '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
       '[creates#1 cursor]  +0:01 sandbox starting',
       '[adds#1 cursor]  +0:01 sandbox starting',
       '[creates#1 cursor]  +0:05 sandbox ready 4s',
@@ -355,7 +356,7 @@ describe('plain renderer', () => {
     assert.equal(
       block,
       lines(
-        '::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  3m 12s',
+        '::group::[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  3m 12s',
         ' +0:01 sandbox ready 4s',
         ' +0:05 turn 1 done 2m 45s · 6 tool calls, 2 file edits',
         ' +2:50 $ node --test  exit 0 1s',
@@ -363,7 +364,7 @@ describe('plain renderer', () => {
         '::endgroup::',
         '… 1 running after 4m 12s: [adds#1 cursor] turn 2 4m 11s',
         '… 1 running after 5m 12s: [adds#1 cursor] turn 2 5m 11s',
-        '[adds#1 cursor] ✗ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  6m 03s',
+        '[adds#1 cursor] ✗ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  6m 03s',
         ' +0:01 sandbox ready 4s',
         ' +0:05 turn 1 done 3m 14s · 3 tool calls, 1 file edit',
         ' +1:09 stdout | seeding greet.js',
@@ -377,8 +378,8 @@ describe('plain renderer', () => {
         ' - 2',
         ' + 1',
         '',
-        '  ❯ evals/hello.es.ts:31:20',
-        '::error file=evals/hello.es.ts,line=31,col=20,title=evals/hello.es.ts › greet module › adds a default name in a follow-up turn::AssertionError: expected 1 to be 2 // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- 2%0A+ 1%0A%0A ❯ evals/hello.es.ts:31:20',
+        '  ❯ evals/hello.eval.ts:31:20',
+        '::error file=evals/hello.eval.ts,line=31,col=20,title=evals/hello.eval.ts › greet module › adds a default name in a follow-up turn::AssertionError: expected 1 to be 2 // Object.is equality%0A%0A- Expected%0A+ Received%0A%0A- 2%0A+ 1%0A%0A ❯ evals/hello.eval.ts:31:20',
       ),
     )
   })
@@ -407,14 +408,14 @@ describe('agent renderer', () => {
     let text = ''
     const renderer = new AgentRenderer({
       out: { write: (chunk: string) => (text += chunk) },
-      attemptDir: () => '.es/runs/run-1/adds/1',
+      attemptDir: () => '.reeval/runs/run-1/adds/1',
     })
     for (const e of interleaved) renderer.onEvent(e)
     assert.equal(
       text,
       lines(
-        'es run: 1 eval file',
-        'FAIL evals/hello.es.ts › greet module › adds a default name in a follow-up turn (6m 03s, assertion)',
+        'reeval run: 1 eval file',
+        'FAIL evals/hello.eval.ts › greet module › adds a default name in a follow-up turn (6m 03s, assertion)',
         '  AssertionError: expected 1 to be 2 // Object.is equality',
         '',
         '  - Expected',
@@ -423,12 +424,12 @@ describe('agent renderer', () => {
         '  - 2',
         '  + 1',
         '',
-        '   ❯ evals/hello.es.ts:31:20',
+        '   ❯ evals/hello.eval.ts:31:20',
         '  console:',
         '    seeding greet.js',
-        '  record: .es/runs/run-1/adds/1',
+        '  record: .reeval/runs/run-1/adds/1',
         '1 passed, 1 failed',
-        'summary: .es/runs/run-1/summary.md',
+        'summary: .reeval/runs/run-1/summary.md',
       ),
     )
     assert.ok(!text.includes('\x1b['))
@@ -444,8 +445,8 @@ describe('output mode', () => {
     assert.equal(resolve({ CI: '1' }).requested, 'plain')
     assert.equal(resolve({}, false).requested, 'plain')
     assert.deepEqual([resolve({}).requested, resolve({}).mode], ['live', 'plain'])
-    assert.equal(resolve({ ES_UI: 'plain' }, true, 'cursor').mode, 'plain')
-    assert.equal(resolve({ ES_UI: 'plain' }, true, 'cursor', { ui: 'agent' }).mode, 'agent')
+    assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor').mode, 'plain')
+    assert.equal(resolve({ REEVAL_UI: 'plain' }, true, 'cursor', { ui: 'agent' }).mode, 'agent')
     assert.throws(() => resolve({}, true, undefined, { ui: 'fancy' }), /--ui must be one of/)
   })
 
@@ -453,7 +454,7 @@ describe('output mode', () => {
     assert.equal(resolve({ BUILD_NUMBER: '7' }).logOrder, 'grouped')
     assert.equal(resolve({}, false).logOrder, 'stream')
     assert.equal(resolve({ CI: 'false' }, false).logOrder, 'stream')
-    assert.equal(resolve({ CI: '1', ES_LOG_ORDER: 'stream' }).logOrder, 'stream')
+    assert.equal(resolve({ CI: '1', REEVAL_LOG_ORDER: 'stream' }).logOrder, 'stream')
   })
 
   test('GitHub Actions: grouped, no detail prefix, colour on', () => {
@@ -479,8 +480,8 @@ describe('output mode', () => {
 
   test('heartbeat: 60s by default, configurable, off for agents', () => {
     assert.equal(resolve({}).heartbeatMs, 60_000)
-    assert.equal(resolve({ ES_HEARTBEAT: '30s' }).heartbeatMs, 30_000)
-    assert.equal(resolve({ ES_HEARTBEAT: '0' }).heartbeatMs, 0)
+    assert.equal(resolve({ REEVAL_HEARTBEAT: '30s' }).heartbeatMs, 30_000)
+    assert.equal(resolve({ REEVAL_HEARTBEAT: '0' }).heartbeatMs, 0)
     assert.equal(resolve({}, true, 'codex').heartbeatMs, 0)
   })
 })

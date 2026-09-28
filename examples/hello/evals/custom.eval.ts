@@ -1,4 +1,4 @@
-import { evaluate, expect, group } from 'evalsuite'
+import { evaluate, expect, group } from 'reeval'
 import { genkit } from './environments.ts'
 
 // Ports of the Lightsage coding evals. Each prompt and judge question is unchanged.

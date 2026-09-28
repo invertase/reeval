@@ -1,6 +1,6 @@
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 // The config adds a capability; the rooted profile runs every eval that doesn't pick its own
 // sandbox as root.

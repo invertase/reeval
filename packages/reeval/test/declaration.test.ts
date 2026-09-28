@@ -33,7 +33,7 @@ function runIn(root: string): RunContext {
 async function collected(root: string, declare: () => void) {
   const run = runIn(root)
   useEngine({ registerTest, registerGroup, getRunContext: () => run, collectingFile })
-  const file = join(root, 'evals/x.es.ts')
+  const file = join(root, 'evals/x.eval.ts')
   const tests = await collect(file, async () => declare())
   return {
     file,
@@ -122,7 +122,7 @@ test('a tree through JSON, declared again, plans the same tests as the calls', a
 
 test('planEval is pure: the same declaration and context give the same tests, gate as data', () => {
   const run = runIn(tempDir('pure'))
-  const ctx = { ...run, file: join(run.config.root, 'evals/p.es.ts'), order: 3 }
+  const ctx = { ...run, file: join(run.config.root, 'evals/p.eval.ts'), order: 3 }
   const declaration = { name: 'p', mode: 'run' as const, groups: [], options: { runs: 2 } }
   const once = planEval(declaration, ctx)
   assert.deepEqual(
@@ -132,7 +132,7 @@ test('planEval is pure: the same declaration and context give the same tests, ga
   assert.equal(once?.length, 4)
   assert.deepEqual(once?.[0]?.gate, {
     limits: { attempts: 4 },
-    rank: { eval: 'evals/p.es.ts › p', file: 'evals/p.es.ts', order: 3, n: 1, cell: 0 },
+    rank: { eval: 'evals/p.eval.ts › p', file: 'evals/p.eval.ts', order: 3, n: 1, cell: 0 },
   })
   assert.equal(
     planEval({ ...declaration, options: { tags: ['x'] } }, { ...ctx, tags: ['y'] }),

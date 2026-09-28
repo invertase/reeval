@@ -315,7 +315,7 @@ test('parseDuration', () => {
 
 test('resolveConfig defaults', () => {
   const c = resolveConfig({}, '/p')
-  assert.deepEqual(c.include, ['evals/**/*.es.ts'])
+  assert.deepEqual(c.include, ['evals/**/*.eval.ts'])
   assert.deepEqual(c.harness, [{ kind: 'cursor', model: 'composer-2.5' }])
   assert.deepEqual(c.sandbox, { kind: 'docker' })
   assert.equal(c.environment, undefined, 'no environment by default')
@@ -325,7 +325,7 @@ test('resolveConfig defaults', () => {
   assert.equal(c.timeoutMs, 900_000)
 })
 
-test('concurrency: flag, then ES_CONCURRENCY, then config, then a default sized to Docker', async () => {
+test('concurrency: flag, then REEVAL_CONCURRENCY, then config, then a default sized to Docker', async () => {
   const GB = 1e9
   assert.equal(defaultConcurrency({ cpus: 20, memoryBytes: 8.2 * GB }), 8)
   assert.equal(defaultConcurrency({ cpus: 20, memoryBytes: 64 * GB }), 8)
@@ -338,10 +338,10 @@ test('concurrency: flag, then ES_CONCURRENCY, then config, then a default sized 
   const withConfig = resolveConfig({ concurrency: 5 }, '/p')
   assert.equal(await resolveConcurrency(withConfig, undefined, capacity, {}), 5)
   assert.equal(
-    await resolveConcurrency(withConfig, undefined, capacity, { ES_CONCURRENCY: '6' }),
+    await resolveConcurrency(withConfig, undefined, capacity, { REEVAL_CONCURRENCY: '6' }),
     6,
   )
-  assert.equal(await resolveConcurrency(withConfig, '7', capacity, { ES_CONCURRENCY: '6' }), 7)
+  assert.equal(await resolveConcurrency(withConfig, '7', capacity, { REEVAL_CONCURRENCY: '6' }), 7)
   await assert.rejects(resolveConcurrency(config, 'lots', capacity, {}), /--concurrency must be/)
   assert.throws(() => resolveConfig({ concurrency: 0 }, '/p'), /config\.concurrency must be/)
 })
@@ -378,8 +378,8 @@ test('judge prompt keeps source diffs and drops dependency noise', () => {
   assert.match(shown, /title: "Soup"/)
   assert.doesNotMatch(shown, /module\.exports/)
   assert.doesNotMatch(shown, /"lock"/)
-  assert.match(shown, /\[es: dropped node_modules\/ \(1 file\): installed dependencies\]/)
-  assert.match(shown, /\[es: dropped package-lock\.json: lockfile, 1 changed line\]/)
+  assert.match(shown, /\[reeval: dropped node_modules\/ \(1 file\): installed dependencies\]/)
+  assert.match(shown, /\[reeval: dropped package-lock\.json: lockfile, 1 changed line\]/)
   assert.equal(
     patchForJudge('diff --git a/greet.js b/greet.js\n+hi\n'),
     'diff --git a/greet.js b/greet.js\n+hi\n',
@@ -450,32 +450,32 @@ test('huge single outputs keep their head and tail, with a marker and hash', () 
   assert.ok(capped.length < OUTPUT_CAP + 200)
   assert.ok(capped.startsWith('a'.repeat(1000)))
   assert.ok(capped.endsWith('z'.repeat(1000)))
-  assert.match(capped, /\[es: truncated \d+ of 220000 characters, sha256 [0-9a-f]{64}\]/)
+  assert.match(capped, /\[reeval: truncated \d+ of 220000 characters, sha256 [0-9a-f]{64}\]/)
   assert.equal(capText('small'), 'small')
 })
 
 test('findConfig takes the nearest config at or above the directory, like Vitest and ESLint', () => {
-  const root = mkdtempSync(join(tmpdir(), 'es-find-config-'))
+  const root = mkdtempSync(join(tmpdir(), 'reeval-find-config-'))
   try {
     const deep = join(root, 'app', 'src', 'lib')
     mkdirSync(deep, { recursive: true })
     assert.equal(findConfig(deep), undefined, 'no config up to the filesystem root')
-    writeFileSync(join(root, 'es.config.mjs'), '')
-    assert.equal(findConfig(deep), join(root, 'es.config.mjs'), 'any supported extension')
-    writeFileSync(join(root, 'es.config.ts'), '')
-    assert.equal(findConfig(deep), join(root, 'es.config.ts'), '.ts first in one directory')
-    writeFileSync(join(root, 'app', 'es.config.cjs'), '')
-    assert.equal(findConfig(deep), join(root, 'app', 'es.config.cjs'), 'the nearest wins')
-    assert.equal(findConfig(root), join(root, 'es.config.ts'), 'never looks below')
-    writeFileSync(join(root, 'app', 'es.claude.config.ts'), '')
-    assert.equal(findConfig(join(root, 'app')), join(root, 'app', 'es.config.cjs'))
+    writeFileSync(join(root, 'reeval.config.mjs'), '')
+    assert.equal(findConfig(deep), join(root, 'reeval.config.mjs'), 'any supported extension')
+    writeFileSync(join(root, 'reeval.config.ts'), '')
+    assert.equal(findConfig(deep), join(root, 'reeval.config.ts'), '.ts first in one directory')
+    writeFileSync(join(root, 'app', 'reeval.config.cjs'), '')
+    assert.equal(findConfig(deep), join(root, 'app', 'reeval.config.cjs'), 'the nearest wins')
+    assert.equal(findConfig(root), join(root, 'reeval.config.ts'), 'never looks below')
+    writeFileSync(join(root, 'app', 'reeval.claude.config.ts'), '')
+    assert.equal(findConfig(join(root, 'app')), join(root, 'app', 'reeval.config.cjs'))
     assert.deepEqual(CONFIG_FILES, [
-      'es.config.ts',
-      'es.config.mts',
-      'es.config.cts',
-      'es.config.js',
-      'es.config.mjs',
-      'es.config.cjs',
+      'reeval.config.ts',
+      'reeval.config.mts',
+      'reeval.config.cts',
+      'reeval.config.js',
+      'reeval.config.mjs',
+      'reeval.config.cjs',
     ])
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -483,9 +483,9 @@ test('findConfig takes the nearest config at or above the directory, like Vitest
 })
 
 test('the history folder sits in the directory the evals live in', () => {
-  assert.equal(evalRoot(['evals/**/*.es.ts']), 'evals')
-  assert.equal(evalRoot(['test/evals/a/*.es.ts', 'test/evals/b/**/*.es.ts']), 'test/evals')
-  assert.equal(evalRoot(['**/*.es.ts']), '')
+  assert.equal(evalRoot(['evals/**/*.eval.ts']), 'evals')
+  assert.equal(evalRoot(['test/evals/a/*.eval.ts', 'test/evals/b/**/*.eval.ts']), 'test/evals')
+  assert.equal(evalRoot(['**/*.eval.ts']), '')
   assert.equal(resolveConfig({}, '/p').history.dir, resolve('/p/evals/.history'))
   assert.equal(resolveConfig({ history: { dir: 'runs' } }, '/p').history.dir, resolve('/p/runs'))
   assert.equal(resolveConfig({}, '/p').record, 'ci')
@@ -500,8 +500,8 @@ test('an npm install in the sandbox collapses to one line for the judge', () => 
   ].join('')
   const shown = patchForJudge(patch)
   assert.ok(shown.length < 500, `judge diff is ${shown.length} characters`)
-  assert.match(shown, /\[es: dropped node_modules\/ \(10000 files\)/)
-  assert.equal(shown.match(/\[es: dropped/g)?.length, 1, 'one marker for the whole directory')
+  assert.match(shown, /\[reeval: dropped node_modules\/ \(10000 files\)/)
+  assert.equal(shown.match(/\[reeval: dropped/g)?.length, 1, 'one marker for the whole directory')
   assert.match(shown, /\+app/)
   const files = changedFilesForJudge([
     ...deps.map((path) => ({ path, status: 'added' })),
@@ -564,30 +564,30 @@ test('compare classifies an eval on the cells both runs have, and lists the rest
     ],
   })
   // The dogfood shape: base is the full run (✗, an Antigravity variant failed), head only re-ran
-  // Antigravity's es-good cell.
+  // Antigravity's reeval-good cell.
   const base = run('fail', [
     cell('cursor/-', 'pass', 'none'),
-    cell('cursor/es-good', 'pass'),
+    cell('cursor/reeval-good', 'pass'),
     cell('agy/-', 'fail', 'none'),
-    cell('agy/es-weak', 'fail'),
-    cell('agy/es-good', 'pass'),
+    cell('agy/reeval-weak', 'fail'),
+    cell('agy/reeval-good', 'pass'),
   ])
-  const removed = ['cursor/-', 'cursor/es-good', 'agy/-', 'agy/es-weak']
-  const head = run('pass', [cell('agy/es-good', 'pass')])
+  const removed = ['cursor/-', 'cursor/reeval-good', 'agy/-', 'agy/reeval-weak']
+  const head = run('pass', [cell('agy/reeval-good', 'pass')])
   assert.deepEqual(compare(base, head), [
     { id: 'e', status: 'same', base: 'pass', head: 'pass', cells: { added: [], removed } },
   ])
   assert.match(
     formatCompare(base, head, compare(base, head), false),
-    /✓ → ✓ {2}same {22}e · cells removed: cursor\/-, cursor\/es-good, agy\/-, agy\/es-weak$/m,
+    /✓ → ✓ {2}same {22}e · cells removed: cursor\/-, cursor\/reeval-good, agy\/-, agy\/reeval-weak$/m,
   )
   // The shared cell still decides: a flip in it is a regression, and a change in it is drift.
-  const failed = run('fail', [cell('agy/es-good', 'fail')])
+  const failed = run('fail', [cell('agy/reeval-good', 'fail')])
   assert.deepEqual(
     compare(base, failed).map((r) => [r.status, r.base, r.head]),
     [['regressed', 'pass', 'fail']],
   )
-  const changed = run('pass', [cell('agy/es-good', 'pass', 'all', 'fp changed')])
+  const changed = run('pass', [cell('agy/reeval-good', 'pass', 'all', 'fp changed')])
   assert.equal(compare(base, changed)[0]?.status, 'drift')
   const disjoint = run('pass', [cell('other/-', 'pass')])
   assert.equal(compare(base, disjoint)[0]?.status, 'drift', 'no shared cell: not comparable')
@@ -812,7 +812,7 @@ test('effort under 10s reads in tenths, so a ratio matches its times', async () 
 
 test('layered environments and overrides', async () => {
   const main = defineEnvironment('main', ({ secret }) => ({
-    env: { KEY: secret.fromEnv('ES_UNIT_KEY', { optional: true }), MODE: 'main' },
+    env: { KEY: secret.fromEnv('REEVAL_UNIT_KEY', { optional: true }), MODE: 'main' },
     files: { 'a.txt': 'main' },
     setup: ['echo one'],
   }))
@@ -886,8 +886,8 @@ test('excludeMatcher is gitignore-style', () => {
   assert.equal(m('references/evals', true), false, 'a leading / anchors to the skill root')
   assert.equal(m('.history', true), true)
   assert.equal(m('scripts/.history', true), true, 'an unanchored name matches at any depth')
-  assert.equal(m('greet.es.ts', false), true)
-  assert.equal(m('scripts/greet.es.ts', false), true)
+  assert.equal(m('greet.eval.ts', false), true)
+  assert.equal(m('scripts/greet.eval.ts', false), true)
   assert.equal(m('scripts/greet.ts', false), false)
   assert.equal(m('greetXes.ts', false), false, 'dots are literal')
   const custom = excludeMatcher(['drafts/*.md', 'secret.txt'])
@@ -898,7 +898,7 @@ test('excludeMatcher is gitignore-style', () => {
 })
 
 test('skill directories leave out eval material, recorded as excluded', async () => {
-  const root = mkdtempSync(join(tmpdir(), 'es-skill-'))
+  const root = mkdtempSync(join(tmpdir(), 'reeval-skill-'))
   const write = (path: string, content: string) => {
     mkdirSync(dirname(join(root, path)), { recursive: true })
     writeFileSync(join(root, path), content)
@@ -911,7 +911,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
   write('skills/greet/references/evals/notes.md', 'Kept: only the root evals/ is eval material.')
   write('skills/greet/evals/evals.json', '{"prompts":["secret"]}')
   write('skills/greet/evals/.history/run.json', '{}')
-  write('skills/greet/greet.es.ts', 'evaluate()')
+  write('skills/greet/greet.eval.ts', 'evaluate()')
   write('skills/greet/scripts/.history/x', 'x')
   write('skills/greet/.git/HEAD', 'ref: refs/heads/main')
   write('skills/greet/drafts/next.md', 'WIP')
@@ -927,7 +927,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
       s?.files.map((f) => f.path),
       ['drafts/next.md', 'references/evals/notes.md', 'references/tone.md'],
     )
-    assert.deepEqual(r.record.skills[0]?.excluded, ['evals/', 'greet.es.ts', 'scripts/.history/'])
+    assert.deepEqual(r.record.skills[0]?.excluded, ['evals/', 'greet.eval.ts', 'scripts/.history/'])
 
     const custom = await resolveEnvironment(
       layered(undefined, env([...DEFAULT_SKILL_EXCLUDE, 'drafts/'])),
@@ -939,7 +939,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
     assert.deepEqual(custom.record.skills[0]?.excluded, [
       'drafts/',
       'evals/',
-      'greet.es.ts',
+      'greet.eval.ts',
       'scripts/.history/',
     ])
     assert.notEqual(custom.record.skills[0]?.sha256, r.record.skills[0]?.sha256)
@@ -1041,7 +1041,7 @@ test('git(): URLs, GitHub shorthands and local paths, resolved against the calli
   )
 })
 
-test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {
+test('selectProfile: --profile, then REEVAL_PROFILE, then defaultProfile', () => {
   const config = resolveConfig(
     {
       budget: { attempts: 50 },
@@ -1051,7 +1051,7 @@ test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {
     '/p',
   )
   assert.equal(selectProfile(config, 'nightly', {})?.reason, '--profile')
-  assert.equal(selectProfile(config, undefined, { ES_PROFILE: 'nightly' })?.name, 'nightly')
+  assert.equal(selectProfile(config, undefined, { REEVAL_PROFILE: 'nightly' })?.name, 'nightly')
   const ci = selectProfile(config, undefined, { CI: 'true' })
   assert.deepEqual(
     [ci?.name, ci?.reason, ci?.budget],
@@ -1060,6 +1060,6 @@ test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {
   assert.equal(selectProfile(config, undefined, {})?.reason, 'default')
   assert.throws(
     () => selectProfile(config, 'nope', {}),
-    /Unknown profile "nope"\. Profiles in es\.config\.ts: pr, dev, nightly\./,
+    /Unknown profile "nope"\. Profiles in reeval\.config\.ts: pr, dev, nightly\./,
   )
 })

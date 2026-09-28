@@ -1,9 +1,9 @@
 ---
 title: Fingerprints and drift
-description: What makes two runs of an eval comparable, and what es compare says when they aren't.
+description: What makes two runs of an eval comparable, and what reeval compare says when they aren't.
 ---
 
-A pass that turns into a fail is only a regression if nothing else changed. ES fingerprints each cell from everything that shapes its result, so `es compare` can tell a regression from a changed eval, agent, image or judge.
+A pass that turns into a fail is only a regression if nothing else changed. reeval fingerprints each cell from everything that shapes its result, so `reeval compare` can tell a regression from a changed eval, agent, image or judge.
 
 ```text
           "fingerprintParts": {
@@ -31,18 +31,18 @@ That's one cell of a real Cursor run. The cell's `fingerprint` is the hash of th
 | `judge` | The judge's model, threshold and version | You change the judge or its threshold |
 | `context` | The skills, rules and MCP config the agent could see in its sandbox | Anything new lands where the agent reads it |
 
-Only local imports are traced; packages are covered by the lockfile hashes the run records. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; ES treats changes to those as noise, not drift.
+Only local imports are traced; packages are covered by the lockfile hashes the run records. Records from before `cursor()` moved to the Cursor SDK list files its old CLI rewrote every session, such as `~/.cursor/cli-config.json`; reeval treats changes to those as noise, not drift.
 
 ## Read a compare
 
-`es compare` diffs the latest run against its nearest recorded ancestor and gives each eval one status:
+`reeval compare` diffs the latest run against its nearest recorded ancestor and gives each eval one status:
 
 ```text
 base 20260926T174239Z_b010670_ada-lovelace_yzmg (b010670) → head 20260926T174444Z_b010670_ada-lovelace_7gmj (b010670)
 0 regressed · 0 fixed · 0 not comparable · 2 same
 
-  · → ✓  new                       evals/skill.es.ts › house greeting › greets in the house style
-  ✓ → ✓  same                      evals/hello.es.ts › greet module › creates a tested greet module · cells added: cursor:composer-2.5/-/docker
+  · → ✓  new                       evals/skill.eval.ts › house greeting › greets in the house style
+  ✓ → ✓  same                      evals/hello.eval.ts › greet module › creates a tested greet module · cells added: cursor:composer-2.5/-/docker
       antigravity:gemini-3.8-flash-medium/-/docker  tools 15 → 12.5 (×0.83) · agent 36s → 40s (×1.11)
 …
 ```
@@ -54,15 +54,15 @@ Under a cell both runs share, a line shows how its median effort moved. Effort d
 | `regressed` | Same fingerprint, passed before, fails now |
 | `fixed` | Same fingerprint, failed before, passes now |
 | `same` | Same fingerprint, same outcome |
-| `changed (not comparable)` | The fingerprint changed; ES names what, e.g. `evals/helpers.ts changed` or `agent CLI changed` |
+| `changed (not comparable)` | The fingerprint changed; reeval names what, e.g. `evals/helpers.ts changed` or `agent CLI changed` |
 | `infra error` | Either side had an infra error |
 | `new`, `removed` | The eval is in only one of the runs |
 
-When two runs ran different cells of an eval (one was filtered to a harness, say), ES compares the cells both ran and lists the rest, as in the `cells added` above, where the base run had Antigravity only. With no cell in common, it's not comparable. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or not comparable eval that fails.
+When two runs ran different cells of an eval (one was filtered to a harness, say), reeval compares the cells both ran and lists the rest, as in the `cells added` above, where the base run had Antigravity only. With no cell in common, it's not comparable. `--fail-on-regression` exits 1 on any `regressed`, and on a `new` or not comparable eval that fails.
 
 ## Drift
 
-Drift is a cell whose fingerprint changed since the last run that had it. The studio's runs list shows a drift badge, `es history` marks the run with `¦`, and `es query drift` lists which parts changed.
+Drift is a cell whose fingerprint changed since the last run that had it. The studio's runs list shows a drift badge, `reeval history` marks the run with `¦`, and `reeval query drift` lists which parts changed.
 
 ```mermaid
 flowchart LR
@@ -73,34 +73,34 @@ flowchart LR
 
 A run filtered to fewer cells isn't drift, and neither is the full run after it: each cell is compared with the last run that had it.
 
-Some changes sit outside the fingerprint but still move results, such as the model id the judge provider says it served. When one of those changes between two runs, `es compare` prints a `stack changed:` line, and an outcome that flipped across it counts as not comparable rather than as a regression.
+Some changes sit outside the fingerprint but still move results, such as the model id the judge provider says it served. When one of those changes between two runs, `reeval compare` prints a `stack changed:` line, and an outcome that flipped across it counts as not comparable rather than as a regression.
 
-<Image src="/assets/studio/compare.png" alt="ES studio compare page: evals marked regressed, fixed and not comparable, with the reason" width={800} />
+<Image src="/assets/studio/compare.png" alt="reeval studio compare page: evals marked regressed, fixed and not comparable, with the reason" width={800} />
 
 ## Renaming an eval starts a new history
 
-An eval's id is its file, its groups and its name: `evals/hello.es.ts › greet module › creates a tested greet module`. History, compare and the studio follow evals by that id.
+An eval's id is its file, its groups and its name: `evals/hello.eval.ts › greet module › creates a tested greet module`. History, compare and the studio follow evals by that id.
 
 <Warning>
-  Renaming an eval, one of its groups or its file gives it a new id. `es compare` shows the old one as `removed` and the new one as `new`, and its history starts again.
+  Renaming an eval, one of its groups or its file gives it a new id. `reeval compare` shows the old one as `removed` and the new one as `new`, and its history starts again.
 </Warning>
 
 ## What a fingerprint can't pin
 
-A matching fingerprint means the inputs ES controls are the same. Some inputs aren't under its control:
+A matching fingerprint means the inputs reeval controls are the same. Some inputs aren't under its control:
 
 | Can't pin | What to do |
 |---|---|
 | Sampled agent output: the same prompt gives different runs | Run cells more than once and read the [interval](/concepts/lift) |
-| Provider-side model updates behind a model id | Pin versioned model ids; ES records the judge model the provider reported |
+| Provider-side model updates behind a model id | Pin versioned model ids; reeval records the judge model the provider reported |
 | Network results: web search, package registries | Pin dependencies in the workspace, or restrict [egress](/concepts/egress) |
-| Locally built images | `es show` warns when an image isn't pushed, so a rerun needs that machine's image |
+| Locally built images | `reeval show` warns when an image isn't pushed, so a rerun needs that machine's image |
 
 ## Next
 
 <CardGroup cols={2}>
   <Card title="History" icon="database" href="/guide/history">
-    Record runs in git, then read `es history` and `es compare`.
+    Record runs in git, then read `reeval history` and `reeval compare`.
   </Card>
   <Card title="Judges" icon="flask" href="/concepts/judges">
     Why a pinned judge model keeps runs comparable.

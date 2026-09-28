@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from AnalysisDoc in src/view/analysis.ts by `pnpm schema:update`; don't edit. An es analyze document: <run>/analysis/*.json and .es/analysis/<key>.json.",
+  "$comment": "Generated from AnalysisDoc in src/view/analysis.ts by `pnpm schema:update`; don't edit. A reeval analyze document: <run>/analysis/*.json and .reeval/analysis/<key>.json.",
   "title": "AnalysisDoc",
   "$ref": "#/$defs/AnalysisDoc",
   "$defs": {

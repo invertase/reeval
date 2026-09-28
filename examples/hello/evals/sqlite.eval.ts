@@ -1,8 +1,8 @@
-import { evaluate, expect } from 'evalsuite'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate, expect } from 'reeval'
+import { docker } from 'reeval/sandbox'
 
-// A sandbox from a Dockerfile, relative to this file. It starts FROM ${ES_BASE}; from any other
-// Debian or Ubuntu base, ES bakes Node, git and the harness bootstrap on top.
+// A sandbox from a Dockerfile, relative to this file. It starts FROM ${REEVAL_BASE}; from any other
+// Debian or Ubuntu base, reeval bakes Node, git and the harness bootstrap on top.
 evaluate(
   'queries a seeded SQLite database',
   { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },

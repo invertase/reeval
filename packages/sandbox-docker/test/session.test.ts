@@ -16,7 +16,7 @@ const dockerReady = (() => {
     return false
   }
 })()
-const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 const skip = !dockerReady && !requireDocker && `needs Docker and ${DEFAULT_IMAGE}`
 
 /** Polls until `check` returns true, failing with `what` after the deadline. */
@@ -41,7 +41,7 @@ const longCommand = () => `sleep 3000.${process.pid}${++n}`
 
 /** Containers, running or not, with the test label `value`. */
 const labelled = (value: string) =>
-  execFileSync('docker', ['ps', '-aq', '--filter', `label=dev.evalsuite.test=${value}`], {
+  execFileSync('docker', ['ps', '-aq', '--filter', `label=ai.reeval.test=${value}`], {
     encoding: 'utf8',
   }).trim()
 
@@ -61,7 +61,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
         try {
           const s = await createDockerSession({
             image: DEFAULT_IMAGE,
-            labels: { 'dev.evalsuite.test': label },
+            labels: { 'ai.reeval.test': label },
             abortSignal: controller.signal,
           })
           outcomes.push(`${ms}ms: created`)
@@ -75,7 +75,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
           left.push(`${ms}ms`)
           execFileSync('sh', [
             '-c',
-            `docker rm -f $(docker ps -aq --filter label=dev.evalsuite.test=${label})`,
+            `docker rm -f $(docker ps -aq --filter label=ai.reeval.test=${label})`,
           ])
         }
       }),
@@ -91,7 +91,7 @@ describe('create and abort', { skip, timeout: 120_000 }, () => {
     const label = `twin-${process.pid}`
     const s = await createDockerSession({
       image: DEFAULT_IMAGE,
-      labels: { 'dev.evalsuite.test': label },
+      labels: { 'ai.reeval.test': label },
     })
     await assert.rejects(
       eventually('expected to time out', async () => labelled(label) === '', 1000),
@@ -120,7 +120,7 @@ describe('the gateway when its forwarder dies', { skip, timeout: 60_000 }, () =>
   test('the session reports it, and ports fail fast with the reason', async () => {
     const s = await createDockerSession({
       image: DEFAULT_IMAGE,
-      labels: { 'dev.evalsuite.test': 'forwarder' },
+      labels: { 'ai.reeval.test': 'forwarder' },
       egress: true,
     })
     try {
@@ -173,7 +173,7 @@ describe('exec in a container', { skip, timeout: 60_000 }, () => {
   const open = async () => {
     const s = await createDockerSession({
       image: DEFAULT_IMAGE,
-      labels: { 'dev.evalsuite.test': 'session' },
+      labels: { 'ai.reeval.test': 'session' },
     })
     sessions.push(s)
     return s

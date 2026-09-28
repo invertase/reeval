@@ -14,7 +14,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     studioDevData(),
-    // For @invertase/foobar's THIRD_PARTY_NOTICES.md; its build leaves this file out of
+    // For reeval's THIRD_PARTY_NOTICES.md; its build leaves this file out of
     // dist/studio-app.
     bundledLicenses('dist/studio-app', (packages) =>
       writeFileSync(
@@ -26,7 +26,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      'evalsuite/view': fileURLToPath(new URL('../evalsuite/src/view/index.ts', import.meta.url)),
+      'reeval/view': fileURLToPath(new URL('../reeval/src/view/index.ts', import.meta.url)),
     },
   },
   build: { outDir: 'dist', emptyOutDir: true, chunkSizeWarningLimit: 1500 },

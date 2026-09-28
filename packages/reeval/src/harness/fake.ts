@@ -1,5 +1,5 @@
 import { setTimeout as sleep } from 'node:timers/promises'
-import { shellQuote as q } from '@evalsuite/sandbox-docker/process'
+import { shellQuote as q } from '@reeval/sandbox-docker/process'
 import { debugLog } from '../debug/attempt.ts'
 import { type ResolvedMcpServer, skillFiles } from '../environment/resolve.ts'
 import { InfraError, type Sandbox } from '../sandbox/types.ts'
@@ -207,7 +207,7 @@ async function callMcpTool(
       params: {
         protocolVersion: '2024-11-05',
         capabilities: {},
-        clientInfo: { name: 'es-fake-agent', version: '1' },
+        clientInfo: { name: 'reeval-fake-agent', version: '1' },
       },
     },
     { jsonrpc: '2.0', method: 'notifications/initialized' },

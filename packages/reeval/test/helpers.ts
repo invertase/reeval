@@ -17,7 +17,7 @@ import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { killTree, windowsSpawn } from '@evalsuite/sandbox-docker/process'
+import { killTree, windowsSpawn } from '@reeval/sandbox-docker/process'
 import type { AttemptRecord, EvalEntry, RunRecord, Stack } from '../src/history/types.ts'
 import { startCapture } from './support/differential.ts'
 
@@ -25,10 +25,10 @@ export const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = join(pkgRoot, 'dist/cli.js')
 
 /** Every test's CLI runs and projects go under one fresh directory, removed when tests end. */
-const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), 'es-test-')))
+const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), 'reeval-test-')))
 writeFileSync(join(tmpRoot, '.gitconfig-empty'), '')
 process.on('exit', () => {
-  if (process.env.ES_TEST_KEEP) return
+  if (process.env.REEVAL_TEST_KEEP) return
   try {
     rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 3 })
   } catch (error) {
@@ -59,7 +59,7 @@ const PASSTHROUGH = [
   'DOCKER_CONFIG',
   'DOCKER_CERT_PATH',
   'DOCKER_TLS_VERIFY',
-  'ES_DEBUG',
+  'REEVAL_DEBUG',
   // Windows: where programs, the user's profile and app data are, and how a shell finds commands.
   'PATHEXT',
   'ComSpec',
@@ -77,7 +77,7 @@ const PASSTHROUGH = [
 
 /**
  * Runs a command-line tool by name. npm, pnpm, yarn, corepack and npx are `.cmd` scripts on
- * Windows, which only cmd.exe runs, so there it goes the way ES's own `run` does.
+ * Windows, which only cmd.exe runs, so there it goes the way reeval's own `run` does.
  */
 export function spawnTool(
   cmd: string,
@@ -107,16 +107,16 @@ export const baseEnv: NodeJS.ProcessEnv = {
   GIT_CONFIG_NOSYSTEM: '1',
   GIT_CONFIG_GLOBAL: join(tmpRoot, '.gitconfig-empty'),
   NO_COLOR: '1',
-  ES_UI: 'plain',
+  REEVAL_UI: 'plain',
 }
 
 export type Project = { dir: string; sandboxes: string }
 
-/** Creates a throwaway ES project that resolves `evalsuite` to this package. */
+/** Creates a throwaway reeval project that resolves `reeval` to this package. */
 export async function project(name: string, files: Record<string, string>): Promise<Project> {
   const dir = tempDir(name)
   await mkdir(join(dir, 'node_modules'), { recursive: true })
-  await symlink(pkgRoot, join(dir, 'node_modules/evalsuite'), 'dir')
+  await symlink(pkgRoot, join(dir, 'node_modules/reeval'), 'dir')
   for (const [path, content] of Object.entries(files)) {
     await mkdir(dirname(join(dir, path)), { recursive: true })
     await writeFile(join(dir, path), content)
@@ -125,10 +125,10 @@ export async function project(name: string, files: Record<string, string>): Prom
 }
 
 export const fakeConfig = (options: { harness?: string; judge?: string; extra?: string } = {}) => `
-import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness(${options.harness ?? '{}'}),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
@@ -168,7 +168,7 @@ export function runCli(
     let watching = !!opts.onOutput
     const timer = setTimeout(() => {
       if (child.pid) killTree(child.pid)
-      reject(new Error(`es ${args.join(' ')} took over ${timeoutMs}ms\n${stdout}\n${stderr}`))
+      reject(new Error(`reeval ${args.join(' ')} took over ${timeoutMs}ms\n${stdout}\n${stderr}`))
     }, timeoutMs)
     child.stdout.on('data', (d) => {
       stdout += d
@@ -203,12 +203,12 @@ const runsIn = (dir: string) =>
         .sort()
     : []
 
-/** The newest run in `.es/runs/` (scratch) or, with `history`, in that history folder. */
+/** The newest run in `.reeval/runs/` (scratch) or, with `history`, in that history folder. */
 export function readRun(
   project: string,
   options: { back?: number; history?: string } = {},
 ): RunView {
-  const folder = join(project, options.history ?? '.es/runs')
+  const folder = join(project, options.history ?? '.reeval/runs')
   const names = runsIn(folder)
   const name = names[names.length - 1 - (options.back ?? 0)]
   if (!name) throw new Error(`no run in ${folder}`)
@@ -227,4 +227,6 @@ export const recordedRuns = (project: string, history = 'evals/.history') =>
   runsIn(join(project, history)).map((f) => f.slice(0, -5))
 
 export const liveSandboxes = (p: Project) =>
-  existsSync(p.sandboxes) ? readdirSync(p.sandboxes).filter((f) => f.startsWith('es-sandbox-')) : []
+  existsSync(p.sandboxes)
+    ? readdirSync(p.sandboxes).filter((f) => f.startsWith('reeval-sandbox-'))
+    : []

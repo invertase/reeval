@@ -58,7 +58,7 @@ export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as co
  * {@link OPENCODE_DENIED_TOOLS} off, web search on {@link OPENCODE_WEB_SEARCH},
  * session titles on the run's own model (OpenCode's default is a second, small one), the
  * provider's model calls over HTTP, and the MCP servers. It loads after an eval's own
- * `opencode.json(c)`: a key both set is ES's, objects merge (MCP servers by name), and permission
+ * `opencode.json(c)`: a key both set is reeval's, objects merge (MCP servers by name), and permission
  * rules append to the eval's.
  */
 export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
@@ -67,7 +67,7 @@ export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
   return {
     update: 'disable',
     share: 'disabled',
-    // Appended to an eval's own rules, and the last match wins, so ES only denies: anything that
+    // Appended to an eval's own rules, and the last match wins, so reeval only denies: anything that
     // asks is answered by harness-acp, which allows it.
     permissions: OPENCODE_DENIED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' })),
     websearch: { provider: OPENCODE_WEB_SEARCH.provider },
@@ -149,7 +149,7 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  * OpenCode (`opencode acp`) as an AI SDK harness, on any provider whose key it sends in a header
  * on known hosts: the model's provider (`anthropic/claude-haiku-4-5` runs on `anthropic`) picks
  * the key, and only that key is used and brokered. `@ai-sdk/harness-opencode` brokers only a few
- * providers' keys and OpenCode 1's, so this is ES's own thin config over `@ai-sdk/harness-acp`.
+ * providers' keys and OpenCode 1's, so this is reeval's own thin config over `@ai-sdk/harness-acp`.
  *
  * OpenCode ignores its config's `model` over ACP (a session starts on its own default), so each
  * turn sets the session's `model` config option. Its ACP `PromptResponse.usage` is its last

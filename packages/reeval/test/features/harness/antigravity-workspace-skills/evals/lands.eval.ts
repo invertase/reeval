@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Under Antigravity, a workspace-placed skill lands in .agents/skills, the repo skill directory it reads.

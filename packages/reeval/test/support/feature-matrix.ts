@@ -20,7 +20,7 @@ const matrix = buildMatrix(inventory, {
   fixtures: features.map((f) => ({
     dir: f.dir,
     tiers: f.tiers,
-    canary: existsSync(join(testDir, 'features', f.dir, 'evals/canary.es.ts')),
+    canary: existsSync(join(testDir, 'features', f.dir, 'evals/canary.eval.ts')),
   })),
   planCases: cases.map((c) => `${c.dir}/${c.name}`),
   contract: behaviours.map((b) => ({ name: b.name, canary: b.canary })),

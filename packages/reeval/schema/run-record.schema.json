@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$comment": "Generated from RunRecord in src/history/types.ts by `pnpm schema:update`; don't edit. A run record: evals/.history/<run>.json and .es/runs/<run>.json.",
+  "$comment": "Generated from RunRecord in src/history/types.ts by `pnpm schema:update`; don't edit. A run record: evals/.history/<run>.json and .reeval/runs/<run>.json.",
   "title": "RunRecord",
   "$ref": "#/$defs/RunRecord",
   "$defs": {

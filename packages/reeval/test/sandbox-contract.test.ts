@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { after, describe, test } from 'node:test'
-import { DEFAULT_IMAGE } from '@evalsuite/sandbox-docker'
+import { DEFAULT_IMAGE } from '@reeval/sandbox-docker'
 import { createSandbox, type Sandbox } from '../src/sandbox/index.ts'
 import type { SandboxDescriptor } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
@@ -19,7 +19,7 @@ const dockerReady = (() => {
     return false
   }
 })()
-const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 
 const kinds: Array<{ name: string; descriptor: () => SandboxDescriptor; skip: string | false }> = [
   { name: 'fake', descriptor: () => ({ kind: 'fake', dir: tempDir('contract') }), skip: false },
@@ -39,7 +39,7 @@ async function sameDir(s: Sandbox, dir: string, path: string, cwd?: string) {
     assert.equal((await s.exec(`printf %s ${dir}`, { cwd })).stdout, path)
     return
   }
-  const marker = `es-contract-${randomUUID()}`
+  const marker = `reeval-contract-${randomUUID()}`
   writeFileSync(join(path, marker), '')
   try {
     assert.equal(
@@ -60,7 +60,7 @@ for (const kind of kinds) {
         runId: `contract-${process.pid}`,
         timeoutMs: 120_000,
         signal: new AbortController().signal,
-        env: { ES_CONTRACT_VAR: 'from-the-sandbox' },
+        env: { REEVAL_CONTRACT_VAR: 'from-the-sandbox' },
         egress: { policy: 'allow-all', auto: [] },
       })
       return box
@@ -92,12 +92,12 @@ for (const kind of kinds) {
       await sameDir(s, '"$PWD"', s.workdir)
       await s.exec('mkdir -p sub')
       await sameDir(s, '"$PWD"', `${s.workdir}/sub`, 'sub')
-      assert.equal((await s.exec('printf %s "$ES_CONTRACT_VAR"')).stdout, 'from-the-sandbox')
-      const over = await s.exec('printf %s "$ES_CONTRACT_VAR"', {
-        env: { ES_CONTRACT_VAR: 'from-the-command' },
+      assert.equal((await s.exec('printf %s "$REEVAL_CONTRACT_VAR"')).stdout, 'from-the-sandbox')
+      const over = await s.exec('printf %s "$REEVAL_CONTRACT_VAR"', {
+        env: { REEVAL_CONTRACT_VAR: 'from-the-command' },
       })
       assert.equal(over.stdout, 'from-the-command')
-      assert.equal((await s.exec('printf %s "$ES_CONTRACT_VAR"')).stdout, 'from-the-sandbox')
+      assert.equal((await s.exec('printf %s "$REEVAL_CONTRACT_VAR"')).stdout, 'from-the-sandbox')
     })
 
     test('writeFile replaces a file whole', async () => {

@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 /** The repository at v1, with `files` writing over one of its files. */
 export const patched = defineEnvironment('patched', ({ git }) => ({

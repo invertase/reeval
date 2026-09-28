@@ -1,11 +1,11 @@
 ---
 title: opencode()
-description: The OpenCode 2 harness on any provider whose key ES can broker, its options and id, the providers it runs on and refuses, the tokens it can't report, its settings, web search and MCP servers.
+description: The OpenCode 2 harness on any provider whose key reeval can broker, its options and id, the providers it runs on and refuses, the tokens it can't report, its settings, web search and MCP servers.
 ---
 
 `opencode()` runs [OpenCode](https://opencode.ai) 2 in the Docker sandbox over its ACP server (`opencode acp`), on the model's provider: Google, Anthropic, OpenAI, OpenRouter and nearly 200 more. `model` is required, and its provider picks the key.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { opencode } from '{{ pkg }}/harness'
 
@@ -21,7 +21,7 @@ export default defineConfig({
 ## Options
 
 <Property name="model" type="string">
-  OpenCode's model id, `<provider>/<model>`, such as `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5` or `openrouter/anthropic/claude-haiku-4.5`. The provider, before the first `/`, picks the key: only that provider's key is needed and brokered. A bare id with no provider, or a provider ES can't broker ([below](#refused-providers)), exits 2 at plan time. Required.
+  OpenCode's model id, `<provider>/<model>`, such as `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5` or `openrouter/anthropic/claude-haiku-4.5`. The provider, before the first `/`, picks the key: only that provider's key is needed and brokered. A bare id with no provider, or a provider reeval can't broker ([below](#refused-providers)), exits 2 at plan time. Required.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -42,27 +42,27 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
-| Adapter | `@evalsuite/harness-opencode` 0.2.0 (over `@ai-sdk/harness-acp`), bundled with ES |
+| Adapter | `@reeval/harness-opencode` 0.2.0 (over `@ai-sdk/harness-acp`), bundled with reeval |
 | CLI | `@opencode/cli` 2.0.18 |
 | Sandbox | `docker()` only |
-| Image | `evalsuite-sandbox:opencode-0.2.0` |
+| Image | `reeval-sandbox:opencode-0.2.0` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
 | Egress hosts added | The provider's API hosts, such as `api.anthropic.com`, and `mcp.exa.ai` (web search) |
 | Tokens | Not reported (below) |
 
-Build its image once with `es image build` in a project whose config uses `opencode()`.
+Build its image once with `reeval image build` in a project whose config uses `opencode()`.
 
 ## The key
 
-```text title="es run -v"
+```text title="reeval run -v"
 broker    ANTHROPIC_API_KEY stays on the host · the gateway swaps it in on POST api.anthropic.com/v1/messages
 …
 gateway   POST https://api.anthropic.com/v1/messages → 200 · allowed · … · substituted ANTHROPIC_API_KEY (x-api-key)
 ```
 
-ES reads the model's provider's key from the host, passes it to the adapter explicitly, and it never enters the container. The container gets only that provider's variable, holding a placeholder, so OpenCode can't reach another provider with another key. The gateway swaps the key in on the requests OpenCode 2.0.18 sends it on, in the header it uses:
+reeval reads the model's provider's key from the host, passes it to the adapter explicitly, and it never enters the container. The container gets only that provider's variable, holding a placeholder, so OpenCode can't reach another provider with another key. The gateway swaps the key in on the requests OpenCode 2.0.18 sends it on, in the header it uses:
 
 | Provider | Header | Endpoint |
 |---|---|---|
@@ -71,7 +71,7 @@ ES reads the model's provider's key from the host, passes it to the adapter expl
 | `openai` | `Authorization: Bearer` | `POST api.openai.com/v1/responses` |
 | `openrouter` | `Authorization: Bearer` | `POST openrouter.ai/api/v1/chat/completions` |
 
-Each provider's hosts, paths and headers come from running the pinned OpenCode against a mock server, once per provider and model API, and are listed [below](#supported-providers). A request that carries the placeholder anywhere else gets a 403 from the gateway. The adapter refuses to run in a sandbox that can't broker the key. `@ai-sdk/harness-opencode` brokers only a few providers' keys, for OpenCode 1, so ES uses its own thin config over `@ai-sdk/harness-acp` instead.
+Each provider's hosts, paths and headers come from running the pinned OpenCode against a mock server, once per provider and model API, and are listed [below](#supported-providers). A request that carries the placeholder anywhere else gets a 403 from the gateway. The adapter refuses to run in a sandbox that can't broker the key. `@ai-sdk/harness-opencode` brokers only a few providers' keys, for OpenCode 1, so reeval uses its own thin config over `@ai-sdk/harness-acp` instead.
 
 ## Served model
 
@@ -79,7 +79,7 @@ Each provider's hosts, paths and headers come from running the pinned OpenCode a
 { "model": "gpt-5.4-mini-2026-03-17[effort=none]", … }
 ```
 
-OpenCode's ACP server names no model, so each turn records the one the gateway saw serve its last model call. Gemini's API names it in the URL; every other provider's response body does, as its first `"model"` field, with the reasoning effort when the response reports one (OpenAI's Responses API). ES runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
+OpenCode's ACP server names no model, so each turn records the one the gateway saw serve its last model call. Gemini's API names it in the URL; every other provider's response body does, as its first `"model"` field, with the reasoning effort when the response reports one (OpenAI's Responses API). reeval runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
 
 ## Amazon Bedrock
 
@@ -88,23 +88,23 @@ AWS_BEARER_TOKEN_BEDROCK=...   # a Bedrock API key
 AWS_REGION=eu-west-1           # optional; default us-east-1
 ```
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 harness: opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' }),
 ```
 
-Bedrock runs on a Bedrock API key, which OpenCode sends as `Authorization: Bearer` and the gateway swaps in. ES never passes AWS access keys, profiles or session tokens, which sign each request (SigV4) and can't be brokered. `AWS_REGION` isn't secret: ES passes it into the sandbox as it is, and its region's hosts, `bedrock-runtime.<region>.amazonaws.com` and `bedrock-mantle.<region>.api.aws`, are the automatic egress hosts.
+Bedrock runs on a Bedrock API key, which OpenCode sends as `Authorization: Bearer` and the gateway swaps in. reeval never passes AWS access keys, profiles or session tokens, which sign each request (SigV4) and can't be brokered. `AWS_REGION` isn't secret: reeval passes it into the sandbox as it is, and its region's hosts, `bedrock-runtime.<region>.amazonaws.com` and `bedrock-mantle.<region>.api.aws`, are the automatic egress hosts.
 
 <Warning>
-Bedrock's hosts, header and served model are checked with OpenCode against a mock server, and through ES's gateway with a made-up key (which AWS refuses). It hasn't yet run against real Bedrock with a real key.
+Bedrock's hosts, header and served model are checked with OpenCode against a mock server, and through reeval's gateway with a made-up key (which AWS refuses). It hasn't yet run against real Bedrock with a real key.
 </Warning>
 
 ## Tokens
 
-None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.18), so ES records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
+None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.18), so reeval records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
 
 ## Settings
 
-ES starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`. The CLI stays the image's, and its model catalog is the one it shipped with:
+reeval starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`. The CLI stays the image's, and its model catalog is the one it shipped with:
 
 ```json
 {
@@ -131,7 +131,7 @@ ES starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE
 | `providers.<provider>.settings.transport` | Model calls go over HTTP, where the gateway reads the served model, not a WebSocket. |
 | `mcp.servers` | The environment's MCP servers, below. |
 
-Every other tool runs without asking, as on every harness: ES answers OpenCode's permission requests with allow.
+Every other tool runs without asking, as on every harness: reeval answers OpenCode's permission requests with allow.
 
 ## Your own opencode.jsonc
 
@@ -143,7 +143,7 @@ Every other tool runs without asking, as on every harness: ES answers OpenCode's
 }
 ```
 
-OpenCode loads `~/.config/opencode`, then the workspace's `opencode.json(c)`, then ES's config last. With the file above, session titles still run on your cell's model (a key both set is ES's), `files` loads beside the environment's MCP servers (objects merge, servers by name), and `webfetch` is off. Permission rules append, the last match winning, so ES's rules only deny: your own denies stand.
+OpenCode loads `~/.config/opencode`, then the workspace's `opencode.json(c)`, then reeval's config last. With the file above, session titles still run on your cell's model (a key both set is reeval's), `files` loads beside the environment's MCP servers (objects merge, servers by name), and `webfetch` is off. Permission rules append, the last match winning, so reeval's rules only deny: your own denies stand.
 
 OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, it also reads `.claude/skills` and `.agents/skills` in the workspace and the home directory, and nothing turns that off, so keep other agents' skills out of an OpenCode eval's files.
 
@@ -153,9 +153,9 @@ OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, 
 {"type":"web-search","toolCallId":"call_782405","query":"anomalyco opencode github","references":8,…}
 ```
 
-OpenCode's `websearch` tool calls a search service it's configured with; with none, it asks the user to pick one, which in an eval ends "Web search cancelled". ES points it at Exa's hosted MCP server (`https://mcp.exa.ai/mcp`), which answers without a key. The search runs from the sandbox, so `mcp.exa.ai` is one of OpenCode's automatic hosts and works under `egress: 'deny-all'`.
+OpenCode's `websearch` tool calls a search service it's configured with; with none, it asks the user to pick one, which in an eval ends "Web search cancelled". reeval points it at Exa's hosted MCP server (`https://mcp.exa.ai/mcp`), which answers without a key. The search runs from the sandbox, so `mcp.exa.ai` is one of OpenCode's automatic hosts and works under `egress: 'deny-all'`.
 
-Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, which the gateway can't swap in, so ES uses none rather than put a key in the container.
+Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, which the gateway can't swap in, so reeval uses none rather than put a key in the container.
 
 ## MCP servers
 
@@ -165,7 +165,7 @@ Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, w
 
 The environment's MCP servers go in OpenCode's config (`mcp.servers`), `stdio` as `local` and `http` as `remote`, with `codemode: false`, so the model calls their tools directly and the transcript has each call's input and output. An `sse` server is refused at plan time (exit 2). Over ACP's `session/new`, OpenCode would offer them only through Code Mode, its `execute` tool.
 
-OpenCode connects config MCP servers in the background once the session exists. ES runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
+OpenCode connects config MCP servers in the background once the session exists. reeval runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
 ## Errors
 
@@ -174,7 +174,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 | No model | `opencode(): needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got …)` |
 | A model without a provider (at plan time, exit 2) | `opencode(): an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got "gemini-3.8-flash")` |
 | A provider OpenCode doesn't know (exit 2) | `opencode(): OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'` |
-| A provider ES refuses (exit 2) | `opencode(): ES can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox` |
+| A provider reeval refuses (exit 2) | `opencode(): reeval can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox` |
 | A malformed `AWS_REGION` on Bedrock (exit 2) | `opencode(): AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"` |
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox` |
@@ -399,29 +399,29 @@ The providers OpenCode knows whose key the gateway can't swap in, or that can't 
 
 [//]: # (generated:opencode-refused)
 
-| Provider | Model ids | Why ES refuses it |
+| Provider | Model ids | Why reeval refuses it |
 |---|---|---|
 | AIHubMix | `aihubmix/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
 | Atomic Chat | `atomic-chat/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
-| Azure | `azure/…` | Its API host is per account (AZURE_RESOURCE_NAME), which ES doesn't pass. |
-| Cloudflare AI Gateway | `cloudflare-ai-gateway/…` | Its API host is per account (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_GATEWAY_ID), which ES doesn't pass. |
-| Cloudflare Workers AI | `cloudflare-workers-ai/…` | Its API host is per account (CLOUDFLARE_ACCOUNT_ID), which ES doesn't pass. |
-| Databricks | `databricks/…` | Its API host is per account (DATABRICKS_HOST), which ES doesn't pass. |
+| Azure | `azure/…` | Its API host is per account (AZURE_RESOURCE_NAME), which reeval doesn't pass. |
+| Cloudflare AI Gateway | `cloudflare-ai-gateway/…` | Its API host is per account (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_GATEWAY_ID), which reeval doesn't pass. |
+| Cloudflare Workers AI | `cloudflare-workers-ai/…` | Its API host is per account (CLOUDFLARE_ACCOUNT_ID), which reeval doesn't pass. |
+| Databricks | `databricks/…` | Its API host is per account (DATABRICKS_HOST), which reeval doesn't pass. |
 | GitHub Copilot | `github-copilot/…` | It runs on a GitHub Copilot subscription, through a GitHub login. |
 | GitLab Duo | `gitlab/…` | It runs on a GitLab Duo subscription, through a GitLab login. |
 | Vertex | `google-vertex/…` | It takes a service account (Vertex refuses API keys for most models), not a key in a header. |
-| Infomaniak | `infomaniak/…` | Its API host is per account (INFOMANIAK_PRODUCT_ID), which ES doesn't pass. |
+| Infomaniak | `infomaniak/…` | Its API host is per account (INFOMANIAK_PRODUCT_ID), which reeval doesn't pass. |
 | LMStudio | `lmstudio/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Lynkr | `lynkr/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Merge Gateway | `merge-gateway/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
 | Morph | `morph/…` | None of its models can call tools, so they can't run an agent. |
-| Neon | `neon/…` | Its API host is per account (NEON_AI_GATEWAY_BASE_URL), which ES doesn't pass. |
+| Neon | `neon/…` | Its API host is per account (NEON_AI_GATEWAY_BASE_URL), which reeval doesn't pass. |
 | Perplexity | `perplexity/…` | None of its models can call tools, so they can't run an agent. |
 | Privatemode AI | `privatemode-ai/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | QVAC | `qvac/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
 | SaladCloud AI Gateway | `salad-cloud/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
 | SAP AI Core | `sap-ai-core/…` | Its service key is JSON that OpenCode trades for OAuth tokens. |
-| Snowflake Cortex | `snowflake-cortex/…` | Its API host is per account (SNOWFLAKE_ACCOUNT), which ES doesn't pass. |
+| Snowflake Cortex | `snowflake-cortex/…` | Its API host is per account (SNOWFLAKE_ACCOUNT), which reeval doesn't pass. |
 | watsonx.ai | `watsonx/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
 
 [//]: # (/generated:opencode-refused)

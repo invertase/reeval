@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { houseRules } from './env.ts'
 
 // Under Claude Code, `rules` become the workspace's CLAUDE.md, word for word.

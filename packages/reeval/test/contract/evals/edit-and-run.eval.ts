@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { COMMAND_OUTPUT, notes, prompts, toolsMentioning, trimmed } from './probes.ts'
 
 // The agent edits a file and runs a command, and the transcript has both: an edit of notes.txt

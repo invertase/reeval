@@ -1,17 +1,17 @@
-// `es report --issue`: a pre-filled new-issue URL for ES's repository, from the package's `bugs`
+// `reeval report --issue`: a pre-filled new-issue URL for reeval's repository, from the package's `bugs`
 // field, or `gh issue create` when gh is installed and the user confirms. Nothing leaves the
 // machine without one of those two steps.
 import { execFile } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { run } from '@evalsuite/sandbox-docker/process'
+import { run } from '@reeval/sandbox-docker/process'
 import { PACKAGE_DIR } from '../root.ts'
 
 /** GitHub refuses longer new-issue URLs; this leaves room under its ~8 KB limit. */
 export const MAX_URL = 8000
 /** GitHub's limit on an issue body is 65536 characters. */
 export const MAX_BODY = 60_000
-/** The issue form in `.github/ISSUE_TEMPLATE/`, and the ids of the fields ES fills. */
+/** The issue form in `.github/ISSUE_TEMPLATE/`, and the ids of the fields reeval fills. */
 export const ISSUE_TEMPLATE = 'bug_report.yml'
 export const FIELDS = { report: 'report', whatHappened: 'what-happened' } as const
 
@@ -19,14 +19,14 @@ const TRUNCATED = '\n\n…cut to fit the URL: attach report.md for the rest.'
 
 export type IssueRepo = { issues: string; slug: string | null }
 
-/** The issues page from `bugs` in ES's package.json, so a rename moves it too. */
+/** The issues page from `bugs` in reeval's package.json, so a rename moves it too. */
 export function issueRepo(
   pkg: { bugs?: string | { url?: string } } = JSON.parse(
     readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8'),
   ),
 ): IssueRepo {
   const url = (typeof pkg.bugs === 'string' ? pkg.bugs : pkg.bugs?.url)?.replace(/\/+$/, '')
-  if (!url) throw new Error("ES's package.json has no bugs URL")
+  if (!url) throw new Error("reeval's package.json has no bugs URL")
   const slug = /^https:\/\/github\.com\/([^/]+\/[^/]+)\/issues$/.exec(url)?.[1] ?? null
   return { issues: url, slug }
 }
@@ -89,7 +89,7 @@ const exec = (command: string, args: string[]) =>
     )
   })
 
-/** gh through ES's own `run`, which finds it however it's installed on Windows (.exe or .cmd). */
+/** gh through reeval's own `run`, which finds it however it's installed on Windows (.exe or .cmd). */
 const gh = (args: string[]) =>
   run('gh', args, { signal: AbortSignal.timeout(60_000), detached: false }).then(
     (r) => ({ code: r.exitCode, stdout: r.stdout, stderr: r.stderr }),

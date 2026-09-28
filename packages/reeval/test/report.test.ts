@@ -1,4 +1,4 @@
-// `es report`: the bundle's contents, its redaction (seeded secrets, fragments, paths and
+// `reeval report`: the bundle's contents, its redaction (seeded secrets, fragments, paths and
 // variables never leak, with a canary proving they reach the raw data the report reads), no
 // network unless filing, the issue URL and its truncation, the gh path, the failure hint and the
 // `--out` formats.
@@ -22,7 +22,7 @@ import { tarGz } from '../src/report/tar.ts'
 import type { ReportBundle } from '../src/report/types.ts'
 import { fakeConfig, pkgRoot, project, runCli, tempDir } from './helpers.ts'
 
-// Seeds: each must never appear in anything es report writes or prints.
+// Seeds: each must never appear in anything reeval report writes or prints.
 const NAMED = 'sk-live-report-7f3a9c2e1b8d4f6a' // in a secret-named variable
 const UNNAMED = 'hunter2-webhook-q8w7e6r5t4y3' // in .env.local under an innocent name
 const TOKEN = `ghp_${'R3p0rtT0k3n'.repeat(4)}` // a token shape, set nowhere
@@ -69,11 +69,11 @@ const untar = (archive: string, into: string) =>
 async function failingProject(name: string) {
   const home = tempDir(`${name}-home`)
   const p = await project(`${name}`, {
-    'es.config.ts': fakeConfig({
+    'reeval.config.ts': fakeConfig({
       harness: `{ failWith: ['agent broke', process.env.MY_API_KEY, process.env.WEBHOOK, '${TOKEN}', '${FRAGMENT}', process.cwd(), process.env.HOME + '/elsewhere/cache'].join(' ') }`,
       extra: 'profiles: { pr: { defaults: { runs: 1 } } },',
     }),
-    'evals/agent.es.ts': `import { evaluate } from 'evalsuite'
+    'evals/agent.eval.ts': `import { evaluate } from 'reeval'
 evaluate('agent eval', async (t) => { await t.send('go') })
 `,
     '.env.local': `WEBHOOK=${UNNAMED}\n`,
@@ -83,7 +83,7 @@ evaluate('agent eval', async (t) => { await t.send('go') })
   return { ...p, home, env }
 }
 
-describe('es report: redaction', () => {
+describe('reeval report: redaction', () => {
   test("Windows' 8.3 short home, as TEMP spells it, is masked too", () => {
     const long = (p: string) => p.replace('RUNNER~1', 'runneradmin')
     const temp = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp'
@@ -145,12 +145,12 @@ describe('es report: redaction', () => {
       Buffer.from(NAMED).toString('base64'),
       encodeURIComponent(NAMED),
       TOKEN,
-      '/home/alice/work/app/es.config.ts',
+      '/home/alice/work/app/reeval.config.ts',
       '/home/alice/.npm/_logs',
     ].join('\n')
     const out = scrub.text(text)
     assert.deepEqual(leaks(out, { HOME: '/home/alice', PROJECT: '/home/alice/work/app' }), [])
-    assert.match(out, /<project>\/es\.config\.ts/)
+    assert.match(out, /<project>\/reeval\.config\.ts/)
     assert.match(out, /~\/\.npm\/_logs/)
     // Keys are scrubbed as well as values.
     assert.deepEqual(scrub.value({ [`/home/alice/${NAMED}`]: [NAMED] }), {
@@ -171,14 +171,14 @@ describe('es report: redaction', () => {
   })
 })
 
-describe('es report: the bundle', () => {
+describe('reeval report: the bundle', () => {
   test('a failed run: bundle contents, --out as a directory, nothing leaks, no network', async () => {
     const p = await failingProject('report-bundle')
     const run = await runCli(p.dir, ['run', '--profile', 'pr', 'agent'], { env: p.env })
     assert.equal(run.code, 3, run.stdout + run.stderr)
-    // The canary: ES's own debug data holds the seeds es report must mask (an innocently named
+    // The canary: reeval's own debug data holds the seeds reeval report must mask (an innocently named
     // .env value and the paths), so a report that copied it unscrubbed would fail below.
-    const debugText = allText(join(p.dir, '.es/debug'))
+    const debugText = allText(join(p.dir, '.reeval/debug'))
     assert.deepEqual(leaks(debugText, { PROJECT: p.dir, HOME: p.home }).sort(), [
       'HOME',
       'PROJECT',
@@ -189,14 +189,14 @@ describe('es report: the bundle', () => {
     const log = join(tempDir('report-net'), 'network.log')
     writeFileSync(log, '')
     const r = await runCli(p.dir, ['report', '--out', out], {
-      env: { ...p.env, NODE_OPTIONS: `--import ${NO_NETWORK}`, ES_TEST_NETWORK_LOG: log },
+      env: { ...p.env, NODE_OPTIONS: `--import ${NO_NETWORK}`, REEVAL_TEST_NETWORK_LOG: log },
     })
     assert.equal(r.code, 0, r.stderr)
-    assert.equal(readFileSync(log, 'utf8'), '', 'es report used the network')
+    assert.equal(readFileSync(log, 'utf8'), '', 'reeval report used the network')
     assert.deepEqual(readdirSync(out).sort(), ['report-logs.tar.gz', 'report.json', 'report.md'])
 
     const bundle: ReportBundle = JSON.parse(readFileSync(join(out, 'report.json'), 'utf8'))
-    assert.equal(bundle.kind, 'es-report')
+    assert.equal(bundle.kind, 'reeval-report')
     assert.equal(bundle.node, process.versions.node)
     assert.equal(bundle.os.platform, process.platform)
     assert.deepEqual(bundle.invocation?.argv, ['run', '--profile', '<value>', '<arg>'])
@@ -221,12 +221,12 @@ describe('es report: the bundle', () => {
     assert.deepEqual(leaks(written + r.stdout + r.stderr, { PROJECT: p.dir, HOME: p.home }), [])
 
     // The summary names the run, the failure and where it wrote.
-    assert.match(r.stdout, /^es report\n/)
-    assert.match(r.stdout, /\ncommand +es run --profile <value> <arg> → exit 3/)
-    assert.match(r.stdout, /\nfailing +evals\/agent\.es\.ts › agent eval # .*\(infra\)/)
+    assert.match(r.stdout, /^reeval report\n/)
+    assert.match(r.stdout, /\ncommand +reeval run --profile <value> <arg> → exit 3/)
+    assert.match(r.stdout, /\nfailing +evals\/agent\.eval\.ts › agent eval # .*\(infra\)/)
     assert.match(r.stdout, /\nlogs +2 debug files attached/)
 
-    // The count is every masked value the report holds: the key ES masked in the record and
+    // The count is every masked value the report holds: the key reeval masked in the record and
     // logs before the report read them, plus the .env value only the report masks.
     const { masked, upstream } = bundle.redaction
     const markers = (text: string) => text.split('[REDACTED]').length - 1
@@ -240,18 +240,18 @@ describe('es report: the bundle', () => {
     assert.match(
       r.stdout,
       new RegExp(
-        `\\nredacted +${masked} secret values masked, ${upstream} of them already by ES's records and logs;`,
+        `\\nredacted +${masked} secret values masked, ${upstream} of them already by reeval's records and logs;`,
       ),
     )
     assert.match(r.stdout, /Nothing was uploaded/)
   })
 
-  test('values ES masked before the report read them count, though the report masks none', async () => {
+  test('values reeval masked before the report read them count, though the report masks none', async () => {
     const p = await project('report-upstream', {
-      'es.config.ts': fakeConfig({
+      'reeval.config.ts': fakeConfig({
         harness: `{ failWith: 'agent failed: key ' + process.env.MY_API_KEY }`,
       }),
-      'evals/agent.es.ts': `import { evaluate } from 'evalsuite'
+      'evals/agent.eval.ts': `import { evaluate } from 'reeval'
 evaluate('agent eval', async (t) => { await t.send('go') })
 `,
     })
@@ -267,7 +267,7 @@ evaluate('agent eval', async (t) => { await t.send('go') })
     assert.match(
       plain.stdout,
       new RegExp(
-        `\\nredacted +${masked} secret values? masked, all already by ES's records and logs;`,
+        `\\nredacted +${masked} secret values? masked, all already by reeval's records and logs;`,
       ),
     )
   })
@@ -284,39 +284,39 @@ evaluate('agent eval', async (t) => { await t.send('go') })
       assert.equal(r.code, 0, r.stderr)
       assert.deepEqual(readdirSync(dirname(out)).sort(), files)
     }
-    assert.match(readFileSync(join(dir, 'a', 'bug.md'), 'utf8'), /^# es report\n/)
+    assert.match(readFileSync(join(dir, 'a', 'bug.md'), 'utf8'), /^# reeval report\n/)
 
     const json = await runCli(p.dir, ['report', '--json'], { env: p.env })
     assert.equal(json.code, 0, json.stderr)
-    assert.equal((JSON.parse(json.stdout) as ReportBundle).kind, 'es-report')
-    assert.equal(existsSync(join(p.dir, '.es/reports')), false)
+    assert.equal((JSON.parse(json.stdout) as ReportBundle).kind, 'reeval-report')
+    assert.equal(existsSync(join(p.dir, '.reeval/reports')), false)
 
     const plain = await runCli(p.dir, ['report'], { env: p.env })
-    const [stamp] = readdirSync(join(p.dir, '.es/reports'))
+    const [stamp] = readdirSync(join(p.dir, '.reeval/reports'))
     assert.match(stamp ?? '', /^\d{8}T\d{6}Z$/)
-    assert.match(plain.stdout, new RegExp(`Wrote \\.es/reports/${stamp}/report\\.md`))
+    assert.match(plain.stdout, new RegExp(`Wrote \\.reeval/reports/${stamp}/report\\.md`))
 
     const both = await runCli(p.dir, ['report', '--json', '--issue'], { env: p.env })
     assert.equal(both.code, 2)
   })
 
-  test('a crash: its stack is logged and --last reports it; the log skips es report', async () => {
+  test('a crash: its stack is logged and --last reports it; the log skips reeval report', async () => {
     const p = await project('report-crash', {
-      'es.config.ts': `${fakeConfig()}
+      'reeval.config.ts': `${fakeConfig()}
 if (process.argv.includes('run')) {
   setTimeout(() => Promise.reject(new Error('late failure in ' + process.cwd())), 0)
 }
 `,
-      '.gitignore': '.env*\n.es/\n',
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+      '.gitignore': '.env*\n.reeval/\n',
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
 evaluate('slow', async (t) => { await new Promise((r) => setTimeout(r, 2000)) })
 `,
-      '.es/.keep': '',
+      '.reeval/.keep': '',
     })
     const crash = await runCli(p.dir, ['run'])
     assert.equal(crash.code, 3, crash.stdout + crash.stderr)
-    assert.match(crash.stderr, /es: late failure/)
-    assert.match(crash.stderr, /hint: .*es report/)
+    assert.match(crash.stderr, /reeval: late failure/)
+    assert.match(crash.stderr, /hint: .*reeval report/)
     await runCli(p.dir, ['report', '--json'])
     await runCli(p.dir, ['doctor'])
     const logged = readInvocations(p.dir)
@@ -332,23 +332,23 @@ evaluate('slow', async (t) => { await new Promise((r) => setTimeout(r, 2000)) })
     assert.deepEqual(leaks(r.stdout, { PROJECT: p.dir }), [])
   })
 
-  test('the log keeps the newest 20 commands, and nothing outside a project with .es/', async () => {
-    const p = await project('report-log', { 'es.config.ts': fakeConfig() })
+  test('the log keeps the newest 20 commands, and nothing outside a project with .reeval/', async () => {
+    const p = await project('report-log', { 'reeval.config.ts': fakeConfig() })
     await runCli(p.dir, ['--version'])
-    assert.equal(existsSync(join(p.dir, '.es')), false)
-    mkdirSync(join(p.dir, '.es'))
+    assert.equal(existsSync(join(p.dir, '.reeval')), false)
+    mkdirSync(join(p.dir, '.reeval'))
     for (let i = 0; i < 22; i++) await runCli(p.dir, ['--version'])
     assert.equal(readInvocations(p.dir).length, 20)
   })
 })
 
-describe('es report: filing an issue', () => {
-  const repo = issueRepo({ bugs: { url: 'https://github.com/invertase/evalsuite/issues' } })
+describe('reeval report: filing an issue', () => {
+  const repo = issueRepo({ bugs: { url: 'https://github.com/invertase/reeval/issues' } })
 
   test("the repository comes from the package's bugs field, so a rename moves it", () => {
     assert.deepEqual(repo, {
-      issues: 'https://github.com/invertase/evalsuite/issues',
-      slug: 'invertase/evalsuite',
+      issues: 'https://github.com/invertase/reeval/issues',
+      slug: 'invertase/reeval',
     })
     assert.equal(
       issueRepo({ bugs: 'https://github.com/acme/renamed/issues/' }).slug,
@@ -365,14 +365,14 @@ describe('es report: filing an issue', () => {
     )
     for (const id of Object.values(FIELDS)) assert.match(template, new RegExp(`id: ${id}\\n`))
 
-    const short = new URL(issueUrl(repo, 'es run: it broke', 'line one\nline two'))
-    assert.equal(short.origin + short.pathname, 'https://github.com/invertase/evalsuite/issues/new')
+    const short = new URL(issueUrl(repo, 'reeval run: it broke', 'line one\nline two'))
+    assert.equal(short.origin + short.pathname, 'https://github.com/invertase/reeval/issues/new')
     assert.equal(short.searchParams.get('template'), ISSUE_TEMPLATE)
-    assert.equal(short.searchParams.get('title'), 'es run: it broke')
+    assert.equal(short.searchParams.get('title'), 'reeval run: it broke')
     assert.equal(short.searchParams.get(FIELDS.report), 'line one\nline two')
 
     const body = Array.from({ length: 800 }, (_, i) => `line ${i} ${'é ✓ '.repeat(4)}`).join('\n')
-    const url = issueUrl(repo, 'es run: it broke', body)
+    const url = issueUrl(repo, 'reeval run: it broke', body)
     assert.ok(url.length <= MAX_URL, `${url.length}`)
     const report = new URL(url).searchParams.get(FIELDS.report) ?? ''
     assert.match(report, /\n\n…cut to fit the URL: attach report\.md for the rest\.$/)
@@ -392,7 +392,7 @@ describe('es report: filing an issue', () => {
         calls.push(args)
         return over.code
           ? { code: over.code, stdout: '', stderr: 'HTTP 403' }
-          : { code: 0, stdout: 'https://github.com/invertase/evalsuite/issues/9\n', stderr: '' }
+          : { code: 0, stdout: 'https://github.com/invertase/reeval/issues/9\n', stderr: '' }
       },
       open: async (url: string) => {
         opened.push(url)
@@ -401,7 +401,7 @@ describe('es report: filing an issue', () => {
     })
     const base = {
       repo,
-      title: 'es run: it broke',
+      title: 'reeval run: it broke',
       body: 'the body',
       bodyFile: '/tmp/issue.md',
       whatHappened: '',
@@ -414,13 +414,13 @@ describe('es report: filing an issue', () => {
       'issue',
       'create',
       '--repo',
-      'invertase/evalsuite',
+      'invertase/reeval',
       '--title',
-      'es run: it broke',
+      'reeval run: it broke',
       '--body-file',
       '/tmp/issue.md',
     ])
-    assert.match(out.at(-1) ?? '', /^Filed https:\/\/github\.com\/invertase\/evalsuite\/issues\/9$/)
+    assert.match(out.at(-1) ?? '', /^Filed https:\/\/github\.com\/invertase\/reeval\/issues\/9$/)
     assert.deepEqual(opened, [])
     assert.equal(await fileIssue({ ...base, yes: true }, deps()), 'gh')
     assert.equal(calls.length, 2)
@@ -432,10 +432,10 @@ describe('es report: filing an issue', () => {
     assert.equal(await fileIssue({ ...base, interactive: false }, deps({ hasGh: false })), 'url')
     assert.equal(calls.length, 3)
     assert.equal(opened.length, 3)
-    assert.match(out.at(-1) ?? '', /^https:\/\/github\.com\/invertase\/evalsuite\/issues\/new\?/)
+    assert.match(out.at(-1) ?? '', /^https:\/\/github\.com\/invertase\/reeval\/issues\/new\?/)
   })
 
-  test('es report --issue --yes runs gh issue create with a scrubbed body file', async () => {
+  test('reeval report --issue --yes runs gh issue create with a scrubbed body file', async () => {
     const p = await failingProject('report-gh')
     await runCli(p.dir, ['run'], { env: p.env })
     const bin = tempDir('report-gh-bin')
@@ -445,7 +445,7 @@ describe('es report: filing an issue', () => {
       join(bin, 'gh.js'),
       `const args = process.argv.slice(2)
 require('node:fs').appendFileSync(${JSON.stringify(log)}, args.join(' ') + '\\n')
-if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/issues/42')
+if (args[0] === 'issue') console.log('https://github.com/invertase/reeval/issues/42')
 `,
     )
     writeFileSync(join(bin, 'gh'), `#!/bin/sh\nexec node "$(dirname "$0")/gh.js" "$@"\n`)
@@ -454,14 +454,14 @@ if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/iss
     const env = { ...p.env, PATH: `${bin}${delimiter}${process.env.PATH}` }
     const r = await runCli(p.dir, ['report', '--issue', '--yes'], { env })
     assert.equal(r.code, 0, r.stderr)
-    assert.match(r.stdout, /Filed https:\/\/github\.com\/invertase\/evalsuite\/issues\/42/)
+    assert.match(r.stdout, /Filed https:\/\/github\.com\/invertase\/reeval\/issues\/42/)
     const create = readFileSync(log, 'utf8')
       .split('\n')
       .find((l) => l.startsWith('issue create'))
     const bodyFile = /--body-file (\S+)/.exec(create ?? '')?.[1] ?? ''
-    assert.match(create ?? '', /--repo invertase\/evalsuite --title es run: infra: agent broke/)
+    assert.match(create ?? '', /--repo invertase\/reeval --title reeval run: infra: agent broke/)
     const body = readFileSync(bodyFile, 'utf8')
-    assert.match(body, /\*\*Command:\*\* `es run` → exit 3/)
+    assert.match(body, /\*\*Command:\*\* `reeval run` → exit 3/)
     assert.match(body, /attach `report\.md`/)
     // The body file's own path is local, for gh; everything sent is scrubbed.
     const sent = (create ?? '').replace(bodyFile, '')
@@ -471,7 +471,7 @@ if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/iss
     const url = await runCli(p.dir, ['report', '--issue'], { env })
     assert.match(
       url.stdout,
-      /\nhttps:\/\/github\.com\/invertase\/evalsuite\/issues\/new\?template=bug_report\.yml&/,
+      /\nhttps:\/\/github\.com\/invertase\/reeval\/issues\/new\?template=bug_report\.yml&/,
     )
     assert.equal(
       readFileSync(log, 'utf8')
@@ -482,18 +482,19 @@ if (args[0] === 'issue') console.log('https://github.com/invertase/evalsuite/iss
   })
 })
 
-describe('es report: the failure hint', () => {
-  test('an infra error suggests es report once, unless hidden, JSON or agent output', async () => {
+describe('reeval report: the failure hint', () => {
+  test('an infra error suggests reeval report once, unless hidden, JSON or agent output', async () => {
     const p = await failingProject('report-hint')
-    const hint = /^hint: if this looks like a bug in ES, es report collects a redacted report/m
+    const hint =
+      /^hint: if this looks like a bug in reeval, reeval report collects a redacted report/m
     const r = await runCli(p.dir, ['run'], { env: p.env })
     assert.equal(r.code, 3)
     assert.equal(r.stderr.match(new RegExp(hint.source, 'gm'))?.length, 1)
     for (const [args, env] of [
-      [['run'], { ES_NO_REPORT_HINT: '1' }],
+      [['run'], { REEVAL_NO_REPORT_HINT: '1' }],
       [['run', '--ui', 'agent'], {}],
-      [['run'], { ES_UI: 'agent' }],
-      [['run'], { CURSOR_AGENT: '1', ES_UI: '' }],
+      [['run'], { REEVAL_UI: 'agent' }],
+      [['run'], { CURSOR_AGENT: '1', REEVAL_UI: '' }],
     ] as const) {
       const quiet = await runCli(p.dir, [...args], { env: { ...p.env, ...env } })
       assert.equal(quiet.code, 3, args.join(' '))
@@ -503,14 +504,14 @@ describe('es report: the failure hint', () => {
         `${args.join(' ')} ${JSON.stringify(env)}`,
       )
     }
-    // An error the engine caught outside any eval gets it too, and es report has it.
+    // An error the engine caught outside any eval gets it too, and reeval report has it.
     const stray = await project('report-hint-stray', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
 setTimeout(() => Promise.reject(new Error('stray rejection')), 0)
 evaluate('waits', async () => { await new Promise((r) => setTimeout(r, 500)) })
 `,
-      '.es/.keep': '',
+      '.reeval/.keep': '',
     })
     const unhandled = await runCli(stray.dir, ['run'])
     assert.equal(unhandled.code, 1, unhandled.stdout + unhandled.stderr)
@@ -518,13 +519,13 @@ evaluate('waits', async () => { await new Promise((r) => setTimeout(r, 500)) })
     const report = await runCli(stray.dir, ['report', '--json'])
     const logged = (JSON.parse(report.stdout) as ReportBundle).invocation?.unhandledErrors ?? []
     assert.match(logged.join('\n'), /stray rejection/)
-    // Usage errors and passing runs are the user's to fix, not ES's.
+    // Usage errors and passing runs are the user's to fix, not reeval's.
     const usage = await runCli(p.dir, ['run', '--runs', 'x'], { env: p.env })
     assert.equal(usage.code, 2)
     assert.doesNotMatch(usage.stderr, hint)
     const ok = await project('report-hint-ok', {
-      'es.config.ts': fakeConfig(),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
 evaluate('passes', async () => {})
 `,
     })
@@ -534,7 +535,7 @@ evaluate('passes', async () => {})
   })
 })
 
-describe('es report: the logs archive', () => {
+describe('reeval report: the logs archive', () => {
   test('tar -xzf reads it, long paths included', () => {
     const long = `${'a'.repeat(60)}/${'b'.repeat(60)}/${'c'.repeat(40)}/debug.log`
     const archive = join(tempDir('tar'), 'x.tar.gz')

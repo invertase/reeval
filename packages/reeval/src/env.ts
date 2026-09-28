@@ -3,7 +3,7 @@ import { dirname, join, resolve } from 'node:path'
 
 /**
  * Loads .env.local, then .env, from the config file's directory (the current one only without a
- * config), so `es run` from a subdirectory reads the project's. Neither overrides a variable
+ * config), so `reeval run` from a subdirectory reads the project's. Neither overrides a variable
  * that's already set, so the environment wins over .env.local, which wins over .env.
  */
 export function loadEnvFiles(configPath: string | undefined): void {

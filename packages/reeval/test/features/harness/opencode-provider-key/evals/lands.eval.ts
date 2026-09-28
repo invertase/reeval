@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { closed, keysSeen, prompt } from './env.ts'
 
 // The agent's shell has the model's provider's key, as a placeholder, and no other provider's.

@@ -1,4 +1,4 @@
-// Generates a JSON Schema of each shape ES persists and later reads back, from the TypeScript types
+// Generates a JSON Schema of each shape reeval persists and later reads back, from the TypeScript types
 // that write and read them, with TypeScript 7's (unstable) checker API.
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
@@ -45,7 +45,7 @@ class Generator {
     this.srcDir = srcDir
   }
 
-  /** The name a type is kept under in `$defs`: a type alias or interface declared in ES's `src/`. */
+  /** The name a type is kept under in `$defs`: a type alias or interface declared in reeval's `src/`. */
   #nameOf(type: Any): string | null {
     const alias = type.getAliasSymbol()
     const symbol =
@@ -151,7 +151,7 @@ export function generate(
     for (const shape of shapes) {
       const file = join(PACKAGE_DIR, shape.file)
       const source = project.program.getSourceFile(file)
-      if (!source) throw new Error(`${shape.file} isn't in packages/evalsuite's tsconfig`)
+      if (!source) throw new Error(`${shape.file} isn't in packages/reeval's tsconfig`)
       const symbol = checker.getSymbolAtLocation(source)?.getExports().get(shape.type)
       if (!symbol) throw new Error(`${shape.file} doesn't export ${shape.type}`)
       // Declarations carry the checker's canonical path: lower case on a case-insensitive file

@@ -1,6 +1,6 @@
-import { defineConfig } from 'evalsuite'
-import { cursor } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
   harness: [

@@ -168,7 +168,7 @@ function checkCompare(value: unknown, where: string): void {
   for (const v of variants as unknown[]) {
     if (v === undefined) {
       throw new UsageError(
-        `compare lists undefined in ${where}. evalsuite has no baseline: the inherited environment is the control of compare; with none, the control is empty.`,
+        `compare lists undefined in ${where}. reeval has no baseline: the inherited environment is the control of compare; with none, the control is empty.`,
       )
     }
     if (!isEnvironment(v)) {
@@ -648,7 +648,7 @@ export const secretVarsIn = (env: EnvVars, attempt: PlannedAttempt): string[] =>
 
 const brokerHint = (s: UnbrokeredSecret) =>
   /^mcp\.[^.]+\.headers\./.test(s.label)
-    ? 'give the MCP server an https:// URL (ES brokers its header secrets to its own host, over HTTPS only)'
+    ? 'give the MCP server an https:// URL (reeval brokers its header secrets to its own host, over HTTPS only)'
     : `add the hosts it's sent to, e.g. secret.fromEnv('${s.from}', { hosts: ['api.example.com'] })`
 
 export const unbrokeredWarning = (s: UnbrokeredSecret) =>

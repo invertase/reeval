@@ -1,13 +1,13 @@
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
-import type { OpenCodeMcpServer } from '@evalsuite/harness-opencode'
+import type { OpenCodeMcpServer } from '@reeval/harness-opencode'
 import {
   providerEndpoints,
   providerHosts,
   providerModelResponses,
   providerServedModel,
   resolveOpenCodeProvider,
-} from '@evalsuite/harness-opencode/providers'
-import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
+} from '@reeval/harness-opencode/providers'
+import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type {
@@ -30,11 +30,11 @@ export type Layout = {
   harnessSkillDir: string
 }
 
-/** What ES needs to know about a real agent; everything else is the same for all of them. */
+/** What reeval needs to know about a real agent; everything else is the same for all of them. */
 export type Agent = Layout & {
   /** For messages. */
   name: string
-  /** The `evalsuite/harness` factory, for messages. */
+  /** The `reeval/harness` factory, for messages. */
   factory: string
   /** The host variable the harness authenticates with. It never enters the sandbox. */
   credential: string
@@ -50,7 +50,7 @@ export type Agent = Layout & {
   tokens?: Omit<DerivedTokens, 'name'>
   /**
    * Hosts the agent's CLI always tries and nothing needs, which no setting turns off. A
-   * restricted policy still refuses them, but ES records them apart from the real blocks and
+   * restricted policy still refuses them, but reeval records them apart from the real blocks and
    * `-v` summarises them once instead of a line per request.
    */
   expectedBlocked?: ExpectedBlocked
@@ -79,7 +79,7 @@ export type Agent = Layout & {
    * run.
    */
   forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
-  /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
+  /** reeval's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
    * The adapter, with `auth` always an explicit environment holding only the credential: left on
@@ -347,7 +347,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
   },
 }
 
-/** Every real agent ES can drive, by harness kind. */
+/** Every real agent reeval can drive, by harness kind. */
 export const AGENTS: Record<AgentKind, Agent> = {
   cursor: {
     ...LAYOUTS.cursor,
@@ -368,7 +368,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     unreported: cursorUnreported,
     mcpServers: cursorMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
-      (await import('@evalsuite/harness-cursor-sdk')).createCursorSdk({
+      (await import('@reeval/harness-cursor-sdk')).createCursorSdk({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
         ...(descriptor.kind === 'cursor' && descriptor.params
@@ -427,10 +427,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     servedModel: geminiServedModel,
     mcpServers: antigravityMcpServers,
     adapter: async ({ auth, mcpServers }) =>
-      (await import('@evalsuite/harness-antigravity')).createAntigravity({
+      (await import('@reeval/harness-antigravity')).createAntigravity({
         auth,
         ...(mcpServers ? { mcpServers } : {}),
-        // ES's Docker sandbox always brokers; a sandbox that can't must not get the key.
+        // reeval's Docker sandbox always brokers; a sandbox that can't must not get the key.
         requireCredentialBrokering: true,
       }),
   },
@@ -447,7 +447,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
-      (await import('@evalsuite/harness-opencode')).createOpenCode({
+      (await import('@reeval/harness-opencode')).createOpenCode({
         auth,
         model: descriptor.model,
         vars: opencodeVars(descriptor.model),
@@ -465,8 +465,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
-      (await import('@evalsuite/harness-goose')).createGoose({
-        // Goose reads the key as GOOGLE_API_KEY; ES's host variable is the one the others use.
+      (await import('@reeval/harness-goose')).createGoose({
+        // Goose reads the key as GOOGLE_API_KEY; reeval's host variable is the one the others use.
         auth: { GOOGLE_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
         model: descriptor.model,
         ...(mcpServers
@@ -490,8 +490,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
       )
     },
     adapter: async ({ auth }) =>
-      (await import('@evalsuite/harness-pi')).createPi({
-        // pi reads the key as GEMINI_API_KEY; ES's host variable is the one OpenCode and Goose use.
+      (await import('@reeval/harness-pi')).createPi({
+        // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
         auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
         requireCredentialBrokering: true,
       }),
@@ -508,7 +508,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     servedModel: openaiServedModel,
     mcpServers: codexMcpServers,
     adapter: async ({ auth, mcpServers }) =>
-      (await import('@evalsuite/harness-codex')).createCodex({
+      (await import('@reeval/harness-codex')).createCodex({
         auth,
         ...(mcpServers
           ? { mcpServers: mcpServers as Record<string, Record<string, unknown>> }

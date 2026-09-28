@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { pinned, staged } from './env.ts'
 
 // skill.git at a tag stages the skill as it was at that tag, not the branch head.

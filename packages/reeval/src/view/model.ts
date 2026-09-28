@@ -46,7 +46,7 @@ export type StudioInfo = {
   es: string
   project: string
   generatedAt: string
-  /** `debug`: local debug data (`.es/debug`) can be read; never in a static build. */
+  /** `debug`: local debug data (`.reeval/debug`) can be read; never in a static build. */
   features: { live: boolean; scratch: boolean; artifacts: boolean; debug: boolean }
 }
 
@@ -149,7 +149,7 @@ export function activityLabel(a: Pick<AttemptRecord['activity'], 'tools' | 'file
 // ── Runs list ────────────────────────────────────────────────────────────────────────────────
 
 /**
- * A run's outcome, as `es run`'s exit code has it: a failed gated cell (or a budget stop) fails
+ * A run's outcome, as `reeval run`'s exit code has it: a failed gated cell (or a budget stop) fails
  * the run, while failures in ungated cells (controls, by default) don't.
  */
 export function runOutcome(run: {
@@ -433,7 +433,7 @@ function gatedPassRate(cells: HistoryCell[]): number | null {
   return counted ? pass / counted : null
 }
 
-/** `es compare`'s classification, plus pass rates and judge-score deltas from the records. */
+/** `reeval compare`'s classification, plus pass rates and judge-score deltas from the records. */
 export function compareView(
   base: HistoryEntry,
   head: HistoryEntry,

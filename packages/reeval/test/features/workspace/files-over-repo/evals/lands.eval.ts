@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { patched } from './env.ts'
 
 // files are written after the repository is copied in, so they win.

@@ -103,7 +103,7 @@ const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implemen
 /**
  * Files the Cursor CLI (the ACP harness `cursor()` used before the Cursor SDK) rewrote every
  * session, under `~/` or its adapter's home. Records from then still list them; no current
- * harness writes session state into the paths ES records.
+ * harness writes session state into the paths reeval records.
  */
 const RETIRED_RUNTIME_STATE = new Set([
   '.cursor/cli-config.json',

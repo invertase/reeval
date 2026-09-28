@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { staged, vendored } from './env.ts'
 
 // skill.npm with a relative tarball path stages that tarball's skills.

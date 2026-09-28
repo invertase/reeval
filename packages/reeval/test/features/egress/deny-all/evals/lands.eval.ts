@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { agentSaw, closed } from './env.ts'
 
 // Under deny-all the sandbox has no route out but the gateway: a direct connection fails, and

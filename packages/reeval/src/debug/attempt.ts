@@ -26,7 +26,7 @@ const ENTRY_HEAD = 64 * 1024
 const MAX_SCREEN = 2000
 
 export type AttemptDebugOptions = {
-  /** `.es/debug/<runId>/<eval>/<cell>/<n>`. */
+  /** `.reeval/debug/<runId>/<eval>/<cell>/<n>`. */
   dir: string
   verbosity: Verbosity
   /** Bytes of trace kept in memory; older entries are dropped first. */

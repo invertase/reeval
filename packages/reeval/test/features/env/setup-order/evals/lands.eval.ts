@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { ordered } from './env.ts'
 
 // Setup steps run in order, the parent environment's first, each to completion.

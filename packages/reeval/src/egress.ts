@@ -5,7 +5,7 @@ import {
   type EgressCapabilities,
   HARNESS_HOSTS,
   PACKAGE_HOSTS,
-} from '@evalsuite/sandbox-docker'
+} from '@reeval/sandbox-docker'
 import { plannedSecrets } from './environment.ts'
 import { agentFor, isAgentKind } from './harness/agents.ts'
 import { FAKE_EGRESS } from './sandbox/fake.ts'

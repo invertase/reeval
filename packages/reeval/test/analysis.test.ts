@@ -1,5 +1,5 @@
-// The analysis MVP (docs/analysis-feature-design.md): the facts views in `es query`, effort next to
-// lift, and `es analyze`. The facts come out exactly on two real dogfood histories (trimmed by
+// The analysis MVP (docs/analysis-feature-design.md): the facts views in `reeval query`, effort next to
+// lift, and `reeval analyze`. The facts come out exactly on two real dogfood histories (trimmed by
 // fixtures/analysis/trim.mjs), each verdict rule has a canary where the opposite data must flip it,
 // and the model step runs on a fake model that returns canned (and deliberately wrong) answers.
 import assert from 'node:assert/strict'
@@ -24,11 +24,11 @@ import { fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
 
 type Row = Record<string, unknown>
 const FIXTURES = join(pkgRoot, 'test/fixtures/analysis')
-const UPDATE = !!process.env.ES_UPDATE_SNAPSHOTS
+const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 
-const CONFIG = `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
+const CONFIG = `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: fakeHarness({}),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
@@ -38,7 +38,7 @@ export default defineConfig({
 
 /** A project whose history is a copy of a fixture history, with an optional `analysis` config. */
 async function historyProject(name: string, fixture: string, analysis = '') {
-  const p = await project(name, { 'es.config.ts': CONFIG.replace('ANALYSIS', analysis) })
+  const p = await project(name, { 'reeval.config.ts': CONFIG.replace('ANALYSIS', analysis) })
   cpSync(join(FIXTURES, fixture), join(p.dir, 'evals/.history'), { recursive: true })
   return p
 }
@@ -49,7 +49,7 @@ async function query(dir: string, sql: string): Promise<Row[]> {
   return JSON.parse(r.stdout) as Row[]
 }
 
-/** The digest `es analyze --context` hands over, parsed back out of its Markdown. */
+/** The digest `reeval analyze --context` hands over, parsed back out of its Markdown. */
 async function digestOf(dir: string, args: string[] = []) {
   const r = await runCli(dir, ['analyze', '--context', ...args])
   assert.equal(r.code, 0, r.stderr)
@@ -64,7 +64,7 @@ type Digest = {
   attempts: Record<string, Row>
 }
 
-/** Compares `value` with a golden file; ES_UPDATE_SNAPSHOTS=1 rewrites it. */
+/** Compares `value` with a golden file; REEVAL_UPDATE_SNAPSHOTS=1 rewrites it. */
 function golden(name: string, value: unknown) {
   const path = join(FIXTURES, `${name}.golden.json`)
   const text = `${JSON.stringify(value, null, 2)}\n`
@@ -264,8 +264,8 @@ describe('canaries: the verdicts flip when the data does', () => {
 
   test('mixed outcomes over enough comparable attempts are flaky, caused by the agent', async () => {
     const p = await project('canary-flaky', {
-      'es.config.ts': fakeConfig(),
-      'evals/f.es.ts': `import { evaluate } from 'evalsuite'
+      'reeval.config.ts': fakeConfig(),
+      'evals/f.eval.ts': `import { evaluate } from 'reeval'
 evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (t) => {
   await t.send('go')
   if (t.attempt.n % 2 === 0) throw new Error('every other attempt fails')
@@ -294,11 +294,11 @@ describe('effort next to lift', () => {
     )
   })
 
-  test('es run, summary.md and es compare show each variant cell\u2019s effort beside its lift', async () => {
+  test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
     const p = await project('effort-summary', {
-      'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
-      'evals/c.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+      'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
 evaluate('greets', { compare: [skilled], runs: 2 }, async (t) => {
   await t.send('go')
@@ -329,89 +329,94 @@ evaluate('greets', { compare: [skilled], runs: 2 }, async (t) => {
   })
 })
 
-describe('es CLI spec', () => {
-  test('verify commands must parse as ES commands with their own flags', () => {
+describe('reeval CLI spec', () => {
+  test('verify commands must parse as reeval commands with their own flags', () => {
     const tables = ['effort', 'lift']
     const ok = [
-      'es query effort',
-      'npx es run --record',
-      'pnpm es compare latest~1 latest --md',
-      'es analyze latest --vs latest~1 --json',
-      'es run --tag smoke -vv',
-      'es studio build --out site',
-      'es image build --dry-run',
-      `es query "SELECT * FROM effort WHERE verdict = 'fewer'"`,
-      'es run --record && es query effort',
+      'reeval query effort',
+      'npx reeval run --record',
+      'pnpm reeval compare latest~1 latest --md',
+      'reeval analyze latest --vs latest~1 --json',
+      'reeval run --tag smoke -vv',
+      'reeval studio build --out site',
+      'reeval image build --dry-run',
+      `reeval query "SELECT * FROM effort WHERE verdict = 'fewer'"`,
+      'reeval run --record && reeval query effort',
     ]
     for (const c of ok) assert.equal(checkCommand(c, tables), null, c)
     const bad: Array<[string, RegExp]> = [
-      ['npx es compare r1 r2 --include-efficiency', /--include-efficiency isn't an ES flag/],
-      ['es eval fix-config --debug-judge', /es eval isn't an ES command/],
-      ['es run --eval scaffold', /--eval isn't an option of es run/],
-      ['es query efficiency', /no view or table named efficiency/],
-      ['es show latest --md --json extra', /takes at most 1 argument/],
-      ['es run --runs', /--runs needs a value/],
-      ['cat evals/x.ts', /isn't an es command/],
-      ['es query effort | head', /pipes/],
+      ['npx reeval compare r1 r2 --include-efficiency', /--include-efficiency isn't a reeval flag/],
+      ['reeval eval fix-config --debug-judge', /reeval eval isn't a reeval command/],
+      ['reeval run --eval scaffold', /--eval isn't an option of reeval run/],
+      ['reeval query efficiency', /no view or table named efficiency/],
+      ['reeval show latest --md --json extra', /takes at most 1 argument/],
+      ['reeval run --runs', /--runs needs a value/],
+      ['cat evals/x.ts', /isn't a reeval command/],
+      ['reeval query effort | head', /pipes/],
     ]
     for (const [c, why] of bad) assert.match(checkCommand(c, tables) ?? '', why, c)
   })
 
-  test('es run and es image build verify commands must select an eval of the run', () => {
+  test('reeval run and reeval image build verify commands must select an eval of the run', () => {
     const evals = [
       {
-        file: 'evals/skill.es.ts',
+        file: 'evals/skill.eval.ts',
         name: 'house greeting greets',
         tags: ['skill'],
         cells: ['fake/-', 'fake/with-skill'],
       },
       {
-        file: 'evals/hello.es.ts',
+        file: 'evals/hello.eval.ts',
         name: 'greet module creates',
         tags: ['smoke'],
         cells: ['fake/-'],
       },
     ]
     const ok = [
-      'es run --tag skill',
-      'es run --tag !skill',
-      'es run evals/skill.es.ts --runs 6',
-      'es run greets',
-      'es run with-skill --tag skill',
-      'es image build hello',
-      'es query effort',
+      'reeval run --tag skill',
+      'reeval run --tag !skill',
+      'reeval run evals/skill.eval.ts --runs 6',
+      'reeval run greets',
+      'reeval run with-skill --tag skill',
+      'reeval image build hello',
+      'reeval query effort',
     ]
     for (const c of ok) assert.equal(checkCommand(c, ['effort'], evals), null, c)
     const bad: Array<[string, RegExp]> = [
       [
-        'es run --runs 6 --tag nosuchtag',
-        /es run --tag nosuchtag: no eval in the run has the tag nosuchtag \(tags: skill, smoke\)/,
+        'reeval run --runs 6 --tag nosuchtag',
+        /reeval run --tag nosuchtag: no eval in the run has the tag nosuchtag \(tags: skill, smoke\)/,
       ],
       [
-        'es run nosuchname',
-        /es run: filter "nosuchname" matches no eval file, eval name or cell in the run/,
+        'reeval run nosuchname',
+        /reeval run: filter "nosuchname" matches no eval file, eval name or cell in the run/,
       ],
       [
-        'es run hello.es.ts --tag skill',
-        /es run hello\.es\.ts --tag skill selects no eval in the run/,
+        'reeval run hello.eval.ts --tag skill',
+        /reeval run hello\.eval\.ts --tag skill selects no eval in the run/,
       ],
-      ['es run --tag=nosuchtag', /es run --tag nosuchtag: no eval/],
-      ['es image build nosuchname', /es image build: filter "nosuchname" matches no eval/],
-      ['es run --record && es run --tag nope', /--tag nope: no eval/],
+      ['reeval run --tag=nosuchtag', /reeval run --tag nosuchtag: no eval/],
+      ['reeval image build nosuchname', /reeval image build: filter "nosuchname" matches no eval/],
+      ['reeval run --record && reeval run --tag nope', /--tag nope: no eval/],
     ]
     for (const [c, why] of bad) assert.match(checkCommand(c, [], evals) ?? '', why, c)
-    assert.equal(checkCommand('es run --tag nosuchtag'), null, 'without the run, only the syntax')
+    assert.equal(
+      checkCommand('reeval run --tag nosuchtag'),
+      null,
+      'without the run, only the syntax',
+    )
   })
 
-  test('the spec and es --help name the same commands and flags', async () => {
-    const p = await project('cli-spec', { 'es.config.ts': fakeConfig() })
+  test('the spec and reeval --help name the same commands and flags', async () => {
+    const p = await project('cli-spec', { 'reeval.config.ts': fakeConfig() })
     const help = (await runCli(p.dir, ['--help'])).stdout
     for (const command of Object.keys(COMMANDS))
-      assert.match(help, new RegExp(`\\n  es ${command}\\b`), command)
+      assert.match(help, new RegExp(`\\n  reeval ${command}\\b`), command)
     const named = new Set([...help.matchAll(/--([a-z][a-z-]+)/g)].map((m) => m[1] as string))
-    for (const flag of named) assert.ok(flag in FLAGS, `--${flag} in es --help isn't in the spec`)
+    for (const flag of named)
+      assert.ok(flag in FLAGS, `--${flag} in reeval --help isn't in the spec`)
     for (const flag of Object.keys(FLAGS))
-      assert.ok(named.has(flag), `--${flag} isn't in es --help`)
+      assert.ok(named.has(flag), `--${flag} isn't in reeval --help`)
   })
 })
 
@@ -443,11 +448,11 @@ const FAKE = `analysis: {
           ],
           anomalies: [{ text: 'Saturated evals.', kind: 'eval-design', cites: [sat.id] }],
           actions: [
-            action('npx es compare r1 r2 --include-efficiency'),
-            action('es query efficiency'),
-            action('es run --runs 6 --tag nosuchtag'),
-            action('es query effort'),
-            action('es run --record', ['F999']),
+            action('npx reeval compare r1 r2 --include-efficiency'),
+            action('reeval query efficiency'),
+            action('reeval run --runs 6 --tag nosuchtag'),
+            action('reeval query effort'),
+            action('reeval run --record', ['F999']),
           ],
           confidence: { overall: 'medium', why: 'n = 4 per cell per eval' },
         }
@@ -455,11 +460,11 @@ const FAKE = `analysis: {
     }),
   },`
 const FAKE_IMPORTS =
-  "import { appendFileSync } from 'node:fs'\nimport { fakeAnalysis } from 'evalsuite/judge'\n"
+  "import { appendFileSync } from 'node:fs'\nimport { fakeAnalysis } from 'reeval/judge'\n"
 
 async function fakeProject(name: string) {
   const p = await historyProject(name, 'dogfood', FAKE)
-  const config = join(p.dir, 'es.config.ts')
+  const config = join(p.dir, 'reeval.config.ts')
   writeFileSync(config, FAKE_IMPORTS + readFileSync(config, 'utf8'))
   return p
 }
@@ -486,12 +491,12 @@ function tree(dir: string): Map<string, string> {
 const HEAD = '20260926T104633Z_041aef3_ci_jzvq'
 const BASE = '20260926T104130Z_60f3dc9_cursor-agent_92gs'
 
-describe('es analyze', () => {
+describe('reeval analyze', () => {
   test('the digest is facts with ids, evidence by rule, and the verdict rules; --context needs no key', async () => {
     const p = await historyProject('analyze-context', 'dogfood')
     const { text, digest } = await digestOf(p.dir)
-    assert.match(text, new RegExp(`# ES analysis context: ${HEAD} vs ${BASE}`))
-    assert.match(text, /es query factor_effects/)
+    assert.match(text, new RegExp(`# reeval analysis context: ${HEAD} vs ${BASE}`))
+    assert.match(text, /reeval query factor_effects/)
     golden('dogfood-digest-facts', digest.facts)
     const failure = digest.facts.find((f) => f.kind === 'failure')
     assert.equal(failure?.attempt, 'r2/fix-config/control#1')
@@ -537,13 +542,13 @@ describe('es analyze', () => {
     assert.equal(a.results[0].unverifiedNumbers, undefined)
     assert.deepEqual(
       a.actions.map((x: { verify: string | null }) => x.verify),
-      [null, null, null, 'es query effort'],
+      [null, null, null, 'reeval query effort'],
       'the action citing only F999 is dropped',
     )
-    assert.match(a.actions[0].verifyProblem, /--include-efficiency isn't an ES flag/)
+    assert.match(a.actions[0].verifyProblem, /--include-efficiency isn't a reeval flag/)
     assert.match(
       a.actions[2].verifyProblem,
-      /es run --runs 6 --tag nosuchtag: es run --tag nosuchtag: no eval in the run has the tag nosuchtag/,
+      /reeval run --runs 6 --tag nosuchtag: reeval run --tag nosuchtag: no eval in the run has the tag nosuchtag/,
     )
     const v = doc.validation
     assert.deepEqual([v.dropped, v.commands, v.invalidCommands.length], [4, 4, 3])
@@ -560,7 +565,7 @@ describe('es analyze', () => {
     const text = await runCli(p.dir, ['analyze'])
     assert.match(
       text.stdout,
-      /verify: none \(npx es compare r1 r2 --include-efficiency: --include-efficiency isn't an ES flag\)/,
+      /verify: none \(npx reeval compare r1 r2 --include-efficiency: --include-efficiency isn't a reeval flag\)/,
     )
     assert.match(
       text.stdout,
@@ -576,8 +581,8 @@ describe('es analyze', () => {
     assert.equal(again.code, 0, again.stderr)
     assert.equal(calls(p.dir), 1, 'the cache answered')
     assert.match(again.stderr, /cached analysis from/)
-    assert.match(again.stdout, /^## ES analysis · /)
-    assert.equal(readdirSync(join(p.dir, '.es/analysis')).length, 1)
+    assert.match(again.stdout, /^## reeval analysis · /)
+    assert.equal(readdirSync(join(p.dir, '.reeval/analysis')).length, 1)
     const dry = await runCli(p.dir, ['analyze', '--dry-run'])
     assert.match(dry.stdout, /cache hit/)
     assert.match(dry.stdout, /≈ \d+ tokens \(cap 20000 in, 8000 out\)/)
@@ -611,7 +616,7 @@ describe('es analyze', () => {
       added.join(', '),
     )
     for (const [file, hash] of before) assert.equal(after.get(file), hash, `${file} is untouched`)
-    assert.equal(readdirSync(join(p.dir, '.es/analysis')).length, 1, 'the cache has it too')
+    assert.equal(readdirSync(join(p.dir, '.reeval/analysis')).length, 1, 'the cache has it too')
 
     const twice = await runCli(p.dir, ['analyze', '--save'])
     assert.equal(twice.code, 2)
@@ -648,7 +653,7 @@ describe('es analyze', () => {
     const cases: Array<[string, RegExp]> = [
       [
         '',
-        /es analyze needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \}.*es analyze --context/,
+        /reeval analyze needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \}.*reeval analyze --context/,
       ],
       [
         "analysis: { model: 'typesafe-ai/jev-1.13.0' },",
@@ -681,16 +686,16 @@ describe('es analyze', () => {
     const p = await fakeProject('analyze-scratch')
     const later = '20260926T120000Z_041aef3_ci_abcd'
     const record = JSON.parse(readFileSync(join(p.dir, 'evals/.history', `${HEAD}.json`), 'utf8'))
-    mkdirSync(join(p.dir, '.es/runs'), { recursive: true })
+    mkdirSync(join(p.dir, '.reeval/runs'), { recursive: true })
     writeFileSync(
-      join(p.dir, '.es/runs', `${later}.json`),
+      join(p.dir, '.reeval/runs', `${later}.json`),
       JSON.stringify({ ...record, runId: later }),
     )
     const r = await runCli(p.dir, ['analyze', 'latest', '--save'])
     assert.equal(r.code, 2)
     assert.match(
       r.stderr,
-      /isn't recorded, so there's no history folder to save into\. Run es record/,
+      /isn't recorded, so there's no history folder to save into\. Run reeval record/,
     )
   })
 })

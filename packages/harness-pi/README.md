@@ -1,4 +1,4 @@
-# @evalsuite/harness-pi
+# @reeval/harness-pi
 
 [pi](https://github.com/earendil-works/pi) on a Gemini API key, as an
 [AI SDK harness](https://ai-sdk.dev/docs), running inside the sandbox. It's shaped like the
@@ -6,7 +6,7 @@
 
 ```ts
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { createPi } from '@evalsuite/harness-pi'
+import { createPi } from '@reeval/harness-pi'
 
 const agent = new HarnessAgent({
   harness: createPi({

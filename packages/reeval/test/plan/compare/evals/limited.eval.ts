@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { skilled, terse } from './envs.ts'
 
 evaluate('two variants', { compare: [skilled, terse] }, async () => {})

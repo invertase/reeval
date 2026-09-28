@@ -1,22 +1,22 @@
 # The engine protocol
 
-How ES's main process (`node.ts`, `pool.ts`) and a worker (`worker.ts`) talk. The types are in
+How reeval's main process (`node.ts`, `pool.ts`) and a worker (`worker.ts`) talk. The types are in
 [`protocol.ts`](./protocol.ts); their JSON Schemas, generated from those types, are in
-`schema/plan/` (`to-worker`, `from-worker`, `wire-test` and `declaration`). This is internal: ES
+`schema/plan/` (`to-worker`, `from-worker`, `wire-test` and `declaration`). This is internal: reeval
 starts its own workers, and nothing outside this repository speaks it yet.
 
 ## Transport and framing
 
 ```text
-main process                                  worker: es __worker, cwd = project root
+main process                                  worker: reeval __worker, cwd = project root
   spawn(node, [--enable-source-maps, <cli>, __worker], stdio: [ignore, pipe, pipe, ipc])
   ── ToWorker ─────────────────────────────▶
   ◀──────────────────────────── FromWorker ──
 ```
 
-- One worker per eval file and phase, started as `es __worker` from the copy of ES the project
-  resolves (a compiled `es` starts itself). Its stdout and stderr are piped: text a worker writes
-  there outside ES's console routing is shown as the file's output.
+- One worker per eval file and phase, started as `reeval __worker` from the copy of reeval the project
+  resolves (a compiled `reeval` starts itself). Its stdout and stderr are piped: text a worker writes
+  there outside reeval's console routing is shown as the file's output.
 - Messages go over Node's IPC channel with `serialization: 'json'`: each message is one JSON
   value followed by a newline. Every message is a JSON object with a string `t`; nothing in one
   may be a value JSON can't carry (`undefined`, a function, a `Map`, `NaN`, a class instance), and
@@ -30,11 +30,11 @@ main process                                  worker: es __worker, cwd = project
 // worker → main, before anything else
 {"t":"hello","protocol":2}
 // main → worker, once the protocol matches
-{"t":"init","run":{…RunContext},"file":"/abs/evals/greet.es.ts","select":null}
+{"t":"init","run":{…RunContext},"file":"/abs/evals/greet.eval.ts","select":null}
 ```
 
 The worker says `hello` first, whatever it was sent. If `protocol` isn't the main process's
-`PROTOCOL`, the main process kills the worker and stops with a usage error naming the other ES.
+`PROTOCOL`, the main process kills the worker and stops with a usage error naming the other reeval.
 Only then does it send `init`: `select: null` to collect the file, or the indexes of the tests to
 run.
 
@@ -63,7 +63,7 @@ run.
 ## Errors
 
 ```jsonc
-{"t":"load-error","error":{"name":"SyntaxError","message":"Unexpected token (evals/a.es.ts:3:7)"}}
+{"t":"load-error","error":{"name":"SyntaxError","message":"Unexpected token (evals/a.eval.ts:3:7)"}}
 {"t":"unhandled","error":{"name":"Error","message":"boom","stack":"Error: boom\n    at …"}}
 ```
 
@@ -74,7 +74,7 @@ evals; `unhandled` fails the run; a failed attempt is a `result` with `state: "f
 ## Versions
 
 `PROTOCOL` in `protocol.ts` is one integer, bumped whenever a message changes shape or meaning,
-or the framing changes; there's no negotiation. A worker from another ES must speak the same
+or the framing changes; there's no negotiation. A worker from another reeval must speak the same
 number. `pnpm schema:check` fails when `schema/plan/` isn't what the types generate, so a change
 to a message shows up in review with its snapshot.
 

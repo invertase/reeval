@@ -47,7 +47,7 @@ describe('studio data paths', () => {
 
   test('reject traversal, odd segments and unknown areas', () => {
     for (const path of [
-      `data/runs/${RUN}/../../es.config.ts`,
+      `data/runs/${RUN}/../../reeval.config.ts`,
       `data/runs/${RUN}/./summary.md`,
       `data/runs/${RUN}//summary.md`,
       `data/runs/${RUN}/.hidden`,
@@ -71,9 +71,9 @@ describe('studio data paths', () => {
 
 // A real history: three recorded runs of the fake agent (pass, fail, a control and a variant ×
 // two runs) and one scratch run.
-const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'evalsuite'
+const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
 const other = defineEnvironment('other', {})
-group('greet', process.env.ES_TEST_COMPARE ? { compare: [other], runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: [other], runs: 2 } : {}, () => {
   evaluate('writes hello', async (t) => {
     await t.send('write hello.txt')
     await expect(t.exec('test -f hello.txt')).toSucceed()
@@ -90,10 +90,10 @@ const records = new Map<string, RunRecord>()
 
 before(async () => {
   const p = await project('studio', {
-    '.gitignore': '.es/\nnode_modules/\nsandboxes/\n',
-    'es.config.ts': fakeConfig({ harness: agent }),
-    'evals/hello.es.ts': evalFile,
-    'es.fail.config.ts': fakeConfig({
+    '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
+    'reeval.config.ts': fakeConfig({ harness: agent }),
+    'evals/hello.eval.ts': evalFile,
+    'reeval.fail.config.ts': fakeConfig({
       harness: agent,
       judge: '{ model: fakeJudge({ score: 0.2 }) }',
     }),
@@ -101,8 +101,8 @@ before(async () => {
   dir = p.dir
   for (const [args, env] of [
     [['run', '--record']],
-    [['run', '--record', '--config', 'es.fail.config.ts']],
-    [['run', '--record'], { ES_TEST_COMPARE: '1' }],
+    [['run', '--record', '--config', 'reeval.fail.config.ts']],
+    [['run', '--record'], { REEVAL_TEST_COMPARE: '1' }],
     [['run']],
   ] as Array<[string[], NodeJS.ProcessEnv?]>) {
     const r = await runCli(dir, args, { env })
@@ -111,27 +111,27 @@ before(async () => {
   source = { root: dir, historyDir: join(dir, 'evals/.history'), scratch: true }
   headers = await listHeaders(source)
   for (const h of headers) {
-    const folder = h.recorded ? source.historyDir : join(dir, '.es/runs')
+    const folder = h.recorded ? source.historyDir : join(dir, '.reeval/runs')
     records.set(h.runId, JSON.parse(readFileSync(join(folder, `${h.runId}.json`), 'utf8')))
   }
 })
 
 describe('run outcome and activity, as the CLI has them', () => {
-  const skilled = `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+  const skilled = `import { defineEnvironment, evaluate, expect } from 'reeval'
 const skilled = defineEnvironment('skilled', ({ skill }) => ({
   skills: [skill.inline({ name: 'ok', description: 'Writes ok.txt', content: 'Write ok.txt.' })],
 }))
-const compare = process.env.ES_TEST_GATE_ALL ? { variants: [skilled], gate: 'all' as const } : [skilled]
+const compare = process.env.REEVAL_TEST_GATE_ALL ? { variants: [skilled], gate: 'all' as const } : [skilled]
 evaluate('writes ok', { compare }, async (t) => {
   await t.send('write ok.txt')
   await expect(t.exec('test -f ok.txt')).toSucceed()
 })
 `
 
-  test("a run whose only failures are ungated is passed, as es run's exit 0 says", async () => {
+  test("a run whose only failures are ungated is passed, as reeval run's exit 0 says", async () => {
     const p = await project('studio-ungated', {
-      'es.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
-      'evals/ok.es.ts': skilled,
+      'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+      'evals/ok.eval.ts': skilled,
     })
     const ungated = await runCli(p.dir, ['run'])
     assert.equal(ungated.code, 0, ungated.stdout + ungated.stderr)
@@ -144,7 +144,7 @@ evaluate('writes ok', { compare }, async (t) => {
     assert.deepEqual([header.summary.fail, header.summary.notGated], [1, 1])
     assert.equal(runOutcome(header), 'pass')
     const recordOf = (h: HistoryEntry) =>
-      JSON.parse(readFileSync(join(p.dir, '.es/runs', `${h.runId}.json`), 'utf8')) as RunRecord
+      JSON.parse(readFileSync(join(p.dir, '.reeval/runs', `${h.runId}.json`), 'utf8')) as RunRecord
     // The studio's tree counts the control's miss apart, so the file doesn't read as failed.
     assert.deepEqual(evalTree(recordOf(header))[0]?.tally, {
       pass: 1,
@@ -154,8 +154,8 @@ evaluate('writes ok', { compare }, async (t) => {
       skipped: 0,
     })
 
-    // Twin: the same failure in a gated control fails the run, and es run exits 1.
-    const gated = await runCli(p.dir, ['run'], { env: { ES_TEST_GATE_ALL: '1' } })
+    // Twin: the same failure in a gated control fails the run, and reeval run exits 1.
+    const gated = await runCli(p.dir, ['run'], { env: { REEVAL_TEST_GATE_ALL: '1' } })
     assert.equal(gated.code, 1, gated.stdout + gated.stderr)
     const latest = (
       await listHeaders({ root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true })
@@ -206,7 +206,7 @@ describe('view-models over a real history', () => {
       [...headers.map((h) => h.runId)].sort(),
     )
     const evalHeader = headers[0]?.evals[0]
-    assert.match(evalHeader?.slug ?? '', /^evals-hello-es-ts-greet-writes-hello-/)
+    assert.match(evalHeader?.slug ?? '', /^evals-hello-eval-ts-greet-writes-hello-/)
     assert.deepEqual(
       evalHeader?.cells.map((c) => [c.key, c.pass, c.runs]),
       [['fake/-/fake', 1, 1]],
@@ -246,7 +246,7 @@ describe('view-models over a real history', () => {
 
   test('runs list: a run over a subset of cells is no drift, before or after it', () => {
     const cell = (harness: string, env: string, image: string) => ({
-      key: `${harness}/${env}/es-tarball`,
+      key: `${harness}/${env}/reeval-tarball`,
       role: 'variant',
       variant: env,
       harness,
@@ -255,9 +255,11 @@ describe('view-models over a real history', () => {
       fingerprint: `${harness}/${env}/${image}`,
       fingerprintParts: { image, agentCli: harness.startsWith('cursor') ? '2026.09' : '1.2.11' },
     })
-    const agy = ['es-good', 'es-weak'].map((e) => cell('antigravity:gemini', e, 'sha256:a1'))
+    const agy = ['reeval-good', 'reeval-weak'].map((e) =>
+      cell('antigravity:gemini', e, 'sha256:a1'),
+    )
     const cursor = (image: string) =>
-      ['es-good', 'es-weak'].map((e) => cell('cursor:composer', e, image))
+      ['reeval-good', 'reeval-weak'].map((e) => cell('cursor:composer', e, image))
     const run = (n: number, cells: ReturnType<typeof cell>[]) =>
       ({
         runId: `2026092${n}T000000Z_abc1234_ci_000${n}`,
@@ -276,7 +278,7 @@ describe('view-models over a real history', () => {
         },
         evals: [
           {
-            id: 'evals/scaffold.es.ts › scaffolds',
+            id: 'evals/scaffold.eval.ts › scaffolds',
             slug: 'scaffolds',
             outcome: 'pass',
             fingerprint: cells.map((c) => c.fingerprint).join(),
@@ -313,7 +315,7 @@ describe('view-models over a real history', () => {
     const matrix = records.get(headers[2]?.runId as string) as RunRecord
     const tree = evalTree(matrix)
     assert.equal(tree[0]?.kind, 'group')
-    assert.equal(tree[0]?.name, 'evals/hello.es.ts')
+    assert.equal(tree[0]?.name, 'evals/hello.eval.ts')
     assert.deepEqual(tree[0]?.tally, { pass: 4, fail: 0, missed: 0, infra: 0, skipped: 0 })
     const rows = cellRows(matrix.evals[0] as RunRecord['evals'][number])
     assert.deepEqual(
@@ -485,21 +487,21 @@ describe('studio server', () => {
 
   test('traversal, encoded tricks and symlinks out of a run never reach a file', async () => {
     const runId = headers[0]?.runId as string
-    await symlink(join(dir, 'es.config.ts'), join(source.historyDir, runId, 'escape.txt'))
+    await symlink(join(dir, 'reeval.config.ts'), join(source.historyDir, runId, 'escape.txt'))
     await symlink(
-      join(dir, 'es.config.ts'),
+      join(dir, 'reeval.config.ts'),
       join(source.historyDir, '20990101T000000Z_abc1234_x_a1b2.json'),
     )
     for (const path of [
       `/data/runs/${runId}/escape.txt`,
       '/data/runs/20990101T000000Z_abc1234_x_a1b2.json',
-      `/data/runs/${runId}/..%2F..%2F..%2Fes.config.ts`,
-      `/data/runs/${runId}/%2e%2e/%2e%2e/es.config.ts`,
+      `/data/runs/${runId}/..%2F..%2F..%2Freeval.config.ts`,
+      `/data/runs/${runId}/%2e%2e/%2e%2e/reeval.config.ts`,
       `/data/runs/${runId}/summary.md%00.txt`,
-      `/data/runs/${runId}/..%5C..%5Ces.config.ts`,
+      `/data/runs/${runId}/..%5C..%5Creeval.config.ts`,
       '/data/runs/20260101T000000Z_0000000_nobody_a1b2.json',
-      '/assets/../../es.config.ts',
-      '/es.config.ts',
+      '/assets/../../reeval.config.ts',
+      '/reeval.config.ts',
       '/data/unknown',
     ]) {
       const res = await get(path)
@@ -537,8 +539,8 @@ describe('studio server', () => {
 
     for (const [runId, key] of [
       [passed.runId, `${passed.key}0`],
-      [passed.runId, 'evals/hello.es.ts › greet › writes hello'],
-      [passed.runId, '../../../es.config.ts # x#1'],
+      [passed.runId, 'evals/hello.eval.ts › greet › writes hello'],
+      [passed.runId, '../../../reeval.config.ts # x#1'],
       ['not-a-run', passed.key],
     ]) {
       assert.equal(await view(runId as string, key as string), null, key)
@@ -567,7 +569,7 @@ const filesIn = (root: string): string[] =>
     .map((e) => relative(root, join(e.parentPath, e.name)).replaceAll(sep, '/'))
     .sort()
 
-describe('es studio build', () => {
+describe('reeval studio build', () => {
   test('writes a static site with the same paths the server answers', async () => {
     assert.ok(existsSync(join(pkgRoot, 'dist/studio-app/index.html')), 'run pnpm build first')
     const out = join(dir, 'site')
@@ -584,7 +586,7 @@ describe('es studio build', () => {
     assert.equal(info.mode, 'static')
     assert.equal(info.features.artifacts, true)
     assert.equal(info.features.debug, false, 'local debug data is never published')
-    assert.ok(existsSync(join(dir, '.es/debug')), 'twin: the project has debug data')
+    assert.ok(existsSync(join(dir, '.reeval/debug')), 'twin: the project has debug data')
     assert.deepEqual(
       written.filter((f) => /debug\.log|trace\.ndjson|requests\.ndjson|^api\//.test(f)),
       [],
@@ -639,7 +641,7 @@ describe('es studio build', () => {
     assert.match(refused.stderr, /isn't empty and isn't a previous studio build/)
   })
 
-  test('es studio prints a tokenised 127.0.0.1 URL and serves the app', async () => {
+  test('reeval studio prints a tokenised 127.0.0.1 URL and serves the app', async () => {
     const child = spawn(
       process.execPath,
       [join(pkgRoot, 'dist/cli.js'), 'studio', '--port', '47311'],

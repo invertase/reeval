@@ -16,7 +16,7 @@ import type {
 } from '../types.ts'
 import type { CellEffort } from '../view/effort.ts'
 
-/** Stays 1 while ES is pre-release: the record changes in place. */
+/** Stays 1 while reeval is pre-release: the record changes in place. */
 export const SCHEMA_VERSION = 1
 
 export type ArtifactLevel = 'all' | 'failures' | 'none'
@@ -27,12 +27,12 @@ export type FileRef = { path: string; sha256: string; bytes: number }
 
 export type GitInfo = {
   /**
-   * The commit the run executed at: HEAD when `es run` started. The later commit that adds the
+   * The commit the run executed at: HEAD when `reeval run` started. The later commit that adds the
    * history file is a different, descendant commit.
    */
   sha: string
   branch: string | null
-  /** Uncommitted changes, outside `.es/` and the history folder, when the run started. */
+  /** Uncommitted changes, outside `.reeval/` and the history folder, when the run started. */
   dirty: boolean
   /** sha256 of the uncommitted changes (tracked and untracked, as a binary patch), when dirty. */
   diffHash: string | null
@@ -81,7 +81,7 @@ export type AttemptFiles = {
   /** Each environment setup step's command, exit code, duration and output. */
   setupLog?: FileRef
   transcript?: FileRef
-  /** Unnormalised harness stream parts, only with `ES_RAW_TRANSCRIPT=1`. */
+  /** Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`. */
   rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
@@ -255,7 +255,7 @@ export type RunSummary = {
   skipped: number
 }
 
-/** The tokens the run used, as the harnesses count them; ES prices nothing. */
+/** The tokens the run used, as the harnesses count them; reeval prices nothing. */
 export type Cost = {
   /** Prompt tokens, cache reads and writes included. */
   inputTokens: number | null
@@ -367,7 +367,7 @@ export type Stack = {
     /** Model ids the provider reported serving, across every judge call in the run. */
     resolvedModels: string[]
     threshold: number
-    /** Changes when ES, the AI SDK or the provider adapter (and so the judge prompt) change. */
+    /** Changes when reeval, the AI SDK or the provider adapter (and so the judge prompt) change. */
     version: string
   }
   /** Union of every attempt's context files. */
@@ -376,7 +376,7 @@ export type Stack = {
   fingerprintScope: string[]
 }
 
-/** The parts of a run's stack that `es compare` checks for drift. */
+/** The parts of a run's stack that `reeval compare` checks for drift. */
 export type StackSummary = {
   imageIds: string[]
   agentClis: string[]

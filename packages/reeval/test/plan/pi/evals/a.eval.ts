@@ -1,6 +1,6 @@
-import { evaluate } from 'evalsuite'
-import { pi } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+import { evaluate } from 'reeval'
+import { pi } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 evaluate('both harnesses', async () => {})
 evaluate('pi only, own id', { harness: pi({ model: 'gemini-3.8-pro', id: 'pim' }) }, async () => {})

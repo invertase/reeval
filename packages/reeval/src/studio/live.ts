@@ -1,4 +1,4 @@
-// Runs in progress for `es studio`: each running `es run`'s `.es/staging/<runId>/live.json`,
+// Runs in progress for `reeval studio`: each running `reeval run`'s `.reeval/staging/<runId>/live.json`,
 // until its record lands. Only the local server reads these; a static build never has them.
 
 import { existsSync } from 'node:fs'
@@ -22,7 +22,7 @@ import type { StudioSource } from './source.ts'
 /** A live run whose heartbeat is older than this is shown as stopped. */
 export const STALE_MS = 15_000
 
-export const stagingRoot = (root: string) => join(root, '.es', 'staging')
+export const stagingRoot = (root: string) => join(root, '.reeval', 'staging')
 
 export type LiveOptions = { now?: number; staleMs?: number }
 

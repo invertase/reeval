@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting, shellOutput } from './env.ts'
 
 // Must fail: the skill goes to ~/.agents/skills, not ~/.codex/skills, where Codex

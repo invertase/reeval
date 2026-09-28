@@ -1,7 +1,7 @@
 // Tiers F, D and C: one directory per feature under test/features/, each with one check
-// (evals/lands.es.ts) and a canary that must fail (evals/canary.es.ts). The same fixture runs on
-// the fake sandbox, in Docker when Docker and ES's image are there, and on real Cursor with
-// ES_TEST_REAL=1 and CURSOR_API_KEY. The oracle here checks the record from outside; see
+// (evals/lands.eval.ts) and a canary that must fail (evals/canary.eval.ts). The same fixture runs on
+// the fake sandbox, in Docker when Docker and reeval's image are there, and on real Cursor with
+// REEVAL_TEST_REAL=1 and CURSOR_API_KEY. The oracle here checks the record from outside; see
 // test/features/README.md for adding one.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -21,12 +21,12 @@ import { networkInterfaces } from 'node:os'
 import { dirname, join } from 'node:path'
 import { after, before, describe, test } from 'node:test'
 import { gzipSync } from 'node:zlib'
-import { ANTIGRAVITY_CLI_VERSION } from '@evalsuite/harness-antigravity'
-import { CODEX_CLI_VERSION } from '@evalsuite/harness-codex'
-import { GOOSE_CLI_VERSION } from '@evalsuite/harness-goose'
-import { OPENCODE_CLI_VERSION } from '@evalsuite/harness-opencode'
-import { PI_CLI_VERSION } from '@evalsuite/harness-pi'
-import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sandbox-docker'
+import { ANTIGRAVITY_CLI_VERSION } from '@reeval/harness-antigravity'
+import { CODEX_CLI_VERSION } from '@reeval/harness-codex'
+import { GOOSE_CLI_VERSION } from '@reeval/harness-goose'
+import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
+import { PI_CLI_VERSION } from '@reeval/harness-pi'
+import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandbox-docker'
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -40,7 +40,7 @@ import {
 } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
 
-/** `real` is Docker with real Cursor (ES_FIXTURE_HARNESS=cursor), one fixture at a time. */
+/** `real` is Docker with real Cursor (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time. */
 type Tier = 'fake' | 'docker' | 'real'
 
 type Feature = {
@@ -56,13 +56,13 @@ type Feature = {
   /** When the check is that the attempt fails, e.g. an infra error; else it must pass. */
   lands?: Pick<EvalExpectation, 'outcome' | 'error'>
   /**
-   * Host variables for `es run`, e.g. what `secret.fromEnv` reads; a function runs at test time,
+   * Host variables for `reeval run`, e.g. what `secret.fromEnv` reads; a function runs at test time,
    * with the copied project's directory.
    */
   hostEnv?: NodeJS.ProcessEnv | ((dir: string) => NodeJS.ProcessEnv)
-  /** Where `es run` starts, under the copied project; defaults to its root. */
+  /** Where `reeval run` starts, under the copied project; defaults to its root. */
   cwd?: string
-  /** Runs on the copied project before `es run`. */
+  /** Runs on the copied project before `reeval run`. */
   prepare?: (dir: string) => void
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
   record?: (view: {
@@ -71,7 +71,7 @@ type Feature = {
     runDir: string
     tier: Tier
   }) => void | Promise<void>
-  /** ES's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
+  /** reeval's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
   /**
    * The harness the real tier runs it on, with that contract row's model and key, when it isn't
@@ -80,7 +80,7 @@ type Feature = {
   realHarness?: HarnessRow['id']
 }
 
-const TOKEN = 'es-fixture-token-7c1d9a0b52e4'
+const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
 /** With characters each encoding changes: space, `/`, `+`, `"`, `&`, `?` and `=`. */
 const LEAKY = 'es leak/7c+1d"9a&b?0=e4f2'
 
@@ -97,12 +97,12 @@ const leakyForms = () => {
 
 /**
  * A listener on the host at an address that isn't loopback (the gateway never reaches loopback),
- * for the egress fixtures: `ES_EGRESS_HOST` is its address, `ES_EGRESS_TARGET` adds the port.
+ * for the egress fixtures: `REEVAL_EGRESS_HOST` is its address, `REEVAL_EGRESS_TARGET` adds the port.
  */
 const egressTarget = { host: '', port: 0, requests: 0 }
 const listener = createServer((_, res) => {
   egressTarget.requests++
-  res.end('es-egress-ok')
+  res.end('reeval-egress-ok')
 })
 before(async () => {
   const addresses = Object.entries(networkInterfaces()).flatMap(([name, list]) =>
@@ -117,7 +117,7 @@ before(async () => {
 after(() => listener.close())
 
 /** The token `workspace/token` fetches with, and the git HTTP server that insists on it. */
-const GIT_TOKEN = 'es-fixture-git-token-5e0b77c2d9a1'
+const GIT_TOKEN = 'reeval-fixture-git-token-5e0b77c2d9a1'
 let gitHttp: GitHttp
 before(async () => {
   gitHttp = await gitHttpServer(GIT_TOKEN)
@@ -208,8 +208,8 @@ function publish(dir: string) {
   }
 }
 const egressEnv = () => ({
-  ES_EGRESS_HOST: egressTarget.host,
-  ES_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
+  REEVAL_EGRESS_HOST: egressTarget.host,
+  REEVAL_EGRESS_TARGET: `${egressTarget.host}:${egressTarget.port}`,
 })
 
 /** The `lands` eval's first attempt. */
@@ -283,7 +283,7 @@ export const features: Feature[] = [
     env: 'greeting',
     canary: /to include '\.\/evals\/prompts\.md'/,
     record: ({ run }) =>
-      assert.deepEqual(skills(run)[0]?.excluded, ['.history/', 'evals/', 'greets.es.ts']),
+      assert.deepEqual(skills(run)[0]?.excluded, ['.history/', 'evals/', 'greets.eval.ts']),
   },
   {
     dir: 'skills/exclude-custom',
@@ -332,9 +332,9 @@ export const features: Feature[] = [
         tree: git(repo, 'rev-parse', 'v1:app'),
       })
       // A partial fetch: the cache has app/'s blobs, not the rest of the repository's.
-      const [cache] = readdirSync(join(project, '.es/cache/git/repos'))
+      const [cache] = readdirSync(join(project, '.reeval/cache/git/repos'))
       const missing = git(
-        join(project, '.es/cache/git/repos', cache ?? ''),
+        join(project, '.reeval/cache/git/repos', cache ?? ''),
         'rev-list',
         '--objects',
         '--missing=print',
@@ -361,11 +361,14 @@ export const features: Feature[] = [
     env: 'private',
     canary: /expected .*Hello.* to contain 'Ahoy'/,
     prepare: versionedRepo,
-    hostEnv: (dir) => ({ ES_GIT_HTTP: gitHttp.serve(dir), ES_FIXTURE_GIT_TOKEN: GIT_TOKEN }),
+    hostEnv: (dir) => ({
+      REEVAL_GIT_HTTP: gitHttp.serve(dir),
+      REEVAL_FIXTURE_GIT_TOKEN: GIT_TOKEN,
+    }),
     record: ({ run, project }) => {
       assert.equal(workspaceOf(run)?.ref, 'v1')
       const header = Buffer.from(`x-access-token:${GIT_TOKEN}`).toString('base64')
-      for (const file of filesUnder(join(project, '.es'))) {
+      for (const file of filesUnder(join(project, '.reeval'))) {
         const text = readFileSync(file, 'latin1')
         assert.ok(!text.includes(GIT_TOKEN) && !text.includes(header), `the token is in ${file}`)
       }
@@ -378,7 +381,10 @@ export const features: Feature[] = [
     env: 'private',
     canary: /to contain '/,
     prepare: versionedRepo,
-    hostEnv: (dir) => ({ ES_GIT_HTTP: gitHttp.serve(dir), ES_FIXTURE_GIT_TOKEN: GIT_TOKEN }),
+    hostEnv: (dir) => ({
+      REEVAL_GIT_HTTP: gitHttp.serve(dir),
+      REEVAL_FIXTURE_GIT_TOKEN: GIT_TOKEN,
+    }),
   },
   {
     dir: 'workspace/missing-ref',
@@ -552,7 +558,7 @@ export const features: Feature[] = [
     dir: 'secrets/checks-hidden-from-agent',
     tiers: ['fake', 'docker'],
     env: 'tokens',
-    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected 'unset\\n' to be '\[REDACTED\]\\n'/,
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
   },
@@ -560,7 +566,7 @@ export const features: Feature[] = [
     dir: 'secrets/checks-visible-to-checks',
     tiers: ['fake', 'docker'],
     env: 'tokens',
-    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
     canary: /expected '\[REDACTED\]' to be ''/,
     record: ({ runDir }) => assert.equal(filesContaining(runDir, TOKEN), ''),
   },
@@ -568,8 +574,8 @@ export const features: Feature[] = [
     dir: 'secrets/brokered-agent-sees-placeholder',
     tiers: ['fake', 'docker'],
     env: 'keys',
-    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
-    canary: /expected 'es_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'reeval_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
     record: ({ run, runDir }) => {
       assert.deepEqual(landed(run)?.env.brokered, ['API_KEY'])
       assert.equal(filesContaining(runDir, TOKEN), '')
@@ -580,8 +586,8 @@ export const features: Feature[] = [
     dir: 'secrets/brokered-checks-see-placeholder',
     tiers: ['fake', 'docker'],
     env: 'keys',
-    hostEnv: { ES_FIXTURE_TOKEN: TOKEN },
-    canary: /expected 'es_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
+    hostEnv: { REEVAL_FIXTURE_TOKEN: TOKEN },
+    canary: /expected 'reeval_secret_[0-9A-Za-z]+…' to be '\[REDACTED\]'/,
     record: ({ run, runDir }) => {
       assert.deepEqual(landed(run)?.env, {
         vars: [],
@@ -596,16 +602,16 @@ export const features: Feature[] = [
     dir: 'secrets/cursor-session-tokens',
     tiers: ['real'],
     env: 'plain',
-    canary: /expected '' to match \/\^es_secret_\//,
+    canary: /expected '' to match \/\^reeval_secret_\//,
   },
   {
     dir: 'secrets/redaction-coverage',
     tiers: ['fake', 'docker'],
     env: 'leaky',
-    hostEnv: { ES_FIXTURE_LEAKY: LEAKY },
+    hostEnv: { REEVAL_FIXTURE_LEAKY: LEAKY },
     canary: /not to contain '\[REDACTED\]'/,
     async record({ project, runDir, tier }) {
-      const env = { ES_FIXTURE_LEAKY: LEAKY, ES_FIXTURE_SANDBOX: tier }
+      const env = { REEVAL_FIXTURE_LEAKY: LEAKY, REEVAL_FIXTURE_SANDBOX: tier }
       const recorded = await runCli(project, ['record'], { env })
       assert.equal(recorded.code, 0, recorded.stdout + recorded.stderr)
       const site = join(project, 'site')
@@ -640,7 +646,7 @@ export const features: Feature[] = [
     env: 'listed',
     canaryEnv: 'closed',
     hostEnv: egressEnv,
-    canary: /expected 'blocked by the ES egress policy: the …' to be 'es-egress-ok'/,
+    canary: /expected 'blocked by the reeval egress policy: …' to be 'reeval-egress-ok'/,
     record: ({ run }) => {
       const egress = landed(run)?.egress
       assert.deepEqual(egress?.policy, { allow: [egressTarget.host] })
@@ -650,7 +656,7 @@ export const features: Feature[] = [
         [reached?.host, reached?.port, reached?.connections, more],
         [egressTarget.host, egressTarget.port, 1, []],
       )
-      assert.ok((reached?.sent ?? 0) > 0 && (reached?.received ?? 0) > 'es-egress-ok'.length)
+      assert.ok((reached?.sent ?? 0) > 0 && (reached?.received ?? 0) > 'reeval-egress-ok'.length)
       assert.deepEqual(egress?.blocked, [])
     },
   },
@@ -659,7 +665,7 @@ export const features: Feature[] = [
     tiers: ['docker'],
     env: 'listed',
     canary:
-      /expected 'blocked by the ES egress policy: bloc…' not to contain 'blocked by the ES egress policy'/,
+      /expected 'blocked by the reeval egress policy: …' not to contain 'blocked by the reeval egress policy'/,
     record: ({ run }) =>
       assert.deepEqual(landed(run)?.egress, {
         policy: { allow: ['api.example.com'] },
@@ -726,8 +732,8 @@ export const features: Feature[] = [
     tiers: ['docker'],
     env: 'keyed',
     canaryEnv: 'closed',
-    hostEnv: () => ({ ...egressEnv(), ES_FIXTURE_TOKEN: TOKEN }),
-    canary: /expected 'blocked by the ES egress policy: the …' to be 'es-egress-ok'/,
+    hostEnv: () => ({ ...egressEnv(), REEVAL_FIXTURE_TOKEN: TOKEN }),
+    canary: /expected 'blocked by the reeval egress policy: …' to be 'reeval-egress-ok'/,
     record: ({ run, runDir }) => {
       const egress = landed(run)?.egress
       assert.equal(egress?.policy, 'deny-all')
@@ -1076,7 +1082,7 @@ export const features: Feature[] = [
     canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
       assert.match(image?.agentCli ?? '', /\(Claude Code\)$/)
     },
   },
@@ -1089,7 +1095,7 @@ export const features: Feature[] = [
     record: ({ run }) => {
       const [image] = run.stack.images
       // Not baked again: the Dockerfile's base carries Antigravity's harness label.
-      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
       assert.equal(image?.agentCli, ANTIGRAVITY_CLI_VERSION)
     },
   },
@@ -1101,7 +1107,7 @@ export const features: Feature[] = [
     canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
       assert.equal(image?.agentCli, `opencode v${OPENCODE_CLI_VERSION}`)
     },
   },
@@ -1113,7 +1119,7 @@ export const features: Feature[] = [
     canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
       assert.match(
         image?.agentCli ?? '',
         new RegExp(`${GOOSE_CLI_VERSION.replaceAll('.', '\\.')}$`),
@@ -1128,7 +1134,7 @@ export const features: Feature[] = [
     canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
       assert.equal(image?.agentCli, PI_CLI_VERSION)
     },
   },
@@ -1140,7 +1146,7 @@ export const features: Feature[] = [
     canary: /expected '' to match \/\\\/@cursor\\\/sdk\$\//,
     record: ({ run }) => {
       const [image] = run.stack.images
-      assert.match(image?.base ?? '', /^evalsuite-dockerfile:docker-[0-9a-f]{16}$/)
+      assert.match(image?.base ?? '', /^reeval-dockerfile:docker-[0-9a-f]{16}$/)
       assert.equal(image?.agentCli, `codex-cli ${CODEX_CLI_VERSION}`)
     },
   },
@@ -1218,19 +1224,19 @@ const imageBuilt = (ref: string) => {
   }
 }
 const dockerReady = imageBuilt(DEFAULT_IMAGE)
-const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 /** Real Cursor, for the attempt ledger (support/harnesses.ts). */
 const cursorRow = harnesses.find((h) => h.id === 'cursor') as (typeof harnesses)[number]
 /** The contract row a fixture's real tier runs on: Cursor, or its `realHarness`. */
 const realRowOf = (f: Feature) =>
   f.realHarness ? (harnesses.find((h) => h.id === f.realHarness) as HarnessRow) : cursorRow
-/** Cursor's is ES_REAL_MODEL's (default composer-2.5); another row's is its contract model. */
+/** Cursor's is REEVAL_REAL_MODEL's (default composer-2.5); another row's is its contract model. */
 const realModelOf = (row: HarnessRow) => (row === cursorRow ? realModel : (row.model ?? ''))
 /** The real tier runs only when asked, since it spends money; asked, it needs the key. */
-const real = process.env.ES_TEST_REAL === '1'
-const realModel = process.env.ES_REAL_MODEL ?? 'composer-2.5'
-/** `ES_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
-const only = process.env.ES_FIXTURE_TIERS?.split(',')
+const real = process.env.REEVAL_TEST_REAL === '1'
+const realModel = process.env.REEVAL_REAL_MODEL ?? 'composer-2.5'
+/** `REEVAL_FIXTURE_TIERS=docker` (or `fake`) runs one tier only. */
+const only = process.env.REEVAL_FIXTURE_TIERS?.split(',')
 
 /** Containers are removed by a detached `docker rm`, which may finish after the CLI exits. */
 async function containersGone(runId: string, deadlineMs = 20_000): Promise<void> {
@@ -1247,9 +1253,9 @@ async function containersGone(runId: string, deadlineMs = 20_000): Promise<void>
 }
 
 function skipTier(tier: Tier, image?: BakedHarness): string | false {
-  if (only && !only.includes(tier)) return `ES_FIXTURE_TIERS=${only.join(',')}`
+  if (only && !only.includes(tier)) return `REEVAL_FIXTURE_TIERS=${only.join(',')}`
   if (tier === 'real')
-    return real ? false : 'set ES_TEST_REAL=1 (and CURSOR_API_KEY) for real Cursor'
+    return real ? false : 'set REEVAL_TEST_REAL=1 (and CURSOR_API_KEY) for real Cursor'
   if (tier === 'docker' && !requireDocker) {
     if (!dockerReady) return `needs Docker and ${DEFAULT_IMAGE}`
     if (image && !imageBuilt(imageFor(image))) return `needs ${imageFor(image)}`
@@ -1272,11 +1278,11 @@ function fixtureTests(tiers: Tier[]) {
         const r = await runCli(cwd, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
           env: {
             ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
-            ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
+            REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
             ...(tier === 'real'
               ? {
-                  ES_FIXTURE_HARNESS: harnessOf(row),
-                  ES_REAL_MODEL: realModelOf(row),
+                  REEVAL_FIXTURE_HARNESS: harnessOf(row),
+                  REEVAL_REAL_MODEL: realModelOf(row),
                   ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
                 }
               : {}),
@@ -1322,8 +1328,8 @@ test('every feature fixture is in the table, with one check and a canary', () =>
     .sort()
   assert.deepEqual(dirs, features.map((f) => f.dir).sort())
   for (const dir of dirs) {
-    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => f.endsWith('.es.ts'))
-    assert.deepEqual(evals.sort(), ['canary.es.ts', 'lands.es.ts'], dir)
-    assert.ok(existsSync(join(root, dir, 'es.config.ts')), dir)
+    const evals = readdirSync(join(root, dir, 'evals')).filter((f) => f.endsWith('.eval.ts'))
+    assert.deepEqual(evals.sort(), ['canary.eval.ts', 'lands.eval.ts'], dir)
+    assert.ok(existsSync(join(root, dir, 'reeval.config.ts')), dir)
   }
 })

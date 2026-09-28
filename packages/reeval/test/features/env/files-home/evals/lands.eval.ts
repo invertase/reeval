@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { homeFiles } from './env.ts'
 
 // A `~/` file lands in the sandbox's home directory.

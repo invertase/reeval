@@ -4,8 +4,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { mkdir, rm } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
-import { placeholder, type Substitution } from '@evalsuite/sandbox-docker'
-import { run } from '@evalsuite/sandbox-docker/process'
+import { placeholder, type Substitution } from '@reeval/sandbox-docker'
+import { run } from '@reeval/sandbox-docker/process'
 import { parse as parseYaml } from 'yaml'
 import { badCharacterAt, parseDuration } from '../config.ts'
 import {
@@ -279,7 +279,13 @@ function cloneSkills(root: string, url: string, ref: string | undefined) {
   let clone = clones.get(key)
   if (!clone) {
     clone = (async () => {
-      const dir = join(root, '.es', 'cache', 'skills', `${sha256(key).slice(0, 16)}-${process.pid}`)
+      const dir = join(
+        root,
+        '.reeval',
+        'cache',
+        'skills',
+        `${sha256(key).slice(0, 16)}-${process.pid}`,
+      )
       await rm(dir, { recursive: true, force: true })
       await mkdir(dir, { recursive: true })
       const what = `Cloning ${url}${ref ? ` at ${ref}` : ''}`
@@ -303,7 +309,7 @@ function unpackNpm(root: string, spec: string) {
     pack = (async () => {
       const dir = join(
         root,
-        '.es',
+        '.reeval',
         'cache',
         'skills',
         `npm-${sha256(spec).slice(0, 16)}-${process.pid}`,

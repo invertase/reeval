@@ -1,6 +1,6 @@
 // Effort next to lift: tool calls and agent time per cell, and a variant's against its control.
 // Pass rate can't tell a skill that makes the agent 4× cheaper from no skill at all when both
-// pass, so effort is reported with its own test and verdict. No USD: prices aren't ES's to know.
+// pass, so effort is reported with its own test and verdict. No USD: prices aren't reeval's to know.
 import type { AttemptRecord, EvalEntry } from '../history/types.ts'
 import { mannWhitney, median, minimumP, quantile } from '../stats.ts'
 

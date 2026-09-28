@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { MCP_LOG, prompts, stamped, toolNames, withFakeMcp } from './probes.ts'
 
 // The environment's stdio MCP server is started in the sandbox and the agent calls its tool: the

@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 // deny-all: the provider's API is one of the automatic hosts, so the turn still runs.
 export const closed = defineEnvironment('closed', { egress: 'deny-all' })

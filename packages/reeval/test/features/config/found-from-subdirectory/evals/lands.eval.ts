@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 
 // Run from deep/nested/, the config's file('marker.txt') is the project root's.
 evaluate('lands', async (t) => {

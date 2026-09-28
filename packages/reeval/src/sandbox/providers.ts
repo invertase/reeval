@@ -1,11 +1,6 @@
-// The sandbox providers ES has, each meeting the prepare contract (provider.ts). Docker builds
+// The sandbox providers reeval has, each meeting the prepare contract (provider.ts). Docker builds
 // images; the fake sandbox needs nothing.
-import {
-  type DockerState,
-  dockerState,
-  ImageBuildError,
-  isTransient,
-} from '@evalsuite/sandbox-docker'
+import { type DockerState, dockerState, ImageBuildError, isTransient } from '@reeval/sandbox-docker'
 import { UsageError } from '../errors.ts'
 import type { DockerSandboxDescriptor, FakeSandboxDescriptor, HarnessDescriptor } from '../types.ts'
 import type { Refresh } from './prepare.ts'
@@ -49,7 +44,7 @@ export function dockerProblem(
 ): string | null {
   if (state === 'running') return null
   if (state === 'windows-containers')
-    return "Docker is running Windows containers, but ES's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again."
+    return "Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again."
   return platform === 'win32'
     ? 'Docker is not running. Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.'
     : 'Docker is not running. Start Docker and try again.'

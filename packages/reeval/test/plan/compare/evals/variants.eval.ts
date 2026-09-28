@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 import { base, skilled, terse } from './envs.ts'
 
 evaluate(

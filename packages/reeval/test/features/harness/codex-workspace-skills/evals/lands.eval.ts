@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Under Codex, a workspace-placed skill lands in .agents/skills, which it reads from the repo.

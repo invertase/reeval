@@ -5,7 +5,7 @@ description: How a judge scores a yes/no question, which model it calls, and how
 
 `t.judge(question)` asks an evaluation model a yes/no question about the agent's latest turn. The model returns the probability of "yes", and the verdict passes when that score is at or above the threshold.
 
-```ts title="evals/hello.es.ts"
+```ts title="evals/hello.eval.ts"
 evaluate('adds a default name in a follow-up turn', async (t) => {
   await t.send(
     'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
@@ -38,7 +38,7 @@ The score is P(yes), from 0 to 1. The threshold defaults to 0.8, and a verdict i
 
 `judge` merges field by field, innermost first: the call, then the eval, then each group, then the config. So an eval or a single call can change the threshold and keep the config's model:
 
-```ts title="evals/strict.es.ts"
+```ts title="evals/strict.eval.ts"
 evaluate('strict', { judge: { threshold: 0.9 } }, async (t) => {
   await t.send('Rename add.js to sum.js and update its imports.')
   const minimal = await t.judge('Is the change minimal?', { threshold: 0.7 })
@@ -48,7 +48,7 @@ evaluate('strict', { judge: { threshold: 0.9 } }, async (t) => {
 
 ## Which model it calls
 
-There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `t.judge()` fails with `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in es.config.ts, on the group or eval, or pass { model } to this call.`
+There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `t.judge()` fails with `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.`
 
 ```mermaid
 flowchart LR
@@ -118,17 +118,17 @@ So the judge can't tell whether the agent ran the tests; check that with `t.exec
 
 ## Write questions the judge can grade
 
-Ask one thing, about what the judge sees, in words that don't assume one solution. The ES dogfood run found the failure mode: a question that named specific matchers failed a correct scaffold at 0.05, because the agent used `t.readFile` and `toEqual` instead.
+Ask one thing, about what the judge sees, in words that don't assume one solution. The reeval dogfood run found the failure mode: a question that named specific matchers failed a correct scaffold at 0.05, because the agent used `t.readFile` and `toEqual` instead.
 
 | Brittle | Better |
 |---|---|
 | Pass only if the eval uses `toHaveFile` or `t.exec` to check the file. | Does the eval check that the file was created with the right content? |
-| Pass only if the final message names all three mistakes correctly: … | Does the final message explain why `compare` can't go in `es.config.ts`? |
+| Pass only if the final message names all three mistakes correctly: … | Does the final message explain why `compare` can't go in `reeval.config.ts`? |
 | Did the agent run the tests? | Use `t.exec('npm test')` and `toSucceed()` instead |
 
 "Pass only if …" questions with several conditions are the most brittle: every extra clause is another way to score near 0. Split them into several `t.judge` calls, and move anything a command can check into a check.
 
-<Image src="/assets/studio/attempt-judge.png" alt="ES studio attempt page, Judge tab: the question, the score against the threshold and the judge input" width={800} />
+<Image src="/assets/studio/attempt-judge.png" alt="reeval studio attempt page, Judge tab: the question, the score against the threshold and the judge input" width={800} />
 
 ## Next
 

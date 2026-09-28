@@ -1,5 +1,5 @@
-// The side-by-side comparison of ES's engine with the Vitest engine it replaces. With
-// ES_DIFFERENTIAL_DIR set, every `es` the tests run (`runCli`) appends what it did to
+// The side-by-side comparison of reeval's engine with the Vitest engine it replaces. With
+// REEVAL_DIFFERENTIAL_DIR set, every `reeval` the tests run (`runCli`) appends what it did to
 // <dir>/<test file>.jsonl: exit code, output and run record, with the parts that vary run to run
 // (times, run ids, temp paths, the order concurrent attempts print in) normalised away.
 // scripts/differential.mjs runs the suites once per engine and compares the captures.
@@ -18,20 +18,22 @@ export type Capture = {
 }
 
 const runsIn = (cwd: string) => {
-  const dir = join(cwd, '.es/runs')
+  const dir = join(cwd, '.reeval/runs')
   return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')) : []
 }
 
 /** Call before the CLI runs; the returned function captures it once it has exited. */
 export function startCapture(cwd: string, args: string[], name: string) {
-  const dir = process.env.ES_DIFFERENTIAL_DIR
+  const dir = process.env.REEVAL_DIFFERENTIAL_DIR
   if (!dir) return () => {}
   const before = new Set(runsIn(cwd))
   return (result: { code: number | null; stdout: string; stderr: string }, roots: string[]) => {
     const created = runsIn(cwd).filter((f) => !before.has(f))
     const record = created.length
       ? normaliseRecord(
-          JSON.parse(readFileSync(join(cwd, '.es/runs', created.sort().at(-1) as string), 'utf8')),
+          JSON.parse(
+            readFileSync(join(cwd, '.reeval/runs', created.sort().at(-1) as string), 'utf8'),
+          ),
           roots,
         )
       : null
@@ -65,7 +67,7 @@ export function normaliseText(text: string, roots: string[]): string {
       .replace(/\d{8}T\d{6}Z_[0-9a-z]+_[a-z0-9-]+_[0-9a-z]{4}/g, '<run>')
       .replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d|\+<t>)/g, '<time>')
       .replace(/\d{8}T\d{6}Z_[a-z0-9-]+_[0-9a-f]{8}/g, '<analysis>')
-      .replace(/\S*\/es-test-[A-Za-z0-9]{6}\//g, '<dir>/')
+      .replace(/\S*\/reeval-test-[A-Za-z0-9]{6}\//g, '<dir>/')
       .replace(/<dir>\/[^/\s]*\[REDACTED\][^/\s]*\//g, '<dir>/')
       .replace(/(<dir>\/[\w-]+?)-[A-Za-z0-9]{6}(?=\/)/g, '$1')
       .replace(/\+\d+:\d\d\b/g, '+<t>')
@@ -94,8 +96,8 @@ export function normaliseText(text: string, roots: string[]): string {
       // Which engine ran is a fact of the record, not a behaviour: Vitest, or @vitest/expect and jiti.
       .replace(/@vitest\/expect [\d.]+ · jiti [\d.]+|\bvitest [\d.]+/g, '<engine>')
       .replace(/^ *"(vitest|@vitest\/expect|jiti)": "[\d.]+",?(\n|$)/gm, '')
-      .replace(/es-sandbox-[A-Za-z0-9]{6}/g, 'es-sandbox-<x>')
-      .replace(/es_secret_[A-Za-z0-9]+/g, 'es_secret_<x>')
+      .replace(/reeval-sandbox-[A-Za-z0-9]{6}/g, 'reeval-sandbox-<x>')
+      .replace(/reeval_secret_[A-Za-z0-9]+/g, 'reeval_secret_<x>')
       .replace(/"(\w*(?:Ms|At|_ms)|median|mean|q1|q3|min|max|p\d+)": ?-?[\d.]+/g, '"$1": <n>')
       .replace(/×(\d+(\.\d+)?|–)/g, '×<r>')
       .replace(/\b\d+(\.\d+)?(ms|s|m)\b/g, '<n>')
@@ -142,7 +144,7 @@ export function renormalise(capture: Capture): Capture {
     live: capture.live
       .map((l) => normaliseText(l, []))
       // The Vitest engine sent progress over an async RPC, so an attempt's last line could land
-      // after its result, where the renderer drops it; ES's IPC keeps them in order.
+      // after its result, where the renderer drops it; reeval's IPC keeps them in order.
       .filter((l) => l && !/\] {2}\+<t> cleaning up$/.test(l))
       .sort(),
     summary: normaliseText(capture.summary, []),

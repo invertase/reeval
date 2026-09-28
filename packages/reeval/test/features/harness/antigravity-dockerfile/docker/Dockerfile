@@ -1,3 +1,3 @@
-ARG ES_BASE
-FROM ${ES_BASE}
-RUN echo 'from the dockerfile' > /etc/es-fixture
+ARG REEVAL_BASE
+FROM ${REEVAL_BASE}
+RUN echo 'from the dockerfile' > /etc/reeval-fixture

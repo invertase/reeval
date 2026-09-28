@@ -1,6 +1,6 @@
 // Tier P: "given this config and these evals, the matrix is Y". Each case runs
-// `es run --dry-run --json` on a directory under test/plan/ and compares the normalised matrix
-// with test/plan/<dir>/expected/<case>.txt. ES_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
+// `reeval run --dry-run --json` on a directory under test/plan/ and compares the normalised matrix
+// with test/plan/<dir>/expected/<case>.txt. REEVAL_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
 import { availableParallelism } from 'node:os'
@@ -12,10 +12,10 @@ import { matchFile, type PlanCase, planJson, renderPlan } from './support/plan.t
 export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
-  { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.es.ts'] },
-  { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.es.ts'] },
-  { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.es.ts', 'b/skilled'] },
-  { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.es.ts'] },
+  { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
+  { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
+  { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
+  { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },
@@ -34,13 +34,17 @@ export const cases: PlanCase[] = [
   { dir: 'cursor', name: 'cursor', args: [] },
   { dir: 'secrets', name: 'brokered', args: [] },
   { dir: 'egress', name: 'cascade', args: [] },
-  { dir: 'egress', name: 'profile-defaults', args: ['--profile', 'locked', 'evals/cascade.es.ts'] },
+  {
+    dir: 'egress',
+    name: 'profile-defaults',
+    args: ['--profile', 'locked', 'evals/cascade.eval.ts'],
+  },
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
 ]
 
-// Each case starts an `es` and its worker. All 25 at once swamp a small CI runner (Windows'
+// Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'
 // has 4 CPUs) until each takes over 30 s; as many at a time as there are CPUs keeps each quick.
 const CLIS = availableParallelism()
 
@@ -76,9 +80,9 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     )
   })
 
-  test('ES_PROFILE picks a profile, as --profile does', async () => {
-    const plan = await planJson({ dir: 'profiles', args: [], env: { ES_PROFILE: 'nightly' } })
-    assert.deepEqual(plan.profile, { name: 'nightly', reason: 'ES_PROFILE' })
+  test('REEVAL_PROFILE picks a profile, as --profile does', async () => {
+    const plan = await planJson({ dir: 'profiles', args: [], env: { REEVAL_PROFILE: 'nightly' } })
+    assert.deepEqual(plan.profile, { name: 'nightly', reason: 'REEVAL_PROFILE' })
   })
 
   test('.only in CI exits 2 before any plan prints', async () => {
@@ -86,15 +90,18 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     const r = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: { CI: 'true' } })
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.equal(r.stdout, '')
-    assert.match(r.stderr, /evaluate\.only\/group\.only in evals\/only\.es\.ts isn't allowed in CI/)
+    assert.match(
+      r.stderr,
+      /evaluate\.only\/group\.only in evals\/only\.eval\.ts isn't allowed in CI/,
+    )
   })
 
   test('an egress policy the sandbox cannot enforce exits 2 at plan time', async () => {
     const p = await fixture('plan/egress')
-    const env = { ES_EGRESS_FAKE: '1' }
+    const env = { REEVAL_EGRESS_FAKE: '1' }
     for (const args of [['run', '--dry-run', '--json'], ['run']].map((a) => [
       ...a,
-      'evals/cascade.es.ts',
+      'evals/cascade.eval.ts',
     ])) {
       const r = await runCli(p.dir, args, { env })
       assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -104,15 +111,15 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
         /runs under egress \{ allow: \['config\.example\.com'\] \}, which needs a host allowlist \(config\.example\.com\), but the fake sandbox enforces no egress policy \(its commands run on the host\)\. Run it in docker\(\), or set egress: 'allow-all'\./,
       )
     }
-    assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
+    assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
   })
 
-  test("OpenCode on a provider ES can't broker exits 2 at plan time, naming it and why", async () => {
+  test("OpenCode on a provider reeval can't broker exits 2 at plan time, naming it and why", async () => {
     for (const [where, model, refusal, env] of [
       [
         'config',
         'google-vertex/gemini-3.8-flash',
-        /opencode\(\): ES can't run OpenCode on Vertex \(google-vertex\): it takes a service account \(Vertex refuses API keys for most models\), not a key in a header, so the gateway can't keep its key out of the sandbox/,
+        /opencode\(\): reeval can't run OpenCode on Vertex \(google-vertex\): it takes a service account \(Vertex refuses API keys for most models\), not a key in a header, so the gateway can't keep its key out of the sandbox/,
       ],
       [
         'config',
@@ -123,7 +130,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       [
         'eval',
         'lmstudio/qwen3-coder',
-        /opencode\(\): ES can't run OpenCode on LMStudio \(lmstudio\): it runs on your machine, and the sandbox can't reach the host's localhost/,
+        /opencode\(\): reeval can't run OpenCode on LMStudio \(lmstudio\): it runs on your machine, and the sandbox can't reach the host's localhost/,
       ],
       [
         'eval',
@@ -133,23 +140,23 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     ] as const) {
       const harness = `opencode({ model: '${model}' })`
       const p = await project(`refused-${where}-${model.split('/')[0]}${env ? '-env' : ''}`, {
-        'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { cursor, opencode } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor, opencode } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: ${where === 'config' ? harness : "cursor({ model: 'composer-2.5' })"},
   sandbox: docker(),
 })
 `,
-        'evals/r.es.ts': `import { evaluate } from 'evalsuite'
-import { opencode } from 'evalsuite/harness'
+        'evals/r.eval.ts': `import { evaluate } from 'reeval'
+import { opencode } from 'reeval/harness'
 evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async () => {})
 `,
       })
       const r = await runCli(p.dir, ['run', '--dry-run'], { env: env ?? {} })
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(r.stderr, refusal)
-      assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
+      assert.deepEqual(readdirSync(p.dir).includes('.reeval'), false, 'nothing ran')
     }
   })
 
@@ -177,15 +184,15 @@ evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async 
       ],
     ] as const) {
       const p = await project(`sse-${factory}`, {
-        'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { cursor, ${factory} } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+        'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { cursor, ${factory} } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: [cursor({ model: 'composer-2.5' }), ${factory}({ model: '${model}' })],
   sandbox: docker(),
 })
 `,
-        'evals/s.es.ts': `import { defineEnvironment, evaluate } from 'evalsuite'
+        'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const events = defineEnvironment('events', ({ mcp }) => ({ mcp: { events: mcp.sse('https://events.example.com/sse') } }))
 evaluate('streams', { environment: events }, async () => {})
 `,
@@ -203,18 +210,21 @@ evaluate('streams', { environment: events }, async () => {})
   })
 
   test('any MCP server on pi exits 2 at plan time; Goose takes stdio and http', async () => {
-    const config = (factory: string) => `import { defineConfig } from 'evalsuite'
-import { ${factory} } from 'evalsuite/harness'
-import { docker } from 'evalsuite/sandbox'
+    const config = (factory: string) => `import { defineConfig } from 'reeval'
+import { ${factory} } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }), sandbox: docker() })
 `
-    const evals = `import { defineEnvironment, evaluate } from 'evalsuite'
+    const evals = `import { defineEnvironment, evaluate } from 'reeval'
 const tools = defineEnvironment('tools', ({ mcp }) => ({
   mcp: { local: mcp.stdio('node', ['server.mjs']), remote: mcp.http('https://mcp.example.com/mcp') },
 }))
 evaluate('uses tools', { environment: tools }, async () => {})
 `
-    const pi = await project('mcp-pi', { 'es.config.ts': config('pi'), 'evals/m.es.ts': evals })
+    const pi = await project('mcp-pi', {
+      'reeval.config.ts': config('pi'),
+      'evals/m.eval.ts': evals,
+    })
     const refused = await runCli(pi.dir, ['run', '--dry-run'])
     assert.equal(refused.code, 2, refused.stdout + refused.stderr)
     assert.match(
@@ -223,8 +233,8 @@ evaluate('uses tools', { environment: tools }, async () => {})
     )
     // The twin: the same servers plan on a harness that has an MCP client.
     const goose = await project('mcp-goose', {
-      'es.config.ts': config('goose'),
-      'evals/m.es.ts': evals,
+      'reeval.config.ts': config('goose'),
+      'evals/m.eval.ts': evals,
     })
     const planned = await runCli(goose.dir, ['run', '--dry-run'])
     assert.equal(planned.code, 0, planned.stdout + planned.stderr)
@@ -232,7 +242,7 @@ evaluate('uses tools', { environment: tools }, async () => {})
 
   test('the text plan names each restricted policy and its automatic hosts', async () => {
     const p = await fixture('plan/egress')
-    const r = await runCli(p.dir, ['run', '--dry-run', 'evals/auto.es.ts'])
+    const r = await runCli(p.dir, ['run', '--dry-run', 'evals/auto.eval.ts'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
@@ -243,12 +253,12 @@ evaluate('uses tools', { environment: tools }, async () => {})
 
   test("a cell filter narrows each row's counts in the text plan, not only the totals", async () => {
     const p = await fixture('plan/compare')
-    const r = await runCli(p.dir, ['run', '--dry-run', 'evals/variants.es.ts', 'b/skilled'])
+    const r = await runCli(p.dir, ['run', '--dry-run', 'evals/variants.eval.ts', 'b/skilled'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(r.stdout, /2 evals · 2 cells · 3 attempts/)
     const rows = r.stdout
       .split('\n')
-      .filter((l) => l.startsWith('evals/variants.es.ts'))
+      .filter((l) => l.startsWith('evals/variants.eval.ts'))
       .map((l) => l.split(/\s{2,}/).slice(1, 5))
     assert.deepEqual(rows, [
       ['1', '1 of 2', '1', '1'],
@@ -259,7 +269,7 @@ evaluate('uses tools', { environment: tools }, async () => {})
   test('a filter part that matches no file, eval name or cell exits 2 and names it', async () => {
     const p = await fixture('plan/compare')
     for (const args of [
-      ['evals/variants.es.ts', 'nosuchcell'],
+      ['evals/variants.eval.ts', 'nosuchcell'],
       ['b/skilled', 'nosuchcell'],
     ]) {
       const r = await runCli(p.dir, ['run', '--dry-run', ...args])
@@ -267,7 +277,7 @@ evaluate('uses tools', { environment: tools }, async () => {})
       assert.equal(r.stdout, '')
       assert.match(
         r.stderr,
-        /filter "nosuchcell" matches no eval file, eval name or cell in evals\/\*\*\/\*\.es\.ts/,
+        /filter "nosuchcell" matches no eval file, eval name or cell in evals\/\*\*\/\*\.eval\.ts/,
       )
     }
   })
@@ -276,11 +286,11 @@ evaluate('uses tools', { environment: tools }, async () => {})
     const p = await fixture('plan/matrix')
     const r = await runCli(p.dir, ['run', '--json'])
     assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /es run --json only prints the plan: add --dry-run/)
+    assert.match(r.stderr, /reeval run --json only prints the plan: add --dry-run/)
   })
 })
 
-/** The root warning `es run` prints for the privileges fixture's eval-level sandbox. */
+/** The root warning `reeval run` prints for the privileges fixture's eval-level sandbox. */
 const ROOT_LINE =
   'WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))'
 
@@ -296,7 +306,7 @@ describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
         kind: 'root',
         level: 'group',
         where: 'group("system packages")',
-        file: 'evals/p.es.ts',
+        file: 'evals/p.eval.ts',
         message:
           'running as root in the sandbox: group("system packages") (docker({ root: true }))',
       },
@@ -304,24 +314,24 @@ describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
         kind: 'root',
         level: 'eval',
         where: 'evaluate("installs deps")',
-        file: 'evals/p.es.ts',
+        file: 'evals/p.eval.ts',
         message:
           'running as root in the sandbox: evaluate("installs deps") (docker({ root: true }))',
       },
       {
         kind: 'capabilities',
         level: 'config',
-        where: 'es.config.ts',
+        where: 'reeval.config.ts',
         file: null,
         capabilities: ['NET_RAW'],
         message:
-          "extra capabilities in the sandbox: es.config.ts (docker({ capabilities: ['NET_RAW'] }))",
+          "extra capabilities in the sandbox: reeval.config.ts (docker({ capabilities: ['NET_RAW'] }))",
       },
       {
         kind: 'capabilities',
         level: 'eval',
         where: 'evaluate("installs deps")',
-        file: 'evals/p.es.ts',
+        file: 'evals/p.eval.ts',
         capabilities: ['NET_ADMIN'],
         message:
           'extra capabilities in the sandbox: evaluate("installs deps") (docker({ capabilities: [\'NET_ADMIN\'] }))',
@@ -336,7 +346,7 @@ describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
     assertRootWarning(plain.stdout)
     assert.match(
       plain.stdout,
-      /^warning: extra capabilities in the sandbox: es\.config\.ts \(docker\(\{ capabilities: \['NET_RAW'\] \}\)\)$/m,
+      /^warning: extra capabilities in the sandbox: reeval\.config\.ts \(docker\(\{ capabilities: \['NET_RAW'\] \}\)\)$/m,
     )
     assert.doesNotMatch(plain.stdout, /^::warning/m, 'no annotations outside GitHub Actions')
     const agent = await runCli(p.dir, ['run', '--dry-run', '--ui', 'agent'])
@@ -347,11 +357,11 @@ describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
     assertRootWarning(gh.stdout)
     assert.match(
       gh.stdout,
-      /^::warning file=evals\/p\.es\.ts,title=Sandbox runs as root::running as root in the sandbox: evaluate\("installs deps"\) \(docker\(\{ root: true \}\)\)$/m,
+      /^::warning file=evals\/p\.eval\.ts,title=Sandbox runs as root::running as root in the sandbox: evaluate\("installs deps"\) \(docker\(\{ root: true \}\)\)$/m,
     )
     assert.match(
       gh.stdout,
-      /^::warning title=Sandbox has extra capabilities::extra capabilities in the sandbox: es\.config\.ts/m,
+      /^::warning title=Sandbox has extra capabilities::extra capabilities in the sandbox: reeval\.config\.ts/m,
     )
   })
 

@@ -1,5 +1,5 @@
 {
-  "name": "@evalsuite/harness-codex",
+  "name": "@reeval/harness-codex",
   "version": "0.1.0",
   "private": true,
   "description": "An AI SDK harness adapter for OpenAI's Codex CLI on an OpenAI API key, running codex exec --json in the sandbox",

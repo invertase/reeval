@@ -15,7 +15,7 @@ export type HarnessResult = {
   model: string | null
   /** Event types the harness can't report, so their absence from `transcript` proves nothing. */
   unreported: WebEventType[]
-  /** Every stream part as the harness sent it, only when `ES_RAW_TRANSCRIPT` is set. */
+  /** Every stream part as the harness sent it, only when `REEVAL_RAW_TRANSCRIPT` is set. */
   raw?: unknown[]
 }
 

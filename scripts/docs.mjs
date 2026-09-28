@@ -24,14 +24,14 @@ import {
 
 const root = join(import.meta.dirname, '..')
 const docsDir = join(root, 'docs')
-const src = join(root, 'packages/evalsuite/src')
-const cli = join(root, 'packages/evalsuite/dist/cli.js')
+const src = join(root, 'packages/reeval/src')
+const cli = join(root, 'packages/reeval/dist/cli.js')
 const check = process.argv.includes('--check')
 const problems = []
 const read = (path) => readFileSync(path, 'utf8')
 
 if (!existsSync(cli)) {
-  console.error('docs: packages/evalsuite/dist/cli.js is missing. Run pnpm build first.')
+  console.error('docs: packages/reeval/dist/cli.js is missing. Run pnpm build first.')
   process.exit(1)
 }
 
@@ -50,7 +50,7 @@ function helpSections(text) {
       sections.set('footer', [...(sections.get('footer') ?? []), line])
       continue
     }
-    const head = /^ {2}es ((?:[a-z]+)(?: build)?)\b/.exec(line)
+    const head = /^ {2}reeval ((?:[a-z]+)(?: build)?)\b/.exec(line)
     if (head) current = head[1]
     else if (!line.startsWith('    ')) current = null
     if (current) sections.set(current, [...(sections.get(current) ?? []), line.slice(2)])
@@ -59,7 +59,7 @@ function helpSections(text) {
 }
 
 function querySchema() {
-  const dir = mkdtempSync(join(tmpdir(), 'es-docs-'))
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-docs-'))
   try {
     const out = execFileSync(process.execPath, [cli, 'query', '--schema', '--json'], {
       cwd: dir,
@@ -84,7 +84,7 @@ function exitCodes() {
   return [...match[1].matchAll(/(\w+): (\d+)/g)].map((m) => ({ name: m[1], code: Number(m[2]) }))
 }
 
-/** Every command's flags, from the spec `es` parses its own arguments from. */
+/** Every command's flags, from the spec `reeval` parses its own arguments from. */
 async function cliCommands() {
   const spec = join(src, 'cli-spec.ts')
   if (!existsSync(spec)) return null
@@ -110,7 +110,7 @@ function esVariables() {
     }
   }
   walk(src)
-  found.delete('ES_BASE_ARG') // the constant that holds the name ES_BASE
+  found.delete('REEVAL_BASE_ARG') // the constant that holds the name REEVAL_BASE
   return [...found].sort()
 }
 
@@ -306,7 +306,7 @@ async function blocks() {
   out.set(
     'option-keys',
     [
-      '| Key | `es.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |',
+      '| Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |',
       '|---|---|---|---|---|',
       ...all.map(
         (k) =>
@@ -409,17 +409,17 @@ const mentions = (text, token) => text.includes(token)
 const commands = await cliCommands()
 const sections = helpSections(help)
 const GLOBAL_FLAGS = ['config', 'help', 'version']
-if (!commands) problems.push('packages/evalsuite/src/cli-spec.ts is missing')
+if (!commands) problems.push('packages/reeval/src/cli-spec.ts is missing')
 for (const [name, flags] of commands ?? []) {
   const section = sections.get(name)
   if (!section) {
-    problems.push(`es --help has no section for es ${name}`)
+    problems.push(`reeval --help has no section for reeval ${name}`)
     continue
   }
   const text = section.join('\n')
   for (const flag of flags) {
     if (!GLOBAL_FLAGS.includes(flag) && !text.includes(`--${flag}`)) {
-      problems.push(`es --help doesn't list --${flag} under es ${name}`)
+      problems.push(`reeval --help doesn't list --${flag} under reeval ${name}`)
     }
   }
 }
@@ -476,11 +476,15 @@ for (const href of hrefs) {
 }
 const linked = new Set(hrefs.map(fileFor).filter(Boolean))
 const pkg = config.variables.pkg
+/** The package named where it's installed or imported; the brand and CLI share its name. */
+const pkgSpecifier = new RegExp(
+  `(?:from |import\\(|require\\()['"]${pkg}(?:/[\\w-]+)?['"]|\\b(?:npm (?:i|install)|pnpm add|yarn add|bun add)\\b[^\\n]*\\s${pkg}(?:@\\S*)?(?=\\s|$)`,
+)
 for (const file of mdxFiles()) {
   if (!linked.has(file)) problems.push(`${relative(root, file)} isn't in the docs.json sidebar`)
-  if (read(file).includes(pkg)) {
+  if (pkgSpecifier.test(read(file))) {
     problems.push(
-      `${relative(root, file)} names ${pkg}: use {{ pkg }} so the name lives in docs.json`,
+      `${relative(root, file)} installs or imports ${pkg} by name: use {{ pkg }} so it lives in docs.json`,
     )
   }
 }

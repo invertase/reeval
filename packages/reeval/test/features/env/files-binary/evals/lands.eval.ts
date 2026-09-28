@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { binaryFile, hostBlob, sandboxSha256 } from './env.ts'
 
 // A host `file()` lands byte for byte.

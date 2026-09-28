@@ -92,8 +92,8 @@ const shortFlag = (letter: string) =>
   )?.[0]
 
 /**
- * `es`'s arguments with every value replaced: command names and flag names stay, a flag's value
- * becomes `<value>`, any other argument (filters, run ids, SQL, paths) `<arg>`, and a flag ES
+ * `reeval`'s arguments with every value replaced: command names and flag names stay, a flag's value
+ * becomes `<value>`, any other argument (filters, run ids, SQL, paths) `<arg>`, and a flag reeval
  * doesn't know `<flag>`.
  */
 export function redactArgv(argv: string[]): string[] {

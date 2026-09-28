@@ -1,4 +1,4 @@
-import { SANDBOX_ROOT, WORKSPACE_DIR } from '@evalsuite/sandbox-docker'
+import { SANDBOX_ROOT, WORKSPACE_DIR } from '@reeval/sandbox-docker'
 import type { FileEditEvent, TranscriptEvent } from '../types.ts'
 
 /** One stream part and when it arrived, in ms since the turn started. */
@@ -230,7 +230,7 @@ function toolName(part: StampedPart['part']): string {
 }
 
 /**
- * Turns an AI SDK harness stream into ES transcript events: text and reasoning blocks joined,
+ * Turns an AI SDK harness stream into reeval transcript events: text and reasoning blocks joined,
  * each tool call merged with its result, edits normalised to `file-edit`, web tools given their
  * query or URL, and the harness's duplicate `fileChange` events dropped. Cursor's tool durations
  * come from its runner's own `tool_call` events, because tool results are only flushed at the

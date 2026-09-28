@@ -1,4 +1,4 @@
-// The digest `es analyze` hands a model: facts computed by ES (ids F1…), evidence excerpts chosen
+// The digest `reeval analyze` hands a model: facts computed by reeval (ids F1…), evidence excerpts chosen
 // by rule (ids E1…, transcript lines keep their numbers as L<n>), and an attempts table with short
 // ids. Deterministic: the same records give the same digest, byte for byte, so it can be cached.
 import { readFile } from 'node:fs/promises'
@@ -90,7 +90,7 @@ const liftText = (points: number, lo: number, hi: number) =>
 /** Short tags for the evals in scope: the file's base name, numbered when a file has several. */
 function evalTags(evals: EvalEntry[]): Map<string, string> {
   const tags = new Map<string, string>()
-  const bases = evals.map((e) => basename(e.file).replace(/\.es\.ts$|\.[jt]s$/, ''))
+  const bases = evals.map((e) => basename(e.file).replace(/\.(?:eval|es)\.ts$|\.[jt]s$/, ''))
   evals.forEach((e, i) => {
     const b = bases[i] as string
     const same = bases.filter((x) => x === b).length

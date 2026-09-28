@@ -1,4 +1,4 @@
-// `es mcp`'s server: run history as read-only MCP tools and resources. The same factory serves
+// `reeval mcp`'s server: run history as read-only MCP tools and resources. The same factory serves
 // stdio and each stateless HTTP request, so it builds a fresh McpServer and holds nothing.
 import { readFile } from 'node:fs/promises'
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/server'
@@ -53,7 +53,7 @@ const RUN_REF =
 
 type Json = Record<string, unknown>
 
-/** A tool's answer: the JSON as text and as structured content, masked like everything ES writes. */
+/** A tool's answer: the JSON as text and as structured content, masked like everything reeval writes. */
 function result(value: Json) {
   const text = redactSecrets(JSON.stringify(value, null, 2))
   let structured: Json
@@ -87,7 +87,7 @@ export function firstKeyword(sql: string): string {
 }
 
 /**
- * Why `es mcp` won't run `sql`, or null. On top of the read-only connection: one `SELECT` or
+ * Why `reeval mcp` won't run `sql`, or null. On top of the read-only connection: one `SELECT` or
  * `WITH` statement, so no `ATTACH` (another file), `PRAGMA` or `VACUUM INTO` (a new file).
  */
 export function sqlProblem(sql: string): string | null {
@@ -101,7 +101,7 @@ export function sqlProblem(sql: string): string | null {
 
 type ViewColumns = Record<string, string[]>
 
-/** Each view's columns, as `es query --schema --json` lists them. */
+/** Each view's columns, as `reeval query --schema --json` lists them. */
 export async function viewColumns(config: ResolvedConfig): Promise<ViewColumns> {
   const db = await openHistoryDb(config.root, config.history.dir)
   try {
@@ -143,7 +143,7 @@ const source = (config: ResolvedConfig): StudioSource => ({
 })
 
 export const transcriptUri = (runId: string, attemptKey: string) =>
-  `es://runs/${runId}/transcripts/${encodeURIComponent(attemptKey)}`
+  `reeval://runs/${runId}/transcripts/${encodeURIComponent(attemptKey)}`
 
 /** The attempt `ref` names in `run`: its key, or an attempt id (`<cell>#<n>`) unique in the run. */
 function findAttempt(run: RunRecord, ref: string) {
@@ -193,15 +193,15 @@ async function recordById(config: ResolvedConfig, runId: string): Promise<RunRec
   return file ? readRecord(file) : null
 }
 
-const INSTRUCTIONS = `Read-only access to this project's ES (Eval Suite) run history: runs of evals for coding agents, recorded in git and scratch runs in .es/runs.
-Start with history (pass/fail per eval over recent runs) or show (one run). compare diffs two runs (regressions, fixes, stack changes). The query_* tools answer common questions across runs (lift, flaky cells, drift, failures); query runs any read-only SQL (query_schema lists tables and columns). transcript reads what an agent did in one attempt. analysis returns saved es analyze results. Runs are named latest, latest~N, a run id prefix or a git SHA prefix. Nothing here runs evals: that's es run in a terminal.`
+const INSTRUCTIONS = `Read-only access to this project's reeval run history: runs of evals for coding agents, recorded in git and scratch runs in .reeval/runs.
+Start with history (pass/fail per eval over recent runs) or show (one run). compare diffs two runs (regressions, fixes, stack changes). The query_* tools answer common questions across runs (lift, flaky cells, drift, failures); query runs any read-only SQL (query_schema lists tables and columns). transcript reads what an agent did in one attempt. analysis returns saved reeval analyze results. Runs are named latest, latest~N, a run id prefix or a git SHA prefix. Nothing here runs evals: that's reeval run in a terminal.`
 
-/** Builds the factory `es mcp` serves: one McpServer per connection (stdio) or request (HTTP). */
+/** Builds the factory `reeval mcp` serves: one McpServer per connection (stdio) or request (HTTP). */
 export async function serverFactory(config: ResolvedConfig, version: string) {
   const columns = await viewColumns(config)
   return () => {
     const server = new McpServer(
-      { name: 'es', title: 'ES run history', version },
+      { name: 'reeval', title: 'reeval run history', version },
       { instructions: INSTRUCTIONS },
     )
 
@@ -210,7 +210,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Run history',
         description:
-          'Pass/fail of each eval over recent runs, oldest first (es history --json): runs[] with their ids, commits and summaries, and rows[] with one outcome per run (null when not run) and drift, the runs where the eval or its stack changed.',
+          'Pass/fail of each eval over recent runs, oldest first (reeval history --json): runs[] with their ids, commits and summaries, and rows[] with one outcome per run (null when not run) and drift, the runs where the eval or its stack changed.',
         inputSchema: z.object({
           filter: z.string().optional().describe('Only evals whose id contains this'),
           limit: limitField(500, 20, 'runs'),
@@ -226,7 +226,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Show a run',
         description:
-          'One run: its full record (es show --json: stack, plan, evals, cells with lift and effort, attempts with verdicts, errors, token usage and file references) or, with format md, its summary.md.',
+          'One run: its full record (reeval show --json: stack, plan, evals, cells with lift and effort, attempts with verdicts, errors, token usage and file references) or, with format md, its summary.md.',
         inputSchema: z.object({
           run: z.string().optional().describe(RUN_REF),
           format: z.enum(['json', 'md']).optional().describe('json (default) or md'),
@@ -246,7 +246,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Compare two runs',
         description:
-          "Diffs two runs eval by eval (es compare --json): each row's base and head outcome and status (regressed, fixed, same, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack. With only head, the base is head's nearest recorded ancestor.",
+          "Diffs two runs eval by eval (reeval compare --json): each row's base and head outcome and status (regressed, fixed, same, drift = not comparable, added, removed, infra), per-cell lift and effort, and what changed in the stack. With only head, the base is head's nearest recorded ancestor.",
         inputSchema: z.object({
           base: z.string().optional().describe(`${RUN_REF}; needs head too`),
           head: z.string().optional().describe(RUN_REF),
@@ -264,7 +264,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Saved analyses of a run',
         description:
-          "The analyses es analyze saved for a run (in its history folder) and cached ones anchored on it, newest first: claims with citations, anomalies and suggested actions. Never calls a model; empty when the run hasn't been analysed.",
+          "The analyses reeval analyze saved for a run (in its history folder) and cached ones anchored on it, newest first: claims with citations, anomalies and suggested actions. Never calls a model; empty when the run hasn't been analysed.",
         inputSchema: z.object({ run: z.string().optional().describe(RUN_REF) }),
         annotations: READ_ONLY,
       },
@@ -316,7 +316,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
         `query_${view}`,
         {
           title: `Query ${view}`,
-          description: `The ${view} view of es query: one row per ${VIEW_ROWS[view] ?? 'row'}. Columns: ${cols.join(', ')}.`,
+          description: `The ${view} view of reeval query: one row per ${VIEW_ROWS[view] ?? 'row'}. Columns: ${cols.join(', ')}.`,
           inputSchema: z.object({ where, limit: limitField(MAX_ROWS, DEFAULT_ROWS, 'rows') }),
           annotations: READ_ONLY,
         },
@@ -340,7 +340,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'Query run history with SQL',
         description:
-          "One read-only SQLite SELECT or WITH statement over .es/history.db, the projection of every recorded and scratch run (es query). Tables include runs, evals, cells, attempts, judgements, tool_calls; the views are the query_* tools. query_schema lists every table's columns.",
+          "One read-only SQLite SELECT or WITH statement over .reeval/history.db, the projection of every recorded and scratch run (reeval query). Tables include runs, evals, cells, attempts, judgements, tool_calls; the views are the query_* tools. query_schema lists every table's columns.",
         inputSchema: z.object({
           sql: z.string().describe('One SELECT or WITH statement'),
           limit: limitField(MAX_ROWS, DEFAULT_ROWS, 'rows'),
@@ -359,7 +359,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       {
         title: 'History tables and views',
         description:
-          'Every table and view in .es/history.db with its columns (es query --schema --json), for the query tool.',
+          'Every table and view in .reeval/history.db with its columns (reeval query --schema --json), for the query tool.',
         annotations: READ_ONLY,
       },
       guard(async () => withDb(config, (db) => ({ objects: db.schema() }))),
@@ -367,13 +367,13 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
 
     server.registerResource(
       'run',
-      new ResourceTemplate('es://runs/{runId}', {
+      new ResourceTemplate('reeval://runs/{runId}', {
         list: async () => {
           const { listHeaders } = await import('../studio/source.ts')
           const runs = await listHeaders(source(config))
           return {
             resources: [...runs].reverse().map((r) => ({
-              uri: `es://runs/${r.runId}`,
+              uri: `reeval://runs/${r.runId}`,
               name: r.runId,
               title: `${r.runId} (${r.recorded ? 'recorded' : 'scratch'})`,
               mimeType: 'application/json',
@@ -383,7 +383,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
       }),
       {
         title: 'Run record',
-        description: 'A run record, as es show --json prints it',
+        description: 'A run record, as reeval show --json prints it',
         mimeType: 'application/json',
         cacheHint: { ttlMs: 0, cacheScope: 'private' },
       },
@@ -404,7 +404,7 @@ export async function serverFactory(config: ResolvedConfig, version: string) {
 
     server.registerResource(
       'transcript',
-      new ResourceTemplate('es://runs/{runId}/transcripts/{attempt}', { list: undefined }),
+      new ResourceTemplate('reeval://runs/{runId}/transcripts/{attempt}', { list: undefined }),
       {
         title: 'Attempt transcript',
         description:

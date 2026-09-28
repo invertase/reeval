@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { shellQuote } from '@evalsuite/sandbox-docker/process'
+import { shellQuote } from '@reeval/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
@@ -69,7 +69,7 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
 }
 
 // A relative path: GNU tar (Git for Windows' too) reads a `C:` in its file name as a remote host.
-const WORKSPACE_TAR = '.es-workspace.tar'
+const WORKSPACE_TAR = '.reeval-workspace.tar'
 
 /** Unpacks the git workspace's tarball into the (empty) workspace. */
 async function copyWorkspace(

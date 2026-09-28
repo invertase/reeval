@@ -1,11 +1,11 @@
 ---
 title: Egress policies
-description: Where the sandbox may connect, which hosts are always allowed, and what ES records.
+description: Where the sandbox may connect, which hosts are always allowed, and what reeval records.
 ---
 
 `egress` says where an attempt's sandbox may connect. Every request goes through the attempt's egress gateway, which enforces the policy and records each host contacted or refused.
 
-```ts title="evals/offline.es.ts"
+```ts title="evals/offline.eval.ts"
 evaluate('installs from npm only', {
   harness: (inherited) => inherited.slice(0, 1),
   egress: { allow: [...DEFAULT_EGRESS_ALLOW] },
@@ -20,13 +20,13 @@ evaluate('works offline', { egress: 'deny-all' }, async (t) => {
 })
 ```
 
-The plan shows each restricted policy and the hosts ES adds to it:
+The plan shows each restricted policy and the hosts reeval adds to it:
 
 ```text
 plan  2 evals · 3 cells · 3 attempts · ~9m 00s serial (~3m 00s at concurrency 4)
 eval                                          harnesses  variants  runs  attempts  notes
-evals/offline.es.ts › installs from npm only  1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org + auto: api2.cursor.sh, *.cursor.sh
-evals/offline.es.ts › works offline           2          —         1     2         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh; deny-all + auto: api.anthropic.com, *.anthropic.com
+evals/offline.eval.ts › installs from npm only  1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org + auto: api2.cursor.sh, *.cursor.sh
+evals/offline.eval.ts › works offline           2          —         1     2         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh; deny-all + auto: api.anthropic.com, *.anthropic.com
 ```
 
 ## Three policies
@@ -55,16 +55,16 @@ A restricted policy always allows what the attempt itself needs, so an agent sti
 | Brokered secrets | Each secret's `hosts` |
 | MCP servers | Each `http` or `sse` server's host |
 
-Only the attempt's own harness's hosts are added: a Cursor attempt under `'deny-all'` can't reach Anthropic. Cursor needs only its agent backend: ES's Cursor adapter fetches the model catalog from `api.cursor.com` on the host, not in the sandbox.
+Only the attempt's own harness's hosts are added: a Cursor attempt under `'deny-all'` can't reach Anthropic. Cursor needs only its agent backend: reeval's Cursor adapter fetches the model catalog from `api.cursor.com` on the host, not in the sandbox.
 
 ## Expected telemetry hosts
 
-Some CLIs contact hosts that nothing needs and no setting turns off. ES lists them per harness, still refuses them under a restricted policy, and records them apart from real blocks.
+Some CLIs contact hosts that nothing needs and no setting turns off. reeval lists them per harness, still refuses them under a restricted policy, and records them apart from real blocks.
 
 | Harness | Expected blocks | Why |
 |---|---|---|
 | Antigravity | `play.googleapis.com`, `antigravity-unleash.goog` | Telemetry and feature flags, sent even with telemetry off |
-| Claude Code | None | ES runs it with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
+| Claude Code | None | reeval runs it with `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` |
 | Cursor | None | Its analytics go to `api2.cursor.sh`, an automatic host |
 | OpenCode | None | It calls only its provider's API and, for web search, Exa |
 | Goose, pi | None | They call only the Gemini API |
@@ -74,7 +74,7 @@ These go to the record's `expectedBlocked` instead of `blocked`, and `-v` prints
 
 ## Blocked requests don't fail the attempt
 
-A request to any other host gets a `403` from the gateway and the attempt carries on; your checks decide whether it passed. With `-v`, each refusal is a `gateway` line. This one is from an Antigravity run, before ES listed that host as expected:
+A request to any other host gets a `403` from the gateway and the attempt carries on; your checks decide whether it passed. With `-v`, each refusal is a `gateway` line. This one is from an Antigravity run, before reeval listed that host as expected:
 
 ```text
 [scaffolds#1 antigravity:gemini-3.8-flash-low · control] 13:57:41 gateway   CONNECT antigravity-unleash.goog:443 → 403 · blocked: antigravity-unleash.goog isn't in the allowlist · ↑0 B ↓0 B · 1ms · no key substituted
@@ -126,14 +126,14 @@ Each attempt's record has an `egress` block. From a real Cursor attempt under `'
 
 `allowed` is every host a restricted policy let through (null under `'allow-all'`), and `blocked` each refused `host:port` with its connections and reason. A restricted policy is also part of the environment's [fingerprint](/concepts/fingerprints). The studio shows it on the attempt's State tab.
 
-<Image src="/assets/studio/attempt-state-egress.png" alt="ES studio attempt State tab with the egress panel: the policy, hosts contacted with bytes, and hosts refused" width={800} />
+<Image src="/assets/studio/attempt-state-egress.png" alt="reeval studio attempt State tab with the egress panel: the policy, hosts contacted with bytes, and hosts refused" width={800} />
 
 ## The fake sandbox can't enforce
 
 The fake sandbox runs commands on the host, so it enforces nothing and records nothing. A restricted policy on it stops the run before anything starts:
 
 ```text
-es: evals/offline.es.ts: evaluate("works offline") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
+reeval: evals/offline.eval.ts: evaluate("works offline") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
 ```
 
 That's exit 2, for `--dry-run` too.

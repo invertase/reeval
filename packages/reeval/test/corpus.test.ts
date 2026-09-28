@@ -1,4 +1,4 @@
-// Every reader against every run in the record corpus (test/fixtures/records/), so a record ES
+// Every reader against every run in the record corpus (test/fixtures/records/), so a record reeval
 // wrote at any point since keeps loading in the CLI. The studio's browser test opens the same runs.
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -74,7 +74,7 @@ describe('the record corpus', () => {
       const p = await fixture(`fixtures/records/${entry.name}`)
       const ok = async (args: string[], codes = [0]) => {
         const r = await runCli(p.dir, args, { timeoutMs: 120_000 })
-        const where = `es ${args.join(' ')} in ${entry.name}\n${r.stdout}${r.stderr}`
+        const where = `reeval ${args.join(' ')} in ${entry.name}\n${r.stdout}${r.stderr}`
         assert.ok(codes.includes(r.code as number), where)
         assert.doesNotMatch(r.stderr, /warning: skipped|TypeError|Cannot read prop/, where)
         return r.stdout
@@ -83,7 +83,11 @@ describe('the record corpus', () => {
       const listed = JSON.parse(await ok(['history', '--json', '--all'])) as {
         runs: Array<{ runId: string }>
       }
-      assert.deepEqual(listed.runs.map((r) => r.runId).sort(), ids, 'es history lists every run')
+      assert.deepEqual(
+        listed.runs.map((r) => r.runId).sort(),
+        ids,
+        'reeval history lists every run',
+      )
       await ok(['history'])
       for (const run of entry.runs) {
         await ok(['show', run.runId])

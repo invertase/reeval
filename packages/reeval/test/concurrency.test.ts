@@ -9,7 +9,7 @@ import { fakeConfig, liveSandboxes, noSignals, project, readRun, runCli } from '
 
 const rank = (evalId: string, n: number, cell = 0, order = 0): Rank => ({
   eval: evalId,
-  file: 'evals/a.es.ts',
+  file: 'evals/a.eval.ts',
   order,
   n,
   cell,
@@ -122,7 +122,7 @@ export const traced = async (name: string, fn: () => Promise<unknown>) => {
 `
 
 /** Each attempt sends one turn to the fake agent, which takes `delayMs`. */
-const tracedEval = (name: string, options = '{}') => `import { evaluate } from 'evalsuite'
+const tracedEval = (name: string, options = '{}') => `import { evaluate } from 'reeval'
 import { traced } from './trace.ts'
 evaluate('${name}', ${options}, async (t) => {
   await traced(\`${name} \${t.attempt.cell.harness}#\${t.attempt.n}\`, () => t.send('go'))
@@ -160,10 +160,10 @@ const wall = (trace: Trace[]) =>
 describe('concurrency', () => {
   test('--concurrency caps attempts across files, and the first slots go to every eval', async () => {
     const p = await project('conc-cap', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 800 }' }),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 800 }' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': tracedEval('a', '{ runs: 3 }'),
-      'evals/b.es.ts': tracedEval('b', '{ runs: 3 }'),
+      'evals/a.eval.ts': tracedEval('a', '{ runs: 3 }'),
+      'evals/b.eval.ts': tracedEval('b', '{ runs: 3 }'),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '4'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -182,7 +182,7 @@ describe('concurrency', () => {
     assert.equal(run.config.concurrency, 4)
     assert.deepEqual(
       run.evals.map((e) => e.id),
-      ['evals/a.es.ts › a', 'evals/b.es.ts › b'],
+      ['evals/a.eval.ts › a', 'evals/b.eval.ts › b'],
     )
     // A queued attempt that counted its wait would take about the whole run. Where starting a
     // sandbox is slow (Windows), one round alone passes 3 s, so the bound is the run's span.
@@ -192,11 +192,11 @@ describe('concurrency', () => {
     }
   })
 
-  test('the config, ES_CONCURRENCY and --concurrency set the cap, in that order', async () => {
+  test('the config, REEVAL_CONCURRENCY and --concurrency set the cap, in that order', async () => {
     const p = await project('conc-sources', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 400 }', extra: 'concurrency: 2,' }),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 400 }', extra: 'concurrency: 2,' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': tracedEval('a', '{ runs: 4 }'),
+      'evals/a.eval.ts': tracedEval('a', '{ runs: 4 }'),
     })
     const overlapWith = async (args: string[], env: NodeJS.ProcessEnv = {}) => {
       const tracePath = join(p.dir, 'trace.jsonl')
@@ -206,8 +206,8 @@ describe('concurrency', () => {
       return maxOverlap(readTrace(p.dir))
     }
     assert.equal(await overlapWith([]), 2)
-    assert.equal(await overlapWith([], { ES_CONCURRENCY: '3' }), 3)
-    assert.equal(await overlapWith(['--concurrency', '1'], { ES_CONCURRENCY: '3' }), 1)
+    assert.equal(await overlapWith([], { REEVAL_CONCURRENCY: '3' }), 3)
+    assert.equal(await overlapWith(['--concurrency', '1'], { REEVAL_CONCURRENCY: '3' }), 1)
     const bad = await runCli(p.dir, ['run', '--concurrency', '0'])
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--concurrency must be a whole number of at least 1 \(got 0\)/)
@@ -215,11 +215,11 @@ describe('concurrency', () => {
 
   test('--dry-run sizes the default concurrency from the Docker VM, as a real run does', async () => {
     const p = await project('conc-docker-vm', {
-      'es.config.ts': fakeConfig().replace(
+      'reeval.config.ts': fakeConfig().replace(
         "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),",
-        "sandbox: (await import('evalsuite/sandbox')).docker(),",
+        "sandbox: (await import('reeval/sandbox')).docker(),",
       ),
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'\nevaluate('a', async (t) => { await t.send('go') })\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('go') })\n`,
       // A docker CLI whose VM has 3 CPUs and 16 GB, whatever the host has: Node, behind an sh
       // and a .cmd wrapper, so it runs on every OS.
       'bin/docker.js': `const a = process.argv.slice(2).join(' ')\nif (a.startsWith('info') && a.includes('NCPU')) console.log('3 16000000000')\nelse process.exit(1)\n`,
@@ -235,10 +235,10 @@ describe('concurrency', () => {
 
   test('a sandbox cap holds on top of the run cap; the judge takes its own leases', async () => {
     const p = await project('conc-sandbox-cap', {
-      'es.config.ts': `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeSandbox } from 'evalsuite/sandbox'
-import { fakeJudge } from 'evalsuite/judge'
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness({ delayMs: 400 }),
   sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }),
@@ -246,7 +246,7 @@ export default defineConfig({
 })
 `,
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': `import { evaluate, expect } from 'evalsuite'
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
 import { traced } from './trace.ts'
 evaluate('a', { runs: 5 }, async (t) => {
   await traced(\`a#\${t.attempt.n}\`, () => t.send('go'))
@@ -258,8 +258,8 @@ evaluate('a', { runs: 5 }, async (t) => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.equal(maxOverlap(readTrace(p.dir)), 2)
     const bad = await project('conc-bad-cap', {
-      'es.config.ts': fakeConfig({ extra: 'concurrency: 1.5,' }),
-      'evals/a.es.ts': tracedEval('a'),
+      'reeval.config.ts': fakeConfig({ extra: 'concurrency: 1.5,' }),
+      'evals/a.eval.ts': tracedEval('a'),
     })
     const b = await runCli(bad.dir)
     assert.equal(b.code, 2)
@@ -268,10 +268,10 @@ evaluate('a', { runs: 5 }, async (t) => {
 
   test('at concurrency 1, runs go round-robin across evals with their cells together', async () => {
     const p = await project('conc-order', {
-      'es.config.ts': fakeConfig({ extra: 'runs: 2,' }),
+      'reeval.config.ts': fakeConfig({ extra: 'runs: 2,' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': `import { evaluate } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
 import { traced } from './trace.ts'
 const harness = [fakeHarness({ id: 'x' }), fakeHarness({ id: 'y' })]
 for (const name of ['a', 'b']) {
@@ -293,9 +293,9 @@ for (const name of ['a', 'b']) {
 
   test('time spent queued counts toward neither the timeout nor the duration', async () => {
     const p = await project('conc-queue-time', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 1200 }' }),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 1200 }' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': tracedEval('a', "{ runs: 3, timeout: '2s' }"),
+      'evals/a.eval.ts': tracedEval('a', "{ runs: 3, timeout: '2s' }"),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '1'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -322,9 +322,9 @@ for (const name of ['a', 'b']) {
 
   test('timeouts under concurrency fail every attempt and destroy every sandbox', async () => {
     const p = await project('conc-timeout', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': tracedEval('a', "{ runs: 4, timeout: '1s' }"),
+      'evals/a.eval.ts': tracedEval('a', "{ runs: 4, timeout: '1s' }"),
     })
     const started = Date.now()
     const r = await runCli(p.dir, ['run', '--concurrency', '4'])
@@ -342,10 +342,10 @@ for (const name of ['a', 'b']) {
     skip: noSignals,
   }, async () => {
     const p = await project('conc-sigint', {
-      'es.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
+      'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 60_000 }' }),
       'evals/trace.ts': TRACE,
-      'evals/a.es.ts': tracedEval('a', '{ runs: 3 }'),
-      'evals/b.es.ts': tracedEval('b', '{ runs: 3 }'),
+      'evals/a.eval.ts': tracedEval('a', '{ runs: 3 }'),
+      'evals/b.eval.ts': tracedEval('b', '{ runs: 3 }'),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '3'], {
       onOutput: (stdout, pid) => {

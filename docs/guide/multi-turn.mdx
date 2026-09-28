@@ -5,7 +5,7 @@ description: Send follow-up turns in one agent session, and check each turn's st
 
 Real work takes more than one prompt. Call `t.send` again and the agent carries on in the same session, with the same workspace. This is the second `greet` eval:
 
-```ts title="evals/hello.es.ts"
+```ts title="evals/hello.eval.ts"
 evaluate('adds a default name in a follow-up turn', async (t) => {
   await t.send(
     'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
@@ -30,12 +30,12 @@ The checks run after both turns, and the judge grades the latest one.
 ## Run it
 
 ```bash
-npx es run hello --log-order grouped
+npx reeval run hello --log-order grouped
 ```
 
 ```text
 …
-[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  16s
+[adds#1 cursor] ✓ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  16s
 [adds#1 cursor]  +0:00 sandbox ready 1s
 [adds#1 cursor]  +0:01 turn 1 done 9s · 2 tool calls, 1 file edit
 [adds#1 cursor]  +0:10 turn 2 done 4s · 1 tool call, 1 file edit
@@ -49,7 +49,7 @@ Each turn gets a line with its time, tool calls and file edits. The summary coun
 
 ## Keep each turn
 
-```ts title="evals/guide.es.ts"
+```ts title="evals/guide.eval.ts"
 evaluate('checks turns', async (t) => {
   const first = await t.send(
     'Create greet.js exporting greet(name) that returns "Hello, <name>!".',

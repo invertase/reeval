@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { plain, prompt } from './env.ts'
 
 // Every turn reports its tokens: the prompt (most of it cached, from the second call on) and

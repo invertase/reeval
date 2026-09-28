@@ -1,4 +1,4 @@
-# Base image for ES sandboxes. `es image build` builds this, bakes the Cursor harness
+# Base image for reeval sandboxes. `reeval image build` builds this, bakes the Cursor harness
 # bootstrap into it and commits the result as the image evals run in.
 FROM node:22-bookworm-slim
 

@@ -1,12 +1,12 @@
 // Every harness the real-agent suites (contract.test.ts, e2e-real.test.ts) run, one row each.
-// Adding a harness to them means adding a row here, and a case to the contract's es.config.ts.
+// Adding a harness to them means adding a row here, and a case to the contract's reeval.config.ts.
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { appendFileSync, existsSync, readFileSync } from 'node:fs'
-import { type BakedHarness, imageFor } from '@evalsuite/sandbox-docker'
+import { type BakedHarness, imageFor } from '@reeval/sandbox-docker'
 
 export type HarnessRow = {
-  /** The name in test titles, `ES_CONTRACT_HARNESSES` and the capture directory. */
+  /** The name in test titles, `REEVAL_CONTRACT_HARNESSES` and the capture directory. */
   id:
     | 'fake'
     | 'cursor'
@@ -19,7 +19,7 @@ export type HarnessRow = {
     | 'pi'
     | 'codex'
   /**
-   * `ES_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
+   * `REEVAL_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
    * providers than Google's.
    */
   harness?: 'opencode'
@@ -30,7 +30,7 @@ export type HarnessRow = {
    * (the first that's set). Null for the fake agent, which needs no key.
    */
   key: { name: string; from: string[] } | null
-  /** ES's image for it, which the Docker tier needs built. */
+  /** reeval's image for it, which the Docker tier needs built. */
   image: BakedHarness
   /** Where the placed contract skill shows up in the attempt's `context`. */
   skillContext: RegExp
@@ -235,32 +235,34 @@ const imageBuilt = (ref: string) => {
 }
 
 /**
- * Why a row doesn't run here, or false. Real rows run only with `ES_TEST_REAL=1` (they spend
+ * Why a row doesn't run here, or false. Real rows run only with `REEVAL_TEST_REAL=1` (they spend
  * money), and skip without it, saying so; asked for, a row without its key runs and fails in
- * `reserveAttempts`, naming the variable. `ES_CONTRACT_HARNESSES=cursor,…` picks rows. A missing
- * image fails instead under `ES_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
+ * `reserveAttempts`, naming the variable. `REEVAL_CONTRACT_HARNESSES=cursor,…` picks rows. A missing
+ * image fails instead under `REEVAL_TEST_REQUIRE_DOCKER=1`, as the Docker tier does.
  */
 export function skipRow(row: HarnessRow): string | false {
-  const only = process.env.ES_CONTRACT_HARNESSES?.split(',')
-  if (only && !only.includes(row.id)) return `ES_CONTRACT_HARNESSES=${only.join(',')}`
+  const only = process.env.REEVAL_CONTRACT_HARNESSES?.split(',')
+  if (only && !only.includes(row.id)) return `REEVAL_CONTRACT_HARNESSES=${only.join(',')}`
   if (row.key) {
-    if (process.env.ES_TEST_REAL !== '1') return 'set ES_TEST_REAL=1 to run real agents'
+    if (process.env.REEVAL_TEST_REAL !== '1') return 'set REEVAL_TEST_REAL=1 to run real agents'
     if (!keyOf(row)) return false
   }
-  if (process.env.ES_TEST_REQUIRE_DOCKER === '1') return false
+  if (process.env.REEVAL_TEST_REQUIRE_DOCKER === '1') return false
   if (!imageBuilt(imageFor(row.image)))
-    return `needs Docker and ${imageFor(row.image)} (es image build)`
+    return `needs Docker and ${imageFor(row.image)} (reeval image build)`
   return false
 }
 
-/** The host environment for `es run` on this row: the key under its own name, and the row's pick. */
+/** The host environment for `reeval run` on this row: the key under its own name, and the row's pick. */
 export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   const key = keyOf(row)
   return {
-    ...(row.id === 'fake' ? {} : { ES_CONTRACT_HARNESS: harnessOf(row) }),
-    ...(row.model ? { ES_CONTRACT_MODEL: row.model } : {}),
+    ...(row.id === 'fake' ? {} : { REEVAL_CONTRACT_HARNESS: harnessOf(row) }),
+    ...(row.model ? { REEVAL_CONTRACT_MODEL: row.model } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
-    ...(process.env.ES_RAW_TRANSCRIPT ? { ES_RAW_TRANSCRIPT: process.env.ES_RAW_TRANSCRIPT } : {}),
+    ...(process.env.REEVAL_RAW_TRANSCRIPT
+      ? { REEVAL_RAW_TRANSCRIPT: process.env.REEVAL_RAW_TRANSCRIPT }
+      : {}),
   }
 }
 
@@ -292,20 +294,20 @@ export function scanTargets(value: string): string {
 
 /**
  * The hard cap on real attempts across every suite of one CI job: each real row reserves what it
- * may start in `ES_REAL_LEDGER` (a file, one number per line) before it runs, and fails without
- * starting anything when that would take the job over `ES_REAL_ATTEMPT_BUDGET`. Unset, no cap
- * (local runs); each es run's own `budget.attempts` still holds. A real row without its key fails
- * here, before anything starts: asking for real agents (`ES_TEST_REAL=1`) and getting a skip would
+ * may start in `REEVAL_REAL_LEDGER` (a file, one number per line) before it runs, and fails without
+ * starting anything when that would take the job over `REEVAL_REAL_ATTEMPT_BUDGET`. Unset, no cap
+ * (local runs); each reeval run's own `budget.attempts` still holds. A real row without its key fails
+ * here, before anything starts: asking for real agents (`REEVAL_TEST_REAL=1`) and getting a skip would
  * pass a nightly that tested nothing.
  */
 export function reserveAttempts(row: HarnessRow, attempts: number, what: string): void {
   if (row.key && !keyOf(row)) {
     throw new Error(
-      `${row.key.from.join(' or ')} isn't set, and ES_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of ES_CONTRACT_HARNESSES`,
+      `${row.key.from.join(' or ')} isn't set, and REEVAL_TEST_REAL=1 asks for real ${row.id}: set it, or leave ${row.id} out of REEVAL_CONTRACT_HARNESSES`,
     )
   }
-  const budget = Number(process.env.ES_REAL_ATTEMPT_BUDGET)
-  const ledger = process.env.ES_REAL_LEDGER
+  const budget = Number(process.env.REEVAL_REAL_ATTEMPT_BUDGET)
+  const ledger = process.env.REEVAL_REAL_LEDGER
   if (!row.key || !budget || !ledger) return
   const spent = existsSync(ledger)
     ? readFileSync(ledger, 'utf8')
@@ -315,7 +317,7 @@ export function reserveAttempts(row: HarnessRow, attempts: number, what: string)
     : 0
   if (spent + attempts > budget) {
     throw new Error(
-      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise ES_REAL_ATTEMPT_BUDGET in real.yml if the suite grew on purpose`,
+      `${what} on ${row.id} would start ${attempts} real attempts, over the job's budget of ${budget} (${spent} reserved): raise REEVAL_REAL_ATTEMPT_BUDGET in real.yml if the suite grew on purpose`,
     )
   }
   appendFileSync(ledger, `${attempts} ${what} ${row.id}\n`)

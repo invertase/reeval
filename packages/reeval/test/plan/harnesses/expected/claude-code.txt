@@ -1,20 +1,20 @@
 no profile · 4 evals · 6 cells · 6 attempts
-evals/h.es.ts › both harnesses                  cursor:composer-2.5/-/docker                           control  gated  ×1
-                                                claude-code:claude-sonnet-5/-/docker                   control  gated  ×1
-evals/h.es.ts › claude only, own id             claude/-/docker                                        control  gated  ×1
-evals/h.es.ts › both harnesses on a dockerfile  cursor:composer-2.5/-/docker:tools                     control  gated  ×1
-                                                claude-code:claude-sonnet-5/-/docker:tools             control  gated  ×1
-evals/h.es.ts › claude on a toolchain base      claude-code:claude-sonnet-5/-/docker:python:3.12-slim  control  gated  ×1
+evals/h.eval.ts › both harnesses                  cursor:composer-2.5/-/docker                           control  gated  ×1
+                                                  claude-code:claude-sonnet-5/-/docker                   control  gated  ×1
+evals/h.eval.ts › claude only, own id             claude/-/docker                                        control  gated  ×1
+evals/h.eval.ts › both harnesses on a dockerfile  cursor:composer-2.5/-/docker:tools                     control  gated  ×1
+                                                  claude-code:claude-sonnet-5/-/docker:tools             control  gated  ×1
+evals/h.eval.ts › claude on a toolchain base      claude-code:claude-sonnet-5/-/docker:python:3.12-slim  control  gated  ×1
 excluded: —
 image docker · 1 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
-  base  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.128-patch.5d1c985c  (reeval's image: built when missing or when its base changed)
 image docker:tools · 1 evals
-  dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-<context + ES image id>  (docker build (layer cache), tagged by content hash)
-  harness                             evalsuite-dockerfile:tools-<context + ES image id>  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:cursor-0.1.0)
+  dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.0)
 image docker:tools · claude-code · 1 evals
-  dockerfile docker/tools/Dockerfile  evalsuite-dockerfile:tools-<context + ES image id>  (docker build (layer cache), tagged by content hash)
-  harness                             evalsuite-dockerfile:tools-<context + ES image id>  (inherited: FROM ${ES_BASE}, which is evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c)
+  dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:claude-code-1.0.128-patch.5d1c985c)
 image docker:python:3.12-slim · claude-code · 1 evals
-  from python:3.12-slim  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; es image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:claude-code-1.0.128-patch.5d1c985c-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

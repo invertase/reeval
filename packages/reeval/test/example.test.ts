@@ -14,24 +14,32 @@ test('examples/hello copied out of the repo runs on the fake harness', async () 
   assert.ok(fromRepo.startsWith('..') || isAbsolute(fromRepo), 'the copy is outside the repo')
   cpSync(example, dir, {
     recursive: true,
-    filter: (src) => !/[/\\](node_modules|\.es)([/\\]|$)/.test(src.slice(example.length)),
+    filter: (src) => !/[/\\](node_modules|\.reeval)([/\\]|$)/.test(src.slice(example.length)),
   })
   await mkdir(join(dir, 'node_modules'))
-  await symlink(pkgRoot, join(dir, 'node_modules/evalsuite'), 'dir')
+  await symlink(pkgRoot, join(dir, 'node_modules/reeval'), 'dir')
 
   const tsconfig = JSON.parse(readFileSync(join(dir, 'tsconfig.json'), 'utf8'))
   assert.equal(tsconfig.extends, undefined, 'tsconfig.json extends nothing outside the example')
 
-  const plan = await runCli(dir, ['run', '--config', 'es.fake.config.ts', '--dry-run', '--json'])
+  const plan = await runCli(dir, [
+    'run',
+    '--config',
+    'reeval.fake.config.ts',
+    '--dry-run',
+    '--json',
+  ])
   assert.equal(plan.code, 0, plan.stdout + plan.stderr)
   const files = new Set(JSON.parse(plan.stdout).evals.map((e: { file: string }) => e.file))
   assert.deepEqual([...files].sort(), [
-    'evals/hello.es.ts',
-    'evals/preferences.es.ts',
-    'evals/skill.es.ts',
+    'evals/hello.eval.ts',
+    'evals/preferences.eval.ts',
+    'evals/skill.eval.ts',
   ])
 
-  const run = await runCli(dir, ['run', '--config', 'es.fake.config.ts'], { timeoutMs: 180_000 })
+  const run = await runCli(dir, ['run', '--config', 'reeval.fake.config.ts'], {
+    timeoutMs: 180_000,
+  })
   assert.equal(run.code, 0, run.stdout + run.stderr)
   const { evals } = readRun(dir)
   assert.ok(evals.length >= 3, `ran ${evals.length} evals`)

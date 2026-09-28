@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { built } from './env.ts'
 
 // Setup steps run in the workspace after the repository is copied in.

@@ -1,4 +1,4 @@
-// `@evalsuite/harness-codex`: OpenAI's Codex CLI on an OpenAI API key, as an AI SDK harness, in
+// `@reeval/harness-codex`: OpenAI's Codex CLI on an OpenAI API key, as an AI SDK harness, in
 // the sandbox.
 export {
   CODEX_BIN_DIR,

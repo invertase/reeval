@@ -1,4 +1,4 @@
-// How a file ES wrote earlier (or later) reads in this ES. Browser-safe. Every reader of a run
+// How a file reeval wrote earlier (or later) reads in this reeval. Browser-safe. Every reader of a run
 // record, transcript line and analysis document goes through here, and `pnpm schema:check` holds
 // the types to it: a field added as required needs a read default below, or a schemaVersion bump
 // with a migration.
@@ -10,7 +10,7 @@ import type { AnalysisDoc } from './analysis.ts'
 import type { DebugRequest } from './debug.ts'
 import type { TranscriptLine } from './model.ts'
 
-/** Each shape ES persists and reads back; `schema/<name>.schema.json` is its snapshot. */
+/** Each shape reeval persists and reads back; `schema/<name>.schema.json` is its snapshot. */
 export type ShapeName =
   | 'run-record'
   | 'transcript-line'
@@ -45,16 +45,16 @@ export const READ_DEFAULTS: Record<ShapeName, ReadDefault[]> = {
  */
 export const MIGRATIONS: Partial<Record<ShapeName, Record<number, (value: never) => unknown>>> = {}
 
-/** The newest schemaVersion of each versioned shape this ES reads. */
+/** The newest schemaVersion of each versioned shape this reeval reads. */
 export const SCHEMA_VERSIONS = { 'run-record': SCHEMA_VERSION, analysis: 1 } as const
 
-/** A file from a newer ES, whose schemaVersion this ES doesn't know. */
+/** A file from a newer reeval, whose schemaVersion this reeval doesn't know. */
 export class NewerSchemaError extends Error {
   override name = 'NewerSchemaError'
-  /** The message without its subject: `written by a newer ES (…). Upgrade ES to read it.` */
+  /** The message without its subject: `written by a newer reeval (…). Upgrade reeval to read it.` */
   readonly reason: string
   constructor(what: string, version: number, newest: number) {
-    const reason = `written by a newer ES (schemaVersion ${version}; this ES reads up to ${newest}). Upgrade ES to read it.`
+    const reason = `written by a newer reeval (schemaVersion ${version}; this reeval reads up to ${newest}). Upgrade reeval to read it.`
     super(`${what} was ${reason}`)
     this.reason = reason
   }
@@ -111,9 +111,9 @@ function upgrade<T>(shape: keyof typeof SCHEMA_VERSIONS, value: T, what: string)
 }
 
 /**
- * A record as every reader sees it: migrated to this ES's schemaVersion, with each field added
- * after it was written read as its default, so older runs keep loading in `es show`, `es query`,
- * compare, history and the studio. A record from a newer ES throws a `NewerSchemaError`.
+ * A record as every reader sees it: migrated to this reeval's schemaVersion, with each field added
+ * after it was written read as its default, so older runs keep loading in `reeval show`, `reeval query`,
+ * compare, history and the studio. A record from a newer reeval throws a `NewerSchemaError`.
  */
 export function readableRecord(record: RunRecord, what = `Run ${record.runId}`): RunRecord {
   return fillDefaults('run-record', upgrade('run-record', record, what))
@@ -123,14 +123,14 @@ export function readableRecord(record: RunRecord, what = `Run ${record.runId}`):
 export const readableTranscriptLine = (line: TranscriptLine): TranscriptLine =>
   fillDefaults('transcript-line', line)
 
-/** An analysis document as every reader sees it; one from a newer ES throws. */
+/** An analysis document as every reader sees it; one from a newer reeval throws. */
 export const readableAnalysis = (doc: AnalysisDoc, what = 'This analysis'): AnalysisDoc =>
   fillDefaults('analysis', upgrade('analysis', doc, what))
 
-/** A gateway request line from `.es/debug` as the studio sees it. */
+/** A gateway request line from `.reeval/debug` as the studio sees it. */
 export const readableDebugRequest = (request: DebugRequest): DebugRequest =>
   fillDefaults('debug-request', request)
 
-/** A line of `.es/cli.jsonl` as `es report` sees it. */
+/** A line of `.reeval/cli.jsonl` as `reeval report` sees it. */
 export const readableCliInvocation = (entry: CliInvocation): CliInvocation =>
   fillDefaults('cli-invocation', entry)

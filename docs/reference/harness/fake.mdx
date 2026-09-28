@@ -5,7 +5,7 @@ description: A scripted stand-in for a coding agent, for testing evals, configs 
 
 `fakeHarness()` is an agent that writes canned files and replies with canned text. It needs no key, costs nothing and finishes in milliseconds.
 
-```ts title="es.fake.config.ts"
+```ts title="reeval.fake.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
@@ -27,7 +27,7 @@ export default defineConfig({
 ```
 
 ```bash
-npx es run --config es.fake.config.ts
+npx reeval run --config reeval.fake.config.ts
 ```
 
 ## Options
@@ -73,7 +73,7 @@ npx es run --config es.fake.config.ts
 </Property>
 
 <Property name="ignoreAbort" type="boolean" optional>
-  Sits out `delayMs` even after a timeout or Ctrl-C, like an agent that doesn't stop when it's told to. For testing how your run behaves then: ES waits 3 seconds, then records the turn as `aborted` and moves on.
+  Sits out `delayMs` even after a timeout or Ctrl-C, like an agent that doesn't stop when it's told to. For testing how your run behaves then: reeval waits 3 seconds, then records the turn as `aborted` and moves on.
 </Property>
 
 <Property name="failWith" type="string" optional>

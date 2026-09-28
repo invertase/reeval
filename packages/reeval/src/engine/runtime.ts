@@ -60,7 +60,7 @@ export function useEngine(next: Engine): void {
 function active(): Engine {
   if (!engine)
     throw new UsageError(
-      'evaluate() and group() only work in an eval file that es run loads. Run it with es run.',
+      'evaluate() and group() only work in an eval file that reeval run loads. Run it with reeval run.',
     )
   return engine
 }

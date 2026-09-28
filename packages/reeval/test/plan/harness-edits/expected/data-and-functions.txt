@@ -1,16 +1,16 @@
 no profile · 5 evals · 10 cells · 10 attempts
-evals/edits.es.ts › add, as data            cursor:composer-2.5/-/docker          control  gated  ×1
-                                            claude-code:claude-sonnet-5/-/docker  control  gated  ×1
-                                            fast/-/docker                         control  gated  ×1
-evals/edits.es.ts › add, as a function      cursor:composer-2.5/-/docker          control  gated  ×1
-                                            claude-code:claude-sonnet-5/-/docker  control  gated  ×1
-                                            fast/-/docker                         control  gated  ×1
-evals/edits.es.ts › only, as data           cursor:composer-2.5/-/docker          control  gated  ×1
-evals/edits.es.ts › only, as a function     cursor:composer-2.5/-/docker          control  gated  ×1
-evals/edits.es.ts › cursor only › then add  cursor:composer-2.5/-/docker          control  gated  ×1
-                                            fast/-/docker                         control  gated  ×1
+evals/edits.eval.ts › add, as data            cursor:composer-2.5/-/docker          control  gated  ×1
+                                              claude-code:claude-sonnet-5/-/docker  control  gated  ×1
+                                              fast/-/docker                         control  gated  ×1
+evals/edits.eval.ts › add, as a function      cursor:composer-2.5/-/docker          control  gated  ×1
+                                              claude-code:claude-sonnet-5/-/docker  control  gated  ×1
+                                              fast/-/docker                         control  gated  ×1
+evals/edits.eval.ts › only, as data           cursor:composer-2.5/-/docker          control  gated  ×1
+evals/edits.eval.ts › only, as a function     cursor:composer-2.5/-/docker          control  gated  ×1
+evals/edits.eval.ts › cursor only › then add  cursor:composer-2.5/-/docker          control  gated  ×1
+                                              fast/-/docker                         control  gated  ×1
 excluded: —
 image docker · 5 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
-  base  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.128-patch.5d1c985c  (reeval's image: built when missing or when its base changed)

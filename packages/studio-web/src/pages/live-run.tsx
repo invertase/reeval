@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
-import { formatDuration, isFinished, type LiveAttempt, type LiveRun } from 'evalsuite/view'
 import { ArrowLeft, CircleStop, FileText, Radio } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
+import { formatDuration, isFinished, type LiveAttempt, type LiveRun } from 'reeval/view'
 import {
   elapsed,
   LiveBadge,
@@ -57,7 +57,7 @@ function Stat({ label, children }: { label: string; children: React.ReactNode })
 function NotLive({ runId }: { runId: string }) {
   return (
     <EmptyState icon={Radio} title="This run isn't in progress">
-      No running <span className="font-mono">es run</span> has the id{' '}
+      No running <span className="font-mono">reeval run</span> has the id{' '}
       <span className="font-mono">{runId}</span>, and no record of it has landed.{' '}
       <Link to="/" className="underline">
         Back to runs
@@ -125,8 +125,9 @@ export function LiveRunPage() {
         <div className="flex gap-3 rounded-xl border border-infra/30 bg-infra/5 px-4 py-3 text-sm">
           <CircleStop className="mt-0.5 size-4 shrink-0 text-infra" />
           <p>
-            This run stopped without writing a record: its <span className="font-mono">es run</span>{' '}
-            exited or stopped responding. The attempts below are what finished before it did.
+            This run stopped without writing a record: its{' '}
+            <span className="font-mono">reeval run</span> exited or stopped responding. The attempts
+            below are what finished before it did.
           </p>
         </div>
       ) : null}

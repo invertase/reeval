@@ -1,6 +1,6 @@
 // One eval file's worker: loads the file, reports what it declares, and with a selection, runs
 // those attempts and exits. The main process starts a fresh one per file (./pool.ts), from the
-// copy of ES the project itself resolves, so the file registers with the ES it imports.
+// copy of reeval the project itself resolves, so the file registers with the reeval it imports.
 import { matchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
 import type { RunContext } from '../types.ts'

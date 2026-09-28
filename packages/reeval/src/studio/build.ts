@@ -36,7 +36,7 @@ async function sizeOf(dir: string): Promise<{ files: number; bytes: number }> {
 
 /**
  * Writes the studio as a static site: the prebuilt app, `studio.json`, the index shards, and every
- * run under `data/runs/` at the same paths `es studio` serves. The app uses hash routing and
+ * run under `data/runs/` at the same paths `reeval studio` serves. The app uses hash routing and
  * relative URLs, so the folder works from any host and subpath.
  */
 export async function buildStudio(options: BuildOptions): Promise<BuildResult> {

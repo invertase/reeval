@@ -1,15 +1,15 @@
 profile locked (--profile) · 8 evals · 9 cells · 9 attempts
-evals/cascade.es.ts › the config policy                                   fake/-/docker         control         gated    ×1  egress "deny-all"
-evals/cascade.es.ts › an environment replaces it                          fake/closed/docker    control         gated    ×1  egress "deny-all"
-evals/cascade.es.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1
-evals/cascade.es.ts › the default list spreads                            fake/installs/docker  control         gated    ×1  egress {"allow":["registry.npmjs.org","registry.yarnpkg.com","github.com","*.github.com","*.githubusercontent.com","pypi.org","files.pythonhosted.org","api.example.com"]}
-evals/cascade.es.ts › the eval replaces the environment                   fake/closed/docker    control         gated    ×1  egress {"allow":["eval.example.com"]}
-evals/cascade.es.ts › a group › replaces the environment too              fake/closed/docker    control         gated    ×1  egress {"allow":["group.example.com"]}
-evals/cascade.es.ts › a variant runs under its own policy                 fake/plain/docker     control         ungated  ×1  egress "deny-all"
-                                                                          fake/closed/docker    variant closed  gated    ×1  egress "deny-all"
-evals/cascade.es.ts › a fake agent with a layout gets that agent's hosts  fake/closed/docker    control         gated    ×1  egress "deny-all" + api.anthropic.com, *.anthropic.com
+evals/cascade.eval.ts › the config policy                                   fake/-/docker         control         gated    ×1  egress "deny-all"
+evals/cascade.eval.ts › an environment replaces it                          fake/closed/docker    control         gated    ×1  egress "deny-all"
+evals/cascade.eval.ts › an extend child replaces its parent                 fake/reopened/docker  control         gated    ×1
+evals/cascade.eval.ts › the default list spreads                            fake/installs/docker  control         gated    ×1  egress {"allow":["registry.npmjs.org","registry.yarnpkg.com","github.com","*.github.com","*.githubusercontent.com","pypi.org","files.pythonhosted.org","api.example.com"]}
+evals/cascade.eval.ts › the eval replaces the environment                   fake/closed/docker    control         gated    ×1  egress {"allow":["eval.example.com"]}
+evals/cascade.eval.ts › a group › replaces the environment too              fake/closed/docker    control         gated    ×1  egress {"allow":["group.example.com"]}
+evals/cascade.eval.ts › a variant runs under its own policy                 fake/plain/docker     control         ungated  ×1  egress "deny-all"
+                                                                            fake/closed/docker    variant closed  gated    ×1  egress "deny-all"
+evals/cascade.eval.ts › a fake agent with a layout gets that agent's hosts  fake/closed/docker    control         gated    ×1  egress "deny-all" + api.anthropic.com, *.anthropic.com
 excluded: —
 image docker · 7 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 1 evals
-  base  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c  (ES's image: built when missing or when its base changed)
+  base  reeval-sandbox:claude-code-1.0.128-patch.5d1c985c  (reeval's image: built when missing or when its base changed)

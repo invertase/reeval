@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { run } from '@evalsuite/sandbox-docker/process'
+import { run } from '@reeval/sandbox-docker/process'
 import { redactSecrets } from './redact.ts'
 
 export type GitResult = { code: number; stdout: Buffer; stderr: string }

@@ -1,5 +1,5 @@
 // The standalone `expect` (engine/expect.ts): Vitest's matchers from @vitest/expect, routed to the
-// attempt that asserts, with ES's shims for what Vitest's runner used to provide.
+// attempt that asserts, with reeval's shims for what Vitest's runner used to provide.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import {

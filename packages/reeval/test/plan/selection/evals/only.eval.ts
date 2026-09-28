@@ -1,4 +1,4 @@
-import { evaluate } from 'evalsuite'
+import { evaluate } from 'reeval'
 
 evaluate.only('focused', async () => {})
 evaluate('sibling', async () => {})

@@ -60,7 +60,7 @@ export async function studioCommand({ config, flags, version, build }: Args): Pr
     es: version,
     project,
   })
-  console.log(`es studio · ${project} · ${rel(config.history.dir)}/`)
+  console.log(`reeval studio · ${project} · ${rel(config.history.dir)}/`)
   console.log(`  ${studio.url}`)
   console.log('Ctrl-C to stop.')
   if (flags.open) openBrowser(studio.url)

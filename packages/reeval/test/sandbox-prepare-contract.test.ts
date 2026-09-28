@@ -1,12 +1,12 @@
 // The sandbox prepare contract (src/sandbox/provider.ts), checked the same way on every provider:
 // a scripted fake one that fails in each class on demand (a bad API token, a 503, running out of
-// memory or disk), and Docker, which gets each case from a real build. ES's generic layer
+// memory or disk), and Docker, which gets each case from a real build. reeval's generic layer
 // (src/sandbox/preflight.ts) does the retrying, caching and stopping; a provider only prepares
 // and classes.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { describe, test } from 'node:test'
-import { DEFAULT_IMAGE } from '@evalsuite/sandbox-docker'
+import { DEFAULT_IMAGE } from '@reeval/sandbox-docker'
 import { fakeHarness } from '../src/harness.ts'
 import {
   type PrepareUse,
@@ -43,7 +43,7 @@ function scriptedProvider(state: { token: string; calls: Map<string, number> }):
     async prepare(sandbox, _harness, ctx) {
       const { script, n } = sandbox as unknown as { script: Case; n: number }
       const key = `${script}:${n}`
-      // One network step, retried by ES when it fails transiently.
+      // One network step, retried by reeval when it fails transiently.
       return await ctx.retry(async () => {
         const call = (state.calls.get(key) ?? 0) + 1
         state.calls.set(key, call)
@@ -108,7 +108,7 @@ const dockerReady = (() => {
     return false
   }
 })()
-const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
+const requireDocker = process.env.REEVAL_TEST_REQUIRE_DOCKER === '1'
 const nonce = `${Date.now()}-${process.pid}`
 
 const dockerRow: Row = {
@@ -135,7 +135,7 @@ const dockerRow: Row = {
   },
   async badCredentials(body) {
     const before = process.env.DOCKER_HOST
-    process.env.DOCKER_HOST = 'unix:///nonexistent/es-contract.sock'
+    process.env.DOCKER_HOST = 'unix:///nonexistent/reeval-contract.sock'
     try {
       return await body()
     } finally {
@@ -149,7 +149,7 @@ const harness = fakeHarness()
 const use = (sandbox: SandboxDescriptor, where = 'evaluate("x")'): PrepareUse => ({
   harness,
   sandbox,
-  setBy: { sandbox: where, harness: 'es.config.ts' },
+  setBy: { sandbox: where, harness: 'reeval.config.ts' },
 })
 
 for (const row of [scripted.row, dockerRow]) {
@@ -225,7 +225,10 @@ for (const row of [scripted.row, dockerRow]) {
     })
 
     test('a config-level sandbox that fails stops the run', async () => {
-      const p = prepare([use(row.sandbox('broken', 5), 'es.config.ts'), use(row.sandbox('ok', 5))])
+      const p = prepare([
+        use(row.sandbox('broken', 5), 'reeval.config.ts'),
+        use(row.sandbox('ok', 5)),
+      ])
       assert.equal(p.targets[0]?.runWide, true)
       assert.equal(p.targets[1]?.runWide, false)
       await assert.rejects(p.run(), RunStopError)

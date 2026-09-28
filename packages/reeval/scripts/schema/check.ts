@@ -1,4 +1,4 @@
-// `pnpm schema:check` (CI) and `pnpm schema:update`: holds every shape ES persists and reads back
+// `pnpm schema:check` (CI) and `pnpm schema:update`: holds every shape reeval persists and reads back
 // to its committed snapshot in schema/, so a change can't silently stop older files from loading.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
@@ -87,7 +87,7 @@ export function explain(reports: ShapeReport[]): string {
   for (const r of reports.filter((x) => x.breaking.length)) {
     const { shape } = r
     lines.push(
-      `✗ ${shape.type} (${shape.file}) changed in a way that breaks files ES already wrote.`,
+      `✗ ${shape.type} (${shape.file}) changed in a way that breaks files reeval already wrote.`,
       `  ${shape.where}. Snapshot: ${relative(PACKAGE_DIR, snapshotFile(shape))}`,
       '',
     )
@@ -108,9 +108,9 @@ export function explain(reports: ShapeReport[]): string {
         )
       } else if (how === 'removed') {
         lines.push(
-          '    An older ES reading a file this version writes would crash without it. Either:',
+          '    An older reeval reading a file this version writes would crash without it. Either:',
           '    1. Keep the field in the type (optional, with a /** @deprecated */ note) and keep writing it; or',
-          `    2. ${version}, so an older ES refuses the new files with a clear message instead.`,
+          `    2. ${version}, so an older reeval refuses the new files with a clear message instead.`,
         )
       } else if (how === 'narrowed') {
         lines.push(
@@ -132,7 +132,7 @@ export function explain(reports: ShapeReport[]): string {
 }
 
 /**
- * Every file in the record corpus, read the way ES reads it, checked against the shapes the code
+ * Every file in the record corpus, read the way reeval reads it, checked against the shapes the code
  * describes now: a missing read default (or one dropped later) shows up here as a missing field.
  */
 export function checkCorpus(current: Map<string, ShapeSchema>): string[] {
@@ -207,7 +207,7 @@ function main(argv: string[]): number {
   if (broken.length || misfits.length) {
     process.stderr.write(`${explain(reports)}${misfits.join('\n')}`)
     process.stderr.write(
-      'The snapshots in packages/evalsuite/schema/ record what ES has written. See "Changing what ES persists" in AGENTS.md.\n',
+      'The snapshots in packages/reeval/schema/ record what reeval has written. See "Changing what reeval persists" in AGENTS.md.\n',
     )
     return 1
   }
@@ -225,7 +225,7 @@ function main(argv: string[]): number {
   if (!update) {
     const names = [...stale.map((r) => r.shape.type), ...plan.map((s) => s.type)]
     process.stderr.write(
-      `✗ ${names.join(', ')} changed compatibly, but schema/ wasn't updated. Run \`pnpm --filter @invertase/foobar schema:update\` and commit schema/.\n`,
+      `✗ ${names.join(', ')} changed compatibly, but schema/ wasn't updated. Run \`pnpm --filter reeval schema:update\` and commit schema/.\n`,
     )
     return 1
   }

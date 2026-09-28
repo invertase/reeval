@@ -1,8 +1,10 @@
-// `es __worker`: the process the main process starts for each eval file (./pool.ts, ./worker.ts).
+// `reeval __worker`: the process the main process starts for each eval file (./pool.ts, ./worker.ts).
 import { startWorker } from './worker.ts'
 
 if (!process.send) {
-  console.error("es __worker is the process ES starts for each eval file; it isn't a command.")
+  console.error(
+    "reeval __worker is the process reeval starts for each eval file; it isn't a command.",
+  )
   process.exit(2)
 }
 // Workers run in their own process group, but a stray Ctrl-C must still leave cancelling to the CLI.

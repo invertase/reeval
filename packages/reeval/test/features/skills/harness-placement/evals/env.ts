@@ -1,4 +1,4 @@
-import { defineEnvironment, type Turn } from 'evalsuite'
+import { defineEnvironment, type Turn } from 'reeval'
 
 export const greeting = defineEnvironment('greeting', ({ skill }) => ({
   skills: [skill.local('../skills/house-greeting')],

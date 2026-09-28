@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { greeting } from './env.ts'
 
 // Under pi, a workspace-placed skill lands in .pi/skills, which it reads in a trusted project.

@@ -4,7 +4,7 @@
 // sandbox-docker's proxy and Docker tests.
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
-import type { Substitution } from '@evalsuite/sandbox-docker'
+import type { Substitution } from '@reeval/sandbox-docker'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
@@ -14,12 +14,12 @@ import { countSecrets, redactSecrets, registerSecret } from '../src/redact.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
 
-const VALUE = 'es-unit-brokered-4f1c9e2a7b'
-const OTHER = 'es-unit-other-9d3a61c0e5'
-process.env.ES_UNIT_BROKERED = VALUE
-process.env.ES_UNIT_OTHER = OTHER
+const VALUE = 'reeval-unit-brokered-4f1c9e2a7b'
+const OTHER = 'reeval-unit-other-9d3a61c0e5'
+process.env.REEVAL_UNIT_BROKERED = VALUE
+process.env.REEVAL_UNIT_OTHER = OTHER
 
-const PLACEHOLDER = /^es_secret_[0-9A-Za-z]{32}$/
+const PLACEHOLDER = /^reeval_secret_[0-9A-Za-z]{32}$/
 
 const resolve = (input: EnvironmentInput) =>
   resolveEnvironment(layered(undefined, defineEnvironment('e', input)), {}, '/p', 'e', 'AGENTS.md')
@@ -27,7 +27,7 @@ const resolve = (input: EnvironmentInput) =>
 describe('resolving brokered secrets', () => {
   test('the sandbox gets a placeholder, and the gateway the value on its hosts', async () => {
     const r = await resolve(({ secret }) => ({
-      env: { API_KEY: secret.fromEnv('ES_UNIT_BROKERED', { hosts: secret.hosts.gemini }) },
+      env: { API_KEY: secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: secret.hosts.gemini }) },
     }))
     assert.match(r.vars.API_KEY ?? '', PLACEHOLDER)
     assert.deepEqual(r.substitutions, [
@@ -43,29 +43,32 @@ describe('resolving brokered secrets', () => {
   })
 
   test('a value with a line break in it fails the attempt when it would go in a header', async () => {
-    process.env.ES_UNIT_WRAPPED = 'AQ.abc\n   │ def'
+    process.env.REEVAL_UNIT_WRAPPED = 'AQ.abc\n   │ def'
     try {
       await assert.rejects(
         resolve(({ secret }) => ({
-          env: { API_KEY: secret.fromEnv('ES_UNIT_WRAPPED', { hosts: secret.hosts.gemini }) },
+          env: { API_KEY: secret.fromEnv('REEVAL_UNIT_WRAPPED', { hosts: secret.hosts.gemini }) },
         })),
         /^InfraError: API_KEY has whitespace or a line break in it \(character 7\), so it can't go in a request header\. A key copied from a wrapped terminal line picks these up; set it again as one line\.$/,
       )
       // A body-only secret may be anything, a PEM say.
       const r = await resolve(({ secret }) => ({
         env: {
-          API_KEY: secret.fromEnv('ES_UNIT_WRAPPED', { hosts: ['api.example.com'], in: ['body'] }),
+          API_KEY: secret.fromEnv('REEVAL_UNIT_WRAPPED', {
+            hosts: ['api.example.com'],
+            in: ['body'],
+          }),
         },
       }))
       assert.match(r.vars.API_KEY ?? '', PLACEHOLDER)
     } finally {
-      delete process.env.ES_UNIT_WRAPPED
+      delete process.env.REEVAL_UNIT_WRAPPED
     }
   })
 
   test('the record names the brokered secret, and never has its value or placeholder', async () => {
     const r = await resolve(({ secret }) => ({
-      env: { API_KEY: secret.fromEnv('ES_UNIT_BROKERED', { hosts: ['api.example.com'] }) },
+      env: { API_KEY: secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: ['api.example.com'] }) },
     }))
     assert.deepEqual(r.record.brokered, ['API_KEY'])
     assert.deepEqual(r.record.secrets, ['API_KEY'])
@@ -76,14 +79,14 @@ describe('resolving brokered secrets', () => {
 
   test('twin: the same search finds the secret name in the record', async () => {
     const r = await resolve(({ secret }) => ({
-      env: { API_KEY: secret.fromEnv('ES_UNIT_BROKERED', { hosts: ['api.example.com'] }) },
+      env: { API_KEY: secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: ['api.example.com'] }) },
     }))
     assert.equal(JSON.stringify(r.record).includes('API_KEY'), true)
   })
 
   test('each attempt gets a fresh placeholder, and the digest stays the same', async () => {
     const input: EnvironmentInput = ({ secret }) => ({
-      env: { API_KEY: secret.fromEnv('ES_UNIT_BROKERED', { hosts: ['api.example.com'] }) },
+      env: { API_KEY: secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: ['api.example.com'] }) },
     })
     const [a, b] = [await resolve(input), await resolve(input)]
     assert.notEqual(a.vars.API_KEY, b.vars.API_KEY)
@@ -94,7 +97,7 @@ describe('resolving brokered secrets', () => {
     const digest = async (options: object) =>
       (
         await resolve(({ secret }) => ({
-          env: { API_KEY: secret.fromEnv('ES_UNIT_BROKERED', options) },
+          env: { API_KEY: secret.fromEnv('REEVAL_UNIT_BROKERED', options) },
         }))
       ).record.digest
     const base = await digest({ hosts: ['api.example.com'] })
@@ -106,7 +109,10 @@ describe('resolving brokered secrets', () => {
   test("a to: 'checks' secret gives the checks a placeholder, brokered in the checks phase", async () => {
     const r = await resolve(({ secret }) => ({
       env: {
-        CHECK_KEY: secret.fromEnv('ES_UNIT_BROKERED', { to: 'checks', hosts: ['api.example.com'] }),
+        CHECK_KEY: secret.fromEnv('REEVAL_UNIT_BROKERED', {
+          to: 'checks',
+          hosts: ['api.example.com'],
+        }),
       },
     }))
     assert.equal(r.vars.CHECK_KEY, undefined)
@@ -116,7 +122,9 @@ describe('resolving brokered secrets', () => {
   })
 
   test('a secret without hosts is still the real value', async () => {
-    const r = await resolve(({ secret }) => ({ env: { API_KEY: secret.fromEnv('ES_UNIT_OTHER') } }))
+    const r = await resolve(({ secret }) => ({
+      env: { API_KEY: secret.fromEnv('REEVAL_UNIT_OTHER') },
+    }))
     assert.equal(r.vars.API_KEY, OTHER)
     assert.deepEqual(r.substitutions, [])
     assert.deepEqual(r.record.brokered, [])
@@ -127,9 +135,9 @@ describe('resolving brokered secrets', () => {
       mcp: {
         docs: mcp.http('https://mcp.example.com/v1', {
           headers: {
-            'x-api-key': secret.fromEnv('ES_UNIT_BROKERED'),
+            'x-api-key': secret.fromEnv('REEVAL_UNIT_BROKERED'),
             // biome-ignore lint/suspicious/noTemplateCurlyInString: secret.template's syntax
-            authorization: secret.template('Bearer ${ES_UNIT_OTHER}'),
+            authorization: secret.template('Bearer ${REEVAL_UNIT_OTHER}'),
           },
         }),
       },
@@ -137,7 +145,7 @@ describe('resolving brokered secrets', () => {
     const server = r.mcp.docs
     assert.ok(server && server.transport === 'http')
     assert.match(server.headers['x-api-key'] ?? '', PLACEHOLDER)
-    assert.match(server.headers.authorization ?? '', /^Bearer es_secret_[0-9A-Za-z]{32}$/)
+    assert.match(server.headers.authorization ?? '', /^Bearer reeval_secret_[0-9A-Za-z]{32}$/)
     // What the Cursor adapter forwards to the agent: the placeholders, never the values.
     const forwarded = JSON.stringify(cursorMcpServers(r.mcp))
     assert.ok(forwarded.includes(server.headers['x-api-key'] ?? '?'))
@@ -146,7 +154,7 @@ describe('resolving brokered secrets', () => {
       r.substitutions.map((s) => [s.name, s.value, s.hosts]),
       [
         ['x-api-key', VALUE, ['mcp.example.com']],
-        ['ES_UNIT_OTHER', OTHER, ['mcp.example.com']],
+        ['REEVAL_UNIT_OTHER', OTHER, ['mcp.example.com']],
       ],
     )
   })
@@ -155,7 +163,7 @@ describe('resolving brokered secrets', () => {
     const r = await resolve(({ secret, mcp }) => ({
       mcp: {
         local: mcp.http('http://localhost:3333', {
-          headers: { 'x-api-key': secret.fromEnv('ES_UNIT_BROKERED') },
+          headers: { 'x-api-key': secret.fromEnv('REEVAL_UNIT_BROKERED') },
         }),
       },
     }))
@@ -170,8 +178,8 @@ describe('resolving brokered secrets', () => {
       mcp: {
         gh: mcp.stdio('gh-mcp', [], {
           env: {
-            GITHUB_TOKEN: secret.fromEnv('ES_UNIT_BROKERED', { hosts: secret.hosts.github }),
-            OTHER_TOKEN: secret.fromEnv('ES_UNIT_OTHER'),
+            GITHUB_TOKEN: secret.fromEnv('REEVAL_UNIT_BROKERED', { hosts: secret.hosts.github }),
+            OTHER_TOKEN: secret.fromEnv('REEVAL_UNIT_OTHER'),
           },
         }),
       },
@@ -187,7 +195,7 @@ describe('resolving brokered secrets', () => {
 describe('broker phases', () => {
   const sub = (name: string, phase: BrokeredSecret['phase']): BrokeredSecret => ({
     name,
-    placeholder: `es_secret_${name}`,
+    placeholder: `reeval_secret_${name}`,
     value: `value-${name}`,
     hosts: ['api.example.com'],
     in: ['header'],
@@ -420,7 +428,7 @@ describe('redacting fragments of a secret', () => {
   })
 
   test('masks fragments of a declared secret whatever its variable is called', () => {
-    const declared = 'es-declared/9c4e+a1b7d20f'
+    const declared = 'reeval-declared/9c4e+a1b7d20f'
     registerSecret(declared)
     assert.equal(redactSecrets(`x ${declared.slice(2, 14)} y`, {}), 'x [REDACTED] y')
   })
@@ -441,7 +449,7 @@ describe('redacting fragments of a secret', () => {
   test("never breaks a record's JSON: a JSON-valued variable and quoted windows aren't masked alone", () => {
     const targets = JSON.stringify([{ form: 'raw', len: 36, sha256: 'ab12cd34ef56ab12' }])
     const record = JSON.stringify({ context: [{ path: 'AGENTS.md', sha256: 'ab12cd34ef56ab12' }] })
-    const out = redactSecrets(record, { ES_CONTRACT_KEY_TARGETS: targets })
+    const out = redactSecrets(record, { REEVAL_CONTRACT_KEY_TARGETS: targets })
     assert.deepEqual(JSON.parse(out), JSON.parse(record))
     registerSecret('q"uoted-se,cret:9f3a')
     const quoted = JSON.stringify({ a: 'uoted-se', b: 'd-se,cre', c: 'q"uoted-s' })

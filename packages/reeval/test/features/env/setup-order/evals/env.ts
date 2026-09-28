@@ -1,4 +1,4 @@
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 const base = defineEnvironment('base', { setup: [{ run: 'echo one >> order.txt' }] })
 

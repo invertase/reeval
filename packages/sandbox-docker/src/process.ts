@@ -9,7 +9,7 @@ export type RunOptions = {
   input?: string | Uint8Array
   /** Aborting kills the child with SIGKILL and rejects with the signal's reason. */
   signal?: AbortSignal
-  /** Own process group (the default): Ctrl-C goes to ES, which then aborts and kills the child. */
+  /** Own process group (the default): Ctrl-C goes to reeval, which then aborts and kills the child. */
   detached?: boolean
   /** Collect stdout as a Buffer rather than a UTF-8 string. */
   binary?: boolean

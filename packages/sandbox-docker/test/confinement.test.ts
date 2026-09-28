@@ -18,7 +18,7 @@ import {
 } from '../src/session.ts'
 
 const dockerReady =
-  process.env.ES_TEST_REQUIRE_DOCKER === '1' ||
+  process.env.REEVAL_TEST_REQUIRE_DOCKER === '1' ||
   (() => {
     try {
       execFileSync('docker', ['image', 'inspect', DEFAULT_IMAGE], { stdio: 'ignore' })
@@ -28,8 +28,8 @@ const dockerReady =
     }
   })()
 
-/** ES's image with iptables and iproute2, built once (as root, like every image build). */
-const NET_TOOLS_IMAGE = `evalsuite-test-net-tools:${DEFAULT_IMAGE.split(':')[1]}`
+/** reeval's image with iptables and iproute2, built once (as root, like every image build). */
+const NET_TOOLS_IMAGE = `reeval-test-net-tools:${DEFAULT_IMAGE.split(':')[1]}`
 
 /** Capability bits, from linux/capability.h. */
 const CAP = { CHOWN: 0, DAC_OVERRIDE: 1, FOWNER: 3, SETGID: 6, SETUID: 7, NET_RAW: 13 } as const
@@ -87,7 +87,7 @@ describe('sandbox confinement in Docker', {
       command: `stat -c %U owned.txt ${SANDBOX_HOME}/.config/owned.txt`,
     })
     assert.equal(owners.stdout, `${SANDBOX_USER}\n${SANDBOX_USER}\n`)
-    const root = await s.run({ command: 'ls /root; touch /etc/es-test; apt-get update' })
+    const root = await s.run({ command: 'ls /root; touch /etc/reeval-test; apt-get update' })
     assert.notEqual(root.exitCode, 0)
     assert.match(root.stderr, /Permission denied/)
     // Twin: root: true runs the same commands as root, so the probe can tell.

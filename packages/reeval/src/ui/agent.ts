@@ -1,4 +1,4 @@
-// For coding agents running `es run`: they read every line back into context, so print only
+// For coding agents running `reeval run`: they read every line back into context, so print only
 // failures (and, as MISS, ungated cells' expected misses), each with where its detail lives, in
 // a stable greppable vocabulary.
 import { sandboxWarningLine } from '../text.ts'
@@ -80,7 +80,7 @@ export class AgentRenderer implements Renderer {
         for (const w of e.sandboxWarnings ?? []) this.#write(sandboxWarningLine(w))
         return
       case 'run-start':
-        this.#write(`es run: ${e.files} eval file${e.files === 1 ? '' : 's'}`)
+        this.#write(`reeval run: ${e.files} eval file${e.files === 1 ? '' : 's'}`)
         return
       case 'collected':
         this.#tags.addFile(e.evals)

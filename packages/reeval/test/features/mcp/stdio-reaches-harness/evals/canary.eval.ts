@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { LOG, stamp } from './env.ts'
 
 // Must fail: with no turn, nothing has called the tool.

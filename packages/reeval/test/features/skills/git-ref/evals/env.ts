@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import { defineEnvironment } from 'evalsuite'
+import { defineEnvironment } from 'reeval'
 
 const repo = `file://${fileURLToPath(new URL('../repo', import.meta.url))}`
 

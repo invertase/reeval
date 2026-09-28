@@ -1,4 +1,4 @@
-import { evaluate, expect } from 'evalsuite'
+import { evaluate, expect } from 'reeval'
 import { BLOCKED_HOST, closed, prompts, reach, trimmed } from './probes.ts'
 
 // Under deny-all the harness's automatic hosts stay open, so the agent works; any other host is
