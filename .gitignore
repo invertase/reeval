@@ -10,3 +10,5 @@ coverage/
 packages/evalsuite/docker/
 packages/evalsuite/assets/
 packages/evalsuite/THIRD_PARTY_NOTICES.md
+packages/evalsuite/es
+packages/evalsuite/es.exe
