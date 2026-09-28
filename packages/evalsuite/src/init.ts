@@ -8,6 +8,7 @@ import type { Flags } from './cli-spec.ts'
 import { CONFIG_FILES } from './config.ts'
 import { UsageError } from './errors.ts'
 import { type AgentKind, agentFor } from './harness/agents.ts'
+import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { AgentHarnessDescriptor } from './types.ts'
 
@@ -34,9 +35,12 @@ export const INIT_HARNESSES: ReadonlyArray<{
 
 export type InitChoice = AgentKind | 'none'
 
+const descriptorOf = (h: { kind: AgentKind; model: string }) =>
+  ({ kind: h.kind, model: h.model }) as AgentHarnessDescriptor
 /** The key an offered agent's pinned model needs. */
-const keyOf = (h: { kind: AgentKind; model: string }) =>
-  agentFor({ kind: h.kind, model: h.model } as AgentHarnessDescriptor).credential
+const keyOf = (h: { kind: AgentKind; model: string }) => agentFor(descriptorOf(h)).credential
+/** The cell id an offered agent runs as, e.g. `opencode:gemini-3.8-flash`. */
+const cellOf = (h: { kind: AgentKind; model: string }) => harnessId(descriptorOf(h))
 
 const CHOICES: InitChoice[] = [...INIT_HARNESSES.map((h) => h.kind), 'none']
 const DEFAULT_CHOICE: InitChoice = 'cursor'
@@ -234,7 +238,7 @@ export function planInit(options: {
       'es.config.ts',
       configSource(pkg, choice),
       real
-        ? `harness ${real.kind}:${real.model}; profiles fake, pr, nightly`
+        ? `harness ${cellOf(real)}; profiles fake, pr, nightly`
         : 'the fake agent; profiles pr, nightly',
       force,
       conflicts,
@@ -250,9 +254,7 @@ export function planInit(options: {
 export async function askHarness(input: Readable, output: Writable): Promise<InitChoice> {
   const lines = [
     'Which agent should es.config.ts run? The fake profile needs no keys or Docker.',
-    ...INIT_HARNESSES.map(
-      (h, i) => `  ${i + 1}) ${h.label.padEnd(12)} ${h.kind}:${h.model}, ${keyOf(h)}`,
-    ),
+    ...INIT_HARNESSES.map((h, i) => `  ${i + 1}) ${h.label.padEnd(12)} ${cellOf(h)}, ${keyOf(h)}`),
     `  ${CHOICES.length}) None         the fake agent only`,
   ]
   output.write(`${lines.join('\n')}\n`)
