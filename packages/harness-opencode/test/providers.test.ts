@@ -120,7 +120,7 @@ test('a model id is <provider>/<model>; the provider is before the first /', () 
     provider: 'openrouter',
     model: 'anthropic/claude-haiku-4.5',
   })
-  for (const bare of ['gemini-3.8-flash', '/m', 'google/', '']) {
+  for (const bare of ['gemini-3.8-flash', '/m', 'google/', '', undefined as never]) {
     assert.equal(splitModel(bare), undefined, bare)
   }
 })

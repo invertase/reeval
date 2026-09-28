@@ -40,6 +40,7 @@ const refusedById = new Map(REFUSED_OPENCODE_PROVIDERS.map((p) => [p.id, p]))
 
 /** A model id's provider and the model within it: `openrouter/anthropic/x` is `openrouter`. */
 export function splitModel(model: string): { provider: string; model: string } | undefined {
+  if (typeof model !== 'string') return undefined
   const at = model.indexOf('/')
   if (at <= 0 || at === model.length - 1) return undefined
   return { provider: model.slice(0, at), model: model.slice(at + 1) }
