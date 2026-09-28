@@ -64,7 +64,7 @@ const NOTES = [
   (h) =>
     h.agent.forModel &&
     h.kind === 'opencode' &&
-    `Its key is the model's provider's (${code('anthropic/claude-haiku-4-5')} takes ${code('ANTHROPIC_API_KEY')}), on any of the ${OPENCODE_PROVIDERS.length} providers whose key OpenCode sends in a header on fixed hosts; the other ${REFUSED_OPENCODE_PROVIDERS.length} are refused at plan time.`,
+    `Its key is the model's provider's (${code('anthropic/claude-haiku-4-5')} takes ${code('ANTHROPIC_API_KEY')}), on any of the ${OPENCODE_PROVIDERS.length} providers whose key OpenCode sends in a header on known hosts; the other ${REFUSED_OPENCODE_PROVIDERS.length} are refused at plan time.`,
   (h) =>
     h.agent.tokens &&
     `The gateway also swaps the session tokens the ${h.agent.name} SDK exchanges its key for (${list(h.agent.tokens.fields.map(code))}) on ${list(h.agent.tokens.hosts.map(code))}.`,
