@@ -223,13 +223,13 @@ have fixtures on which tier is a separate, generated matrix:
 
 ### CI and releases
 
-GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with Node from
-`engines`, plus Windows and macOS legs (below):
+GitHub Actions runs on every PR, every merge-queue entry (`merge_group`) and every push to
+`main`, on `ubuntu-24.04` with Node from `engines`, plus Windows and macOS legs (below):
 
 | Workflow | Jobs |
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `engine coverage` (100% of the engine's files), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`), `coverage` (below), `windows (unit 1/6 … 6/6, tiers, packed)` with the `windows` check over them, and `macos` |
-| `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
+| `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
@@ -256,6 +256,10 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 - **Merge with squash,** so the PR title (checked by `commits.yml`) is the commit release-please
   reads. `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking
   change bumps the minor too.
+- **Merge queue:** `ci.yml` and `commits.yml` run every required check on `merge_group`, with
+  nothing skipped or path-filtered; each queue entry has its own concurrency group (its
+  `gh-readonly-queue/…` ref), so entries never cancel each other or PR runs. The queue's merge
+  method must be squash. `real.yml` and `contract.yml` don't run in the queue.
 - **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open with the new version
   (in `packages/evalsuite/package.json`, the root `package.json` and
   `.release-please-manifest.json`) and `CHANGELOG.md`. Merging it tags `vX.Y.Z` and creates the
