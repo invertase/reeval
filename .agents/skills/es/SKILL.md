@@ -141,8 +141,8 @@ are errors with a hint (`repeat` → "Did you mean runs?").
 
 ## Environments
 
-What the agent runs *in*, per attempt: skills, MCP servers, files, rules, env vars, secrets and
-setup steps. Pass a spec, or a synchronous callback that destructures the helpers it needs:
+What the agent runs *in*, per attempt: the code the workspace starts as, skills, MCP servers,
+files, rules, env vars, secrets and setup steps. Pass a spec, or a synchronous callback that destructures the helpers it needs:
 
 ```ts
 // evals/envs.ts
@@ -158,7 +158,22 @@ export const withDocs = houseStyle.extend('with-docs', ({ file, mcp }) => ({
   mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose, pi or Codex)
   setup: [{ run: 'npm ci', timeout: '5m' }],         // every attempt, before the agent
 }))
+
+// Start from existing code: a repo, or one directory of it, at a pinned ref
+export const app = defineEnvironment('acme-app', ({ git }) => ({
+  workspace: git('https://github.com/acme/app', { ref: 'v2.3.0', path: 'examples/basic' }),
+  setup: ['npm ci'],
+}))
 ```
+
+`workspace: git(repo, { ref, path })` takes a URL, `github:owner/repo`, a GitHub `/tree/` URL or
+a local path (relative to the file). ES fetches it on the host before any attempt, with the
+host's git credentials or `token: 'GITHUB_TOKEN'` (a host variable's name; never a token in the
+URL or the eval), copies the tree in before `files` (which win) and `setup`, and records the
+commit and tree hash. `init: true` adds a `.git` with one commit of the tree (no remote), for
+agents that expect a repo. Pin `ref` to a tag or full SHA; a branch warns. The agent's diff starts
+after setup, so the repo never counts as its change. A bad ref, path, URL or token fails only
+the attempts that use it (infra error, exit 3). Submodules and LFS files aren't fetched.
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
 writes them into the repo's skill directory). `extend` is the only composition; the child wins
@@ -269,6 +284,7 @@ them to `evals/.history/` to commit.
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
+| `workspace: 'https://…'` | `must come from the git helper` | `({ git }) => ({ workspace: git('https://…', { ref }) })` |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
 | Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.es.ts` under `evals/` |
 | `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `es.config.ts` |

@@ -808,6 +808,21 @@ describe('common mistakes', () => {
       `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
       /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
     ],
+    [
+      'a repository URL as the workspace',
+      `defineEnvironment('app', { workspace: 'https://github.com/acme/app' as never })`,
+      /workspace in defineEnvironment\("app"\) must come from the git helper, e\.g\. workspace: git\('https:\/\/github\.com\/acme\/app', \{ ref: 'v1\.0\.0' \}\)/,
+    ],
+    [
+      "the token itself as git()'s token",
+      `defineEnvironment('app', ({ git }) => ({ workspace: git('github:acme/app', { token: 'ghp_abc123def456' }) }))`,
+      /git\("github:acme\/app"\): token names the host variable that holds the token, e\.g\. token: 'GITHUB_TOKEN'\. Don't put the token itself in the eval\./,
+    ],
+    [
+      'a token in the workspace URL',
+      `defineEnvironment('app', ({ git }) => ({ workspace: git('https://x-access-token:ghp_abc123@github.com/acme/app') }))`,
+      /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. ES fetches the repository on the host with your own git credentials/,
+    ],
   ]
   for (const [what, body, message] of cases) {
     test(`${what} exits 2 with a fix`, async () => {

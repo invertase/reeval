@@ -34,6 +34,7 @@ export const cases: PlanCase[] = [
   { dir: 'egress', name: 'profile-defaults', args: ['--profile', 'locked', 'evals/cascade.es.ts'] },
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
+  { dir: 'workspace', name: 'git', args: [] },
 ]
 
 describe('plan snapshots', { concurrency: true }, () => {

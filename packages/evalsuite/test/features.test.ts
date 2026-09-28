@@ -30,6 +30,7 @@ import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sa
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
+import { type GitHttp, gitHttpServer } from './support/git-http.ts'
 import { type HarnessRow, harnesses, keyOf, reserveAttempts } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
 
@@ -108,6 +109,20 @@ before(async () => {
   egressTarget.port = (listener.address() as AddressInfo).port
 })
 after(() => listener.close())
+
+/** The token `workspace/token` fetches with, and the git HTTP server that insists on it. */
+const GIT_TOKEN = 'es-fixture-git-token-5e0b77c2d9a1'
+let gitHttp: GitHttp
+before(async () => {
+  gitHttp = await gitHttpServer(GIT_TOKEN)
+})
+after(() => gitHttp.close())
+
+/** Every file under `dir`, for a check that a value was written to none of them. */
+const filesUnder = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true, recursive: true })
+    .filter((e) => e.isFile())
+    .map((e) => join(e.parentPath, e.name))
 
 /**
  * A local npm registry for `skill.npm`: `prepare` packs a fixture's package versions into it, and
@@ -203,6 +218,28 @@ const git = (cwd: string, ...args: string[]) =>
     encoding: 'utf8',
   }).trim()
 
+/**
+ * `repo/` from `repo-src/`: `v1/` committed and tagged `v1`, then `v2/` committed on `main`. It
+ * serves partial fetches, as a hosted repository does, so a `path` fetches only its blobs.
+ */
+const versionedRepo = (dir: string) => {
+  const repo = join(dir, 'repo')
+  execFileSync('git', ['init', '-q', '-b', 'main', repo])
+  git(repo, 'config', 'uploadpack.allowFilter', 'true')
+  for (const version of ['v1', 'v2']) {
+    for (const entry of readdirSync(repo)) {
+      if (entry !== '.git') rmSync(join(repo, entry), { recursive: true, force: true })
+    }
+    cpSync(join(dir, 'repo-src', version), repo, { recursive: true })
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', version)
+    if (version === 'v1') git(repo, 'tag', 'v1')
+  }
+  return repo
+}
+
+const workspaceOf = (run: RunRecord) => run.environments.find((e) => e.workspace)?.workspace
+
 export const features: Feature[] = [
   {
     dir: 'config/found-from-subdirectory',
@@ -272,6 +309,115 @@ export const features: Feature[] = [
       assert.equal(s?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
       assert.match(s?.source ?? '', /#v1:skills$/)
     },
+  },
+  {
+    dir: 'workspace/git-subpath',
+    tiers: ['fake', 'docker'],
+    env: 'app-v1',
+    canary: /expected .*Hello.* to contain .*Ahoy/,
+    prepare: versionedRepo,
+    record: ({ run, project }) => {
+      const repo = join(project, 'repo')
+      assert.deepEqual(workspaceOf(run), {
+        source: 'repo',
+        ref: 'v1',
+        path: 'app',
+        commit: git(repo, 'rev-parse', 'v1'),
+        tree: git(repo, 'rev-parse', 'v1:app'),
+      })
+      // A partial fetch: the cache has app/'s blobs, not the rest of the repository's.
+      const [cache] = readdirSync(join(project, '.es/cache/git/repos'))
+      const missing = git(
+        join(project, '.es/cache/git/repos', cache ?? ''),
+        'rev-list',
+        '--objects',
+        '--missing=print',
+        git(repo, 'rev-parse', 'v1'),
+      )
+      assert.match(missing, new RegExp(`^\\?${git(repo, 'rev-parse', 'v1:README.md')}$`, 'm'))
+      assert.doesNotMatch(
+        missing,
+        new RegExp(`^\\?${git(repo, 'rev-parse', 'v1:app/greet.js')}`, 'm'),
+      )
+    },
+  },
+  {
+    dir: 'workspace/init',
+    tiers: ['fake', 'docker'],
+    env: 'with-git',
+    canary: /expected '1\\n' to be '2\\n'/,
+    prepare: versionedRepo,
+    record: ({ run }) => assert.equal(workspaceOf(run)?.init, true),
+  },
+  {
+    dir: 'workspace/token',
+    tiers: ['fake', 'docker'],
+    env: 'private',
+    canary: /expected .*Hello.* to contain 'Ahoy'/,
+    prepare: versionedRepo,
+    hostEnv: (dir) => ({ ES_GIT_HTTP: gitHttp.serve(dir), ES_FIXTURE_GIT_TOKEN: GIT_TOKEN }),
+    record: ({ run, project }) => {
+      assert.equal(workspaceOf(run)?.ref, 'v1')
+      const header = Buffer.from(`x-access-token:${GIT_TOKEN}`).toString('base64')
+      for (const file of filesUnder(join(project, '.es'))) {
+        const text = readFileSync(file, 'latin1')
+        assert.ok(!text.includes(GIT_TOKEN) && !text.includes(header), `the token is in ${file}`)
+      }
+    },
+  },
+  {
+    // Docker only: the fake sandbox runs on the host, whose environment has the variable.
+    dir: 'workspace/token-sandbox-env',
+    tiers: ['docker'],
+    env: 'private',
+    canary: /to contain '/,
+    prepare: versionedRepo,
+    hostEnv: (dir) => ({ ES_GIT_HTTP: gitHttp.serve(dir), ES_FIXTURE_GIT_TOKEN: GIT_TOKEN }),
+  },
+  {
+    dir: 'workspace/missing-ref',
+    tiers: ['fake', 'docker'],
+    env: 'missing',
+    canaryEnv: 'pinned',
+    lands: {
+      outcome: 'infra_error',
+      error: {
+        kind: 'infra',
+        message:
+          /^Workspace git\("\.\.\/repo#v9"\): the repository has no ref "v9" \(a branch, tag or commit SHA\)\.\n\(the workspace git\("\.\.\/repo#v9"\), set by environment missing, failed to prepare before the run started; every attempt that needs it fails with this\)$/,
+      },
+    },
+    canary: /expected .*Hello.* to contain 'Ahoy'/,
+    prepare: versionedRepo,
+    record: ({ run }) => {
+      const prepare = run.evals.flatMap((e) => e.attempts).find((a) => a.error?.prepare)
+        ?.error?.prepare
+      assert.deepEqual(prepare, {
+        class: 'config',
+        stage: 'workspace',
+        ref: '../repo#v9',
+        cause: null,
+        log: null,
+        setBy: ['environment missing'],
+      })
+    },
+  },
+  {
+    dir: 'workspace/files-over-repo',
+    tiers: ['fake', 'docker'],
+    env: 'patched',
+    canary: /to contain 'Hello'/,
+    prepare: versionedRepo,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['greet.js']),
+  },
+  {
+    dir: 'workspace/setup-in-repo',
+    tiers: ['fake', 'docker'],
+    env: 'built',
+    canary: /expected 'v1\\n' to be 'v2\\n'/,
+    prepare: versionedRepo,
+    record: ({ run, project }) =>
+      assert.equal(workspaceOf(run)?.commit, git(join(project, 'repo'), 'rev-parse', 'v1')),
   },
   {
     dir: 'skills/registry-version',

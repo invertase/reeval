@@ -125,7 +125,8 @@
       "pages": [
         { "title": "Compare agents", "href": "/recipes/compare-agents" },
         { "title": "Python, Flutter and more", "href": "/recipes/toolchains" },
-        { "title": "Offline evals", "href": "/recipes/offline" }
+        { "title": "Offline evals", "href": "/recipes/offline" },
+        { "title": "Start from an existing codebase", "href": "/recipes/existing-codebase" }
       ]
     },
     {
@@ -165,7 +166,7 @@
         { "title": "defineEnvironment", "href": "/reference/environment" },
         { "title": "The t API", "href": "/reference/t" },
         { "title": "Matchers", "href": "/reference/matchers" },
-        { "title": "secret, skill, mcp, file", "href": "/reference/helpers" }
+        { "title": "secret, skill, mcp, file, git", "href": "/reference/helpers" }
       ]
     },
     {

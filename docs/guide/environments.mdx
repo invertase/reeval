@@ -1,9 +1,9 @@
 ---
 title: Environments and skills
-description: Give the agent skills, MCP servers, rules, files, variables and setup steps with defineEnvironment.
+description: Give the agent a starting codebase, skills, MCP servers, rules, files, variables and setup steps with defineEnvironment.
 ---
 
-The sandbox is where the agent runs. An environment is what it runs with: skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
+The sandbox is where the agent runs. An environment is what it runs with: a starting codebase, skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
@@ -14,7 +14,7 @@ export const withHouseGreeting = defineEnvironment(
 )
 ```
 
-`defineEnvironment(name, spec)` takes a plain object, or a callback that picks the helpers it needs: `skill`, `mcp`, `file` and `secret`. The callback runs once, when the file loads, and must return synchronously.
+`defineEnvironment(name, spec)` takes a plain object, or a callback that picks the helpers it needs: `skill`, `mcp`, `file`, `git` and `secret`. The callback runs once, when the file loads, and must return synchronously.
 
 ## Use an environment
 
@@ -75,6 +75,19 @@ export const withDocsMcp = base.extend('with-docs-mcp', ({ mcp }) => ({
 
 Each server has a name, and the agent's calls to it show in the transcript as `mcp__<server>__<tool>`, such as `mcp__docs__search`. `mcp.stdio` starts a command in the sandbox; `mcp.http` and `mcp.sse` connect to a URL. Headers can carry secrets, which [Secrets and egress](/guide/secrets-and-egress) covers.
 
+## Start from a repository
+
+```ts title="evals/env.ts"
+export const reactTs = defineEnvironment('react-ts', ({ git }) => ({
+  workspace: git('https://github.com/vitejs/vite', {
+    ref: 'v6.0.0',
+    path: 'packages/create-vite/template-react-ts',
+  }),
+}))
+```
+
+`workspace` starts every attempt's workspace as a git repository, or one directory of it. ES fetches it on the host once per run, before any attempt, so the sandbox never sees your git credentials. The record keeps the commit; [Start from an existing codebase](/recipes/existing-codebase) covers private repositories, caching and errors.
+
 ## Write rules and files
 
 ```ts title="evals/guide-environments.ts"
@@ -98,10 +111,10 @@ export const base = defineEnvironment('base', ({ file }) => ({
 
 ```mermaid
 flowchart LR
-  I[image ready] --> V[env] --> F[files and rules] --> S[setup] --> N[snapshot] --> A["agent, with skills and MCP"]
+  I[image ready] --> V[env] --> W[workspace] --> F[files and rules] --> S[setup] --> N[snapshot] --> A["agent, with skills and MCP"]
 ```
 
-ES snapshots the workspace after setup, so files, rules and setup output never show in the agent's diff. Anything baked into the image instead belongs to the [sandbox](/guide/sandboxes).
+ES snapshots the workspace after setup, so the repository, files, rules and setup output never show in the agent's diff. Anything baked into the image instead belongs to the [sandbox](/guide/sandboxes).
 
 ## Layer environments with extend
 
@@ -109,7 +122,7 @@ ES snapshots the workspace after setup, so files, rules and setup output never s
 const withSkills = base.extend('with-skills', ({ skill }) => ({ /* … */ }))
 ```
 
-`extend` is the only way to compose environments. The child's spec layers on the parent's: where both set the same key (a variable, a file path, a skill or server name, `rules`), the child wins, and the record lists it under `overrides`. `setup` steps concatenate, parent first.
+`extend` is the only way to compose environments. The child's spec layers on the parent's: where both set the same key (a variable, a file path, a skill or server name, `rules`, `workspace`), the child wins, and the record lists it under `overrides`. `setup` steps concatenate, parent first.
 
 ## Check what the environment set up
 

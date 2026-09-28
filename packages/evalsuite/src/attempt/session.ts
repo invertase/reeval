@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+import { shellQuote } from '@evalsuite/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
@@ -64,6 +66,53 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
         : `${what} timed out after ${formatDuration(step.timeoutMs)} (see setup.log)`,
     )
   }
+}
+
+// A relative path: GNU tar (Git for Windows' too) reads a `C:` in its file name as a remote host.
+const WORKSPACE_TAR = '.es-workspace.tar'
+
+/** Unpacks the git workspace's tarball into the (empty) workspace. */
+async function copyWorkspace(
+  box: Sandbox,
+  workspace: NonNullable<ResolvedEnvironment['workspace']>,
+  signal: AbortSignal,
+) {
+  const start = performance.now()
+  const tar = await readFile(workspace.tar)
+  await box.writeFile(WORKSPACE_TAR, tar)
+  const r = await box.exec(`tar -xf ${WORKSPACE_TAR} && rm -f ${WORKSPACE_TAR}`, { signal })
+  if (r.exitCode !== 0) {
+    throw new InfraError(
+      `Couldn't unpack the workspace ${workspace.label} into the sandbox (the image needs tar): ${tailOf(r.stderr || r.stdout)}`,
+    )
+  }
+  if (workspace.init) {
+    // A fixed author and date, so every attempt's HEAD is the same commit of the same tree.
+    const at = '2000-01-01T00:00:00Z'
+    const init = await box.exec(
+      `git init -q -b main && git add -A && git -c commit.gpgsign=false commit -q --no-verify -m ${shellQuote(`${workspace.label} at ${workspace.commit}`)}`,
+      {
+        signal,
+        env: {
+          GIT_AUTHOR_NAME: 'es',
+          GIT_AUTHOR_EMAIL: 'es@localhost',
+          GIT_AUTHOR_DATE: at,
+          GIT_COMMITTER_NAME: 'es',
+          GIT_COMMITTER_EMAIL: 'es@localhost',
+          GIT_COMMITTER_DATE: at,
+        },
+      },
+    )
+    if (init.exitCode !== 0) {
+      throw new InfraError(
+        `Couldn't give the workspace ${workspace.label} a .git (init: true needs git in the image): ${tailOf(init.stderr || init.stdout)}`,
+      )
+    }
+  }
+  debugLog(
+    'env',
+    `workspace ${workspace.label} at ${workspace.commit.slice(0, 12)} (${tar.byteLength} bytes of tar${workspace.init ? ', with a .git' : ''}) in ${formatDuration(performance.now() - start)}`,
+  )
 }
 
 /**
@@ -135,6 +184,7 @@ export async function startSession(
     const agent = env.substitutions.filter((s) => s.phase === 'agent').map((s) => s.name)
     debugLog('broker', `gateway swaps in ${agent.join(', ') || 'nothing'} for the agent`)
   }
+  if (env.workspace) await copyWorkspace(box, env.workspace, a.signal)
   for (const f of env.files) {
     await box.writeFile(f.path, f.content)
     const size = typeof f.content === 'string' ? Buffer.byteLength(f.content) : f.content.byteLength

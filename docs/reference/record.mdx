@@ -67,7 +67,7 @@ The type definitions are in `packages/evalsuite/src/history/types.ts`; the envir
 
 `runner` is `{ kind: 'ci', provider, runUrl, attempt, pr: { number, baseRef } | null }` in CI, or `{ kind: 'local', hostHash }` on your machine.
 
-An attempt's `error` is `{ kind, message, prepare? }`. `prepare` is set when its sandbox couldn't be prepared before the run: `{ class, stage, ref, cause, log, setBy }`, with `class` one of `config`, `transient` or `resource`, and the same on every attempt that needed that sandbox (see [Sandbox providers](/reference/sandbox/providers)). Such an attempt never started, so it has no artifacts directory.
+An attempt's `error` is `{ kind, message, prepare? }`. `prepare` is set when its sandbox couldn't be prepared before the run: `{ class, stage, ref, cause, log, setBy }`, with `class` one of `config`, `transient` or `resource`, and the same on every attempt that needed that sandbox (see [Sandbox providers](/reference/sandbox/providers)). A git `workspace` that couldn't be fetched sets it too, with `stage: "workspace"` and the workspace as `ref`, such as `../repo#v9`. Such an attempt never started, so it has no artifacts directory.
 
 [//]: # (generated:record-types)
 
@@ -609,6 +609,10 @@ An environment as it was applied, without secret values.
 
 <Property name="egress" type="EgressPolicy">
   The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`.
+</Property>
+
+<Property name="workspace" type="{source: string; ref: string | null; path: string | null; commit: string; tree: string; init?: boolean}" optional>
+  The git repository the workspace started as: the repo as written (a local one relative to the project root), the ref and path asked for (null when unset), the commit the ref resolved to and the hash of the tree that was copied in, which is in the digest.
 </Property>
 
 ### EgressRecord

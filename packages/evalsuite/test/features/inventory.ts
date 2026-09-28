@@ -50,6 +50,7 @@ const prepareContract = (name: string) =>
 const debug = (name: string) => `evalsuite/test/debug.test.ts › ${name}`
 const studio = (name: string) => `evalsuite/test/studio.test.ts › ${name}`
 const analysis = (name: string) => `evalsuite/test/analysis.test.ts › ${name}`
+const workspace = (name: string) => `evalsuite/test/workspace.test.ts › ${name}`
 const sandboxDocker = (file: string, name: string) =>
   `sandbox-docker/test/${file}.test.ts › ${name}`
 const cursorAdapter = (file: string, name: string) =>
@@ -265,6 +266,48 @@ export const inventory: InventoryFeature[] = [
     name: '`skill.git`: ref, `path`, `only` and the recorded commit',
     fixtures: ['skills/git-ref'],
     tests: [unit('git refs and repo shorthands'), options('skills come from a git URL at a ref')],
+  },
+  {
+    id: 'environment.workspace',
+    area: 'Environments',
+    name: '`workspace: git(…)`: a repository or directory at a ref, fetched on the host, with its commit and tree recorded',
+    fixtures: [
+      'workspace/git-subpath',
+      'workspace/files-over-repo',
+      'workspace/setup-in-repo',
+      'workspace/missing-ref',
+    ],
+    plan: ['workspace/git'],
+    tests: [
+      workspace('a ref the repository lacks fails only the attempts that use it'),
+      workspace('a missing subdirectory names what is there'),
+      workspace('a pinned SHA reruns offline from the cache, with the same commit and tree'),
+      workspace("the agent's diff starts from the repository, and a variant's workspace overrides"),
+      options('common mistakes'),
+    ],
+  },
+  {
+    id: 'environment.workspace.init',
+    area: 'Environments',
+    name: '`git(…, { init: true })`: a `.git` with one commit of the fetched tree',
+    fixtures: ['workspace/init'],
+    tests: [
+      workspace(
+        'init: true gives the workspace a .git that the diff leaves out, and the same HEAD in every attempt',
+      ),
+    ],
+  },
+  {
+    id: 'environment.workspace.token',
+    area: 'Environments',
+    name: '`git(…, { token })`: a token from a host variable for the fetch, never in the sandbox or the record',
+    fixtures: ['workspace/token', 'workspace/token-sandbox-env'],
+    tests: [
+      workspace(
+        'a token fetches over HTTPS on the host, a wrong one is an auth failure, and neither is written anywhere',
+      ),
+      workspace('a token variable that is not set fails only its attempts, naming the variable'),
+    ],
   },
   {
     id: 'skill.inline',

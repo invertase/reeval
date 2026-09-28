@@ -108,6 +108,29 @@ See [Profiles and budgets](/reference/profiles).
 
 See [docker()](/reference/sandbox/docker).
 
+## Git workspaces
+
+Before any attempt, ES fetches each `workspace: git(…)` repository on the host. A failure is reported once, like a sandbox image that failed to prepare, and fails only the attempts that use the workspace, as infra errors (exit 3); the other evals run:
+
+```text
+✗ workspace https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts failed to prepare (set by environment react-ts; only its attempts fail)
+  Workspace git("https://github.com/vitejs/vite#v99.0.0:packages/create-vite/template-react-ts"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).
+…
+   ! adds a reset button     17ms  0 turns
+   ✓ writes a README          5ms  0 turns
+```
+
+Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace as its `ref`.
+
+| Message | Fix |
+|---|---|
+| `Workspace git("https://github.com/vitejs/vite#v99.0.0:…"): the repository has no ref "v99.0.0" (a branch, tag or commit SHA).` | Check the ref. A commit needs its full 40-character SHA; an abbreviated one gets that hint. |
+| `Workspace git("…#v6.0.0:packages/create-vite/template-react-tsx") at v6.0.0 (commit 814120f) has no directory "packages/create-vite/template-react-tsx"; packages/create-vite/ has: …, template-lit-ts/, …` | Pick one of the listed directories. A file gets `is a file, not a directory`. |
+| `Workspace git("https://github.com/acme/no-such-repo#v1"): couldn't fetch it (remote: Repository not found.). Check the URL; a private repository also needs this machine's git credentials.` | Check the URL, or give this machine access to the repository. |
+| `Workspace git("…"): isn't readable with this machine's git credentials, or doesn't exist (could not read Username for 'https://github.com': terminal prompts disabled). …` | ES never prompts. Give `git()` a `token`, or run `gh auth setup-git`, configure a credential helper or load an SSH key on the host; the sandbox never gets them. With a `token`, this means the token was refused. |
+| `Workspace git("…"): its token variable GITHUB_TOKEN isn't set. Set it in the environment or .env.local.` | Set the variable `token` names. |
+| `Workspace git("https://gitlab.invalid/acme/app#v1"): couldn't be fetched (unable to access 'https://gitlab.invalid/acme/app/': Could not resolve host: gitlab.invalid)` | The network, after two retries (its `class` is `transient`). A pinned SHA fetched before reruns from the cache offline. |
+
 ## During an attempt
 
 | Message | Fix |

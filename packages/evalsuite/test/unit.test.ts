@@ -22,6 +22,7 @@ import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environ
 import {
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
+  helpersFor,
   isMovingRef,
   layered,
   parseGitRepo,
@@ -936,6 +937,68 @@ test('git refs and repo shorthands', () => {
     ref: 'v1',
     path: 'skills/genkit',
   })
+})
+
+test('git(): URLs, GitHub shorthands and local paths, resolved against the calling file', () => {
+  const { git } = helpersFor('/p/evals')
+  assert.deepEqual(git('https://github.com/acme/app', { ref: 'v1', path: 'examples/basic/' }), {
+    kind: 'git',
+    repo: 'https://github.com/acme/app',
+    url: 'https://github.com/acme/app',
+    ref: 'v1',
+    path: 'examples/basic',
+  })
+  assert.deepEqual(git('github:acme/app'), {
+    kind: 'git',
+    repo: 'github:acme/app',
+    url: 'https://github.com/acme/app.git',
+  })
+  assert.deepEqual(git('https://github.com/acme/app/tree/v2/apps/web'), {
+    kind: 'git',
+    repo: 'https://github.com/acme/app',
+    url: 'https://github.com/acme/app.git',
+    ref: 'v2',
+    path: 'apps/web',
+  })
+  assert.equal(git('../fixtures/app').url, resolve('/p/evals', '../fixtures/app'))
+  assert.equal(git('git@github.com:acme/app.git').url, 'git@github.com:acme/app.git')
+  assert.throws(() => git('https://tok@github.com/acme/app'), /password or token in it/)
+  assert.throws(() => git('github:acme/app', { ref: '--upload-pack=x' }), /ref is a branch/)
+  assert.throws(
+    () => git('github:acme/app', { path: '../secrets' }),
+    /^DefinitionError: git\("github:acme\/app"\): path is a directory in the repository, relative, with forward slashes and no \. or \.\. \(got "\.\.\/secrets"\)$/,
+  )
+  assert.throws(
+    () => git('github:acme/app', { branch: 'main' } as never),
+    /git\("github:acme\/app"\): unknown option "branch"; it takes ref, path, init and token\. Use ref for a branch, tag or commit\./,
+  )
+  assert.deepEqual(git('github:acme/app', { ref: 'v1', init: true, token: 'GITHUB_TOKEN' }), {
+    kind: 'git',
+    repo: 'github:acme/app',
+    url: 'https://github.com/acme/app.git',
+    ref: 'v1',
+    init: true,
+    token: 'GITHUB_TOKEN',
+  })
+  assert.throws(() => git('github:acme/app', { init: 'yes' } as never), /init is true or false/)
+  for (const pasted of ['ghp_abcdef1234567890', 'glpat-abc123', 'not a name']) {
+    assert.throws(
+      () => git('github:acme/app', { token: pasted }),
+      (error: Error) =>
+        /token names the host variable that holds the token, e\.g\. token: 'GITHUB_TOKEN'\. Don't put the token itself in the eval\.$/.test(
+          error.message,
+        ) && !error.message.includes(pasted),
+    )
+  }
+  assert.throws(
+    () => git('git@github.com:acme/app.git', { token: 'GITHUB_TOKEN' }),
+    /token only works with an https:\/\/ URL; for SSH or a local repository, git uses this machine's own credentials/,
+  )
+  assert.throws(() => git('../fixtures/app', { token: 'GITHUB_TOKEN' }), /token only works/)
+  assert.throws(
+    () => defineEnvironment('app', { repo: 'github:acme/app' } as never),
+    /Unknown field "repo" in defineEnvironment\("app"\)\. Did you mean "workspace"\?/,
+  )
 })
 
 test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {

@@ -208,6 +208,7 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
       ...p.notes,
       p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
       p.egress.length ? `egress: ${p.egress.join('; ')}` : '',
+      p.workspaces.length ? `workspace: ${p.workspaces.join('; ')}` : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -229,6 +230,8 @@ export type PlanCell = Cell & {
   /** Secrets its attempts broker, as `NAME → host, host`. */
   brokered: string[]
   egress: PlannedEgress
+  /** The git repository its workspace starts as; unset for an empty workspace. */
+  workspace?: { repo: string; ref: string | null; path: string | null }
 }
 
 export type PlanEval = {
@@ -301,6 +304,13 @@ export function planDocument(
         runs: 1,
         brokered: attempt.brokered,
         egress: attempt.egress,
+        ...(attempt.workspace && {
+          workspace: {
+            repo: attempt.workspace.repo,
+            ref: attempt.workspace.ref ?? null,
+            path: attempt.workspace.path ?? null,
+          },
+        }),
       })
     }
   }
