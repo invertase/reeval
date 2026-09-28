@@ -1,8 +1,7 @@
 import { spawn } from 'node:child_process'
-import { join } from 'node:path'
 import { getRequestListener, serve } from '@hono/node-server'
 import { scratchDir } from '../history/files.ts'
-import { DIST_DIR } from '../root.ts'
+import { ownDir } from '../root.ts'
 import { watchLive } from './live.ts'
 import { allowedHosts, createStudioApp, newToken, type StudioEvent } from './server.ts'
 import type { StudioSource } from './source.ts'
@@ -11,7 +10,7 @@ import { watchRuns } from './watch.ts'
 export { buildStudio, StudioBuildError } from './build.ts'
 
 /** Where the prebuilt web app ships inside the package (copied from packages/studio-web). */
-export const APP_DIR = join(DIST_DIR, 'studio-app')
+export const APP_DIR = ownDir('dist/studio-app')
 
 export type StartOptions = {
   source: StudioSource

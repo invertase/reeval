@@ -66,6 +66,8 @@ for (let i = 0; i < Number(seconds); i++) {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
+    // A compiled es (bun build --compile) runs as plain Bun, which takes -e, only when told.
+    env: { ...process.env, BUN_BE_BUN: '1' },
   })
   child.on('error', () => {})
   child.unref()

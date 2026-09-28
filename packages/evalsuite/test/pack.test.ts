@@ -182,7 +182,6 @@ test('the packed package installs into a clean project and runs es', {
   assert.match(listing, /^package\/LICENSE$/m)
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
-  assert.match(listing, /^package\/dist\/worker\.js$/m)
   for (const entry of ['index', 'harness', 'sandbox', 'judge', 'view/index']) {
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.js$`, 'm'))
     assert.match(listing, new RegExp(`^package/dist/${entry}\\.d\\.ts$`, 'm'))
@@ -257,8 +256,8 @@ test('the packed package installs into a clean project and runs es', {
   assert.equal(readRun(app).run.stack.packages['@evalsuite/harness-antigravity'], VERSION)
 
   // Nothing that ships imports an @evalsuite/* package, and every chunk loads with the installed
-  // package's dependencies alone. cli and worker run on import, and so do the chunks only they
-  // reach, which import them.
+  // package's dependencies alone. cli.js runs `es` or `es __worker` by importing the CLI's chunk
+  // or the worker's; those run on import, and so do the chunks only they reach, which import them.
   const dist = join(app, 'node_modules', pkg, 'dist')
   const shipped = readdirSync(dist, { recursive: true, encoding: 'utf8' }).map((f) =>
     f.replaceAll(sep, '/'),
@@ -267,12 +266,18 @@ test('the packed package installs into a clean project and runs es', {
   const source = (file: string) => readFileSync(join(dist, file), 'utf8')
   for (const file of code)
     assert.doesNotMatch(source(file), /(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//, file)
+  const dispatched = [...source('cli.js').matchAll(/\bimport\("\.\/([^"]+)"\)/g)].map(
+    (m) => m[1] as string,
+  )
+  const cliChunk = dispatched.find((f) => /^cli-[\w-]+\.js$/.test(f))
+  const workerChunk = dispatched.find((f) => /^worker-entry-[\w-]+\.js$/.test(f))
+  assert.ok(cliChunk && workerChunk && dispatched.length === 2, dispatched.join(', '))
   const imports = (file: string) =>
     [...source(file).matchAll(/\bfrom\s*"(\.\.?\/[^"]+)"/g)].map((m) =>
       posix.join(posix.dirname(file), m[1] as string),
     )
   const runsOnImport = (file: string, seen = new Set<string>()): boolean =>
-    ['cli.js', 'worker.js'].includes(file) ||
+    ['cli.js', ...dispatched].includes(file) ||
     imports(file).some((f) => !seen.has(f) && seen.add(f) && runsOnImport(f, seen))
   const chunks = code.filter((f) => f.endsWith('.js') && !runsOnImport(f))
   assert.ok(chunks.includes('index.js') && chunks.length > 10, chunks.join(', '))
@@ -283,8 +288,8 @@ test('the packed package installs into a clean project and runs es', {
   ])
   assert.equal(loaded.status, 0, loaded.stderr)
 
-  // What users and ES's workers load (every export, and worker.js) never reaches cli.js, whose
-  // import runs the CLI, following import() as well as static imports.
+  // What users and ES's workers load (every export, and the worker's chunk) never reaches the
+  // CLI's chunk, whose import runs the CLI, following import() as well as static imports.
   const reached = (entry: string, dynamic = true) => {
     const via = new Map<string, string | null>([[entry, null]])
     const pattern = dynamic
@@ -302,14 +307,15 @@ test('the packed package installs into a clean project and runs es', {
     ...Object.values(manifest.exports as Record<string, string | { default: string }>).flatMap(
       (target) => (typeof target === 'string' ? [] : [target.default.replace(/^\.\/dist\//, '')]),
     ),
-    'worker.js',
+    workerChunk,
   ]
   assert.ok(entries.includes('harness.js') && entries.includes('view/index.js'), entries.join())
   for (const entry of entries) {
     const via = reached(entry)
     const path: string[] = []
-    for (let f: string | null | undefined = 'cli.js'; f; f = via.get(f)) path.unshift(f)
-    assert.equal(via.has('cli.js'), false, `${entry} reaches cli.js: ${path.join(' → ')}`)
+    for (let f: string | null | undefined = cliChunk; f; f = via.get(f)) path.unshift(f)
+    assert.equal(via.has(cliChunk), false, `${entry} reaches the CLI: ${path.join(' → ')}`)
+    assert.equal(via.has('cli.js'), false, `${entry} reaches cli.js`)
   }
   // The canary: the walk follows import(), which is how the CLI loads most of itself.
   assert.ok(reached('cli.js').size > reached('cli.js', false).size)

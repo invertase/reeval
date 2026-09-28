@@ -58,7 +58,7 @@ its files import `evalsuite`.
 | Path | What it is |
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
-| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, `worker-entry.ts`), the IPC messages (`protocol.ts`), `expect` (`expect.ts`), error printing (`errors.ts`) and the budget marker (`budget.ts`). The only code that imports `@vitest/*` |
+| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, and `worker-entry.ts`, which `es __worker` runs), the IPC messages (`protocol.ts`), `expect` (`expect.ts`), error printing (`errors.ts`) and the budget marker (`budget.ts`). The only code that imports `@vitest/*` |
 | `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
@@ -96,7 +96,19 @@ pnpm coverage    # the same tests with code coverage from every process they sta
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
+node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone es
 ```
+
+ES runs on Node only. `scripts/bun-compile.mjs` (it needs `bun` on your PATH, and `pnpm build`)
+compiles `dist/` into `packages/evalsuite/es` with ES's own files embedded (`--asset`:
+`package.json`, `docker/`, `assets/`, the studio app, the Claude Code bridge, jiti's Babel build
+and a `versions.json` of the bundled dependencies). It copies the binary into an empty directory
+and checks it plans and runs a copy of `examples/hello` with no `node_modules` as Node does,
+answers `es query` and `es studio build`, and, with Docker, runs an egress fixture. Compiled,
+`src/root.ts` finds those files at the root of Bun's virtual filesystem, and `ownDir` copies a
+directory that must be real (Docker's build context, the studio app, jiti's Babel) to
+`~/.cache/evalsuite/<dir>-<content hash>` (`XDG_CACHE_HOME`, or the platform's cache directory).
+Run it after changing how ES finds its files, starts processes or loads TypeScript; CI doesn't.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `@invertase/foobar`
 (`packages/evalsuite/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -104,8 +116,13 @@ pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
 `devDependencies`, from its `src/`, so a new one needs only that entry. The published code may
 import only the package's `dependencies`, so an inlined package's runtime dependencies must be
 among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
-files (`dist/worker.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
-module's `import.meta.url`; the build fails if a chunk below `dist/`'s top level uses it.
+files (`dist/studio-app`, `dist/bridge`, `docker/`, `package.json`) from `src/root.ts`, not from
+the module's `import.meta.url`. `src/root.ts` is ES's one resource locator (`ownFile`,
+`ownFileURL`, `ownDir`, `ownRequire`, `ownVersion`, the package's name, version and build id): the build rewrites an
+inlined package's `new URL('<path>', import.meta.url)` to its `ownFileURL` and fails on any other
+`import.meta.url`. `dist/cli.js` (`src/bin.ts`) is the only entry besides the exports: `es
+__worker` is how the engine starts a worker for each eval file, so a compiled `es` can start its
+own.
 An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, `harness-pi`'s
 `assets/` lockfile) ship at the
 root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
