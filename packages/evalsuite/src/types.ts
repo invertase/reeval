@@ -606,10 +606,20 @@ export type McpHelper = {
 /** A spec, or a callback that gets the typed helpers and returns one (synchronously). */
 export type EnvironmentInput = EnvironmentSpec | ((helpers: EnvironmentHelpers) => EnvironmentSpec)
 
-/** One value, a list (each is its own cell), or an edit of the inherited list. */
+/**
+ * An edit of the inherited harness list, as data: `add` appends harnesses, `only` keeps the
+ * inherited ones with these ids, in their order.
+ */
+export type HarnessEdit =
+  | { add: HarnessDescriptor | HarnessDescriptor[] }
+  | { only: string | string[] }
+
+/** One value, a list (each is its own cell), or an edit of the inherited list, as data. */
+export type HarnessData = HarnessDescriptor | HarnessDescriptor[] | HarnessEdit
+
+/** `HarnessData`, or a function that edits the inherited list (TypeScript only). */
 export type HarnessOption =
-  | HarnessDescriptor
-  | HarnessDescriptor[]
+  | HarnessData
   | ((inherited: HarnessDescriptor[]) => HarnessDescriptor | HarnessDescriptor[])
 
 export type CompareGate = 'variants' | 'all' | 'none'

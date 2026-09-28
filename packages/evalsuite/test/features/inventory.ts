@@ -106,7 +106,8 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'matrix.cascade',
     area: 'Config and selection',
-    name: 'Option cascade through groups and evals; harness edit functions',
+    name: 'Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions)',
+    plan: ['harness-edits/data-and-functions'],
     tests: [
       engine('groups nest, cascade options'),
       options('groups replace the harness list, evals can edit it'),

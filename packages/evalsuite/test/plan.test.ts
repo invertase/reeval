@@ -24,6 +24,7 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
   { dir: 'images', name: 'install-from-dockerfile', args: [] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
+  { dir: 'harness-edits', name: 'data-and-functions', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },
   { dir: 'opencode', name: 'opencode', args: [] },
   { dir: 'goose', name: 'goose', args: [] },

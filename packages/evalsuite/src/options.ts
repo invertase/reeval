@@ -30,6 +30,7 @@ import type {
   EvalPlan,
   GatePolicy,
   HarnessDescriptor,
+  HarnessEdit,
   JudgeOptions,
   PinnableKey,
   PlannedEgress,
@@ -247,7 +248,12 @@ function applyHarness(
   where: string,
 ): HarnessDescriptor[] {
   if (value === undefined) return inherited
-  const next = typeof value === 'function' ? value(inherited) : value
+  const next =
+    typeof value === 'function'
+      ? value(inherited)
+      : isHarnessEdit(value)
+        ? editHarness(inherited, value, where)
+        : value
   const list = Array.isArray(next) ? next : [next]
   if (list.length === 0) {
     throw new UsageError(
@@ -256,6 +262,34 @@ function applyHarness(
   }
   checkHarnesses(list, where)
   return list
+}
+
+const isHarnessEdit = (v: unknown): v is HarnessEdit =>
+  typeof v === 'object' &&
+  v !== null &&
+  !Array.isArray(v) &&
+  !('kind' in v) &&
+  ('add' in v || 'only' in v)
+
+/** `{ add }` appends to the inherited harnesses; `{ only }` keeps those with these ids. */
+function editHarness(
+  inherited: HarnessDescriptor[],
+  edit: HarnessEdit,
+  where: string,
+): HarnessDescriptor[] {
+  if ('add' in edit && 'only' in edit) {
+    throw new UsageError(`harness takes { add } or { only }, not both, in ${where}`)
+  }
+  if ('add' in edit) return [...inherited, ...(Array.isArray(edit.add) ? edit.add : [edit.add])]
+  const ids = Array.isArray(edit.only) ? edit.only : [edit.only]
+  const have = inherited.map(harnessId)
+  const missing = ids.filter((id) => typeof id !== 'string' || !have.includes(id))
+  if (missing.length) {
+    throw new UsageError(
+      `harness { only: ${missing.map((id) => JSON.stringify(id)).join(', ')} } in ${where} names no inherited harness (inherited: ${have.join(', ')})`,
+    )
+  }
+  return inherited.filter((h) => ids.includes(harnessId(h)))
 }
 
 /** Each harness is one, with a valid `maxConcurrent`. */

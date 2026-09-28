@@ -27,6 +27,8 @@ export type {
   EvalOptions,
   ExecResult,
   GroupOptions,
+  HarnessData,
+  HarnessEdit,
   HarnessOption,
   HistoryConfig,
   HostFile,

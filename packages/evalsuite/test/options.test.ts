@@ -105,8 +105,10 @@ import { fakeHarness } from 'evalsuite/harness'
 group('only c', () => {
   evaluate('replaced', async (t) => { await t.send('x') })
   evaluate('added', { harness: (h) => [...h, fakeHarness({ id: 'd' })] }, async (t) => { await t.send('x') })
+  evaluate('added as data', { harness: { add: fakeHarness({ id: 'd' }) } }, async (t) => { await t.send('x') })
 }, { harness: fakeHarness({ id: 'c' }) })
 evaluate('inherits', async (t) => { await t.send('x') })
+evaluate('kept as data', { harness: { only: 'b' } }, async (t) => { await t.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -114,7 +116,13 @@ evaluate('inherits', async (t) => { await t.send('x') })
     const cells = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.cells.map((c) => c.harness)]),
     )
-    assert.deepEqual(cells, { replaced: ['c'], added: ['c', 'd'], inherits: ['a', 'b'] })
+    assert.deepEqual(cells, {
+      replaced: ['c'],
+      added: ['c', 'd'],
+      'added as data': ['c', 'd'],
+      inherits: ['a', 'b'],
+      'kept as data': ['b'],
+    })
   })
 
   test('tags filter, todo, for, and a filter that matches nothing exits 2', async () => {
@@ -582,6 +590,16 @@ describe('common mistakes', () => {
       'an async callback',
       `defineEnvironment('docs', async ({ file }) => ({ files: { 'docs/llms.txt': 'x' } }))`,
       /defineEnvironment\("docs"\) returned a Promise\. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead\./,
+    ],
+    [
+      'a harness edit naming a harness the eval does not inherit',
+      `evaluate('e', { harness: { only: 'cursor' } }, async () => {})`,
+      /harness \{ only: "cursor" \} in evaluate\("e"\) names no inherited harness \(inherited: fake\)/,
+    ],
+    [
+      'a harness edit that adds and keeps at once',
+      `evaluate('e', { harness: { add: [], only: 'fake' } as never }, async () => {})`,
+      /harness takes \{ add \} or \{ only \}, not both, in evaluate\("e"\)/,
     ],
     [
       'a list of sandboxes',

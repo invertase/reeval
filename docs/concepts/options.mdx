@@ -97,7 +97,7 @@ evaluate('installs from npm only', {
 })
 ```
 
-Under a config with Cursor and Claude Code, this eval runs on Cursor only. A function can also add one: `(inherited) => [...inherited, cursor({ model: 'composer-2', id: 'fast' })]`.
+Under a config with Cursor and Claude Code, this eval runs on Cursor only. The same edits as data: `{ only: 'cursor:composer-2.5' }` keeps harnesses by id, and `{ add: cursor({ model: 'composer-2', id: 'fast' }) }` appends one.
 
 ## Narrow with a limit, and pin what can't narrow
 

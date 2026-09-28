@@ -48,8 +48,8 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 
 ## Options
 
-<Property name="harness" type="Harness | Harness[] | ((inherited: Harness[]) => Harness[])">
-  Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. A function edits the inherited list: `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, or two harnesses with the same id, is an error. Default `cursor({ model: 'composer-2.5' })`.
+<Property name="harness" type="Harness | Harness[] | { add } | { only } | ((inherited: Harness[]) => Harness[])">
+  Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. An edit changes the inherited list instead: `{ add: cursor({ model: 'composer-2' }) }` appends one or a list, `{ only: 'cursor:composer-2.5' }` keeps the inherited harnesses with these ids (one or a list), and a function gets the list and returns a new one, `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, two harnesses with the same id, or an `only` id nothing inherited has, is an error. Default `cursor({ model: 'composer-2.5' })`.
 </Property>
 
 <Property name="environment" type="Environment">
