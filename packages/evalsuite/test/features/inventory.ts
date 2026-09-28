@@ -1048,6 +1048,19 @@ export const inventory: InventoryFeature[] = [
     real: ['e2e › es query'],
   },
   {
+    id: 'mcp',
+    area: 'Records and studio',
+    name: '`es mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP',
+    tests: [
+      'evalsuite/test/mcp.test.ts › speaks the stateless 2026-07-28 protocol and the 2025 handshake',
+      "evalsuite/test/mcp.test.ts › each query_<view> tool answers what es query <view> does, with its columns' filters",
+      'evalsuite/test/mcp.test.ts › query runs one read-only SELECT',
+      'evalsuite/test/mcp.test.ts › show, compare and history answer what their --json does',
+      'evalsuite/test/mcp.test.ts › masks secret-looking values',
+      'evalsuite/test/mcp.test.ts › --http serves stateless Streamable HTTP',
+    ],
+  },
+  {
     id: 'query.facts',
     area: 'Records and studio',
     name: '`es query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context`',

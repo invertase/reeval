@@ -1,7 +1,9 @@
 // `es mcp`: serves the run history over MCP, on stdio (the host launches it) or, with `--http`,
 // as stateless Streamable HTTP on a local port.
 import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { basename } from 'node:path'
 import { UsageError } from '../errors.ts'
+import { fromCwd } from '../ids.ts'
 import { redactSecrets } from '../redact.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { serverFactory } from './server.ts'
@@ -70,7 +72,7 @@ async function serveHttp(
   const { serve } = await import('@hono/node-server')
   const { allowedHosts } = await import('../studio/server.ts')
   const hosts = allowedHosts(host, port)
-  const handler = createMcpHandler(factory, { responseMode: 'json', onerror: report })
+  const handler = createMcpHandler(factory, { onerror: report })
   const app = new Hono()
   app.use('*', async (c, next) => {
     if (!hosts.includes(c.req.header('host') ?? '')) return c.text('Unknown host', 403)
@@ -100,7 +102,7 @@ async function serveHttp(
     s.once('listening', () => resolve(s))
   })
   const url = `http://${host.includes(':') ? `[${host}]` : host}:${port}/mcp`
-  console.log(`es mcp · ${config.root}`)
+  console.log(`es mcp · ${basename(config.root)} · ${fromCwd(config.history.dir) || '.'}/`)
   console.log(`  ${url}`)
   if (token) console.log(`  Authorization: Bearer ${token}`)
   console.log('Ctrl-C to stop.')

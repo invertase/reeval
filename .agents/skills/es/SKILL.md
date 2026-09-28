@@ -241,7 +241,12 @@ es record            es history      es show [run]      es compare [base] [head]
 es query lift        es query effort      es query "SELECT … FROM failing_attempts"
 es analyze           (one checked LLM reading of a run; --context for your own agent)
 es studio            es studio build --out site      es image build [--dry-run]      es clean
+es mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
 ```
+
+If your client has an `es` MCP server (`es mcp`), prefer its tools for reading results: they
+return the same JSON as `--json`, and `query_failing_attempts` or `compare` then `transcript` is
+the quickest way from "it failed" to what the agent did.
 
 Filters: a part naming an eval file picks files; any other part picks evals by name or cell key
 (`es run skill antigravity`). Every command uses the nearest `es.config.*` in the current directory or
