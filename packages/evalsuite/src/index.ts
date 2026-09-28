@@ -45,6 +45,7 @@ export type {
   SkillSource,
   TranscriptEvent,
   Turn,
+  TurnData,
   Verdict,
   WebEventType,
 } from './types.ts'

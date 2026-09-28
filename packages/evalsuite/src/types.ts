@@ -69,7 +69,8 @@ export type TokenUsage = {
 }
 
 /** One agent turn. Immutable once `t.send()` resolves. */
-export type Turn = {
+/** A turn as data, as a record or another language's runner carries it: `Turn` without its methods. */
+export type TurnData = {
   prompt: string
   /** The agent's final message for this turn. */
   text: string
@@ -93,6 +94,9 @@ export type Turn = {
   unreported: WebEventType[]
   /** Workspace changes since the eval started, as of the end of this turn. */
   diff: Diff
+}
+
+export type Turn = TurnData & {
   /** Runs in the eval's sandbox. Same as `t.exec`. */
   exec(command: string): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
