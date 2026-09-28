@@ -95,8 +95,6 @@ export type Agent = Layout & {
 export type ModelSpecific = Pick<Agent, 'credential' | 'endpoints' | 'servedModel'> & {
   modelResponses?: readonly EndpointMatch[]
   hosts: readonly string[]
-  /** The provider, for messages, e.g. `Anthropic`. */
-  provider: string
 }
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
@@ -184,7 +182,6 @@ export function opencodeForModel(model: string): ModelSpecific {
     ...(modelResponses.length ? { modelResponses } : {}),
     servedModel: (request) => providerServedModel(provider, request),
     hosts: [...providerHosts(provider), 'mcp.exa.ai'],
-    provider: provider.name,
   }
 }
 
@@ -546,9 +543,7 @@ export function refusedMcp(
 /** A real agent's catalog entry, with what its model's provider decides. */
 export function agentFor(h: AgentHarnessDescriptor): Agent {
   const agent = AGENTS[h.kind]
-  if (!agent.forModel) return agent
-  const { provider: _, ...specific } = agent.forModel(h.model)
-  return { ...agent, ...specific }
+  return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
 }
 
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
