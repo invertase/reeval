@@ -964,6 +964,18 @@ test('git(): URLs, GitHub shorthands and local paths, resolved against the calli
   assert.equal(git('git@github.com:acme/app.git').url, 'git@github.com:acme/app.git')
   assert.throws(() => git('https://tok@github.com/acme/app'), /password or token in it/)
   assert.throws(() => git('github:acme/app', { ref: '--upload-pack=x' }), /ref is a branch/)
+  assert.throws(
+    () => git('github:acme/app', { path: '../secrets' }),
+    /^DefinitionError: git\("github:acme\/app"\): path is a directory in the repository, relative, with forward slashes and no \. or \.\. \(got "\.\.\/secrets"\)$/,
+  )
+  assert.throws(
+    () => git('github:acme/app', { branch: 'main' } as never),
+    /git\("github:acme\/app"\): unknown option "branch"; it takes ref and path\. Use ref for a branch, tag or commit\./,
+  )
+  assert.throws(
+    () => defineEnvironment('app', { repo: 'github:acme/app' } as never),
+    /Unknown field "repo" in defineEnvironment\("app"\)\. Did you mean "workspace"\?/,
+  )
 })
 
 test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {

@@ -230,8 +230,8 @@ export type PlanCell = Cell & {
   /** Secrets its attempts broker, as `NAME → host, host`. */
   brokered: string[]
   egress: PlannedEgress
-  /** The git repository its workspace starts as; null for an empty workspace. */
-  workspace: { repo: string; ref: string | null; path: string | null } | null
+  /** The git repository its workspace starts as; unset for an empty workspace. */
+  workspace?: { repo: string; ref: string | null; path: string | null }
 }
 
 export type PlanEval = {
@@ -304,13 +304,13 @@ export function planDocument(
         runs: 1,
         brokered: attempt.brokered,
         egress: attempt.egress,
-        workspace: attempt.workspace
-          ? {
-              repo: attempt.workspace.repo,
-              ref: attempt.workspace.ref ?? null,
-              path: attempt.workspace.path ?? null,
-            }
-          : null,
+        ...(attempt.workspace && {
+          workspace: {
+            repo: attempt.workspace.repo,
+            ref: attempt.workspace.ref ?? null,
+            path: attempt.workspace.path ?? null,
+          },
+        }),
       })
     }
   }
