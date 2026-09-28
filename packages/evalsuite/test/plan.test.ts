@@ -3,6 +3,7 @@
 // with test/plan/<dir>/expected/<case>.txt. ES_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
 import { project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -37,7 +38,11 @@ export const cases: PlanCase[] = [
   { dir: 'workspace', name: 'git', args: [] },
 ]
 
-describe('plan snapshots', { concurrency: true }, () => {
+// Each case starts an `es` and its worker. All 25 at once swamp a small CI runner (Windows'
+// has 4 CPUs) until each takes over 30 s; as many at a time as there are CPUs keeps each quick.
+const CLIS = availableParallelism()
+
+describe('plan snapshots', { concurrency: CLIS }, () => {
   for (const c of cases) {
     test(`${c.dir}: ${c.name}`, async () => {
       matchFile(`plan/${c.dir}/expected/${c.name}.txt`, renderPlan(await planJson(c)))
@@ -45,7 +50,7 @@ describe('plan snapshots', { concurrency: true }, () => {
   }
 })
 
-describe('the JSON plan', { concurrency: true }, () => {
+describe('the JSON plan', { concurrency: CLIS }, () => {
   test('is one document with the host-dependent fields the snapshots leave out', async () => {
     const plan = await planJson({ dir: 'matrix', args: [] })
     assert.deepEqual(Object.keys(plan), [
@@ -235,7 +240,7 @@ function assertRootWarning(output: string): void {
   assert.ok(output.split('\n').includes(ROOT_LINE), `no root warning in:\n${output}`)
 }
 
-describe('sandbox privilege warnings', { concurrency: true }, () => {
+describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
   test('are structured in the JSON plan, one per level that set the sandbox', async () => {
     const plan = await planJson({ dir: 'privileges', args: [] })
     assert.deepEqual(plan.sandboxWarnings, [
