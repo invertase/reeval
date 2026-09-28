@@ -9,6 +9,7 @@ import {
   type TestMode,
 } from './engine/runtime.ts'
 import { inCI } from './env.ts'
+import { workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { refusedMcp } from './harness/agents.ts'
 import { attemptId, evalId, relativeFile } from './ids.ts'
@@ -218,6 +219,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
   const cells: string[] = []
   for (const planned of plannedAttempts) {
     if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
+    const workspace = workspaceOf(planned.environment.layers)
     const attempt: AttemptMeta = {
       name,
       groups,
@@ -233,6 +235,7 @@ function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hi
       brokered: brokeredIn(resolved.env, planned),
       secretVars: secretVarsIn(resolved.env, planned),
       egress: planned.egress,
+      ...(workspace ? { workspace } : {}),
       plan,
     }
     const spec: AttemptSpec = {

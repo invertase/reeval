@@ -17,6 +17,7 @@ import {
   mcpHosts,
   parseGitRepo,
   stepCommand,
+  workspaceLabel,
 } from '../environment.ts'
 import { sha256 } from '../ids.ts'
 import { registerSecret } from '../redact.ts'
@@ -25,6 +26,7 @@ import type {
   EgressPolicy,
   EnvironmentRecord,
   EnvVars,
+  GitWorkspace,
   HostFile,
   McpServer,
   Secret,
@@ -32,6 +34,7 @@ import type {
   SkillPlacement,
   SkillSource,
 } from '../types.ts'
+import type { PreparedWorkspace } from '../workspace.ts'
 
 /** The harness-neutral skill shape the harness adapters take. */
 export type HarnessSkill = {
@@ -68,6 +71,8 @@ export type ResolvedEnvironment = {
    * for the Docker egress gateway. Never write this anywhere.
    */
   substitutions: BrokeredSecret[]
+  /** The tarball of the git tree the workspace starts as, copied in before `files`. */
+  workspace?: { tar: string; label: string; commit: string }
 }
 
 /** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
@@ -392,6 +397,7 @@ export async function resolveEnvironment(
   where: string,
   rulesFile: string,
   egress: EgressPolicy = 'allow-all',
+  prepared: (w: GitWorkspace) => PreparedWorkspace | undefined = () => undefined,
 ): Promise<ResolvedEnvironment> {
   const envWhere = `environment ${environment.name} (${where})`
   const overrides = new Set<string>()
@@ -407,7 +413,12 @@ export async function resolveEnvironment(
   const seen = { env: new Set<string>(), files: new Set<string>(), mcp: new Set<string>() }
 
   let egressSet = false
+  let workspace: GitWorkspace | undefined
   for (const { spec } of environment.layers) {
+    if (spec.workspace !== undefined) {
+      if (workspace) overrides.add('workspace')
+      workspace = spec.workspace
+    }
     if (spec.egress !== undefined) {
       if (egressSet) overrides.add('egress')
       egressSet = true
@@ -539,6 +550,24 @@ export async function resolveEnvironment(
         : [name, { transport: s.transport, url: s.url, headers: Object.keys(s.headers).sort() }],
     ),
   )
+  const tree = workspace && prepared(workspace)
+  if (workspace && !tree) {
+    throw new InfraError(
+      `The workspace git(${JSON.stringify(workspaceLabel(workspace))}) for ${envWhere} wasn't prepared before the run started`,
+    )
+  }
+  const workspaceRecord =
+    workspace && tree
+      ? {
+          source: isAbsolute(workspace.url)
+            ? relative(root, workspace.url).split(sep).join('/') || '.'
+            : workspace.repo,
+          ref: workspace.ref ?? null,
+          path: workspace.path ?? null,
+          commit: tree.commit,
+          tree: tree.tree,
+        }
+      : undefined
   const digest = `sha256:${sha256(
     JSON.stringify({
       setup,
@@ -554,6 +583,7 @@ export async function resolveEnvironment(
       ...(egress === 'allow-all'
         ? {}
         : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
+      ...(workspaceRecord ? { workspace: workspaceRecord.tree } : {}),
     }),
   )}`
   return {
@@ -571,6 +601,7 @@ export async function resolveEnvironment(
       brokered: brokeredNames,
       unset: [...secrets.unset].sort(),
       egress,
+      ...(workspaceRecord ? { workspace: workspaceRecord } : {}),
     },
     setup,
     skills: skillList.filter((s) => s.placement === 'harness').map((s) => s.skill),
@@ -580,6 +611,9 @@ export async function resolveEnvironment(
     vars,
     checkVars,
     substitutions: secrets.brokered,
+    ...(workspace && tree
+      ? { workspace: { tar: tree.tar, label: workspaceLabel(workspace), commit: tree.commit } }
+      : {}),
   }
 }
 

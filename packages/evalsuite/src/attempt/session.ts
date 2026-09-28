@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
@@ -64,6 +65,32 @@ async function runSetup(a: Attempt, box: Sandbox, env: ResolvedEnvironment) {
         : `${what} timed out after ${formatDuration(step.timeoutMs)} (see setup.log)`,
     )
   }
+}
+
+const WORKSPACE_TAR = '~/.es-workspace.tar'
+
+/** Unpacks the git workspace's tarball into the (empty) workspace. */
+async function copyWorkspace(
+  box: Sandbox,
+  workspace: NonNullable<ResolvedEnvironment['workspace']>,
+  signal: AbortSignal,
+) {
+  const start = performance.now()
+  const tar = await readFile(workspace.tar)
+  await box.writeFile(WORKSPACE_TAR, tar)
+  const r = await box.exec(
+    `tar -xf "$HOME/${WORKSPACE_TAR.slice(2)}" && rm -f "$HOME/${WORKSPACE_TAR.slice(2)}"`,
+    { signal },
+  )
+  if (r.exitCode !== 0) {
+    throw new InfraError(
+      `Couldn't unpack the workspace ${workspace.label} into the sandbox (the image needs tar): ${tailOf(r.stderr || r.stdout)}`,
+    )
+  }
+  debugLog(
+    'env',
+    `workspace ${workspace.label} at ${workspace.commit.slice(0, 12)} (${tar.byteLength} bytes of tar) in ${formatDuration(performance.now() - start)}`,
+  )
 }
 
 /**
@@ -135,6 +162,7 @@ export async function startSession(
     const agent = env.substitutions.filter((s) => s.phase === 'agent').map((s) => s.name)
     debugLog('broker', `gateway swaps in ${agent.join(', ') || 'nothing'} for the agent`)
   }
+  if (env.workspace) await copyWorkspace(box, env.workspace, a.signal)
   for (const f of env.files) {
     await box.writeFile(f.path, f.content)
     const size = typeof f.content === 'string' ? Buffer.byteLength(f.content) : f.content.byteLength

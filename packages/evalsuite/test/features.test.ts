@@ -203,6 +203,28 @@ const git = (cwd: string, ...args: string[]) =>
     encoding: 'utf8',
   }).trim()
 
+/**
+ * `repo/` from `repo-src/`: `v1/` committed and tagged `v1`, then `v2/` committed on `main`. It
+ * serves partial fetches, as a hosted repository does, so a `path` fetches only its blobs.
+ */
+const versionedRepo = (dir: string) => {
+  const repo = join(dir, 'repo')
+  execFileSync('git', ['init', '-q', '-b', 'main', repo])
+  git(repo, 'config', 'uploadpack.allowFilter', 'true')
+  for (const version of ['v1', 'v2']) {
+    for (const entry of readdirSync(repo)) {
+      if (entry !== '.git') rmSync(join(repo, entry), { recursive: true, force: true })
+    }
+    cpSync(join(dir, 'repo-src', version), repo, { recursive: true })
+    git(repo, 'add', '-A')
+    git(repo, 'commit', '-q', '-m', version)
+    if (version === 'v1') git(repo, 'tag', 'v1')
+  }
+  return repo
+}
+
+const workspaceOf = (run: RunRecord) => run.environments.find((e) => e.workspace)?.workspace
+
 export const features: Feature[] = [
   {
     dir: 'config/found-from-subdirectory',
@@ -272,6 +294,54 @@ export const features: Feature[] = [
       assert.equal(s?.commit, git(join(project, 'repo'), 'rev-parse', 'v1'))
       assert.match(s?.source ?? '', /#v1:skills$/)
     },
+  },
+  {
+    dir: 'workspace/git-subpath',
+    tiers: ['fake', 'docker'],
+    env: 'app-v1',
+    canary: /expected .*Hello.* to contain .*Ahoy/,
+    prepare: versionedRepo,
+    record: ({ run, project }) => {
+      const repo = join(project, 'repo')
+      assert.deepEqual(workspaceOf(run), {
+        source: 'repo',
+        ref: 'v1',
+        path: 'app',
+        commit: git(repo, 'rev-parse', 'v1'),
+        tree: git(repo, 'rev-parse', 'v1:app'),
+      })
+      // A partial fetch: the cache has app/'s blobs, not the rest of the repository's.
+      const [cache] = readdirSync(join(project, '.es/cache/git/repos'))
+      const missing = git(
+        join(project, '.es/cache/git/repos', cache ?? ''),
+        'rev-list',
+        '--objects',
+        '--missing=print',
+        git(repo, 'rev-parse', 'v1'),
+      )
+      assert.match(missing, new RegExp(`^\\?${git(repo, 'rev-parse', 'v1:README.md')}$`, 'm'))
+      assert.doesNotMatch(
+        missing,
+        new RegExp(`^\\?${git(repo, 'rev-parse', 'v1:app/greet.js')}`, 'm'),
+      )
+    },
+  },
+  {
+    dir: 'workspace/files-over-repo',
+    tiers: ['fake', 'docker'],
+    env: 'patched',
+    canary: /to contain 'Hello'/,
+    prepare: versionedRepo,
+    record: ({ run }) => assert.deepEqual(envFiles(run), ['greet.js']),
+  },
+  {
+    dir: 'workspace/setup-in-repo',
+    tiers: ['fake', 'docker'],
+    env: 'built',
+    canary: /expected 'v1\\n' to be 'v2\\n'/,
+    prepare: versionedRepo,
+    record: ({ run, project }) =>
+      assert.equal(workspaceOf(run)?.commit, git(join(project, 'repo'), 'rev-parse', 'v1')),
   },
   {
     dir: 'skills/registry-version',

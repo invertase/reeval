@@ -23,13 +23,14 @@ import {
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
+import { workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
-import { preflight, type SandboxVersions } from './preflight.ts'
+import { PreflightInfraError, preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
@@ -622,6 +623,32 @@ async function executeRun(
         `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
     }
+    const { prepareWorkspaces, WorkspaceError, workspaceKey } = await import('./workspace.ts')
+    try {
+      const uses = planned.flatMap(({ attempt: a }) =>
+        a.workspace && !a.plan.skip
+          ? [{ workspace: a.workspace, environment: a.cell.environment }]
+          : [],
+      )
+      const prepared = await prepareWorkspaces(uses, { root: config.root, runId })
+      const shown = new Set<string>()
+      for (const { workspace } of uses) {
+        const p = prepared.get(workspaceKey(workspace))
+        if (!p || shown.has(workspaceKey(workspace))) continue
+        shown.add(workspaceKey(workspace))
+        renderer.onEvent({
+          type: 'notice',
+          at: Date.now(),
+          level: 'info',
+          text: `workspace ${workspaceLabel(workspace)} at ${p.commit.slice(0, 12)}`,
+        })
+      }
+    } catch (error) {
+      if (!(error instanceof WorkspaceError)) throw error
+      if (error.usage) throw new UsageError(error.message)
+      preflightStop = new PreflightInfraError(error.message)
+      return false
+    }
     try {
       sandboxVersions = await preflight(
         planned
@@ -742,6 +769,8 @@ async function executeRun(
     clearTimeout(budgetTimer)
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
+    const { removePreparedWorkspaces } = await import('./workspace.ts')
+    removePreparedWorkspaces(config.root, runId)
   }
   if (preflightStop) throw preflightStop
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted))

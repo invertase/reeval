@@ -3,6 +3,7 @@ import { resolveEnvironment } from '../environment/resolve.ts'
 import { layoutOf } from '../harness/index.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AttemptImage } from '../types.ts'
+import { preparedWorkspace } from '../workspace.ts'
 import { traceEnvironment } from './debug.ts'
 import type { Attempt } from './state.ts'
 
@@ -26,6 +27,7 @@ export async function prepareEnvironment(
     where,
     layoutOf(spec.harness).rulesFile,
     spec.egress.policy,
+    (w) => preparedWorkspace(root, runId, w),
   )
   a.env = env
   record.environment = env.record

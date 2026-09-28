@@ -13,6 +13,8 @@ import type {
   EnvironmentLayer,
   EnvironmentSpec,
   EnvVars,
+  GitHelper,
+  GitWorkspace,
   HostFile,
   McpHelper,
   McpServer,
@@ -31,7 +33,7 @@ export class DefinitionError extends Error {
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
-const SPEC_KEYS = ['env', 'egress', 'files', 'rules', 'setup', 'skills', 'mcp']
+const SPEC_KEYS = ['workspace', 'env', 'egress', 'files', 'rules', 'setup', 'skills', 'mcp']
 /** Image fields that belong on the sandbox, not the environment. */
 const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
 const SPEC_HINTS: Record<string, string> = {
@@ -46,6 +48,9 @@ const SPEC_HINTS: Record<string, string> = {
   file: 'files',
   agents: 'rules',
   use: 'extend',
+  repo: 'workspace',
+  git: 'workspace',
+  template: 'workspace',
 }
 
 export const isSecret = (value: unknown): value is Secret =>
@@ -334,6 +339,88 @@ export function parseGitRepo(repo: string): { url: string; ref?: string; path?: 
   return { url: repo }
 }
 
+/** `repo#ref:path`, as the plan and the record name a git workspace. */
+export const workspaceLabel = (w: Pick<GitWorkspace, 'repo' | 'ref' | 'path'>) =>
+  `${w.repo}${w.ref ? `#${w.ref}` : ''}${w.path ? `:${w.path}` : ''}`
+
+/** The workspace an attempt starts as: the last layer that sets one. */
+export const workspaceOf = (layers: readonly EnvironmentLayer[]): GitWorkspace | undefined =>
+  layers.findLast((l) => l.spec.workspace)?.spec.workspace
+
+/** A URL with its password (or an https username, which is where tokens go) masked. */
+function credentialsIn(repo: string): string | undefined {
+  if (!URL.canParse(repo)) return undefined
+  const u = new URL(repo)
+  if (!u.password && !(u.username && /^https?:$/.test(u.protocol))) return undefined
+  u.username = u.username && '***'
+  u.password = u.password && '***'
+  return u.href
+}
+
+const isLocalPath = (repo: string) => /^\.{1,2}(?:\/|$)/.test(repo) || isAbsolute(repo)
+
+function gitHelper(base: string): GitHelper {
+  return (repo, options = {}) => {
+    const written = repo instanceof URL ? repo.href : repo
+    if (typeof written !== 'string' || !written.trim()) {
+      throw new DefinitionError(
+        `git() needs a repository: a URL, github:owner/repo or a local path (got ${JSON.stringify(repo)})`,
+      )
+    }
+    const what = `git(${JSON.stringify(written)})`
+    const masked = credentialsIn(written)
+    if (masked) {
+      throw new DefinitionError(
+        `git(${JSON.stringify(masked)}): the URL has a password or token in it. ES fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.`,
+      )
+    }
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new DefinitionError(`${what}: options are { ref?, path? }`)
+    }
+    const extra = Object.keys(options).filter((k) => k !== 'ref' && k !== 'path')
+    if (extra.length) {
+      const hint =
+        extra.includes('branch') || extra.includes('tag')
+          ? ' Use ref for a branch, tag or commit.'
+          : ''
+      throw new DefinitionError(
+        `${what}: unknown option "${extra.join('", "')}"; it takes ref and path.${hint}`,
+      )
+    }
+    const local = repo instanceof URL ? repo.protocol === 'file:' : isLocalPath(written)
+    const parsed = local ? { url: toPath(repo, base) } : parseGitRepo(written)
+    const ref = options.ref ?? parsed.ref
+    if (ref !== undefined && (typeof ref !== 'string' || !ref.trim() || ref.startsWith('-'))) {
+      throw new DefinitionError(
+        `${what}: ref is a branch, tag or commit SHA (got ${JSON.stringify(ref)})`,
+      )
+    }
+    const path = options.path ?? parsed.path
+    if (path !== undefined) {
+      const clean = typeof path === 'string' ? path.replace(/\/+$/, '') : path
+      if (
+        typeof clean !== 'string' ||
+        !clean ||
+        clean.includes('\\') ||
+        clean.startsWith('/') ||
+        clean.split('/').some((p) => p === '..' || p === '.' || p === '')
+      ) {
+        throw new DefinitionError(
+          `${what}: path is a directory in the repository, relative, with forward slashes and no . or .. (got ${JSON.stringify(path)})`,
+        )
+      }
+    }
+    const cleanPath = path?.replace(/\/+$/, '')
+    return {
+      kind: 'git',
+      repo: written,
+      url: parsed.url,
+      ...(ref ? { ref } : {}),
+      ...(cleanPath ? { path: cleanPath } : {}),
+    }
+  }
+}
+
 /**
  * What a skill directory leaves out of the sandbox unless `exclude` says otherwise: eval material
  * (skill-creator keeps `evals/` in the skill), run history and ES eval files. `.git` is always left out.
@@ -432,6 +519,7 @@ export function helpersFor(base: string): EnvironmentHelpers {
     skill: skillHelper(base),
     mcp: mcpHelper,
     file: (path) => ({ kind: 'file', path: toPath(path, base) }),
+    git: gitHelper(base),
   }
 }
 
@@ -475,6 +563,11 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
     throw new DefinitionError(`Unknown field "${key}" in ${where}.${hint}`)
   }
   const s = spec as EnvironmentSpec
+  if (s.workspace !== undefined && (s.workspace as GitWorkspace | null)?.kind !== 'git') {
+    throw new DefinitionError(
+      `workspace in ${where} must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got ${JSON.stringify(s.workspace)})`,
+    )
+  }
   if (s.env !== undefined) checkEnv(s.env, where)
   if (s.egress !== undefined) checkEgress(s.egress, where)
   const list = (key: 'setup' | 'skills') => {

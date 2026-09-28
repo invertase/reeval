@@ -485,8 +485,30 @@ export type SetupStep = string | { run: string; timeout?: Duration; cwd?: string
  */
 export type EgressPolicy = 'allow-all' | 'deny-all' | { allow: readonly string[] }
 
+/**
+ * A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url`
+ * is what ES fetches: the clone URL, or an absolute path for a local repository.
+ */
+export type GitWorkspace = {
+  kind: 'git'
+  /** As written: a URL, `github:owner/repo`, or a local path. */
+  repo: string
+  url: string
+  /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+  ref?: string
+  /** A directory in the repository whose contents become the workspace. */
+  path?: string
+}
+
+export type GitHelper = (
+  repo: string | URL,
+  options?: { ref?: string; path?: string },
+) => GitWorkspace
+
 /** What an eval runs in: the declarative, phased spec of one environment. */
 export type EnvironmentSpec = {
+  /** The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's. */
+  workspace?: GitWorkspace
   env?: EnvVars
   /** Replaces the inherited policy; an `extend` child's replaces its parent's. */
   egress?: EgressPolicy
@@ -521,6 +543,8 @@ export type EnvironmentHelpers = {
   mcp: McpHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
+  /** A git repository for `workspace`: a URL, `github:owner/repo`, or a local path. */
+  git: GitHelper
 }
 
 export type SecretHelper = {
@@ -877,6 +901,18 @@ export type EnvironmentRecord = {
   unset: string[]
   /** The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`. */
   egress: EgressPolicy
+  /**
+   * The git repository the workspace started as: the repo as written (a local one relative to the
+   * project root), the ref and path asked for (null when unset), the commit the ref resolved to
+   * and the hash of the tree that was copied in, which is in the digest.
+   */
+  workspace?: {
+    source: string
+    ref: string | null
+    path: string | null
+    commit: string
+    tree: string
+  }
 }
 
 /**
@@ -987,6 +1023,8 @@ export type EvalPlan = {
   brokered: string[]
   /** Each distinct restricted egress policy its attempts run under, as the plan prints it. */
   egress: string[]
+  /** Each distinct git workspace its attempts start from, as `repo#ref:path`. */
+  workspaces: string[]
 }
 
 /**
@@ -1035,6 +1073,8 @@ export type AttemptMeta = {
    */
   secretVars: string[]
   egress: PlannedEgress
+  /** The git repository its workspace starts as, which the CLI fetches before any attempt. */
+  workspace?: GitWorkspace
   plan: EvalPlan
 }
 

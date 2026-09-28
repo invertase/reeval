@@ -13,6 +13,8 @@ import {
   plannedSecrets,
   type UnbrokeredSecret,
   unbrokeredSecrets,
+  workspaceLabel,
+  workspaceOf,
 } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
@@ -552,6 +554,13 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
 export function environmentWarnings(attempts: PlannedAttempt[]): string[] {
   const out = new Set<string>()
   for (const a of attempts) {
+    const workspace = workspaceOf(a.environment.layers)
+    if (workspace && isMovingRef(workspace.ref)) {
+      const ref = workspace.ref ? `moving ref "${workspace.ref}"` : 'no ref (the default branch)'
+      out.add(
+        `workspace git(${workspace.repo}) uses ${ref}: results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).`,
+      )
+    }
     for (const layer of a.environment.layers) {
       for (const s of layer.spec.skills ?? []) {
         if (s.source === 'git' && isMovingRef(s.ref)) {
@@ -681,6 +690,14 @@ export function evalPlan(
     sandboxWarnings: skip ? [] : sandboxWarnings(resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
     egress: [...new Set(attempts.map((a) => egressLabel(a.egress)).filter(Boolean))],
+    workspaces: [
+      ...new Set(
+        attempts.flatMap((a) => {
+          const w = workspaceOf(a.environment.layers)
+          return w ? [workspaceLabel(w)] : []
+        }),
+      ),
+    ],
   }
 }
 
