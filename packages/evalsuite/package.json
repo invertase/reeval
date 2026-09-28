@@ -95,7 +95,7 @@
     "@evalsuite/harness-codex": "workspace:0.1.0",
     "@evalsuite/harness-cursor-sdk": "workspace:0.1.0",
     "@evalsuite/harness-goose": "workspace:0.1.0",
-    "@evalsuite/harness-opencode": "workspace:0.1.0",
+    "@evalsuite/harness-opencode": "workspace:0.2.0",
     "@evalsuite/harness-pi": "workspace:0.1.0",
     "@evalsuite/sandbox-docker": "workspace:*",
     "studio-web": "workspace:*",

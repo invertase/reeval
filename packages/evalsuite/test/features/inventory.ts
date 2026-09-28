@@ -331,7 +331,7 @@ export const inventory: InventoryFeature[] = [
     plan: ['egress/cascade'],
     tests: [
       'evalsuite/test/harness.test.ts › resolves to an SSE server and reaches every harness in its SSE shape',
-      'evalsuite/test/plan.test.ts › an mcp.sse server on Goose, pi or Codex exits 2 at plan time',
+      'evalsuite/test/plan.test.ts › an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time',
     ],
   },
   {
@@ -764,7 +764,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.opencode',
     area: 'Harnesses',
-    name: '`opencode()`: OpenCode over ACP on a brokered Gemini key, its image, rules, skills and tool names',
+    name: '`opencode()`: OpenCode 2 over ACP on a brokered Gemini key, its image, config, rules, skills, tool names, web search and config MCP servers',
     fixtures: [
       'harness/opencode-rules',
       'harness/opencode-workspace-skills',
@@ -777,6 +777,22 @@ export const inventory: InventoryFeature[] = [
       harness("the key is swapped in on OpenCode's model endpoint only"),
       harness("OpenCode's edits and writes are file edits, relative to the workspace"),
       opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
+      opencodeAdapter('stream', "a tool's output is its content's text, with its metadata"),
+      opencodeAdapter('stream', "a web search's results are its references"),
+      opencodeAdapter(
+        'unit',
+        'MCP servers go in the config with codemode off, and the gate waits for them',
+      ),
+      opencodeAdapter(
+        'gate',
+        'the first prompt waits for the MCP servers to connect, and what follows keeps its order',
+      ),
+      opencodeAdapter(
+        'unit',
+        'the config turns off updates, sharing and the tools an eval has no use for',
+      ),
+      opencodeAdapter('unit', "session titles run on the turn's model, not a second one"),
+      opencodeAdapter('unit', 'the musl builds are left out of the install, and only those'),
     ],
   },
   {
@@ -886,7 +902,7 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.web-events',
     area: 'Harnesses',
     name: "Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched`",
-    fixtures: ['harness/cursor-web-fetch'],
+    fixtures: ['harness/cursor-web-fetch', 'harness/opencode-web-search'],
     tests: [
       harness('web calls the runner recovers survive the adapter, HarnessAgent and the normaliser'),
       harness('SDK 1.0.32 loses them before our first layer'),

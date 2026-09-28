@@ -39,18 +39,12 @@ function lineDelta(before: string, after: string): { added: number; removed: num
 
 const WORKSPACE = `${SANDBOX_ROOT}/${WORKSPACE_DIR}/`
 
-/**
- * Cursor's edit tools take `path`, Claude Code's `file_path` and OpenCode's `filePath`, which is
- * made relative to the workspace, as Cursor's are.
- */
-const editPath = (input: Record<string, unknown>) => {
-  const opencode = str(input.filePath)
-  return (
-    str(input.path) ||
-    str(input.file_path) ||
-    (opencode.startsWith(WORKSPACE) ? opencode.slice(WORKSPACE.length) : opencode)
-  )
-}
+/** A path under the workspace, relative to it, as Cursor reports them. */
+const inWorkspace = (path: string) =>
+  path.startsWith(WORKSPACE) ? path.slice(WORKSPACE.length) : path
+
+/** Cursor's and OpenCode's edit tools take `path`, Claude Code's `file_path`. */
+const editPath = (input: Record<string, unknown>) => str(input.path) || str(input.file_path)
 
 /**
  * Cursor reports `referenceCount`; Claude Code lists `results`, where each search is
@@ -69,7 +63,7 @@ function searchReferences(output: unknown): number | null {
 
 /**
  * Claude Code's bridge sends errors as `{ message }` objects; Cursor's as strings or Errors; ACP
- * harnesses (OpenCode) the tool's `rawOutput`, `{ error }`. Any other object is kept as JSON.
+ * harnesses (OpenCode) the tool's `rawOutput`, `{ metadata, error }`. Any other object is kept as JSON.
  */
 export const errorText = (error: unknown) =>
   str(error) || str(record(error).message) || str(record(error).error) || jsonText(error)
@@ -155,30 +149,33 @@ function fileEdits(
       },
     ]
   }
-  const opencode = record(result.metadata)
-  // OpenCode's edit reports a `filediff` with counts; its write says whether the file `exists`.
-  const filediff = record(opencode.filediff)
-  if (typeof filediff.additions === 'number') {
-    return [
-      {
+  // OpenCode's edit lists the `files` it changed, with counts; its write only says, in words,
+  // whether it created the file.
+  const files = record(result.metadata).files
+  if (Array.isArray(files) && files.length > 0) {
+    return files.map((f) => {
+      const file = record(f)
+      return {
         type: 'file-edit',
         toolCallId,
-        path: editPath(input),
-        kind: 'modify',
-        added: filediff.additions,
-        removed: typeof filediff.deletions === 'number' ? filediff.deletions : null,
-      },
-    ]
+        path: inWorkspace(str(file.file) || editPath(input)),
+        kind: file.status === 'added' ? 'create' : file.status === 'deleted' ? 'delete' : 'modify',
+        added: typeof file.additions === 'number' ? file.additions : null,
+        removed: typeof file.deletions === 'number' ? file.deletions : null,
+      }
+    })
   }
-  if (typeof opencode.exists === 'boolean') {
+  const said = str(result.output)
+  if (/^(Created|Wrote) file successfully/.test(said)) {
+    const created = said.startsWith('Created')
     return [
       {
         type: 'file-edit',
         toolCallId,
-        path: editPath(input),
-        kind: opencode.exists ? 'modify' : 'create',
-        added: opencode.exists ? null : lines(str(input.content)).length,
-        removed: opencode.exists ? null : 0,
+        path: inWorkspace(editPath(input)),
+        kind: created ? 'create' : 'modify',
+        added: created ? lines(str(input.content)).length : null,
+        removed: created ? 0 : null,
       },
     ]
   }

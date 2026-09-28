@@ -5,8 +5,8 @@
 #   Antigravity: the newest google-antigravity/antigravity-cli release's `agy` (its releases
 #     publish no checksums, so unlike the pinned build this one isn't verified).
 #   Cursor: the newest @cursor/sdk from npm, in the SDK harness's bootstrap directory.
-#   OpenCode: the newest opencode-ai from npm in its bootstrap (its postinstall allowed), and the
-#     same release of the plugin runtime the image bakes, so it still starts offline.
+#   OpenCode: the newest @opencode/cli from npm in its bootstrap (its postinstall allowed, which
+#     links the platform binary).
 #   Goose: the newest aaif-goose/goose release's `goose`, in its private home (not verified,
 #     as for agy).
 #   pi: the newest @earendil-works/pi-coding-agent from npm, in its bootstrap directory.
@@ -33,6 +33,7 @@ for pair in $images; do
   docker image inspect "$image" >/dev/null 2>&1 || { echo "skipped $image: not built"; continue; }
   pinned=$(label "$image")
   version=${pinned##* }
+  version=${version#v}
   new_label=""
   bootstrap=/home/es/.ai-sdk-harness/.harness-bootstrap
   case "$harness" in
@@ -58,15 +59,11 @@ npm install --omit=dev --no-audit --no-fund --loglevel=error --save-exact @curso
 node -p \"JSON.parse(require('fs').readFileSync('node_modules/@cursor/sdk/package.json')).version\""
       ;;
     opencode)
-      latest=${ES_DRIFT_OPENCODE_VERSION:-$(npm view opencode-ai version)}
+      latest=${ES_DRIFT_OPENCODE_VERSION:-$(npm view @opencode/cli version)}
       swap="set -eu
 cd $bootstrap/opencode/implementation
-printf 'allowBuilds:\\n  %s: true\\n' \"'opencode-ai@$latest'\" > pnpm-workspace.yaml
-pnpm add --save-exact --store-dir $bootstrap/opencode/.pnpm-store opencode-ai@$latest >/dev/null
-cd /home/es/.config/opencode
-printf '{\"dependencies\":{\"@opencode-ai/plugin\":\"%s\"}}\\n' $latest > package.json
-rm -rf node_modules package-lock.json
-npm install --no-fund --no-audit --ignore-scripts --loglevel=error
+printf 'allowBuilds:\\n  %s: true\\n' \"'@opencode/cli@$latest'\" > pnpm-workspace.yaml
+pnpm add --save-exact --store-dir $bootstrap/opencode/.pnpm-store @opencode/cli@$latest >/dev/null
 expect \"$latest\" \"\$($bootstrap/opencode/implementation/node_modules/.bin/opencode --version)\""
       ;;
     goose)

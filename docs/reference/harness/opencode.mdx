@@ -1,9 +1,9 @@
 ---
 title: opencode()
-description: The OpenCode harness, its options and id, its Gemini API key, the tokens it can't report and what it's kept from reading or fetching.
+description: The OpenCode 2 harness, its options and id, its Gemini API key, the tokens it can't report, its settings, web search and MCP servers.
 ---
 
-`opencode()` runs [OpenCode](https://opencode.ai) in the Docker sandbox over its ACP server (`opencode acp`), on a Google model with a Gemini API key. `model` is required.
+`opencode()` runs [OpenCode](https://opencode.ai) 2 in the Docker sandbox over its ACP server (`opencode acp`), on a Google model with a Gemini API key. `model` is required.
 
 ```ts title="es.config.ts"
 import { defineConfig } from '{{ pkg }}'
@@ -38,21 +38,21 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key) |
-| Adapter | `@evalsuite/harness-opencode` 0.1.0 (over `@ai-sdk/harness-acp`), bundled with ES |
-| CLI | `opencode-ai` 1.18.32 |
+| Adapter | `@evalsuite/harness-opencode` 0.2.0 (over `@ai-sdk/harness-acp`), bundled with ES |
+| CLI | `@opencode/cli` 2.0.18 |
 | Sandbox | `docker()` only |
-| Image | `evalsuite-sandbox:opencode-0.1.0` |
+| Image | `evalsuite-sandbox:opencode-0.2.0` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
-| Egress hosts added | `generativelanguage.googleapis.com` |
+| Egress hosts added | `generativelanguage.googleapis.com`, `mcp.exa.ai` (web search) |
 | Tokens | Not reported (below) |
 
 Build its image once with `es image build` in a project whose config uses `opencode()`.
 
 ## The key
 
-ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request, the one OpenCode 1.18.32 sends it on (its model, and the same model for session titles):
+ES passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request, the one OpenCode 2.0.18 sends it on (its model, and the same model for session titles):
 
 | Host | Endpoint |
 |---|---|
@@ -62,23 +62,70 @@ The adapter refuses to run in a sandbox that can't broker the key. `@ai-sdk/harn
 
 ## Tokens
 
-None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (a 4-call turn that used 33,942 input tokens reported 8,559), so ES records nothing rather than an undercount. The served model is still recorded, from the gateway's requests.
+None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.18), so ES records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
 
 ## Settings
 
-ES starts OpenCode with its auto-update, share links, model-catalog fetch, LSP downloads and default plugins off, and without the files it would also read for Claude Code and `.agents` compatibility:
+ES starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`. The CLI stays the image's, and its model catalog is the one it shipped with:
 
-| Variable | Why |
+```json
+{
+  "update": "disable",
+  "share": "disabled",
+  "permissions": [
+    { "action": "question", "resource": "*", "effect": "deny" },
+    { "action": "browser", "resource": "*", "effect": "deny" }
+  ],
+  "websearch": { "provider": "exa" },
+  "agents": { "title": { "model": "google/<model>" } },
+  "mcp": { "servers": { "<name>": { "…": "…", "codemode": false } } }
+}
+```
+
+| Setting | Why |
 |---|---|
-| `OPENCODE_DISABLE_AUTOUPDATE=1` | No self-update, so the CLI stays the image's. |
-| `OPENCODE_DISABLE_SHARE=1` | No share links. |
-| `OPENCODE_DISABLE_MODELS_FETCH=1` | No `models.opencode.ai` fetch: the model catalog is the one the CLI shipped with. |
-| `OPENCODE_DISABLE_LSP_DOWNLOAD=1`, `OPENCODE_DISABLE_DEFAULT_PLUGINS=1` | Nothing downloaded or loaded that the eval didn't set up. |
-| `OPENCODE_DISABLE_CLAUDE_CODE=1`, `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` | It reads `AGENTS.md` and its own skill directories only, not `CLAUDE.md`, `.claude/skills` or `.agents/skills`. |
+| `update`, `share` | No self-update and no share links. |
+| `question` denied | It waits for a person to answer. |
+| `browser` denied | Its tools drive a desktop browser. |
+| `websearch` | Web search on Exa, below. |
+| `agents.title.model` | Session titles run on your model. OpenCode's default is a second one, `gemini-flash-lite-latest`. |
+| `mcp.servers` | The environment's MCP servers, below. |
 
-OpenCode installs its plugin runtime (`@opencode-ai/plugin`, 63 MB) into `~/.config/opencode` from npm on every start. ES's image has it installed already, so a run makes no npm requests and works under `egress: 'deny-all'`.
+Every other tool runs without asking, as on every harness: ES answers OpenCode's permission requests with allow.
 
-MCP servers are passed in ACP's `session/new` shape; OpenCode accepts `stdio`, `http` and `sse` servers. Its MCP tools are named `mcp__<server>__<tool>` in the transcript, as on every harness.
+## Your own opencode.jsonc
+
+```jsonc title="opencode.jsonc (in the eval's files)"
+{
+  "agents": { "title": { "model": "google/gemini-2.5-flash" } },
+  "permissions": [{ "action": "webfetch", "resource": "*", "effect": "deny" }],
+  "mcp": { "servers": { "files": { "type": "local", "command": ["node", "files.mjs"] } } }
+}
+```
+
+OpenCode loads `~/.config/opencode`, then the workspace's `opencode.json(c)`, then ES's config last. With the file above, session titles still run on your cell's model (a key both set is ES's), `files` loads beside the environment's MCP servers (objects merge, servers by name), and `webfetch` is off. Permission rules append, the last match winning, so ES's rules only deny: your own denies stand.
+
+OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, it also reads `.claude/skills` and `.agents/skills` in the workspace and the home directory, and nothing turns that off, so keep other agents' skills out of an OpenCode eval's files.
+
+## Web search
+
+```json title="transcript.jsonl"
+{"type":"web-search","toolCallId":"call_782405","query":"anomalyco opencode github","references":8,…}
+```
+
+OpenCode's `websearch` tool calls a search service it's configured with; with none, it asks the user to pick one, which in an eval ends "Web search cancelled". ES points it at Exa's hosted MCP server (`https://mcp.exa.ai/mcp`), which answers without a key. The search runs from the sandbox, so `mcp.exa.ai` is one of OpenCode's automatic hosts and works under `egress: 'deny-all'`.
+
+Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, which the gateway can't swap in, so ES uses none rather than put a key in the container.
+
+## MCP servers
+
+```json title="transcript.jsonl"
+{"type":"tool","toolCallId":"call_451616","tool":"mcp__stamp__house_stamp","input":{},"output":{"metadata":{"truncated":false},"output":"STAMP-7Q"},"ok":true,…}
+```
+
+The environment's MCP servers go in OpenCode's config (`mcp.servers`), `stdio` as `local` and `http` as `remote`, with `codemode: false`, so the model calls their tools directly and the transcript has each call's input and output. An `sse` server is refused at plan time (exit 2). Over ACP's `session/new`, OpenCode would offer them only through Code Mode, its `execute` tool.
+
+OpenCode connects config MCP servers in the background once the session exists. ES runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
 ## Errors
 
@@ -87,7 +134,10 @@ MCP servers are passed in ACP's `session/new` shape; OpenCode accepts `stdio`, `
 | No model, or one with a provider | `opencode() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. opencode({ model: 'gemini-3.8-flash' }) (got …)` |
 | No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the OpenCode harness can't authenticate. Set it in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox` |
+| An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
 | OpenCode doesn't start | `OpenCode harness failed to start: …` |
+| A model OpenCode's catalog doesn't have | The turn fails with `Invalid params: model not found: google/<model>` |
+| A key the API rejects | The turn fails with `The API rejected GOOGLE_GENERATIVE_AI_API_KEY: set a valid key in the environment or .env.local. ACP prompt update stream failed: Internal error: API key not valid. …` |
 
 ## Related
 

@@ -29,7 +29,8 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   // The Gemini API only: with a Gemini API key the CLI needs no Google sign-in hosts, and its
   // auto-updater is off.
   antigravity: ['generativelanguage.googleapis.com'],
-  opencode: ['generativelanguage.googleapis.com'],
+  // And Exa's hosted MCP server, where the adapter points its websearch tool (keyless).
+  opencode: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
   goose: ['generativelanguage.googleapis.com'],
   pi: ['generativelanguage.googleapis.com'],
   // The Responses API only, with analytics, feedback and the update check off.
