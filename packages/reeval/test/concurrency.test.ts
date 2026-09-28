@@ -295,29 +295,29 @@ for (const name of ['a', 'b']) {
     const p = await project('conc-queue-time', {
       'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 1200 }' }),
       'evals/trace.ts': TRACE,
-      'evals/a.eval.ts': tracedEval('a', "{ runs: 3, timeout: '2s' }"),
+      'evals/a.eval.ts': tracedEval('a', "{ runs: 4, timeout: '3s' }"),
     })
     const r = await runCli(p.dir, ['run', '--concurrency', '1'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
-    // The third waited 2.4 s or more, so passing under its 2 s timeout means the wait didn't count.
+    // The fourth waited 3.6 s or more, so passing under its 3 s timeout means the wait didn't count.
     assert.deepEqual(
       attempts.map((a) => a.outcome),
-      ['pass', 'pass', 'pass'],
+      ['pass', 'pass', 'pass', 'pass'],
     )
-    // All three queue before the first starts, so a duration that counted the wait would span the
-    // first attempt's turn to the third's end. Counted from its own start, the third's spans only
-    // its own sandbox and turn: shorter by two whole attempts, however slow the machine.
+    // All four queue before the first starts, so a duration that counted the wait would span the
+    // first attempt's turn to the fourth's end. Counted from its own start, the fourth's spans only
+    // its own sandbox and turn: shorter by three whole attempts, however slow the machine.
     const trace = readTrace(p.dir)
     const at = (name: string, event: string) =>
       (trace.find((t) => t.name === name && t.event === event) as Trace).at
-    const third = attempts.find((a) => a.n === 3) as (typeof attempts)[number]
-    const span = at('a fake#3', 'end') - at('a fake#1', 'start')
+    const fourth = attempts.find((a) => a.n === 4) as (typeof attempts)[number]
+    const span = at('a fake#4', 'end') - at('a fake#1', 'start')
     assert.ok(
-      third.durationMs < span,
-      `${third.id}: ${third.durationMs}ms, first turn to its end ${span}ms`,
+      fourth.durationMs < span,
+      `${fourth.id}: ${fourth.durationMs}ms, first turn to its end ${span}ms`,
     )
-    assert.match(r.stdout, /\[eval#3 fake\] ▶/)
+    assert.match(r.stdout, /\[eval#4 fake\] ▶/)
   })
 
   test('timeouts under concurrency fail every attempt and destroy every sandbox', async () => {
