@@ -43,7 +43,7 @@ const EXEC_TAG = 'ES_FAKE_EXEC'
 // Kills every MSYS process whose environment carries the command's tag, until none is left.
 const KILL_TAGGED = `for pass in 1 2 3 4 5; do
   found=
-  for f in $(grep -lzx "${EXEC_TAG}=$ES_KILL_TAG" /proc/[0-9]*/environ 2>/dev/null); do
+  for f in $(grep -lzx "${EXEC_TAG}=$1" /proc/[0-9]*/environ 2>/dev/null); do
     p=\${f#/proc/}; kill -9 "\${p%/environ}" 2>/dev/null; found=1
   done
   [ -n "$found" ] || break
@@ -55,8 +55,7 @@ done`
  * `sleep 30` would run on, holding the command's pipes and working directory.
  */
 function killTagged(sh: string, tag: string) {
-  spawn(sh, ['-c', KILL_TAGGED], {
-    env: { ...process.env, ES_KILL_TAG: tag },
+  spawn(sh, ['-c', KILL_TAGGED, 'sh', tag], {
     stdio: 'ignore',
     windowsHide: true,
   }).on('error', () => {})
