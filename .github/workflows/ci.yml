@@ -1,116 +1,253 @@
-# ES's own gate: lint, typecheck and the test tiers as parallel jobs. The packages' tests run
-# dist/, so every test job builds first (about 2 s). The real-agent tier is in real.yml.
-# release.yml calls this on the release commit and publishes the tarball the pack job uploads.
-# The test jobs collect V8 coverage from every process they start (NODE_V8_COVERAGE, set after
-# the build), and the coverage job merges it into one report. It's report-only: no threshold.
+# ES's own gate: lint, typecheck and the test tiers as parallel jobs, summed up by one required
+# check, `ci`. The packages' tests run dist/, so every test job builds first (about 8 s: cheaper
+# than sharing dist/ as an artifact). The real-agent tier is in real.yml.
+#
+# Two tiers. PRs and merge-queue entries get the one PR_TIER names (below):
+#   light  lint, the build, typecheck and docs, and the unit and plan files in four shards, on every
+#          code change; each heavier job only when the files it tests change (the `changes` job).
+#   full   every Linux tier on every code change, as before the light tier.
+# `main`, the nightly run, workflow_dispatch, release.yml's call and a PR labelled `ci:full`
+# (ci-full.yml) run everything, unscoped: also extended.yml (the Node 22.13 floor, Windows and
+# macOS), npm 10.9's packed install and the coverage report.
+#
+# The engine differential needs no run of its own: the unit shards (on the newest Node) and the
+# features job record every `es` they run (ES_DIFFERENTIAL_DIR), and `differential` compares those
+# captures with the Vitest engine's (scripts/differential.mjs).
+# Coverage runs on full runs only: the test jobs collect V8 coverage from every process they start
+# (NODE_V8_COVERAGE, set after the build), and the coverage job merges it into one report. It's
+# report-only: no threshold.
 name: ci
 
 on:
   pull_request:
   push:
     branches: [main]
-  # The merge queue: every job runs, unfiltered, since the required checks must report.
+  # The merge queue: scoped like a PR, over what the merge group adds to main.
   merge_group:
+  schedule:
+    - cron: '41 2 * * *'
   workflow_dispatch:
   workflow_call:
 
 permissions:
   contents: read
 
+env:
+  # The PRs' and merge queue's tier: `light` or `full`. Set the CI_PR_TIER repository variable
+  # (Settings → Secrets and variables → Actions → Variables) to switch without a commit.
+  PR_TIER: ${{ vars.CI_PR_TIER || 'light' }}
+
 concurrency:
-  # github.workflow is the caller's when release.yml calls this, so the release's run doesn't
-  # share a group with main's own run and can't be replaced by the next push's. A merge group has
-  # no PR number; its github.ref (refs/heads/gh-readonly-queue/main/pr-…) is unique per entry.
+  # github.workflow is the caller's when release.yml or ci-full.yml calls this, so those runs don't
+  # share a group with this workflow's own run and can't be replaced by the next push's. A merge
+  # group has no PR number; its github.ref (refs/heads/gh-readonly-queue/main/pr-…) is unique per
+  # entry.
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   # Superseded PR pushes are cancelled; every commit on main and every queue entry gets a full run.
   cancel-in-progress: ${{ github.event_name != 'merge_group' && github.ref != 'refs/heads/main' }}
 
 jobs:
-  lint:
-    name: lint
+  # Which jobs this run needs. Off PRs and the queue, and with the ci:full label, all of them
+  # (`full`: also extended.yml and npm 10.9; `coverage` off PRs and the queue). Otherwise from the
+  # files changed against the base (the merge group's base in the queue). Docs-only changes
+  # (docs/, docs.json, root-level *.md, .agents/, issue templates) need only `checks`, which always
+  # runs. Any other change needs `unit` unless it's only in packages/studio-web. On the light tier,
+  # the rest follow their own paths, and a change to CI, the lockfile or the workspace needs every
+  # job; on the full tier, every code change needs every job.
+  changes:
+    name: changes
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
+    outputs:
+      full: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+      coverage: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+      unit: ${{ steps.scope.outputs.unit }}
+      features: ${{ steps.scope.outputs.features }}
+      docker: ${{ steps.scope.outputs.docker }}
+      studio: ${{ steps.scope.outputs.studio }}
+      pack: ${{ steps.scope.outputs.pack }}
+      engine: ${{ steps.scope.outputs.engine }}
+    steps:
+      # A PR's merge commit has the base it would merge into as its first parent; a merge group's
+      # base is further back.
+      - if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'merge_group' && 0 || 2 }}
+      - id: scope
+        env:
+          ALL: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+          BASE: ${{ github.event.merge_group.base_sha || 'HEAD^1' }}
+        run: |
+          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL
+          every() { unit=true features=true docker=true studio=true pack=true engine=true; }
+          if [ "$ALL" != true ]; then
+            echo "Tier: $PR_TIER"
+            while IFS= read -r f; do
+              case $f in
+                docs/* | docs.json | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
+                */*) ;;
+                *.md | LICENSE) continue ;;
+              esac
+              case $f in packages/studio-web/*) ;; *) unit=true ;; esac
+              if [ "$PR_TIER" != light ]; then every; continue; fi
+              case $f in
+                .github/* | \
+                package.json | \
+                pnpm-lock.yaml | \
+                pnpm-workspace.yaml | \
+                patches/* | \
+                .pnpmfile.cjs | \
+                tsconfig*.json)
+                  every; continue ;;
+              esac
+              case $f in
+                packages/evalsuite/src/engine/* | \
+                packages/evalsuite/test/engine* | \
+                packages/evalsuite/test/helpers.ts | \
+                packages/evalsuite/package.json | \
+                packages/evalsuite/tsdown.config.mjs | \
+                scripts/coverage.mjs)
+                  engine=true ;;
+              esac
+              case $f in
+                packages/evalsuite/src/engine/* | \
+                packages/evalsuite/src/attempt/* | \
+                packages/evalsuite/src/sandbox/* | \
+                packages/evalsuite/src/harness/* | \
+                packages/evalsuite/src/ui/* | \
+                packages/evalsuite/src/evaluate.ts | \
+                packages/evalsuite/src/egress.ts | \
+                packages/evalsuite/test/features* | \
+                packages/evalsuite/test/support/* | \
+                packages/evalsuite/test/differential/* | \
+                scripts/differential.mjs)
+                  features=true ;;
+              esac
+              case $f in
+                packages/sandbox-docker/* | \
+                packages/harness-* | \
+                packages/evalsuite/src/sandbox/* | \
+                packages/evalsuite/src/harness/* | \
+                packages/evalsuite/src/attempt/* | \
+                packages/evalsuite/src/egress.ts | \
+                packages/evalsuite/test/features/* | \
+                packages/evalsuite/test/docker* | \
+                packages/evalsuite/test/sandbox-* | \
+                packages/evalsuite/test/contract* | \
+                packages/evalsuite/test/e2e-real* | \
+                packages/evalsuite/test/cursor-sdk-shape*)
+                  docker=true ;;
+              esac
+              case $f in
+                packages/studio-web/* | \
+                packages/evalsuite/src/studio/* | \
+                packages/evalsuite/src/view/* | \
+                packages/evalsuite/test/studio*)
+                  studio=true ;;
+              esac
+              case $f in
+                packages/*/package.json | \
+                packages/studio-web/* | \
+                packages/evalsuite/tsdown.config.mjs | \
+                packages/evalsuite/src/root.ts | \
+                packages/evalsuite/test/pack* | \
+                packages/sandbox-docker/docker/* | \
+                packages/harness-pi/assets/* | \
+                scripts/third-party*)
+                  pack=true ;;
+              esac
+            done < <(git diff --name-only "$BASE" HEAD)
+          fi
+          {
+            echo "unit=$unit"
+            echo "features=$features"
+            echo "docker=$docker"
+            echo "studio=$studio"
+            echo "pack=$pack"
+            echo "engine=$engine"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  # Lint, the build, typecheck, the schema check and the docs checks: each under a minute, so one job.
+  checks:
+    name: lint, typecheck and docs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       # biome ci: lint and format check, without writing, with GitHub annotations.
       - run: pnpm exec biome ci .
-
-  typecheck:
-    name: typecheck
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      # evalsuite and examples/hello resolve their workspace dependencies' types from dist/.
+      # evalsuite and examples/hello resolve their workspace dependencies' types from dist/, and
+      # the docs' generated blocks come from dist/cli.js (help, query schema).
       - run: pnpm build
-      - run: pnpm typecheck
+      - if: ${{ !cancelled() }}
+        run: pnpm typecheck
       - name: persisted shapes (schema/ snapshots)
+        if: ${{ !cancelled() }}
         run: pnpm --filter @invertase/foobar schema:check
-
-  docs:
-    name: docs
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      # The generated blocks come from dist/cli.js (help, query schema), so build first.
-      - run: pnpm build
       # Stale generated blocks, reference coverage, sidebar links and the package name.
-      - run: pnpm docs:check
+      - if: ${{ !cancelled() }}
+        run: pnpm docs:check
       # docs.page's own check: internal links, assets and frontmatter targets.
-      - run: npx -y @docs.page/cli@2.1.0 check --external-links warn
+      - if: ${{ !cancelled() }}
+        run: npx -y @docs.page/cli@2.1.0 check --external-links warn
 
+  # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
+  # runner runs one test file at a time), recording the engine differential's captures. The
+  # engines floor, Node 22.13, runs in extended.yml.
   unit:
-    name: unit and plan (node ${{ matrix.node || 'engines' }})
+    name: unit and plan (${{ matrix.shard }})
+    needs: changes
+    if: needs.changes.outputs.unit == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        # The engines floor, and the newest Node that engines.node allows.
-        node: ['22.13', '']
+        shard: ['1/4', '2/4', '3/4', '4/4']
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
-        with: { node-version: '${{ matrix.node }}' }
       - run: pnpm build
-      # Coverage on one leg is enough: both run the same code.
-      - if: matrix.node == ''
+      - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
+      - run: echo "ES_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
       - name: evalsuite (every test file but the fixture, Docker, studio, pack and real-agent ones)
         working-directory: packages/evalsuite
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
+            --test-shard=${{ matrix.shard }} \
             test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real).test.ts
-      # Its real-container tests skip here: there's no sandbox image. The docker job runs them.
-      - name: sandbox-docker (without containers)
-        run: pnpm --filter @evalsuite/sandbox-docker test
-      - name: harness-antigravity
-        run: pnpm --filter @evalsuite/harness-antigravity test
-      - name: harness-cursor-sdk
-        run: pnpm --filter @evalsuite/harness-cursor-sdk test
-      - name: harness-opencode
-        run: pnpm --filter @evalsuite/harness-opencode test
-      - name: harness-goose
-        run: pnpm --filter @evalsuite/harness-goose test
-      - name: harness-pi
-        run: pnpm --filter @evalsuite/harness-pi test
-      - name: harness-codex
-        run: pnpm --filter @evalsuite/harness-codex test
+      # The other packages' own tests take seconds, so the first shard runs them. sandbox-docker's
+      # real-container tests skip here: there's no sandbox image. The docker job runs them.
+      - name: sandbox-docker (without containers) and the harness packages
+        if: matrix.shard == '1/4'
+        run: |
+          for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
+            echo "::group::@evalsuite/$p"
+            pnpm --filter "@evalsuite/$p" test
+            echo "::endgroup::"
+          done
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
-        with: { name: unit }
+        with: { name: 'unit-${{ strategy.job-index }}' }
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: differential-unit-${{ strategy.job-index }}
+          path: ${{ env.ES_DIFFERENTIAL_DIR }}
+          if-no-files-found: warn
+          retention-days: 3
 
   features:
     name: features (fake)
+    needs: changes
+    if: needs.changes.outputs.features == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -118,7 +255,9 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
+      - if: needs.changes.outputs.coverage == 'true'
+        run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
+      - run: echo "ES_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
       - working-directory: packages/evalsuite
         env:
           ES_FIXTURE_TIERS: fake
@@ -126,29 +265,94 @@ jobs:
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: features }
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: differential-features
+          path: ${{ env.ES_DIFFERENTIAL_DIR }}
+          if-no-files-found: error
+          retention-days: 3
 
-  docker:
-    name: docker (${{ matrix.package }})
+  # ES's engine against the Vitest engine's captured runs: the replay of the side-by-side
+  # comparison made before Vitest was removed. A run a failed or cancelled shard didn't reach
+  # shows up here as missing.
+  differential:
+    name: engine differential
+    needs: [changes, unit, features]
+    if: ${{ !cancelled() && needs.changes.outputs.features == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      # compare imports only node: modules, so it needs Node but no install.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with: { node-version-file: package.json }
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: differential-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/es
+      - name: ES's engine does what the Vitest engine did
+        run: node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: differential-captures
+          path: ${{ runner.temp }}/es
+          retention-days: 7
+
+  # The Docker tier, split by test name into legs of a few minutes each. A --test-name-pattern
+  # leg and a --test-skip-pattern leg on the same regex run complementary halves of a file, so
+  # nothing falls between them. All fail rather than skip without Docker.
+  docker:
+    name: docker (${{ matrix.package }}, ${{ matrix.part }})
+    needs: changes
+    if: needs.changes.outputs.docker == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        package: ['@invertase/foobar', '@evalsuite/sandbox-docker']
+        include:
+          # The fixtures' Docker tier: the harness/* fixtures, then the rest.
+          - package: '@invertase/foobar'
+            part: fixtures 1/2
+            run: node --test --experimental-strip-types --no-warnings --test-name-pattern='harness/' test/features.test.ts
+          - package: '@invertase/foobar'
+            part: fixtures 2/2
+            run: node --test --experimental-strip-types --no-warnings --test-skip-pattern='harness/' test/features.test.ts
+          # test/docker.test.ts: the image builds from a from, a dockerfile or a moving tag, then the rest.
+          - package: '@invertase/foobar'
+            part: sandbox 1/2
+            run: node --test --experimental-strip-types --no-warnings --test-name-pattern="$IMAGE_BUILDS" test/docker.test.ts
+          - package: '@invertase/foobar'
+            part: sandbox 2/2
+            run: node --test --experimental-strip-types --no-warnings --test-skip-pattern="$IMAGE_BUILDS" test/docker.test.ts
+          # The Docker sandbox contracts, and the harness contract and e2e CLI suites on their
+          # key-free fake row (real rows run in real.yml).
+          - package: '@invertase/foobar'
+            part: contracts
+            run: node --test --experimental-strip-types --no-warnings test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/sandbox-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts
+          # Its whole suite, real containers included.
+          - package: '@evalsuite/sandbox-docker'
+            part: all
+            run: pnpm test
     env:
+      ES_FIXTURE_TIERS: docker
       ES_TEST_REQUIRE_DOCKER: '1'
+      # docker.test.ts's slowest tests, each building images: about half the file's time.
+      IMAGE_BUILDS: 'a from tag that moves upstream|dockerfile: FROM|dockerfile \+ claudeCode|from: a toolchain image'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
-      - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      # evalsuite: the fixtures' Docker tier, test/docker.test.ts, the Docker sandbox contract, and
-      # the harness contract and e2e CLI suites on their key-free fake row (real rows run in real.yml).
-      # sandbox-docker: its whole suite, real containers included. All fail rather than skip
-      # without Docker.
-      - run: pnpm --filter '${{ matrix.package }}' ${{ matrix.package == '@invertase/foobar' && 'test:docker test/sandbox-contract.test.ts' || 'test' }}
+      - if: needs.changes.outputs.coverage == 'true'
+        run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
+      - working-directory: ${{ matrix.package == '@invertase/foobar' && 'packages/evalsuite' || 'packages/sandbox-docker' }}
+        run: ${{ matrix.run }}
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with:
@@ -156,6 +360,8 @@ jobs:
 
   studio:
     name: studio
+    needs: changes
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -163,7 +369,8 @@ jobs:
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
+      - if: needs.changes.outputs.coverage == 'true'
+        run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
       - working-directory: packages/evalsuite
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/studio.test.ts
       # The browser test skips without Chrome, so check it's there rather than pass silently.
@@ -173,68 +380,11 @@ jobs:
         uses: ./.github/actions/upload-coverage
         with: { name: studio }
 
-  # Windows and macOS: every tier that needs no Docker, through scripts/ci-os.sh. The Docker tier
-  # runs on Linux only: GitHub's Windows runners have Windows containers only, while ES's sandboxes
-  # are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners have no
-  # Docker. Windows starts processes slowly, so its unit files run in six shards.
-  windows-tests:
-    name: windows (${{ matrix.part }})
-    runs-on: windows-latest
-    timeout-minutes: 25
-    defaults:
-      run: { shell: bash }
-    strategy:
-      fail-fast: false
-      matrix:
-        part: ['unit 1/6', 'unit 2/6', 'unit 3/6', 'unit 4/6', 'unit 5/6', 'unit 6/6', tiers, packed]
-    steps:
-      # Recorded runs' artifact paths pass Windows' 260-character limit, which git keeps by default.
-      - run: git config --system core.longpaths true
-      # Scanning every file the tests write and every process they start makes attempts on a busy
-      # runner take tens of seconds; the runner is thrown away after the job.
-      - run: powershell -Command "Set-MpPreference -DisableRealtimeMonitoring \$true"
-        continue-on-error: true
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      - run: pnpm build
-      - if: matrix.part == 'tiers'
-        run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and ES's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
-      - run: scripts/ci-os.sh ${{ matrix.part }}
-
-  # The required Windows check: passes only when every part of windows-tests passed.
-  windows:
-    name: windows
-    needs: windows-tests
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - env:
-          RESULT: ${{ needs.windows-tests.result }}
-        run: |
-          if [ "$RESULT" != success ]; then
-            echo "::error::windows (unit 1/6 … 6/6, tiers, packed): $RESULT"
-            exit 1
-          fi
-
-  macos:
-    name: macos
-    runs-on: macos-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      - run: pnpm build
-      - run: echo "::notice title=No Docker tier on macOS::GitHub's macOS runners have no Docker. The docker jobs run the Docker tier on Linux."
-      - run: scripts/ci-os.sh unit
-      - run: scripts/ci-os.sh tiers
-      - run: scripts/ci-os.sh packed
-
   # The engine's own code (scripts/coverage.mjs ENGINE) must be fully covered by its tests.
   engine-coverage:
     name: engine coverage
+    needs: changes
+    if: needs.changes.outputs.engine == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -244,77 +394,24 @@ jobs:
       - run: pnpm build
       - run: node scripts/coverage.mjs engine
 
-  # ES's engine against the Vitest engine's captured runs (scripts/differential.mjs): the replay
-  # of the side-by-side comparison made before Vitest was removed.
-  engine-differential:
-    name: engine differential
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      - run: pnpm build
-      - name: ES's engine does what the Vitest engine did
-        run: |
-          node --experimental-strip-types --no-warnings scripts/differential.mjs record "$RUNNER_TEMP/es"
-          node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
-      - if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: differential-captures
-          path: ${{ runner.temp }}/es
-          retention-days: 7
-
-  coverage:
-    name: coverage
-    needs: [unit, features, docker, studio]
-    # Report what ran even when a test job failed; report-only, so a low number never fails it.
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      - uses: ./.github/actions/setup
-      # c8 maps the coverage through dist/ and its source maps, at the paths the test jobs ran.
-      - run: pnpm build
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: coverage-raw-*
-          path: ${{ runner.temp }}/coverage
-      - name: code coverage
-        run: |
-          node scripts/coverage.mjs report "$RUNNER_TEMP"/coverage/*
-          cat coverage/report/summary.md >> "$GITHUB_STEP_SUMMARY"
-      - name: feature matrix
-        working-directory: packages/evalsuite
-        run: pnpm -s features:matrix >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: coverage-report
-          path: coverage/report
-          retention-days: 14
-
-  # Installs the tarball with Node 22's npm 10.9 and with npm 11. npm before 11.6 crashed
-  # ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which ES no longer depends on;
-  # this leg keeps it that way.
+  # Installs the tarball with npm 11 (the release job's) and, off PRs, with Node 22's npm 10.9. npm
+  # before 11.6 crashed ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which ES no
+  # longer depends on; that leg keeps it that way.
   pack:
     name: packed install (npm ${{ matrix.npm }})
+    needs: changes
+    if: needs.changes.outputs.pack == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { npm: '10.9', node: '22' }
-          # The release job's npm.
-          - { npm: '11', node: '' }
+        npm: ${{ fromJSON(needs.changes.outputs.full == 'true' && '["11", "10.9"]' || '["11"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
-        with: { node-version: '${{ matrix.node }}' }
+        with: { node-version: "${{ matrix.npm == '10.9' && '22' || '' }}" }
       - run: npm install --global npm@${{ matrix.npm }} && npm --version
       - run: pnpm build
       # pnpm pack rewrites workspace: ranges, and .pnpmfile.cjs drops devDependencies and
@@ -343,18 +440,58 @@ jobs:
           pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"
           npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/dry-run/*.tgz
 
-  # The required check: passes only when every npm leg of the pack job passed.
-  packed-install:
-    name: packed install
-    needs: pack
-    if: ${{ !cancelled() }}
+  # The Node 22.13 floor, Windows and macOS.
+  extended:
+    name: extended
+    needs: changes
+    if: needs.changes.outputs.full == 'true'
+    uses: ./.github/workflows/extended.yml
+
+  coverage:
+    name: coverage
+    needs: [changes, unit, features, docker, studio]
+    # Report what ran even when a test job failed; report-only, so a low number never fails it.
+    if: ${{ !cancelled() && needs.changes.outputs.coverage == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: ./.github/actions/setup
+      # c8 maps the coverage through dist/ and its source maps, at the paths the test jobs ran.
+      - run: pnpm build
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: coverage-raw-*
+          path: ${{ runner.temp }}/coverage
+      - name: code coverage
+        run: |
+          node scripts/coverage.mjs report "$RUNNER_TEMP"/coverage/*
+          cat coverage/report/summary.md >> "$GITHUB_STEP_SUMMARY"
+      - name: feature matrix
+        working-directory: packages/evalsuite
+        run: pnpm -s features:matrix >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: coverage/report
+          retention-days: 14
+
+  # The one required check: fails when any job above failed or was cancelled. A job the change
+  # doesn't need is skipped, which passes. `always()`, so a cancelled run fails it rather than
+  # skipping it (a skipped required check counts as passed).
+  ci:
+    name: ci
+    needs: [changes, checks, unit, features, differential, docker, studio, engine-coverage, pack, extended]
+    if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - env:
-          RESULT: ${{ needs.pack.result }}
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          if [ "$RESULT" != success ]; then
-            echo "::error::packed install (npm 10.9 / npm 11): $RESULT"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          if jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' <<< "$NEEDS" > /dev/null; then
+            echo "::error::A required job failed or was cancelled (listed above)."
             exit 1
           fi
