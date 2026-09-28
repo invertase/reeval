@@ -2,16 +2,18 @@
 # check, `ci`. The packages' tests run dist/, so every test job builds first (about 8 s: cheaper
 # than sharing dist/ as an artifact). The real-agent tier is in real.yml.
 #
-# PRs run the Linux tiers, scoped to what changed (the `changes` job) and split so no job runs much
-# past five minutes. Merge-queue entries run every Linux tier, unscoped. `main`, the nightly run,
-# workflow_dispatch, release.yml's call and a PR labelled `ci:full` (ci-full.yml) also run
-# extended.yml (the Node 22.13 floor, Windows and macOS) and npm 10.9's packed install; off PRs and
-# the queue, the coverage report too.
+# Two tiers. PRs and merge-queue entries get the one PR_TIER names (below):
+#   light  lint, the build, typecheck and docs, and the unit and plan files in four shards, on every
+#          code change; each heavier job only when the files it tests change (the `changes` job).
+#   full   every Linux tier on every code change, as before the light tier.
+# `main`, the nightly run, workflow_dispatch, release.yml's call and a PR labelled `ci:full`
+# (ci-full.yml) run everything, unscoped: also extended.yml (the Node 22.13 floor, Windows and
+# macOS), npm 10.9's packed install and the coverage report.
 #
 # The engine differential needs no run of its own: the unit shards (on the newest Node) and the
 # features job record every `es` they run (ES_DIFFERENTIAL_DIR), and `differential` compares those
 # captures with the Vitest engine's (scripts/differential.mjs).
-# Coverage runs off PRs and the queue only: the test jobs collect V8 coverage from every process they start
+# Coverage runs on full runs only: the test jobs collect V8 coverage from every process they start
 # (NODE_V8_COVERAGE, set after the build), and the coverage job merges it into one report. It's
 # report-only: no threshold.
 name: ci
@@ -20,7 +22,7 @@ on:
   pull_request:
   push:
     branches: [main]
-  # The merge queue: every Linux tier runs, unscoped, and the required `ci` check reports.
+  # The merge queue: scoped like a PR, over what the merge group adds to main.
   merge_group:
   schedule:
     - cron: '41 2 * * *'
@@ -29,6 +31,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # The PRs' and merge queue's tier: `light` or `full`. Set the CI_PR_TIER repository variable
+  # (Settings → Secrets and variables → Actions → Variables) to switch without a commit.
+  PR_TIER: ${{ vars.CI_PR_TIER || 'light' }}
 
 concurrency:
   # github.workflow is the caller's when release.yml or ci-full.yml calls this, so those runs don't
@@ -40,55 +47,125 @@ concurrency:
   cancel-in-progress: ${{ github.event_name != 'merge_group' && github.ref != 'refs/heads/main' }}
 
 jobs:
-  # What this run covers. full (extended.yml and npm 10.9) off PRs and the queue, or with the
-  # ci:full label; coverage off PRs and the queue. Every tier below off PRs; on a PR without
-  # ci:full, from the files it changes against its base:
-  #   code    anything but docs/, docs.json, root-level *.md, .agents/ and issue templates
-  #   reeval  code outside packages/studio-web (the unit, fixture, differential and Docker tiers)
-  #   engine  the engine, its tests and what builds or measures them (engine coverage)
-  # .github/ changes count as all three, so a CI change runs every tier.
+  # Which jobs this run needs. Off PRs and the queue, and with the ci:full label, all of them
+  # (`full`: also extended.yml and npm 10.9; `coverage` off PRs and the queue). Otherwise from the
+  # files changed against the base (the merge group's base in the queue). Docs-only changes
+  # (docs/, docs.json, root-level *.md, .agents/, issue templates) need only `checks`, which always
+  # runs. Any other change needs `unit` unless it's only in packages/studio-web. On the light tier,
+  # the rest follow their own paths, and a change to CI, the lockfile or the workspace needs every
+  # job; on the full tier, every code change needs every job.
   changes:
     name: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       full: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-      code: ${{ steps.scope.outputs.code }}
-      reeval: ${{ steps.scope.outputs.reeval }}
-      engine: ${{ steps.scope.outputs.engine }}
       coverage: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+      unit: ${{ steps.scope.outputs.unit }}
+      features: ${{ steps.scope.outputs.features }}
+      docker: ${{ steps.scope.outputs.docker }}
+      studio: ${{ steps.scope.outputs.studio }}
+      pack: ${{ steps.scope.outputs.pack }}
+      engine: ${{ steps.scope.outputs.engine }}
     steps:
-      # The PR's merge commit: its first parent is the base it would merge into.
-      - if: github.event_name == 'pull_request'
+      # A PR's merge commit has the base it would merge into as its first parent; a merge group's
+      # base is further back.
+      - if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false, fetch-depth: 2 }
+        with:
+          persist-credentials: false
+          fetch-depth: ${{ github.event_name == 'merge_group' && 0 || 2 }}
       - id: scope
         env:
-          ALL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+          ALL: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+          BASE: ${{ github.event.merge_group.base_sha || 'HEAD^1' }}
         run: |
-          code=$ALL reeval=$ALL engine=$ALL
+          unit=$ALL features=$ALL docker=$ALL studio=$ALL pack=$ALL engine=$ALL
+          every() { unit=true features=true docker=true studio=true pack=true engine=true; }
           if [ "$ALL" != true ]; then
+            echo "Tier: $PR_TIER"
             while IFS= read -r f; do
               case $f in
                 docs/* | docs.json | .agents/* | .github/ISSUE_TEMPLATE/*) continue ;;
                 */*) ;;
                 *.md | LICENSE) continue ;;
               esac
-              code=true
-              case $f in packages/studio-web/*) ;; *) reeval=true ;; esac
+              case $f in packages/studio-web/*) ;; *) unit=true ;; esac
+              if [ "$PR_TIER" != light ]; then every; continue; fi
               case $f in
-                packages/evalsuite/src/engine/* | packages/evalsuite/test/engine* | \
-                  packages/evalsuite/test/helpers.ts | packages/evalsuite/test/support/* | \
-                  packages/evalsuite/package.json | packages/evalsuite/tsdown.config.mjs | \
-                  scripts/coverage.mjs | package.json | pnpm-lock.yaml | .github/*)
+                .github/* | \
+                package.json | \
+                pnpm-lock.yaml | \
+                pnpm-workspace.yaml | \
+                patches/* | \
+                .pnpmfile.cjs | \
+                tsconfig*.json)
+                  every; continue ;;
+              esac
+              case $f in
+                packages/evalsuite/src/engine/* | \
+                packages/evalsuite/test/engine* | \
+                packages/evalsuite/test/helpers.ts | \
+                packages/evalsuite/package.json | \
+                packages/evalsuite/tsdown.config.mjs | \
+                scripts/coverage.mjs)
                   engine=true ;;
               esac
-              case $f in .github/*) reeval=true ;; esac
-            done < <(git diff --name-only HEAD^1 HEAD)
+              case $f in
+                packages/evalsuite/src/engine/* | \
+                packages/evalsuite/src/attempt/* | \
+                packages/evalsuite/src/sandbox/* | \
+                packages/evalsuite/src/harness/* | \
+                packages/evalsuite/src/ui/* | \
+                packages/evalsuite/src/evaluate.ts | \
+                packages/evalsuite/src/egress.ts | \
+                packages/evalsuite/test/features* | \
+                packages/evalsuite/test/support/* | \
+                packages/evalsuite/test/differential/* | \
+                scripts/differential.mjs)
+                  features=true ;;
+              esac
+              case $f in
+                packages/sandbox-docker/* | \
+                packages/harness-* | \
+                packages/evalsuite/src/sandbox/* | \
+                packages/evalsuite/src/harness/* | \
+                packages/evalsuite/src/attempt/* | \
+                packages/evalsuite/src/egress.ts | \
+                packages/evalsuite/test/features/* | \
+                packages/evalsuite/test/docker* | \
+                packages/evalsuite/test/sandbox-* | \
+                packages/evalsuite/test/contract* | \
+                packages/evalsuite/test/e2e-real* | \
+                packages/evalsuite/test/cursor-sdk-shape*)
+                  docker=true ;;
+              esac
+              case $f in
+                packages/studio-web/* | \
+                packages/evalsuite/src/studio/* | \
+                packages/evalsuite/src/view/* | \
+                packages/evalsuite/test/studio*)
+                  studio=true ;;
+              esac
+              case $f in
+                packages/*/package.json | \
+                packages/studio-web/* | \
+                packages/evalsuite/tsdown.config.mjs | \
+                packages/evalsuite/src/root.ts | \
+                packages/evalsuite/test/pack* | \
+                packages/sandbox-docker/docker/* | \
+                packages/harness-pi/assets/* | \
+                scripts/third-party*)
+                  pack=true ;;
+              esac
+            done < <(git diff --name-only "$BASE" HEAD)
           fi
           {
-            echo "code=$code"
-            echo "reeval=$reeval"
+            echo "unit=$unit"
+            echo "features=$features"
+            echo "docker=$docker"
+            echo "studio=$studio"
+            echo "pack=$pack"
             echo "engine=$engine"
           } | tee -a "$GITHUB_OUTPUT"
 
@@ -124,7 +201,7 @@ jobs:
   unit:
     name: unit and plan (${{ matrix.shard }})
     needs: changes
-    if: needs.changes.outputs.reeval == 'true'
+    if: needs.changes.outputs.unit == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -170,7 +247,7 @@ jobs:
   features:
     name: features (fake)
     needs: changes
-    if: needs.changes.outputs.reeval == 'true'
+    if: needs.changes.outputs.features == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -202,7 +279,7 @@ jobs:
   differential:
     name: engine differential
     needs: [changes, unit, features]
-    if: ${{ !cancelled() && needs.changes.outputs.reeval == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.features == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -231,7 +308,7 @@ jobs:
   docker:
     name: docker (${{ matrix.package }}, ${{ matrix.part }})
     needs: changes
-    if: needs.changes.outputs.reeval == 'true'
+    if: needs.changes.outputs.docker == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -284,7 +361,7 @@ jobs:
   studio:
     name: studio
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.studio == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -323,7 +400,7 @@ jobs:
   pack:
     name: packed install (npm ${{ matrix.npm }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: needs.changes.outputs.pack == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
