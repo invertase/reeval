@@ -23,6 +23,7 @@ import {
   openCodeProvider,
   providerEndpoints,
   providerTransformations,
+  resolveOpenCodeProvider,
   splitModel,
 } from './opencode-providers.ts'
 import { OpenCodeStreamTranslator } from './opencode-stream.ts'
@@ -123,6 +124,11 @@ export type OpenCodeHarnessSettings = {
    */
   readonly model: string
   /**
+   * The provider's variables besides its key, which aren't secret and go into the sandbox as they
+   * are: Bedrock's `AWS_REGION`, which its hosts are built from (default `us-east-1`).
+   */
+  readonly vars?: Record<string, string>
+  /**
    * MCP servers, keyed by name, which go in OpenCode's config with `codemode: false`, so its
    * model calls their tools directly. Over ACP `session/new`, OpenCode 2.0.18 offers them only
    * through Code Mode (`execute`), which reports no call's input or output.
@@ -136,11 +142,12 @@ export type OpenCodeHarnessSettings = {
  * The requests OpenCode sends the model's provider's key on (probed on 2.0.18, see
  * `opencode-provider-table.ts`). A gateway that enforces them refuses the key anywhere else.
  */
-export const openCodeEndpoints = (model: string) => providerEndpoints(openCodeProvider(model))
+export const openCodeEndpoints = (model: string, env: Record<string, string | undefined> = {}) =>
+  providerEndpoints(openCodeProvider(model, env))
 
 /**
  * OpenCode (`opencode acp`) as an AI SDK harness, on any provider whose key it sends in a header
- * on fixed hosts: the model's provider (`anthropic/claude-haiku-4-5` runs on `anthropic`) picks
+ * on known hosts: the model's provider (`anthropic/claude-haiku-4-5` runs on `anthropic`) picks
  * the key, and only that key is used and brokered. `@ai-sdk/harness-opencode` brokers only a few
  * providers' keys and OpenCode 1's, so this is ES's own thin config over `@ai-sdk/harness-acp`.
  *
@@ -150,7 +157,9 @@ export const openCodeEndpoints = (model: string) => providerEndpoints(openCodePr
  * {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
-  const provider = openCodeProvider(settings.model)
+  const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})
+  if ('error' in resolved) throw new Error(resolved.error)
+  const { provider, vars } = resolved
   if (!isHarnessAuthenticationEnvironment(settings.auth) || !settings.auth[provider.env]) {
     throw new Error(
       `OpenCode auth must be an environment object with ${provider.env} (the ${provider.name} key for ${settings.model})`,
@@ -170,7 +179,7 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     executable: OPENCODE_GATE_EXECUTABLE,
     args: [],
     auth: settings.auth,
-    env: openCodeEnv(settings),
+    env: { ...openCodeEnv(settings), ...vars },
     credentialEnv: [provider.env],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[provider.env]

@@ -27,6 +27,7 @@ export const cases: PlanCase[] = [
   { dir: 'harness-edits', name: 'data-and-functions', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },
   { dir: 'opencode', name: 'opencode', args: [] },
+  { dir: 'opencode', name: 'bedrock-region', args: ['Bedrock'], env: { AWS_REGION: 'eu-west-1' } },
   { dir: 'goose', name: 'goose', args: [] },
   { dir: 'pi', name: 'pi', args: [] },
   { dir: 'codex', name: 'codex', args: [] },
@@ -107,11 +108,17 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
   })
 
   test("OpenCode on a provider ES can't broker exits 2 at plan time, naming it and why", async () => {
-    for (const [where, model, refusal] of [
+    for (const [where, model, refusal, env] of [
       [
         'config',
-        'amazon-bedrock/anthropic.claude-haiku-4-5',
-        /opencode\(\): ES can't run OpenCode on Amazon Bedrock \(amazon-bedrock\): its AWS credentials sign each request \(SigV4\), and its API keys go to a host per AWS region, so the gateway can't keep its key out of the sandbox/,
+        'google-vertex/gemini-3.8-flash',
+        /opencode\(\): ES can't run OpenCode on Vertex \(google-vertex\): it takes a service account \(Vertex refuses API keys for most models\), not a key in a header, so the gateway can't keep its key out of the sandbox/,
+      ],
+      [
+        'config',
+        'amazon-bedrock/global.anthropic.claude-haiku-4-5',
+        /opencode\(\): AWS_REGION is "evil\.example\.com\/x", which isn't one Amazon Bedrock \(amazon-bedrock\) takes: OpenCode builds its API's host from it, so it must match/,
+        { AWS_REGION: 'evil.example.com/x' },
       ],
       [
         'eval',
@@ -125,7 +132,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       ],
     ] as const) {
       const harness = `opencode({ model: '${model}' })`
-      const p = await project(`refused-${where}-${model.split('/')[0]}`, {
+      const p = await project(`refused-${where}-${model.split('/')[0]}${env ? '-env' : ''}`, {
         'es.config.ts': `import { defineConfig } from 'evalsuite'
 import { cursor, opencode } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
@@ -139,7 +146,7 @@ import { opencode } from 'evalsuite/harness'
 evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async () => {})
 `,
       })
-      const r = await runCli(p.dir, ['run', '--dry-run'])
+      const r = await runCli(p.dir, ['run', '--dry-run'], { env: env ?? {} })
       assert.equal(r.code, 2, r.stdout + r.stderr)
       assert.match(r.stderr, refusal)
       assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')

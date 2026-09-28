@@ -843,9 +843,9 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.opencode.providers',
     area: 'Harnesses',
-    name: "`opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on fixed hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time",
+    name: "`opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on known hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time",
     fixtures: ['harness/opencode-provider-key'],
-    plan: ['opencode/opencode'],
+    plan: ['opencode/opencode', 'opencode/bedrock-region'],
     tests: [
       "evalsuite/test/plan.test.ts › OpenCode on a provider ES can't broker exits 2 at plan time",
       harness('is plain data with its own cell id, and needs a model on a provider it can broker'),
@@ -854,6 +854,11 @@ export const inventory: InventoryFeature[] = [
       harness("each provider's hosts are its automatic egress hosts, with Exa's for web search"),
       harness("elsewhere the gateway reads the served model from each model call's response"),
       harness("OpenCode's adapter brokers only the model's provider's key, to its API"),
+      harness(
+        "on Bedrock, it needs AWS_BEARER_TOKEN_BEDROCK, and AWS_REGION's hosts are its egress hosts",
+      ),
+      opencodeAdapter('providers', "Bedrock's hosts are its AWS_REGION's, us-east-1 by default"),
+      opencodeAdapter('providers', 'Bedrock brokers its API key as a Bearer token'),
       opencodeAdapter(
         'providers',
         "the main providers' keys go where OpenCode 2.0.18 was seen to send them",

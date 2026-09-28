@@ -60,6 +60,7 @@ import {
   gooseMcpServers,
   LAYOUTS,
   layoutOf,
+  opencodeVars,
   type ServedModel,
 } from '../src/harness/agents.ts'
 import { workspaceSkillDir } from '../src/harness/index.ts'
@@ -333,11 +334,8 @@ describe('the OpenCode harness', () => {
   test("the config refuses a hand-made descriptor on a provider it can't broker", () => {
     assert.throws(
       () =>
-        resolveConfig(
-          { harness: [{ kind: 'opencode', model: 'amazon-bedrock/x' }] } as never,
-          '/p',
-        ),
-      /^UsageError: opencode\(\) in es\.config\.ts: ES can't run OpenCode on Amazon Bedrock/,
+        resolveConfig({ harness: [{ kind: 'opencode', model: 'google-vertex/x' }] } as never, '/p'),
+      /^UsageError: opencode\(\) in es\.config\.ts: ES can't run OpenCode on Vertex/,
     )
   })
 
@@ -371,6 +369,52 @@ describe('the OpenCode harness', () => {
       malformedCredentials(config, { ANTHROPIC_API_KEY: 'a b', OPENAI_API_KEY: 'c d' }),
       ['ANTHROPIC_API_KEY (character 2)'],
     )
+  })
+
+  test("on Bedrock, it needs AWS_BEARER_TOKEN_BEDROCK, and AWS_REGION's hosts are its egress hosts", () => {
+    const bedrock = opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' })
+    const config = resolveConfig({ harness: [bedrock] }, '/p')
+    assert.deepEqual(missingCredentials(config, { AWS_ACCESS_KEY_ID: 'x' }), [
+      'AWS_BEARER_TOKEN_BEDROCK',
+    ])
+    assert.deepEqual(missingCredentials(config, { AWS_BEARER_TOKEN_BEDROCK: 'x' }), [])
+    const saved = process.env.AWS_REGION
+    try {
+      delete process.env.AWS_REGION
+      const hosts = () => plannedEgress({ own: 'deny-all' }, bedrock, {}, []).auto
+      assert.deepEqual(hosts(), [
+        'bedrock-mantle.us-east-1.api.aws',
+        'bedrock-runtime.us-east-1.amazonaws.com',
+        'mcp.exa.ai',
+      ])
+      process.env.AWS_REGION = 'ap-southeast-2'
+      assert.deepEqual(hosts(), [
+        'bedrock-mantle.ap-southeast-2.api.aws',
+        'bedrock-runtime.ap-southeast-2.amazonaws.com',
+        'mcp.exa.ai',
+      ])
+      assert.deepEqual(opencodeVars(bedrock.model), { AWS_REGION: 'ap-southeast-2' })
+      assert.equal(
+        brokeringFor(bedrock)?.servedModel?.({
+          method: 'POST',
+          host: 'bedrock-runtime.ap-southeast-2.amazonaws.com',
+          path: '/model/global.anthropic.claude-haiku-4-5/converse-stream',
+        }),
+        'global.anthropic.claude-haiku-4-5',
+      )
+      process.env.AWS_REGION = 'evil.example.com'
+      assert.throws(
+        () => opencode({ model: bedrock.model }),
+        /^UsageError: opencode\(\): AWS_REGION is "evil\.example\.com"/,
+      )
+      assert.throws(
+        () => brokeringFor(bedrock),
+        /^InfraError: opencode\(\): AWS_REGION is "evil\.example\.com"/,
+      )
+    } finally {
+      if (saved === undefined) delete process.env.AWS_REGION
+      else process.env.AWS_REGION = saved
+    }
   })
 
   test("each provider's hosts are its automatic egress hosts, with Exa's for web search", () => {
@@ -821,6 +865,8 @@ function recordingSession(): {
 }
 
 const HOST_CREDENTIALS = [
+  'AWS_BEARER_TOKEN_BEDROCK',
+  'AWS_REGION',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_BASE_URL',
@@ -1061,6 +1107,18 @@ describe('credential brokering per agent', () => {
     assert.equal(openai[0]?.match.host, 'api.openai.com')
     assert.match(String(openai[0]?.match.headers?.[0]?.value?.exact), /^Bearer aisdkhc_/)
     assert.deepEqual(openai[0]?.transform.headers, { authorization: 'Bearer sk-real' })
+    const bedrock = await adapterRules(
+      'opencode',
+      { ...everything, AWS_BEARER_TOKEN_BEDROCK: 'ABSK-real', AWS_REGION: 'eu-west-1' },
+      'amazon-bedrock/global.anthropic.claude-haiku-4-5',
+    )
+    assert.deepEqual(
+      bedrock.map((r) => [r.match.host, r.transform.headers]),
+      [
+        ['bedrock-mantle.eu-west-1.api.aws', { authorization: 'Bearer ABSK-real' }],
+        ['bedrock-runtime.eu-west-1.amazonaws.com', { authorization: 'Bearer ABSK-real' }],
+      ],
+    )
   })
 
   test("the key is swapped in on OpenCode's model endpoint only; anything else is refused", async () => {

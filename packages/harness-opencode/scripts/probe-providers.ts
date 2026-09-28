@@ -18,6 +18,7 @@ import {
   issueServerCertificate,
 } from '../../sandbox-docker/src/egress/cert.ts'
 import { openCodeConfig } from '../src/opencode-harness.ts'
+import { PROVIDER_VARS } from './provider-vars.ts'
 
 const [opencode, catalogFile, outFile, ...only] = process.argv.slice(2)
 if (!opencode || !catalogFile || !outFile) {
@@ -231,6 +232,7 @@ async function worker() {
           OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig({ model: `${i.id}/${model}` })),
         }
         for (const n of names) env[n] = placeholderOf(i.id, n)
+        for (const v of PROVIDER_VARS[i.id] ?? []) env[v.name] = v.probe
         const before = seen.get(normal(i.id))?.length ?? 0
         const out = await run(
           ['run', '--standalone', '-m', `${i.id}/${model}`, 'Say hi.'],

@@ -29,10 +29,14 @@ its table.
 ## Providers
 
 `opencode-provider-table.ts` lists every provider OpenCode 2.0.18 knows: the ones whose key it
-sends in a header on fixed hosts, each with the variable it reads, the headers and the requests it
+sends in a header on known hosts, each with the variable it reads, the headers and the requests it
 sends the key on, and the others with the reason a gateway can't broker them (per-account hosts,
 SigV4, service accounts, subscriptions, local servers, provider packages it installs from npm).
-`resolveOpenCodeProvider(model)` gives a model's provider or that reason, and
+A provider can also take variables that aren't secret: Bedrock's hosts are built from
+`AWS_REGION`, so its table entry has `{AWS_REGION}` in them, a default (`us-east-1`) and the
+pattern a value must match (`scripts/provider-vars.ts`; the probe runs with a recognisable region).
+`resolveOpenCodeProvider(model, env)` gives a model's provider, with its hosts filled in and the
+variables' values (which `createOpenCode`'s `vars` passes into the sandbox), or that reason, and
 `@evalsuite/harness-opencode/providers` exports the table and its helpers without the harness.
 
 The table is generated, not written: `scripts/probe-providers.ts` runs the pinned `opencode run`
@@ -46,6 +50,10 @@ curl -so /tmp/catalog.json https://models.opencode.ai/api.json   # a model id pe
 node --experimental-strip-types scripts/probe-providers.ts <opencode> /tmp/catalog.json /tmp/probe.json
 node --experimental-strip-types scripts/provider-table.ts /tmp/probe.json /tmp/catalog.json
 ```
+
+The nightly drift leg runs the probe against the newest `@opencode/cli`
+(`scripts/drift/opencode-providers.mjs` at the repo root) and fails, with a diff, when the table it
+would generate differs from this one.
 
 ## How it works
 

@@ -81,6 +81,23 @@ Each provider's hosts, paths and headers come from running the pinned OpenCode a
 
 OpenCode's ACP server names no model, so each turn records the one the gateway saw serve its last model call. Gemini's API names it in the URL; every other provider's response body does, as its first `"model"` field, with the reasoning effort when the response reports one (OpenAI's Responses API). ES runs the provider's calls over HTTP (`transport: 'http'`, below): OpenCode's default for OpenAI and xAI is a WebSocket, whose frames the gateway doesn't read.
 
+## Amazon Bedrock
+
+```bash title=".env.local"
+AWS_BEARER_TOKEN_BEDROCK=...   # a Bedrock API key
+AWS_REGION=eu-west-1           # optional; default us-east-1
+```
+
+```ts title="es.config.ts"
+harness: opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' }),
+```
+
+Bedrock runs on a Bedrock API key, which OpenCode sends as `Authorization: Bearer` and the gateway swaps in. ES never passes AWS access keys, profiles or session tokens, which sign each request (SigV4) and can't be brokered. `AWS_REGION` isn't secret: ES passes it into the sandbox as it is, and its region's hosts, `bedrock-runtime.<region>.amazonaws.com` and `bedrock-mantle.<region>.api.aws`, are the automatic egress hosts.
+
+<Warning>
+Bedrock's hosts, header and served model are checked with OpenCode against a mock server, and through ES's gateway with a made-up key (which AWS refuses). It hasn't yet run against real Bedrock with a real key.
+</Warning>
+
 ## Tokens
 
 None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.18), so ES records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
@@ -157,7 +174,8 @@ OpenCode connects config MCP servers in the background once the session exists. 
 | No model | `opencode(): needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got …)` |
 | A model without a provider (at plan time, exit 2) | `opencode(): an OpenCode model id names its provider, <provider>/<model>, such as 'google/gemini-3.8-flash' or 'anthropic/claude-haiku-4-5' (got "gemini-3.8-flash")` |
 | A provider OpenCode doesn't know (exit 2) | `opencode(): OpenCode has no provider "…" (in "…"); a model id is <provider>/<model>, such as 'google/gemini-3.8-flash'` |
-| A provider ES refuses (exit 2) | `opencode(): ES can't run OpenCode on Amazon Bedrock (amazon-bedrock): its AWS credentials sign each request (SigV4), and its API keys go to a host per AWS region, so the gateway can't keep its key out of the sandbox` |
+| A provider ES refuses (exit 2) | `opencode(): ES can't run OpenCode on Vertex (google-vertex): it takes a service account (Vertex refuses API keys for most models), not a key in a header, so the gateway can't keep its key out of the sandbox` |
+| A malformed `AWS_REGION` on Bedrock (exit 2) | `opencode(): AWS_REGION is "…", which isn't one Amazon Bedrock (amazon-bedrock) takes: OpenCode builds its API's host from it, so it must match /^[a-z]{2}(-[a-z]+)+-\d{1,2}$/, such as "us-east-1"` |
 | No key for the run's providers | `Missing credentials: ANTHROPIC_API_KEY. Set them in the environment or .env.local.` |
 | A non-Docker sandbox | `The OpenCode harness needs the Docker sandbox` |
 | An `mcp.sse` server (at plan time, exit 2) | `evaluate("<eval>") on opencode:<model>: OpenCode has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
@@ -167,7 +185,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 
 ## Supported providers
 
-Every provider OpenCode 2.0.18 knows whose key it sends in a header on fixed hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.0.18 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -191,6 +209,7 @@ Every provider OpenCode 2.0.18 knows whose key it sends in a header on fixed hos
 | Alibaba Coding Plan (China) | `alibaba-coding-plan-cn/…` | `ALIBABA_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `coding.dashscope.aliyuncs.com` |
 | Alibaba Token Plan | `alibaba-token-plan/…` | `ALIBABA_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `token-plan.ap-southeast-1.maas.aliyuncs.com` |
 | Alibaba Token Plan (China) | `alibaba-token-plan-cn/…` | `ALIBABA_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `token-plan.cn-beijing.maas.aliyuncs.com` |
+| Amazon Bedrock | `amazon-bedrock/…` | `AWS_BEARER_TOKEN_BEDROCK` | `Authorization: Bearer` | `bedrock-mantle.{AWS_REGION}.api.aws`, `bedrock-runtime.{AWS_REGION}.amazonaws.com` |
 | Ambient | `ambient/…` | `AMBIENT_API_KEY` | `Authorization: Bearer` | `api.ambient.xyz` |
 | AMD | `amd/…` | `AMD_API_KEY` | `Authorization: Bearer` | `developer.amd.com.cn` |
 | Anthropic | `anthropic/…` | `ANTHROPIC_API_KEY` | `x-api-key` | `api.anthropic.com` |
@@ -383,7 +402,6 @@ The providers OpenCode knows whose key the gateway can't swap in, or that can't 
 | Provider | Model ids | Why ES refuses it |
 |---|---|---|
 | AIHubMix | `aihubmix/…` | OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown. |
-| Amazon Bedrock | `amazon-bedrock/…` | Its AWS credentials sign each request (SigV4), and its API keys go to a host per AWS region. |
 | Atomic Chat | `atomic-chat/…` | It runs on your machine, and the sandbox can't reach the host's localhost. |
 | Azure | `azure/…` | Its API host is per account (AZURE_RESOURCE_NAME), which ES doesn't pass. |
 | Cloudflare AI Gateway | `cloudflare-ai-gateway/…` | Its API host is per account (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_GATEWAY_ID), which ES doesn't pass. |

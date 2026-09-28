@@ -28,7 +28,14 @@ import {
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
-import { AGENTS, type AgentKind, agentAuth, authHint, brokeringFor } from '../src/harness/agents.ts'
+import {
+  AGENTS,
+  type AgentKind,
+  agentAuth,
+  agentFor,
+  authHint,
+  brokeringFor,
+} from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -271,6 +278,15 @@ test('an auth failure names the credential; other errors get no hint', () => {
       message,
     )
   }
+  // OpenCode's words for any provider refusing its key (Bedrock's 403, 28 Sep 2026), naming the
+  // model's provider's variable.
+  assert.equal(
+    authHint(
+      agentFor({ kind: 'opencode', model: 'amazon-bedrock/m' }),
+      'ACP prompt update stream failed: Authentication required: provider authentication required',
+    ),
+    'The API rejected AWS_BEARER_TOKEN_BEDROCK: set a valid key in the environment or .env.local',
+  )
   // The twins: a rate limit, a server error, a missing model and a refused host aren't the key.
   for (const message of [
     'HTTP 429: Resource has been exhausted (e.g. check quota).',

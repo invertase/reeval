@@ -5,7 +5,7 @@ import type { OpenCodeProvider, RefusedOpenCodeProvider } from './opencode-provi
 /** The version the table was probed on; a test holds it to OPENCODE_CLI_VERSION. */
 export const PROBED_VERSION = '2.0.18'
 
-/** Every provider whose key OpenCode sends in a header on fixed hosts, as the probe saw it. */
+/** Every provider whose key OpenCode sends in a header on known hosts, as the probe saw it. */
 export const OPENCODE_PROVIDERS: readonly OpenCodeProvider[] = [
   {
     id: '302ai',
@@ -190,6 +190,30 @@ export const OPENCODE_PROVIDERS: readonly OpenCodeProvider[] = [
         host: 'token-plan.cn-beijing.maas.aliyuncs.com',
         method: ['POST'],
         path: { exact: '/compatible-mode/v1/chat/completions' },
+      },
+    ],
+  },
+  {
+    id: 'amazon-bedrock',
+    name: 'Amazon Bedrock',
+    env: 'AWS_BEARER_TOKEN_BEDROCK',
+    vars: [{ name: 'AWS_REGION', default: 'us-east-1', pattern: '^[a-z]{2}(-[a-z]+)+-\\d{1,2}$' }],
+    headers: [{ name: 'authorization', scheme: 'bearer' }],
+    endpoints: [
+      {
+        host: 'bedrock-mantle.{AWS_REGION}.api.aws',
+        method: ['POST'],
+        path: { exact: '/openai/v1/responses' },
+      },
+      {
+        host: 'bedrock-mantle.{AWS_REGION}.api.aws',
+        method: ['POST'],
+        path: { exact: '/v1/chat/completions' },
+      },
+      {
+        host: 'bedrock-runtime.{AWS_REGION}.amazonaws.com',
+        method: ['POST'],
+        path: { regex: '^/model/([^/]+)/converse-stream$' },
       },
     ],
   },
@@ -1992,11 +2016,6 @@ export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
     id: 'aihubmix',
     name: 'AIHubMix',
     why: 'OpenCode installs its provider package from npm when it starts, so where it sends the key is unknown',
-  },
-  {
-    id: 'amazon-bedrock',
-    name: 'Amazon Bedrock',
-    why: 'its AWS credentials sign each request (SigV4), and its API keys go to a host per AWS region',
   },
   {
     id: 'atomic-chat',

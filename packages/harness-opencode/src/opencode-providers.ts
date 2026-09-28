@@ -13,13 +13,27 @@ export type OpenCodeEndpoint = {
   readonly path: { readonly exact: string } | { readonly regex: string }
 }
 
-/** A provider whose key OpenCode sends in a header on fixed hosts, so a gateway can broker it. */
+/**
+ * A variable a provider needs besides its key, which isn't secret: OpenCode builds its hosts from
+ * it, so the table's hosts have `{NAME}` in its place.
+ */
+export type OpenCodeProviderVar = {
+  readonly name: string
+  /** OpenCode's own default, when the host doesn't set it. */
+  readonly default: string
+  /** What a value must look like, since it goes into a host name. */
+  readonly pattern: string
+}
+
+/** A provider whose key OpenCode sends in a header on known hosts, so a gateway can broker it. */
 export type OpenCodeProvider = {
   /** OpenCode's provider id, the part of a model id before the first `/`. */
   readonly id: string
   readonly name: string
   /** The variable OpenCode reads the key from, which ES reads on the host. */
   readonly env: string
+  /** Variables its hosts are built from, such as Bedrock's `AWS_REGION`. */
+  readonly vars?: readonly OpenCodeProviderVar[]
   /** Where OpenCode puts the key (a provider whose models use several APIs has one per API). */
   readonly headers: readonly OpenCodeKeyHeader[]
   /** Every request OpenCode was seen to send the key on. */
@@ -47,12 +61,15 @@ export function splitModel(model: string): { provider: string; model: string } |
 }
 
 /**
- * The provider a model id runs on, or why it can't: the id has no provider, OpenCode doesn't
- * know the provider, or ES can't broker its key.
+ * The provider a model id runs on, with its hosts built from `env`'s values for its variables
+ * (or their defaults), and those values, which go into the sandbox as they are. Or why it can't
+ * run: the id has no provider, OpenCode doesn't know the provider, ES can't broker its key, or a
+ * variable's value can't be part of a host name.
  */
 export function resolveOpenCodeProvider(
   model: string,
-): { provider: OpenCodeProvider } | { error: string } {
+  env: Record<string, string | undefined> = {},
+): { provider: OpenCodeProvider; vars: Record<string, string> } | { error: string } {
   const split = splitModel(model)
   if (!split) {
     return {
@@ -60,7 +77,22 @@ export function resolveOpenCodeProvider(
     }
   }
   const provider = byId.get(split.provider)
-  if (provider) return { provider }
+  if (provider) {
+    const vars: Record<string, string> = {}
+    for (const v of provider.vars ?? []) {
+      const value = env[v.name] || v.default
+      if (!new RegExp(v.pattern).test(value)) {
+        return {
+          error: `${v.name} is ${JSON.stringify(value)}, which isn't one ${provider.name} (${provider.id}) takes: OpenCode builds its API's host from it, so it must match /${v.pattern}/, such as ${JSON.stringify(v.default)}`,
+        }
+      }
+      vars[v.name] = value
+    }
+    const fill = (host: string) =>
+      Object.entries(vars).reduce((h, [name, value]) => h.replaceAll(`{${name}}`, value), host)
+    const endpoints = provider.endpoints.map((e) => ({ ...e, host: fill(e.host) }))
+    return { provider: { ...provider, endpoints }, vars }
+  }
   const refused = refusedById.get(split.provider)
   if (refused) {
     return {
@@ -73,8 +105,11 @@ export function resolveOpenCodeProvider(
 }
 
 /** Like {@link resolveOpenCodeProvider}, throwing its reason. */
-export function openCodeProvider(model: string): OpenCodeProvider {
-  const resolved = resolveOpenCodeProvider(model)
+export function openCodeProvider(
+  model: string,
+  env: Record<string, string | undefined> = {},
+): OpenCodeProvider {
+  const resolved = resolveOpenCodeProvider(model, env)
   if ('error' in resolved) throw new Error(resolved.error)
   return resolved.provider
 }

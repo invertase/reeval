@@ -24,3 +24,11 @@ evaluate(
   },
   async () => {},
 )
+evaluate(
+  'opencode on Bedrock, under deny-all: its region is its hosts',
+  {
+    harness: opencode({ model: 'amazon-bedrock/global.anthropic.claude-haiku-4-5' }),
+    egress: 'deny-all',
+  },
+  async () => {},
+)

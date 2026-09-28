@@ -174,8 +174,17 @@ test('a model without a brokerable provider throws, saying why', () => {
     /names its provider, <provider>\/<model>/,
   )
   assert.throws(
-    () => createOpenCode({ auth: { X: 'k' }, model: 'amazon-bedrock/anthropic.claude' }),
-    /can't run OpenCode on Amazon Bedrock \(amazon-bedrock\): its AWS credentials sign each request/,
+    () => createOpenCode({ auth: { X: 'k' }, model: 'google-vertex/gemini-3.8-flash' }),
+    /can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
+  )
+  assert.throws(
+    () =>
+      createOpenCode({
+        auth: { AWS_BEARER_TOKEN_BEDROCK: 'k' },
+        model: 'amazon-bedrock/m',
+        vars: { AWS_REGION: 'evil.example.com' },
+      }),
+    /AWS_REGION is "evil\.example\.com", which isn't one Amazon Bedrock \(amazon-bedrock\) takes/,
   )
 })
 

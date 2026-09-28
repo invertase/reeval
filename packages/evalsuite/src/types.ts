@@ -284,7 +284,7 @@ export type AntigravityHarnessDescriptor = {
 }
 /**
  * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
- * on any provider whose key OpenCode sends in a header on fixed hosts, with that provider's key,
+ * on any provider whose key OpenCode sends in a header on known hosts, with that provider's key,
  * and reports no usage (its ACP server counts one call).
  */
 export type OpenCodeHarnessDescriptor = {

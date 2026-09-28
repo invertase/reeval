@@ -74,10 +74,11 @@ export type Agent = Layout & {
   hosts?: readonly string[]
   /**
    * What depends on the model, for an agent that runs on several providers (OpenCode): the
-   * model's provider's credential, endpoints, hosts and served-model reader. Throws an
-   * `InfraError` naming why a model can't run.
+   * model's provider's credential, endpoints, hosts and served-model reader, with hosts built from
+   * the host's variables (Bedrock's `AWS_REGION`). Throws an `InfraError` naming why a model can't
+   * run.
    */
-  forModel?: (model: string) => ModelSpecific
+  forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -169,10 +170,13 @@ const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEff
 /**
  * OpenCode on the model's provider (`anthropic/claude-haiku-4-5` is Anthropic's): its key, the
  * requests OpenCode sends it on, its hosts plus Exa's for web search, and the served model from
- * the URL (Gemini's API) or the response body.
+ * the URL (Gemini's API, Bedrock's) or the response body. Bedrock's hosts are its `AWS_REGION`'s.
  */
-export function opencodeForModel(model: string): ModelSpecific {
-  const resolved = resolveOpenCodeProvider(model)
+export function opencodeForModel(
+  model: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ModelSpecific {
+  const resolved = resolveOpenCodeProvider(model, env)
   if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
   const { provider } = resolved
   const modelResponses = providerModelResponses(provider)
@@ -183,6 +187,16 @@ export function opencodeForModel(model: string): ModelSpecific {
     servedModel: (request) => providerServedModel(provider, request),
     hosts: [...providerHosts(provider), 'mcp.exa.ai'],
   }
+}
+
+/**
+ * The variables besides its key that OpenCode's provider takes from the host, as they are:
+ * Bedrock's `AWS_REGION` (default `us-east-1`); none for most providers.
+ */
+export function opencodeVars(model: string, env: NodeJS.ProcessEnv = process.env) {
+  const resolved = resolveOpenCodeProvider(model, env)
+  if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
+  return resolved.vars
 }
 
 /** Codex's `config.toml` `[mcp_servers]` shape. */
@@ -436,6 +450,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth,
         model: descriptor.model,
+        vars: opencodeVars(descriptor.model),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, OpenCodeMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
@@ -574,11 +589,11 @@ export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlock
 
 /**
  * How the APIs behind the harnesses say they refused a key: an HTTP 401, Anthropic's and OpenAI's
- * wording, Google's (which answers 400). A bare 403 isn't here: the gateway and MCP servers send
+ * wording, Google's (which answers 400), and OpenCode's for any provider's 401 or 403. A bare 403 isn't here: the gateway and MCP servers send
  * those for reasons that have nothing to do with the harness's key.
  */
 const REFUSED_KEY =
-  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b/i
+  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b/i
 
 /** What to do when a harness error says its API refused the key, naming the variable; else undefined. */
 export function authHint(agent: Agent, message: string): string | undefined {

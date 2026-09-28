@@ -83,7 +83,7 @@ export function opencodeModelError(model: unknown): string | undefined {
   if (typeof model !== 'string' || !model) {
     return `needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got ${JSON.stringify(model)})`
   }
-  const resolved = resolveOpenCodeProvider(model)
+  const resolved = resolveOpenCodeProvider(model, process.env)
   return 'error' in resolved ? resolved.error : undefined
 }
 

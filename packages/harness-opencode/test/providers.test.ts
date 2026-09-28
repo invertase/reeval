@@ -30,9 +30,13 @@ test('each provider is supported or refused, once, and the table is well formed'
       assert.equal(h.scheme, h.name === 'authorization' ? 'bearer' : 'raw', `${p.id} ${h.name}`)
     }
     assert.ok(p.endpoints.length > 0, `${p.id} has an endpoint`)
+    const vars = (p.vars ?? []).map((v) => `{${v.name}}`)
+    for (const v of p.vars ?? [])
+      assert.match(v.default, new RegExp(v.pattern), `${p.id} ${v.name}`)
     for (const e of p.endpoints) {
-      // A fixed public host: no loopback, IP address or unfilled ${VARIABLE}.
-      assert.match(e.host, /^[a-z0-9-]+(\.[a-z0-9-]+)+$/, `${p.id} ${e.host}`)
+      // A public host, fixed or built from a declared variable: no loopback or IP address.
+      const host = vars.reduce((h, v) => h.replaceAll(v, 'x'), e.host)
+      assert.match(host, /^[a-z0-9-]+(\.[a-z0-9-]+)+$/, `${p.id} ${e.host}`)
       assert.doesNotMatch(e.host, /^(\d+\.){3}\d+$|localhost/, `${p.id} ${e.host}`)
       if ('exact' in e.path) assert.match(e.path.exact, /^\//, `${p.id}`)
       else assert.equal(new RegExp(`${e.path.regex}|`).exec('')?.length, 2, `${p.id}: one group`)
@@ -136,7 +140,6 @@ test('a model that can’t run says why: no provider, an unknown one, or one ES 
   )
   assert.match(error('nope/m'), /OpenCode has no provider "nope" \(in "nope\/m"\)/)
   const refused: Record<string, RegExp> = {
-    'amazon-bedrock': /Amazon Bedrock \(amazon-bedrock\): its AWS credentials sign each request/,
     'google-vertex': /Vertex \(google-vertex\): it takes a service account/,
     'github-copilot': /GitHub Copilot \(github-copilot\): it runs on a GitHub Copilot subscription/,
     azure: /Azure \(azure\): its API host is per account \(AZURE_RESOURCE_NAME\)/,
@@ -231,4 +234,89 @@ test("the gateway reads the response of each model call whose URL doesn't name t
   )
   assert.equal(providerEndpoints(zen).length, 5)
   assert.deepEqual(providerModelResponses(openCodeProvider('google/m')), [])
+})
+
+test("Bedrock's hosts are its AWS_REGION's, us-east-1 by default, and the region is checked", () => {
+  const hosts = (env: Record<string, string>) => {
+    const r = resolveOpenCodeProvider('amazon-bedrock/global.anthropic.claude-haiku-4-5', env)
+    return 'error' in r ? r.error : { hosts: providerHosts(r.provider), vars: r.vars }
+  }
+  assert.deepEqual(hosts({}), {
+    hosts: ['bedrock-mantle.us-east-1.api.aws', 'bedrock-runtime.us-east-1.amazonaws.com'],
+    vars: { AWS_REGION: 'us-east-1' },
+  })
+  assert.deepEqual(hosts({ AWS_REGION: 'eu-west-1' }), {
+    hosts: ['bedrock-mantle.eu-west-1.api.aws', 'bedrock-runtime.eu-west-1.amazonaws.com'],
+    vars: { AWS_REGION: 'eu-west-1' },
+  })
+  for (const region of ['evil.example.com', 'us-east-1.evil', 'US-EAST-1', 'eu-west-1/x']) {
+    assert.match(
+      String(hosts({ AWS_REGION: region })),
+      /^AWS_REGION is ".*", which isn't one Amazon Bedrock \(amazon-bedrock\) takes: OpenCode builds its API's host from it/,
+      region,
+    )
+  }
+  // No other provider takes a variable.
+  assert.deepEqual(
+    OPENCODE_PROVIDERS.filter((p) => p.vars).map((p) => p.id),
+    ['amazon-bedrock'],
+  )
+})
+
+test('Bedrock brokers its API key as a Bearer token, and its URL names the served model', () => {
+  const bedrock = openCodeProvider('amazon-bedrock/m', { AWS_REGION: 'eu-south-2' })
+  assert.equal(bedrock.env, 'AWS_BEARER_TOKEN_BEDROCK')
+  assert.deepEqual(
+    providerTransformations(bedrock, { key: 'real', placeholder: 'ph' }).map((t) => [
+      t.matchUrl,
+      t.matchHeaders,
+      t.transformHeaders,
+    ]),
+    [
+      [
+        'https://bedrock-mantle.eu-south-2.api.aws',
+        { authorization: 'Bearer ph' },
+        { authorization: 'Bearer real' },
+      ],
+      [
+        'https://bedrock-runtime.eu-south-2.amazonaws.com',
+        { authorization: 'Bearer ph' },
+        { authorization: 'Bearer real' },
+      ],
+    ],
+  )
+  const runtime = { method: 'POST', host: 'bedrock-runtime.eu-south-2.amazonaws.com' }
+  // As the probe saw OpenCode 2.0.18 send it; an inference profile's `:0` is encoded.
+  assert.equal(
+    providerServedModel(bedrock, {
+      ...runtime,
+      path: '/model/global.anthropic.claude-opus-5-5/converse-stream',
+    }),
+    'global.anthropic.claude-opus-5-5',
+  )
+  assert.equal(
+    providerServedModel(bedrock, {
+      ...runtime,
+      path: '/model/anthropic.claude-v2%3A1/converse-stream',
+    }),
+    'anthropic.claude-v2:1',
+  )
+  assert.equal(
+    providerServedModel(bedrock, {
+      method: 'POST',
+      host: 'bedrock-mantle.eu-south-2.api.aws',
+      path: '/v1/chat/completions',
+      responseModel: 'openai.gpt-oss-120b',
+    }),
+    'openai.gpt-oss-120b',
+  )
+  assert.equal(
+    providerServedModel(bedrock, {
+      ...runtime,
+      host: 'bedrock-runtime.us-east-1.amazonaws.com',
+      path: '/model/m/converse-stream',
+    }),
+    undefined,
+    "another region's host",
+  )
 })

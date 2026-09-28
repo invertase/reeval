@@ -62,8 +62,9 @@ export default defineConfig({
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
   `gemini-3.8-flash-medium`), `opencode({ model })` (OpenCode 2 on any brokerable provider: the model is
   `<provider>/<model>`, e.g. `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5`,
-  `openrouter/…`, and needs only that provider's key, e.g. `ANTHROPIC_API_KEY`; Bedrock, Vertex,
-  Azure, Copilot and local providers are refused at plan time; no `mcp.sse`; web search via Exa,
+  `openrouter/…`, and needs only that provider's key, e.g. `ANTHROPIC_API_KEY`; `amazon-bedrock/…`
+  takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local
+  providers are refused at plan time; no `mcp.sse`; web search via Exa,
   whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
   and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
   `gemini-3.8-flash`; pi has no MCP),
