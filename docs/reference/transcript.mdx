@@ -18,10 +18,10 @@ That's a real Cursor attempt, trimmed. The same events are in `t.send()`'s `turn
 
 ## Where it is
 
-Next to the attempt's other files (`diff.patch`, `judge-input.json`, …), in the run's folder under `.es/runs/`, and in the history folder when the run is recorded. The folders are slugs of the eval id and cell key:
+Next to the attempt's other files (`diff.patch`, `judge-input.json`, …), in the run's folder under `.reeval/runs/`, and in the history folder when the run is recorded. The folders are slugs of the eval id and cell key:
 
 ```text
-.es/runs/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
+.reeval/runs/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
 evals/.history/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
 ```
 
@@ -79,7 +79,7 @@ evals/.history/<runId>/<eval slug>/<cell slug>/<n>/transcript.jsonl
   A fetched URL, and whether the fetch succeeded.
 </Property>
 
-Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. ES's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
+Cursor's SDK leaves web search and fetch calls out of its stream: Cursor's backend runs them on its own servers. reeval's adapter recovers them after each turn from the agent's stored conversation, with the backend's own times, so they're normal `web-search` and `web-fetch` events.
 
 When it can't (the store is unreadable, or the turn ended before the result), the turn has `unreported: ['web-search', 'web-fetch']`, the record's `activity.webSearches` and `webFetches` are `null` rather than 0, and the web matchers refuse the turn. Cursor reports file edits relative to the workspace, with line counts.
 
@@ -117,19 +117,19 @@ Token usage isn't in `transcript.jsonl`. Where the harness reports it (`cursor()
   The model the harness says served the turn. Cursor's includes its parameters, such as `composer-2.5[fast=true]`. It can differ from the model you asked for.
 </Property>
 
-Each attempt sums its turns' `usage`, and the run's `cost` has the total; ES prices no models, so there's no USD. `es query`'s `attempts` table has the same numbers as `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`, and the studio shows them for each run and attempt.
+Each attempt sums its turns' `usage`, and the run's `cost` has the total; reeval prices no models, so there's no USD. `reeval query`'s `attempts` table has the same numbers as `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens` and `served_model`, and the studio shows them for each run and attempt.
 
 ## Large outputs
 
 A tool output over 128 KB keeps its first 96 KB and last 16 KB, with a marker between them giving the characters left out and the whole output's sha256:
 
 ```text
-[es: truncated <n> of <total> characters, sha256 <hash>]
+[reeval: truncated <n> of <total> characters, sha256 <hash>]
 ```
 
 ## Raw transcripts
 
-With `ES_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how ES reads a harness, and it can be large.
+With `REEVAL_RAW_TRANSCRIPT=1`, each attempt also writes `transcript.raw.jsonl`: every stream part the harness adapter sent, unnormalised, one per line with its `turn`. It's for debugging how reeval reads a harness, and it can be large.
 
 ## Related
 

@@ -5,7 +5,7 @@ description: Which cells can fail a run, how a cell passes, and how sure a lift 
 
 A `compare` eval answers "does this environment help?". Two settings decide what fails the run, and lift, with its interval, says how big the difference is and whether the attempts can tell.
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 group('house greeting', {
   compare: { variants: [withHouseGreeting], minLift: 0 },
   gate: { passRate: 0.8 },
@@ -22,7 +22,7 @@ Run under the fake agent, which writes the house greeting only when it has the s
 
 ```text
 Summary
- evals/skill.es.ts
+ evals/skill.eval.ts
    house greeting
      ✓ greets in the house style     5/10 · 100% gated  10 attempts
          fake/-/fake                    control    0/5    0%   not gated
@@ -55,7 +55,7 @@ Infra errors and skipped attempts don't count either way. `'all'` gets harder to
 
 ## Lift and its interval
 
-Lift is the variant's pass rate minus the control's on the same harness, in points. ES stores it on the variant cell with a 95% interval on the difference, computed with Newcombe's method from each side's Wilson score interval.
+Lift is the variant's pass rate minus the control's on the same harness, in points. reeval stores it on the variant cell with a 95% interval on the difference, computed with Newcombe's method from each side's Wilson score interval.
 
 ```mermaid
 flowchart LR
@@ -68,7 +68,7 @@ When the interval spans 0, the summary adds `within noise`: at this many attempt
 
 ## Why two runs is usually noise
 
-The interval is wide when attempts are few. These are ES's own intervals for common results:
+The interval is wide when attempts are few. These are reeval's own intervals for common results:
 
 | Variant | Control | Lift | 95% interval | Within noise |
 |---|---|---|---|---|
@@ -81,19 +81,19 @@ The interval is wide when attempts are few. These are ES's own intervals for com
 | 10/10 | 5/10 | +50 | +12…+76 | no |
 | 20/20 | 10/20 | +50 | +24…+70 | no |
 
-At two runs per cell only an all-or-nothing difference clears noise. ES's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
+At two runs per cell only an all-or-nothing difference clears noise. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
 
 ```text
      ✓ fixes a broken config and explains it      5/6 · 100% gated  6 attempts
-         cursor:composer-2.5/broken-project/es-tarball  control    1/2   50%   not gated
-         cursor:composer-2.5/es-weak/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
-         cursor:composer-2.5/es-good/es-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/broken-project/reeval-tarball  control    1/2   50%   not gated
+         cursor:composer-2.5/reeval-weak/reeval-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
+         cursor:composer-2.5/reeval-good/reeval-tarball         variant    2/2  100%   lift +50 pts (95% −27…+91, 2/2 vs 1/2), within noise   gate passRate 0.5
 ```
 
 One control attempt failed, so both skills show +50 pts, and neither is distinguishable from +0. The good skill's real effect showed up elsewhere: a median of 10 tool calls against the control's 40. Pass-rate lift only measures pass rate.
 
 <Info>
-  Use `es query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
+  Use `reeval query lift` to see every variant cell's lift across runs, with `lo`, `hi` and `within_noise` columns.
 </Info>
 
 ## Effort next to lift
@@ -110,7 +110,7 @@ Pass rate can't tell a skill that makes the agent four times cheaper from no ski
            effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
 ```
 
-The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time gets its own verdict in `es query effort`). Effort never fails a run.
+The medians cover passes and fails; infra errors and skips don't count. The verdict comes from an exact, two-sided Mann–Whitney rank test on tool calls, the steadier measure (agent time gets its own verdict in `reeval query effort`). Effort never fails a run.
 
 | Verdict | Printed | When |
 |---|---|---|
@@ -130,7 +130,7 @@ The smallest p a rank test can give depends only on the attempt counts, so a ver
 
 ## Effects across runs
 
-`es query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Each row has an evidence tier:
+`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Each row has an evidence tier:
 
 | `tier` | The contrast |
 |---|---|
@@ -143,13 +143,13 @@ Pooling is how 2 runs at a time add up to a verdict. Over the same history, each
 
 ```text
 eval_key                                                    factor       tier        points  lo      hi     pass_verdict  effort_verdict
-evals/skill.es.ts › house greeting › greets in the house…   environment  controlled  1       0.07    1      effect        insufficient
+evals/skill.eval.ts › house greeting › greets in the house…   environment  controlled  1       0.07    1      effect        insufficient
 …
-evals/skill.es.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
+evals/skill.eval.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
 ·                                                           harness      pooled      0       -0.436  0.436  noise         insufficient
 ```
 
-`es analyze` reads these facts and explains a run in plain words; see [es analyze](/reference/cli/analyze).
+`reeval analyze` reads these facts and explains a run in plain words; see [reeval analyze](/reference/cli/analyze).
 
 ## Gate on the lower bound with minLift
 
@@ -159,7 +159,7 @@ evals/skill.es.ts › house greeting › greets in the house…   environment  p
          fake/with-house-greeting/fake  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2) (minLift 50) ✗   gate passRate 0.8
 …
 Lift below minLift (1)
- ✗ evals/skill.es.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50
+ ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +100 pts (95% +7…+100, 2/2 vs 0/2): its lower bound is below minLift 50
 ```
 
 A variant below its `minLift` fails the run with exit 1. To pass it, add runs until the interval narrows, not until the point estimate looks good.
@@ -168,7 +168,7 @@ A variant below its `minLift` fails the run with exit 1. To pass it, add runs un
 
 The run page shows each cell's role, pass rate and lift with its interval.
 
-<Image src="/assets/studio/run-cells-lift.png" alt="ES studio run page with a cells table: the control at 0%, the variant at 100% and its lift" width={800} />
+<Image src="/assets/studio/run-cells-lift.png" alt="reeval studio run page with a cells table: the control at 0%, the variant at 100% and its lift" width={800} />
 
 ## Next
 

@@ -14,7 +14,7 @@ export const withHouseGreeting = defineEnvironment(
 )
 ```
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
 import { withHouseGreeting } from './environments.ts'
 
@@ -57,21 +57,21 @@ description: The house style for greetings in this organisation. Use when writin
 ## Run it
 
 ```bash
-npx es run skill --runs 2 --log-order grouped
+npx reeval run skill --runs 2 --log-order grouped
 ```
 
 ```text
 plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
 …
-[greets#1 control] ○ evals/skill.es.ts › house greeting › greets in the house style  24s  (not gated)
+[greets#1 control] ○ evals/skill.eval.ts › house greeting › greets in the house style  24s  (not gated)
 [greets#1 control]  +0:00 sandbox ready 2s
 [greets#1 control]  +0:01 turn 1 done 21s · 10 tool calls, 2 file edits
 [greets#1 control]  +0:23 $ node -e "import('./greet.js').then((m) => {…  exit 1 75ms
 [greets#1 control]  Error: expected command to succeed, exit code 1
 …
 Summary
- evals/skill.es.ts
+ evals/skill.eval.ts
    house greeting
      ✓ greets in the house style      2/4 · 100% gated  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
@@ -138,7 +138,7 @@ Lift is the variant's pass rate minus the control's, on the same harness. The ra
 
 The studio shows the same cells, roles, lift and effort for every run (here with two agents):
 
-<Image src="/assets/studio/run-cells-lift.png" alt="ES studio run page with a cells table: each agent's control at 0% and its variant at 100%, with +100 pts lift and fewer tool calls" width={800} />
+<Image src="/assets/studio/run-cells-lift.png" alt="reeval studio run page with a cells table: each agent's control at 0% and its variant at 100%, with +100 pts lift and fewer tool calls" width={800} />
 
 ## Read the effort
 

@@ -1,5 +1,3 @@
-import type { Outcome, StackChange } from 'evalsuite/view'
-import { formatPercent } from 'evalsuite/view'
 import {
   CircleAlert,
   CircleCheck,
@@ -9,6 +7,8 @@ import {
   CircleX,
   GitCompareArrows,
 } from 'lucide-react'
+import type { Outcome, StackChange } from 'reeval/view'
+import { formatPercent } from 'reeval/view'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -40,7 +40,7 @@ const OUTCOME = {
   },
 } satisfies Record<Outcome, unknown>
 
-/** An outcome's look; one from a newer ES that this studio doesn't know shows as its name. */
+/** An outcome's look; one from a newer reeval that this studio doesn't know shows as its name. */
 const outcomeStyle = (outcome: Outcome) =>
   OUTCOME[outcome] ?? {
     label: String(outcome),

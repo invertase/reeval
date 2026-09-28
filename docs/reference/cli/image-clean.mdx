@@ -1,46 +1,46 @@
 ---
-title: es image build, es clean
+title: reeval image build, reeval clean
 description: Build every sandbox image a run needs, and remove local debug data.
 ---
 
-`es image build` builds the Docker images your evals need before a run. `es clean` removes the local debug data runs leave in `.es/debug`.
+`reeval image build` builds the Docker images your evals need before a run. `reeval clean` removes the local debug data runs leave in `.reeval/debug`.
 
 ```bash
-npx es image build --dry-run
-npx es clean --keep 3
+npx reeval image build --dry-run
+npx reeval clean --keep 3
 ```
 
-## es image build
+## reeval image build
 
 [//]: # (generated:cli-help:image-build)
 
 ```text
-es image build [filter...]
-                          Build every image the evals' Docker sandboxes need, per harness: ES's
-                          image (bakes in its CLI), from and dockerfile images, install layers.
-                          Builds what's missing or stale (a from tag that moved upstream), three
-                          at a time, and reports every failure; exit 3 if any image failed
-  --force                 Rebuild every image, pulling each base again
-  --dry-run               List the images, how each is made and how each stands, building
-                          nothing (a from tag is looked up in its registry, not pulled)
+reeval image build [filter...]
+                              Build every image the evals' Docker sandboxes need, per harness: reeval's
+                              image (bakes in its CLI), from and dockerfile images, install layers.
+                              Builds what's missing or stale (a from tag that moved upstream), three
+                              at a time, and reports every failure; exit 3 if any image failed
+  --force                     Rebuild every image, pulling each base again
+  --dry-run                   List the images, how each is made and how each stands, building
+                              nothing (a from tag is looked up in its registry, not pulled)
 ```
 
 [//]: # (/generated:cli-help:image-build)
 
-It collects the evals like `es run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and prepares every image, three at a time, the way `es run` does before a run:
+It collects the evals like `reeval run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and prepares every image, three at a time, the way `reeval run` does before a run:
 
-1. ES's image for each harness the plan uses, `evalsuite-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.0`), which bakes that agent's CLI onto `evalsuite-sandbox-base:latest`: built when it's missing or ES's base changed.
+1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.0`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
 2. Each `docker({ from })` image: built when missing, and rebuilt when its tag has moved upstream since.
 3. Each `docker({ dockerfile })` image and `install` layer: built when its content hash (or its base) is new.
 
 `--force` rebuilds all of them and pulls each base again. It keeps going past a failure, then prints a line per image and exits 3 if any failed (2 if the only failures are a missing `docker({ image })`):
 
 ```text
-✓ docker: evalsuite-sandbox:cursor-0.1.0 e04d443bc8e2
+✓ docker: reeval-sandbox:cursor-0.1.0 e04d443bc8e2
 ✗ docker:bad.Dockerfile (1 eval): Building evals/bad.Dockerfile failed: a RUN step exited 42
     | broken
-  (full log: .es/cache/images/evalsuite-dockerfile-bad-dockerfile-6d9d1a5c9d335eb6.log)
-✓ docker:debian:bookworm-slim: evalsuite-sandbox:cursor-0.1.0-debian-bookworm-slim-12f2bc40 41f80062675e
+  (full log: .reeval/cache/images/reeval-dockerfile-bad-dockerfile-6d9d1a5c9d335eb6.log)
+✓ docker:debian:bookworm-slim: reeval-sandbox:cursor-0.1.0-debian-bookworm-slim-12f2bc40 41f80062675e
 …
 2 of 4 images failed to build
 ```
@@ -50,33 +50,33 @@ A real `--dry-run` in `examples/hello`, where `✓` is ready, `+` to build, `~` 
 ```text
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
-  ✓ base  evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  ✓ base  reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
 docker + install · 1 eval
-  ✓ base               evalsuite-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
-  + install 1 command  evalsuite-install:<base id + commands>  (to build: not built yet)
+  ✓ base               reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
+  + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
-  + from python:3.12-slim  evalsuite-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
+  + from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (to build: on python:3.12-slim (f77ac9e44ae9))
 …
 ```
 
-Without a config file it builds ES's Cursor image only. Rebuild after upgrading ES.
+Without a config file it builds reeval's Cursor image only. Rebuild after upgrading reeval.
 
-## es clean
+## reeval clean
 
 [//]: # (generated:cli-help:clean)
 
 ```text
-es clean                  Remove local debug data (.es/debug); --keep <n> keeps the newest n runs
-  --images                Also remove the Docker images ES built that nothing tags any more,
-                          and the intermediate -base tags of from builds
+reeval clean                  Remove local debug data (.reeval/debug); --keep <n> keeps the newest n runs
+  --images                    Also remove the Docker images reeval built that nothing tags any more,
+                              and the intermediate -base tags of from builds
 ```
 
 [//]: # (/generated:cli-help:clean)
 
-`es run` already keeps only the newest `debug.keep` runs' debug data (default 20). `es clean` removes all of it, or all but the newest `--keep <n>` runs. It never touches `.es/runs/` or the history folder.
+`reeval run` already keeps only the newest `debug.keep` runs' debug data (default 20). `reeval clean` removes all of it, or all but the newest `--keep <n>` runs. It never touches `.reeval/runs/` or the history folder.
 
 ```text
-Removed debug data for 4 runs (106.9 KB) from .es/debug
+Removed debug data for 4 runs (106.9 KB) from .reeval/debug
 ```
 
 ## Related

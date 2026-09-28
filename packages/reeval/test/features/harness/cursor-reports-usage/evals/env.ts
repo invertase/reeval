@@ -1,0 +1,5 @@
+import { defineEnvironment } from 'reeval'
+
+export const plain = defineEnvironment('plain', {})
+
+export const prompt = "Don't run any tools. Reply with the word ok."

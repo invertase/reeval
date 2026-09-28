@@ -24,7 +24,7 @@ description: The house style for greetings in this organisation. Use when
 - Format: `Ahoy, <name>!` (comma after Ahoy, exclamation mark at the end).
 ```
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 import { defineEnvironment, evaluate, expect, group } from '{{ pkg }}'
 
 const withHouseGreeting = defineEnvironment(
@@ -59,7 +59,7 @@ group(
 )
 ```
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 import { docker } from '{{ pkg }}/sandbox'
@@ -82,21 +82,21 @@ export default defineConfig({
 ## Run it
 
 ```bash
-npx es run --dry-run
-npx es run skill
+npx reeval run --dry-run
+npx reeval run skill
 ```
 
 ```text
 plan  1 eval · 2 cells · 6 attempts · ~18m 00s serial (~4m 30s at concurrency 4)
 eval                                                            harnesses  variants  runs  attempts  notes
-evals/skill.es.ts › house greeting › greets in the house style  1          1         3     6
+evals/skill.eval.ts › house greeting › greets in the house style  1          1         3     6
 ```
 
 This is a real Cursor run of the same eval in `examples/hello` (`--runs 2`, no `minLift`):
 
 ```text
 Summary
- evals/skill.es.ts
+ evals/skill.eval.ts
    house greeting
      ✓ greets in the house style      2/4 · 100% gated  4 attempts
          cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
@@ -134,12 +134,12 @@ A skill can help without changing the pass rate: the agent gets there with less 
 `×0.38` is the variant's median divided by the control's. The verdict at the end comes from a rank test on tool calls: `fewer tool calls` or `more tool calls` (with its p) when it's significant, `within noise` when it isn't, and `too few attempts to test` when the counts can't reach significance at all. Two or three attempts per side never can; four per side can.
 
 ```bash
-npx es run skill --runs 4
-npx es query effort
-npx es analyze
+npx reeval run skill --runs 4
+npx reeval query effort
+npx reeval analyze
 ```
 
-`es query effort` lists the same numbers for every recorded run. [`es analyze`](/reference/cli/analyze) explains a run in plain words, lift and effort included, with each claim tied to a fact from the run.
+`reeval query effort` lists the same numbers for every recorded run. [`reeval analyze`](/reference/cli/analyze) explains a run in plain words, lift and effort included, with each claim tied to a fact from the run.
 
 ## When the skill doesn't help
 
@@ -152,7 +152,7 @@ The same eval, with an agent that already writes `Ahoy` without the skill:
            effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.90): too few attempts to test
 
 Lift below minLift (1)
- ✗ evals/skill.es.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise: its lower bound is below minLift 0
+ ✗ evals/skill.eval.ts › house greeting › greets in the house style  fake/with-house-greeting/fake lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise: its lower bound is below minLift 0
 ```
 
 Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidence that the skill is no worse, and three attempts per side can't give it.
@@ -167,7 +167,7 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 - **Skill from git or npm:** `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan.
 - **A shared starting point:** set `environment: base` on the group; each variant runs as `base.extend(variant)`.
 - **Report only:** drop `minLift` and set `compare: { variants, gate: 'none' }` to see lift without failing anything.
-- **Across runs:** `es query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
+- **Across runs:** `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
 
 ## Next
 

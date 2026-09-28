@@ -13,7 +13,7 @@ import {
 import { type DerivedTokens, tokeniseResponse, tokenPlaceholder } from '../src/egress/tokens.ts'
 
 const SECRET = 'real-value-0123456789'
-const HOLDER = `es_secret_${'Z'.repeat(32)}`
+const HOLDER = `reeval_secret_${'Z'.repeat(32)}`
 const sub = (over: Partial<Substitution> = {}): Substitution => ({
   name: 'KEY',
   placeholder: HOLDER,
@@ -156,9 +156,9 @@ describe('derived tokens', () => {
   test('a JWT keeps its header and claims; anything else gets a plain placeholder', () => {
     assert.match(
       tokenPlaceholder('aGVhZA.Y2xhaW1z.c2ln'),
-      /^aGVhZA\.Y2xhaW1z\.es_secret_[0-9A-Za-z]{32}$/,
+      /^aGVhZA\.Y2xhaW1z\.reeval_secret_[0-9A-Za-z]{32}$/,
     )
-    assert.match(tokenPlaceholder('opaque-token'), /^es_secret_[0-9A-Za-z]{32}$/)
+    assert.match(tokenPlaceholder('opaque-token'), /^reeval_secret_[0-9A-Za-z]{32}$/)
     assert.notEqual(tokenPlaceholder('a.b.c'), tokenPlaceholder('a.b.c'), 'fresh each time')
   })
 

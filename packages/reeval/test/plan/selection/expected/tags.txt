@@ -1,0 +1,5 @@
+no profile · 3 evals · 3 cells · 3 attempts
+evals/tags.eval.ts › slow things › big [slow]  fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › case 1 [slow]             fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › case 2 [slow]             fake/-/fake  control  gated  ×1
+excluded: —

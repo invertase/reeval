@@ -1,0 +1,733 @@
+// Replays real agent streams, captured from the contract suite (test/replay/<harness>/, refreshed
+// with REEVAL_UPDATE_CAPTURES=1 on a real run), through today's code, key-free: reeval's normaliser must
+// still find each behaviour's signals, each adapter (Antigravity, the Cursor SDK) must still translate the native events
+// to the same tool calls, text and token counts, and every native event must match the committed
+// format (test/replay/formats/). Claude Code's adapter translates inside its bridge, so its
+// captured SDK messages (test/fixtures/claude-code-bridge/) replay through the bridge reeval ships.
+// Each check has a twin that proves it can fail.
+import assert from 'node:assert/strict'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, test } from 'node:test'
+import type { HarnessV1StreamPart } from '@ai-sdk/harness'
+import { AntigravityStreamTranslator } from '@reeval/harness-antigravity'
+import { CodexStreamTranslator } from '@reeval/harness-codex'
+import { CursorSdkStreamTranslator } from '@reeval/harness-cursor-sdk'
+import { GooseStreamTranslator } from '@reeval/harness-goose'
+import { OpenCodeStreamTranslator } from '@reeval/harness-opencode'
+import { PiStreamTranslator } from '@reeval/harness-pi'
+import { normaliseStream } from '../src/harness/transcript.ts'
+import type { TranscriptEvent } from '../src/types.ts'
+import { replayBridge } from './support/claude-code-bridge.ts'
+import { testDir } from './support/fixture.ts'
+import { knownSignatures, nativeEvents, signatures } from './support/stream-formats.ts'
+
+type Line = { turn: number; ms: number; part: { type: string; [k: string]: unknown } }
+const root = join(testDir, 'replay')
+const read = (harness: string, name: string) => readFileSync(join(root, harness, name), 'utf8')
+const parse = (text: string): Line[] =>
+  text
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as Line)
+const events = (lines: Line[]) =>
+  normaliseStream(
+    lines.map((l) => ({ ms: l.ms, part: l.part as never })),
+    0,
+  )
+
+const text = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v ?? ''))
+const tools = (es: TranscriptEvent[]) => es.flatMap((e) => (e.type === 'tool' ? [e] : []))
+const edits = (es: TranscriptEvent[]) => es.flatMap((e) => (e.type === 'file-edit' ? [e] : []))
+
+/** What each captured behaviour's stream must still say once normalised: robust signals only. */
+const signals: Record<string, (es: TranscriptEvent[]) => void> = {
+  skill(es) {
+    // It read the file, or loaded it with its skill tool (OpenCode's `skill`, Goose's
+    // `load_skill`).
+    assert.ok(
+      tools(es).some(
+        (t) =>
+          text(t.input).includes('contract-probe/SKILL.md') ||
+          ((t.tool === 'skill' || t.tool === 'load_skill') &&
+            text(t.input).includes('"contract-probe"')),
+      ),
+      'the agent read the skill',
+    )
+    assert.ok(edits(es).some((e) => e.path === 'skill-proof.txt'))
+  },
+  mcp(es) {
+    assert.ok(tools(es).some((t) => t.tool === 'mcp__stamp__house_stamp'))
+  },
+  'edit-and-run'(es) {
+    assert.ok(edits(es).some((e) => e.path === 'notes.txt' && e.kind === 'modify'))
+    assert.ok(tools(es).some((t) => text(t.output).includes('contract-42')))
+  },
+  egress(es) {
+    assert.ok(tools(es).some((t) => text(t.input).includes('https://example.com/')))
+  },
+}
+
+const NO_MCP = new Set(['pi'])
+
+const harnesses = existsSync(root)
+  ? readdirSync(root, { withFileTypes: true })
+      .filter((d) => d.isDirectory() && d.name !== 'formats')
+      .map((d) => d.name)
+  : []
+
+test('there are captures for Cursor, Antigravity, OpenCode, Goose, pi and Codex', () => {
+  assert.deepEqual(harnesses.sort(), ['antigravity', 'codex', 'cursor', 'goose', 'opencode', 'pi'])
+})
+
+for (const harness of harnesses) {
+  describe(`replay: ${harness}`, () => {
+    const files = readdirSync(join(root, harness)).filter((f) => f.endsWith('.raw.jsonl'))
+    test('one capture per behaviour', () => {
+      // A harness with no MCP client has no MCP capture: its MCP attempts are refused.
+      const behaviours = Object.keys(signals).filter((b) => b !== 'mcp' || !NO_MCP.has(harness))
+      assert.deepEqual(files.map((f) => f.replace('.raw.jsonl', '')).sort(), behaviours.sort())
+    })
+    for (const file of files) {
+      const name = file.replace('.raw.jsonl', '')
+      test(`${name}: reeval's normaliser still finds its signals`, () => {
+        const check = signals[name]
+        assert.ok(check, `no signals for ${name}`)
+        check(events(parse(read(harness, file))))
+      })
+    }
+    test('twin: a capture checked for another behaviour fails', () => {
+      assert.throws(() => signals.egress?.(events(parse(read(harness, 'skill.raw.jsonl')))))
+    })
+  })
+}
+
+/** A native tool name in each harness's edit-and-run capture, and a name its adapter doesn't know. */
+const renamedTool: Record<string, [string, string]> = {
+  antigravity: ['"run_command"', '"run_cmd_v2"'],
+  cursor: ['"name":"shell"', '"name":"shell_v2"'],
+  pi: ['"name":"bash"', '"name":"bash_v2"'],
+  codex: ['"type":"command_execution"', '"type":"shell_call"'],
+}
+
+/** Each harness's translator, fresh for one turn: the native events go back through it. */
+const translators: Record<string, () => { push(line: string): HarnessV1StreamPart[] }> = {
+  antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
+  cursor: () => new CursorSdkStreamTranslator({ workDir: '/es/workspace' }),
+  pi: () => new PiStreamTranslator(),
+  codex: () => new CodexStreamTranslator({ workDir: '/es/workspace' }),
+}
+
+for (const harness of Object.keys(translators))
+  describe(`replay: the ${harness} adapter, from the agent’s own events`, () => {
+    /** The native events through today's translator, as its parts (raw ones dropped). */
+    const retranslate = (lines: Line[]) => {
+      const t = (translators[harness] as () => { push(line: string): HarnessV1StreamPart[] })()
+      const parts: HarnessV1StreamPart[] = []
+      for (const e of nativeEvents(lines.map((l) => JSON.stringify(l)).join('\n')))
+        parts.push(...t.push(JSON.stringify(e)))
+      return parts.filter((p) => p.type !== 'raw')
+    }
+    /** What must match between the captured parts and today's: tool calls, text and token totals. */
+    const essence = (parts: Array<{ type: string; [k: string]: unknown }>) => ({
+      calls: parts
+        .filter((p) => p.type === 'tool-call')
+        .map((p) => [
+          p.toolName,
+          // The harness layer makes paths workspace-relative after the adapter.
+          JSON.parse(text(p.input).replaceAll('/es/workspace/', '')),
+        ]),
+      text: parts
+        .filter((p) => p.type === 'text-delta')
+        .map((p) => p.delta ?? p.text)
+        .join(''),
+      // Captured parts carry the AI SDK's numbers; the translator's, `{ total }`.
+      tokens: (() => {
+        const u = parts.find((p) => p.type === 'finish')?.totalUsage as
+          | Record<string, number | { total?: number } | undefined>
+          | undefined
+        const n = (v: number | { total?: number } | undefined) =>
+          typeof v === 'number' ? v : v?.total
+        return [n(u?.inputTokens), n(u?.outputTokens)]
+      })(),
+    })
+
+    for (const file of readdirSync(join(root, harness)).filter((f) => f.endsWith('.jsonl'))) {
+      test(`${file}: the same tool calls, text and tokens as when it was captured`, () => {
+        const lines = parse(read(harness, file))
+        const captured = essence(lines.map((l) => l.part))
+        assert.ok(
+          captured.calls.length > 0 && captured.tokens[0],
+          'the capture has calls and tokens',
+        )
+        assert.deepEqual(essence(retranslate(lines) as never), captured)
+      })
+    }
+
+    test('twin: a changed event changes the translation', () => {
+      const [from, to] = renamedTool[harness] as [string, string]
+      const base = read(harness, 'edit-and-run.raw.jsonl')
+      assert.ok(base.includes(from), `${from} is in the capture`)
+      const lines = parse(base.replaceAll(from, to))
+      const captured = essence(parse(base).map((l) => l.part))
+      assert.notDeepEqual(essence(retranslate(lines) as never).calls, captured.calls)
+    })
+  })
+
+// OpenCode's ACP events become parts inside @ai-sdk/harness-acp's bridge, so only the adapter's
+// own step replays: the names it gives calls the bridge couldn't name, and the output text it
+// takes from the ACP content.
+describe('replay: the OpenCode adapter, from the captured parts', () => {
+  type Part = { type: string; [k: string]: unknown }
+  const record = (v: unknown) =>
+    typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+  /**
+   * The captured parts as the bridge sends them: calls it couldn't name are `acp_tool_<id>`, and
+   * a result is its `rawOutput` as `result` (no `output` text).
+   */
+  const fromBridge = (lines: Line[], named: Set<string>): Part[] =>
+    lines.map((l) => {
+      const part = l.part
+      if (part.type !== 'tool-call' && part.type !== 'tool-result') return part
+      const renamed = named.has(String(part.toolName))
+        ? { ...part, toolName: `acp_tool_${part.toolCallId}` }
+        : part
+      if (renamed.type === 'tool-call') return { ...renamed, input: JSON.stringify(renamed.input) }
+      const { output, ...rest } = renamed
+      const { output: _text, ...raw } = record(output)
+      return { ...rest, result: raw }
+    })
+  const replay = (lines: Line[], named: string[], mcpServers: string[] = []) => {
+    const t = new OpenCodeStreamTranslator({ mcpServers })
+    return fromBridge(lines, new Set(named)).flatMap((p) => t.push(p))
+  }
+  const names = (parts: Part[]) =>
+    parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+  const resultOf = (parts: Part[], name: string) =>
+    record(parts.find((p) => p.type === 'tool-result' && p.toolName === name)?.result)
+
+  for (const [file, named, mcp, output] of [
+    ['edit-and-run.raw.jsonl', 'bash', [], /contract-42/],
+    ['mcp.raw.jsonl', 'mcp__stamp__house_stamp', ['stamp'], /STAMP-7Q/],
+  ] as const) {
+    test(`${file}: ${named} is named again from OpenCode's first update, with its output`, () => {
+      const lines = parse(read('opencode', file))
+      const captured = names(lines.map((l) => l.part))
+      assert.ok(captured.includes(named), `${named} is in the capture`)
+      const out = replay(lines, [named], [...mcp])
+      assert.deepEqual(names(out), captured)
+      assert.match(String(resultOf(out, named).output), output)
+    })
+  }
+
+  test('twin: without its first update, or the server, a call keeps the generic name', () => {
+    const edit = parse(read('opencode', 'edit-and-run.raw.jsonl')).filter(
+      (l) => !(l.part.type === 'raw' && record(l.part.rawValue).sessionUpdate === 'tool_call'),
+    )
+    const out = names(replay(edit, ['bash']))
+    assert.ok(
+      out.some((n) => String(n).startsWith('acp_tool_')),
+      JSON.stringify(out),
+    )
+    const mcp = names(replay(parse(read('opencode', 'mcp.raw.jsonl')), ['mcp__stamp__house_stamp']))
+    assert.ok(!mcp.includes('mcp__stamp__house_stamp'), JSON.stringify(mcp))
+  })
+
+  // Captured on openai/gpt-5.4-mini, before the adapter named it: GPT models get `patch`.
+  const gptPatch = () =>
+    parse(readFileSync(join(testDir, 'fixtures', 'opencode-gpt-patch.raw.jsonl'), 'utf8'))
+
+  test("GPT's patch tool is an edit, and the files it changed are file edits", () => {
+    const t = new OpenCodeStreamTranslator()
+    const lines = gptPatch().map((l) => ({ ...l, part: t.push(l.part)[0] as Line['part'] }))
+    assert.deepEqual(names(lines.map((l) => l.part)), ['edit'])
+    assert.deepEqual(
+      edits(events(lines)).map((e) => [e.path, e.kind, e.added]),
+      [
+        ['greet.js', 'create', 5],
+        ['greet.test.js', 'create', 8],
+      ],
+    )
+  })
+
+  test('twin: without its first update, the patch call keeps the generic name', () => {
+    const t = new OpenCodeStreamTranslator()
+    const lines = gptPatch()
+      .filter(
+        (l) => !(l.part.type === 'raw' && record(l.part.rawValue).sessionUpdate === 'tool_call'),
+      )
+      .map((l) => ({ ...l, part: t.push(l.part)[0] as Line['part'] }))
+    assert.ok(names(lines.map((l) => l.part)).every((n) => String(n).startsWith('acp_tool_')))
+    assert.deepEqual(edits(events(lines)), [])
+  })
+})
+
+describe('replay: the Goose adapter, from the captured parts', () => {
+  test('mcp.raw.jsonl: the MCP call is named again from its tool_call metadata', () => {
+    const lines = parse(read('goose', 'mcp.raw.jsonl'))
+    const named = 'mcp__stamp__house_stamp'
+    const fromBridge = lines.map((l) =>
+      (l.part.type === 'tool-call' || l.part.type === 'tool-result') && l.part.toolName === named
+        ? { ...l.part, toolName: `acp_tool_${l.part.toolCallId}` }
+        : l.part,
+    )
+    const calls = (parts: Array<{ type: string; [k: string]: unknown }>) =>
+      parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+    const t = new GooseStreamTranslator({ mcpServers: ['stamp'] })
+    assert.deepEqual(calls(fromBridge.map((p) => t.push(p))), [named])
+    const twin = new GooseStreamTranslator()
+    assert.notDeepEqual(calls(fromBridge.map((p) => twin.push(p))), [named])
+  })
+})
+
+/** Changes to each harness's native stream that must each read as a format change. */
+const formatChanges: Record<string, Array<[string, string]>> = {
+  antigravity: [
+    ['"event":"result"', '"event":"final_result"'],
+    ['"step_type":"tool"', '"step_type":"tool_v2"'],
+    ['"text_delta"', '"delta_text"'],
+    ['"run_command"', '"run_cmd_v2"'],
+    ['"state":"DONE"', '"state":"FINISHED"'],
+  ],
+  cursor: [
+    ['"type":"result"', '"type":"final_result"'],
+    ['"type":"tool_call"', '"type":"tool_use"'],
+    ['"call_id"', '"callId"'],
+    ['"status":"completed"', '"status":"done"'],
+  ],
+  pi: [
+    ['"type":"message_end"', '"type":"message_done"'],
+    ['"type":"toolcall_end"', '"type":"tool_call_end"'],
+    ['"stopReason":"toolUse"', '"stopReason":"tool_use"'],
+  ],
+  codex: [
+    ['"type":"turn.completed"', '"type":"turn.done"'],
+    ['"type":"command_execution"', '"type":"shell_call"'],
+    ['"aggregated_output"', '"output"'],
+    ['"status":"completed"', '"status":"done"'],
+    ['"kind":"update"', '"kind":"modify"'],
+  ],
+  goose: [
+    ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
+    ['"stopReason"', '"stop_reason"'],
+    ['"status":"completed"', '"status":"done"'],
+  ],
+  opencode: [
+    ['"sessionUpdate":"tool_call"', '"sessionUpdate":"tool_use"'],
+    ['"stopReason"', '"stop_reason"'],
+    ['"kind":"execute"', '"kind":"shell"'],
+    ['"status":"in_progress"', '"status":"running"'],
+  ],
+}
+
+for (const harness of Object.keys(formatChanges))
+  describe(`replay: ${harness}'s native stream format`, () => {
+    const known = new Set(knownSignatures(harness))
+    test('every captured event matches the committed format', () => {
+      assert.ok(known.size > 0, `test/replay/formats/${harness}.json is empty`)
+      for (const file of readdirSync(join(root, harness))) {
+        const seen = signatures(harness, nativeEvents(read(harness, file)))
+        assert.deepEqual(
+          seen.filter((s) => !known.has(s)),
+          [],
+          file,
+        )
+      }
+    })
+
+    test('twin: a new event kind, step type, key or tool is a format change', () => {
+      const base = read(harness, 'edit-and-run.raw.jsonl')
+      for (const [from, to] of formatChanges[harness] ?? []) {
+        const changed = base.replaceAll(from, to)
+        assert.notEqual(changed, base, `${from} is in the capture`)
+        const unknown = signatures(harness, nativeEvents(changed)).filter((s) => !known.has(s))
+        assert.notDeepEqual(unknown, [], `${from} → ${to} went unnoticed`)
+      }
+    })
+  })
+
+/**
+ * Values ACP defines that a contract run shows only when the model does something: a tool call
+ * that fails (a missing file, a bad edit), a turn cut short. Each is the same format, so a run
+ * that happens to show one must pass.
+ */
+const acpOutcomes: Array<[RegExp, string]> = [
+  [/"status":"completed"/g, '"status":"failed"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"max_tokens"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"max_turn_requests"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"refusal"'],
+  [/"stopReason":"end_turn"/g, '"stopReason":"cancelled"'],
+]
+/** Goose sends no `kind`, so a tool kind is OpenCode's only. */
+const acpKinds: Array<[RegExp, string]> = [
+  [/"kind":"[a-z_]+"/g, '"kind":"fetch"'],
+  [/"kind":"[a-z_]+"/g, '"kind":"switch_mode"'],
+]
+
+for (const [harness, outcomes] of [
+  ['opencode', [...acpOutcomes, ...acpKinds]],
+  ['goose', acpOutcomes],
+] as const)
+  describe(`replay: ${harness}'s format holds every value ACP defines`, () => {
+    const known = new Set(knownSignatures(harness))
+    for (const [from, to] of outcomes)
+      test(`${to} is not a format change`, () => {
+        const base = read(harness, 'edit-and-run.raw.jsonl')
+        const changed = base.replaceAll(from, to)
+        assert.notEqual(changed, base, `${from} is in the capture`)
+        const unknown = signatures(harness, nativeEvents(changed)).filter((s) => !known.has(s))
+        assert.deepEqual(unknown, [])
+      })
+  })
+
+/** A harness package's own capture of its CLI's native NDJSON (its test/fixtures/). */
+const packageCapture = (pkg: string, name: string) =>
+  readFileSync(new URL(`../../${pkg}/test/fixtures/${name}`, import.meta.url), 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as Record<string, unknown>)
+
+/** The signatures in `events` that the harness's format doesn't know. */
+const unknownSignatures = (harness: string, events: Record<string, unknown>[]) => {
+  const known = new Set(knownSignatures(harness))
+  return signatures(harness, events).filter((s) => !known.has(s))
+}
+
+/** The edit-and-run capture with each replacement made; each must change it. */
+function substituted(harness: string, ...replacements: Array<[RegExp | string, string]>) {
+  const base = read(harness, 'edit-and-run.raw.jsonl')
+  let changed = base
+  for (const [from, to] of replacements) {
+    const next = changed.replaceAll(from, to)
+    assert.notEqual(next, changed, `${from} is in the capture`)
+    changed = next
+  }
+  return nativeEvents(changed)
+}
+
+/** One raw-transcript line carrying `value` as the CLI's native event. */
+const rawLine = (value: unknown) =>
+  JSON.stringify({ turn: 0, ms: 1, part: { type: 'raw', rawValue: value } })
+
+describe("replay: the Cursor runner's format holds every failure it can report", () => {
+  // Real runner output (SDK 1.0.32): a rejected key, a turn reeval cancelled, and web calls the runner
+  // recovered from the stored conversation.
+  for (const file of ['bad-key.ndjson', 'cancelled.ndjson', 'web-recovered.ndjson'])
+    test(`${file} is not a format change`, () => {
+      assert.deepEqual(unknownSignatures('cursor', packageCapture('harness-cursor-sdk', file)), [])
+    })
+
+  for (const status of ['CREATING', 'ERROR', 'CANCELLED', 'EXPIRED'])
+    test(`a status event's ${status} is not a format change`, () => {
+      const events = substituted('cursor', ['"status":"FINISHED"', `"status":"${status}"`])
+      assert.deepEqual(unknownSignatures('cursor', events), [])
+    })
+
+  test("a status event's message, a failed run's error and a truncated tool call are not", () => {
+    const events = substituted(
+      'cursor',
+      ['"status":"FINISHED"', '"status":"ERROR","message":"the run failed"'],
+      [
+        '"status":"finished"',
+        '"status":"error","error":{"message":"overloaded","code":"unavailable"}',
+      ],
+      ['"status":"completed"', '"status":"error","truncated":{"args":true,"result":true}'],
+    )
+    assert.deepEqual(unknownSignatures('cursor', events), [])
+  })
+
+  test("the runner's own failure lines: an error mid-turn and web calls it couldn't recover", () => {
+    const capture = `${read('cursor', 'edit-and-run.raw.jsonl')}${[
+      rawLine({ type: 'unreported', turn: 1, tools: ['webSearch'], message: 'store locked' }),
+      rawLine({
+        type: 'error',
+        turn: 1,
+        message: 'boom',
+        name: 'ConnectError',
+        code: 'unavailable',
+        status: 503,
+      }),
+    ].join('\n')}\n`
+    assert.deepEqual(unknownSignatures('cursor', nativeEvents(capture)), [])
+  })
+
+  test('twin: a status, run status or tool status the SDK does not define is a format change', () => {
+    for (const [from, to] of [
+      ['"status":"FINISHED"', '"status":"PAUSED"'],
+      ['"status":"finished"', '"status":"expired"'],
+      ['"status":"completed"', '"status":"failed"'],
+    ] as const)
+      assert.notDeepEqual(unknownSignatures('cursor', substituted('cursor', [from, to])), [], to)
+  })
+})
+
+describe("replay: Antigravity's format holds every failure agy reports", () => {
+  // agy 1.2.11 against a Gemini endpoint that refused each call (400, 429, 503), or dropped the
+  // stream after the first chunk: one error_message step per try, then an ERROR result.
+  for (const file of [
+    'provider-400.ndjson',
+    'provider-429.ndjson',
+    'provider-503.ndjson',
+    'provider-dropped-mid-stream.ndjson',
+  ])
+    test(`${file} is not a format change`, () => {
+      const events = packageCapture('harness-antigravity', file)
+      assert.ok(events.some((e) => JSON.stringify(e).includes('"step_type":"error_message"')))
+      assert.deepEqual(unknownSignatures('antigravity', events), [])
+    })
+
+  for (const state of ['ERROR', 'CANCELED', 'CANCELLED'])
+    test(`a tool step's ${state} is not a format change`, () => {
+      const events = substituted('antigravity', [
+        /"state":"DONE","step_type":"tool"/g,
+        `"state":"${state}","step_type":"tool"`,
+      ])
+      assert.deepEqual(unknownSignatures('antigravity', events), [])
+    })
+
+  test("a failed tool's error and a failed turn's ERROR result are not", () => {
+    const events = substituted(
+      'antigravity',
+      [
+        /"state":"DONE","step_type":"tool",([^{]*)"tool_info":\{/g,
+        '"state":"ERROR","step_type":"tool",$1"tool_info":{"error":{"type":"tool","message":"denied"},',
+      ],
+      ['"status":"SUCCESS"', '"status":"ERROR","error":"agent executor error: Error 503"'],
+    )
+    assert.deepEqual(unknownSignatures('antigravity', events), [])
+  })
+
+  test("twin: a state or step type agy's failures don't use is a format change", () => {
+    const events = packageCapture('harness-antigravity', 'provider-503.ndjson')
+    const renamed = JSON.parse(
+      JSON.stringify(events).replaceAll(
+        '"step_type":"error_message"',
+        '"step_type":"error_notice"',
+      ),
+    ) as Record<string, unknown>[]
+    assert.notDeepEqual(unknownSignatures('antigravity', renamed), [])
+    const aborted = substituted('antigravity', [
+      /"state":"DONE","step_type":"tool"/g,
+      '"state":"ABORTED","step_type":"tool"',
+    ])
+    assert.notDeepEqual(unknownSignatures('antigravity', aborted), [])
+    const onReply = substituted('antigravity', [
+      /"state":"DONE","step_type":"agent_response"/g,
+      '"state":"ERROR","step_type":"agent_response"',
+    ])
+    assert.notDeepEqual(unknownSignatures('antigravity', onReply), [])
+  })
+})
+
+describe("replay: pi's format holds every stop reason pi defines, and a failed call's error", () => {
+  const known = new Set(knownSignatures('pi'))
+  const unknownIn = (events: Record<string, unknown>[]) =>
+    signatures('pi', events).filter((s) => !known.has(s))
+
+  test('a nightly contract turn whose one model call Gemini refused (503) is not a format change', () => {
+    const capture = readFileSync(
+      join(testDir, 'fixtures', 'pi-provider-unavailable.raw.jsonl'),
+      'utf8',
+    )
+    assert.match(capture, /"stopReason":"error"/)
+    assert.deepEqual(unknownIn(nativeEvents(capture)), [])
+  })
+
+  test("pi 0.87.1's whole failed turn (a bad key): message_start, message_end and turn_end", () => {
+    assert.deepEqual(unknownIn(packageCapture('harness-pi', 'bad-key.ndjson')), [])
+  })
+
+  for (const to of ['length', 'aborted', 'error'])
+    test(`"stopReason":"${to}" is not a format change`, () => {
+      const base = read('pi', 'edit-and-run.raw.jsonl')
+      const changed = base.replaceAll('"stopReason":"stop"', `"stopReason":"${to}"`)
+      assert.notEqual(changed, base)
+      assert.deepEqual(unknownIn(nativeEvents(changed)), [])
+    })
+
+  test("twin: a stop reason pi's one-shot loop never ends a call with is a format change", () => {
+    const base = read('pi', 'edit-and-run.raw.jsonl')
+    const changed = base.replaceAll('"stopReason":"stop"', '"stopReason":"deferred"')
+    assert.notDeepEqual(unknownIn(nativeEvents(changed)), [])
+  })
+})
+
+describe('replay: the Claude Code bridge, from the SDK’s own messages', () => {
+  // A real contract turn (edit and run, claude-haiku-4-5): the host's `start` and every message
+  // the bridge's query() loop saw. Claude Code acknowledges the bridge's streamed user message
+  // with `command_lifecycle` messages before `system/init`, which names the model.
+  const fixture = join(testDir, 'fixtures/claude-code-bridge/edit-and-run')
+  const start = JSON.parse(readFileSync(`${fixture}.start.json`, 'utf8'))
+  const messages = readFileSync(`${fixture}.sdk.jsonl`, 'utf8')
+  const sdk = messages
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => JSON.parse(l) as { type: string; subtype?: string; model?: string })
+  // What the image bakes and the published package ships: the adapter's patched bridge.
+  const shipped = join(testDir, '../dist/bridge/index.mjs')
+  const fix = '!streamStarted && type !== "command_lifecycle"'
+
+  test('the capture starts with command_lifecycle, then system/init names the model', () => {
+    assert.equal(sdk[0]?.type, 'command_lifecycle')
+    const init = sdk.findIndex((m) => m.type === 'system' && m.subtype === 'init')
+    assert.ok(init > 0 && sdk.slice(0, init).every((m) => m.type === 'command_lifecycle'))
+    assert.equal(sdk[init]?.model, 'claude-haiku-4-5')
+  })
+
+  test('the shipped bridge starts the stream with the served model, then the turn', async () => {
+    const parts = await replayBridge({ bridge: shipped, start, messages })
+    assert.deepEqual(parts[0], { type: 'stream-start', modelId: 'claude-haiku-4-5' })
+    assert.equal(parts.filter((p) => p.type === 'stream-start').length, 1)
+    const calls = parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+    assert.deepEqual(calls, ['read', 'edit', 'bash'])
+    assert.equal(parts.at(-1)?.type, 'finish')
+  })
+
+  test('twin: without the patch, command_lifecycle starts the stream and the model is lost', async () => {
+    const source = readFileSync(shipped, 'utf8')
+    assert.ok(source.includes(fix), 'the shipped bridge has the patch')
+    const dir = mkdtempSync(join(tmpdir(), 'reeval-unpatched-'))
+    const unpatched = join(dir, 'bridge.mjs')
+    writeFileSync(unpatched, source.replace(fix, '!streamStarted'))
+    try {
+      const parts = await replayBridge({ bridge: unpatched, start, messages })
+      assert.deepEqual(parts[0], { type: 'stream-start' })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+})
+
+describe('replay: Cursor web calls, streamed and recovered', () => {
+  // A real two-turn capture where SDK 1.0.32 streamed no web calls and the runner recovered them
+  // from Agent.messages.list(); its first turn only (up to the first result line).
+  const capture = readFileSync(
+    join(testDir, '../../harness-cursor-sdk/test/fixtures/web-recovered.ndjson'),
+    'utf8',
+  )
+  const firstTurn = capture.split('\n').filter(Boolean)
+  firstTurn.splice(firstTurn.findIndex((l) => JSON.parse(l).type === 'result') + 1)
+  const recovered = firstTurn.filter((l) => JSON.parse(l).recovered)
+
+  /** The turn as if the SDK streamed the web calls too, before the runner's recovered copies. */
+  const upstreamFixed = (id: (callId: string) => string, keepMarker = true) => {
+    const streamed = recovered.map((l) => {
+      const { recovered: _, ...line } = JSON.parse(l)
+      return JSON.stringify({ ...line, event: { ...line.event, call_id: id(line.event.call_id) } })
+    })
+    const usage = firstTurn.findIndex((l) => JSON.parse(l).event?.type === 'usage')
+    const lines = [...firstTurn.slice(0, usage), ...streamed, ...firstTurn.slice(usage)]
+    return keepMarker
+      ? lines
+      : lines.map((l) => JSON.stringify({ ...JSON.parse(l), recovered: undefined }))
+  }
+  const webCalls = (lines: string[]) => {
+    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    return lines
+      .flatMap((l) => t.push(l))
+      .flatMap((p) => (p.type === 'tool-call' ? [p.toolName] : []))
+      .filter((n) => n === 'webFetch' || n === 'webSearch')
+      .sort()
+  }
+
+  test('today: the stream has none, the recovered calls are each reported once', () => {
+    assert.ok(recovered.length > 0, 'the capture has recovered calls')
+    assert.deepEqual(webCalls(firstTurn), ['webFetch', 'webSearch'])
+  })
+
+  test('upstream fixed, same ids: each web call once, not twice', () => {
+    assert.deepEqual(webCalls(upstreamFixed((id) => id)), ['webFetch', 'webSearch'])
+  })
+
+  test('upstream fixed, other ids: each web call once, matched by tool and target', () => {
+    assert.deepEqual(webCalls(upstreamFixed((id) => `${id}-streamed`)), ['webFetch', 'webSearch'])
+  })
+
+  test('twin: without the recovered marker, the same lines count twice', () => {
+    assert.deepEqual(webCalls(upstreamFixed((id) => `${id}-streamed`, false)), [
+      'webFetch',
+      'webFetch',
+      'webSearch',
+      'webSearch',
+    ])
+  })
+})
+
+describe("replay: Codex's format holds every item, status and failure codex exec defines", () => {
+  // Real codex exec 0.157.1 output: a refused key (each retry an `error`, then `turn.failed`), a
+  // command that exited non-zero (`failed`), a turn with reasoning summaries that added and
+  // deleted a file, and a page the model opened with its web tool.
+  for (const file of [
+    'bad-key.ndjson',
+    'failed-command.ndjson',
+    'plan-and-reasoning.ndjson',
+    'web.ndjson',
+  ])
+    test(`${file} is not a format change`, () => {
+      assert.deepEqual(unknownSignatures('codex', packageCapture('harness-codex', file)), [])
+    })
+
+  for (const status of ['in_progress', 'failed', 'declined'])
+    test(`a command's ${status} is not a format change`, () => {
+      const events = substituted('codex', [
+        /"type":"command_execution",([^}]*)"status":"completed"/g,
+        `"type":"command_execution",$1"status":"${status}"`,
+      ])
+      assert.deepEqual(unknownSignatures('codex', events), [])
+    })
+
+  test('a failed patch, a failed MCP call and every item type Codex defines are not', () => {
+    const item = (type: string, fields: Record<string, unknown>) =>
+      rawLine({ type: 'item.completed', item: { id: 'i', type, ...fields } })
+    const capture = `${read('codex', 'edit-and-run.raw.jsonl')}${[
+      item('file_change', { changes: [{ path: '/x', kind: 'delete' }], status: 'failed' }),
+      item('mcp_tool_call', {
+        server: 's',
+        tool: 't',
+        arguments: {},
+        result: null,
+        error: { message: 'no such tool' },
+        status: 'failed',
+      }),
+      item('reasoning', { text: 'thinking' }),
+      item('todo_list', { items: [{ text: 'a', completed: false }] }),
+      item('web_search', { query: 'q', action: { type: 'search', query: 'q' } }),
+      item('collab_tool_call', {
+        tool: 'spawn_agent',
+        sender_thread_id: 'a',
+        receiver_thread_ids: ['b'],
+        prompt: 'p',
+        agents_states: { b: { status: 'running', message: null } },
+        status: 'in_progress',
+      }),
+      item('error', { message: 'Falling back from WebSockets to HTTPS transport.' }),
+      rawLine({ type: 'error', message: 'Reconnecting... 1/5' }),
+      rawLine({ type: 'turn.failed', error: { message: 'unexpected status 401' } }),
+    ].join('\n')}\n`
+    assert.deepEqual(unknownSignatures('codex', nativeEvents(capture)), [])
+  })
+
+  test("twin: an item type, status or key codex exec doesn't define is a format change", () => {
+    const item = (fields: Record<string, unknown>) =>
+      nativeEvents(rawLine({ type: 'item.completed', item: { id: 'i', ...fields } }))
+    assert.notDeepEqual(unknownSignatures('codex', item({ type: 'image_view', path: '/x' })), [])
+    assert.notDeepEqual(
+      unknownSignatures(
+        'codex',
+        item({
+          type: 'command_execution',
+          command: 'x',
+          aggregated_output: '',
+          exit_code: 0,
+          status: 'timed_out',
+        }),
+      ),
+      [],
+    )
+    assert.notDeepEqual(
+      unknownSignatures('codex', item({ type: 'agent_message', text: 'x', phase: 'final' })),
+      [],
+    )
+  })
+})

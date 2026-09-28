@@ -2010,7 +2010,7 @@ export const OPENCODE_PROVIDERS: readonly OpenCodeProvider[] = [
   },
 ]
 
-/** Every other provider OpenCode knows, and why ES can't broker its key. */
+/** Every other provider OpenCode knows, and why reeval can't broker its key. */
 export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
   {
     id: 'aihubmix',
@@ -2025,22 +2025,22 @@ export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
   {
     id: 'azure',
     name: 'Azure',
-    why: "its API host is per account (AZURE_RESOURCE_NAME), which ES doesn't pass",
+    why: "its API host is per account (AZURE_RESOURCE_NAME), which reeval doesn't pass",
   },
   {
     id: 'cloudflare-ai-gateway',
     name: 'Cloudflare AI Gateway',
-    why: "its API host is per account (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_GATEWAY_ID), which ES doesn't pass",
+    why: "its API host is per account (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_GATEWAY_ID), which reeval doesn't pass",
   },
   {
     id: 'cloudflare-workers-ai',
     name: 'Cloudflare Workers AI',
-    why: "its API host is per account (CLOUDFLARE_ACCOUNT_ID), which ES doesn't pass",
+    why: "its API host is per account (CLOUDFLARE_ACCOUNT_ID), which reeval doesn't pass",
   },
   {
     id: 'databricks',
     name: 'Databricks',
-    why: "its API host is per account (DATABRICKS_HOST), which ES doesn't pass",
+    why: "its API host is per account (DATABRICKS_HOST), which reeval doesn't pass",
   },
   {
     id: 'github-copilot',
@@ -2060,7 +2060,7 @@ export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
   {
     id: 'infomaniak',
     name: 'Infomaniak',
-    why: "its API host is per account (INFOMANIAK_PRODUCT_ID), which ES doesn't pass",
+    why: "its API host is per account (INFOMANIAK_PRODUCT_ID), which reeval doesn't pass",
   },
   {
     id: 'lmstudio',
@@ -2085,7 +2085,7 @@ export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
   {
     id: 'neon',
     name: 'Neon',
-    why: "its API host is per account (NEON_AI_GATEWAY_BASE_URL), which ES doesn't pass",
+    why: "its API host is per account (NEON_AI_GATEWAY_BASE_URL), which reeval doesn't pass",
   },
   {
     id: 'perplexity',
@@ -2115,7 +2115,7 @@ export const REFUSED_OPENCODE_PROVIDERS: readonly RefusedOpenCodeProvider[] = [
   {
     id: 'snowflake-cortex',
     name: 'Snowflake Cortex',
-    why: "its API host is per account (SNOWFLAKE_ACCOUNT), which ES doesn't pass",
+    why: "its API host is per account (SNOWFLAKE_ACCOUNT), which reeval doesn't pass",
   },
   {
     id: 'watsonx',

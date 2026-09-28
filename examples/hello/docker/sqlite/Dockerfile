@@ -1,7 +1,7 @@
-# Layered on ES's sandbox image, so the harness bootstrap is already in it. ES builds this with
+# Layered on reeval's sandbox image, so the harness bootstrap is already in it. reeval builds this with
 # `docker build` from this directory and tags it by content hash.
-ARG ES_BASE
-FROM ${ES_BASE}
+ARG REEVAL_BASE
+FROM ${REEVAL_BASE}
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends sqlite3 \

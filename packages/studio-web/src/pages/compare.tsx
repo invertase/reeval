@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
+import { ArrowRight, GitCompareArrows, TriangleAlert } from 'lucide-react'
+import { useMemo } from 'react'
 import {
   type CompareStatus,
   type CompareViewRow,
@@ -8,9 +10,7 @@ import {
   formatPercent,
   type HistoryEntry,
   shortSha,
-} from 'evalsuite/view'
-import { ArrowRight, GitCompareArrows, TriangleAlert } from 'lucide-react'
-import { useMemo } from 'react'
+} from 'reeval/view'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { OutcomeIcon } from '@/components/status'
 import { Badge } from '@/components/ui/badge'
@@ -230,7 +230,7 @@ export function ComparePage() {
         <p className="mt-1 text-sm text-muted-foreground">
           What flipped between two runs, with pass-rate and judge-score deltas, and each cell's lift
           and effort (tool calls, agent time). Uses the same rules as{' '}
-          <code className="font-mono text-xs">es compare</code>.
+          <code className="font-mono text-xs">reeval compare</code>.
         </p>
       </div>
 

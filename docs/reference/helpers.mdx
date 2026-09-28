@@ -44,11 +44,11 @@ Group and eval options are plain objects, so the helpers aren't available there:
 
 ## secret
 
-A secret is read from the host when an attempt starts. Its value is masked in everything ES writes, travels through the Docker CLI's environment rather than its arguments, and only its name is recorded.
+A secret is read from the host when an attempt starts. Its value is masked in everything reeval writes, travels through the Docker CLI's environment rather than its arguments, and only its name is recorded.
 
-| ES masks | In |
+| reeval masks | In |
 |---|---|
-| Declared secrets and secret-named host variables (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`) | The terminal, `.es/debug`, records, transcripts, history and the studio |
+| Declared secrets and secret-named host variables (`KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `CREDENTIAL`) | The terminal, `.reeval/debug`, records, transcripts, history and the studio |
 | Their JSON-, URL- and base64-encoded forms | The same |
 | Any stretch of 8 or more of their characters, such as a key's last 12 | The same, for declared secrets of 12+ characters and token-like variables (16+ characters of letters, digits and `_.~+/=:-`, with at least one letter and one digit, not a path or URL) |
 | Well-known token shapes (`AIza…`, `sk-…`, `ghp_…`, AWS keys, JWTs, private keys) | The same, even when they aren't set on the host |
@@ -74,7 +74,7 @@ A stretch made only of lower-case letters, upper-case letters or digits isn't ma
 Options for `secret()` and `secret.fromEnv()`:
 
 <Property name="hosts" type="string[]" optional>
-  Brokers the secret. The sandbox gets a per-attempt placeholder (`es_secret_` and 32 characters), and the Docker egress gateway swaps in the real value on requests to these hosts. Host names only, no URL or port; `*.example.com` matches subdomains. Brokered hosts are allowed through a restricted egress policy automatically.
+  Brokers the secret. The sandbox gets a per-attempt placeholder (`reeval_secret_` and 32 characters), and the Docker egress gateway swaps in the real value on requests to these hosts. Host names only, no URL or port; `*.example.com` matches subdomains. Brokered hosts are allowed through a restricted egress policy automatically.
 </Property>
 
 <Property name="in" type="Array<'header' | 'query' | 'body'>" optional>
@@ -123,7 +123,7 @@ Every skill source takes `placement`: `'harness'` (default) lets the harness ada
 </Property>
 
 <Property name="skill.registry(id, options?)" type="SkillSource">
-  A skills.sh id, `owner/repo@skill`. ES clones the GitHub repository and reads that one skill from its `skills/` directory when it has one. `version` is a git ref; the record keeps the commit it resolved to.
+  A skills.sh id, `owner/repo@skill`. reeval clones the GitHub repository and reads that one skill from its `skills/` directory when it has one. `version` is a git ref; the record keeps the commit it resolved to.
 </Property>
 
 <Property name="skill.inline(skill, options?)" type="SkillSource">
@@ -140,7 +140,7 @@ Directory sources (`local`, `git`, `npm`) also take:
   Paths to leave out of the sandbox, gitignore-style. It replaces `DEFAULT_SKILL_EXCLUDE`, so spread that to add to it, or pass `[]` to keep everything. `.git` is always left out. What's left out is recorded as the skill's `excluded`.
 </Property>
 
-`DEFAULT_SKILL_EXCLUDE` is `['/evals/', '.history/', '*.es.ts']`, so a skill's own evals don't reach the agent.
+`DEFAULT_SKILL_EXCLUDE` is `['/evals/', '.history/', '*.eval.ts']`, so a skill's own evals don't reach the agent.
 
 A skill needs a `SKILL.md` with YAML frontmatter naming it (kebab-case) and describing it. A git skill on a moving ref, or a registry skill without a version, warns in the plan; the resolved commit is recorded either way:
 
@@ -196,18 +196,18 @@ export const app = defineEnvironment('app', ({ git }) => ({
 </Property>
 
 <Property name="path" type="string" optional>
-  A directory in the repository, relative, with forward slashes. Its contents become the workspace root. ES fetches only that directory's files (a partial fetch), so a subdirectory of a large monorepo stays cheap.
+  A directory in the repository, relative, with forward slashes. Its contents become the workspace root. reeval fetches only that directory's files (a partial fetch), so a subdirectory of a large monorepo stays cheap.
 </Property>
 
 <Property name="init" type="boolean" optional>
-  Gives the workspace a `.git`: a new repository with one commit of the fetched tree, on `main`, with no remote. The commit is by `es` at a fixed date, so every attempt starts at the same `HEAD`. `files` and `setup` run after it, so their changes show in `git status`. The image needs `git`, which ES's images have.
+  Gives the workspace a `.git`: a new repository with one commit of the fetched tree, on `main`, with no remote. The commit is by `reeval` at a fixed date, so every attempt starts at the same `HEAD`. `files` and `setup` run after it, so their changes show in `git status`. The image needs `git`, which reeval's images have.
 </Property>
 
 <Property name="token" type="string" optional>
-  The name of a host variable holding a token for the fetch, such as `'GITHUB_TOKEN'`, read like `secret.fromEnv`. ES sends it to the repository's own origin only, as an HTTP header in `git`'s environment, never its arguments; it never reaches the sandbox, the record or `.es`, and it's masked in errors. Only for `https://` (or `http://`) URLs. A variable that isn't set fails the workspace's attempts.
+  The name of a host variable holding a token for the fetch, such as `'GITHUB_TOKEN'`, read like `secret.fromEnv`. reeval sends it to the repository's own origin only, as an HTTP header in `git`'s environment, never its arguments; it never reaches the sandbox, the record or `.reeval`, and it's masked in errors. Only for `https://` (or `http://`) URLs. A variable that isn't set fails the workspace's attempts.
 </Property>
 
-Without `token`, ES runs `git` on the host with your own git credentials (credential helpers, `gh auth setup-git`, SSH keys). Either way it copies only the tree into the sandbox, with no remote and no credentials. A URL with a password or token in it is refused. Submodules and Git LFS files aren't fetched: a submodule is left as an empty directory and an LFS file as its pointer. A branch or no `ref` warns in the plan, as for `skill.git`:
+Without `token`, reeval runs `git` on the host with your own git credentials (credential helpers, `gh auth setup-git`, SSH keys). Either way it copies only the tree into the sandbox, with no remote and no credentials. A URL with a password or token in it is refused. Submodules and Git LFS files aren't fetched: a submodule is left as an empty directory and an LFS file as its pointer. A branch or no `ref` warns in the plan, as for `skill.git`:
 
 ```text
 warning: workspace git(github:acme/template) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).
@@ -223,11 +223,11 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | A bad `to` | `secret(): to must be 'agent' or 'checks'` |
 | A bad variable name | `secret.fromEnv("my-var") needs a host variable name` |
 | A bad placement | `skill placement must be 'harness' or 'workspace' (got home)` |
-| `exclude` not a list | `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.es.ts'] (got "/evals/")` |
+| `exclude` not a list | `skill exclude must be an array of paths or globs, e.g. ['/evals/', '*.eval.ts'] (got "/evals/")` |
 | A bad registry id | `skill.registry("genkit") needs an id like owner/repo@skill` |
 | No repository | `skill.git() needs a repository URL` |
 | No command | `mcp.stdio() needs a command` |
-| A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. ES fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |
+| A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. reeval fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |
 | A bad `path` | `git("github:acme/app"): path is a directory in the repository, relative, with forward slashes and no . or .. (got "../secrets")` |
 | The token itself as `token` | `git("github:acme/app"): token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.` (the value isn't echoed) |
 | `token` on an SSH or local repository | `git("git@github.com:acme/app.git"): token only works with an https:// URL; for SSH or a local repository, git uses this machine's own credentials` |

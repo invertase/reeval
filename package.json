@@ -1,15 +1,15 @@
 {
-  "name": "es-monorepo",
+  "name": "reeval-monorepo",
   "version": "0.0.1",
   "license": "Apache-2.0",
   "author": "Invertase <oss@invertase.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/invertase/evalsuite.git"
+    "url": "git+https://github.com/invertase/reeval.git"
   },
-  "homepage": "https://github.com/invertase/evalsuite#readme",
+  "homepage": "https://github.com/invertase/reeval#readme",
   "bugs": {
-    "url": "https://github.com/invertase/evalsuite/issues"
+    "url": "https://github.com/invertase/reeval/issues"
   },
   "private": true,
   "type": "module",
@@ -24,7 +24,7 @@
     "coverage": "pnpm build && node scripts/coverage.mjs run",
     "lint": "biome check .",
     "format": "biome check --write .",
-    "example": "pnpm --filter hello-example es run",
+    "example": "pnpm --filter hello-example reeval run",
     "smoke:real": "bash scripts/real-smoke.sh",
     "docs": "node --experimental-strip-types --no-warnings scripts/docs.mjs",
     "docs:check": "node --experimental-strip-types --no-warnings scripts/docs.mjs --check"

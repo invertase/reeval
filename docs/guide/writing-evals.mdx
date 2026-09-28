@@ -5,7 +5,7 @@ description: Write evals with prompts, sandbox commands, file checks, matchers a
 
 An eval gives the agent a task, then checks what it did. Here's the first `greet` eval again, the one you ran on Cursor:
 
-```ts title="evals/hello.es.ts"
+```ts title="evals/hello.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
 
 group('greet module', () => {
@@ -30,14 +30,14 @@ It has three parts: a prompt, deterministic checks, and a question for the judge
 
 ## Name evals with groups
 
-```ts title="evals/hello.es.ts"
+```ts title="evals/hello.eval.ts"
 group('greet module', () => {
   evaluate('creates a tested greet module', async (t) => { /* … */ })
   evaluate('adds a default name in a follow-up turn', async (t) => { /* … */ })
 })
 ```
 
-`evaluate(name, fn)` declares one eval, and `group(name, fn)` groups evals. Groups nest, and both take options as a second argument (or last). The file, groups and name make the eval's id, `evals/hello.es.ts › greet module › creates a tested greet module`, which is how ES tracks it across runs.
+`evaluate(name, fn)` declares one eval, and `group(name, fn)` groups evals. Groups nest, and both take options as a second argument (or last). The file, groups and name make the eval's id, `evals/hello.eval.ts › greet module › creates a tested greet module`, which is how reeval tracks it across runs.
 
 <Warning>
   Renaming an eval or its group gives it a new id, so its history starts again.
@@ -56,7 +56,7 @@ turn.diff.files  // [{ path: 'greet.js', status: 'added' }]
 
 ## Run commands in the sandbox
 
-```ts title="evals/guide.es.ts"
+```ts title="evals/guide.eval.ts"
 evaluate('passes its own tests', async (t) => {
   await t.send('Create greet.js and greet.test.js. No dependencies.')
 
@@ -70,7 +70,7 @@ evaluate('passes its own tests', async (t) => {
 
 ## Check files
 
-```ts title="evals/guide.es.ts"
+```ts title="evals/guide.eval.ts"
 evaluate('writes a module', async (t) => {
   const turn = await t.send('Create greet.js exporting greet(name).')
 
@@ -93,10 +93,10 @@ await expect(turn).toHaveFile('nope.js')  // right
 
 ```text
 Summary
- evals/guide-unawaited.es.ts
+ evals/guide-unawaited.eval.ts
    ✗ unawaited     45ms  1 turn
 …
- ✗ evals/guide-unawaited.es.ts › unawaited
+ ✗ evals/guide-unawaited.eval.ts › unawaited
    Error: expected file nope.js to exist
 
    expect(…).toHaveFile() wasn't awaited. Its check is async: write `await expect(…).toHaveFile()`.
@@ -115,7 +115,7 @@ const verdict = await t.judge('Is the change minimal?', { threshold: 0.9 })
 expect(verdict).toPass()
 ```
 
-The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `es.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions.
+The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions.
 
 ## Choose checks or the judge
 
@@ -129,22 +129,22 @@ Prefer checks: they're exact, free and never change their mind. Use the judge fo
 
 ## Tag evals
 
-```ts title="evals/guide.es.ts"
+```ts title="evals/guide.eval.ts"
 group('greet module', { tags: ['smoke'] }, () => {
   // …
 })
 ```
 
 ```bash
-npx es run --tag smoke        # only evals tagged smoke
-npx es run --tag '!slow'      # everything but slow
+npx reeval run --tag smoke        # only evals tagged smoke
+npx reeval run --tag '!slow'      # everything but slow
 ```
 
 Tags add up from groups to evals. Repeat `--tag` to combine filters; each one must match.
 
 ## Skip, focus and plan evals
 
-```ts title="evals/guide.es.ts"
+```ts title="evals/guide.eval.ts"
 evaluate.skip('greets in French', async (t) => {
   await t.send('Add greetFr(name).')
 })
@@ -153,7 +153,7 @@ evaluate.todo('greets a list of names')
 
 ```text
 Summary
- evals/guide.es.ts
+ evals/guide.eval.ts
    greet module
      ✓ writes a module            57ms  1 turn
      ✓ passes its own tests      121ms  1 turn

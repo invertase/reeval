@@ -18,7 +18,7 @@ const JWT = /^[\w-]+\.[\w-]+\.[\w-]+$/
 
 /**
  * A placeholder for a token. A JWT keeps its header and claims, so a client reading its `exp` sees
- * the real one, and gets `es_secret_…` for a signature; anything else is a plain `es_secret_…`.
+ * the real one, and gets `reeval_secret_…` for a signature; anything else is a plain `reeval_secret_…`.
  */
 export function tokenPlaceholder(token: string): string {
   if (!JWT.test(token)) return placeholder()

@@ -8,13 +8,13 @@ export const HARNESS_PACKAGES: Record<
   'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex',
   { readonly name: string; readonly version: string; readonly patch?: string }
 > = {
-  cursor: { name: '@evalsuite/harness-cursor-sdk', version: '0.1.0' },
+  cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.0' },
   'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.128', patch: '5d1c985c' },
-  antigravity: { name: '@evalsuite/harness-antigravity', version: '0.1.0' },
-  opencode: { name: '@evalsuite/harness-opencode', version: '0.2.0' },
-  goose: { name: '@evalsuite/harness-goose', version: '0.1.0' },
-  pi: { name: '@evalsuite/harness-pi', version: '0.1.0' },
-  codex: { name: '@evalsuite/harness-codex', version: '0.1.0' },
+  antigravity: { name: '@reeval/harness-antigravity', version: '0.1.0' },
+  opencode: { name: '@reeval/harness-opencode', version: '0.2.0' },
+  goose: { name: '@reeval/harness-goose', version: '0.1.0' },
+  pi: { name: '@reeval/harness-pi', version: '0.1.0' },
+  codex: { name: '@reeval/harness-codex', version: '0.1.0' },
 }
 
 /** A harness whose CLI an image can bake. */
@@ -24,37 +24,37 @@ export const BAKED_HARNESSES = Object.keys(HARNESS_PACKAGES) as BakedHarness[]
 export const isBakedHarness = (kind: string): kind is BakedHarness =>
   Object.hasOwn(HARNESS_PACKAGES, kind)
 
-/** The adapter build ES runs for a harness: its version, and its patch if ES patches it. */
+/** The adapter build reeval runs for a harness: its version, and its patch if reeval patches it. */
 export const adapterVersion = (harness: BakedHarness) => {
   const { version, patch } = HARNESS_PACKAGES[harness]
   return patch ? `${version}-patch.${patch}` : version
 }
 
-export const BASE_IMAGE = 'evalsuite-sandbox-base:latest'
-/** ES's image for a harness; the tag pins the adapter, whose bootstrap pins the CLI. */
+export const BASE_IMAGE = 'reeval-sandbox-base:latest'
+/** reeval's image for a harness; the tag pins the adapter, whose bootstrap pins the CLI. */
 export const imageFor = (harness: BakedHarness) =>
-  `evalsuite-sandbox:${harness}-${adapterVersion(harness)}`
+  `reeval-sandbox:${harness}-${adapterVersion(harness)}`
 /** Cursor's image, which the fake harness also runs in by default. */
 export const DEFAULT_IMAGE = imageFor('cursor')
-/** The `dev.evalsuite.harness` label value an image baked for `harness` carries. */
+/** The `ai.reeval.harness` label value an image baked for `harness` carries. */
 export const harnessLabel = (harness: BakedHarness) =>
   `${HARNESS_PACKAGES[harness].name}@${adapterVersion(harness)}`
 
 export const LABEL = {
-  managed: 'dev.evalsuite.managed',
-  run: 'dev.evalsuite.run',
+  managed: 'ai.reeval.managed',
+  run: 'ai.reeval.run',
   /** Unique per session, so a create cut short can find what it made. */
-  session: 'dev.evalsuite.session',
-  agentVersion: 'dev.evalsuite.agent-version',
-  harness: 'dev.evalsuite.harness',
-  /** On ES's own images: the hash of the base image's build context, to tell a stale one. */
-  context: 'dev.evalsuite.context',
+  session: 'ai.reeval.session',
+  agentVersion: 'ai.reeval.agent-version',
+  harness: 'ai.reeval.harness',
+  /** On reeval's own images: the hash of the base image's build context, to tell a stale one. */
+  context: 'ai.reeval.context',
   /** On a `from` image: the digest (or, for a local-only base, the image id) it was built on. */
-  fromDigest: 'dev.evalsuite.from-digest',
+  fromDigest: 'ai.reeval.from-digest',
 } as const
 
 /**
- * The user the agent, setup steps and checks run as, which every image ES builds creates. Image
+ * The user the agent, setup steps and checks run as, which every image reeval builds creates. Image
  * builds (`install`, Dockerfiles) stay root.
  */
 export const SANDBOX_USER = 'es'

@@ -42,7 +42,7 @@ const slugify = (text: string, max: number) =>
     .slice(0, max)
     .replace(/-+$/, '')
 
-/** The build context of ES's base image, shipped in the package. */
+/** The build context of reeval's base image, shipped in the package. */
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
 /** The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. */
@@ -66,7 +66,7 @@ const BOOTSTRAPS: Record<
     name: 'Cursor',
     cli: '@cursor/sdk',
     version: `node -p "'@cursor/sdk ' + require(process.env.HOME + '/.ai-sdk-harness/.harness-bootstrap/cursor-sdk/node_modules/@cursor/sdk/package.json').version"`,
-    adapter: async () => (await import('@evalsuite/harness-cursor-sdk')).createCursorSdk(),
+    adapter: async () => (await import('@reeval/harness-cursor-sdk')).createCursorSdk(),
   },
   'claude-code': {
     name: 'Claude Code',
@@ -76,14 +76,14 @@ const BOOTSTRAPS: Record<
   antigravity: {
     name: 'Antigravity',
     cli: 'agy',
-    adapter: async () => (await import('@evalsuite/harness-antigravity')).createAntigravity(),
+    adapter: async () => (await import('@reeval/harness-antigravity')).createAntigravity(),
   },
   opencode: {
     name: 'OpenCode',
     cli: 'opencode',
     // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
-      (await import('@evalsuite/harness-opencode')).createOpenCode({
+      (await import('@reeval/harness-opencode')).createOpenCode({
         auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
         model: 'google/unused',
       }),
@@ -93,7 +93,7 @@ const BOOTSTRAPS: Record<
     cli: 'goose',
     // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
-      (await import('@evalsuite/harness-goose')).createGoose({
+      (await import('@reeval/harness-goose')).createGoose({
         auth: { GOOGLE_API_KEY: 'unused' },
         model: 'unused',
       }),
@@ -103,14 +103,14 @@ const BOOTSTRAPS: Record<
     cli: 'pi',
     // The bootstrap only installs the CLI; the key is never used.
     adapter: async () =>
-      (await import('@evalsuite/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
+      (await import('@reeval/harness-pi')).createPi({ auth: { GEMINI_API_KEY: 'unused' } }),
   },
   codex: {
     name: 'Codex',
     cli: 'codex',
     // The bootstrap only installs the CLI; the key is never used.
     adapter: async () =>
-      (await import('@evalsuite/harness-codex')).createCodex({
+      (await import('@reeval/harness-codex')).createCodex({
         auth: { OPENAI_API_KEY: 'unused' },
       }),
   },
@@ -122,7 +122,7 @@ const BOOTSTRAPS: Record<
  */
 const toolchainDockerfile = (from: string) => `FROM ${from}
 SHELL ["/bin/sh", "-c"]
-RUN command -v apt-get >/dev/null || { echo "ES needs a Debian or Ubuntu based image (glibc and apt-get)" >&2; exit 1; } \\
+RUN command -v apt-get >/dev/null || { echo "reeval needs a Debian or Ubuntu based image (glibc and apt-get)" >&2; exit 1; } \\
   && apt-get update \\
   && apt-get install -y --no-install-recommends bash ca-certificates curl git procps \\
   && rm -rf /var/lib/apt/lists/*
@@ -184,11 +184,11 @@ function buildError(
   )
 }
 
-/** Every image ES builds carries this label, so `es clean --images` can find what it left. */
+/** Every image reeval builds carries this label, so `reeval clean --images` can find what it left. */
 const BUILT_BY = ['--label', `${LABEL.managed}=image`]
 
 /**
- * Removes the images ES built that nothing tags any more (a rebuild's old image) and the
+ * Removes the images reeval built that nothing tags any more (a rebuild's old image) and the
  * intermediate `-base` tags of `from` builds. Returns how many it removed.
  */
 export async function pruneImages(): Promise<number> {
@@ -208,7 +208,7 @@ export async function pruneImages(): Promise<number> {
     ])),
     ...(await list(['-q', '--filter', 'dangling=true', '--filter', `label=${LABEL.harness}`])),
   ]
-  const bases = (await list(['--format', '{{.Repository}}:{{.Tag}}', 'evalsuite-sandbox'])).filter(
+  const bases = (await list(['--format', '{{.Repository}}:{{.Tag}}', 'reeval-sandbox'])).filter(
     (ref) => ref.endsWith('-base'),
   )
   let removed = 0
@@ -244,12 +244,12 @@ export async function resolveFrom(
   return { error }
 }
 
-/** Removes a tag or an image ES replaced, unless something still uses it. */
+/** Removes a tag or an image reeval replaced, unless something still uses it. */
 const removeQuietly = async (ref: string) => {
   await docker(['image', 'rm', ref]).catch(() => {})
 }
 
-/** The hash of ES's base image build context, which its images carry as a label. */
+/** The hash of reeval's base image build context, which its images carry as a label. */
 export function contextHash(): string {
   const hash = createHash('sha256')
   for (const path of contextFiles(DOCKER_CONTEXT, join(DOCKER_CONTEXT, 'Dockerfile'))) {
@@ -263,7 +263,7 @@ export function contextHash(): string {
 /**
  * Bakes a harness's bootstrap (which installs its agent's CLI) into an image, so the image tag
  * pins the CLI build. Rebuild after bumping the adapter. With `from`, the base is that toolchain
- * image instead of ES's Node image. `log` gets progress lines, `output` the build's full output
+ * image instead of reeval's Node image. `log` gets progress lines, `output` the build's full output
  * (for a log file, whose path failures name). The previous image under the tag, and the
  * intermediate `-base` tag of a `from` build, are removed once the new one is committed.
  */
@@ -274,7 +274,7 @@ export async function buildImage(
     from?: string
     signal?: AbortSignal
     output?: BuildOutput
-    /** Pull the base again even when it's cached: `es image build --force`. */
+    /** Pull the base again even when it's cached: `reeval image build --force`. */
     pull?: boolean
   },
 ): Promise<{ image: string; agentVersion: string }> {
@@ -316,10 +316,12 @@ export async function buildImage(
       {
         stage: from ? 'from' : 'harness',
         ref: target,
-        headline: from ? `Building the toolchain layer FROM ${from}` : "Building ES's base image",
+        headline: from
+          ? `Building the toolchain layer FROM ${from}`
+          : "Building reeval's base image",
         log: options.output?.path ?? null,
       },
-      (parsed) => parsed.output.find((l) => l.startsWith('ES needs a Debian')) ?? null,
+      (parsed) => parsed.output.find((l) => l.startsWith('reeval needs a Debian')) ?? null,
     )
   }
 
@@ -340,7 +342,7 @@ export async function buildImage(
       `LABEL ${LABEL.agentVersion}="${agentVersion}" ${LABEL.harness}="${harnessLabel(harness)}"${from ? (digest ? ` ${LABEL.fromDigest}="${digest}"` : '') : ` ${LABEL.context}="${contextHash()}"`}`,
       '--change',
       `WORKDIR ${SANDBOX_ROOT}`,
-      // Not the bootstrap's user: Dockerfiles `FROM ${ES_BASE}` build as root.
+      // Not the bootstrap's user: Dockerfiles `FROM ${REEVAL_BASE}` build as root.
       '--change',
       'USER root',
       '--change',
@@ -415,7 +417,7 @@ export type InstallStep = { run: string; timeoutMs?: number }
  * id and the exact list, so it's built once. Secrets and the workspace never exist here.
  */
 export const installLayerTag = (parent: { id: string }, steps: InstallStep[]) =>
-  `evalsuite-install:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
+  `reeval-install:${sha256(JSON.stringify({ parent: parent.id, steps })).slice(0, 16)}`
 
 /** The commands as one bash script: in order, from `/`, stopping at the first that fails. */
 export function installScript(steps: InstallStep[]): string {
@@ -427,8 +429,8 @@ export function installScript(steps: InstallStep[]): string {
       : `bash -c ${q(step.run)}`
     const label = q(step.run.split('\n')[0] ?? '')
     lines.push(
-      `echo "es: install ${n}: "${label}`,
-      `${run} || { code=$?; echo "es: install ${n} exited $code: "${label} >&2; exit $code; }`,
+      `echo "reeval: install ${n}: "${label}`,
+      `${run} || { code=$?; echo "reeval: install ${n} exited $code: "${label} >&2; exit $code; }`,
     )
   }
   return `${lines.join('\n')}\n`
@@ -456,9 +458,9 @@ export async function buildInstallLayer(
   const dockerfile = [
     `FROM ${parent.ref}`,
     'USER root',
-    `RUN echo ${encoded} | base64 -d > /tmp/es-install.sh \\`,
+    `RUN echo ${encoded} | base64 -d > /tmp/reeval-install.sh \\`,
     `  && if id -u ${SANDBOX_USER} >/dev/null 2>&1; then export HOME="${home}"; fi \\`,
-    '  && bash /tmp/es-install.sh && rm /tmp/es-install.sh \\',
+    '  && bash /tmp/reeval-install.sh && rm /tmp/reeval-install.sh \\',
     `  && { ! id -u ${SANDBOX_USER} >/dev/null 2>&1 || find "$HOME" -xdev ! -user ${SANDBOX_USER} -exec chown -h ${SANDBOX_USER}: {} +; }`,
     `WORKDIR ${SANDBOX_ROOT}`,
   ].join('\n')
@@ -469,7 +471,7 @@ export async function buildInstallLayer(
   const output = `${build.stdout.toString('utf8')}${build.stderr}`
   options.output?.write(`${script}\n${dockerfile}\n\n${output}`)
   if (build.exitCode !== 0) {
-    const failed = /es: install (\d+\/\d+) exited (\d+): (.*)/.exec(output)
+    const failed = /reeval: install (\d+\/\d+) exited (\d+): (.*)/.exec(output)
     const count = `${steps.length} command${steps.length === 1 ? '' : 's'}`
     throw buildError(
       output,
@@ -481,14 +483,14 @@ export async function buildInstallLayer(
       },
       () =>
         failed ? `install ${failed[1]} exited ${failed[2]}: ${clipLine(failed[3] ?? '')}` : null,
-      (line) => !line.startsWith('es: install '),
+      (line) => !line.startsWith('reeval: install '),
     )
   }
   return tag
 }
 
-/** The build arg a Dockerfile can start `FROM` to layer on ES's sandbox image. */
-export const ES_BASE_ARG = 'ES_BASE'
+/** The build arg a Dockerfile can start `FROM` to layer on reeval's sandbox image. */
+export const REEVAL_BASE_ARG = 'REEVAL_BASE'
 
 /**
  * `.dockerignore` rules as Docker reads them: paths from the context root, `*`, `?` and `**`
@@ -550,14 +552,14 @@ export function contextFiles(context: string, dockerfile: string): string[] {
   return files.sort()
 }
 
-/** Whether the Dockerfile starts from ES's sandbox image, which then has to exist first. */
+/** Whether the Dockerfile starts from reeval's sandbox image, which then has to exist first. */
 export const usesEsBase = (dockerfile: string) =>
-  new RegExp(`\\$\\{?${ES_BASE_ARG}\\b`).test(readFileSync(dockerfile, 'utf8'))
+  new RegExp(`\\$\\{?${REEVAL_BASE_ARG}\\b`).test(readFileSync(dockerfile, 'utf8'))
 
 /**
  * The tag of a `docker({ dockerfile })` build for a harness: a hash of the Dockerfile, every file
  * of its build context (its directory, less `.dockerignore`) and, for a Dockerfile `FROM
- * ${ES_BASE}`, the id of the harness's image it names, so an edit to any of them, or a rebuilt ES
+ * ${REEVAL_BASE}`, the id of the harness's image it names, so an edit to any of them, or a rebuilt reeval
  * image, builds anew. `esBase` is that id (null when it isn't built).
  */
 export function dockerfileTag(
@@ -567,7 +569,7 @@ export function dockerfileTag(
 ): { tag: string; sha256: string } {
   const context = dirname(dockerfile)
   const base = usesEsBase(dockerfile) ? `${imageFor(harness)}@${esBase ?? 'unbuilt'}` : ''
-  const hash = createHash('sha256').update(`${ES_BASE_ARG}=${base}\0`)
+  const hash = createHash('sha256').update(`${REEVAL_BASE_ARG}=${base}\0`)
   for (const path of contextFiles(context, dockerfile)) {
     const full = join(context, path)
     const stat = lstatSync(full)
@@ -580,13 +582,13 @@ export function dockerfileTag(
     basename(dockerfile) === 'Dockerfile' ? basename(context) : basename(dockerfile),
     40,
   )
-  return { tag: `evalsuite-dockerfile:${name || 'image'}-${digest.slice(0, 16)}`, sha256: digest }
+  return { tag: `reeval-dockerfile:${name || 'image'}-${digest.slice(0, 16)}`, sha256: digest }
 }
 
 /**
  * Builds the user's Dockerfile with plain `docker build` (so Docker's layer cache applies), from
- * its directory, with `ES_BASE` set to the harness's sandbox image (whose id is `esBase`).
- * Rebuilds even when the tag exists with `force`, as `es image build` does, and then removes the
+ * its directory, with `REEVAL_BASE` set to the harness's sandbox image (whose id is `esBase`).
+ * Rebuilds even when the tag exists with `force`, as `reeval image build` does, and then removes the
  * image the tag pointed at before. `name` is the path failures name.
  */
 export async function buildDockerfile(
@@ -598,7 +600,7 @@ export async function buildDockerfile(
     signal?: AbortSignal
     output?: BuildOutput
     force?: boolean
-    /** Pull its `FROM` again: `es image build --force`. */
+    /** Pull its `FROM` again: `reeval image build --force`. */
     pull?: boolean
   },
 ): Promise<string> {
@@ -616,7 +618,7 @@ export async function buildDockerfile(
       '--file',
       dockerfile,
       '--build-arg',
-      `${ES_BASE_ARG}=${imageFor(harness)}`,
+      `${REEVAL_BASE_ARG}=${imageFor(harness)}`,
       '--tag',
       tag,
       dirname(dockerfile),

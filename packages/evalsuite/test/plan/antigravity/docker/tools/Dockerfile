@@ -1,3 +1,0 @@
-ARG ES_BASE
-FROM ${ES_BASE}
-RUN echo tools

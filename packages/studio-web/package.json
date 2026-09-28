@@ -5,12 +5,12 @@
   "author": "Invertase <oss@invertase.io>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/invertase/evalsuite.git",
+    "url": "git+https://github.com/invertase/reeval.git",
     "directory": "packages/studio-web"
   },
-  "homepage": "https://github.com/invertase/evalsuite/tree/main/packages/studio-web#readme",
+  "homepage": "https://github.com/invertase/reeval/tree/main/packages/studio-web#readme",
   "bugs": {
-    "url": "https://github.com/invertase/evalsuite/issues"
+    "url": "https://github.com/invertase/reeval/issues"
   },
   "private": true,
   "type": "module",

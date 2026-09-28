@@ -1,13 +1,13 @@
 ---
-title: es query
+title: reeval query
 description: Read-only SQL over every recorded and scratch run, with every view and table.
 ---
 
-`es query` answers questions across runs with SQL. It reads `.es/history.db`, a gitignored SQLite projection of every record in the history folder and `.es/runs/`.
+`reeval query` answers questions across runs with SQL. It reads `.reeval/history.db`, a gitignored SQLite projection of every record in the history folder and `.reeval/runs/`.
 
 ```bash
-npx es query lift
-npx es query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"
+npx reeval query lift
+npx reeval query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_noise = 0"
 ```
 
 ## Help
@@ -15,11 +15,11 @@ npx es query "SELECT eval_key, variant, points, lo, hi FROM lift WHERE within_no
 [//]: # (generated:cli-help:query)
 
 ```text
-es query [sql | view]     Read-only SQL over every recorded and scratch run (.es/history.db,
-                          rebuilt from the records); views: lift, effort, factor_effects,
-                          skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
-                          verdict_flips. No argument lists them
-  --json                  Rows as JSON; --schema every table and column; --rebuild from scratch
+reeval query [sql | view]     Read-only SQL over every recorded and scratch run (.reeval/history.db,
+                              rebuilt from the records); views: lift, effort, factor_effects,
+                              skill_reads, flaky_cells, drift, failing_attempts, eval_trend,
+                              verdict_flips. No argument lists them
+  --json                      Rows as JSON; --schema every table and column; --rebuild from scratch
 ```
 
 [//]: # (/generated:cli-help:query)
@@ -37,7 +37,7 @@ A real query (`points`, `lo` and `hi` are fractions: 1 is +100 points):
 ```text
 eval_key                                                   harness                              variant              variant_pass  variant_counted  control_pass  control_counted  points  lo    hi  within_noise
 …
-evals/skill.es.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
+evals/skill.eval.ts › house greeting › greets in the house…  cursor:composer-2.5                  with-house-greeting  2             2                0             2                1       0.07  1   0
 ```
 
 ## Views

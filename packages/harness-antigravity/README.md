@@ -1,4 +1,4 @@
-# @evalsuite/harness-antigravity
+# @reeval/harness-antigravity
 
 An [AI SDK harness](https://ai-sdk.dev/docs) adapter for Google's
 [Antigravity CLI](https://antigravity.google/product/antigravity-cli/) (`agy`). It's shaped like
@@ -6,7 +6,7 @@ the `@ai-sdk/harness-*` packages, so it could move upstream to `vercel/ai`.
 
 ```ts
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { createAntigravity } from '@evalsuite/harness-antigravity'
+import { createAntigravity } from '@reeval/harness-antigravity'
 
 const agent = new HarnessAgent({
   harness: createAntigravity({ auth: { GEMINI_API_KEY: process.env.GEMINI_API_KEY! } }),
@@ -54,4 +54,4 @@ the shell's "Argument list too long".
 
 `pnpm test` runs `node:test` over the translator (with NDJSON captured from real CLI runs), the
 auth and brokering rules, the command line, the bootstrap, and the adapter against an in-memory
-sandbox. ES's own tests run it in Docker and against the real CLI.
+sandbox. reeval's own tests run it in Docker and against the real CLI.

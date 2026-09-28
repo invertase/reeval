@@ -1,14 +1,14 @@
 ---
-title: es analyze
+title: reeval analyze
 description: Explain a run in plain words with one checked LLM call over a digest of its facts.
 ---
 
-`es analyze` explains a run: what happened, what the numbers mean, why, and what to change. ES computes the facts; one structured LLM call explains and ranks them, and ES checks the answer before showing it.
+`reeval analyze` explains a run: what happened, what the numbers mean, why, and what to change. reeval computes the facts; one structured LLM call explains and ranks them, and reeval checks the answer before showing it.
 
 ```bash
-npx es analyze                                  # latest vs its nearest recorded ancestor
-npx es analyze latest --vs latest~2 --eval skill
-npx es analyze --context                        # the digest for your own agent: no key, no call
+npx reeval analyze                                  # latest vs its nearest recorded ancestor
+npx reeval analyze latest --vs latest~2 --eval skill
+npx reeval analyze --context                        # the digest for your own agent: no key, no call
 ```
 
 ## Help
@@ -16,14 +16,14 @@ npx es analyze --context                        # the digest for your own agent:
 [//]: # (generated:cli-help:analyze)
 
 ```text
-es analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
-                          nearest recorded ancestor), citations and commands checked; cached
-                          in .es/analysis (model: config.analysis.model)
-  --vs <run>              The run to compare with; --eval <filter> only matching evals
-  --save                  Also write it into the run's history folder: <run>/analysis/
-  --context               Print the digest and rules for your own coding agent (no key, no call)
-  --dry-run               Print the digest's size and the cache key, without calling the model
-  --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again
+reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
+                              nearest recorded ancestor), citations and commands checked; cached
+                              in .reeval/analysis (model: config.analysis.model)
+  --vs <run>                  The run to compare with; --eval <filter> only matching evals
+  --save                      Also write it into the run's history folder: <run>/analysis/
+  --context                   Print the digest and rules for your own coding agent (no key, no call)
+  --dry-run                   Print the digest's size and the cache key, without calling the model
+  --json --md --no-cache      The analysis as JSON or Markdown; --no-cache calls the model again
 ```
 
 [//]: # (/generated:cli-help:analyze)
@@ -35,7 +35,7 @@ es analyze [run]          Explain a run with one LLM call over a digest of its f
 ```text
 digest 20260926T174444Z_b010670_ada-lovelace_7gmj vs 20260926T174239Z_b010670_ada-lovelace_yzmg: 24 facts, 5 evidence items, 18 attempts
 size 26510 characters ≈ 6628 tokens (cap 20000 in, 8000 out)
-model google/gemini-3.8-flash · analysis-v1 · cache miss (.es/analysis/cb4f1ade460a94fdd4e5a9ddef213bd995e81adbbf4f83d0c4a7fa93e0a69398.json)
+model google/gemini-3.8-flash · analysis-v2 · cache miss (.reeval/analysis/cb4f1ade460a94fdd4e5a9ddef213bd995e81adbbf4f83d0c4a7fa93e0a69398.json)
 ```
 
 Then the analysis, over a real Cursor and Antigravity run with the skill compare (trimmed):
@@ -51,14 +51,14 @@ Results
 …
 Suggested actions
   1. Increase attempt count on skill eval to reach statistical power for effort (eval · impact medium · effort low) [F10] [F11]
-     verify: es run --runs 6 --tag skill
+     verify: reeval run --runs 6 --tag skill
 …
-gemini-3.8-flash · analysis-v1 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
+gemini-3.8-flash · analysis-v2 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
 ```
 
-The studio shows saved analyses (and, in `es studio`, cached ones) on the run's Analysis tab, with each citation linking to its attempt:
+The studio shows saved analyses (and, in `reeval studio`, cached ones) on the run's Analysis tab, with each citation linking to its attempt:
 
-<Image src="/assets/studio/run-analysis.png" alt="ES studio Analysis tab with the TL;DR, what happened and results, each claim followed by fact and evidence citations" width={800} />
+<Image src="/assets/studio/run-analysis.png" alt="reeval studio Analysis tab with the TL;DR, what happened and results, each claim followed by fact and evidence citations" width={800} />
 
 ## How it works
 
@@ -72,12 +72,12 @@ flowchart LR
 
 1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, the judge's scores, failures, flaky cells, drift, the compare), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and check tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>`. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them.
 2. **Call.** One `generateText` call with a schema: TL;DR, what happened, results, why, anomalies, at most five actions (target, change, expected effect, verify command, impact, effort) and a confidence.
-3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged. Each verify command must parse as ES's own CLI, with only that command's flags, and an `es run` or `es image build` must select an eval of the run: a `--tag` no eval has, or a filter that matches no eval file, name or cell, is rejected. The counts are in the footer.
-4. **Storage.** Every analysis is cached in `.es/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into.
+3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged. Each verify command must parse as reeval's own CLI, with only that command's flags, and an `reeval run` or `reeval image build` must select an eval of the run: a `--tag` no eval has, or a filter that matches no eval file, name or cell, is rejected. The counts are in the footer.
+4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into.
 
 ## Configuration
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 export default defineConfig({
   judge: { model: 'typesafe-ai/jev-1.13.0' },
   analysis: {
@@ -105,20 +105,20 @@ export default defineConfig({
   The answer's cap, at least 500. Default 8000.
 </Property>
 
-For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. ES has no prices, so the footer shows tokens used and no cost.
+For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. reeval has no prices, so the footer shows tokens used and no cost.
 
 ## Errors
 
 | Message | Fix |
 |---|---|
-| `es analyze takes --json or --md, not both` | Pick one |
-| `es analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
-| `es analyze --vs names the run itself` | Name an earlier run |
-| `No eval in <run> matches "<filter>"` | Check `--eval` against `es show <run>` |
+| `reeval analyze takes --json or --md, not both` | Pick one |
+| `reeval analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
+| `reeval analyze --vs names the run itself` | Name an earlier run |
+| `No eval in <run> matches "<filter>"` | Check `--eval` against `reeval show <run>` |
 | A missing key, or an evaluation model | Set the key, set `analysis.model`, or use `--context` with your own agent |
 
 ## Related
 
 - [Analysis](/guide/analysis)
-- [es query](/reference/cli/query): the views the facts come from
+- [reeval query](/reference/cli/query): the views the facts come from
 - [Gates and lift](/concepts/lift)

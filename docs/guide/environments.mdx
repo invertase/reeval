@@ -18,7 +18,7 @@ export const withHouseGreeting = defineEnvironment(
 
 ## Use an environment
 
-```ts title="evals/guide-env.es.ts"
+```ts title="evals/guide-env.eval.ts"
 group('greet with context', { environment: base }, () => {
   // …
 })
@@ -59,7 +59,7 @@ export const withSkills = base.extend('with-skills', ({ skill }) => ({
 The harness adapter puts skills where its agent reads them. `placement: 'workspace'` writes them into the repo's skill directory instead, such as `.cursor/skills`. Pin git skills to a tag or commit: the plan warns on a moving ref like `main`, and the record keeps the commit either way.
 
 <Info>
-  Eval material stays out of the sandbox. A skill directory leaves out `.git` and `DEFAULT_SKILL_EXCLUDE`: a root `/evals/`, any `.history/` and any `*.es.ts`. Pass `exclude` to change the list.
+  Eval material stays out of the sandbox. A skill directory leaves out `.git` and `DEFAULT_SKILL_EXCLUDE`: a root `/evals/`, any `.history/` and any `*.eval.ts`. Pass `exclude` to change the list.
 </Info>
 
 ## Connect MCP servers
@@ -86,7 +86,7 @@ export const reactTs = defineEnvironment('react-ts', ({ git }) => ({
 }))
 ```
 
-`workspace` starts every attempt's workspace as a git repository, or one directory of it. ES fetches it on the host once per run, before any attempt, so the sandbox never sees your git credentials. The record keeps the commit; [Start from an existing codebase](/recipes/existing-codebase) covers private repositories, caching and errors.
+`workspace` starts every attempt's workspace as a git repository, or one directory of it. reeval fetches it on the host once per run, before any attempt, so the sandbox never sees your git credentials. The record keeps the commit; [Start from an existing codebase](/recipes/existing-codebase) covers private repositories, caching and errors.
 
 ## Write rules and files
 
@@ -114,7 +114,7 @@ flowchart LR
   I[image ready] --> V[env] --> W[workspace] --> F[files and rules] --> S[setup] --> N[snapshot] --> A["agent, with skills and MCP"]
 ```
 
-ES snapshots the workspace after setup, so the repository, files, rules and setup output never show in the agent's diff. Anything baked into the image instead belongs to the [sandbox](/guide/sandboxes).
+reeval snapshots the workspace after setup, so the repository, files, rules and setup output never show in the agent's diff. Anything baked into the image instead belongs to the [sandbox](/guide/sandboxes).
 
 ## Layer environments with extend
 
@@ -126,7 +126,7 @@ const withSkills = base.extend('with-skills', ({ skill }) => ({ /* … */ }))
 
 ## Check what the environment set up
 
-```ts title="evals/guide-env.es.ts"
+```ts title="evals/guide-env.eval.ts"
 evaluate('sees the house rules', async (t) => {
   const sandbox = await t.sandbox()
   expect(await sandbox.readFile('AGENTS.md')).toContain('House rules')

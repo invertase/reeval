@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { type DebugView, formatBytes, formatDuration } from 'evalsuite/view'
 import { ChevronRight, Globe, ScrollText } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { type DebugView, formatBytes, formatDuration } from 'reeval/view'
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -176,7 +176,7 @@ export function Debug({
   return (
     <div className="space-y-6">
       <p className="text-xs text-muted-foreground">
-        Local debug data from <code className="font-mono">.es/debug</code>. It stays on this
+        Local debug data from <code className="font-mono">.reeval/debug</code>. It stays on this
         machine: it isn't recorded, and static builds leave it out.
       </p>
       <section className="space-y-2">
@@ -194,7 +194,7 @@ export function Debug({
         ) : (
           <p className="text-sm text-muted-foreground">
             No trace.ndjson: it's kept when an attempt fails, or with{' '}
-            <code className="font-mono">es run --trace</code>.
+            <code className="font-mono">reeval run --trace</code>.
           </p>
         )}
       </section>

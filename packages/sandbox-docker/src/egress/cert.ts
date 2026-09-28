@@ -56,7 +56,7 @@ const time = (date: Date) => {
 
 const ECDSA_SHA256 = seq(oid('1.2.840.10045.4.3.2'))
 const name = (commonName: string) =>
-  seq(set(seq(oid('2.5.4.10'), utf8('evalsuite'))), set(seq(oid('2.5.4.3'), utf8(commonName))))
+  seq(set(seq(oid('2.5.4.10'), utf8('reeval'))), set(seq(oid('2.5.4.3'), utf8(commonName))))
 const extension = (id: string, critical: boolean, value: Buffer) =>
   seq(oid(id), ...(critical ? [bool(true)] : []), octets(value))
 
@@ -118,7 +118,7 @@ const newKeyPair = () => generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
 export function createCertificateAuthority(days = 7): CertificateAuthority {
   const { publicKey, privateKey } = newKeyPair()
   const spki = publicKey.export({ type: 'spki', format: 'der' })
-  const subject = `evalsuite egress CA ${randomBytes(4).toString('hex')}`
+  const subject = `reeval egress CA ${randomBytes(4).toString('hex')}`
   const cert = issue({
     subject,
     issuer: subject,

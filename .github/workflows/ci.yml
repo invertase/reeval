@@ -1,4 +1,4 @@
-# ES's own gate: lint, typecheck and the test tiers as parallel jobs, summed up by one required
+# reeval's own gate: lint, typecheck and the test tiers as parallel jobs, summed up by one required
 # check, `ci`. The packages' tests run dist/, so every test job builds first (about 8 s: cheaper
 # than sharing dist/ as an artifact). The real-agent tier is in real.yml.
 #
@@ -11,7 +11,7 @@
 # macOS), npm 10.9's packed install and the coverage report.
 #
 # The engine differential needs no run of its own: the unit shards (on the newest Node) and the
-# features job record every `es` they run (ES_DIFFERENTIAL_DIR), and `differential` compares those
+# features job record every `reeval` they run (REEVAL_DIFFERENTIAL_DIR), and `differential` compares those
 # captures with the Vitest engine's (scripts/differential.mjs).
 # Coverage runs on full runs only: the test jobs collect V8 coverage from every process they start
 # (NODE_V8_COVERAGE, set after the build), and the coverage job merges it into one report. It's
@@ -103,56 +103,56 @@ jobs:
                   every; continue ;;
               esac
               case $f in
-                packages/evalsuite/src/engine/* | \
-                packages/evalsuite/test/engine* | \
-                packages/evalsuite/test/helpers.ts | \
-                packages/evalsuite/package.json | \
-                packages/evalsuite/tsdown.config.mjs | \
+                packages/reeval/src/engine/* | \
+                packages/reeval/test/engine* | \
+                packages/reeval/test/helpers.ts | \
+                packages/reeval/package.json | \
+                packages/reeval/tsdown.config.mjs | \
                 scripts/coverage.mjs)
                   engine=true ;;
               esac
               case $f in
-                packages/evalsuite/src/engine/* | \
-                packages/evalsuite/src/attempt/* | \
-                packages/evalsuite/src/sandbox/* | \
-                packages/evalsuite/src/harness/* | \
-                packages/evalsuite/src/ui/* | \
-                packages/evalsuite/src/evaluate.ts | \
-                packages/evalsuite/src/egress.ts | \
-                packages/evalsuite/test/features* | \
-                packages/evalsuite/test/support/* | \
-                packages/evalsuite/test/differential/* | \
+                packages/reeval/src/engine/* | \
+                packages/reeval/src/attempt/* | \
+                packages/reeval/src/sandbox/* | \
+                packages/reeval/src/harness/* | \
+                packages/reeval/src/ui/* | \
+                packages/reeval/src/evaluate.ts | \
+                packages/reeval/src/egress.ts | \
+                packages/reeval/test/features* | \
+                packages/reeval/test/support/* | \
+                packages/reeval/test/differential/* | \
                 scripts/differential.mjs)
                   features=true ;;
               esac
               case $f in
                 packages/sandbox-docker/* | \
                 packages/harness-* | \
-                packages/evalsuite/src/sandbox/* | \
-                packages/evalsuite/src/harness/* | \
-                packages/evalsuite/src/attempt/* | \
-                packages/evalsuite/src/egress.ts | \
-                packages/evalsuite/test/features/* | \
-                packages/evalsuite/test/docker* | \
-                packages/evalsuite/test/sandbox-* | \
-                packages/evalsuite/test/contract* | \
-                packages/evalsuite/test/e2e-real* | \
-                packages/evalsuite/test/cursor-sdk-shape*)
+                packages/reeval/src/sandbox/* | \
+                packages/reeval/src/harness/* | \
+                packages/reeval/src/attempt/* | \
+                packages/reeval/src/egress.ts | \
+                packages/reeval/test/features/* | \
+                packages/reeval/test/docker* | \
+                packages/reeval/test/sandbox-* | \
+                packages/reeval/test/contract* | \
+                packages/reeval/test/e2e-real* | \
+                packages/reeval/test/cursor-sdk-shape*)
                   docker=true ;;
               esac
               case $f in
                 packages/studio-web/* | \
-                packages/evalsuite/src/studio/* | \
-                packages/evalsuite/src/view/* | \
-                packages/evalsuite/test/studio*)
+                packages/reeval/src/studio/* | \
+                packages/reeval/src/view/* | \
+                packages/reeval/test/studio*)
                   studio=true ;;
               esac
               case $f in
                 packages/*/package.json | \
                 packages/studio-web/* | \
-                packages/evalsuite/tsdown.config.mjs | \
-                packages/evalsuite/src/root.ts | \
-                packages/evalsuite/test/pack* | \
+                packages/reeval/tsdown.config.mjs | \
+                packages/reeval/src/root.ts | \
+                packages/reeval/test/pack* | \
                 packages/sandbox-docker/docker/* | \
                 packages/harness-pi/assets/* | \
                 scripts/third-party*)
@@ -180,14 +180,14 @@ jobs:
       - uses: ./.github/actions/setup
       # biome ci: lint and format check, without writing, with GitHub annotations.
       - run: pnpm exec biome ci .
-      # evalsuite and examples/hello resolve their workspace dependencies' types from dist/, and
+      # reeval and examples/hello resolve their workspace dependencies' types from dist/, and
       # the docs' generated blocks come from dist/cli.js (help, query schema).
       - run: pnpm build
       - if: ${{ !cancelled() }}
         run: pnpm typecheck
       - name: persisted shapes (schema/ snapshots)
         if: ${{ !cancelled() }}
-        run: pnpm --filter @invertase/foobar schema:check
+        run: pnpm --filter reeval schema:check
       # Stale generated blocks, reference coverage, sidebar links and the package name.
       - if: ${{ !cancelled() }}
         run: pnpm docs:check
@@ -215,9 +215,9 @@ jobs:
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - run: echo "ES_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
-      - name: evalsuite (every test file but the fixture, Docker, studio, pack and real-agent ones)
-        working-directory: packages/evalsuite
+      - run: echo "REEVAL_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
+      - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
+        working-directory: packages/reeval
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
@@ -229,8 +229,8 @@ jobs:
         if: matrix.shard == '1/4'
         run: |
           for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
-            echo "::group::@evalsuite/$p"
-            pnpm --filter "@evalsuite/$p" test
+            echo "::group::@reeval/$p"
+            pnpm --filter "@reeval/$p" test
             echo "::endgroup::"
           done
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
@@ -240,7 +240,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: differential-unit-${{ strategy.job-index }}
-          path: ${{ env.ES_DIFFERENTIAL_DIR }}
+          path: ${{ env.REEVAL_DIFFERENTIAL_DIR }}
           if-no-files-found: warn
           retention-days: 3
 
@@ -257,10 +257,10 @@ jobs:
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - run: echo "ES_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
-      - working-directory: packages/evalsuite
+      - run: echo "REEVAL_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
+      - working-directory: packages/reeval
         env:
-          ES_FIXTURE_TIERS: fake
+          REEVAL_FIXTURE_TIERS: fake
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/features.test.ts
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
@@ -269,11 +269,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: differential-features
-          path: ${{ env.ES_DIFFERENTIAL_DIR }}
+          path: ${{ env.REEVAL_DIFFERENTIAL_DIR }}
           if-no-files-found: error
           retention-days: 3
 
-  # ES's engine against the Vitest engine's captured runs: the replay of the side-by-side
+  # reeval's engine against the Vitest engine's captured runs: the replay of the side-by-side
   # comparison made before Vitest was removed. A run a failed or cancelled shard didn't reach
   # shows up here as missing.
   differential:
@@ -293,8 +293,8 @@ jobs:
           pattern: differential-*
           merge-multiple: true
           path: ${{ runner.temp }}/es
-      - name: ES's engine does what the Vitest engine did
-        run: node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/evalsuite/test/differential/vitest "$RUNNER_TEMP/es"
+      - name: reeval's engine does what the Vitest engine did
+        run: node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/reeval/test/differential/vitest "$RUNNER_TEMP/es"
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -316,31 +316,31 @@ jobs:
       matrix:
         include:
           # The fixtures' Docker tier: the harness/* fixtures, then the rest.
-          - package: '@invertase/foobar'
+          - package: 'reeval'
             part: fixtures 1/2
             run: node --test --experimental-strip-types --no-warnings --test-name-pattern='harness/' test/features.test.ts
-          - package: '@invertase/foobar'
+          - package: 'reeval'
             part: fixtures 2/2
             run: node --test --experimental-strip-types --no-warnings --test-skip-pattern='harness/' test/features.test.ts
           # test/docker.test.ts: the image builds from a from, a dockerfile or a moving tag, then the rest.
-          - package: '@invertase/foobar'
+          - package: 'reeval'
             part: sandbox 1/2
             run: node --test --experimental-strip-types --no-warnings --test-name-pattern="$IMAGE_BUILDS" test/docker.test.ts
-          - package: '@invertase/foobar'
+          - package: 'reeval'
             part: sandbox 2/2
             run: node --test --experimental-strip-types --no-warnings --test-skip-pattern="$IMAGE_BUILDS" test/docker.test.ts
           # The Docker sandbox contracts, and the harness contract and e2e CLI suites on their
           # key-free fake row (real rows run in real.yml).
-          - package: '@invertase/foobar'
+          - package: 'reeval'
             part: contracts
             run: node --test --experimental-strip-types --no-warnings test/docker-antigravity.test.ts test/sandbox-prepare-contract.test.ts test/sandbox-contract.test.ts test/contract.test.ts test/e2e-real.test.ts test/cursor-sdk-shape.test.ts
           # Its whole suite, real containers included.
-          - package: '@evalsuite/sandbox-docker'
+          - package: '@reeval/sandbox-docker'
             part: all
             run: pnpm test
     env:
-      ES_FIXTURE_TIERS: docker
-      ES_TEST_REQUIRE_DOCKER: '1'
+      REEVAL_FIXTURE_TIERS: docker
+      REEVAL_TEST_REQUIRE_DOCKER: '1'
       # docker.test.ts's slowest tests, each building images: about half the file's time.
       IMAGE_BUILDS: 'a from tag that moves upstream|dockerfile: FROM|dockerfile \+ claudeCode|from: a toolchain image'
     steps:
@@ -351,7 +351,7 @@ jobs:
       - uses: ./.github/actions/sandbox-images
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - working-directory: ${{ matrix.package == '@invertase/foobar' && 'packages/evalsuite' || 'packages/sandbox-docker' }}
+      - working-directory: ${{ matrix.package == 'reeval' && 'packages/reeval' || 'packages/sandbox-docker' }}
         run: ${{ matrix.run }}
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
@@ -371,7 +371,7 @@ jobs:
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - working-directory: packages/evalsuite
+      - working-directory: packages/reeval
         run: node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/studio.test.ts
       # The browser test skips without Chrome, so check it's there rather than pass silently.
       - run: google-chrome --version
@@ -395,7 +395,7 @@ jobs:
       - run: node scripts/coverage.mjs engine
 
   # Installs the tarball with npm 11 (the release job's) and, off PRs, with Node 22's npm 10.9. npm
-  # before 11.6 crashed ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which ES no
+  # before 11.6 crashed ("reading 'edgesOut'", npm/cli#8261) on vitest's peer set, which reeval no
   # longer depends on; that leg keeps it that way.
   pack:
     name: packed install (npm ${{ matrix.npm }})
@@ -416,7 +416,7 @@ jobs:
       - run: pnpm build
       # pnpm pack rewrites workspace: ranges, and .pnpmfile.cjs drops devDependencies and
       # scripts. On a release commit, release.yml publishes the npm 11 leg's tarball.
-      - run: pnpm --filter @invertase/foobar pack --pack-destination "$RUNNER_TEMP/package"
+      - run: pnpm --filter reeval pack --pack-destination "$RUNNER_TEMP/package"
       - if: matrix.npm == '11'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -426,7 +426,7 @@ jobs:
           retention-days: 7
       # Besides npm, the pack test installs with the runner's Yarn 1 and with strict pnpm, which
       # install no peers.
-      - working-directory: packages/evalsuite
+      - working-directory: packages/reeval
         run: |
           yarn --version
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings test/pack.test.ts
@@ -434,7 +434,7 @@ jobs:
       # throwaway prerelease of it.
       - name: npm publish --dry-run
         if: matrix.npm == '11'
-        working-directory: packages/evalsuite
+        working-directory: packages/reeval
         run: |
           npm version --no-git-tag-version "$(node -p "require('./package.json').version")-ci.$GITHUB_RUN_ID"
           pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"
@@ -469,7 +469,7 @@ jobs:
           node scripts/coverage.mjs report "$RUNNER_TEMP"/coverage/*
           cat coverage/report/summary.md >> "$GITHUB_STEP_SUMMARY"
       - name: feature matrix
-        working-directory: packages/evalsuite
+        working-directory: packages/reeval
         run: pnpm -s features:matrix >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

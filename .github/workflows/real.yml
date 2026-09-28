@@ -7,7 +7,7 @@
 #   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
 #                        OpenCode, Goose and pi, and the newest OpenCode's providers re-probed
 #   real agents (Cursor) examples/hello's smoke profile
-# PRs get the pinned contract only. Budgets: each es run's budget.attempts, a ledger per job
+# PRs get the pinned contract only. Budgets: each reeval run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
 name: real
 
@@ -36,7 +36,7 @@ jobs:
     name: gate
     # This repository only; on a PR, only its own branches and only with the label.
     if: >-
-      github.repository == 'invertase/evalsuite' &&
+      github.repository == 'invertase/reeval' &&
       (github.event_name != 'pull_request' ||
        (github.event.pull_request.head.repo.full_name == github.repository &&
         contains(github.event.pull_request.labels.*.name, 'real-agents')))
@@ -92,15 +92,15 @@ jobs:
       - run: pnpm build
       - uses: ./.github/actions/sandbox-images
       # The real-tier fixtures ran in the contract legs; this is examples/hello's smoke profile.
-      # Without either key, es run exits 2 naming it.
+      # Without either key, reeval run exits 2 naming it.
       - name: examples/hello smoke
         working-directory: examples/hello
-        run: node ../../packages/evalsuite/dist/cli.js run --profile smoke
+        run: node ../../packages/reeval/dist/cli.js run --profile smoke
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: es-runs-${{ github.run_id }}
-          path: examples/hello/.es/runs
+          name: reeval-runs-${{ github.run_id }}
+          path: examples/hello/.reeval/runs
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 14

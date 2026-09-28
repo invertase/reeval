@@ -9,7 +9,7 @@ description: Write one eval body and run it over a list of cases with evaluate.f
 
 ## The file
 
-```ts title="evals/strings.es.ts"
+```ts title="evals/strings.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 const cases = [
@@ -37,26 +37,26 @@ evaluate.for(cases)('writes $fn', async (t, c) => {
 ## Run it
 
 ```bash
-npx es run strings --dry-run
+npx reeval run strings --dry-run
 ```
 
 ```text
 plan  3 evals · 3 cells · 3 attempts · ~9m 00s serial (~3m 00s at concurrency 4)
 eval                                    harnesses  variants  runs  attempts  notes
-evals/strings.es.ts › writes slugify    1          —         1     1
-evals/strings.es.ts › writes camelCase  1          —         1     1
-evals/strings.es.ts › writes titleCase  1          —         1     1
+evals/strings.eval.ts › writes slugify    1          —         1     1
+evals/strings.eval.ts › writes camelCase  1          —         1     1
+evals/strings.eval.ts › writes titleCase  1          —         1     1
 ```
 
 Under the [fake harness](/recipes/fake-harness), with a config that writes all three modules:
 
 ```bash
-npx es run strings --config es.fake.config.ts
+npx reeval run strings --config reeval.fake.config.ts
 ```
 
 ```text
 Summary
- evals/strings.es.ts
+ evals/strings.eval.ts
    ✓ writes slugify       85ms  1 turn
    ✓ writes camelCase     69ms  1 turn
    ✓ writes titleCase     73ms  1 turn
@@ -64,7 +64,7 @@ Summary
    Evals  3 passed (3)
 ```
 
-A filter matches the generated names, so `es run camelCase` runs one case.
+A filter matches the generated names, so `reeval run camelCase` runs one case.
 
 ## Name placeholders
 
@@ -76,7 +76,7 @@ A filter matches the generated names, so `es run camelCase` runs one case.
 
 With a list of strings, `%s` is all you need:
 
-```ts title="evals/managers.es.ts"
+```ts title="evals/managers.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate.for(['npm', 'pnpm', 'yarn'])(
@@ -101,7 +101,7 @@ Options go between the name and the body, as with `evaluate`, and apply to every
 
 A case is any value, so it can carry its own checks. Optional fields add a check only where you need it:
 
-```ts title="evals/percase.es.ts"
+```ts title="evals/percase.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 type Case = { fn: string; check: string; question?: string }
@@ -123,7 +123,7 @@ evaluate.for(cases)('exports $fn', async (t, c) => {
 ```
 
 ```text
- evals/percase.es.ts
+ evals/percase.eval.ts
    ✓ exports slugify           76ms  1 turn
    ✓ exports camelCase         83ms  judge 0.95  1 turn
 …
@@ -133,7 +133,7 @@ evaluate.for(cases)('exports $fn', async (t, c) => {
 
 `evaluate.for` shares one set of options. When cases need different options (tags, a sandbox, a timeout), a plain loop works, since `evaluate` is an ordinary function:
 
-```ts title="evals/percase.es.ts"
+```ts title="evals/percase.eval.ts"
 for (const pm of ['npm', 'pnpm']) {
   evaluate(`adds lodash with ${pm}`, { tags: [pm] }, async (t) => {
     await t.send(`Add lodash to this project with ${pm}.`)
@@ -142,18 +142,18 @@ for (const pm of ['npm', 'pnpm']) {
 ```
 
 ```bash
-npx es run --tag pnpm --dry-run
+npx reeval run --tag pnpm --dry-run
 ```
 
 ```text
 plan  1 eval · 1 cell · 1 attempt · ~3m 00s serial
 eval                                         harnesses  variants  runs  attempts  notes
-evals/percase.es.ts › adds lodash with pnpm  1          —         1     1
+evals/percase.eval.ts › adds lodash with pnpm  1          —         1     1
 ```
 
 ## Variations
 
-- **Cases in their own module:** `import { cases } from './cases.ts'`. ES records every local file an eval imports among its sources, so an edit to the list shows up when you [compare runs](/guide/history).
+- **Cases in their own module:** `import { cases } from './cases.ts'`. reeval records every local file an eval imports among its sources, so an edit to the list shows up when you [compare runs](/guide/history).
 - **Inside a group:** `evaluate.for` works in `group(…)`, and the group's options (`compare`, `runs`, `environment`) apply to every case.
 - **Competitors:** see [Check a recommendation](/recipes/recommendation) for one judge-only eval per competitor.
 

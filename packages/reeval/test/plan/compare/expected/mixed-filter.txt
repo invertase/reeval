@@ -1,0 +1,5 @@
+no profile · 2 evals · 2 cells · 3 attempts
+hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
+evals/variants.eval.ts › control and two variants               b/skilled/fake  variant skilled  gated  ×1
+evals/variants.eval.ts › every cell gated, with a minimum lift  b/skilled/fake  variant skilled  gated  ×2  minLift 0.2
+excluded: —

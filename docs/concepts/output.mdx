@@ -1,12 +1,12 @@
 ---
 title: Output modes
-description: How es run picks live, plain or agent output, and how grouped and stream logs differ.
+description: How reeval run picks live, plain or agent output, and how grouped and stream logs differ.
 ---
 
-`es run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details.
+`reeval run` prints for whoever is reading: a person at a terminal, a CI log or a coding agent. It picks a mode on its own, and a few flags, named after Turborepo's, change the details.
 
 ```bash
-es run --ui plain --log-order grouped --log-prefix task \
+reeval run --ui plain --log-order grouped --log-prefix task \
   --output-logs errors-only
 ```
 
@@ -14,7 +14,7 @@ es run --ui plain --log-order grouped --log-prefix task \
 
 ```mermaid
 flowchart TD
-  A{"--ui or ES_UI set?"} -- yes --> U[that mode]
+  A{"--ui or REEVAL_UI set?"} -- yes --> U[that mode]
   A -- no --> B{"under a coding agent?"}
   B -- yes --> AG[agent]
   B -- no --> C{"CI, or stdout not a terminal?"}
@@ -24,11 +24,11 @@ flowchart TD
 
 | Mode | Picked when | Prints |
 |---|---|---|
-| `agent` | A coding agent runs ES (Cursor, Claude Code, Codex…, as std-env detects them) | Failures (and expected misses, as `MISS`) only, then totals and the summary path; no colour, no heartbeat |
+| `agent` | A coding agent runs reeval (Cursor, Claude Code, Codex…, as std-env detects them) | Failures (and expected misses, as `MISS`) only, then totals and the summary path; no colour, no heartbeat |
 | `plain` | CI is detected (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…), or stdout isn't a terminal | Append-only lines, never rewritten |
 | `live` | On a terminal | The same as `plain`, until the redrawn view lands |
 
-If your agent isn't detected, set `ES_UI=agent` (or `AI_AGENT=<name>`).
+If your agent isn't detected, set `REEVAL_UI=agent` (or `AI_AGENT=<name>`).
 
 ## Every run starts with a plan line
 
@@ -36,7 +36,7 @@ The plan line comes first in every mode, then plain mode's run header:
 
 ```text
 plan  profile pr (auto: CI is set) · 3 evals · 3 cells · 3 attempts · ~37s serial (~12s at concurrency 4) · budget 20 attempts ✓
-es 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+reeval 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
 ```
 
 ## Grouped or stream
@@ -44,15 +44,15 @@ es 0.0.1 · 2 eval files · harness cursor:composer-2.5 · sandbox docker · con
 `--log-order grouped` is the default in CI. Each attempt's start line (`▶`) prints at once, and its detail prints as one block when it finishes, result line first, so concurrent attempts never interleave. From a real `CI=1` run:
 
 ```text
-[summarises#1 cursor] ▶ evals/jq.es.ts › summarises a JSON file with jq
-[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
-[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
-[summarises#1 cursor] ✓ evals/jq.es.ts › summarises a JSON file with jq  10s
+[summarises#1 cursor] ▶ evals/jq.eval.ts › summarises a JSON file with jq
+[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module
+[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
+[summarises#1 cursor] ✓ evals/jq.eval.ts › summarises a JSON file with jq  10s
 [summarises#1 cursor]  +0:00 sandbox ready 2s
 [summarises#1 cursor]  +0:01 turn 1 done 8s · 3 tool calls, 2 file edits
 [summarises#1 cursor]  +0:09 $ jq --version  exit 0 41ms
 [summarises#1 cursor]  +0:09 $ ./count.sh  exit 0 55ms
-[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  12s
+[adds#1 cursor] ✓ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  12s
 …
 ```
 
@@ -89,7 +89,7 @@ Every line about an attempt starts with a tag: the first distinctive word of the
 After 60 seconds without output, plain mode prints what's still running, with each attempt's phase (`sandbox`, `turn 2`, `checks`, `judging`) and elapsed time, in the shape `… 1 running, 1 queued after 45s: [greets#1 control] turn 1 45s`. CI doesn't kill a silent job, and a hung log shows where it stopped.
 
 ```bash
-ES_HEARTBEAT=30s es run   # 0 turns it off
+REEVAL_HEARTBEAT=30s reeval run   # 0 turns it off
 ```
 
 ## GitHub Actions
@@ -97,7 +97,7 @@ ES_HEARTBEAT=30s es run   # 0 turns it off
 With `GITHUB_ACTIONS=true`, passing attempts collapse into `::group::` blocks titled with their result line, and failing ones stay open with an `::error` annotation. Colour is on, and `summary.md` is appended to `$GITHUB_STEP_SUMMARY`. Lines inside a group drop their tag unless you pass `--log-prefix task`, as this real run did:
 
 ```text
-::group::[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  10s
+::group::[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  10s
 [creates#1 cursor]  +0:00 sandbox ready 1s
 [creates#1 cursor]  +0:01 turn 1 done 6s · 1 tool call, 2 file edits
 [creates#1 cursor]  +0:08 $ node --test  exit 0 137ms
@@ -113,13 +113,13 @@ Agent mode prints one block per failure with its record path, then totals, and t
 
 ```text
 plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
-es run: 1 eval file
-FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (21s, judge)
+reeval run: 1 eval file
+FAIL evals/preferences.eval.ts › recommends Genkit over LangChain for production apps (21s, judge)
   judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
-  record: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-es-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
+  record: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-eval-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
 …
 7 failed
-summary: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
+summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 ```
 
 ## The summary
@@ -128,13 +128,13 @@ Plain output ends with a summary: a file › group tree with each eval's outcome
 
 ```text
 Summary
- evals/hello.es.ts
+ evals/hello.eval.ts
    greet module
      ✓ creates a tested greet module                4/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
          antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
 …
- evals/skill.es.ts
+ evals/skill.eval.ts
    house greeting
      ✓ greets in the house style                    4/8 · 100% gated  8 attempts
          cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
@@ -142,25 +142,25 @@ Summary
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
 …
 Expected misses, not gated (4)
- ○ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#1
+ ○ evals/skill.eval.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#1
    Error: expected command to succeed, exit code 1
 …
 Attempts  12 passed · 4 missed, not gated (16 attempts, 3 evals)
 Duration  2m 39s
   Tokens  5149k in (2946k cached) · 64k out
- Results  .es/runs/20260926T174444Z_b010670_ada-lovelace_7gmj/summary.md
+ Results  .reeval/runs/20260926T174444Z_b010670_ada-lovelace_7gmj/summary.md
 ```
 
-An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, pi and Codex do): input includes cached reads, and there's no cost line because ES prices no models.
+An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, pi and Codex do): input includes cached reads, and there's no cost line because reeval prices no models.
 
 Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its artifact directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure. Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
 
 | Variable | Same as |
 |---|---|
-| `ES_UI` | `--ui` |
-| `ES_LOG_ORDER` | `--log-order` |
-| `ES_LOG_PREFIX` | `--log-prefix` |
-| `ES_OUTPUT_LOGS` | `--output-logs` |
+| `REEVAL_UI` | `--ui` |
+| `REEVAL_LOG_ORDER` | `--log-order` |
+| `REEVAL_LOG_PREFIX` | `--log-prefix` |
+| `REEVAL_OUTPUT_LOGS` | `--output-logs` |
 | `NO_COLOR`, `FORCE_COLOR` | Colour off or on |
 
 ## Next

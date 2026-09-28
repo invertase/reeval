@@ -316,7 +316,7 @@ describe('a failed or cancelled turn, as the runner reports it (SDK 1.0.32)', ()
     assert.equal(finish?.type === 'finish' && finish.finishReason.unified, 'error')
   })
 
-  test('a turn ES cancelled mid-edit: no error, the open edit closed, finish cancelled', () => {
+  test('a turn reeval cancelled mid-edit: no error, the open edit closed, finish cancelled', () => {
     const { parts } = translate(fixture('cancelled.ndjson'), { exitCode: 0 })
     assert.equal(
       parts.some((p) => p.type === 'error'),

@@ -1,11 +1,11 @@
 ---
 title: defineConfig
-description: Every key of es.config.ts, its default and type, the callback's helpers, and the errors ES raises for a bad config.
+description: Every key of reeval.config.ts, its default and type, the callback's helpers, and the errors reeval raises for a bad config.
 ---
 
-`es.config.ts` default-exports `defineConfig(…)`: the project's defaults, profiles and run settings.
+`reeval.config.ts` default-exports `defineConfig(…)`: the project's defaults, profiles and run settings.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 import { docker } from '{{ pkg }}/sandbox'
@@ -25,35 +25,35 @@ Without a config file, every key takes its default. The option keys (`harness`, 
 
 ```text
 my-project/
-  es.config.ts      ← found from my-project/ and every directory below it
+  reeval.config.ts      ← found from my-project/ and every directory below it
   .env.local
   evals/
   packages/app/
-    es.config.mjs   ← nearer: packages/app/ and below use this one
+    reeval.config.mjs   ← nearer: packages/app/ and below use this one
     src/lib/
 ```
 
-Without `--config`, `es` looks in the current directory, then in each parent up to the filesystem root, and uses the first config it finds, as Vitest and ESLint do. In each directory it tries `es.config.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs`, in that order. A git or workspace root doesn't stop the search, so a nested project with its own config uses it, and a project without one uses its parent's.
+Without `--config`, `reeval` looks in the current directory, then in each parent up to the filesystem root, and uses the first config it finds, as Vitest and ESLint do. In each directory it tries `reeval.config.ts`, `.mts`, `.cts`, `.js`, `.mjs` and `.cjs`, in that order. A git or workspace root doesn't stop the search, so a nested project with its own config uses it, and a project without one uses its parent's.
 
-| You run | ES reads |
+| You run | reeval reads |
 |---|---|
-| `es run` in `my-project/evals` | `my-project/es.config.ts` |
-| `es run` in `packages/app/src/lib` | `packages/app/es.config.mjs` |
-| `es run --config ../es.claude.config.ts` | that file, relative to the current directory |
+| `reeval run` in `my-project/evals` | `my-project/reeval.config.ts` |
+| `reeval run` in `packages/app/src/lib` | `packages/app/reeval.config.mjs` |
+| `reeval run --config ../reeval.claude.config.ts` | that file, relative to the current directory |
 
-`--config` always wins, and names like `es.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). With no config found, every key takes its default and the current directory is the project root.
+`--config` always wins, and names like `reeval.claude.config.ts` are only read through it. A missing `--config` file is an error (`Config file not found: nope.ts`). With no config found, every key takes its default and the current directory is the project root.
 
-The config's directory is the project root, wherever you run `es`. `include` globs, helper paths (`skill.local`, `file`), `.env.local` and `.env`, `.es/` (scratch runs, debug data, `history.db`), the history folder and `es studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root. Env file precedence: the shell, then `.env.local`, then `.env`.
+The config's directory is the project root, wherever you run `reeval`. `include` globs, helper paths (`skill.local`, `file`), `.env.local` and `.env`, `.reeval/` (scratch runs, debug data, `history.db`), the history folder and `reeval studio build`'s default `studio-dist/` all resolve against it. So every command behaves the same from a subdirectory as from the root. Env file precedence: the shell, then `.env.local`, then `.env`.
 
-```text title="es run -v, in my-project/src/lib"
-plan  config ../../es.config.ts · 1 eval · 1 cell · 1 attempt · ~1s serial
+```text title="reeval run -v, in my-project/src/lib"
+plan  config ../../reeval.config.ts · 1 eval · 1 cell · 1 attempt · ~1s serial
 …
-[greets#1 fake]  10:28:24 plan      config ../../es.config.ts · no profile · …
+[greets#1 fake]  10:28:24 plan      config ../../reeval.config.ts · no profile · …
 ```
 
 The plan line names the config when it isn't in the current directory, and `-v` names it on each attempt's first `plan` line.
 
-The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `es.config.ts must default-export defineConfig({...})`.
+The config is TypeScript loaded as is, with no build step. It must default-export an object or a callback that returns one: anything else is `reeval.config.ts must default-export defineConfig({...})`.
 
 ## The callback
 
@@ -80,15 +80,15 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="command" type="string">
-  The command loading the config: `run` (also for `es image build`), `studio`, `mcp`, `clean`, or a history command (`record`, `history`, `show`, `compare`, `checkout`, `query`, `analyze`).
+  The command loading the config: `run` (also for `reeval image build`), `studio`, `mcp`, `clean`, or a history command (`record`, `history`, `show`, `compare`, `checkout`, `query`, `analyze`).
 </Property>
 
 <Property name="hostEnv" type="NodeJS.ProcessEnv">
-  `process.env` of the `es` process, after `.env.local` and `.env` are loaded.
+  `process.env` of the `reeval` process, after `.env.local` and `.env` are loaded.
 </Property>
 
 <Property name="profile" type="string | undefined">
-  The profile named by `--profile` or `ES_PROFILE`. It's `undefined` when the profile comes from `defaultProfile`, which is resolved after the callback returns.
+  The profile named by `--profile` or `REEVAL_PROFILE`. It's `undefined` when the profile comes from `defaultProfile`, which is resolved after the callback returns.
 </Property>
 
 `defineConfig` itself does nothing at runtime: it returns what you pass, and exists for types.
@@ -96,7 +96,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 ## Keys
 
 <Property name="include" type="string[]">
-  Globs of eval files, relative to the config's directory. Default `['evals/**/*.es.ts']`. Must be a list of strings.
+  Globs of eval files, relative to the config's directory. Default `['evals/**/*.eval.ts']`. Must be a list of strings.
 </Property>
 
 <Property name="harness" type="Harness | Harness[]">
@@ -136,11 +136,11 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="concurrency" type="number">
-  How many attempts run at once. A whole number of at least 1. Default: the smallest of 8, the CPU count, and the memory in GB, measured on the Docker VM (or the host when Docker isn't available). `--concurrency` beats `ES_CONCURRENCY`, which beats this key.
+  How many attempts run at once. A whole number of at least 1. Default: the smallest of 8, the CPU count, and the memory in GB, measured on the Docker VM (or the host when Docker isn't available). `--concurrency` beats `REEVAL_CONCURRENCY`, which beats this key.
 </Property>
 
 <Property name="record" type="'manual' | 'ci' | 'always'">
-  When `es run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `es record`. Default `'ci'`. A run stopped by `budget.duration` is recorded too, with status `budget`, and `es compare` never takes it as a base; an interrupted one never is. With `manual`, `es record` needs `--allow-incomplete` for it.
+  When `reeval run` writes a run to history. `ci` records only when `CI` is set; `manual` leaves it to `reeval record`. Default `'ci'`. A run stopped by `budget.duration` is recorded too, with status `budget`, and `reeval compare` never takes it as a base; an interrupted one never is. With `manual`, `reeval record` needs `--allow-incomplete` for it.
 </Property>
 
 <Property name="history" type="{ dir?: string, artifacts?: 'all' | 'failures' | 'none' }">
@@ -156,7 +156,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="defaultProfile" type="{ ci?: string, local?: string }">
-  The profile used when neither `--profile` nor `ES_PROFILE` names one: `ci` when `CI` is set, `local` otherwise. Each must name a key of `profiles`.
+  The profile used when neither `--profile` nor `REEVAL_PROFILE` names one: `ci` when `CI` is set, `local` otherwise. Each must name a key of `profiles`.
 </Property>
 
 <Property name="secrets" type="{ unbrokered?: 'warn' | 'error' }">
@@ -164,11 +164,11 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="debug" type="{ keep?: number, traceBufferMb?: number }">
-  `keep` is how many runs of `.es/debug` data to keep (default `20`); `traceBufferMb` caps each attempt's in-memory trace (default `8`). See [Debug data](/reference/debug-data).
+  `keep` is how many runs of `.reeval/debug` data to keep (default `20`); `traceBufferMb` caps each attempt's in-memory trace (default `8`). See [Debug data](/reference/debug-data).
 </Property>
 
 <Property name="analysis" type="{ model?, instructions?, maxInputTokens?, maxOutputTokens? }">
-  Settings for `es analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). See [es analyze](/reference/cli/analyze).
+  Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). See [reeval analyze](/reference/cli/analyze).
 </Property>
 
 `compare`, `tags` and `pin` belong on groups and evals, not in the config.
@@ -178,13 +178,13 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 Every config error exits 2 before anything runs. An unknown key gets a hint when it looks like a known one:
 
 ```text
-es: Unknown option "harnesses" in es.config.ts. Did you mean "harness"?
+reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 ```
 
 | Mistake | Message |
 |---|---|
-| `compare` in the config | `compare can't be set in es.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.` |
-| A literal secret | `env.API_KEY in es.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` |
+| `compare` in the config | `compare can't be set in reeval.config.ts: it would multiply every eval. Put it on the group or eval that asks the question.` |
+| A literal secret | `env.API_KEY in reeval.config.ts is a literal string. Pass secrets with secret.fromEnv() so they're redacted and never recorded.` |
 | A judge model object | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
 | A model without a provider | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
 | A bad duration | `Invalid duration "10 minutes". Use e.g. "90s" or "15m".` |
@@ -192,7 +192,7 @@ es: Unknown option "harnesses" in es.config.ts. Did you mean "harness"?
 | A bad concurrency | `config.concurrency must be a whole number of at least 1 (got 0)` |
 | An unknown `debug` key | `Unknown option "keepRuns" in config.debug. Use keep, traceBufferMb.` |
 | A missing default profile | `defaultProfile names "pr", which isn't in profiles (none)` |
-| A `Promise` from the callback | `The defineConfig callback in es.config.ts returned a Promise. …` |
+| A `Promise` from the callback | `The defineConfig callback in reeval.config.ts returned a Promise. …` |
 
 More messages, with fixes, are on [Errors](/reference/errors).
 

@@ -1,4 +1,4 @@
-// `@evalsuite/harness-opencode`: OpenCode on any brokerable provider, as an AI SDK harness over ACP.
+// `@reeval/harness-opencode`: OpenCode on any brokerable provider, as an AI SDK harness over ACP.
 export {
   createOpenCode,
   OPENCODE_CLI_VERSION,

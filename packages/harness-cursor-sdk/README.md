@@ -1,4 +1,4 @@
-# @evalsuite/harness-cursor-sdk
+# @reeval/harness-cursor-sdk
 
 An [AI SDK harness](https://ai-sdk.dev/docs) adapter for Cursor's agent, over the
 [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript) (`@cursor/sdk`) and its local
@@ -7,7 +7,7 @@ runtime. It's shaped like the `@ai-sdk/harness-*` packages, so it could move ups
 
 ```ts
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { createCursorSdk } from '@evalsuite/harness-cursor-sdk'
+import { createCursorSdk } from '@reeval/harness-cursor-sdk'
 
 const agent = new HarnessAgent({
   harness: createCursorSdk({
@@ -80,5 +80,5 @@ output, non-text prompts, manual compaction, and suspending or continuing a turn
 
 `pnpm test` runs `node:test` over the translator (with NDJSON captured from a real SDK run: shell,
 grep, reads, edits, delete, an MCP call, rules and both skill layers, then a resumed turn), the
-auth and brokering rules, the bootstrap, and the adapter against an in-memory sandbox. ES's own
+auth and brokering rules, the bootstrap, and the adapter against an in-memory sandbox. reeval's own
 tests run it in Docker against real Cursor.

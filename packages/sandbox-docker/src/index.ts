@@ -1,4 +1,4 @@
-// `@evalsuite/sandbox-docker`: a local Docker sandbox for AI SDK harnesses, with an egress gateway
+// `@reeval/sandbox-docker`: a local Docker sandbox for AI SDK harnesses, with an egress gateway
 // that brokers credentials and enforces a network policy.
 export {
   causeLine,
@@ -22,12 +22,12 @@ export {
   DOCKER_CONTEXT,
   dockerfileTag,
   dockerignoreMatcher,
-  ES_BASE_ARG,
   harnessImageFor,
   type InstallStep,
   installLayerTag,
   installScript,
   pruneImages,
+  REEVAL_BASE_ARG,
   resolveFrom,
   usesEsBase,
 } from './build-image.ts'

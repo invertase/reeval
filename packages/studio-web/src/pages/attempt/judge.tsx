@@ -1,5 +1,5 @@
-import type { AttemptRecord, JudgementRecord, RunRecord } from 'evalsuite/view'
 import { Gavel } from 'lucide-react'
+import type { AttemptRecord, JudgementRecord, RunRecord } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'

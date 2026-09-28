@@ -1,0 +1,8 @@
+no profile · 6 evals · 6 cells · 6 attempts
+evals/only.eval.ts › focused                             fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › slow things › big [slow]            fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › slow things › bigger [slow, flaky]  fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › quick                               fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › case 1 [slow]                       fake/-/fake  control  gated  ×1
+evals/tags.eval.ts › case 2 [slow]                       fake/-/fake  control  gated  ×1
+excluded: evals/groups.eval.ts › parked › inside (skip), evals/groups.eval.ts › parked › nested › deeper (skip), evals/groups.eval.ts › someday (todo), evals/only.eval.ts › sibling (skip), evals/only.eval.ts › skipped (skip), evals/only.eval.ts › later (todo)

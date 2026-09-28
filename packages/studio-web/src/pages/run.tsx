@@ -1,6 +1,21 @@
 import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router'
 import {
+  ChevronRight,
+  Clock,
+  Coins,
+  FileCode2,
+  Folder,
+  GitBranch,
+  GitCommitHorizontal,
+  GitCompareArrows,
+  History,
+  ListFilter,
+  ShieldAlert,
+  User,
+} from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
   activityLabel,
   type CellRow,
   cellRows,
@@ -18,22 +33,7 @@ import {
   shortSha,
   type TreeNode,
   VERDICT_TEXT,
-} from 'evalsuite/view'
-import {
-  ChevronRight,
-  Clock,
-  Coins,
-  FileCode2,
-  Folder,
-  GitBranch,
-  GitCommitHorizontal,
-  GitCompareArrows,
-  History,
-  ListFilter,
-  ShieldAlert,
-  User,
-} from 'lucide-react'
-import { useMemo, useState } from 'react'
+} from 'reeval/view'
 import { CopyButton } from '@/components/copy-button'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
 import { Lift, OutcomeBadge, OutcomeIcon, PassRate, TallyBar } from '@/components/status'
@@ -470,7 +470,9 @@ export function RunPage() {
               </Link>
             </Button>
           ) : null}
-          {record.git ? <CopyButton value={`es checkout ${runId}`} label="es checkout" /> : null}
+          {record.git ? (
+            <CopyButton value={`reeval checkout ${runId}`} label="reeval checkout" />
+          ) : null}
         </div>
       </RunHeader>
 
@@ -604,7 +606,8 @@ export function RunPage() {
         </TabsContent>
       </Tabs>
       <p className="text-xs text-muted-foreground">
-        Started {timeAgo(record.startedAt)} · artifacts: {record.artifacts} · ES {record.stack.es}
+        Started {timeAgo(record.startedAt)} · artifacts: {record.artifacts} · reeval{' '}
+        {record.stack.es}
       </p>
     </div>
   )

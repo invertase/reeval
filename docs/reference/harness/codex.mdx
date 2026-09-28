@@ -5,7 +5,7 @@ description: The Codex harness, its options and id, its OpenAI API key, the toke
 
 `codex()` runs OpenAI's [Codex CLI](https://github.com/openai/codex) in the Docker sandbox, one `codex exec --json` process per turn, on an OpenAI API key. `model` is required.
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { codex } from '{{ pkg }}/harness'
 
@@ -38,10 +38,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `OPENAI_API_KEY` (an OpenAI API key) |
-| Adapter | `@evalsuite/harness-codex` 0.1.0, bundled with ES |
+| Adapter | `@reeval/harness-codex` 0.1.0, bundled with reeval |
 | CLI | `@openai/codex` 0.157.1, its native Linux build, checked against npm's sha512 |
 | Sandbox | `docker()` only |
-| Image | `evalsuite-sandbox:codex-0.1.0` |
+| Image | `reeval-sandbox:codex-0.1.0` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.agents/skills` |
 | Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
@@ -50,15 +50,15 @@ export default defineConfig({
 | Served model | The dated model and reasoning effort, from each API response |
 | MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
 
-Build its image once with `es image build` in a project whose config uses `codex()`. `gpt-5.4-mini` is cheap and passes the harness contract; pin the model you mean to measure.
+Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.4-mini` is cheap and passes the harness contract; pin the model you mean to measure.
 
 ## Why not `@ai-sdk/harness-codex`
 
-That adapter runs Codex in the sandbox too, but its stream carries none of Codex's own events, so ES couldn't check Codex's output format or replay real runs. It also drops reasoning tokens, and the release that matches ES's `@ai-sdk/harness` pins Codex 0.155.0 behind `@openai/codex-sdk`. ES's adapter runs `codex exec --json`, which that SDK wraps, directly.
+That adapter runs Codex in the sandbox too, but its stream carries none of Codex's own events, so reeval couldn't check Codex's output format or replay real runs. It also drops reasoning tokens, and the release that matches reeval's `@ai-sdk/harness` pins Codex 0.155.0 behind `@openai/codex-sdk`. reeval's adapter runs `codex exec --json`, which that SDK wraps, directly.
 
 ## The key
 
-ES passes `OPENAI_API_KEY` to the adapter explicitly, and Codex gets a placeholder. The adapter gives Codex its own provider for the OpenAI API, with WebSockets off, so every model call is one HTTP request the gateway can read. The gateway swaps the real key in on that request only:
+reeval passes `OPENAI_API_KEY` to the adapter explicitly, and Codex gets a placeholder. The adapter gives Codex its own provider for the OpenAI API, with WebSockets off, so every model call is one HTTP request the gateway can read. The gateway swaps the real key in on that request only:
 
 | Host | Endpoint |
 |---|---|
@@ -68,7 +68,7 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 ## Tokens and the served model
 
-Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens. Codex reports no cost, and ES prices no models.
+Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens. Codex reports no cost, and reeval prices no models.
 
 Codex doesn't say which model served a turn. The gateway reads it from each response instead: the Responses API names the dated model and the reasoning effort Codex asked for, so a turn on `gpt-5.4-mini` records `gpt-5.4-mini-2026-03-17[effort=medium]`. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
 

@@ -5,7 +5,7 @@ description: Every option groups, evals, profiles and the config accept, and how
 
 `defineConfig`, `group` and `evaluate` take the same options. They cascade config → profile `defaults` → outer group → inner group → eval, then the profile's `limit` narrows them, then `--runs` overrides.
 
-```ts title="evals/skill.es.ts"
+```ts title="evals/skill.eval.ts"
 group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'] }, () => {
   evaluate('greets in the house style', { timeout: '10m', tags: ['skills'] }, async (t) => {
     // …
@@ -17,7 +17,7 @@ group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'
 
 [//]: # (generated:option-keys)
 
-| Key | `es.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
+| Key | `reeval.config.ts` | Profile `defaults` | Group or eval | Profile `limit` |
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
 | [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
@@ -57,7 +57,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="compare" type="Environment[] | { variants, gate?, minLift?, harness? } | false">
-  Variants to run next to the inherited environment, reported as lift. **Replaces**. Groups and evals only: it's refused in `es.config.ts`. `false` opts out.
+  Variants to run next to the inherited environment, reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `false` opts out.
 
   - `variants`: environments. Each variant cell runs `control.extend(variant)`.
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
@@ -70,7 +70,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="runs" type="number">
-  Attempts per cell, a whole number of at least 1. **Replaces**. `es run --runs n` overrides every level, pins included. Default 1.
+  Attempts per cell, a whole number of at least 1. **Replaces**. `reeval run --runs n` overrides every level, pins included. Default 1.
 </Property>
 
 <Property name="gate" type="'all' | { passRate: number }">
@@ -94,7 +94,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="tags" type="string[]">
-  Labels for `es run --tag`. **Union** of every level.
+  Labels for `reeval run --tag`. **Union** of every level.
 </Property>
 
 <Property name="pin" type="Array<'harness' | 'runs' | 'compare'>">
@@ -111,7 +111,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 | Inner group, then outer group | `group(name, options, fn)` |
 | Environment `egress` | For `egress` only |
 | Profile `defaults` | Fills in what nothing else set |
-| Config | `es.config.ts` |
+| Config | `reeval.config.ts` |
 
 ## Related
 

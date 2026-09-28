@@ -4,7 +4,7 @@
 # its `ci` check fails when any of these fails. No concurrency group: the caller's applies.
 #
 # The Docker tier runs on Linux only: GitHub's Windows runners have Windows containers only, while
-# ES's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
+# reeval's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
 # have no Docker. Windows starts processes slowly, so its unit files run in six shards.
 name: extended
 
@@ -29,8 +29,8 @@ jobs:
       - uses: ./.github/actions/setup
         with: { node-version: '22.13' }
       - run: pnpm build
-      - name: evalsuite (every test file but the fixture, Docker, studio, pack and real-agent ones)
-        working-directory: packages/evalsuite
+      - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
+        working-directory: packages/reeval
         run: |
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
@@ -40,8 +40,8 @@ jobs:
         if: matrix.shard == '1/4'
         run: |
           for p in sandbox-docker harness-antigravity harness-cursor-sdk harness-opencode harness-goose harness-pi harness-codex; do
-            echo "::group::@evalsuite/$p"
-            pnpm --filter "@evalsuite/$p" test
+            echo "::group::@reeval/$p"
+            pnpm --filter "@reeval/$p" test
             echo "::endgroup::"
           done
 
@@ -67,7 +67,7 @@ jobs:
       - uses: ./.github/actions/setup
       - run: pnpm build
       - if: matrix.part == 'tiers'
-        run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and ES's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
+        run: echo "::notice title=No Docker tier on Windows::GitHub's Windows runners run Windows containers only, and reeval's sandboxes are Linux containers. The docker jobs run the Docker tier on Linux."
       - run: scripts/ci-os.sh ${{ matrix.part }}
 
   macos:

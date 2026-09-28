@@ -3,12 +3,12 @@ title: The run record
 description: Every field of a run's JSON record, and the history folder layout.
 ---
 
-Each run is one JSON file, `<runId>.json`, plus optional artifacts in `<runId>/`. The record is immutable once written. `es show <run> --json` prints it.
+Each run is one JSON file, `<runId>.json`, plus optional artifacts in `<runId>/`. The record is immutable once written. `reeval show <run> --json` prints it.
 
-A record written before a field existed still loads everywhere: ES reads the missing field as empty (`[]`, or `false` for `todo`). A record from a newer ES loads too, ignoring fields this ES doesn't know, unless its `schemaVersion` is higher: then ES skips it with a warning to upgrade.
+A record written before a field existed still loads everywhere: reeval reads the missing field as empty (`[]`, or `false` for `todo`). A record from a newer reeval loads too, ignoring fields this reeval doesn't know, unless its `schemaVersion` is higher: then reeval skips it with a warning to upgrade.
 
 ```bash
-npx es show latest --json | jq '.evals[] | select(.outcome != "pass") | .id'
+npx reeval show latest --json | jq '.evals[] | select(.outcome != "pass") | .id'
 ```
 
 ## Layout
@@ -24,13 +24,13 @@ evals/.history/                            commit this
     judge-input.json                       what each judge call saw
     setup.log                              each environment setup step's output
     checks/<n>.log                         each t.exec: command, exit code, stdout, stderr
-.es/                                       scratch: gitignore it
-  runs/<runId>.json + <runId>/             every es run, same shape
+.reeval/                                       scratch: gitignore it
+  runs/<runId>.json + <runId>/             every reeval run, same shape
   debug/<runId>/…                          local debug data, never recorded
-  history.db                               es query's projection
+  history.db                               reeval query's projection
 ```
 
-The record is `kind: "es-run"`, `schemaVersion: 1`. While ES is pre-release the schema changes in place, and an older record may not parse. Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
+The record is `kind: "es-run"`, `schemaVersion: 1`. While reeval is pre-release the schema changes in place, and an older record may not parse. Single tool outputs, check streams and per-file diffs over 128 KB keep their head and tail, a truncation marker and the full text's sha256. Records are redacted before they're written.
 
 ## Reading one
 
@@ -43,13 +43,13 @@ Start at `evals[]` where `outcome != "pass"`, then its `cells[]` for pass rates,
   "runId": "20260926T170558Z_bd6205e_ada-lovelace_sycz",
   "status": "complete",
   "summary": { "evals": 1, "attempts": 4, "pass": 2, "fail": 2, "notGated": 2, "infraError": 0, "skipped": 0 },
-  "evals": [{ "id": "evals/skill.es.ts › house greeting › greets in the house style", "outcome": "pass", "…": "…" }]
+  "evals": [{ "id": "evals/skill.eval.ts › house greeting › greets in the house style", "outcome": "pass", "…": "…" }]
 }
 ```
 
 ## Fields
 
-The type definitions are in `packages/evalsuite/src/history/types.ts`; the environment, egress and image records are in `src/types.ts`. This section is generated from them.
+The type definitions are in `packages/reeval/src/history/types.ts`; the environment, egress and image records are in `src/types.ts`. This section is generated from them.
 
 ### Value types
 
@@ -132,13 +132,13 @@ An attempt's `error` is `{ kind, message, prepare? }`. `prepare` is set when its
 ### GitInfo
 
 <Property name="sha" type="string">
-  The commit the run executed at: HEAD when `es run` started. The later commit that adds the history file is a different, descendant commit.
+  The commit the run executed at: HEAD when `reeval run` started. The later commit that adds the history file is a different, descendant commit.
 </Property>
 
 <Property name="branch" type="string | null"></Property>
 
 <Property name="dirty" type="boolean">
-  Uncommitted changes, outside `.es/` and the history folder, when the run started.
+  Uncommitted changes, outside `.reeval/` and the history folder, when the run started.
 </Property>
 
 <Property name="diffHash" type="string | null">
@@ -228,7 +228,7 @@ A sandbox with more privilege than the default `es` user: `docker({ root: true }
 </Property>
 
 <Property name="where" type="string">
-  That level as ES names it: `es.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`.
+  That level as reeval names it: `reeval.config.ts`, `profiles.pr.defaults`, `group("net")` or `evaluate("installs deps")`.
 </Property>
 
 <Property name="file" type="string | null">
@@ -240,12 +240,12 @@ A sandbox with more privilege than the default `es` user: `docker({ root: true }
 </Property>
 
 <Property name="message" type="string">
-  The line ES prints, after `WARNING: ` (root) or `warning: ` (capabilities).
+  The line reeval prints, after `WARNING: ` (root) or `warning: ` (capabilities).
 </Property>
 
 ### Cost
 
-The tokens the run used, as the harnesses count them; ES prices nothing.
+The tokens the run used, as the harnesses count them; reeval prices nothing.
 
 <Property name="inputTokens" type="number | null">
   Prompt tokens, cache reads and writes included.
@@ -496,7 +496,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="transcript" type="FileRef" optional></Property>
 
 <Property name="rawTranscript" type="FileRef" optional>
-  Unnormalised harness stream parts, only with `ES_RAW_TRANSCRIPT=1`.
+  Unnormalised harness stream parts, only with `REEVAL_RAW_TRANSCRIPT=1`.
 </Property>
 
 <Property name="diff" type="FileRef" optional></Property>
@@ -633,7 +633,7 @@ An attempt's network traffic. `allowed` is every host a restricted policy let th
 
 ### AttemptImage
 
-The image an attempt's container started from, and how ES made it.
+The image an attempt's container started from, and how reeval made it.
 
 <Property name="ref" type="string"></Property>
 
@@ -656,7 +656,7 @@ The image an attempt's container started from, and how ES made it.
 </Property>
 
 <Property name="from" type="{ref: string; digest: string | null}" optional>
-  `docker({ from })`: the base as written and the digest the image was built on (a local-only base's image id); `es image build` rebuilds it when the tag has moved since.
+  `docker({ from })`: the base as written and the digest the image was built on (a local-only base's image id); `reeval image build` rebuilds it when the tag has moved since.
 </Property>
 
 ### PhaseTimings
@@ -687,6 +687,6 @@ Each record lists these: sampled agent output, provider-side model updates, netw
 
 ## Related
 
-- [es show, compare](/reference/cli/history)
+- [reeval show, compare](/reference/cli/history)
 - [Transcripts](/reference/transcript)
 - [Fingerprints and drift](/concepts/fingerprints)

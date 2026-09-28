@@ -1,11 +1,11 @@
 ---
 title: Egress
-description: Egress policies, the hosts ES allows automatically, DEFAULT_EGRESS_ALLOW, the plan line and the egress field of the record.
+description: Egress policies, the hosts reeval allows automatically, DEFAULT_EGRESS_ALLOW, the plan line and the egress field of the record.
 ---
 
 `egress` says where the sandbox may connect. The Docker sandbox enforces it and records every connection.
 
-```ts title="evals/offline.es.ts"
+```ts title="evals/offline.eval.ts"
 import { DEFAULT_EGRESS_ALLOW, evaluate } from '{{ pkg }}'
 
 evaluate(
@@ -31,11 +31,11 @@ evaluate(
   The listed hosts, plus the automatic hosts. `*.example.com` matches any subdomain of `example.com` (not `example.com` itself). IPv4 addresses are allowed as entries. Host names only: no scheme, path or port.
 </Property>
 
-A refused request doesn't fail the attempt: the client gets an error and the agent carries on. The refusal is recorded, and the response body says why: `blocked by the ES egress policy: <reason>`.
+A refused request doesn't fail the attempt: the client gets an error and the agent carries on. The refusal is recorded, and the response body says why: `blocked by the reeval egress policy: <reason>`.
 
 ## Where it's set
 
-`egress` is accepted in `es.config.ts`, profile `defaults`, environments, groups and evals. The most specific wins, and a policy replaces rather than merges:
+`egress` is accepted in `reeval.config.ts`, profile `defaults`, environments, groups and evals. The most specific wins, and a policy replaces rather than merges:
 
 | Level | Wins over |
 |---|---|
@@ -45,7 +45,7 @@ A refused request doesn't fail the attempt: the client gets an error and the age
 
 ## Automatic hosts
 
-Under `'deny-all'` or an allowlist, ES adds the hosts the attempt can't work without:
+Under `'deny-all'` or an allowlist, reeval adds the hosts the attempt can't work without:
 
 | Source | Hosts |
 |---|---|
@@ -134,12 +134,12 @@ A restricted policy is part of the environment's fingerprint, so runs under diff
 
 | Mistake | Message |
 |---|---|
-| A bare list | `egress is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got ["api.example.com"]) in es.config.ts. For a list of hosts, use { allow: ["api.example.com"] }.` |
-| A deny list | `Unknown egress key "deny" in es.config.ts. A policy lists what's allowed; everything else is refused.` |
-| A URL | `egress.allow in es.config.ts: hosts are host names, not URLs: use 'api.example.com' (got 'https://api.example.com/v1')` |
-| A port | `egress.allow in es.config.ts: hosts are host names without a port: use 'api.example.com' (got 'api.example.com:443')` |
-| A top-level wildcard | `egress.allow in es.config.ts: '*.com' would allow every host under .com; name the domain, e.g. '*.example.com'.` |
-| A wildcard address | `egress.allow in es.config.ts: '*.10.0.0.1' isn't a host name or an IPv4 address, and a *. pattern never matches an address.` |
+| A bare list | `egress is 'allow-all' (the default), 'deny-all', or { allow: ['api.example.com', '*.example.org'] } (got ["api.example.com"]) in reeval.config.ts. For a list of hosts, use { allow: ["api.example.com"] }.` |
+| A deny list | `Unknown egress key "deny" in reeval.config.ts. A policy lists what's allowed; everything else is refused.` |
+| A URL | `egress.allow in reeval.config.ts: hosts are host names, not URLs: use 'api.example.com' (got 'https://api.example.com/v1')` |
+| A port | `egress.allow in reeval.config.ts: hosts are host names without a port: use 'api.example.com' (got 'api.example.com:443')` |
+| A top-level wildcard | `egress.allow in reeval.config.ts: '*.com' would allow every host under .com; name the domain, e.g. '*.example.com'.` |
+| A wildcard address | `egress.allow in reeval.config.ts: '*.10.0.0.1' isn't a host name or an IPv4 address, and a *. pattern never matches an address.` |
 | A policy in the fake sandbox | `… runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.` |
 
 ## Related

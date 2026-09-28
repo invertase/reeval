@@ -1,0 +1,141 @@
+import { randomBytes } from 'node:crypto'
+import { readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, relative, resolve, sep } from 'node:path'
+import { VERSION as ANTIGRAVITY_VERSION } from '@reeval/harness-antigravity'
+import { VERSION as CODEX_VERSION } from '@reeval/harness-codex'
+import { VERSION as CURSOR_SDK_VERSION } from '@reeval/harness-cursor-sdk'
+import { VERSION as GOOSE_VERSION } from '@reeval/harness-goose'
+import { VERSION as OPENCODE_VERSION } from '@reeval/harness-opencode'
+import { VERSION as PI_VERSION } from '@reeval/harness-pi'
+import { adapterVersion } from '@reeval/sandbox-docker'
+import { git, repoTop } from '../git.ts'
+import { sha256 } from '../ids.ts'
+import { DIRECT_PROVIDERS } from '../judge/index.ts'
+import { ownVersion } from '../root.ts'
+import type { RunRecord } from './types.ts'
+
+const LOCKFILES = [
+  'pnpm-lock.yaml',
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'bun.lock',
+  'bun.lockb',
+  'pubspec.lock',
+  'Cargo.lock',
+  'go.sum',
+  'poetry.lock',
+  'uv.lock',
+  'Pipfile.lock',
+  'Gemfile.lock',
+  'composer.lock',
+  'Podfile.lock',
+  'gradle.lockfile',
+]
+
+/** Dependency state: lockfiles in the project root and, if different, the repo root. */
+export async function lockfiles(root: string): Promise<Array<{ path: string; sha256: string }>> {
+  const dirs = [root]
+  const repo = await repoTop(root)
+  if (repo && repo !== resolve(root)) dirs.push(repo)
+  const found: Array<{ path: string; sha256: string }> = []
+  for (const dir of dirs) {
+    for (const name of LOCKFILES) {
+      const bytes = await readFile(join(dir, name)).catch(() => null)
+      if (!bytes) continue
+      const path = relative(root, join(dir, name)).split(sep).join('/')
+      found.push({ path, sha256: sha256(bytes) })
+    }
+  }
+  return found
+}
+
+/** Above this, a dirty run keeps the patch's hash but not the patch. */
+export const WORKTREE_PATCH_LIMIT = 5 * 1024 * 1024
+
+/**
+ * Uncommitted changes, tracked and untracked (ignored files excluded), as one binary patch that
+ * `git apply` recreates on top of HEAD. Built through a temporary index so the user's index is
+ * never touched. reeval's own output (`ignore`, absolute paths) is left out.
+ */
+export async function worktreePatch(root: string, ignore: string[]): Promise<Buffer | null> {
+  const top = await repoTop(root)
+  if (!top) return null
+  const index = join(tmpdir(), `reeval-index-${process.pid}-${randomBytes(4).toString('hex')}`)
+  const env = { GIT_INDEX_FILE: index }
+  const exclude = [
+    ':(exclude,glob)**/.reeval/**',
+    ...ignore.map((d) => `:(exclude)${relative(top, d).split(sep).join('/')}`),
+  ]
+  try {
+    if ((await git(top, ['read-tree', 'HEAD'], { env })).code !== 0) return null
+    if ((await git(top, ['add', '-A', '--', '.', ...exclude], { env })).code !== 0) return null
+    const diff = await git(top, ['diff', '--cached', '--binary', 'HEAD'], { env })
+    return diff.code === 0 && diff.stdout.length > 0 ? diff.stdout : null
+  } finally {
+    await rm(index, { force: true })
+    await rm(`${index}.lock`, { force: true })
+  }
+}
+
+// The engine's version comes from `engine/`, the only module that may name it.
+const PACKAGES = ['ai', '@ai-sdk/harness', '@ai-sdk/google', '@ai-sdk/typesafe-ai']
+
+export function packageVersions(engine: Record<string, string>): Record<string, string> {
+  // Bundled into dist, so the published package can't resolve their package.json.
+  const out: Record<string, string> = {
+    ...engine,
+    '@reeval/harness-antigravity': ANTIGRAVITY_VERSION,
+    '@reeval/harness-opencode': OPENCODE_VERSION,
+    '@reeval/harness-goose': GOOSE_VERSION,
+    '@reeval/harness-pi': PI_VERSION,
+    '@reeval/harness-cursor-sdk': CURSOR_SDK_VERSION,
+    '@ai-sdk/harness-claude-code': adapterVersion('claude-code'),
+    '@reeval/harness-codex': CODEX_VERSION,
+  }
+  for (const name of PACKAGES) {
+    try {
+      out[name] = ownVersion(name)
+    } catch {}
+  }
+  return out
+}
+
+/** Moves whenever the code that builds and scores the judge prompt could have changed. */
+export function judgeVersion(es: string, packages: Record<string, string>, model: string): string {
+  const direct = DIRECT_PROVIDERS[model.slice(0, model.indexOf('/'))]
+  const adapter = (direct && packages[direct.pkg]) ?? packages.ai
+  return sha256(JSON.stringify({ es, ai: packages.ai, adapter, model })).slice(0, 12)
+}
+
+/** Inputs every eval fingerprint hashes. Change it when the fingerprint's inputs change. */
+export const FINGERPRINT_SCOPE = [
+  'eval-source',
+  'harness',
+  'environment',
+  'agent-cli',
+  'image-id',
+  'judge',
+  'context',
+]
+
+/**
+ * One-line warnings for states that stop an exact rerun and that someone can act on. Derived
+ * when shown, never stored.
+ */
+export function warnings(run: RunRecord): string[] {
+  const out: string[] = []
+  for (const image of run.stack.images.filter((i) => i.repoDigests.length === 0)) {
+    out.push(
+      `Image ${image.ref} isn't pushed, so an exact rerun needs this machine's image (id ${image.id.replace(/^sha256:/, '').slice(0, 12)}).`,
+    )
+  }
+  if (!run.git) out.push("Not a git repository, so the code under test isn't pinned.")
+  else if (run.git.dirty && !run.git.worktreePatch) {
+    out.push(
+      `Uncommitted changes weren't saved (${run.git.worktreePatchNote ?? 'no patch'}), so this exact state can't be recreated.`,
+    )
+  }
+  return out
+}

@@ -1,4 +1,5 @@
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import {
   type AnalysisIndex,
   analysisDataPath,
@@ -18,22 +19,21 @@ import {
   shardPath,
   studioPath,
   traceApiPath,
-} from 'evalsuite/view'
-import { useEffect } from 'react'
+} from 'reeval/view'
 
 export class NotFoundError extends Error {
   override name = 'NotFoundError'
 }
 
 /**
- * Every read goes through here: a path relative to the page, the same in `es studio` (served by
- * the local server) and `es studio build` (files next to index.html).
+ * Every read goes through here: a path relative to the page, the same in `reeval studio` (served by
+ * the local server) and `reeval studio build` (files next to index.html).
  */
 async function get(path: string): Promise<Response> {
   const res = await fetch(new URL(path, document.baseURI), { credentials: 'same-origin' })
   if (res.status === 404) throw new NotFoundError(`${path} not found`)
   if (res.status === 401)
-    throw new Error('The studio session expired. Reopen the URL printed by es studio.')
+    throw new Error('The studio session expired. Reopen the URL printed by reeval studio.')
   if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`)
   return res
 }
@@ -113,7 +113,7 @@ export const traceQuery = (runId: string, attemptKey: string, enabled: boolean) 
 
 export const useStudio = () => useQuery(studioQuery)
 
-/** Runs in progress; `es studio` only (a static build has none), kept current over SSE. */
+/** Runs in progress; `reeval studio` only (a static build has none), kept current over SSE. */
 export const liveQuery = queryOptions({
   queryKey: ['live'],
   queryFn: () => fetchJson<LiveIndex>(liveApiPath),
@@ -137,7 +137,7 @@ export const liveTranscriptQuery = (runId: string, attemptKey: string) =>
   })
 
 /**
- * In `es studio`, refetch the index (and records) when a run lands or is recorded, and take each
+ * In `reeval studio`, refetch the index (and records) when a run lands or is recorded, and take each
  * live-run update as it comes. A run that left the live list has landed: the index is refetched
  * before the list changes, so the real run takes its place without a gap.
  */

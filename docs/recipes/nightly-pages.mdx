@@ -8,7 +8,7 @@ description: Run every eval on several agents each night, commit the history to 
 The committed history is also what gives the [PR gate](/recipes/github-pr-gate) a base to compare with.
 
 <Warning>
-  This workflow passes [actionlint](https://github.com/rhysd/actionlint), and each `es` command in it was run locally, but the workflow as a whole hasn't run in GitHub Actions. The action versions were the latest releases when this page was written.
+  This workflow passes [actionlint](https://github.com/rhysd/actionlint), and each `reeval` command in it was run locally, but the workflow as a whole hasn't run in GitHub Actions. The action versions were the latest releases when this page was written.
 </Warning>
 
 ## The files
@@ -22,7 +22,7 @@ export const composer = cursor({ model: 'composer-2.5' })
 export const sonnet = claudeCode({ model: 'claude-sonnet-5' })
 ```
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 import { composer, sonnet } from './evals/harnesses.ts'
@@ -88,20 +88,20 @@ jobs:
         id: images
         uses: actions/cache@v6
         with:
-          path: ${{ runner.temp }}/es-images.tar
+          path: ${{ runner.temp }}/reeval-images.tar
           key: >-
-            es-images-nightly-${{ hashFiles('package-lock.json',
-            'es.config.ts', 'docker/**') }}
+            reeval-images-nightly-${{ hashFiles('package-lock.json',
+            'reeval.config.ts', 'docker/**') }}
       - name: Load sandbox images
         if: steps.images.outputs.cache-hit == 'true'
-        run: docker load -i "$RUNNER_TEMP/es-images.tar"
+        run: docker load -i "$RUNNER_TEMP/reeval-images.tar"
       - name: Build sandbox images
         if: steps.images.outputs.cache-hit != 'true'
         run: |
-          npx es image build --profile nightly
+          npx reeval image build --profile nightly
           images=$(docker images --format '{{.Repository}}:{{.Tag}}' \
-            | grep '^evalsuite-')
-          docker save -o "$RUNNER_TEMP/es-images.tar" $images
+            | grep '^reeval-')
+          docker save -o "$RUNNER_TEMP/reeval-images.tar" $images
 
       - name: Run evals
         env:
@@ -109,13 +109,13 @@ jobs:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_AI_KEY }}
-        run: npx es run --profile nightly
+        run: npx reeval run --profile nightly
 
       - name: Upload the history
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
-          name: es-history
+          name: reeval-history
           path: evals/.history
           include-hidden-files: true
           if-no-files-found: ignore
@@ -143,7 +143,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: es-history
+          name: reeval-history
           path: evals/.history
       - name: Commit the history
         run: |
@@ -155,7 +155,7 @@ jobs:
           git commit -m 'evals: record the nightly run'
           git push
 
-      - run: npx es studio build --out studio-dist
+      - run: npx reeval studio build --out studio-dist
       - uses: actions/upload-pages-artifact@v5
         with:
           path: studio-dist
@@ -170,18 +170,18 @@ Before the first run, set **Settings › Pages › Source** to **GitHub Actions*
 A dry run of this config under the nightly profile, and under CI's default:
 
 ```bash
-npx es run --profile nightly --dry-run
+npx reeval run --profile nightly --dry-run
 ```
 
 ```text
 plan  profile nightly (--profile) · 2 evals · 4 cells · 12 attempts · ~36m 00s serial (~9m 00s at concurrency 4) · budget 80 attempts ✓, 2h
 eval                                                              harnesses  variants  runs  attempts  notes
-evals/hello.es.ts › greet module › creates a tested greet module  2          —         3     6
-evals/hello.es.ts › greet module › adds a default name in a…      2          —         3     6
+evals/hello.eval.ts › greet module › creates a tested greet module  2          —         3     6
+evals/hello.eval.ts › greet module › adds a default name in a…      2          —         3     6
 ```
 
 ```bash
-CI=1 npx es run --dry-run
+CI=1 npx reeval run --dry-run
 ```
 
 ```text
@@ -189,32 +189,32 @@ plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~6m 00
 …
 ```
 
-`es image build --profile nightly` builds an image per harness, Cursor's and Claude Code's. With `--dry-run` it lists them:
+`reeval image build --profile nightly` builds an image per harness, Cursor's and Claude Code's. With `--dry-run` it lists them:
 
 ```text
 images  2 sandbox images (nothing built: --dry-run)
 docker · 2 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  base  reeval-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker · claude-code · 2 evals
-  base  evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c  (rebuild: the harness bootstrap)
+  base  reeval-sandbox:claude-code-1.0.128-patch.5d1c985c  (rebuild: the harness bootstrap)
 ```
 
 ## Record and commit
 
-At the end of a complete run, ES copies it into the history folder and says so. This line is from a real Cursor run in CI:
+At the end of a complete run, reeval copies it into the history folder and says so. This line is from a real Cursor run in CI:
 
 ```text
 recorded evals/.history/20260926T174109Z_b010670_ci_8f60.json + 9 artifact files in evals/.history/20260926T174109Z_b010670_ci_8f60/ (30.2 KB). Commit it with git.
 ```
 
-A run that fails evals is still complete, so it's recorded, and `publish` still runs because of `!cancelled()`. A run that hits `budget.duration` ends with status `budget` and is recorded too, with its unstarted attempts skipped, so the publish job commits what the budget allowed. `es compare` never takes it as a base.
+A run that fails evals is still complete, so it's recorded, and `publish` still runs because of `!cancelled()`. A run that hits `budget.duration` ends with status `budget` and is recorded too, with its unstarted attempts skipped, so the publish job commits what the budget allowed. `reeval compare` never takes it as a base.
 
 If your main branch is protected, let the `github-actions[bot]` push to it, or change the commit step to open a pull request.
 
 ## Build the studio
 
 ```bash
-npx es studio build --out studio-dist
+npx reeval studio build --out studio-dist
 ```
 
 ```text
@@ -230,7 +230,7 @@ The build includes transcripts, diffs and judge inputs. On a public Pages site, 
 
 ## Variations
 
-- **Upload instead of commit:** drop the commit step and keep the `es-history` artifact; the studio still builds, but the PR gate has no committed base.
+- **Upload instead of commit:** drop the commit step and keep the `reeval-history` artifact; the studio still builds, but the PR gate has no committed base.
 - **Only the smoke evals:** a `smoke` profile with `tags: ['smoke']` and a small `budget`, run first, catches a broken key before the long run.
 - **More agents:** add `antigravity({ model })` to the nightly `harness` list and `GEMINI_API_KEY` to the secrets; see [Compare agents](/recipes/compare-agents).
 - **Another host:** `studio-dist` is a plain static folder, so Netlify or Cloudflare Pages can serve it too.
@@ -241,7 +241,7 @@ The build includes transcripts, diffs and judge inputs. On a public Pages site, 
   <Card title="Studio" icon="chart-line" href="/guide/studio">
     What each page of the studio shows.
   </Card>
-  <Card title="ES evaluating ES" icon="flask" href="/recipes/case-study-dogfood">
+  <Card title="reeval evaluating reeval" icon="flask" href="/recipes/case-study-dogfood">
     What a real suite found, and what it missed.
   </Card>
 </CardGroup>

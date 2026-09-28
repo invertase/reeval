@@ -30,7 +30,7 @@ export const HARNESS_HOSTS: Record<BakedHarness, readonly string[]> = {
   // auto-updater is off.
   antigravity: ['generativelanguage.googleapis.com'],
   // On Google, and Exa's hosted MCP server, where the adapter points its websearch tool
-  // (keyless). ES allows the model's provider's hosts instead of Google's.
+  // (keyless). reeval allows the model's provider's hosts instead of Google's.
   opencode: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
   goose: ['generativelanguage.googleapis.com'],
   pi: ['generativelanguage.googleapis.com'],

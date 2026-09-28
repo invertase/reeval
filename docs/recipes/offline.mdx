@@ -9,7 +9,7 @@ An `egress` policy says where the sandbox may connect. Under a restricted policy
 
 ## The files
 
-```ts title="evals/offline.es.ts"
+```ts title="evals/offline.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate(
@@ -25,7 +25,7 @@ evaluate(
 )
 ```
 
-```ts title="evals/installs.es.ts"
+```ts title="evals/installs.eval.ts"
 import { DEFAULT_EGRESS_ALLOW, defineEnvironment, evaluate, expect } from
   '{{ pkg }}'
 
@@ -54,14 +54,14 @@ evaluate(
 ## Check the plan
 
 ```bash
-npx es run --dry-run
+npx reeval run --dry-run
 ```
 
 ```text
 plan  2 evals · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
 eval                                               harnesses  variants  runs  attempts  notes
-evals/installs.es.ts › adds zod validation         1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org, api.acme.dev + auto: api2.cursor.sh, *.cursor.sh
-evals/offline.es.ts › writes a CSV parser offline  1          —         1     1         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
+evals/installs.eval.ts › adds zod validation         1          —         1     1         egress: allow registry.npmjs.org, registry.yarnpkg.com, github.com, *.github.com, *.githubusercontent.com, pypi.org, files.pythonhosted.org, api.acme.dev + auto: api2.cursor.sh, *.cursor.sh
+evals/offline.eval.ts › writes a CSV parser offline  1          —         1     1         egress: deny-all + auto: api2.cursor.sh, *.cursor.sh
 ```
 
 Each restricted eval lists its policy and the automatic hosts it adds.
@@ -74,12 +74,12 @@ Each restricted eval lists its policy and the automatic hosts it adds.
 - **Every brokered secret's `hosts`**, so a key the agent is meant to use keeps working.
 - **Each MCP `http` or `sse` server's host.**
 
-The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them and the egress record doesn't see them. ES still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway.
+The agent's own web tools may not go through the sandbox at all. Cursor's web search and fetch run in Cursor's backend, so an egress policy doesn't stop them and the egress record doesn't see them. reeval still records them in the transcript, so check them there: `expect(turn).not.toHaveSearched()` fails an eval whose agent searched anyway.
 
 ## Run it and see what was blocked
 
 ```bash
-npx es run offline -v
+npx reeval run offline -v
 ```
 
 A request to any other host gets a `403` from the gateway and the attempt carries on; your checks decide whether it passed. `-v` prints one `gateway` line per request. This one is from a real Antigravity run under an allowlist:
@@ -88,12 +88,12 @@ A request to any other host gets a `403` from the gateway and the attempt carrie
 … 14:00:24 gateway   CONNECT antigravity-unleash.goog:443 → 403 · blocked: antigravity-unleash.goog isn't in the allowlist · ↑0 B ↓0 B · 2ms · no key substituted
 ```
 
-That host is Antigravity's feature-flag service, which its CLI contacts in every session. ES now lists hosts like it as expected blocks: still refused, but summarised in one `expected blocks` line at teardown instead of a line per request.
+That host is Antigravity's feature-flag service, which its CLI contacts in every session. reeval now lists hosts like it as expected blocks: still refused, but summarised in one `expected blocks` line at teardown instead of a line per request.
 
 The record keeps every attempt's traffic under `egress`:
 
 ```bash
-npx es show latest --json \
+npx reeval show latest --json \
   | jq -c '.evals[].attempts[] | {key, blocked: .egress.blocked}'
 ```
 
@@ -110,14 +110,14 @@ In the studio, the attempt's State tab shows the same panel:
 
 ## It needs Docker
 
-The fake sandbox runs commands on the host, so it can't enforce a policy, and ES refuses before anything starts:
+The fake sandbox runs commands on the host, so it can't enforce a policy, and reeval refuses before anything starts:
 
 ```bash
-npx es run --config es.fake.config.ts --dry-run
+npx reeval run --config reeval.fake.config.ts --dry-run
 ```
 
 ```text
-es: evals/offline.es.ts: evaluate("writes a CSV parser offline") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
+reeval: evals/offline.eval.ts: evaluate("writes a CSV parser offline") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
 ```
 
 <Warning>
@@ -126,7 +126,7 @@ es: evals/offline.es.ts: evaluate("writes a CSV parser offline") runs under egre
 
 ## Variations
 
-- **One policy for the whole suite:** set `egress` in `es.config.ts` or a profile's `defaults`; groups, environments and evals can still override it.
+- **One policy for the whole suite:** set `egress` in `reeval.config.ts` or a profile's `defaults`; groups, environments and evals can still override it.
 - **Offline as a compare:** `compare: [offline]` with `const offline = defineEnvironment('offline', { egress: 'deny-all' })` shows how much the agent relies on the network, as lift.
 - **Your API only:** `{ allow: ['api.acme.dev'] }` without `DEFAULT_EGRESS_ALLOW` blocks installs as well.
 - **A brokered key:** `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })` adds `api.acme.dev` to the automatic hosts and keeps the token out of the sandbox.

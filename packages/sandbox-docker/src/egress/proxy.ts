@@ -46,7 +46,7 @@ export type EgressProxyOptions = {
    * isn't one of them gets a 403 from the gateway, not the placeholder sent upstream.
    */
   endpoints?: readonly EndpointMatch[]
-  /** Called for each request refused under `endpoints`, e.g. to warn outside `ES_DEBUG`. */
+  /** Called for each request refused under `endpoints`, e.g. to warn outside `REEVAL_DEBUG`. */
   onRefused?: (request: { method: string; url: string }) => void
   /**
    * Called when a request to a brokered secret's host carries its placeholder somewhere the
@@ -376,7 +376,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     }
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
-        log(`es:egress CONNECT ${host}:${port} denied (${verdict.reason})`)
+        log(`reeval:egress CONNECT ${host}:${port} denied (${verdict.reason})`)
         block(socket, host, port, verdict.reason)
         emit({
           ...tunnel,
@@ -387,17 +387,21 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
           received: 0,
           ms: Date.now() - startedAt,
         })
-        return reply(socket, verdict.status, `blocked by the ES egress policy: ${verdict.reason}`)
+        return reply(
+          socket,
+          verdict.status,
+          `blocked by the reeval egress policy: ${verdict.reason}`,
+        )
       }
       contact(socket, host, port)
       const target = { host, port, address: verdict.address }
       if (decrypts(rules, host) || substitutes(allSubs(), host) || hostAllowed(tokenHosts, host)) {
-        log(`es:egress CONNECT ${host}:${port} decrypt`)
+        log(`reeval:egress CONNECT ${host}:${port} decrypt`)
         socket.write('HTTP/1.1 200 Connection Established\r\n\r\n')
         if (head.length) socket.unshift(head)
         return decrypt(socket, target)
       }
-      log(`es:egress CONNECT ${host}:${port} tunnel`)
+      log(`reeval:egress CONNECT ${host}:${port} tunnel`)
       let status = 200
       let reason: string | undefined
       const before = { ...(carried.get(socket) ?? { sent: 0, received: 0 }) }
@@ -420,10 +424,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         link(socket, upstream)
       })
       upstream.once('error', (error) => {
-        log(`es:egress CONNECT ${host}:${port} failed (${error.message})`)
+        log(`reeval:egress CONNECT ${host}:${port} failed (${error.message})`)
         status = 502
         reason = `couldn't reach ${host}:${port}: ${error.message}`
-        reply(socket, 502, `ES egress gateway couldn't reach ${host}:${port}: ${error.message}`)
+        reply(socket, 502, `reeval egress gateway couldn't reach ${host}:${port}: ${error.message}`)
       })
     })
   })
@@ -435,9 +439,10 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     try {
       url = new URL(req.url ?? '')
     } catch {
-      return res.writeHead(400).end('ES egress gateway: expected an absolute URL\n')
+      return res.writeHead(400).end('reeval egress gateway: expected an absolute URL\n')
     }
-    if (url.protocol !== 'http:') return res.writeHead(400).end('ES egress gateway: http only\n')
+    if (url.protocol !== 'http:')
+      return res.writeHead(400).end('reeval egress gateway: http only\n')
     const { host, port } = parseAuthority(url.host, 80)
     const done = requestEvent(res, {
       method: req.method ?? 'GET',
@@ -449,14 +454,14 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     })
     void check(host).then((verdict) => {
       if (!verdict.allowed) {
-        log(`es:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
+        log(`reeval:egress ${req.method} http://${host}:${port} denied (${verdict.reason})`)
         block(req.socket, host, port, verdict.reason)
         done.refuse(verdict.reason)
         return res
           .writeHead(verdict.status)
-          .end(`blocked by the ES egress policy: ${verdict.reason}\n`)
+          .end(`blocked by the reeval egress policy: ${verdict.reason}\n`)
       }
-      log(`es:egress ${req.method} http://${host}:${port}${url.pathname}`)
+      log(`reeval:egress ${req.method} http://${host}:${port}${url.pathname}`)
       contact(req.socket, host, port)
       const upstream = http.request({
         host: verdict.address,
@@ -469,7 +474,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     })
   })
   front.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => {
-    reply(socket, 501, 'ES egress gateway: use CONNECT for websockets')
+    reply(socket, 501, 'reeval egress gateway: use CONNECT for websockets')
   })
 
   /**
@@ -515,8 +520,8 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const named = String(headers[':authority'] ?? headers.host ?? '')
     const asked = parseAuthority(named, target.port).host
     if (named && asked !== target.host) {
-      const reason = `ES egress gateway: the request names ${asked}, but the connection is to ${target.host}; send it on a connection to ${asked}.`
-      log(`es:egress ${method} https://${target.host}${pathOnly(path)} refused (Host ${asked})`)
+      const reason = `reeval egress gateway: the request names ${asked}, but the connection is to ${target.host}; send it on a connection to ${asked}.`
+      log(`reeval:egress ${method} https://${target.host}${pathOnly(path)} refused (Host ${asked})`)
       return {
         headers: {},
         path,
@@ -542,7 +547,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     )
     const url = `https://${target.host}${pathOnly(path)}`
     if (refused) {
-      log(`es:egress ${method} ${url} HTTP/${version} refused (not a brokered endpoint)`)
+      log(`reeval:egress ${method} ${url} HTTP/${version} refused (not a brokered endpoint)`)
       options.onRefused?.({ method, url })
       return {
         headers: {},
@@ -552,7 +557,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         credentials: [],
         refused: {
           status: 403,
-          reason: `ES egress gateway: refused ${method} ${url}. It carries a brokered credential, and it isn't one of the endpoints ES brokers it for.`,
+          reason: `reeval egress gateway: refused ${method} ${url}. It carries a brokered credential, and it isn't one of the endpoints reeval brokers it for.`,
         },
       }
     }
@@ -579,7 +584,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       substituted.names.length ? `substituted ${substituted.names.join(', ')}` : '',
       ...kept.map((k) => `kept ${k.name}'s placeholder in the ${k.where}`),
     ].filter(Boolean)
-    log(`es:egress ${method} ${url} HTTP/${version}${notes.length ? ` (${notes.join('; ')})` : ''}`)
+    log(
+      `reeval:egress ${method} ${url} HTTP/${version}${notes.length ? ` (${notes.join('; ')})` : ''}`,
+    )
     return {
       headers: substituted.headers as OutgoingHttpHeaders,
       path: substituted.path,
@@ -674,11 +681,11 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     const chunks: Buffer[] = []
     let size = 0
     const refuse = (why: string) => {
-      log(`es:egress ${url} response refused (${why})`)
+      log(`reeval:egress ${url} response refused (${why})`)
       if (!res.headersSent) {
         res
           .writeHead(502, { 'content-type': 'text/plain' })
-          .end(`ES egress gateway: couldn't keep ${exchange.name}'s tokens out of the sandbox: ${why}
+          .end(`reeval egress gateway: couldn't keep ${exchange.name}'s tokens out of the sandbox: ${why}
 `)
       } else res.destroy()
     }
@@ -703,7 +710,9 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
         return refuse((error as Error).message)
       }
       tokens = [...tokens, ...result.added]
-      log(`es:egress ${url} tokenised ${result.fields.join(', ') || 'nothing'} (${exchange.name})`)
+      log(
+        `reeval:egress ${url} tokenised ${result.fields.join(', ') || 'nothing'} (${exchange.name})`,
+      )
       const text = Buffer.from(result.body)
       delete out['content-encoding']
       res.writeHead(status, { ...out, 'content-length': String(text.length) }).end(text)
@@ -766,7 +775,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       ':authority': authority,
     })
     const fail = (error: Error) => {
-      if (!res.headersSent) res.writeHead(502).end(`ES egress gateway: ${error.message}\n`)
+      if (!res.headersSent) res.writeHead(502).end(`reeval egress gateway: ${error.message}\n`)
       else res.destroy()
     }
     stream.once('error', fail)
@@ -810,7 +819,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
     })
     upstream.once('error', (error) => {
       t?.set({ status: 502, reason: error.message })
-      if (!res.headersSent) res.writeHead(502).end(`ES egress gateway: ${error.message}\n`)
+      if (!res.headersSent) res.writeHead(502).end(`reeval egress gateway: ${error.message}\n`)
       else res.destroy()
     })
     req.pipe(upstream)
@@ -873,7 +882,7 @@ export function createEgressProxy(options: EgressProxyOptions): EgressProxy {
       reply(socket, up.statusCode ?? 502, `upstream refused the upgrade (${up.statusCode})`)
       up.resume()
     })
-    upstream.once('error', (error) => reply(socket, 502, `ES egress gateway: ${error.message}`))
+    upstream.once('error', (error) => reply(socket, 502, `reeval egress gateway: ${error.message}`))
     upstream.end()
   }
 

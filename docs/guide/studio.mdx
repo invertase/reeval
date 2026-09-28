@@ -6,16 +6,16 @@ description: Browse runs, cells, transcripts and diffs in a local web app, and p
 The studio is a web app over your history: every run, every eval across runs, and every attempt's transcript, diff, checks and judge input.
 
 ```bash
-npx es studio
+npx reeval studio
 ```
 
 ```text
-es studio · scratch-guide · evals/.history/
+reeval studio · scratch-guide · evals/.history/
   http://127.0.0.1:4984/?token=…
 Ctrl-C to stop.
 ```
 
-Open the printed URL. New runs appear as they're recorded, and unrecorded runs from `.es/runs/` show too, labelled scratch (`--no-scratch` hides them). A run that's still going shows at the top. `--open` opens the browser for you.
+Open the printed URL. New runs appear as they're recorded, and unrecorded runs from `.reeval/runs/` show too, labelled scratch (`--no-scratch` hides them). A run that's still going shows at the top. `--open` opens the browser for you.
 
 ## Browse runs
 
@@ -27,7 +27,7 @@ The runs list shows each run's commit, branch, author (or CI), pass counts, toke
 
 <Image src="/assets/studio/live-run.png" alt="A run in progress: Running 2/4, a progress bar, two attempts passed and two still running" width={800} />
 
-Start `es run` with the studio open and the run appears at the top of the runs list with a `Running 2/4` badge and a progress bar. Its page lists every planned attempt, filling in with each outcome and duration as it finishes. A finished attempt opens its transcript straight away.
+Start `reeval run` with the studio open and the run appears at the top of the runs list with a `Running 2/4` badge and a progress bar. Its page lists every planned attempt, filling in with each outcome and duration as it finishes. A finished attempt opens its transcript straight away.
 
 When the record lands, the run's own page replaces the live one. A run that was killed, or stopped answering for 15 seconds, shows as `Stopped`, with what it finished. A static build never shows runs in progress.
 
@@ -35,13 +35,13 @@ When the record lands, the run's own page replaces the live one. A run that was 
 
 <Image src="/assets/studio/run-cells-lift.png" alt="A run page with a cells table showing the control at 0% and the variant at 100%, with its lift" width={800} />
 
-A run's page is its eval tree, with each cell's pass rate, role, lift and effort. This is the cross-agent run from [Harnesses](/guide/harnesses). A run you've analysed with `es analyze` also has an Analysis tab; [Analysis](/guide/analysis) shows how.
+A run's page is its eval tree, with each cell's pass rate, role, lift and effort. This is the cross-agent run from [Harnesses](/guide/harnesses). A run you've analysed with `reeval analyze` also has an Analysis tab; [Analysis](/guide/analysis) shows how.
 
 ## Follow one eval
 
 <Image src="/assets/studio/eval-history.png" alt="One eval across runs, with pass rates and fingerprint change marks" width={800} />
 
-An eval's page lists it across runs, with a mark where its fingerprint changed. The compare page diffs two runs, as `es compare` does; [History](/guide/history) shows both.
+An eval's page lists it across runs, with a mark where its fingerprint changed. The compare page diffs two runs, as `reeval compare` does; [History](/guide/history) shows both.
 
 ## Open an attempt
 
@@ -69,7 +69,7 @@ Each attempt has tabs for its transcript (tool calls folded), its diff, each che
 ## Keep it private
 
 ```bash
-npx es studio --port 5000 --host 127.0.0.1
+npx reeval studio --port 5000 --host 127.0.0.1
 ```
 
 The studio listens on `127.0.0.1:4984` (or the next free port) and needs the session token in the URL it prints, so other local users and web pages can't read your transcripts. `--no-token` turns the check off, with a warning.
@@ -77,7 +77,7 @@ The studio listens on `127.0.0.1:4984` (or the next free port) and needs the ses
 ## Publish a static build
 
 ```bash
-npx es studio build --out site
+npx reeval studio build --out site
 ```
 
 ```text
@@ -85,7 +85,7 @@ built site/: 1 run, 12 files, 673 KB (records, transcripts, diffs, logs and judg
 Serve it from any static host. Anyone who can open it can read every included file.
 ```
 
-`es studio build` writes the same app as a static folder, for GitHub Pages, Netlify, Cloudflare Pages or any static host. It includes recorded runs only (`--scratch` adds the rest), and never debug data.
+`reeval studio build` writes the same app as a static folder, for GitHub Pages, Netlify, Cloudflare Pages or any static host. It includes recorded runs only (`--scratch` adds the rest), and never debug data.
 
 <Warning>
   A build includes transcripts, diffs and logs. Host it where your repo's readers are, or pass `--no-artifacts` to publish only the records.

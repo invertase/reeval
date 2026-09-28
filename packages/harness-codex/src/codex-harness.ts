@@ -112,7 +112,7 @@ function toml(value: TomlValue): string {
 }
 
 /**
- * Codex's `config.toml`: the quiet settings, ES's provider as the model provider, and the MCP
+ * Codex's `config.toml`: the quiet settings, reeval's provider as the model provider, and the MCP
  * servers. Each top-level key is one line, tables inline, so nothing depends on section order.
  */
 export function buildCodexConfig(options: {
@@ -181,7 +181,7 @@ export function buildCodexCommand(options: {
  * OpenAI's Codex CLI (`codex exec --json`) as an AI SDK harness, in the sandbox: one process per
  * turn, resumed by thread id, its NDJSON translated into harness stream parts with each turn's
  * tokens, reasoning included. `@ai-sdk/harness-codex` reports neither those nor Codex's native
- * events, and needs a newer `@ai-sdk/harness` than ES runs.
+ * events, and needs a newer `@ai-sdk/harness` than reeval runs.
  */
 export function createCodex(settings: CodexHarnessSettings): HarnessV1<CodexBuiltinTools> {
   const key = isHarnessAuthenticationEnvironment(settings.auth)

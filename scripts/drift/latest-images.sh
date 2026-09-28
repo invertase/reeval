@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# The version-drift job's "latest" leg: swaps the newest agent CLI or SDK into ES's pinned sandbox
+# The version-drift job's "latest" leg: swaps the newest agent CLI or SDK into reeval's pinned sandbox
 # images, in place, so the contract suite runs against what users would get today. Needs the
-# pinned images built first (es image build, or .github/actions/sandbox-images).
+# pinned images built first (reeval image build, or .github/actions/sandbox-images).
 #   Antigravity: the newest google-antigravity/antigravity-cli release's `agy` (its releases
 #     publish no checksums, so unlike the pinned build this one isn't verified).
 #   Cursor: the newest @cursor/sdk from npm, in the SDK harness's bootstrap directory.
@@ -12,8 +12,8 @@
 #   pi: the newest @earendil-works/pi-coding-agent from npm, in its bootstrap directory.
 #   Codex: the newest @openai/codex native Linux build from npm, checked against npm's sha512 as
 #     the pinned one is, linked into its bootstrap's bin/.
-# ES_DRIFT_ANTIGRAVITY_VERSION, ES_DRIFT_CURSOR_SDK_VERSION, ES_DRIFT_OPENCODE_VERSION,
-# ES_DRIFT_GOOSE_VERSION (a tag, e.g. v1.51.0), ES_DRIFT_PI_VERSION and ES_DRIFT_CODEX_VERSION name
+# REEVAL_DRIFT_ANTIGRAVITY_VERSION, REEVAL_DRIFT_CURSOR_SDK_VERSION, REEVAL_DRIFT_OPENCODE_VERSION,
+# REEVAL_DRIFT_GOOSE_VERSION (a tag, e.g. v1.51.0), REEVAL_DRIFT_PI_VERSION and REEVAL_DRIFT_CODEX_VERSION name
 # a version instead of the newest, e.g. to bisect a drift failure.
 # Prints what it swapped, and appends a table to $GITHUB_STEP_SUMMARY when it's set.
 set -euo pipefail
@@ -24,7 +24,7 @@ images=$(node --input-type=module -e "
   console.log(BAKED_HARNESSES.map((h) => h + '=' + imageFor(h)).join(' '))")
 # The swap scripts end with this, so a swap that leaves the old CLI in place fails the leg.
 expect_fn='expect() { echo "$2"; case "$2" in *"$1"*) ;; *) echo "expected $1, got $2" >&2; exit 1 ;; esac; }'
-label() { docker inspect "$1" --format '{{index .Config.Labels "dev.evalsuite.agent-version"}}'; }
+label() { docker inspect "$1" --format '{{index .Config.Labels "ai.reeval.agent-version"}}'; }
 rows=()
 
 for pair in $images; do
@@ -38,7 +38,7 @@ for pair in $images; do
   bootstrap=/home/es/.ai-sdk-harness/.harness-bootstrap
   case "$harness" in
     antigravity)
-      latest=${ES_DRIFT_ANTIGRAVITY_VERSION:-}
+      latest=${REEVAL_DRIFT_ANTIGRAVITY_VERSION:-}
       [ -n "$latest" ] || latest=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
         https://api.github.com/repos/google-antigravity/antigravity-cli/releases/latest |
         node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).tag_name))')
@@ -51,7 +51,7 @@ rm -rf /tmp/agy /tmp/agy.tgz
 $bootstrap/antigravity/bin/agy --version"
       ;;
     cursor)
-      latest=${ES_DRIFT_CURSOR_SDK_VERSION:-$(npm view @cursor/sdk version)}
+      latest=${REEVAL_DRIFT_CURSOR_SDK_VERSION:-$(npm view @cursor/sdk version)}
       new_label="@cursor/sdk $latest"
       swap="set -eu
 cd $bootstrap/cursor-sdk
@@ -59,7 +59,7 @@ npm install --omit=dev --no-audit --no-fund --loglevel=error --save-exact @curso
 node -p \"JSON.parse(require('fs').readFileSync('node_modules/@cursor/sdk/package.json')).version\""
       ;;
     opencode)
-      latest=${ES_DRIFT_OPENCODE_VERSION:-$(npm view @opencode/cli version)}
+      latest=${REEVAL_DRIFT_OPENCODE_VERSION:-$(npm view @opencode/cli version)}
       swap="set -eu
 cd $bootstrap/opencode/implementation
 printf 'allowBuilds:\\n  %s: true\\n' \"'@opencode/cli@$latest'\" > pnpm-workspace.yaml
@@ -67,7 +67,7 @@ pnpm add --save-exact --store-dir $bootstrap/opencode/.pnpm-store @opencode/cli@
 expect \"$latest\" \"\$($bootstrap/opencode/implementation/node_modules/.bin/opencode --version)\""
       ;;
     goose)
-      tag=${ES_DRIFT_GOOSE_VERSION:-}
+      tag=${REEVAL_DRIFT_GOOSE_VERSION:-}
       [ -n "$tag" ] || tag=$(curl -fsSL --retry 3 ${GITHUB_TOKEN:+-H "Authorization: Bearer $GITHUB_TOKEN"} \
         https://api.github.com/repos/aaif-goose/goose/releases/latest |
         node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).tag_name))')
@@ -81,14 +81,14 @@ rm /tmp/goose.tgz
 expect \"$latest\" \"\$($bin/goose --version)\""
       ;;
     pi)
-      latest=${ES_DRIFT_PI_VERSION:-$(npm view @earendil-works/pi-coding-agent version)}
+      latest=${REEVAL_DRIFT_PI_VERSION:-$(npm view @earendil-works/pi-coding-agent version)}
       swap="set -eu
 cd $bootstrap/pi
 pnpm add --save-exact --ignore-scripts @earendil-works/pi-coding-agent@$latest >/dev/null
 expect \"$latest\" \"\$($bootstrap/pi/node_modules/.bin/pi --version)\""
       ;;
     codex)
-      latest=${ES_DRIFT_CODEX_VERSION:-$(npm view @openai/codex version)}
+      latest=${REEVAL_DRIFT_CODEX_VERSION:-$(npm view @openai/codex version)}
       new_label="codex-cli $latest"
       x64=$(npm view "@openai/codex@$latest-linux-x64" dist.integrity)
       arm64=$(npm view "@openai/codex@$latest-linux-arm64" dist.integrity)
@@ -119,7 +119,7 @@ expect \"$latest\" \"\$(bin/codex --version)\""
   context=$(mktemp -d)
   printf '%s\n%s\n' "$expect_fn" "$swap" > "$context/swap.sh"
   # As the sandbox user, who owns the bootstraps and runs them; the image stays root for builds.
-  printf 'FROM %s\nCOPY --chown=es swap.sh /tmp/swap.sh\nUSER es\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nUSER root\nLABEL dev.evalsuite.agent-version=%s\n' \
+  printf 'FROM %s\nCOPY --chown=es swap.sh /tmp/swap.sh\nUSER es\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nUSER root\nLABEL ai.reeval.agent-version=%s\n' \
     "$image" "\"$new_label\"" > "$context/Dockerfile"
   docker build -q -t "$image" "$context" >/dev/null
   rm -rf "$context"

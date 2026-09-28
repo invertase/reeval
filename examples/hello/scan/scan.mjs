@@ -3,7 +3,7 @@
 // command line, and every file up to 8 MB under the writable roots, are scanned with a rolling hash
 // over each window of the target's length; a window whose hash matches is confirmed by sha256.
 // Prints { files, bytes, hits }, where each hit names where a target was found. The same scanner
-// as the harness contract's (packages/evalsuite/test/contract/scan.mjs).
+// as the harness contract's (packages/reeval/test/contract/scan.mjs).
 import { createHash } from 'node:crypto'
 import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'

@@ -1,4 +1,4 @@
-// `@evalsuite/harness-pi`: pi on a Gemini API key, as an AI SDK harness, in the sandbox.
+// `@reeval/harness-pi`: pi on a Gemini API key, as an AI SDK harness, in the sandbox.
 export { getPiBootstrap, PI_BOOTSTRAP_DIR, PI_CLI_PATH, PI_CLI_VERSION } from './pi-bootstrap.ts'
 export {
   buildPiCommand,

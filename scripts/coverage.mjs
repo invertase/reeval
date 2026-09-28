@@ -1,7 +1,7 @@
 // Code coverage across every process the tests start. NODE_V8_COVERAGE is inherited, so the test
-// runner, each spawned `es` CLI, its workers and the egress gateway (in the CLI and the
+// runner, each spawned `reeval` CLI, its workers and the egress gateway (in the CLI and the
 // workers) all write V8 coverage into one directory, and c8 merges it, mapping dist/ back to src/
-// through the build's source maps. The bundled @invertase/foobar maps its inlined @evalsuite/*
+// through the build's source maps. The bundled reeval maps its inlined @reeval/*
 // code back to each package's own src/. Report-only: there's no threshold.
 //
 //   node scripts/coverage.mjs run [cmd...]   cmd (default: every package's tests) with coverage on, then report
@@ -57,8 +57,8 @@ const ENGINE = [
   'runtime',
   'worker',
   'worker-entry',
-].map((name) => `packages/evalsuite/src/engine/${name}.ts`)
-/** The tests that cover it, run from packages/evalsuite: its unit tests, and the CLI end to end. */
+].map((name) => `packages/reeval/src/engine/${name}.ts`)
+/** The tests that cover it, run from packages/reeval: its unit tests, and the CLI end to end. */
 const ENGINE_TESTS = [
   'test/engine-collector.test.ts',
   'test/engine-errors.test.ts',
@@ -112,7 +112,7 @@ function engine() {
       ...ENGINE_TESTS,
     ],
     {
-      cwd: join(root, 'packages/evalsuite'),
+      cwd: join(root, 'packages/reeval'),
       stdio: 'inherit',
       env: { ...process.env, NODE_V8_COVERAGE: join(dir, 'raw') },
     },
@@ -135,7 +135,7 @@ function engine() {
       '--reporter=json-summary',
       '--exclude-after-remap',
       '--all',
-      '--src=packages/evalsuite/src/engine',
+      '--src=packages/reeval/src/engine',
       ...ENGINE.map((file) => `--include=${file}`),
       '--check-coverage',
       '--lines=100',
@@ -259,7 +259,7 @@ function markdown(summary) {
   return [
     '## Code coverage',
     '',
-    'Every process the tests start (the test runner, `es`, its workers and the egress',
+    'Every process the tests start (the test runner, `reeval`, its workers and the egress',
     'gateway), merged, mapped to `src/`. Report-only: no threshold. Code inside Docker',
     'containers, the browser (studio-web) and the packed-install test is not counted.',
     '',

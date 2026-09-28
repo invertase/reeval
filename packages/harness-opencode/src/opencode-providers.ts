@@ -30,7 +30,7 @@ export type OpenCodeProvider = {
   /** OpenCode's provider id, the part of a model id before the first `/`. */
   readonly id: string
   readonly name: string
-  /** The variable OpenCode reads the key from, which ES reads on the host. */
+  /** The variable OpenCode reads the key from, which reeval reads on the host. */
   readonly env: string
   /** Variables its hosts are built from, such as Bedrock's `AWS_REGION`. */
   readonly vars?: readonly OpenCodeProviderVar[]
@@ -63,7 +63,7 @@ export function splitModel(model: string): { provider: string; model: string } |
 /**
  * The provider a model id runs on, with its hosts built from `env`'s values for its variables
  * (or their defaults), and those values, which go into the sandbox as they are. Or why it can't
- * run: the id has no provider, OpenCode doesn't know the provider, ES can't broker its key, or a
+ * run: the id has no provider, OpenCode doesn't know the provider, reeval can't broker its key, or a
  * variable's value can't be part of a host name.
  */
 export function resolveOpenCodeProvider(
@@ -96,7 +96,7 @@ export function resolveOpenCodeProvider(
   const refused = refusedById.get(split.provider)
   if (refused) {
     return {
-      error: `ES can't run OpenCode on ${refused.name} (${refused.id}): ${refused.why}, so the gateway can't keep its key out of the sandbox`,
+      error: `reeval can't run OpenCode on ${refused.name} (${refused.id}): ${refused.why}, so the gateway can't keep its key out of the sandbox`,
     }
   }
   return {

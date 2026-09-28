@@ -1,6 +1,6 @@
-import { type PatchFile, splitPatch } from 'evalsuite/view'
 import { FileDiff } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { type PatchFile, splitPatch } from 'reeval/view'
 import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'

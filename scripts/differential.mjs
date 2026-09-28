@@ -1,5 +1,5 @@
-// The replay of the side-by-side comparison of ES's engine with the Vitest engine it replaced
-// (packages/evalsuite/test/support/differential.ts). Every `es` the suites run is captured,
+// The replay of the side-by-side comparison of reeval's engine with the Vitest engine it replaced
+// (packages/reeval/test/support/differential.ts). Every `reeval` the suites run is captured,
 // normalised, and compared by test file and call with what the Vitest engine did, which
 // test/differential/vitest/ holds.
 //
@@ -7,20 +7,20 @@
 //   node --experimental-strip-types scripts/differential.mjs compare <expected> <actual>
 //                                    fail on any difference not in INTENDED
 //
-// A deliberate change to what `es` prints or records updates the captures it touches (by hand,
+// A deliberate change to what `reeval` prints or records updates the captures it touches (by hand,
 // or `record` then copy the files), with the change named in the PR.
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
-import { renormalise } from '../packages/evalsuite/test/support/differential.ts'
+import { renormalise } from '../packages/reeval/test/support/differential.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const pkg = join(root, 'packages/evalsuite')
+const pkg = join(root, 'packages/reeval')
 
 /**
- * Every test file that runs `es` through runCli, on the fake sandbox; not `es doctor`'s, which
+ * Every test file that runs `reeval` through runCli, on the fake sandbox; not `reeval doctor`'s, which
  * reports the host (Node, npm, Docker), not what the engine does.
  */
 const SUITES = readdirSync(join(pkg, 'test'))
@@ -43,7 +43,7 @@ const INTENDED = [
     file: 'engine.test.ts.jsonl',
     key: /^worker-(killed|oom) run/,
     fields: ['live', 'summary', 'record'],
-    why: "Vitest left a dead worker's attempts without a result (skipped); ES fails them, naming the file and signal.",
+    why: "Vitest left a dead worker's attempts without a result (skipped); reeval fails them, naming the file and signal.",
   },
   {
     file: 'engine.test.ts.jsonl',
@@ -73,7 +73,7 @@ else {
 function record(dir) {
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
-  const env = { ...process.env, ES_DIFFERENTIAL_DIR: dir, ES_FIXTURE_TIERS: 'fake' }
+  const env = { ...process.env, REEVAL_DIFFERENTIAL_DIR: dir, REEVAL_FIXTURE_TIERS: 'fake' }
   const tests = spawnSync(
     process.execPath,
     ['--test', '--test-timeout=600000', '--experimental-strip-types', '--no-warnings', ...SUITES],
@@ -99,7 +99,7 @@ function load(dir) {
 
 /**
  * The Vitest engine sent progress over an async RPC, so an attempt's line that landed after its
- * result was sometimes dropped: the captures may lack a progress line that ES's engine, which
+ * result was sometimes dropped: the captures may lack a progress line that reeval's engine, which
  * keeps them in order, prints. `fewer` may lack progress lines that `more` has once each; every
  * other line must match.
  */

@@ -1,0 +1,27 @@
+no profile · 4 evals · 8 cells · 8 attempts
+evals/a.eval.ts › both harnesses                   cursor:composer-2.5/-/docker                               control  gated  ×1
+                                                   antigravity:gemini-3.8-flash-medium/-/docker               control  gated  ×1
+evals/a.eval.ts › antigravity only, own id         agy/-/docker                                               control  gated  ×1
+evals/a.eval.ts › three harnesses on a dockerfile  cursor:composer-2.5/-/docker:tools                         control  gated  ×1
+                                                   antigravity:gemini-3.8-flash-medium/-/docker:tools         control  gated  ×1
+                                                   claude-code:claude-sonnet-5/-/docker:tools                 control  gated  ×1
+evals/a.eval.ts › antigravity on a toolchain base  cursor:composer-2.5/-/docker:python:3.12-slim              control  gated  ×1
+                                                   antigravity:gemini-3.1-pro-high/-/docker:python:3.12-slim  control  gated  ×1
+excluded: —
+image docker · 1 evals
+  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
+image docker · antigravity · 2 evals
+  base  reeval-sandbox:antigravity-0.1.0  (reeval's image: built when missing or when its base changed)
+image docker:tools · 1 evals
+  dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:cursor-0.1.0)
+image docker:tools · antigravity · 1 evals
+  dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:antigravity-0.1.0)
+image docker:tools · claude-code · 1 evals
+  dockerfile docker/tools/Dockerfile  reeval-dockerfile:tools-<context + reeval image id>  (docker build (layer cache), tagged by content hash)
+  harness                             reeval-dockerfile:tools-<context + reeval image id>  (inherited: FROM ${REEVAL_BASE}, which is reeval-sandbox:claude-code-1.0.128-patch.5d1c985c)
+image docker:python:3.12-slim · 1 evals
+  from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+image docker:python:3.12-slim · antigravity · 1 evals
+  from python:3.12-slim  reeval-sandbox:antigravity-0.1.0-python-3-12-slim-1d044754  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

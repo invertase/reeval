@@ -1,5 +1,5 @@
 // Probes where the pinned OpenCode sends each provider's key: a MITM proxy answers every request
-// itself (a 401), and `opencode run`, with ES's config, goes through it once per provider and
+// itself (a 401), and `opencode run`, with reeval's config, goes through it once per provider and
 // package, with a placeholder in each of the provider's variables. Nothing leaves the host.
 //
 //   node --experimental-strip-types scripts/probe-providers.ts <opencode> <catalog.json> <out.json> [ids...]
@@ -97,12 +97,14 @@ function answer(host: string, req: IncomingMessage, res: ServerResponse) {
   req.on('end', () => {
     record(host, req, body)
     res.writeHead(401, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ error: { message: 'ES provider probe', type: 'invalid_api_key' } }))
+    res.end(
+      JSON.stringify({ error: { message: 'reeval provider probe', type: 'invalid_api_key' } }),
+    )
   })
 }
 
 const ca = createCertificateAuthority(1)
-const dir = mkdtempSync(join(tmpdir(), 'es-oc-probe-'))
+const dir = mkdtempSync(join(tmpdir(), 'reeval-oc-probe-'))
 const caFile = join(dir, 'ca.pem')
 writeFileSync(caFile, ca.cert)
 const contexts = new Map<string, ReturnType<typeof createSecureContext>>()

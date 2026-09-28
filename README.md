@@ -1,14 +1,14 @@
-# ES (Eval Suite)
+# reeval
 
-Does a coding agent actually use your SDK, your skills and your docs correctly? ES answers
+Does a coding agent actually use your SDK, your skills and your docs correctly? reeval answers
 that with evals. You write the task, a real agent (Cursor, Claude Code, Antigravity, OpenCode,
-Goose, pi or Codex) does it in a fresh local Docker sandbox, and ES grades the result with deterministic checks and an LLM judge.
+Goose, pi or Codex) does it in a fresh local Docker sandbox, and reeval grades the result with deterministic checks and an LLM judge.
 `compare` runs the same task with and without a skill, MCP server or docs, and reports the lift.
 Every run is saved as a result file you can commit, diff against earlier runs and browse in a
 web studio.
 
 ```bash
-npm i -D @invertase/foobar   # placeholder name; the CLI is `es`
+npm i -D reeval   # the CLI is `reeval`, or `re` for short
 ```
 
 You need Node 22.13 or later and, for real runs, a running Docker.
@@ -19,14 +19,14 @@ You need Node 22.13 or later and, for real runs, a running Docker.
 | macOS | ✓ | ✓ Docker Desktop, OrbStack or Colima |
 | Windows | ✓ with [Git for Windows](https://git-scm.com/download/win) (its `sh`) | ✓ Docker Desktop on the WSL 2 backend, running Linux containers |
 
-`es doctor` checks Docker for your platform and names the fix. CI runs every tier on Linux and
+`reeval doctor` checks Docker for your platform and names the fix. CI runs every tier on Linux and
 everything but the Docker tier on Windows and macOS.
 
 ## A minimal eval
 
 ```ts
-// evals/hello.es.ts
-import { evaluate, expect, group } from '@invertase/foobar'
+// evals/hello.eval.ts
+import { evaluate, expect, group } from 'reeval'
 
 group('greet module', () => {
   evaluate('creates a tested greet module', async (t) => {
@@ -43,13 +43,13 @@ group('greet module', () => {
 ```
 
 ```ts
-// es.config.ts
-import { defineConfig } from '@invertase/foobar'
-import { cursor } from '@invertase/foobar/harness'
-import { docker } from '@invertase/foobar/sandbox'
+// reeval.config.ts
+import { defineConfig } from 'reeval'
+import { cursor } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
-  include: ['evals/**/*.es.ts'],
+  include: ['evals/**/*.eval.ts'],
   harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), opencode({ model }), goose({ model }), pi({ model }), codex({ model }), or a list: each is its own cell
   sandbox: docker(),
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // optional; pin the version
@@ -68,8 +68,8 @@ Give the agent a skill and check that it helps. The control runs without the env
 the variant runs with it, with the same prompt and the same checks:
 
 ```ts
-// evals/skill.es.ts (trimmed from examples/hello)
-import { defineEnvironment, evaluate, expect, group } from '@invertase/foobar'
+// evals/skill.eval.ts (trimmed from examples/hello)
+import { defineEnvironment, evaluate, expect, group } from 'reeval'
 
 const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) => ({
   skills: [skill.local('../skills/house-greeting')],
@@ -84,7 +84,7 @@ group('house greeting', { compare: [withHouseGreeting] }, () => {
 ```
 
 ```text
-$ es run skill --runs 2
+$ reeval run skill --runs 2
 plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 …
      ✓ greets in the house style      2/4 · 100% gated  4 attempts
@@ -96,44 +96,44 @@ plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 ## Run it
 
 ```text
-$ CI=1 es run greet
+$ CI=1 reeval run greet
 plan  profile pr (auto: CI is set) · 2 evals · 2 cells · 2 attempts · ~40s serial (~20s at concurrency 4) · budget 20 attempts ✓
-es 0.0.1 · 3 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
-[creates#1 cursor] ▶ evals/hello.es.ts › greet module › creates a tested greet module
-[creates#1 cursor] ✓ evals/hello.es.ts › greet module › creates a tested greet module  17s
+reeval 0.0.1 · 3 eval files · harness cursor:composer-2.5 · sandbox docker · concurrency 4 · grouped logs
+[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module
+[creates#1 cursor] ✓ evals/hello.eval.ts › greet module › creates a tested greet module  17s
 [creates#1 cursor]  +0:00 sandbox ready 1s
 [creates#1 cursor]  +0:01 turn 1 done 12s · 1 tool call, 2 file edits
 [creates#1 cursor]  +0:13 $ node --test  exit 0 129ms
 [creates#1 cursor]  +0:13 judge  pass 1.00 (≥ 0.8)  Does the agent's final message accurately describe what it changed?
-[adds#1 cursor] ▶ evals/hello.es.ts › greet module › adds a default name in a follow-up turn
-[adds#1 cursor] ✓ evals/hello.es.ts › greet module › adds a default name in a follow-up turn  23s
+[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn
+[adds#1 cursor] ✓ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn  23s
 …
 
 Summary
- evals/hello.es.ts
+ evals/hello.eval.ts
    greet module
      ✓ creates a tested greet module                17s  judge 1.00  1 turn
      ✓ adds a default name in a follow-up turn      23s  judge 1.00  2 turns
 
    Evals  2 passed (2)
 Duration  40s
- Results  .es/runs/20260924T213759Z_1ba71aa_ci_4vb0/summary.md
+ Results  .reeval/runs/20260924T213759Z_1ba71aa_ci_4vb0/summary.md
 ```
 
-Under a coding agent, ES switches to compact output: one block per failure and the path to its
+Under a coding agent, reeval switches to compact output: one block per failure and the path to its
 record. To see what an attempt did step by step, add `-v`: a timestamped line per phase (image,
 container, setup, brokering, each tool call, checks, judge calls, every gateway request).
 `-vv` adds the raw payloads and every `docker` command. Either way each attempt's trace is
-kept locally in `.es/debug`, never in the committed history. Commit runs into `evals/.history/` with `es record`, then track them with `es history`
-and `es compare`, or ask across runs with SQL: `es query lift`, `es query effort` (tool calls and
-agent time, variant against control), `es query factor_effects`, or
-`es query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`. Where the harness
+kept locally in `.reeval/debug`, never in the committed history. Commit runs into `evals/.history/` with `reeval record`, then track them with `reeval history`
+and `reeval compare`, or ask across runs with SQL: `reeval query lift`, `reeval query effort` (tool calls and
+agent time, variant against control), `reeval query factor_effects`, or
+`reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`. Where the harness
 reports them (Cursor, Claude Code, Antigravity, pi and Codex do), the record keeps each turn's tokens and the model that
 served it, and totals them per attempt and per run.
 
-`es analyze` explains a run: one LLM call over a digest of those facts, with every claim's
-citations and every suggested command checked against ES's own CLI. It's cached in `.es/`;
-`--save` commits it next to the run, and `es analyze --context` hands the same digest to your own
+`reeval analyze` explains a run: one LLM call over a digest of those facts, with every claim's
+citations and every suggested command checked against reeval's own CLI. It's cached in `.reeval/`;
+`--save` commits it next to the run, and `reeval analyze --context` hands the same digest to your own
 coding agent instead, with no key.
 
 ## Harnesses
@@ -153,7 +153,7 @@ its Reference page.
 | [pi](./docs/reference/harness/pi.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
 | [Codex](./docs/reference/harness/codex.mdx) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 
-- **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; ES recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
+- **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
 - **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
 - **Antigravity**: Its CLI always tries `play.googleapis.com` and `antigravity-unleash.goog`; a restricted egress policy refuses them and records them under the record's `egress.expectedBlocked`.
 - **OpenCode**: Its key is the model's provider's (`anthropic/claude-haiku-4-5` takes `ANTHROPIC_API_KEY`), on any of the 199 providers whose key OpenCode sends in a header on known hosts; the other 22 are refused at plan time. No `mcp.sse` transport: those servers are refused at plan time (exit 2). No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: `mcp.exa.ai` is one of its automatic hosts. MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its `execute` tool; the first prompt waits until they've connected.
@@ -166,12 +166,12 @@ its Reference page.
 ## Studio
 
 ```bash
-es studio                    # browse runs, evals and transcripts at http://127.0.0.1:4984
-es studio build --out site   # the same thing as a static site for GitHub Pages or any host
+reeval studio                    # browse runs, evals and transcripts at http://127.0.0.1:4984
+reeval studio build --out site   # the same thing as a static site for GitHub Pages or any host
 ```
 
 The studio shows each run's commit, pass counts and drift. For compares it shows per-cell pass
-rates, lift and effort, and a run's saved analyses in its Analysis tab, and for each attempt the transcript, diff, checks and judge input. `es studio`
+rates, lift and effort, and a run's saved analyses in its Analysis tab, and for each attempt the transcript, diff, checks and judge input. `reeval studio`
 adds a Debug tab for attempts with local debug data.
 
 ## Learn more
@@ -179,7 +179,7 @@ adds a Debug tab for attempts with local debug data.
 The user docs in [`docs/`](./docs) are a [docs.page](https://use.docs.page) site: a Guide from a
 first eval to CI, Concepts, Recipes, and a Reference tab with every option, command, flag, exit
 code and file format. Preview them with `npx @docs.page/cli preview`. Coding agents writing evals
-can load the ES skill in [`.agents/skills/es/SKILL.md`](./.agents/skills/es/SKILL.md).
+can load the reeval skill in [`.agents/skills/reeval/SKILL.md`](./.agents/skills/reeval/SKILL.md).
 [AGENTS.md](./AGENTS.md) covers developing this repo.
 
 ## License

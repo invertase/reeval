@@ -22,7 +22,7 @@ export const reactTs = defineEnvironment('react-ts', ({ git }) => ({
 }))
 ```
 
-```ts title="evals/template.es.ts"
+```ts title="evals/template.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 import { reactTs } from './env.ts'
 
@@ -42,13 +42,13 @@ evaluate('adds a reset button', { environment: reactTs }, async (t) => {
 ## Check the plan
 
 ```bash
-npx es run --dry-run
+npx reeval run --dry-run
 ```
 
 ```text
 plan  1 eval · 1 cell · 1 attempt · ~1s serial
 eval                                        harnesses  variants  runs  attempts  notes
-evals/template.es.ts › adds a reset button  1          —         1     1         workspace: https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts
+evals/template.eval.ts › adds a reset button  1          —         1     1         workspace: https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts
 ```
 
 A dry run never fetches. With `--json`, each of the eval's cells has a `workspace` with its `repo`, `ref` and `path`. A branch, or no `ref`, adds a warning: results on a moving branch aren't comparable over time.
@@ -60,15 +60,15 @@ plan  1 eval · 1 cell · 1 attempt · ~1s serial
 workspace https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts at 814120f2ad38
 …
 [adds#1 fake]  +0:21 $ npm run build  exit 0 2s
-[adds#1 fake] ✓ evals/template.es.ts › adds a reset button  22s
+[adds#1 fake] ✓ evals/template.eval.ts › adds a reset button  22s
 ```
 
-Before any attempt, ES fetches the repository on the host and resolves the ref once. With a `path`, it fetches only that directory's files: the vite monorepo's template takes about a second.
+Before any attempt, reeval fetches the repository on the host and resolves the ref once. With a `path`, it fetches only that directory's files: the vite monorepo's template takes about a second.
 
 | Step | Where |
 |---|---|
-| Fetch the ref (shallow; partial with a `path`) | The host, into `.es/cache/git/repos/` |
-| Export the tree as a tarball, by tree hash | `.es/cache/git/trees/` |
+| Fetch the ref (shallow; partial with a `path`) | The host, into `.reeval/cache/git/repos/` |
+| Export the tree as a tarball, by tree hash | `.reeval/cache/git/trees/` |
 | Unpack it into the workspace, before `files` and `setup` | Each attempt's sandbox |
 
 A pinned full commit SHA that's already in the cache reruns offline. Submodules and Git LFS files aren't fetched: a submodule arrives as an empty directory, an LFS file as its pointer.
@@ -84,12 +84,12 @@ Without `init`, the workspace has no `.git`, and some agents behave differently 
 6169c1a https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts at 814120f2ad387ca3d1e16c7dd403b04ca4b97f75
 ```
 
-The commit comes before `files` and `setup`, so what they add is uncommitted, and it's by `es` at a fixed date, so every attempt starts at the same `HEAD`. The template's history isn't there, and neither is its remote.
+The commit comes before `files` and `setup`, so what they add is uncommitted, and it's by `reeval` at a fixed date, so every attempt starts at the same `HEAD`. The template's history isn't there, and neither is its remote.
 
 ## What the record keeps
 
 ```bash
-npx es show latest --json | jq -c '.environments[].workspace'
+npx reeval show latest --json | jq -c '.environments[].workspace'
 ```
 
 ```json
@@ -109,18 +109,18 @@ export const app = defineEnvironment('app', ({ git }) => ({
 }))
 ```
 
-`token` names a host variable, as `secret.fromEnv` does. ES reads it on the host and sends it, as a header in `git`'s environment, only to the repository's own origin; it never reaches the sandbox, the record or `.es`, and it's masked in errors. Without `token`, ES uses your own git credentials: a credential helper, `gh auth setup-git` or an SSH key. It never prompts.
+`token` names a host variable, as `secret.fromEnv` does. reeval reads it on the host and sends it, as a header in `git`'s environment, only to the repository's own origin; it never reaches the sandbox, the record or `.reeval`, and it's masked in errors. Without `token`, reeval uses your own git credentials: a credential helper, `gh auth setup-git` or an SSH key. It never prompts.
 
 Only the tree reaches the sandbox, so a `deny-all` eval can start from a private repository. In GitHub Actions, the workflow's own `GITHUB_TOKEN` reads only its own repository; for another private one, store a read-only fine-grained token as a secret and set it in the step's `env`:
 
 ```yaml title=".github/workflows/evals.yml"
-      - run: npx es run
+      - run: npx reeval run
         env:
           GITHUB_TOKEN: ${{ secrets.APP_READ_TOKEN }}
 ```
 
 <Warning>
-  Don't put a token in the URL or in `token`. ES refuses `https://user:token@…` and a `token` that looks like a token rather than a variable name, without echoing it.
+  Don't put a token in the URL or in `token`. reeval refuses `https://user:token@…` and a `token` that looks like a token rather than a variable name, without echoing it.
 </Warning>
 
 ## When it can't be fetched

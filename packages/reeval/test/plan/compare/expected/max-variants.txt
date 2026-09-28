@@ -1,0 +1,16 @@
+profile lean (--profile) · 3 evals · 14 cells · 14 attempts
+evals/limited.eval.ts › two variants  a/-/fake        control          ungated  ×1  variants 2 → 1 (profile lean)
+                                      a/skilled/fake  variant skilled  gated    ×1
+                                      b/-/fake        control          ungated  ×1
+                                      b/skilled/fake  variant skilled  gated    ×1
+evals/limited.eval.ts › one variant   a/-/fake        control          ungated  ×1
+                                      a/skilled/fake  variant skilled  gated    ×1
+                                      b/-/fake        control          ungated  ×1
+                                      b/skilled/fake  variant skilled  gated    ×1
+evals/limited.eval.ts › pinned        a/-/fake        control          ungated  ×1  pinned: compare
+                                      a/skilled/fake  variant skilled  gated    ×1
+                                      a/terse/fake    variant terse    gated    ×1
+                                      b/-/fake        control          ungated  ×1
+                                      b/skilled/fake  variant skilled  gated    ×1
+                                      b/terse/fake    variant terse    gated    ×1
+excluded: —

@@ -129,7 +129,7 @@ test('a model id is <provider>/<model>; the provider is before the first /', () 
   }
 })
 
-test('a model that can’t run says why: no provider, an unknown one, or one ES refuses', () => {
+test('a model that can’t run says why: no provider, an unknown one, or one reeval refuses', () => {
   const error = (model: string) => {
     const r = resolveOpenCodeProvider(model)
     return 'error' in r ? r.error : ''

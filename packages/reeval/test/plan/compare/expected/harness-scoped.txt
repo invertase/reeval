@@ -1,0 +1,5 @@
+no profile · 1 evals · 3 cells · 3 attempts
+evals/scoped.eval.ts › variant on b only  a/-/fake        control          ungated  ×1
+                                          b/-/fake        control          ungated  ×1
+                                          b/skilled/fake  variant skilled  gated    ×1
+excluded: —

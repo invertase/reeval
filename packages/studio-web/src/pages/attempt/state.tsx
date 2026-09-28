@@ -1,5 +1,5 @@
-import { type AttemptRecord, harnessLabel, type RunRecord } from 'evalsuite/view'
 import type { ReactNode } from 'react'
+import { type AttemptRecord, harnessLabel, type RunRecord } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { CopyButton } from '@/components/copy-button'
 import { PatchView } from './diff'
@@ -98,7 +98,9 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
       <Section
         title="Source"
         action={
-          git ? <CopyButton value={`es checkout ${record.runId}`} label="es checkout" /> : null
+          git ? (
+            <CopyButton value={`reeval checkout ${record.runId}`} label="reeval checkout" />
+          ) : null
         }
       >
         {git ? (
@@ -185,7 +187,7 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
       </Section>
 
       <Section title="Stack">
-        <Row k="ES">
+        <Row k="reeval">
           {stack.es} · node {stack.node} · {stack.os}/{stack.arch}
         </Row>
         <Row k="Harnesses">{stack.harnesses.map(harnessLabel).join(', ')}</Row>

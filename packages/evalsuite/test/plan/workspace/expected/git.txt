@@ -1,8 +1,0 @@
-no profile · 4 evals · 5 cells · 5 attempts
-warning: workspace git(github:acme/template) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).
-evals/workspace.es.ts › a pinned subdirectory              fake/pinned/fake  control       gated    ×1  workspace https://github.com/acme/app#v2.3.0:examples/basic
-evals/workspace.es.ts › the default branch warns           fake/moving/fake  control       gated    ×1  workspace github:acme/template
-evals/workspace.es.ts › a variant swaps the starting code  fake/pinned/fake  control       ungated  ×1  workspace https://github.com/acme/app#v2.3.0:examples/basic
-                                                           fake/next/fake    variant next  gated    ×1  workspace https://github.com/acme/app#v3.0.0:examples/basic
-evals/workspace.es.ts › no workspace                       fake/-/fake       control       gated    ×1
-excluded: —

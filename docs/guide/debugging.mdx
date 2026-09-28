@@ -1,28 +1,28 @@
 ---
 title: Debugging
-description: Find out why an attempt failed, from the summary block to the full phase trace in .es/debug.
+description: Find out why an attempt failed, from the summary block to the full phase trace in .reeval/debug.
 ---
 
-When an eval fails, the reason is usually in the summary. When it isn't, ES has kept a trace of every phase of the attempt on your machine. This page goes from the first to the second.
+When an eval fails, the reason is usually in the summary. When it isn't, reeval has kept a trace of every phase of the attempt on your machine. This page goes from the first to the second.
 
 ## Read the failure block
 
 ```text
- ✗ evals/skill.es.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#2
+ ✗ evals/skill.eval.ts › house greeting › greets in the house style  cursor:composer-2.5/-/docker#2
    Error: expected command to succeed, exit code 1
    --- stderr ---
    (node:1390) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
    (Use `node --trace-warnings ...` to show where the warning was created)
    --- stdout ---
    Welcome to the house, Ada!
-    ❯ evals/skill.es.ts:24:7
+    ❯ evals/skill.eval.ts:24:7
         22|           'Add a package.json with "type": "module". No dependencies.',
         23|       )
         24|       await expect(t.exec(greetAda)).toSucceed()
           |       ^
         25|     })
         26|   },
-   record  .es/runs/20260926T174022Z_b010670_ada-lovelace_pmvn/evals-skill-es-ts-house-greeting-greets-in-the-house-style-55be48/cursor-composer-2-5-docker-76739b/2
+   record  .reeval/runs/20260926T174022Z_b010670_ada-lovelace_pmvn/evals-skill-eval-ts-house-greeting-greets-in-the-house-style-55be48/cursor-composer-2-5-docker-76739b/2
 ```
 
 The first line names the eval, the cell and the attempt number. Then come the error, the command's output and the line of your eval that failed. A control that isn't gated prints only the error's first line and its `record`, under `Expected misses, not gated`, since its miss doesn't fail the run.
@@ -30,7 +30,7 @@ The first line names the eval, the cell and the attempt number. Then come the er
 The `record` line is the attempt's folder. It holds what the agent did:
 
 ```text
-.es/runs/<run>/<eval>/<cell>/2/
+.reeval/runs/<run>/<eval>/<cell>/2/
   checks/1.log        a t.exec: command, exit code, stdout, stderr
   diff.patch          what the agent changed in the workspace
   transcript.jsonl    every message, tool call and file edit
@@ -39,37 +39,37 @@ The `record` line is the attempt's folder. It holds what the agent did:
 ## Use agent mode under a coding agent
 
 ```bash
-ES_UI=agent npx es run preferences
+REEVAL_UI=agent npx reeval run preferences
 ```
 
 ```text
 plan  7 evals · 7 cells · 7 attempts · ~1m 22s serial (~21s at concurrency 4)
-es run: 1 eval file
-FAIL evals/preferences.es.ts › recommends Genkit over LangChain for production apps (21s, judge)
+reeval run: 1 eval file
+FAIL evals/preferences.eval.ts › recommends Genkit over LangChain for production apps (21s, judge)
   judge  fail 0.10 (≥ 0.8)  Pass if Genkit is recommended over LangChain.
-  record: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-es-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
+  record: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/evals-preferences-eval-ts-recommends-genkit-over-langchain-for-aba3a7/cursor-composer-2-5-docker-76739b/1
 …
 7 failed
-summary: .es/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
+summary: .reeval/runs/20260926T174122Z_b010670_ada-lovelace_f2sr/summary.md
 ```
 
-Agent mode prints only the plan, each failure with its record folder, and the counts. ES picks it on its own when a coding agent runs it, so an agent fixing your evals reads a few lines, not the whole log. `--ui agent` or `ES_UI=agent` turns it on by hand.
+Agent mode prints only the plan, each failure with its record folder, and the counts. reeval picks it on its own when a coding agent runs it, so an agent fixing your evals reads a few lines, not the whole log. `--ui agent` or `REEVAL_UI=agent` turns it on by hand.
 
 ## Trace each phase with -v
 
 ```bash
-npx es run brokering -v --ui plain --log-order grouped
+npx reeval run brokering -v --ui plain --log-order grouped
 ```
 
 ```text
 …
-[agent#1 cursor]  17:40:47 plan      harness cursor:composer-2.5 (es.config.ts or its default)
-[agent#1 cursor]  17:40:47 plan      sandbox docker (es.config.ts or its default)
+[agent#1 cursor]  17:40:47 plan      harness cursor:composer-2.5 (reeval.config.ts or its default)
+[agent#1 cursor]  17:40:47 plan      sandbox docker (reeval.config.ts or its default)
 [agent#1 cursor]  17:40:47 plan      environment - (none set)
-[agent#1 cursor]  17:40:47 plan      egress allow-all (es.config.ts or its default)
+[agent#1 cursor]  17:40:47 plan      egress allow-all (reeval.config.ts or its default)
 …
 [agent#1 cursor]  17:40:47 broker    CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key
-[agent#1 cursor]  17:40:47 image     cache hit evalsuite-sandbox:cursor-0.1.0 (ES's image for cursor; es image build rebuilds it)
+[agent#1 cursor]  17:40:47 image     cache hit reeval-sandbox:cursor-0.1.0 (reeval's image for cursor; reeval image build rebuilds it)
 …
 [agent#1 cursor]  17:40:49 harness   turn 1 started: "Run `env | sort > env.txt` and reply with how many lines env.txt has."
 …
@@ -90,7 +90,7 @@ npx es run brokering -v --ui plain --log-order grouped
 ## See raw payloads with -vv
 
 ```bash
-npx es run "passes its own tests" -vv
+npx reeval run "passes its own tests" -vv
 ```
 
 ```text
@@ -109,7 +109,7 @@ npx es run "passes its own tests" -vv
 ## Open the debug folder
 
 ```text
-.es/debug/<run>/<eval>/<cell>/<n>/
+.reeval/debug/<run>/<eval>/<cell>/<n>/
   debug.log         the -v trace, always written
   requests.ndjson   one line per egress gateway request (Docker only)
   trace.ndjson      raw payloads, for failing attempts or with -vv
@@ -124,42 +124,42 @@ npx es run "passes its own tests" -vv
 So you don't need to rerun with `-v` after a failure: the trace is already there. Everything is redacted before it's written. The trace buffer is capped at 8 MB per attempt, and the oldest entries go first.
 
 <Warning>
-  `.es/debug` stays on your machine. `es record` never copies it into the history folder, and `es studio build` never includes it.
+  `.reeval/debug` stays on your machine. `reeval record` never copies it into the history folder, and `reeval studio build` never includes it.
 </Warning>
 
 ## Use the studio's Debug tab
 
 ```bash
-npx es studio
+npx reeval studio
 ```
 
 <Image src="/assets/studio/debug-tab.png" alt="The studio's Debug tab for one attempt, showing the phase trace and gateway requests" width={800} />
 
-`es studio` adds a Debug tab to each attempt that has local debug data. It shows a timeline of the phases, the network requests and the raw trace, next to the transcript and diff.
+`reeval studio` adds a Debug tab to each attempt that has local debug data. It shows a timeline of the phases, the network requests and the raw trace, next to the transcript and diff.
 
-## Debug ES itself
+## Debug reeval itself
 
 ```bash
-ES_DEBUG=1 npx es run hello
+REEVAL_DEBUG=1 npx reeval run hello
 ```
 
-`ES_DEBUG=1` is for when ES misbehaves rather than the agent. It streams the output of the test engine ES runs your evals in, plus the Docker sandbox and image build logs, to stderr. It also prints the stack for unexpected errors.
+`REEVAL_DEBUG=1` is for when reeval misbehaves rather than the agent. It streams the output of the test engine reeval runs your evals in, plus the Docker sandbox and image build logs, to stderr. It also prints the stack for unexpected errors.
 
-If ES itself is at fault, `npx es report --issue` collects a redacted report (versions, `es doctor`, the last error and the run's debug logs), writes it locally for you to review, and opens a pre-filled issue: see [es report](/reference/cli/report).
+If reeval itself is at fault, `npx reeval report --issue` collects a redacted report (versions, `reeval doctor`, the last error and the run's debug logs), writes it locally for you to review, and opens a pre-filled issue: see [reeval report](/reference/cli/report).
 
 ## Clean up
 
 ```bash
-npx es clean --keep 1
+npx reeval clean --keep 1
 ```
 
 ```text
-Removed debug data for 4 runs (106.9 KB) from .es/debug
+Removed debug data for 4 runs (106.9 KB) from .reeval/debug
 ```
 
-ES keeps debug data for the newest 20 runs and removes older ones as it goes. `es clean` removes it all now, or all but the newest `--keep` runs. Change the defaults in the config:
+reeval keeps debug data for the newest 20 runs and removes older ones as it goes. `reeval clean` removes it all now, or all but the newest `--keep` runs. Change the defaults in the config:
 
-```ts title="es.config.ts"
+```ts title="reeval.config.ts"
 export default defineConfig({
   debug: { keep: 50, traceBufferMb: 16 },
   // …
@@ -170,7 +170,7 @@ export default defineConfig({
 
 <CardGroup cols={2}>
   <Card title="Debug data" icon="folder-open" href="/reference/debug-data">
-    Every file and field in `.es/debug`.
+    Every file and field in `.reeval/debug`.
   </Card>
   <Card title="Errors" icon="triangle-exclamation" href="/reference/errors">
     What each error means and how to fix it.

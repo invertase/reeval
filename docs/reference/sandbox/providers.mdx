@@ -1,9 +1,9 @@
 ---
 title: Sandbox providers
-description: The contract a sandbox provider meets before any attempt starts, and what ES does with its failures.
+description: The contract a sandbox provider meets before any attempt starts, and what reeval does with its failures.
 ---
 
-A sandbox provider is what makes and starts a sandbox: Docker today, with the fake sandbox as a second. Before any attempt starts, ES asks each provider in the plan to check it can work, then to prepare every distinct sandbox the attempts need. The provider classes each failure; ES does the rest the same way for every provider.
+A sandbox provider is what makes and starts a sandbox: Docker today, with the fake sandbox as a second. Before any attempt starts, reeval asks each provider in the plan to check it can work, then to prepare every distinct sandbox the attempts need. The provider classes each failure; reeval does the rest the same way for every provider.
 
 ```ts
 interface SandboxProvider {
@@ -26,7 +26,7 @@ interface SandboxProvider {
 
 ## Failure classes
 
-| Class | Means | ES |
+| Class | Means | reeval |
 |---|---|---|
 | `config` | The setup is wrong: a bad token, a failing build step, a missing image | Fails at once, never retried |
 | `transient` | The network, a registry or API 5xx, a quota | Retried twice, after 2 s and 8 s |
@@ -34,7 +34,7 @@ interface SandboxProvider {
 
 A failed `check` stops the run: exit 2 when it's the setup (a bad token, Docker not running), else 3.
 
-## What ES does with them
+## What reeval does with them
 
 | Where the sandbox is set | When it can't be prepared |
 |---|---|

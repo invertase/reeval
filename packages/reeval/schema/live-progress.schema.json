@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from LiveProgress in src/view/live.ts by `pnpm schema:update`; don't edit. A running reeval run's progress: .reeval/staging/<run>/live.json, read by reeval studio.",
+  "title": "LiveProgress",
+  "$ref": "#/$defs/LiveProgress",
+  "$defs": {
+    "LiveAttempt": {
+      "type": "object",
+      "properties": {
+        "cell": {
+          "type": "string"
+        },
+        "durationMs": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "evalId": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "n": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "startedAt": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/LiveStatus"
+        }
+      },
+      "required": [
+        "cell",
+        "durationMs",
+        "evalId",
+        "file",
+        "key",
+        "n",
+        "name",
+        "startedAt",
+        "status"
+      ]
+    },
+    "LiveCounts": {
+      "type": "object",
+      "properties": {
+        "done": {
+          "type": "number"
+        },
+        "errored": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "passed": {
+          "type": "number"
+        },
+        "running": {
+          "type": "number"
+        },
+        "skipped": {
+          "type": "number"
+        }
+      },
+      "required": ["done", "errored", "failed", "passed", "running", "skipped"]
+    },
+    "LivePhase": {
+      "enum": ["cancelling", "finishing", "running"]
+    },
+    "LiveProgress": {
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LiveAttempt"
+          }
+        },
+        "counts": {
+          "$ref": "#/$defs/LiveCounts"
+        },
+        "heartbeatAt": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "phase": {
+          "$ref": "#/$defs/LivePhase"
+        },
+        "pid": {
+          "type": "number"
+        },
+        "planned": {
+          "type": "number"
+        },
+        "runId": {
+          "type": "string"
+        },
+        "schemaVersion": {
+          "const": 1
+        },
+        "startedAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "attempts",
+        "counts",
+        "heartbeatAt",
+        "host",
+        "phase",
+        "pid",
+        "planned",
+        "runId",
+        "schemaVersion",
+        "startedAt"
+      ]
+    },
+    "LiveStatus": {
+      "enum": ["fail", "infra_error", "pass", "queued", "running", "skipped"]
+    }
+  },
+  "x-schemaVersion": 1
+}

@@ -1,0 +1,12 @@
+no profile · 5 evals · 10 cells · 10 attempts
+evals/m.eval.ts › grouped › inherits runs  a/-/fake  control  gated               ×1
+                                           b/-/fake  control  gated               ×1
+evals/m.eval.ts › grouped › own runs       a/-/fake  control  gated               ×1
+                                           b/-/fake  control  gated               ×1
+evals/m.eval.ts › added harness            a/-/fake  control  gated               ×1
+                                           b/-/fake  control  gated               ×1
+                                           c/-/fake  control  gated               ×1
+evals/m.eval.ts › replaced harness         c/-/fake  control  gated               ×1
+evals/m.eval.ts › gated on a pass rate     a/-/fake  control  gated passRate 0.8  ×1
+                                           b/-/fake  control  gated passRate 0.8  ×1
+excluded: —

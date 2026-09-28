@@ -1,5 +1,5 @@
 // Reading a failed build: real `docker build --progress plain` output (Docker 29, BuildKit),
-// captured from the failures ES hits, each with a canary that must not match.
+// captured from the failures reeval hits, each with a canary that must not match.
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -18,22 +18,22 @@ import { dockerfileTag } from '../src/build-image.ts'
 const ENOSPC = `#4 [1/2] FROM docker.io/library/debian:bookworm-slim@sha256:3783
 #4 DONE 0.0s
 
-#5 [2/2] RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/es-install.sh && bash /tmp/es-install.sh
+#5 [2/2] RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh
 #5 0.101 es: install 1/1: 'dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'
 #5 0.122 about to fail
 #5 0.140 dd: error writing '/dev/shm/fill': No space left on device
 #5 0.140 65+0 records in
 #5 0.141 es: install 1/1 exited 1: 'dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'
-#5 ERROR: process "/bin/sh -c echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/es-install.sh && bash /tmp/es-install.sh" did not complete successfully: exit code: 1
+#5 ERROR: process "/bin/sh -c echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh" did not complete successfully: exit code: 1
 ------
- > [2/2] RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/es-install.sh && bash /tmp/es-install.sh:
+ > [2/2] RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh:
 0.122 about to fail
 ------
 Dockerfile:3
 --------------------
-   3 | >>> RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/es-install.sh \\
+   3 | >>> RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh \\
 --------------------
-ERROR: failed to build: failed to solve: process "/bin/sh -c echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/es-install.sh && bash /tmp/es-install.sh" did not complete successfully: exit code: 1
+ERROR: failed to build: failed to solve: process "/bin/sh -c echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh" did not complete successfully: exit code: 1
 `
 const KILLED = `#5 [2/2] RUN bash -c 'echo dying; kill -9 $$'
 #5 0.127 dying
@@ -48,7 +48,7 @@ syn.Dockerfile:2
 --------------------
 ERROR: failed to build: failed to solve: dockerfile parse error on line 2: unknown instruction: COPYY (did you mean COPY?)
 `
-const DENIED = `ERROR: failed to build: failed to solve: nonexistent-es-image-xyz:1: failed to resolve source metadata for docker.io/library/nonexistent-es-image-xyz:1: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed`
+const DENIED = `ERROR: failed to build: failed to solve: nonexistent-reeval-image-xyz:1: failed to resolve source metadata for docker.io/library/nonexistent-reeval-image-xyz:1: pull access denied, repository does not exist or may require authorization: server message: insufficient_scope: authorization failed`
 const NO_HOST = `ERROR: failed to build: failed to solve: registry.invalid.example:5000/x:1: failed to resolve source metadata for registry.invalid.example:5000/x:1: failed to do request: Head "https://registry.invalid.example:5000/v2/x/manifests/1": dial tcp: lookup registry.invalid.example on 10.0.0.2:53: no such host`
 const REGISTRY_503 = `ERROR: failed to build: failed to solve: node:22: failed to resolve source metadata for docker.io/library/node:22: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/node/manifests/22: 503 Service Unavailable`
 const BOOTSTRAP_NET = `Bootstrap command failed for harness 'cursor-sdk' (exit 1): sh install.sh
@@ -116,13 +116,13 @@ describe('reading a failed build', () => {
       headline: 'Building the install layer (1 command) failed: install 1/1 exited 1: dd …',
       cause: 'enospc',
       output: ['about to fail'],
-      log: '.es/cache/images/x.log',
+      log: '.reeval/cache/images/x.log',
     })
     assert.deepEqual(message.split('\n'), [
       'Building the install layer (1 command) failed: install 1/1 exited 1: dd …',
-      'out of disk space (ENOSPC): free space for Docker (docker system df, es clean --images) and rerun',
+      'out of disk space (ENOSPC): free space for Docker (docker system df, reeval clean --images) and rerun',
       '  | about to fail',
-      '(full log: .es/cache/images/x.log)',
+      '(full log: .reeval/cache/images/x.log)',
     ])
   })
 })
@@ -177,21 +177,21 @@ describe('retrying transient failures', () => {
 })
 
 describe('Dockerfile tags', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'es-tag-'))
+  const dir = mkdtempSync(join(tmpdir(), 'reeval-tag-'))
   const esBase = join(dir, 'es', 'Dockerfile')
   const plain = join(dir, 'plain', 'Dockerfile')
   mkdirSync(join(dir, 'es'))
   mkdirSync(join(dir, 'plain'))
-  writeFileSync(esBase, 'ARG ES_BASE\nFROM $ES_BASE\n')
+  writeFileSync(esBase, 'ARG REEVAL_BASE\nFROM $REEVAL_BASE\n')
   writeFileSync(plain, 'FROM debian:bookworm-slim\n')
 
-  test("FROM $ES_BASE: a rebuilt ES image (a new id) is a new tag; the same id isn't", () => {
+  test("FROM $REEVAL_BASE: a rebuilt reeval image (a new id) is a new tag; the same id isn't", () => {
     const a = dockerfileTag(esBase, 'cursor', 'sha256:aaa').tag
     assert.notEqual(dockerfileTag(esBase, 'cursor', 'sha256:bbb').tag, a)
     assert.equal(dockerfileTag(esBase, 'cursor', 'sha256:aaa').tag, a)
   })
 
-  test("canary: another base ignores ES's image id", () => {
+  test("canary: another base ignores reeval's image id", () => {
     assert.equal(
       dockerfileTag(plain, 'cursor', 'sha256:aaa').tag,
       dockerfileTag(plain, 'cursor', 'sha256:bbb').tag,

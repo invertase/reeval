@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import type { FileRef, RunRecord } from 'evalsuite/view'
 import { FileQuestion } from 'lucide-react'
 import type { ReactNode } from 'react'
+import type { FileRef, RunRecord } from 'reeval/view'
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/states'
 import { artifactQuery, NotFoundError, useStudio } from '@/lib/data'
 

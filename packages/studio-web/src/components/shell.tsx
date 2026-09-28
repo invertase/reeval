@@ -93,7 +93,7 @@ export function Shell() {
                 />
               </svg>
             </span>
-            <span className="hidden sm:inline">ES Studio</span>
+            <span className="hidden sm:inline">reeval Studio</span>
           </Link>
           {studio ? (
             <span className="hidden truncate font-mono text-xs text-muted-foreground md:inline">

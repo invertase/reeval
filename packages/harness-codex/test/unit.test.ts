@@ -53,7 +53,7 @@ test('the first turn starts a thread; later ones resume it, the prompt from its 
   )
 })
 
-test("the config turns off analytics and plugins, and uses ES's HTTP provider on the key", () => {
+test("the config turns off analytics and plugins, and uses reeval's HTTP provider on the key", () => {
   const config = buildCodexConfig({})
   assert.equal(
     config,

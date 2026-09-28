@@ -1,12 +1,12 @@
 ---
-title: es run
+title: reeval run
 description: Plan and run evals, with every flag, filter rule and output option.
 ---
 
-`es run` plans the evals that match `include` and your filters, prints the plan, runs every attempt and prints a summary.
+`reeval run` plans the evals that match `include` and your filters, prints the plan, runs every attempt and prints a summary.
 
 ```bash
-npx es run hello --runs 2 --ui plain
+npx reeval run hello --runs 2 --ui plain
 ```
 
 ## Help
@@ -14,30 +14,30 @@ npx es run hello --runs 2 --ui plain
 [//]: # (generated:cli-help:run)
 
 ```text
-es run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
-  --profile <name>        Size the run with a profile from es.config.ts (also ES_PROFILE;
-                          default: defaultProfile.ci in CI, else defaultProfile.local)
-  --dry-run               Print the plan (evals, cells, attempts, estimate) and exit 0;
-                          with --json, as one JSON document (every cell, and what's excluded)
-  --force                 Run even when the plan is over budget.attempts
-  --runs <n>              Attempts per cell, overriding the config, groups and evals
-  --concurrency <n>       Attempts running at once across evals and cells (default 8, at
-                          most one per CPU and GB of Docker memory; also ES_CONCURRENCY)
-  --tag <tag>             Only evals with this tag; !tag excludes it; repeat to combine (AND)
-  --record                Also record the run into the history folder (see config.record)
-  --ui <mode>             live, plain or agent (default: agent under a coding agent, plain
-                          in CI or when piped, else live; live prints plain for now)
-  --log-order <order>     stream (every line as it happens) or grouped (each attempt as one
-                          block when it ends); default grouped in CI, else stream
-  --log-prefix <prefix>   task or none: the [eval#n harness] prefix on detail lines
-                          (default task, none inside GitHub Actions groups)
-  --output-logs <level>   full, errors-only or none: whose detail lines print (default full)
-  -v, --verbose           Print each attempt's phase trace as it happens: plan, image,
-                          container, environment, brokering, turns and tool calls, checks,
-                          judge calls, gateway requests and teardown
-  -vv, --trace            Also raw payloads, docker commands, headers and DNS decisions, and
-                          keep every attempt's trace.ndjson (else only failing attempts')
-                          Either way each attempt's debug.log is in .es/debug/<run>/ (local only)
+reeval run [filter...]        Run evals matching config.include; filters are path, name or cell substrings
+  --profile <name>            Size the run with a profile from reeval.config.ts (also REEVAL_PROFILE;
+                              default: defaultProfile.ci in CI, else defaultProfile.local)
+  --dry-run                   Print the plan (evals, cells, attempts, estimate) and exit 0;
+                              with --json, as one JSON document (every cell, and what's excluded)
+  --force                     Run even when the plan is over budget.attempts
+  --runs <n>                  Attempts per cell, overriding the config, groups and evals
+  --concurrency <n>           Attempts running at once across evals and cells (default 8, at
+                              most one per CPU and GB of Docker memory; also REEVAL_CONCURRENCY)
+  --tag <tag>                 Only evals with this tag; !tag excludes it; repeat to combine (AND)
+  --record                    Also record the run into the history folder (see config.record)
+  --ui <mode>                 live, plain or agent (default: agent under a coding agent, plain
+                              in CI or when piped, else live; live prints plain for now)
+  --log-order <order>         stream (every line as it happens) or grouped (each attempt as one
+                              block when it ends); default grouped in CI, else stream
+  --log-prefix <prefix>       task or none: the [eval#n harness] prefix on detail lines
+                              (default task, none inside GitHub Actions groups)
+  --output-logs <level>       full, errors-only or none: whose detail lines print (default full)
+  -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
+                              container, environment, brokering, turns and tool calls, checks,
+                              judge calls, gateway requests and teardown
+  -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
+                              keep every attempt's trace.ndjson (else only failing attempts')
+                              Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -45,11 +45,11 @@ es run [filter...]        Run evals matching config.include; filters are path, n
 ## Filters
 
 ```bash
-npx es run evals/hello.es.ts            # a file
-npx es run "greet module"               # evals by group or name
-npx es run "greet module › creates"     # an eval in a group, as its id reads
-npx es run with-house-greeting          # cells by key
-npx es run skill antigravity            # the Antigravity cells of skill.es.ts
+npx reeval run evals/hello.eval.ts            # a file
+npx reeval run "greet module"               # evals by group or name
+npx reeval run "greet module › creates"     # an eval in a group, as its id reads
+npx reeval run with-house-greeting          # cells by key
+npx reeval run skill antigravity            # the Antigravity cells of skill.eval.ts
 ```
 
 - A filter part that names an eval file picks files. Every other part picks evals by name or cell key, as a case-sensitive substring of the eval id or the cell key (`cursor:composer-2.5/with-house-greeting/docker`).
@@ -85,11 +85,11 @@ A sandbox that runs as root or with capabilities added back gets a line under th
 
 ## Before any attempt starts
 
-`es run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running. Each failure exits 2 without writing a run.
+`reeval run` checks, in order: the config and every eval file load; filters and tags match; `.only` isn't used in CI; the plan fits `budget.attempts`; the credentials of the harnesses and judge the plan will use are set (and have no stray whitespace); Docker is running. Each failure exits 2 without writing a run.
 
 Then it prepares every sandbox image the plan needs, three at a time, once each: see [Sandbox providers](/reference/sandbox/providers). One the config sets that can't be prepared stops the run there, exit 3 (2 for a missing `docker({ image })`); one a group or eval sets fails only the attempts that need it.
 
-`es run` loads `.env.local`, then `.env`, from the config's directory, not the current one: variables already set in your shell win, then `.env.local`, then `.env`. The config and the evals both see them.
+`reeval run` loads `.env.local`, then `.env`, from the config's directory, not the current one: variables already set in your shell win, then `.env.local`, then `.env`. The config and the evals both see them.
 
 ## Output flags
 
@@ -101,7 +101,7 @@ Then it prepares every sandbox image the plan needs, three at a time, once each:
 | `--output-logs` | `full`, `errors-only`, `none` | `full` |
 | `-v`, `-vv` | | Off. See [Debug data](/reference/debug-data) |
 
-Each has an environment variable: `ES_UI`, `ES_LOG_ORDER`, `ES_LOG_PREFIX`, `ES_OUTPUT_LOGS`. See [Output modes](/concepts/output).
+Each has an environment variable: `REEVAL_UI`, `REEVAL_LOG_ORDER`, `REEVAL_LOG_PREFIX`, `REEVAL_OUTPUT_LOGS`. See [Output modes](/concepts/output).
 
 ## The summary's eval line
 
@@ -116,10 +116,10 @@ The `gated` label says the rate leaves out the ungated cells, whose failures don
 
 ## What it writes
 
-Every run, including one where nothing passed, writes a scratch run to `.es/runs/<runId>.json` and its artifacts to `.es/runs/<runId>/`. `--record`, or `record: 'ci'` with `CI` set, or `record: 'always'`, also copies it into the history folder. Each attempt's local debug data goes to `.es/debug/`.
+Every run, including one where nothing passed, writes a scratch run to `.reeval/runs/<runId>.json` and its artifacts to `.reeval/runs/<runId>/`. `--record`, or `record: 'ci'` with `CI` set, or `record: 'always'`, also copies it into the history folder. Each attempt's local debug data goes to `.reeval/debug/`.
 
 ## Related
 
 - [Sizing runs](/guide/profiles): profiles, `--dry-run` and budgets
 - [The matrix](/concepts/matrix): how evals become cells and attempts
-- [es record](/reference/cli/record)
+- [reeval record](/reference/cli/record)

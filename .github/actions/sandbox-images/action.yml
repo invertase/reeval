@@ -1,6 +1,6 @@
 name: Sandbox images
 description: >
-  Loads ES's sandbox image for every baked harness (Cursor's, Claude Code's, Antigravity's, OpenCode's, Goose's, pi's, Codex's) from
+  Loads reeval's sandbox image for every baked harness (Cursor's, Claude Code's, Antigravity's, OpenCode's, Goose's, pi's, Codex's) from
   the Actions cache, or builds them and caches them as one zstd tarball. Needs pnpm build first.
 runs:
   using: composite
@@ -20,11 +20,11 @@ runs:
     - id: cache
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
-        path: ${{ runner.temp }}/es-sandbox-images.tar.zst
-        key: es-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'pnpm-workspace.yaml', 'patches/**', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-codex/package.json', 'packages/harness-codex/src/codex-bootstrap.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
+        path: ${{ runner.temp }}/reeval-sandbox-images.tar.zst
+        key: reeval-sandbox-images-${{ runner.os }}-${{ hashFiles('packages/sandbox-docker/package.json', 'pnpm-workspace.yaml', 'patches/**', 'packages/harness-antigravity/package.json', 'packages/harness-antigravity/src/antigravity-bootstrap.ts', 'packages/harness-opencode/package.json', 'packages/harness-opencode/src/opencode-install.ts', 'packages/harness-opencode/src/opencode-harness.ts', 'packages/harness-goose/package.json', 'packages/harness-goose/src/goose-harness.ts', 'packages/harness-pi/package.json', 'packages/harness-pi/assets/**', 'packages/harness-pi/src/pi-bootstrap.ts', 'packages/harness-codex/package.json', 'packages/harness-codex/src/codex-bootstrap.ts', 'packages/harness-cursor-sdk/package.json', 'packages/harness-cursor-sdk/src/cursor-sdk-bootstrap.ts', 'packages/sandbox-docker/src/image.ts', 'packages/sandbox-docker/src/build-image.ts', 'packages/sandbox-docker/docker/**') }}
     - if: steps.cache.outputs.cache-hit == 'true'
       shell: bash
-      run: zstd -dc "$RUNNER_TEMP/es-sandbox-images.tar.zst" | docker load
+      run: zstd -dc "$RUNNER_TEMP/reeval-sandbox-images.tar.zst" | docker load
     - if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       env:
@@ -33,4 +33,4 @@ runs:
         node --input-type=module -e "
           import { BAKED_HARNESSES, buildImage } from './packages/sandbox-docker/dist/index.js'
           for (const harness of BAKED_HARNESSES) await buildImage(console.log, { harness })"
-        docker save $IMAGES | zstd -T0 -3 -q -f -o "$RUNNER_TEMP/es-sandbox-images.tar.zst"
+        docker save $IMAGES | zstd -T0 -3 -q -f -o "$RUNNER_TEMP/reeval-sandbox-images.tar.zst"

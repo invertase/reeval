@@ -1,9 +1,9 @@
 // Checks that `bun build --compile` still makes a working, standalone es from dist/. Local and
-// optional: ES runs on Node, and nothing ships a binary. Needs bun on PATH and `pnpm build` first.
+// optional: reeval runs on Node, and nothing ships a binary. Needs bun on PATH and `pnpm build` first.
 //
 //   node scripts/bun-compile.mjs
 //
-// It writes packages/evalsuite/es (gitignored) with ES's own files embedded (package.json,
+// It writes packages/reeval/es (gitignored) with reeval's own files embedded (package.json,
 // docker/, assets/, dist/studio-app, dist/bridge, jiti's Babel build and the bundled
 // dependencies' versions), copies it into an empty directory, and runs examples/hello's fake
 // config with it, in a copy with no node_modules, and with Node, and compares them. With Docker
@@ -26,7 +26,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
-const pkg = join(root, 'packages/evalsuite')
+const pkg = join(root, 'packages/reeval')
 const cli = join(pkg, 'dist/cli.js')
 const exe = process.platform === 'win32' ? 'es.exe' : 'es'
 const binary = join(pkg, exe)
@@ -43,7 +43,7 @@ if (bun.status !== 0) fail('bun is not on PATH (https://bun.sh)')
 if (!existsSync(cli)) fail('no dist/cli.js: run pnpm build first')
 
 // What the binary embeds, laid out as in the package; src/root.ts finds it there when compiled.
-const stage = mkdtempSync(join(tmpdir(), 'es-bun-stage-'))
+const stage = mkdtempSync(join(tmpdir(), 'reeval-bun-stage-'))
 const own = ['package.json', 'docker', 'assets', 'dist/studio-app', 'dist/bridge']
 for (const path of own) cpSync(join(pkg, path), join(stage, path), { recursive: true })
 const require = createRequire(join(pkg, 'package.json'))
@@ -69,7 +69,7 @@ const built = sh(
   [
     'build',
     '--compile',
-    // ES reads .env files itself, in its own order; the executable mustn't load them first.
+    // reeval reads .env files itself, in its own order; the executable mustn't load them first.
     '--no-compile-autoload-dotenv',
     '--no-compile-autoload-bunfig',
     '--compile-autoload-package-json',
@@ -84,20 +84,20 @@ rmSync(stage, { recursive: true, force: true })
 if (built.status !== 0) fail('bun build --compile failed')
 
 // The binary alone, in an empty directory, with its own cache for what it copies out of itself.
-const alone = mkdtempSync(join(tmpdir(), 'es-bun-alone-'))
+const alone = mkdtempSync(join(tmpdir(), 'reeval-bun-alone-'))
 cpSync(binary, join(alone, exe))
 const cache = join(alone, 'cache')
 
-/** A copy of `dir` outside the repo; with `link`, importing ES as `evalsuite` from here. */
+/** A copy of `dir` outside the repo; with `link`, importing reeval as `reeval` from here. */
 function project(dir, link) {
-  const copy = mkdtempSync(join(tmpdir(), 'es-bun-'))
+  const copy = mkdtempSync(join(tmpdir(), 'reeval-bun-'))
   cpSync(dir, copy, {
     recursive: true,
-    filter: (src) => !/[/\\](node_modules|\.es)([/\\]|$)/.test(src.slice(dir.length)),
+    filter: (src) => !/[/\\](node_modules|\.reeval)([/\\]|$)/.test(src.slice(dir.length)),
   })
   if (link) {
     mkdirSync(join(copy, 'node_modules'))
-    symlinkSync(pkg, join(copy, 'node_modules/evalsuite'), 'dir')
+    symlinkSync(pkg, join(copy, 'node_modules/reeval'), 'dir')
   }
   return copy
 }
@@ -124,11 +124,11 @@ const check = (name, ok, detail = '') => {
 
 console.log(`bun ${bun.stdout.trim()}, ${binary}`)
 const version = compiled(alone, ['--version'])
-check('es --version', version.stdout.trim() === manifest.version, why(version))
+check('reeval --version', version.stdout.trim() === manifest.version, why(version))
 
 const withNode = project(join(root, 'examples/hello'), true)
 const hello = project(join(root, 'examples/hello'), false)
-const fake = ['--config', 'es.fake.config.ts']
+const fake = ['--config', 'reeval.fake.config.ts']
 const planNode = node(withNode, ['run', ...fake, '--dry-run', '--json'])
 const planBin = compiled(hello, ['run', ...fake, '--dry-run', '--json'])
 check(
@@ -144,24 +144,28 @@ check(
   outcome(runBin) ?? why(runBin),
 )
 const query = compiled(hello, ['query', 'effort', '--json'])
-check('es query (node:sqlite)', query.status === 0, why(query))
+check('reeval query (node:sqlite)', query.status === 0, why(query))
 const site = join(hello, 'site')
 const studio = compiled(hello, ['studio', 'build', '--out', site])
-check('es studio build', studio.status === 0 && existsSync(join(site, 'index.html')), why(studio))
+check(
+  'reeval studio build',
+  studio.status === 0 && existsSync(join(site, 'index.html')),
+  why(studio),
+)
 
-const docker = sh('docker', ['image', 'inspect', 'evalsuite-sandbox-base:latest'])
+const docker = sh('docker', ['image', 'inspect', 'reeval-sandbox-base:latest'])
 if (docker.status === 0) {
   // The egress gateway and a Docker attempt: the lands eval passes and its canary fails.
   const fixture = project(join(pkg, 'test/features/egress/blocked-host-recorded'), false)
-  const r = compiled(fixture, ['run'], { ES_FIXTURE_SANDBOX: 'docker' })
+  const r = compiled(fixture, ['run'], { REEVAL_FIXTURE_SANDBOX: 'docker' })
   check(
     'a Docker attempt behind the gateway',
     /1 passed, 1 failed/.test(outcome(r) ?? ''),
     outcome(r) ?? why(r),
   )
   rmSync(fixture, { recursive: true, force: true })
-} else console.log('skip a Docker attempt: no Docker, or no sandbox images (es image build)')
-const copied = existsSync(cache) ? readdirSync(join(cache, 'evalsuite')).sort() : []
+} else console.log('skip a Docker attempt: no Docker, or no sandbox images (reeval image build)')
+const copied = existsSync(cache) ? readdirSync(join(cache, 'reeval')).sort() : []
 check('what it copied out of itself', copied.length > 0, copied.join(', '))
 
 for (const dir of [withNode, hello, alone]) rmSync(dir, { recursive: true, force: true })

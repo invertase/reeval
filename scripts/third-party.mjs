@@ -1,4 +1,4 @@
-// The third-party code inlined into @invertase/foobar's tarball, for its THIRD_PARTY_NOTICES.md.
+// The third-party code inlined into reeval's tarball, for its THIRD_PARTY_NOTICES.md.
 // rollup-plugin-license lists the packages whose modules land in a bundle (tsdown's, and the
 // studio app's Vite build); packages that reach it other ways (CSS @imports, files copied from a
 // package) are added by path. Every one must carry a licence in ALLOWED, and a licence file
@@ -27,7 +27,7 @@ export const ALLOWED = [
 const NO_NOTICE = ['MIT-0', '0BSD', 'CC0-1.0', 'Unlicense']
 
 const root = join(import.meta.dirname, '..')
-/** The workspace's own packages, which the studio reaches by path (`evalsuite/view`). */
+/** The workspace's own packages, which the studio reaches by path (`reeval/view`). */
 const own = new Set(
   readdirSync(join(root, 'packages')).map(
     (dir) => JSON.parse(readFileSync(join(root, 'packages', dir, 'package.json'), 'utf8')).name,

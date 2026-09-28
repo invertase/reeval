@@ -20,13 +20,13 @@ export const claude = claudeCode({ model: 'claude-sonnet-5' })
 export const agy = antigravity({ model: 'gemini-3.8-flash-medium' })
 ```
 
-```ts title="es.agents.config.ts"
+```ts title="reeval.agents.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 import { agy, composer } from './evals/harnesses.ts'
 
 export default defineConfig({
-  include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+  include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
   harness: [composer, agy],
   sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
@@ -35,72 +35,72 @@ export default defineConfig({
 })
 ```
 
-The evals are `examples/hello`'s `hello.es.ts` and `skill.es.ts`, unchanged. The second is the house-greeting skill compare from [Prove a skill helps](/recipes/skill-lift), so each agent gets a control and a variant.
+The evals are `examples/hello`'s `hello.eval.ts` and `skill.eval.ts`, unchanged. The second is the house-greeting skill compare from [Prove a skill helps](/recipes/skill-lift), so each agent gets a control and a variant.
 
 Every harness needs a `model`. `params` sets Cursor's model parameters; `fast: 'true'` shows up in the record as the served model `composer-2.5[fast=true]`. Each harness has an id, a key and an image of its own:
 
 | Harness | Id (in cell keys and filters) | Key in `.env.local` | Sandbox image |
 |---|---|---|---|
-| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `evalsuite-sandbox:cursor-0.1.0` |
-| `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `evalsuite-sandbox:claude-code-1.0.128-patch.5d1c985c` |
-| `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `evalsuite-sandbox:antigravity-0.1.0` |
+| `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `reeval-sandbox:cursor-0.1.0` |
+| `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `reeval-sandbox:claude-code-1.0.128-patch.5d1c985c` |
+| `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `reeval-sandbox:antigravity-0.1.0` |
 
 Each key stays on the host and is swapped in by the egress gateway only on that agent's API endpoints (see [Credential brokering](/concepts/credential-brokering)).
 
 ## Build the images and check the plan
 
 ```bash
-npx es image build --dry-run --config es.agents.config.ts
+npx reeval image build --dry-run --config reeval.agents.config.ts
 ```
 
 ```text
 images  2 sandbox images (nothing built: --dry-run)
 docker · 2 evals
-  base  evalsuite-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
+  base  reeval-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker · antigravity · 2 evals
-  base  evalsuite-sandbox:antigravity-0.1.0  (rebuild: the harness bootstrap)
+  base  reeval-sandbox:antigravity-0.1.0  (rebuild: the harness bootstrap)
 ```
 
 ```bash
-npx es run --dry-run --config es.agents.config.ts --runs 2
+npx reeval run --dry-run --config reeval.agents.config.ts --runs 2
 ```
 
 ```text
 plan  3 evals · 8 cells · 16 attempts · ~12m 31s serial (~3m 08s at concurrency 4)
 eval                                                              harnesses  variants  runs  attempts  notes
-evals/hello.es.ts › greet module › creates a tested greet module  2          —         2     4
-evals/hello.es.ts › greet module › adds a default name in a…      2          —         2     4
-evals/skill.es.ts › house greeting › greets in the house style    2          1         2     8
+evals/hello.eval.ts › greet module › creates a tested greet module  2          —         2     4
+evals/hello.eval.ts › greet module › adds a default name in a…      2          —         2     4
+evals/skill.eval.ts › house greeting › greets in the house style    2          1         2     8
 ```
 
-A filter that names a harness runs only its cells, and ES asks only for that harness's key:
+A filter that names a harness runs only its cells, and reeval asks only for that harness's key:
 
 ```bash
-npx es run antigravity --config es.agents.config.ts --runs 2
+npx reeval run antigravity --config reeval.agents.config.ts --runs 2
 ```
 
 ```text
 plan  2 evals · 2 cells · 4 attempts · ~12m 00s serial (~3m 00s at concurrency 4)
-es: Missing credentials: GEMINI_API_KEY. Set them in the environment or .env.local.
+reeval: Missing credentials: GEMINI_API_KEY. Set them in the environment or .env.local.
 ```
 
 ## Run both agents
 
 ```bash
-npx es run --config es.agents.config.ts --runs 2
+npx reeval run --config reeval.agents.config.ts --runs 2
 ```
 
 A real run on Cursor and Antigravity:
 
 ```text
 Summary
- evals/hello.es.ts
+ evals/hello.eval.ts
    greet module
      ✓ creates a tested greet module                4/4  100%  4 attempts
          cursor:composer-2.5/-/docker                    2/2  100%   gate passRate 0.5
          antigravity:gemini-3.8-flash-medium/-/docker    2/2  100%   gate passRate 0.5
 …
- evals/skill.es.ts
+ evals/skill.eval.ts
    house greeting
      ✓ greets in the house style                    4/8 · 100% gated  8 attempts
          cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
@@ -117,7 +117,7 @@ Duration  2m 39s
 
 What it says:
 
-- **Both agents pass `hello.es.ts`**, so that eval can't tell them apart.
+- **Both agents pass `hello.eval.ts`**, so that eval can't tell them apart.
 - **The skill lifts both by +100 points.** Without it, Cursor's controls wrote `Welcome home, Ada!` and Antigravity's `Hello, Ada!`.
 - **Effort differs more than pass rate.** With the skill, Cursor went from 11.5 tool calls to 3 and Antigravity from 24.5 to 3.5. Antigravity's control spent a minute per attempt, against Cursor's 22 s.
 - **The effort verdict is `too few attempts to test`:** two attempts per side can't reach significance. Use `--runs 4` or more when effort is what you're measuring.
@@ -129,29 +129,29 @@ What it says:
 
 ## Ask across runs
 
-`es query factor_effects` sets one factor against another, within a run (`controlled`) and pooled over comparable runs (`pooled`). From the same history:
+`reeval query factor_effects` sets one factor against another, within a run (`controlled`) and pooled over comparable runs (`pooled`). From the same history:
 
 ```bash
-npx es query "SELECT eval_key, factor, tier, points, lo, hi,
+npx reeval query "SELECT eval_key, factor, tier, points, lo, hi,
   pass_verdict, effort_verdict FROM factor_effects"
 ```
 
 ```text
 eval_key                                                    factor       tier        points  lo      hi     pass_verdict  effort_verdict
 …
-evals/skill.es.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
+evals/skill.eval.ts › house greeting › greets in the house…   environment  pooled      1       0.307   1      effect        fewer
 ·                                                           harness      pooled      0       -0.436  0.436  noise         insufficient
 ```
 
-Pooled over comparable runs, the skill has an effect on both pass rate and tool calls, and the choice of agent has none that the data can show. [`es analyze`](/reference/cli/analyze) reads the same facts and explains them:
+Pooled over comparable runs, the skill has an effect on both pass rate and tool calls, and the choice of agent has none that the data can show. [`reeval analyze`](/reference/cli/analyze) reads the same facts and explains them:
 
 ```text
   - Across all evals, comparing the antigravity harness against cursor yielded a pooled pass-rate lift of +0 pts (95% CI −44…+44, verdict: noise) and effort verdict: insufficient (tools p = 0.3333 across 3 strata). [F12]
 …
-     verify: es run --runs 6 --tag skill
+     verify: reeval run --runs 6 --tag skill
 ```
 
-The token line comes from the harnesses' own reports; `es query` has them per attempt in `input_tokens`, `cache_read_tokens`, `output_tokens` and `served_model`. ES prices no models.
+The token line comes from the harnesses' own reports; `reeval query` has them per attempt in `input_tokens`, `cache_read_tokens`, `output_tokens` and `served_model`. reeval prices no models.
 
 There's no Claude Code run on this page: the Anthropic account behind these captures had no credit, so its turns ended in `error` (`Credit balance is too low` in the transcript).
 

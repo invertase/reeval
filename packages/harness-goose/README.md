@@ -1,4 +1,4 @@
-# @evalsuite/harness-goose
+# @reeval/harness-goose
 
 [Goose](https://goose-docs.ai) on a Gemini API key, as an [AI SDK harness](https://ai-sdk.dev/docs):
 thin config over `@ai-sdk/harness-acp`, which runs `goose acp` in the sandbox. It's shaped like the
@@ -6,7 +6,7 @@ thin config over `@ai-sdk/harness-acp`, which runs `goose acp` in the sandbox. I
 
 ```ts
 import { HarnessAgent } from '@ai-sdk/harness/agent'
-import { createGoose } from '@evalsuite/harness-goose'
+import { createGoose } from '@reeval/harness-goose'
 
 const agent = new HarnessAgent({
   harness: createGoose({

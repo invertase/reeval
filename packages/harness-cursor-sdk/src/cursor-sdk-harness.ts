@@ -79,7 +79,7 @@ export type CursorSdkHarnessSettings = {
   readonly settingSources?: readonly CursorSdkSettingSource[]
   /** MCP servers in the SDK's `McpServerConfig` shape, passed inline on every turn. */
   readonly mcpServers?: Record<string, unknown>
-  /** The SDK's own shell sandbox (bubblewrap on Linux). Off: ES's container is the boundary. */
+  /** The SDK's own shell sandbox (bubblewrap on Linux). Off: reeval's container is the boundary. */
   readonly sdkSandbox?: boolean
   /** Extra variables for the runner process. */
   readonly env?: Record<string, string>

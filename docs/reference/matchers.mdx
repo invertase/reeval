@@ -1,11 +1,11 @@
 ---
 title: Matchers
-description: The matchers ES adds to expect, what they accept, and the failure messages they print.
+description: The matchers reeval adds to expect, what they accept, and the failure messages they print.
 ---
 
-ES adds `toHaveFile`, `toSucceed`, `toPass`, `toHaveSearched` and `toHaveFetched` to `expect`, which you import from `'{{ pkg }}'`.
+reeval adds `toHaveFile`, `toSucceed`, `toPass`, `toHaveSearched` and `toHaveFetched` to `expect`, which you import from `'{{ pkg }}'`.
 
-```ts title="evals/greet.es.ts"
+```ts title="evals/greet.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('creates a tested greet module', async (t) => {
@@ -109,7 +109,7 @@ expect(turn).toHaveFetched(url?)
 
 A real Cursor run:
 
-```ts title="evals/web.es.ts"
+```ts title="evals/web.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('looks up the latest Node.js LTS', async (t) => {
@@ -123,7 +123,7 @@ evaluate('looks up the latest Node.js LTS', async (t) => {
 ```
 
 ```text
-[looks#1 cursor] ✓ evals/web.es.ts › looks up the latest Node.js LTS  16s
+[looks#1 cursor] ✓ evals/web.eval.ts › looks up the latest Node.js LTS  16s
 [looks#1 cursor]  +0:00 sandbox ready 1s
 [looks#1 cursor]  +0:01 turn 1 done 14s · 1 tool call, 0 file edits
 ```
@@ -142,7 +142,7 @@ A harness may not be able to report web events for a turn: then the turn lists t
 toHaveFetched() can't check this turn: its harness doesn't report web fetches ('web-fetch' is in turn.unreported), so the agent may have made them with no event. Check the reply or files instead, or use a harness that reports them.
 ```
 
-Cursor's SDK leaves web calls out of its stream; ES's adapter recovers them after each turn from the agent's stored conversation, so a Cursor turn is `unreported` only when that recovery failed.
+Cursor's SDK leaves web calls out of its stream; reeval's adapter recovers them after each turn from the agent's stored conversation, so a Cursor turn is `unreported` only when that recovery failed.
 
 ## Related
 

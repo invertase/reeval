@@ -5,7 +5,7 @@ description: A temporary directory on the host that stands in for a container, f
 
 `fakeSandbox()` gives each attempt a temporary directory on the host instead of a container. It's for the fake harness and for testing your evals and configs; it isolates nothing.
 
-```ts title="es.fake.config.ts"
+```ts title="reeval.fake.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
@@ -34,7 +34,7 @@ export default defineConfig({
 
 ## What it is
 
-Each attempt gets a directory `es-sandbox-*` under `dir`, with the workspace in `work/`. `HOME` is the attempt's directory, so `~/` paths in `files`, `t.readFile` and skills land there. `t.exec`, setup steps and the fake agent's `exec` steps run with `sh -c` on the host, in the workspace. The directory is removed when the attempt ends.
+Each attempt gets a directory `reeval-sandbox-*` under `dir`, with the workspace in `work/`. `HOME` is the attempt's directory, so `~/` paths in `files`, `t.readFile` and skills land there. `t.exec`, setup steps and the fake agent's `exec` steps run with `sh -c` on the host, in the workspace. The directory is removed when the attempt ends.
 
 On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe`: the one on `PATH`, or else the one in Git's install folder. Without it, the attempt fails with `The fake sandbox runs commands with a POSIX sh, and there's none on this machine.`
 
@@ -55,7 +55,7 @@ On Windows, `sh` is [Git for Windows](https://git-scm.com/download/win)' `sh.exe
 An eval that asks for an egress policy the fake sandbox can't enforce is an error:
 
 ```text
-es: evals/hello.es.ts: evaluate("greet module › creates greet.js") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
+reeval: evals/hello.eval.ts: evaluate("greet module › creates greet.js") runs under egress 'deny-all', which needs turning egress off, but the fake sandbox enforces no egress policy (its commands run on the host). Run it in docker(), or set egress: 'allow-all'.
 ```
 
 ## Related

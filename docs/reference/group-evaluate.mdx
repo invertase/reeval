@@ -5,7 +5,7 @@ description: The signatures of group and evaluate, their skip, only, todo and fo
 
 `evaluate` declares one eval; `group` names a set of evals and gives them shared options.
 
-```ts title="evals/math.es.ts"
+```ts title="evals/math.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
 
 group('math', { tags: ['smoke'] }, () => {
@@ -29,12 +29,12 @@ group('math', { tags: ['smoke'] }, () => {
 ```text
 plan  3 evals · 3 cells · 3 attempts · …
 eval                                   harnesses  variants  runs  attempts  notes
-ge/math.es.ts › math › writes add.js   1          —         1     1
-ge/math.es.ts › math › adds 2 and 3    1          —         1     1
-ge/math.es.ts › math › adds 10 and -4  1          —         1     1
+ge/math.eval.ts › math › writes add.js   1          —         1     1
+ge/math.eval.ts › math › adds 2 and 3    1          —         1     1
+ge/math.eval.ts › math › adds 10 and -4  1          —         1     1
 ```
 
-Eval files match `include` in `es.config.ts` (default `evals/**/*.es.ts`). Both functions come from `'{{ pkg }}'`.
+Eval files match `include` in `reeval.config.ts` (default `evals/**/*.eval.ts`). Both functions come from `'{{ pkg }}'`.
 
 ## evaluate
 
@@ -75,7 +75,7 @@ group(name, fn, options)
 </Property>
 
 <Property name="fn" type="() => void">
-  Declares the group's evals and nested groups. It runs while ES collects evals, so keep it synchronous and free of side effects.
+  Declares the group's evals and nested groups. It runs while reeval collects evals, so keep it synchronous and free of side effects.
 </Property>
 
 ## Variants
@@ -111,14 +111,14 @@ Two cases that end up with the same name stop the run with exit 2 (`evaluate("ad
 An eval's id is its file path (relative to the config's directory), its groups and its name, joined with ` › `:
 
 ```text
-ge/math.es.ts › math › writes add.js
+ge/math.eval.ts › math › writes add.js
 ```
 
-The id is what the plan, the reporters, `es history` and the run record show, and what `es run` filters match. Each attempt also has an id, `<cell key>#<n>`, such as `cursor/-/docker#1`.
+The id is what the plan, the reporters, `reeval history` and the run record show, and what `reeval run` filters match. Each attempt also has an id, `<cell key>#<n>`, such as `cursor/-/docker#1`.
 
 ## Eval files
 
-```ts title="evals/greet.es.ts"
+```ts title="evals/greet.eval.ts"
 import { readFile } from 'node:fs/promises'
 import { evaluate } from '{{ pkg }}'
 import cases from './cases.json'            // JSON imports
@@ -127,7 +127,7 @@ import { house } from './style'             // extensionless: style.ts
 const brief = await readFile(new URL('./brief.md', import.meta.url), 'utf8')
 ```
 
-Eval files are TypeScript or JavaScript, ESM or CommonJS, loaded with no build step. Imports may leave out the extension, and JSON imports work. Each eval file loads in a fresh process of its own, so module state and globals never leak from one file to another; `es run` loads each file twice, once for the plan and once to run.
+Eval files are TypeScript or JavaScript, ESM or CommonJS, loaded with no build step. Imports may leave out the extension, and JSON imports work. Each eval file loads in a fresh process of its own, so module state and globals never leak from one file to another; `reeval run` loads each file twice, once for the plan and once to run.
 
 The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and trailing commas are fine) or extends a missing file stops the run. Its `paths` aliases aren't applied. Decorators are TypeScript's legacy ones. npm, pnpm, Yarn 1 and Yarn's Plug'n'Play all work.
 

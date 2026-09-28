@@ -1,8 +1,8 @@
-// Builds a throwaway ES project with real run history for studio development, screenshots and
+// Builds a throwaway reeval project with real run history for studio development, screenshots and
 // tests: a copy of examples/hello with a few commits and recorded fake runs (passing, failing, CI,
 // multi-cell with a compared skill environment), plus one unrecorded scratch run.
 //
-//   node packages/studio-web/scripts/seed-demo.mjs [dir]    (default: $TMPDIR/es-studio-demo)
+//   node packages/studio-web/scripts/seed-demo.mjs [dir]    (default: $TMPDIR/reeval-studio-demo)
 import { spawnSync } from 'node:child_process'
 import { cp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,14 +10,14 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
-const cli = join(repo, 'packages/evalsuite/dist/cli.js')
-const dir = resolve(process.argv[2] ?? join(tmpdir(), 'es-studio-demo'))
+const cli = join(repo, 'packages/reeval/dist/cli.js')
+const dir = resolve(process.argv[2] ?? join(tmpdir(), 'reeval-studio-demo'))
 
 const sh = (cmd, args, env = {}) => {
   const r = spawnSync(cmd, args, {
     cwd: dir,
     encoding: 'utf8',
-    env: { ...process.env, NO_COLOR: '1', ES_UI: 'plain', CI: '', GITHUB_ACTIONS: '', ...env },
+    env: { ...process.env, NO_COLOR: '1', REEVAL_UI: 'plain', CI: '', GITHUB_ACTIONS: '', ...env },
   })
   if (r.error) throw r.error
   return r
@@ -35,7 +35,7 @@ const commit = (message, who) => {
 const es = (args, env) => {
   const r = sh(process.execPath, [cli, ...args], env)
   const last = r.stdout.trim().split('\n').slice(-3).join('\n')
-  console.log(`$ es ${args.join(' ')}  (exit ${r.status})\n${last}\n`)
+  console.log(`$ reeval ${args.join(' ')}  (exit ${r.status})\n${last}\n`)
 }
 
 // biome-ignore lint/suspicious/noTemplateCurlyInString: the fake agent's file content
@@ -73,10 +73,10 @@ const config = ({
   harnesses,
   judge = 0.95,
   extra = '',
-}) => `import { defineConfig } from 'evalsuite'
-import { fakeHarness } from 'evalsuite/harness'
-import { fakeJudge } from 'evalsuite/judge'
-import { fakeSandbox } from 'evalsuite/sandbox'
+}) => `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ${JSON.stringify(include)},
@@ -100,52 +100,52 @@ await mkdir(dir, { recursive: true })
 await cp(join(repo, 'examples/hello'), dir, {
   recursive: true,
   // `.env*` holds the developer's real keys; the demo commits everything it copies.
-  filter: (src) => !/[\\/](node_modules|\.es|\.history|\.env[^\\/]*)([\\/]|$)/.test(src),
+  filter: (src) => !/[\\/](node_modules|\.reeval|\.history|\.env[^\\/]*)([\\/]|$)/.test(src),
 })
 await writeFile(
   join(dir, 'tsconfig.json'),
   '{ "compilerOptions": { "target": "es2023", "module": "nodenext", "strict": true, "skipLibCheck": true } }\n',
 )
 await mkdir(join(dir, 'node_modules'), { recursive: true })
-await symlink(join(repo, 'packages/evalsuite'), join(dir, 'node_modules/evalsuite'), 'dir')
-await writeFile(join(dir, '.gitignore'), 'node_modules/\n.es/\n')
+await symlink(join(repo, 'packages/reeval'), join(dir, 'node_modules/reeval'), 'dir')
+await writeFile(join(dir, '.gitignore'), 'node_modules/\n.reeval/\n')
 
-const include = ['evals/hello.es.ts', 'evals/preferences.es.ts']
-await writeFile(join(dir, 'es.demo.config.ts'), config({ include, harnesses: [harness(good)] }))
+const include = ['evals/hello.eval.ts', 'evals/preferences.eval.ts']
+await writeFile(join(dir, 'reeval.demo.config.ts'), config({ include, harnesses: [harness(good)] }))
 git('init', '-q', '-b', 'main')
 git('config', 'user.email', 'demo@example.com')
 commit('feat: greet module evals', 'Ada Lovelace')
-es(['run', '--config', 'es.demo.config.ts', '--record'])
+es(['run', '--config', 'reeval.demo.config.ts', '--record'])
 
 // A regression with the same agent: a stricter judge fails every judged eval. Fingerprints
-// match, so es compare calls these regressed rather than not comparable.
+// match, so reeval compare calls these regressed rather than not comparable.
 await writeFile(
-  join(dir, 'es.demo.config.ts'),
+  join(dir, 'reeval.demo.config.ts'),
   config({ include, judge: 0.42, harnesses: [harness(good)] }),
 )
 git('checkout', '-q', '-b', 'stricter-judge')
 commit('test: try a stricter judge', 'Grace Hopper')
-es(['run', '--config', 'es.demo.config.ts', '--record'])
+es(['run', '--config', 'reeval.demo.config.ts', '--record'])
 
 // Back on main, from CI.
 git('checkout', '-q', 'main')
-es(['run', '--config', 'es.demo.config.ts', '--record'], {
+es(['run', '--config', 'reeval.demo.config.ts', '--record'], {
   CI: '1',
   GITHUB_ACTIONS: 'true',
   GITHUB_SERVER_URL: 'https://github.com',
-  GITHUB_REPOSITORY: 'invertase/evalsuite-demo',
+  GITHUB_REPOSITORY: 'invertase/reeval-demo',
   GITHUB_RUN_ID: '9182736450',
   GITHUB_RUN_ATTEMPT: '1',
 })
 
-// A matrix: two agents, each with skill.es.ts's control and its house-greeting variant, three
+// A matrix: two agents, each with skill.eval.ts's control and its house-greeting variant, three
 // runs per cell.
 // biome-ignore lint/suspicious/noTemplateCurlyInString: the fake agent's file content
 const AHOY = "export function greet(name = 'world') {\n  return `Ahoy, ${name}!`\n}\n"
 await writeFile(
-  join(dir, 'es.matrix.config.ts'),
+  join(dir, 'reeval.matrix.config.ts'),
   config({
-    include: ['evals/hello.es.ts', 'evals/skill.es.ts'],
+    include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
     harnesses: [
       harness({
         ...good,
@@ -166,12 +166,12 @@ await writeFile(
   }),
 )
 commit('feat: compare agents with and without the house-greeting skill', 'Ada Lovelace')
-es(['run', '--config', 'es.matrix.config.ts', '--record'])
+es(['run', '--config', 'reeval.matrix.config.ts', '--record'])
 
 // An unrecorded run with uncommitted changes: shows up as scratch.
 await writeFile(join(dir, 'NOTES.md'), 'Trying a stricter judge threshold.\n')
-es(['run', '--config', 'es.demo.config.ts'])
+es(['run', '--config', 'reeval.demo.config.ts'])
 
 console.log(
-  `Demo project: ${dir}\nRun: node ${cli} studio --config ${join(dir, 'es.demo.config.ts')}`,
+  `Demo project: ${dir}\nRun: node ${cli} studio --config ${join(dir, 'reeval.demo.config.ts')}`,
 )

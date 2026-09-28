@@ -1,8 +1,0 @@
-import { evaluate, expect } from 'evalsuite'
-
-// One short turn with a check on the file it writes, so two runs of it are "same" in es compare.
-// A trailing period is allowed: the check is that the agent wrote the file, not its punctuation.
-evaluate('writes hello', async (t) => {
-  await t.send('Create a file named hello.txt whose only content is `hello from es`, then stop.')
-  expect((await t.readFile('hello.txt'))?.trim()).toMatch(/^hello from es\.?$/)
-})

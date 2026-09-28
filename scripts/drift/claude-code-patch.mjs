@@ -1,17 +1,17 @@
-// Whether ES still needs its patch to @ai-sdk/harness-claude-code (pnpm-workspace.yaml's
+// Whether reeval still needs its patch to @ai-sdk/harness-claude-code (pnpm-workspace.yaml's
 // patchedDependencies): the newest adapter from npm, key-free. It replays a real captured turn
-// (packages/evalsuite/test/fixtures/claude-code-bridge/) through that version's own bridge.
+// (packages/reeval/test/fixtures/claude-code-bridge/) through that version's own bridge.
 //   Upstream reports the served model unpatched: it fixed the bug, so drop the patch (exit 1).
 //   The patch no longer applies, or applied doesn't report the model: rebase it (exit 1).
 //   Otherwise the patch is still needed and still works on the newest version (exit 0).
 //   node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs
-// ES_DRIFT_CLAUDE_CODE_VERSION names a version instead of the newest. Appends a line to
+// REEVAL_DRIFT_CLAUDE_CODE_VERSION names a version instead of the newest. Appends a line to
 // $GITHUB_STEP_SUMMARY when it's set.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { replayBridge } from '../../packages/evalsuite/test/support/claude-code-bridge.ts'
+import { replayBridge } from '../../packages/reeval/test/support/claude-code-bridge.ts'
 
 const NAME = '@ai-sdk/harness-claude-code'
 const root = resolve(import.meta.dirname, '../..')
@@ -24,10 +24,10 @@ if (!entry) {
 const [, pinned, patchFile] = entry
 const patch = join(root, patchFile)
 const latest =
-  process.env.ES_DRIFT_CLAUDE_CODE_VERSION ||
+  process.env.REEVAL_DRIFT_CLAUDE_CODE_VERSION ||
   execFileSync('npm', ['view', NAME, 'version'], { encoding: 'utf8' }).trim()
 
-const fixture = join(root, 'packages/evalsuite/test/fixtures/claude-code-bridge/edit-and-run')
+const fixture = join(root, 'packages/reeval/test/fixtures/claude-code-bridge/edit-and-run')
 const start = JSON.parse(readFileSync(`${fixture}.start.json`, 'utf8'))
 const messages = readFileSync(`${fixture}.sdk.jsonl`, 'utf8')
 const MODEL = 'claude-haiku-4-5'
@@ -46,7 +46,7 @@ const report = (ok, line) => {
   }
 }
 
-const tmp = mkdtempSync(join(tmpdir(), 'es-claude-code-drift-'))
+const tmp = mkdtempSync(join(tmpdir(), 'reeval-claude-code-drift-'))
 try {
   const tarball = execFileSync('npm', ['pack', `${NAME}@${latest}`, '--silent'], {
     cwd: tmp,

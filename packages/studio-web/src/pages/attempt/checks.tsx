@@ -1,6 +1,6 @@
-import { type AttemptRecord, formatDuration, type RunRecord } from 'evalsuite/view'
 import { ChevronRight, ListChecks, TerminalSquare } from 'lucide-react'
 import { useState } from 'react'
+import { type AttemptRecord, formatDuration, type RunRecord } from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { EmptyState } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
