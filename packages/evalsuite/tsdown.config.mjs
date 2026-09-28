@@ -75,6 +75,25 @@ for (const name of patched) {
 const root = join(here, 'src/root.ts')
 const OWN_FILE_URL = /new URL\(\s*(['"`])([^'"`$]+)\1\s*,\s*import\.meta\.url\s*\)/g
 
+/** How many times `ast` reads `import.meta.url`. */
+function importMetaUrls(ast) {
+  let count = 0
+  const walk = (node) => {
+    if (Array.isArray(node)) return node.forEach(walk)
+    if (!node || typeof node !== 'object') return
+    if (
+      node.type === 'MemberExpression' &&
+      node.object?.type === 'MetaProperty' &&
+      node.object.meta?.name === 'import' &&
+      node.property?.name === 'url'
+    )
+      count++
+    for (const key in node) if (key !== 'parent') walk(node[key])
+  }
+  walk(ast)
+  return count
+}
+
 /**
  * An inlined package's `new URL('<path>', import.meta.url)` → `ownFileURL('<path in package>')`,
  * on the same line, so the source map still holds. The path must be one the package ships.
@@ -136,6 +155,18 @@ export default defineConfig({
           return out === null ? null : { code: out, map: null }
         },
       },
+      // Only src/root.ts reads import.meta.url, to find the package one level up; a string that
+      // mentions it (a script written into the sandbox) doesn't count.
+      renderChunk(code, chunk) {
+        if (/\.d\.[cm]?ts$/.test(chunk.fileName)) return null
+        const uses = importMetaUrls(this.parse(code))
+        const isRoot = chunk.moduleIds.includes(root)
+        if (uses > (isRoot ? 1 : 0) || (isRoot && chunk.fileName.includes('/')))
+          throw new Error(
+            `${chunk.facadeModuleId ?? chunk.moduleIds.at(-1)} (in dist/${chunk.name}) uses import.meta.url: find ES's files from src/root.ts`,
+          )
+        return null
+      },
     },
     bundledLicenses('dist', (packages) => {
       bundled = packages
@@ -148,13 +179,6 @@ export default defineConfig({
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
         if (/(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//.test(code))
           throw new Error(`dist/${file} imports an @evalsuite/* package`)
-        // Only src/root.ts reads import.meta.url, to find the package one level up.
-        const uses = code
-          .split('\n')
-          .filter((line) => line.includes('import.meta.url') && !/^\s*(?:\*|\/\/)/.test(line))
-        const isRoot = chunk.type === 'chunk' && chunk.moduleIds.includes(root)
-        if (uses.length > (isRoot ? 1 : 0) || (isRoot && file.includes('/')))
-          throw new Error(`dist/${file} uses import.meta.url: find ES's files from src/root.ts`)
       }
       const thirdParty = [...bundled]
       for (const name of patched) {
