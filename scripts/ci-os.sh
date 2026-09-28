@@ -14,6 +14,11 @@ cd "$root"
 node_test() { node --test --test-timeout=300000 --experimental-strip-types --no-warnings "$@"; }
 
 part=${1:?usage: ci-os.sh unit [i/n] | tiers | packed}
+
+# A --dry-run or es doctor asks Docker whether it runs Linux containers. On a fresh Windows runner
+# the first `docker info` takes from seconds to over a minute (later ones take 0.1 s), which would
+# land on whichever test asks first; ask once here instead.
+if command -v docker >/dev/null; then docker info --format '{{.OSType}}' >/dev/null 2>&1 || true; fi
 case $part in
   unit)
     cd packages/evalsuite
