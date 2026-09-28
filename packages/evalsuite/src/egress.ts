@@ -7,7 +7,7 @@ import {
   PACKAGE_HOSTS,
 } from '@evalsuite/sandbox-docker'
 import { plannedSecrets } from './environment.ts'
-import { isAgentKind } from './harness/agents.ts'
+import { agentFor, isAgentKind } from './harness/agents.ts'
 import { FAKE_EGRESS } from './sandbox/fake.ts'
 import type {
   EgressPolicy,
@@ -33,11 +33,13 @@ export const SANDBOX_EGRESS: Record<SandboxDescriptor['kind'], EgressCapabilitie
 export const isRestricted = (policy: EgressPolicy) => policy !== 'allow-all'
 
 /**
- * The hosts the harness needs: a real agent's own API, or a fake agent's with `layout` (it
- * behaves like that agent). A plain fake agent talks to nothing.
+ * The hosts the harness needs: a real agent's own API (its model's provider's, for OpenCode), or
+ * a fake agent's with `layout` (it behaves like that agent). A plain fake agent talks to nothing.
  */
 function harnessHosts(harness: HarnessDescriptor): readonly string[] {
-  if (isAgentKind(harness.kind)) return HARNESS_HOSTS[harness.kind]
+  if (harness.kind !== 'fake' && isAgentKind(harness.kind)) {
+    return agentFor(harness).hosts ?? HARNESS_HOSTS[harness.kind]
+  }
   return harness.kind === 'fake' && harness.layout ? HARNESS_HOSTS[harness.layout] : []
 }
 

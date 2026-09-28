@@ -18,6 +18,7 @@ import {
 } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
+import { opencodeModelError } from './harness.ts'
 import type {
   Cell,
   CellGate,
@@ -299,6 +300,10 @@ export function checkHarnesses(list: unknown[], where: string): void {
       throw new UsageError(
         `harness in ${where} must be like ${HARNESS_EXAMPLE} (got ${describe(item)})`,
       )
+    }
+    if ((item as HarnessDescriptor).kind === 'opencode') {
+      const why = opencodeModelError((item as { model?: unknown }).model)
+      if (why) throw new UsageError(`opencode() in ${where}: ${why}`)
     }
     checkMaxConcurrent((item as HarnessDescriptor).maxConcurrent, `harness in ${where}`)
     const { startTimeout } = item as HarnessDescriptor

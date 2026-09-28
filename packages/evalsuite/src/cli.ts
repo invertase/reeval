@@ -606,7 +606,7 @@ async function executeRun(
     if (setup.dryRun) return false
     checkAttemptBudget(plan, setup.force, config.file)
     const missing = missingCredentials(config, process.env, {
-      harnessKinds: plan.harnessKinds,
+      harnesses: plan.harnessDescriptors,
       profile,
     })
     if (missing.length) {
@@ -615,7 +615,7 @@ async function executeRun(
       )
     }
     const malformed = malformedCredentials(config, process.env, {
-      harnessKinds: plan.harnessKinds,
+      harnesses: plan.harnessDescriptors,
     })
     if (malformed.length) {
       throw new UsageError(

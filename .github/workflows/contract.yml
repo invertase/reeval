@@ -26,16 +26,16 @@ jobs:
   contract:
     name: contract and e2e
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
     env:
       ES_TEST_REAL: '1'
       ES_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key fails, naming the variable.
-      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,goose,pi,codex
-      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all seven rows,
-      # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
-      # first, and fails rather than go over.
-      ES_REAL_ATTEMPT_BUDGET: '112'
+      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex
+      # The hard cap for this job: the contract (12 attempts) on all nine rows, the e2e (2) on the
+      # seven harnesses' own rows, and the real-tier fixtures (2 each, 8 of them). Each reserves its
+      # attempts in the ledger first, and fails rather than go over.
+      ES_REAL_ATTEMPT_BUDGET: '138'
       ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}

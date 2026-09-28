@@ -106,11 +106,51 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
     assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
   })
 
+  test("OpenCode on a provider ES can't broker exits 2 at plan time, naming it and why", async () => {
+    for (const [where, model, refusal] of [
+      [
+        'config',
+        'amazon-bedrock/anthropic.claude-haiku-4-5',
+        /opencode\(\): ES can't run OpenCode on Amazon Bedrock \(amazon-bedrock\): its AWS credentials sign each request \(SigV4\), and its API keys go to a host per AWS region, so the gateway can't keep its key out of the sandbox/,
+      ],
+      [
+        'eval',
+        'lmstudio/qwen3-coder',
+        /opencode\(\): ES can't run OpenCode on LMStudio \(lmstudio\): it runs on your machine, and the sandbox can't reach the host's localhost/,
+      ],
+      [
+        'eval',
+        'gemini-3.8-flash',
+        /opencode\(\): an OpenCode model id names its provider, <provider>\/<model>/,
+      ],
+    ] as const) {
+      const harness = `opencode({ model: '${model}' })`
+      const p = await project(`refused-${where}-${model.split('/')[0]}`, {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { cursor, opencode } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({
+  harness: ${where === 'config' ? harness : "cursor({ model: 'composer-2.5' })"},
+  sandbox: docker(),
+})
+`,
+        'evals/r.es.ts': `import { evaluate } from 'evalsuite'
+import { opencode } from 'evalsuite/harness'
+evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, refusal)
+      assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
+    }
+  })
+
   test('an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
     for (const [factory, model, refusal] of [
       [
         'opencode',
-        'gemini-3.8-flash',
+        'google/gemini-3.8-flash',
         /evaluate\("streams"\) on opencode:gemini-3\.8-flash: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
       [

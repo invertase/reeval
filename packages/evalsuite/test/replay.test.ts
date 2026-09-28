@@ -233,6 +233,34 @@ describe('replay: the OpenCode adapter, from the captured parts', () => {
     const mcp = names(replay(parse(read('opencode', 'mcp.raw.jsonl')), ['mcp__stamp__house_stamp']))
     assert.ok(!mcp.includes('mcp__stamp__house_stamp'), JSON.stringify(mcp))
   })
+
+  // Captured on openai/gpt-5.4-mini, before the adapter named it: GPT models get `patch`.
+  const gptPatch = () =>
+    parse(readFileSync(join(testDir, 'fixtures', 'opencode-gpt-patch.raw.jsonl'), 'utf8'))
+
+  test("GPT's patch tool is an edit, and the files it changed are file edits", () => {
+    const t = new OpenCodeStreamTranslator()
+    const lines = gptPatch().map((l) => ({ ...l, part: t.push(l.part)[0] as Line['part'] }))
+    assert.deepEqual(names(lines.map((l) => l.part)), ['edit'])
+    assert.deepEqual(
+      edits(events(lines)).map((e) => [e.path, e.kind, e.added]),
+      [
+        ['greet.js', 'create', 5],
+        ['greet.test.js', 'create', 8],
+      ],
+    )
+  })
+
+  test('twin: without its first update, the patch call keeps the generic name', () => {
+    const t = new OpenCodeStreamTranslator()
+    const lines = gptPatch()
+      .filter(
+        (l) => !(l.part.type === 'raw' && record(l.part.rawValue).sessionUpdate === 'tool_call'),
+      )
+      .map((l) => ({ ...l, part: t.push(l.part)[0] as Line['part'] }))
+    assert.ok(names(lines.map((l) => l.part)).every((n) => String(n).startsWith('acp_tool_')))
+    assert.deepEqual(edits(events(lines)), [])
+  })
 })
 
 describe('replay: the Goose adapter, from the captured parts', () => {

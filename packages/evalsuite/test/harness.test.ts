@@ -37,13 +37,14 @@ import {
   GOOSE_WORKSPACE_SKILLS_DIR,
 } from '@evalsuite/harness-goose'
 import {
-  OPENCODE_ENDPOINTS,
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WORKSPACE_SKILLS_DIR,
+  openCodeEndpoints,
 } from '@evalsuite/harness-opencode'
 import { PI_ENDPOINTS, PI_HOME_SKILLS_DIR, PI_WORKSPACE_SKILLS_DIR } from '@evalsuite/harness-pi'
 import { applyTransformations, hostAllowed, onEndpoint } from '@evalsuite/sandbox-docker'
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
+import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
 import { defineEnvironment, layered } from '../src/environment.ts'
 import { observed, tokenUsage } from '../src/harness/agent.ts'
@@ -51,6 +52,7 @@ import {
   AGENTS,
   type AgentKind,
   agentAuth,
+  agentFor,
   antigravityMcpServers,
   brokeringFor,
   claudeMcpServers,
@@ -74,7 +76,7 @@ import {
 } from '../src/harness.ts'
 import { harnessId } from '../src/options.ts'
 import { imageHarness } from '../src/sandbox/prepare.ts'
-import type { TranscriptEvent } from '../src/types.ts'
+import type { AgentHarnessDescriptor, TranscriptEvent } from '../src/types.ts'
 import { formatUsage } from '../src/view/model.ts'
 
 describe('the Claude Code harness', () => {
@@ -110,10 +112,14 @@ describe('the Claude Code harness', () => {
       [],
     )
     assert.deepEqual(
-      missingCredentials(config, { CURSOR_API_KEY: 'x' }, { harnessKinds: ['claude-code'] }),
+      missingCredentials(
+        config,
+        { CURSOR_API_KEY: 'x' },
+        { harnesses: [claudeCode({ model: 'claude-opus-5-5' })] },
+      ),
       ['ANTHROPIC_API_KEY'],
     )
-    assert.deepEqual(missingCredentials(config, {}, { harnessKinds: ['fake'] }), [])
+    assert.deepEqual(missingCredentials(config, {}, { harnesses: [fakeHarness()] }), [])
   })
 
   test('names agent and judge keys with a line break in them, never other variables', () => {
@@ -158,7 +164,7 @@ describe('the Claude Code harness', () => {
       claudeCode({ model: 'opus' }),
       cursor({ model: 'composer-2.5' }),
       antigravity({ model: 'm' }),
-      opencode({ model: 'm' }),
+      opencode({ model: 'google/m' }),
       goose({ model: 'm' }),
       pi({ model: 'm' }),
       codex({ model: 'm' }),
@@ -298,36 +304,93 @@ describe('the Antigravity harness', () => {
 })
 
 describe('the OpenCode harness', () => {
-  test('is plain data with its own cell id, and needs a Gemini model id', () => {
-    const h = opencode({ model: 'gemini-3.8-flash' })
-    assert.deepEqual(h, { kind: 'opencode', model: 'gemini-3.8-flash' })
+  test('is plain data with its own cell id, and needs a model on a provider it can broker', () => {
+    const h = opencode({ model: 'google/gemini-3.8-flash' })
+    assert.deepEqual(h, { kind: 'opencode', model: 'google/gemini-3.8-flash' })
     assert.equal(harnessId(h), 'opencode:gemini-3.8-flash')
-    for (const model of [undefined, '', 'google/gemini-3.8-flash', 'anthropic/claude-sonnet-5']) {
+    assert.equal(
+      harnessId(opencode({ model: 'openrouter/anthropic/claude-haiku-4.5' })),
+      'opencode:claude-haiku-4.5',
+    )
+    for (const model of [undefined, '']) {
       assert.throws(
         () => opencode({ model } as never),
-        /opencode\(\) needs a Gemini model id, without a provider, since it runs on a Gemini API key, e\.g\. opencode\(\{ model: 'gemini-3\.8-flash' \}\)/,
+        /opencode\(\): needs a model, <provider>\/<model>, e\.g\. opencode\(\{ model: 'google\/gemini-3\.8-flash' \}\)/,
         String(model),
       )
     }
+    assert.throws(
+      () => opencode({ model: 'gemini-3.8-flash' }),
+      /^UsageError: opencode\(\): an OpenCode model id names its provider, <provider>\/<model>/,
+    )
+    assert.throws(
+      () => opencode({ model: 'google-vertex/gemini-3.8-flash' }),
+      /^UsageError: opencode\(\): ES can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
+    )
+    assert.throws(() => opencode({ model: 'nope/m' }), /OpenCode has no provider "nope"/)
   })
 
-  test('is accepted by the config and needs GOOGLE_GENERATIVE_AI_API_KEY', () => {
-    const config = resolveConfig({ harness: [opencode({ model: 'm' })] }, '/p')
+  test("the config refuses a hand-made descriptor on a provider it can't broker", () => {
+    assert.throws(
+      () =>
+        resolveConfig(
+          { harness: [{ kind: 'opencode', model: 'amazon-bedrock/x' }] } as never,
+          '/p',
+        ),
+      /^UsageError: opencode\(\) in es\.config\.ts: ES can't run OpenCode on Amazon Bedrock/,
+    )
+  })
+
+  test("needs only the model's provider's key", () => {
+    const config = resolveConfig(
+      {
+        harness: [
+          opencode({ model: 'google/m' }),
+          opencode({ model: 'anthropic/claude-haiku-4-5' }),
+          opencode({ model: 'openrouter/openai/gpt-5.4', id: 'or' }),
+        ],
+      },
+      '/p',
+    )
     assert.deepEqual(missingCredentials(config, { GEMINI_API_KEY: 'x' }), [
       'GOOGLE_GENERATIVE_AI_API_KEY',
+      'ANTHROPIC_API_KEY',
+      'OPENROUTER_API_KEY',
     ])
-    assert.deepEqual(missingCredentials(config, { GOOGLE_GENERATIVE_AI_API_KEY: 'x' }), [])
+    assert.deepEqual(
+      missingCredentials(
+        config,
+        { GOOGLE_GENERATIVE_AI_API_KEY: 'x' },
+        {
+          harnesses: [opencode({ model: 'google/m' })],
+        },
+      ),
+      [],
+    )
+    assert.deepEqual(
+      malformedCredentials(config, { ANTHROPIC_API_KEY: 'a b', OPENAI_API_KEY: 'c d' }),
+      ['ANTHROPIC_API_KEY (character 2)'],
+    )
+  })
+
+  test("each provider's hosts are its automatic egress hosts, with Exa's for web search", () => {
+    const hosts = (model: string) =>
+      plannedEgress({ own: 'deny-all' }, opencode({ model }), {}, []).auto
+    assert.deepEqual(hosts('google/m'), ['generativelanguage.googleapis.com', 'mcp.exa.ai'])
+    assert.deepEqual(hosts('anthropic/claude-haiku-4-5'), ['api.anthropic.com', 'mcp.exa.ai'])
+    assert.deepEqual(hosts('openai/gpt-5.4-mini'), ['api.openai.com', 'mcp.exa.ai'])
+    assert.deepEqual(hosts('openrouter/x/y'), ['openrouter.ai', 'mcp.exa.ai'])
   })
 
   test('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills', () => {
-    const h = opencode({ model: 'm' })
+    const h = opencode({ model: 'google/m' })
     assert.deepEqual(layoutOf(h), {
       rulesFile: 'AGENTS.md',
       workspaceSkillDir: OPENCODE_WORKSPACE_SKILLS_DIR,
       harnessSkillDir: OPENCODE_HOME_SKILLS_DIR,
     })
     assert.equal(imageHarness(h), 'opencode')
-    assert.deepEqual(AGENTS.opencode.endpoints, OPENCODE_ENDPOINTS)
+    assert.deepEqual(brokeringFor(h)?.endpoints, openCodeEndpoints('google/m'))
   })
 
   test("gets MCP servers in its config's shape, and refuses SSE", () => {
@@ -356,7 +419,7 @@ describe('the OpenCode harness', () => {
   })
 
   test('its brokered requests name the served model, as Antigravity’s do', () => {
-    const served = brokeringFor(opencode({ model: 'gemini-3.8-flash' }))?.servedModel
+    const served = brokeringFor(opencode({ model: 'google/gemini-3.8-flash' }))?.servedModel
     assert.equal(
       served?.({
         method: 'POST',
@@ -364,6 +427,32 @@ describe('the OpenCode harness', () => {
         path: '/v1beta/models/gemini-3.8-flash:streamGenerateContent',
       }),
       'gemini-3.8-flash',
+    )
+  })
+
+  test("elsewhere the gateway reads the served model from each model call's response", () => {
+    const anthropic = brokeringFor(opencode({ model: 'anthropic/claude-haiku-4-5' }))
+    assert.equal(anthropic?.credential, 'ANTHROPIC_API_KEY')
+    assert.deepEqual(anthropic?.modelResponses, anthropic?.endpoints)
+    assert.equal(
+      anthropic?.servedModel?.({
+        method: 'POST',
+        host: 'api.anthropic.com',
+        path: '/v1/messages',
+        responseModel: 'claude-haiku-4-5-20251001',
+      }),
+      'claude-haiku-4-5-20251001',
+    )
+    const openai = brokeringFor(opencode({ model: 'openai/gpt-5.4-mini' }))
+    assert.equal(
+      openai?.servedModel?.({
+        method: 'POST',
+        host: 'api.openai.com',
+        path: '/v1/responses',
+        responseModel: 'gpt-5.4-mini-2026-03-17',
+        responseEffort: 'none',
+      }),
+      'gpt-5.4-mini-2026-03-17[effort=none]',
     )
   })
 })
@@ -748,13 +837,11 @@ const HOST_CREDENTIALS = [
  * The rules an agent's real adapter asks the sandbox for, given the auth ES passes it, while the
  * host has `env` set (which the adapter must not read).
  */
-async function adapterRules(kind: AgentKind, env: Record<string, string>) {
+async function adapterRules(kind: AgentKind, env: Record<string, string>, model = 'm') {
   return withHostEnv(env, async () => {
-    const agent = AGENTS[kind]
-    const adapter = await agent.adapter({
-      auth: agentAuth(agent),
-      descriptor: { kind, model: 'm' } as never,
-    })
+    const descriptor = { kind, model } as AgentHarnessDescriptor
+    const agent = agentFor(descriptor)
+    const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
     const { session, rules } = recordingSession()
     await assert.rejects(
       adapter.doStart({ sessionId: 's', sandboxSession: session }),
@@ -943,22 +1030,47 @@ describe('credential brokering per agent', () => {
     })
   })
 
-  test("OpenCode's adapter brokers only GOOGLE_GENERATIVE_AI_API_KEY to the Gemini API, whatever else the host has", async () => {
-    const rules = await adapterRules('opencode', {
-      ...everything,
-      GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
-      GEMINI_API_KEY: 'host-gemini',
-      GOOGLE_API_KEY: 'host-google',
-    })
-    assert.equal(rules.length, 1)
-    assert.equal(rules[0]?.match.host, 'generativelanguage.googleapis.com')
-    assert.deepEqual(rules[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
+  test("OpenCode's adapter brokers only the model's provider's key, to its API, whatever else the host has", async () => {
+    const google = await adapterRules(
+      'opencode',
+      {
+        ...everything,
+        GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real',
+        GEMINI_API_KEY: 'host-gemini',
+        GOOGLE_API_KEY: 'host-google',
+      },
+      'google/gemini-3.8-flash',
+    )
+    assert.equal(google.length, 1)
+    assert.equal(google[0]?.match.host, 'generativelanguage.googleapis.com')
+    assert.deepEqual(google[0]?.transform.headers, { 'x-goog-api-key': 'AIza-real' })
+    const anthropic = await adapterRules(
+      'opencode',
+      { ...everything, ANTHROPIC_API_KEY: 'sk-ant-real' },
+      'anthropic/claude-haiku-4-5',
+    )
+    assert.equal(anthropic.length, 1)
+    assert.equal(anthropic[0]?.match.host, 'api.anthropic.com')
+    assert.deepEqual(anthropic[0]?.transform.headers, { 'x-api-key': 'sk-ant-real' })
+    const openai = await adapterRules(
+      'opencode',
+      { ...everything, OPENAI_API_KEY: 'sk-real' },
+      'openai/gpt-5.4-mini',
+    )
+    assert.equal(openai.length, 1)
+    assert.equal(openai[0]?.match.host, 'api.openai.com')
+    assert.match(String(openai[0]?.match.headers?.[0]?.value?.exact), /^Bearer aisdkhc_/)
+    assert.deepEqual(openai[0]?.transform.headers, { authorization: 'Bearer sk-real' })
   })
 
   test("the key is swapped in on OpenCode's model endpoint only; anything else is refused", async () => {
-    const brokering = brokeringFor(opencode({ model: 'm' }))
+    const brokering = brokeringFor(opencode({ model: 'google/m' }))
     assert.equal(brokering?.credential, 'GOOGLE_GENERATIVE_AI_API_KEY')
-    const rules = await adapterRules('opencode', { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' })
+    const rules = await adapterRules(
+      'opencode',
+      { GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' },
+      'google/m',
+    )
     const placeholder = String(rules[0]?.match.headers?.[0]?.value?.exact ?? 'missing')
     assert.match(placeholder, /^aisdkhc_/)
     const send = (method: string, path: string) =>
@@ -991,11 +1103,9 @@ describe('credential brokering per agent', () => {
 
   test("OpenCode fails closed on a sandbox that can't broker: the key never goes in", async () => {
     await withHostEnv({ GOOGLE_GENERATIVE_AI_API_KEY: 'AIza-real' }, async () => {
-      const agent = AGENTS.opencode
-      const adapter = await agent.adapter({
-        auth: agentAuth(agent),
-        descriptor: opencode({ model: 'm' }),
-      })
+      const descriptor = opencode({ model: 'google/m' })
+      const agent = agentFor(descriptor)
+      const adapter = await agent.adapter({ auth: agentAuth(agent), descriptor })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let ran = false

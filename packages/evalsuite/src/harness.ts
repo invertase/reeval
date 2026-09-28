@@ -1,4 +1,5 @@
 // `evalsuite/harness`: agent harness descriptors. The implementations load lazily in workers.
+import { resolveOpenCodeProvider } from '@evalsuite/harness-opencode/providers'
 import { UsageError } from './errors.ts'
 import type {
   AntigravityHarnessDescriptor,
@@ -64,19 +65,26 @@ export const antigravity = (
 }
 
 /**
- * OpenCode, with a Gemini API key: `model` is a Gemini model id, which it runs on its `google`
- * provider, since that's the only key it's given. `id` names the cell; it defaults to
- * `opencode:<model>`.
+ * OpenCode, on the model's provider: `model` is OpenCode's `<provider>/<model>`, such as
+ * `google/gemini-3.8-flash` or `anthropic/claude-haiku-4-5`, and only that provider's key is
+ * needed and brokered. A provider whose key ES can't broker is refused, saying why. `id` names
+ * the cell; it defaults to `opencode:<model>`, the part after the last `/`.
  */
 export const opencode = (
   options: Omit<OpenCodeHarnessDescriptor, 'kind'>,
 ): OpenCodeHarnessDescriptor => {
-  if (typeof options?.model !== 'string' || !/^[\w.-]+$/.test(options.model)) {
-    throw new UsageError(
-      `opencode() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. opencode({ model: 'gemini-3.8-flash' }) (got ${JSON.stringify(options?.model)})`,
-    )
-  }
+  const why = opencodeModelError(options?.model)
+  if (why) throw new UsageError(`opencode(): ${why}`)
   return { kind: 'opencode', ...options }
+}
+
+/** Why `model` can't run on OpenCode, or undefined when it can. */
+export function opencodeModelError(model: unknown): string | undefined {
+  if (typeof model !== 'string' || !model) {
+    return `needs a model, <provider>/<model>, e.g. opencode({ model: 'google/gemini-3.8-flash' }) (got ${JSON.stringify(model)})`
+  }
+  const resolved = resolveOpenCodeProvider(model)
+  return 'error' in resolved ? resolved.error : undefined
 }
 
 /**
