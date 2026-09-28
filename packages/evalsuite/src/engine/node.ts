@@ -1,13 +1,12 @@
 // The engine's main process: finds the eval files, collects each in a fresh worker for the plan,
 // then runs each in a fresh worker again, at most one per CPU at once, handing out the
 // scheduler's leases over IPC and turning what workers report into ES's events and results.
-import { createRequire } from 'node:module'
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
-import { PACKAGE_DIR } from '../root.ts'
+import { ownRequire, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
 import { Scheduler } from '../scheduler/core.ts'
 import { capMiddle } from '../text.ts'
 import { esFrames, formatError, type SerializedError } from './errors.ts'
@@ -40,9 +39,7 @@ export type {
   PlannedItem,
 } from './types.ts'
 
-const require = createRequire(import.meta.url)
-const packageName: string = require(join(PACKAGE_DIR, 'package.json')).name
-const versionOf = (name: string): string => require(`${name}/package.json`).version
+const versionOf = (name: string): string => ownRequire(`${name}/package.json`).version
 
 /** What runs eval files, for the record. */
 export const engineVersions: Record<string, string> = {
@@ -76,7 +73,7 @@ export async function runEngine(
 
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
   const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
-  const entry = workerEntry(root, [...new Set([packageName, 'evalsuite'])])
+  const entry = workerEntry(root, PACKAGE_NAMES)
   const hide = [...esFrames(PACKAGE_DIR), ...esFrames(join(entry, '..', '..'))]
   const matchesName = (e: { id: string; attempt?: EngineEval['attempt'] }) =>
     nameFilters.length === 0 || nameFilters.some((f) => matchesFilter(e, f))

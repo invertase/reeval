@@ -1,15 +1,16 @@
 import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { createJiti } from 'jiti'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { AGENTS, DEFAULT_HARNESS, HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
+import { esJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkHarnesses, checkOptions } from './options.ts'
+import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
   Budget,
@@ -112,7 +113,7 @@ export async function loadConfig(
   const configPath = configLabel(path)
   let user: EsConfig = {}
   if (existsSync(path)) {
-    const jiti = createJiti(import.meta.url, { moduleCache: false })
+    const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
     const module = (await jiti.import(path)) as Record<string, unknown>
     // Without this, a config that forgets `export default` would run the default harness for real.
     if (!module || typeof module !== 'object' || !('default' in module)) {

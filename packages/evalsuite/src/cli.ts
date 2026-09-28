@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
@@ -34,6 +33,7 @@ import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
+import { PACKAGE_VERSION } from './root.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -53,7 +53,7 @@ const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuil
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
-const version: string = createRequire(import.meta.url)('../package.json').version
+const version = PACKAGE_VERSION
 
 const HELP = helpText(version)
 

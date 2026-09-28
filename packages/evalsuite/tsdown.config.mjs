@@ -2,8 +2,10 @@
 // inlined from their TypeScript sources, so the published package imports only its own
 // `dependencies`. What ships next to the code: each of those packages' other `files` (such as
 // sandbox-docker's `docker/` build context), at the package root beside `dist/`, where their
-// `../<dir>` from a module finds it in a chunk too, and the prebuilt studio app
-// (`dist/studio-app`). THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
+// `../<dir>` from a module names the same place, and the prebuilt studio app (`dist/studio-app`).
+// Those lookups go through src/root.ts, ES's one resource locator: the build rewrites each
+// `new URL('<path>', import.meta.url)` in an inlined package to root.ts's `ownFileURL`, and fails
+// on any other import.meta.url, so a compiled es (scripts/bun-compile.mjs) finds them too. THIRD_PARTY_NOTICES.md, at the root, lists the third-party code all of
 // that inlines (scripts/third-party.mjs).
 import {
   cpSync,
@@ -15,7 +17,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join, posix, relative, sep } from 'node:path'
 import { defineConfig } from 'tsdown'
 import {
   bundledLicenses,
@@ -33,6 +35,8 @@ const pkg = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
 const sources = new Map()
 /** Each workspace package's shipped directories besides `dist/`, by name, → where they are. */
 const assets = new Map()
+/** Each inlined package's directory → the paths in it that ship with ES, at the same place. */
+const shipped = new Map()
 for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('@evalsuite/'))) {
   const dir = dirname(realpathSync(require.resolve(`${name}/package.json`)))
   const { exports, files } = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'))
@@ -47,6 +51,10 @@ for (const name of Object.keys(pkg.devDependencies).filter((d) => d.startsWith('
     if (!pkg.files.includes(asset)) throw new Error(`${name} ships ${asset}/: add it to files`)
     assets.set(asset, join(dir, asset))
   }
+  shipped.set(
+    dir,
+    files.filter((f) => f !== 'dist'),
+  )
 }
 
 /**
@@ -61,6 +69,29 @@ const BRIDGE_BUNDLES = ['@ai-sdk/harness']
 for (const name of patched) {
   if (!pkg.devDependencies[name] || pkg.dependencies[name])
     throw new Error(`${name} is inlined: list it in devDependencies only`)
+  shipped.set(dirname(realpathSync(require.resolve(`${name}/package.json`))), ['dist/bridge'])
+}
+
+const root = join(here, 'src/root.ts')
+const OWN_FILE_URL = /new URL\(\s*(['"`])([^'"`$]+)\1\s*,\s*import\.meta\.url\s*\)/g
+
+/**
+ * An inlined package's `new URL('<path>', import.meta.url)` → `ownFileURL('<path in package>')`,
+ * on the same line, so the source map still holds. The path must be one the package ships.
+ */
+function ownFiles(code, id) {
+  const dir = [...shipped.keys()].find((d) => id.startsWith(d + sep))
+  if (!dir || !code.includes('import.meta.url')) return null
+  const out = code.replace(OWN_FILE_URL, (match, _quote, path) => {
+    const file = relative(dir, join(dirname(id), path))
+      .split(sep)
+      .join(posix.sep)
+    if (!shipped.get(dir).some((f) => file === f || file.startsWith(`${f}/`)))
+      throw new Error(`${id} finds ${file} from import.meta.url, but ES doesn't ship it`)
+    const lines = '\n'.repeat(match.split('\n').length - 1)
+    return `__esOwnFileURL(${lines}${JSON.stringify(path.endsWith('/') ? `${file}/` : file)})`
+  })
+  return `${out}\nimport { ownFileURL as __esOwnFileURL } from ${JSON.stringify(root)}\n`
 }
 
 const dist = join(here, 'dist')
@@ -99,6 +130,13 @@ export default defineConfig({
         order: 'pre',
         handler: (id) => sources.get(id),
       },
+      transform: {
+        order: 'pre',
+        handler: (code, id) => {
+          const out = ownFiles(code, id)
+          return out === null ? null : { code: out, map: null }
+        },
+      },
     },
     bundledLicenses('dist', (packages) => {
       bundled = packages
@@ -111,9 +149,13 @@ export default defineConfig({
         const code = chunk.type === 'chunk' ? chunk.code : String(chunk.source)
         if (/(?:\bfrom|\bimport)\s*\(?\s*['"]@evalsuite\//.test(code))
           throw new Error(`dist/${file} imports an @evalsuite/* package`)
-        // src/root.ts finds the package from import.meta.url, one level below the root.
-        if (file.includes('/') && code.includes('import.meta.url'))
-          throw new Error(`dist/${file} uses import.meta.url outside dist/'s top level`)
+        // Only src/root.ts reads import.meta.url, to find the package one level up.
+        const uses = code
+          .split('\n')
+          .filter((line) => line.includes('import.meta.url') && !/^\s*(?:\*|\/\/)/.test(line))
+        const isRoot = chunk.type === 'chunk' && chunk.moduleIds.includes(root)
+        if (uses.length > (isRoot ? 1 : 0) || (isRoot && file.includes('/')))
+          throw new Error(`dist/${file} uses import.meta.url: find ES's files from src/root.ts`)
       }
       const thirdParty = [...bundled]
       for (const name of patched) {

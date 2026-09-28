@@ -6,8 +6,8 @@ import { dirname } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { DecodedMap, getOriginalPosition } from '@vitest/utils/source-map'
 import { getTsconfig } from 'get-tsconfig'
-import { createJiti } from 'jiti'
 import { relativeFile } from '../ids.ts'
+import { esJiti } from '../jiti.ts'
 import { codeFrame } from './errors.ts'
 
 export class TsconfigError extends Error {
@@ -24,8 +24,8 @@ const INLINE_MAP =
 export async function loadEvalFile(file: string, root: string): Promise<unknown> {
   checkTsconfig(dirname(file), root)
   const options = { moduleCache: true, fsCache: false, sourceMaps: true }
-  const base = createJiti(file, options)
-  const jiti = createJiti(file, {
+  const base = await esJiti(file, options)
+  const jiti = await esJiti(file, {
     ...options,
     transform: (opts) => {
       const code = base.transform(opts)

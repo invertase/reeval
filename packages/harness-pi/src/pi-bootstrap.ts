@@ -8,7 +8,8 @@ export const PI_BOOTSTRAP_DIR = '.harness-bootstrap/pi'
 /** The CLI's path relative to the bootstrap directory. */
 export const PI_CLI_PATH = 'node_modules/.bin/pi'
 
-const asset = (name: string) => readFile(new URL(`../assets/${name}`, import.meta.url), 'utf8')
+const ASSETS = new URL('../assets/', import.meta.url)
+const asset = (name: string) => readFile(new URL(name, ASSETS), 'utf8')
 
 /**
  * Installs pi from its lockfile. pi runs without the build scripts of `@google/genai`, `esbuild`
