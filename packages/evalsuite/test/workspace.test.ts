@@ -1,13 +1,15 @@
 // Git workspaces through the CLI: the repository is fetched on the host before any attempt, its
-// ref resolved once and its tree cached by hash; bad URLs, refs and paths stop the run (exit 2)
-// before anything starts; and the agent's diff starts from the repository.
+// ref resolved once and its tree cached by hash; a bad URL, ref, path or token fails only the
+// attempts that use it (exit 3), as an eval's sandbox image does; and the agent's diff starts
+// from the repository.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { classifyGitError } from '../src/workspace.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
+import { gitHttpServer } from './support/git-http.ts'
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
@@ -36,54 +38,185 @@ const env = defineEnvironment('app', ({ git }) => ({ ${env} }))
 evaluate('works on the repo', { environment: env }, async (t) => {
   ${body}
 })
+evaluate('needs no workspace', async () => {})
 `,
   })
   return { ...p, repo: makeRepo(p.dir) }
 }
 
+/**
+ * A workspace that can't be prepared, reported once before the run as a sandbox's is: only the
+ * attempts that use it fail, as infra errors (exit 3), and the other eval still passes.
+ */
+async function failsOnlyItsAttempts(env: string, message: RegExp, hostEnv: NodeJS.ProcessEnv = {}) {
+  const p = await withEval(env)
+  const r = await runCli(p.dir, ['run'], { env: hostEnv })
+  const output = r.stdout + r.stderr
+  assert.equal(r.code, 3, output)
+  assert.match(
+    output,
+    /✗ workspace .+ failed to prepare \(set by environment app; only its attempts fail\)/,
+  )
+  assert.match(output, message)
+  const { run } = readRun(p.dir)
+  const outcome = (name: string) =>
+    run.evals.find((e) => e.name === name)?.attempts.map((a) => a.outcome)
+  assert.deepEqual(outcome('works on the repo'), ['infra_error'])
+  assert.deepEqual(outcome('needs no workspace'), ['pass'])
+  const error = run.evals.find((e) => e.name === 'works on the repo')?.attempts[0]?.error
+  assert.equal(error?.prepare?.stage, 'workspace')
+  assert.match(error?.message ?? '', message)
+  assert.match(
+    error?.message ?? '',
+    /set by environment app, failed to prepare before the run started; every attempt that needs it fails with this\)$/,
+  )
+  return { p, r, run }
+}
+
 describe('git workspaces', { concurrency: true }, () => {
-  test('a ref the repository lacks stops the run before any attempt', async () => {
-    const p = await withEval(`workspace: git('../repo', { ref: 'v9' })`)
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(
-      r.stderr,
-      /Workspace git\("\.\.\/repo#v9"\) in environment app: the repository has no ref "v9" \(a branch, tag or commit SHA\)\./,
+  test('a ref the repository lacks fails only the attempts that use it', async () => {
+    const { run } = await failsOnlyItsAttempts(
+      `workspace: git('../repo', { ref: 'v9' })`,
+      /Workspace git\("\.\.\/repo#v9"\): the repository has no ref "v9" \(a branch, tag or commit SHA\)\./,
     )
-    assert.equal(existsSync(join(p.dir, '.es/runs')), false, 'no attempt ran')
+    const prepare = run.evals.flatMap((e) => e.attempts).find((a) => a.error)?.error?.prepare
+    assert.deepEqual(
+      [prepare?.class, prepare?.ref, prepare?.setBy],
+      ['config', '../repo#v9', ['environment app']],
+    )
   })
 
   test('an abbreviated SHA gets a hint', async () => {
-    const p = await withEval(`workspace: git('../repo', { ref: 'abc1234' })`)
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /no ref "abc1234".*Give a commit as its full 40-character SHA\./)
+    await failsOnlyItsAttempts(
+      `workspace: git('../repo', { ref: 'abc1234' })`,
+      /no ref "abc1234".*Give a commit as its full 40-character SHA\./,
+    )
   })
 
   test('a missing subdirectory names what is there', async () => {
-    const p = await withEval(`workspace: git('../repo', { ref: 'v1', path: 'apps/web' })`)
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(
-      r.stderr,
-      /Workspace git\("\.\.\/repo#v1:apps\/web"\) in environment app at v1 \(commit [0-9a-f]{7}\) has no directory "apps\/web"; its top level has: README\.md, app\//,
+    await failsOnlyItsAttempts(
+      `workspace: git('../repo', { ref: 'v1', path: 'apps/web' })`,
+      /Workspace git\("\.\.\/repo#v1:apps\/web"\) at v1 \(commit [0-9a-f]{7}\) has no directory "apps\/web"; its top level has: README\.md, app\//,
     )
   })
 
   test('a file as the path is refused', async () => {
-    const p = await withEval(`workspace: git('../repo', { ref: 'v1', path: 'README.md' })`)
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(r.stderr, /"README\.md" is a file, not a directory/)
+    await failsOnlyItsAttempts(
+      `workspace: git('../repo', { ref: 'v1', path: 'README.md' })`,
+      /"README\.md" is a file, not a directory/,
+    )
   })
 
   test('a path that is not a repository says to check the URL', async () => {
-    const p = await withEval(`workspace: git('../nowhere', { ref: 'v1' })`)
-    const r = await runCli(p.dir)
-    assert.equal(r.code, 2, r.stdout + r.stderr)
-    assert.match(
-      r.stderr,
-      /Workspace git\("\.\.\/nowhere#v1"\) in environment app: couldn't fetch it \(.+\)\. Check the URL; a private repository also needs this machine's git credentials\./,
+    await failsOnlyItsAttempts(
+      `workspace: git('../nowhere', { ref: 'v1' })`,
+      /Workspace git\("\.\.\/nowhere#v1"\): couldn't fetch it \(.+\)\. Check the URL; a private repository also needs this machine's git credentials\./,
+    )
+  })
+
+  test('a token variable that is not set fails only its attempts, naming the variable', async () => {
+    await failsOnlyItsAttempts(
+      `workspace: git('https://git.example.invalid/acme/app', { ref: 'v1', token: 'ES_TEST_UNSET_TOKEN' })`,
+      /Workspace git\("https:\/\/git\.example\.invalid\/acme\/app#v1"\): its token variable ES_TEST_UNSET_TOKEN isn't set\. Set it in the environment or \.env\.local\./,
+    )
+  })
+
+  test('a token fetches over HTTPS on the host, a wrong one is an auth failure, and neither is written anywhere', async () => {
+    const token = 'es-test-git-token-8d31c6f0a2b4'
+    const server = await gitHttpServer(token)
+    try {
+      const p = await withEval(
+        "workspace: git(process.env.ES_TEST_GIT_URL as string, { ref: 'v1', path: 'app', token: 'ES_TEST_GIT_TOKEN' })",
+        "await t.sandbox()\n  expect(await t.readFile('greet.js')).toContain('Hello')",
+      )
+      const url = `${server.serve(p.dir)}/repo`
+      const good = await runCli(p.dir, ['run'], {
+        env: { ES_TEST_GIT_URL: url, ES_TEST_GIT_TOKEN: token },
+      })
+      assert.equal(good.code, 0, good.stdout + good.stderr)
+      const wrong = 'es-test-git-wrong-4f19a7'
+      const bad = await runCli(p.dir, ['run'], {
+        env: {
+          ES_TEST_GIT_URL: url,
+          ES_TEST_GIT_TOKEN: wrong,
+          GIT_CONFIG_GLOBAL: join(p.dir, 'no-gitconfig'),
+          GIT_CONFIG_NOSYSTEM: '1',
+        },
+      })
+      assert.equal(bad.code, 3, bad.stdout + bad.stderr)
+      assert.match(
+        bad.stdout + bad.stderr,
+        /isn't readable with this machine's git credentials, or doesn't exist/,
+      )
+      const header = (t: string) => Buffer.from(`x-access-token:${t}`).toString('base64')
+      const leaks = [token, wrong, header(token), header(wrong)]
+      for (const out of [good.stdout, good.stderr, bad.stdout, bad.stderr]) {
+        for (const leak of leaks) assert.ok(!out.includes(leak), `printed ${leak}`)
+      }
+      for (const file of readdirSync(join(p.dir, '.es'), {
+        recursive: true,
+        withFileTypes: true,
+      })) {
+        if (!file.isFile()) continue
+        const text = readFileSync(join(file.parentPath, file.name), 'latin1')
+        for (const leak of leaks) assert.ok(!text.includes(leak), `${leak} in ${file.name}`)
+      }
+    } finally {
+      await server.close()
+    }
+  })
+
+  test('init: true gives the workspace a .git that the diff leaves out, and the same HEAD in every attempt', async () => {
+    const p = await project('workspace-init', {
+      'es.config.ts': fakeConfig({
+        harness: `{ script: [[{ exec: 'echo x > NOTES.md && git add -A && git -c user.name=a -c user.email=a@b commit -qm notes' }]] }`,
+      }),
+      'evals/w.es.ts': `import { defineEnvironment, evaluate, expect } from 'evalsuite'
+const env = defineEnvironment('app', ({ git }) => ({
+  workspace: git('../repo', { ref: 'v1', init: true }),
+  files: { 'app/extra.js': 'x' },
+}))
+evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
+  const box = await t.sandbox()
+  expect((await box.exec('git status --porcelain')).stdout).toBe('?? app/extra.js\\n')
+  expect((await box.exec('git rev-parse HEAD')).stdout.trim()).toBe(process.env.EXPECTED_HEAD)
+  const turn = await t.send('x')
+  expect(turn.diff.files).toEqual([{ path: 'NOTES.md', status: 'added' }])
+})
+`,
+    })
+    const repo = makeRepo(p.dir)
+    // What init: true commits: the tree, by es at a fixed date, so its hash is known up front.
+    const at = '2000-01-01T00:00:00Z'
+    const head = execFileSync(
+      'git',
+      [
+        'commit-tree',
+        git(repo, 'rev-parse', 'v1^{tree}'),
+        '-m',
+        `../repo#v1 at ${git(repo, 'rev-parse', 'v1')}`,
+      ],
+      {
+        cwd: repo,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GIT_AUTHOR_NAME: 'es',
+          GIT_AUTHOR_EMAIL: 'es@localhost',
+          GIT_AUTHOR_DATE: at,
+          GIT_COMMITTER_NAME: 'es',
+          GIT_COMMITTER_EMAIL: 'es@localhost',
+          GIT_COMMITTER_DATE: at,
+        },
+      },
+    ).trim()
+    const r = await runCli(p.dir, ['run'], { env: { EXPECTED_HEAD: head } })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(p.dir)
+    assert.equal(run.environments.find((e) => e.workspace)?.workspace?.init, true)
+    assert.deepEqual(
+      run.evals[0]?.attempts.map((a) => a.outcome),
+      ['pass', 'pass'],
     )
   })
 
@@ -105,7 +238,7 @@ describe('git workspaces', { concurrency: true }, () => {
     assert.equal(second.code, 0, second.stdout + second.stderr)
     const records = readdirSync(join(p.dir, '.es/runs')).filter((f) => f.endsWith('.json'))
     assert.equal(records.length, 2)
-    const workspace = readRun(p.dir).run.environments[0]?.workspace
+    const workspace = readRun(p.dir).run.environments.find((e) => e.workspace)?.workspace
     assert.deepEqual(workspace, {
       source: 'repo',
       ref: sha,

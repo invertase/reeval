@@ -202,7 +202,8 @@ export class PlainRenderer implements Renderer {
         for (const line of prepareLines(c, e, ERROR_LINES)) this.#write(line)
         if (e.state === 'failed' && this.#o.output.githubActions) {
           const { target, failure } = e.outcome as Extract<typeof e.outcome, { ok: false }>
-          const title = ghEscape(`Sandbox ${target.label} failed to prepare`, true)
+          const what = target.kind === 'workspace' ? 'The' : 'Sandbox'
+          const title = ghEscape(`${what} ${target.label} failed to prepare`, true)
           this.#write(`::error title=${title}::${ghEscape(failure.message)}`)
         }
         return

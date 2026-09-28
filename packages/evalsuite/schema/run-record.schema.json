@@ -770,6 +770,9 @@
             "commit": {
               "type": "string"
             },
+            "init": {
+              "type": "boolean"
+            },
             "path": {
               "anyOf": [
                 {

@@ -357,6 +357,8 @@ function credentialsIn(repo: string): string | undefined {
   return u.href
 }
 
+const GIT_OPTIONS = ['ref', 'path', 'init', 'token']
+
 const isLocalPath = (repo: string) => /^\.{1,2}(?:\/|$)/.test(repo) || isAbsolute(repo)
 
 function gitHelper(base: string): GitHelper {
@@ -377,14 +379,14 @@ function gitHelper(base: string): GitHelper {
     if (typeof options !== 'object' || options === null || Array.isArray(options)) {
       throw new DefinitionError(`${what}: options are { ref?, path? }`)
     }
-    const extra = Object.keys(options).filter((k) => k !== 'ref' && k !== 'path')
+    const extra = Object.keys(options).filter((k) => !GIT_OPTIONS.includes(k))
     if (extra.length) {
       const hint =
         extra.includes('branch') || extra.includes('tag')
           ? ' Use ref for a branch, tag or commit.'
           : ''
       throw new DefinitionError(
-        `${what}: unknown option "${extra.join('", "')}"; it takes ref and path.${hint}`,
+        `${what}: unknown option "${extra.join('", "')}"; it takes ${GIT_OPTIONS.slice(0, -1).join(', ')} and ${GIT_OPTIONS.at(-1)}.${hint}`,
       )
     }
     const local = repo instanceof URL ? repo.protocol === 'file:' : isLocalPath(written)
@@ -411,6 +413,27 @@ function gitHelper(base: string): GitHelper {
       }
     }
     const cleanPath = path?.replace(/\/+$/, '')
+    const { init, token } = options
+    if (init !== undefined && typeof init !== 'boolean') {
+      throw new DefinitionError(`${what}: init is true or false (got ${JSON.stringify(init)})`)
+    }
+    if (token !== undefined) {
+      // Never echo it: a token pasted here instead of its variable's name is the token itself.
+      if (
+        typeof token !== 'string' ||
+        !VAR.test(token) ||
+        /^(?:gh[opsur]_|github_pat_)/.test(token)
+      ) {
+        throw new DefinitionError(
+          `${what}: token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.`,
+        )
+      }
+      if (local || !/^https?:\/\//.test(parsed.url)) {
+        throw new DefinitionError(
+          `${what}: token only works with an https:// URL; for SSH or a local repository, git uses this machine's own credentials`,
+        )
+      }
+    }
     return {
       kind: 'git',
       // A GitHub /tree/ URL names the repository, ref and path: keep the repository part.
@@ -418,6 +441,8 @@ function gitHelper(base: string): GitHelper {
       url: parsed.url,
       ...(ref ? { ref } : {}),
       ...(cleanPath ? { path: cleanPath } : {}),
+      ...(init ? { init } : {}),
+      ...(token ? { token } : {}),
     }
   }
 }

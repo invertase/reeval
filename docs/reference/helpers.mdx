@@ -219,7 +219,7 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | No command | `mcp.stdio() needs a command` |
 | A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. ES fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |
 | A bad `path` | `git("github:acme/app"): path is a directory in the repository, relative, with forward slashes and no . or .. (got "../secrets")` |
-| An unknown option | `git("github:acme/app"): unknown option "branch"; it takes ref and path. Use ref for a branch, tag or commit.` |
+| An unknown option | `git("github:acme/app"): unknown option "branch"; it takes ref, path, init and token. Use ref for a branch, tag or commit.` |
 
 ## Related
 

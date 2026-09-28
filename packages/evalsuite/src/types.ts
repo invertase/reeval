@@ -498,11 +498,15 @@ export type GitWorkspace = {
   ref?: string
   /** A directory in the repository whose contents become the workspace. */
   path?: string
+  /** Give the workspace a `.git`: one commit of the fetched tree, with no remote. */
+  init?: boolean
+  /** The host variable holding a token for the fetch; read on the host only. */
+  token?: string
 }
 
 export type GitHelper = (
   repo: string | URL,
-  options?: { ref?: string; path?: string },
+  options?: { ref?: string; path?: string; init?: boolean; token?: string },
 ) => GitWorkspace
 
 /** What an eval runs in: the declarative, phased spec of one environment. */
@@ -819,8 +823,9 @@ export type ErrorKind = 'assertion' | 'timeout' | 'aborted' | 'infra' | 'judge'
 /**
  * The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that
  * needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or
- * `install`), what was being made, the class (`config`, `transient` after the retries, or
- * `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.
+ * `install`, or `workspace` for a git workspace, whose `ref` is `repo#ref:path`), what was being
+ * made, the class (`config`, `transient` after the retries, or `resource`), a named cause
+ * (`enospc`, `oom`), the build log, and the levels that set it.
  */
 export type PrepareFailureRecord = {
   class: 'config' | 'transient' | 'resource'
@@ -912,6 +917,8 @@ export type EnvironmentRecord = {
     path: string | null
     commit: string
     tree: string
+    /** `init: true`: the workspace had a `.git` with one commit of the tree. */
+    init?: boolean
   }
 }
 

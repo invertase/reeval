@@ -1,0 +1,9 @@
+import { evaluate, expect } from 'evalsuite'
+import { repo } from './env.ts'
+
+// The workspace is a git repository: one commit of the fetched tree, clean, with no remote.
+evaluate('lands', { environment: repo }, async (t) => {
+  await t.sandbox()
+  const r = await t.exec('git rev-list --count HEAD && git status --porcelain && git remote')
+  expect(r.stdout).toBe('1\n')
+})

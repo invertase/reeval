@@ -9,6 +9,8 @@ import { RETRY_DELAYS } from '@evalsuite/sandbox-docker'
 import { workspaceLabel } from './environment.ts'
 import { git } from './git.ts'
 import { sha256 } from './ids.ts'
+import { registerSecret } from './redact.ts'
+import { PrepareError, type PrepareFailure } from './sandbox/provider.ts'
 import type { GitWorkspace } from './types.ts'
 
 /** What an attempt copies in: the commit the ref resolved to, its tree, and the tarball of it. */
@@ -74,8 +76,11 @@ const GIT_ENV: NodeJS.ProcessEnv = process.env.GIT_SSH_COMMAND
   ? {}
   : { GIT_SSH_COMMAND: 'ssh -o BatchMode=yes' }
 
-async function gitIn(dir: string, args: string[], input?: string) {
-  const r = await git(dir, args, { env: GIT_ENV, ...(input !== undefined ? { input } : {}) })
+async function gitIn(dir: string, args: string[], input?: string, env: NodeJS.ProcessEnv = {}) {
+  const r = await git(dir, args, {
+    env: { ...GIT_ENV, ...env },
+    ...(input !== undefined ? { input } : {}),
+  })
   return { ...r, text: r.stdout.toString('utf8').trim() }
 }
 
@@ -90,6 +95,7 @@ async function prepareOne(
   w: GitWorkspace,
   what: string,
   delays: readonly number[],
+  env: NodeJS.ProcessEnv,
 ): Promise<PreparedWorkspace> {
   const dir = join(cacheDir(root), 'repos', sha256(w.url).slice(0, 16))
   mkdirSync(dir, { recursive: true })
@@ -112,6 +118,7 @@ async function prepareOne(
         dir,
         [...config, 'fetch', '-q', '--no-tags', '--no-write-fetch-head', ...args],
         input,
+        env,
       )
       if (r.code === 0) return
       const failure = classifyGitError(r.stderr)
@@ -240,49 +247,114 @@ function fetchError(failure: Failure, stderr: string, w: GitWorkspace, what: str
   }
 }
 
+/** A workspace's outcome: what attempts copy in, or the failure every attempt that needs it gets. */
+export type WorkspaceOutcome =
+  | { ok: true; workspace: GitWorkspace; prepared: PreparedWorkspace }
+  | { ok: false; workspace: GitWorkspace; failure: PrepareFailure; label: string; setBy: string[] }
+
 /**
- * Prepares every distinct workspace `uses` need, before any attempt, and writes them for the
- * run's workers. Throws the first {@link WorkspaceError}; nothing has started by then.
+ * The token's header for git, in git's environment rather than its arguments, and only for the
+ * repository's own origin. Appended to any `GIT_CONFIG_COUNT` entries already set.
+ */
+function tokenEnv(url: string, token: string): NodeJS.ProcessEnv {
+  const n = Number(process.env.GIT_CONFIG_COUNT ?? 0) || 0
+  const header = Buffer.from(`x-access-token:${token}`).toString('base64')
+  registerSecret(header)
+  return {
+    GIT_CONFIG_COUNT: String(n + 1),
+    [`GIT_CONFIG_KEY_${n}`]: `http.${new URL(url).origin}/.extraHeader`,
+    [`GIT_CONFIG_VALUE_${n}`]: `Authorization: Basic ${header}`,
+  }
+}
+
+/**
+ * Prepares every distinct workspace `uses` need, before any attempt, and writes the outcomes for
+ * the run's workers. A workspace that fails fails only the attempts that use it.
  */
 export async function prepareWorkspaces(
   uses: WorkspaceUse[],
   options: { root: string; runId: string; delays?: readonly number[] },
-): Promise<Map<string, PreparedWorkspace>> {
-  const distinct = new Map<string, WorkspaceUse>()
+): Promise<WorkspaceOutcome[]> {
+  const distinct = new Map<string, { workspace: GitWorkspace; setBy: string[] }>()
   for (const u of uses) {
     const key = workspaceKey(u.workspace)
-    if (!distinct.has(key)) distinct.set(key, u)
+    const entry = distinct.get(key) ?? { workspace: u.workspace, setBy: [] }
+    const by = `environment ${u.environment}`
+    if (!entry.setBy.includes(by)) entry.setBy.push(by)
+    distinct.set(key, entry)
   }
-  const out = new Map<string, PreparedWorkspace>()
-  if (!distinct.size) return out
+  const out = new Map<string, WorkspaceOutcome>()
   // One URL at a time: fetches into the same cache repository would contend for its locks.
-  const byUrl = new Map<string, WorkspaceUse[]>()
+  const byUrl = new Map<string, Array<{ workspace: GitWorkspace; setBy: string[] }>>()
   for (const u of distinct.values()) {
     byUrl.set(u.workspace.url, [...(byUrl.get(u.workspace.url) ?? []), u])
   }
   await Promise.all(
     [...byUrl.values()].map(async (list) => {
-      for (const { workspace, environment } of list) {
-        const what = `Workspace git(${JSON.stringify(workspaceLabel(workspace))}) in environment ${environment}`
-        out.set(
-          workspaceKey(workspace),
-          await prepareOne(options.root, workspace, what, options.delays ?? RETRY_DELAYS),
-        )
+      for (const { workspace, setBy } of list) {
+        const label = workspaceLabel(workspace)
+        const what = `Workspace git(${JSON.stringify(label)})`
+        const key = workspaceKey(workspace)
+        try {
+          let env: NodeJS.ProcessEnv = {}
+          if (workspace.token) {
+            const value = process.env[workspace.token]
+            if (!value) {
+              throw new WorkspaceError(
+                `${what}: its token variable ${workspace.token} isn't set. Set it in the environment or .env.local.`,
+                true,
+              )
+            }
+            registerSecret(value)
+            env = tokenEnv(workspace.url, value)
+          }
+          const delays = options.delays ?? RETRY_DELAYS
+          const prepared = await prepareOne(options.root, workspace, what, delays, env)
+          out.set(key, { ok: true, workspace, prepared })
+        } catch (error) {
+          if (!(error instanceof WorkspaceError)) throw error
+          const failure: PrepareFailure = {
+            class: error.usage ? 'config' : 'transient',
+            stage: 'workspace',
+            ref: label,
+            cause: null,
+            log: null,
+            message: error.message,
+            usage: error.usage,
+            setBy,
+          }
+          out.set(key, { ok: false, workspace, failure, label, setBy })
+        }
       }
     }),
   )
+  const outcomes = [...distinct.keys()].map((k) => out.get(k) as WorkspaceOutcome)
+  if (!outcomes.length) return outcomes
   const file = preparedFile(options.root, options.runId)
   mkdirSync(join(file, '..'), { recursive: true })
-  writeFileSync(file, JSON.stringify(Object.fromEntries(out)))
-  return out
+  const doc = Object.fromEntries(
+    outcomes.map((o) => [
+      workspaceKey(o.workspace),
+      o.ok ? { prepared: o.prepared } : { failure: o.failure, label: o.label, setBy: o.setBy },
+    ]),
+  )
+  writeFileSync(file, JSON.stringify(doc))
+  return outcomes
 }
 
 export const removePreparedWorkspaces = (root: string, runId: string) =>
   rmSync(preparedFile(root, runId), { force: true })
 
-const read = new Map<string, Record<string, PreparedWorkspace> | null>()
+type Entry =
+  | { prepared: PreparedWorkspace }
+  | { failure: PrepareFailure; label: string; setBy: string[] }
 
-/** The workspace an attempt copies in, as the CLI prepared it for the run; undefined if it didn't. */
+const read = new Map<string, Record<string, Entry> | null>()
+
+/**
+ * The workspace an attempt copies in, as the CLI prepared it for the run; undefined if it didn't.
+ * A workspace that failed throws its failure as a {@link PrepareError}, as a sandbox's does.
+ */
 export function preparedWorkspace(
   root: string,
   runId: string,
@@ -290,11 +362,19 @@ export function preparedWorkspace(
 ): PreparedWorkspace | undefined {
   const file = preparedFile(root, runId)
   if (!read.has(file)) {
-    let doc: Record<string, PreparedWorkspace> | null = null
+    let doc: Record<string, Entry> | null = null
     try {
       doc = JSON.parse(readFileSync(file, 'utf8'))
     } catch {}
     read.set(file, doc)
   }
-  return read.get(file)?.[workspaceKey(w)]
+  const entry = read.get(file)?.[workspaceKey(w)]
+  if (!entry) return undefined
+  if ('failure' in entry) {
+    throw new PrepareError({
+      ...entry.failure,
+      message: `${entry.failure.message}\n(the workspace git(${JSON.stringify(entry.label)}), set by ${entry.setBy.join(', ')}, failed to prepare before the run started; every attempt that needs it fails with this)`,
+    })
+  }
+  return entry.prepared
 }

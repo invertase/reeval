@@ -72,7 +72,7 @@ export type ResolvedEnvironment = {
    */
   substitutions: BrokeredSecret[]
   /** The tarball of the git tree the workspace starts as, copied in before `files`. */
-  workspace?: { tar: string; label: string; commit: string }
+  workspace?: { tar: string; label: string; commit: string; init?: boolean }
 }
 
 /** A brokered secret, and whether the gateway swaps it in for the agent or only for checks. */
@@ -566,6 +566,7 @@ export async function resolveEnvironment(
           path: workspace.path ?? null,
           commit: tree.commit,
           tree: tree.tree,
+          ...(workspace.init ? { init: true } : {}),
         }
       : undefined
   const digest = `sha256:${sha256(
@@ -583,7 +584,11 @@ export async function resolveEnvironment(
       ...(egress === 'allow-all'
         ? {}
         : { egress: typeof egress === 'string' ? egress : [...egress.allow].sort() }),
-      ...(workspaceRecord ? { workspace: workspaceRecord.tree } : {}),
+      ...(workspaceRecord
+        ? {
+            workspace: workspaceRecord.init ? [workspaceRecord.tree, 'init'] : workspaceRecord.tree,
+          }
+        : {}),
     }),
   )}`
   return {
@@ -612,7 +617,14 @@ export async function resolveEnvironment(
     checkVars,
     substitutions: secrets.brokered,
     ...(workspace && tree
-      ? { workspace: { tar: tree.tar, label: workspaceLabel(workspace), commit: tree.commit } }
+      ? {
+          workspace: {
+            tar: tree.tar,
+            label: workspaceLabel(workspace),
+            commit: tree.commit,
+            ...(workspace.init ? { init: true } : {}),
+          },
+        }
       : {}),
   }
 }

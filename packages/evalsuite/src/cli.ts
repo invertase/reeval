@@ -30,7 +30,7 @@ import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
 import { harnessId, sandboxId } from './options.ts'
 import type { RunPlan } from './plan.ts'
-import { PreflightInfraError, preflight, type SandboxVersions } from './preflight.ts'
+import { preflight, type SandboxVersions } from './preflight.ts'
 import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
@@ -623,31 +623,42 @@ async function executeRun(
         `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
     }
-    const { prepareWorkspaces, WorkspaceError, workspaceKey } = await import('./workspace.ts')
-    try {
-      const uses = planned.flatMap(({ attempt: a }) =>
-        a.workspace && !a.plan.skip
-          ? [{ workspace: a.workspace, environment: a.cell.environment }]
-          : [],
-      )
-      const prepared = await prepareWorkspaces(uses, { root: config.root, runId })
-      const shown = new Set<string>()
-      for (const { workspace } of uses) {
-        const p = prepared.get(workspaceKey(workspace))
-        if (!p || shown.has(workspaceKey(workspace))) continue
-        shown.add(workspaceKey(workspace))
-        renderer.onEvent({
-          type: 'notice',
-          at: Date.now(),
-          level: 'info',
-          text: `workspace ${workspaceLabel(workspace)} at ${p.commit.slice(0, 12)}`,
-        })
+    const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
+    const live = planned.filter((p) => !p.attempt.plan.skip)
+    const outcomes = await prepareWorkspaces(
+      live.flatMap(({ attempt: a }) =>
+        a.workspace ? [{ workspace: a.workspace, environment: a.cell.environment }] : [],
+      ),
+      { root: config.root, runId },
+    )
+    for (const o of outcomes) {
+      const at = Date.now()
+      if (o.ok) {
+        const text = `workspace ${workspaceLabel(o.workspace)} at ${o.prepared.commit.slice(0, 12)}`
+        renderer.onEvent({ type: 'notice', at, level: 'info', text })
+        continue
       }
-    } catch (error) {
-      if (!(error instanceof WorkspaceError)) throw error
-      if (error.usage) throw new UsageError(error.message)
-      preflightStop = new PreflightInfraError(error.message)
-      return false
+      // Reported like a sandbox that failed to prepare: once, and only its attempts fail.
+      const key = workspaceKey(o.workspace)
+      const user = live.find(
+        (p) => p.attempt.workspace && workspaceKey(p.attempt.workspace) === key,
+      )
+      if (!user) continue
+      const target = {
+        kind: 'workspace',
+        key: o.label,
+        label: `workspace ${o.label}`,
+        sandbox: user.attempt.sandbox,
+        harness: user.attempt.harness,
+        setBy: o.setBy,
+        runWide: false,
+      }
+      renderer.onEvent({
+        type: 'prepare',
+        at,
+        state: 'failed',
+        outcome: { target, ok: false, failure: o.failure, ms: 0 },
+      })
     }
     try {
       sandboxVersions = await preflight(

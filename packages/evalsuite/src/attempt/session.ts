@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { shellQuote } from '@evalsuite/sandbox-docker/process'
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { snapshot } from '../diff.ts'
 import { type ResolvedEnvironment, type ResolvedStep, skillFiles } from '../environment/resolve.ts'
@@ -85,9 +86,32 @@ async function copyWorkspace(
       `Couldn't unpack the workspace ${workspace.label} into the sandbox (the image needs tar): ${tailOf(r.stderr || r.stdout)}`,
     )
   }
+  if (workspace.init) {
+    // A fixed author and date, so every attempt's HEAD is the same commit of the same tree.
+    const at = '2000-01-01T00:00:00Z'
+    const init = await box.exec(
+      `git init -q -b main && git add -A && git -c commit.gpgsign=false commit -q --no-verify -m ${shellQuote(`${workspace.label} at ${workspace.commit}`)}`,
+      {
+        signal,
+        env: {
+          GIT_AUTHOR_NAME: 'es',
+          GIT_AUTHOR_EMAIL: 'es@localhost',
+          GIT_AUTHOR_DATE: at,
+          GIT_COMMITTER_NAME: 'es',
+          GIT_COMMITTER_EMAIL: 'es@localhost',
+          GIT_COMMITTER_DATE: at,
+        },
+      },
+    )
+    if (init.exitCode !== 0) {
+      throw new InfraError(
+        `Couldn't give the workspace ${workspace.label} a .git (init: true needs git in the image): ${tailOf(init.stderr || init.stdout)}`,
+      )
+    }
+  }
   debugLog(
     'env',
-    `workspace ${workspace.label} at ${workspace.commit.slice(0, 12)} (${tar.byteLength} bytes of tar) in ${formatDuration(performance.now() - start)}`,
+    `workspace ${workspace.label} at ${workspace.commit.slice(0, 12)} (${tar.byteLength} bytes of tar${workspace.init ? ', with a .git' : ''}) in ${formatDuration(performance.now() - start)}`,
   )
 }
 
