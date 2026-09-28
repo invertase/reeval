@@ -42,7 +42,7 @@ async function tests(...specs: Spec[]): Promise<CollectedTest[]> {
   })
 }
 
-const gate = (limit: number) => () => ({
+const gate = (limit: number) => ({
   limits: { attempts: limit },
   rank: { eval: 'e', file: 'f', order: 0, n: 1, cell: 0 },
 })
