@@ -50,7 +50,7 @@ eval                                        harnesses  variants  runs  attempts 
 evals/template.es.ts › adds a reset button  1          —         1     1         workspace: https://github.com/vitejs/vite#v6.0.0:packages/create-vite/template-react-ts
 ```
 
-A dry run never fetches. A branch, or no `ref`, adds a warning: results on a moving branch aren't comparable over time.
+A dry run never fetches. With `--json`, each of the eval's cells has a `workspace` with its `repo`, `ref` and `path`. A branch, or no `ref`, adds a warning: results on a moving branch aren't comparable over time.
 
 ## Run it
 
