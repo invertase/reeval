@@ -1,18 +1,23 @@
 # Conventional Commits (AGENTS.md, Project rules) for the PR title, which becomes the squash
 # commit that release-please reads, and for every commit in the PR. Its own workflow so that
 # editing the title re-runs only this.
+# In the merge queue there's no PR title, so it checks every commit the merge group adds to main
+# (base_sha..head_sha): with squash merging, each is a queued PR's squash commit, whose subject is
+# its title. That's exactly what release-please reads, and it still reports, so the required check
+# never stalls the queue.
 name: commits
 
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened]
+  merge_group:
 
 permissions:
   contents: read
 
 concurrency:
-  group: commits-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: commits-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   conventional:
@@ -22,11 +27,17 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
           fetch-depth: 0
           persist-credentials: false
-      - env:
+      - if: github.event_name == 'pull_request'
+        env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-commits.mjs "$BASE" "$HEAD"
+      - if: github.event_name == 'merge_group'
+        env:
+          BASE: ${{ github.event.merge_group.base_sha }}
+          HEAD: ${{ github.event.merge_group.head_sha }}
         run: node scripts/check-commits.mjs "$BASE" "$HEAD"

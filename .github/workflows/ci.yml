@@ -9,6 +9,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # The merge queue: every job runs, unfiltered, since the required checks must report.
+  merge_group:
   workflow_dispatch:
   workflow_call:
 
@@ -17,10 +19,11 @@ permissions:
 
 concurrency:
   # github.workflow is the caller's when release.yml calls this, so the release's run doesn't
-  # share a group with main's own run and can't be replaced by the next push's.
+  # share a group with main's own run and can't be replaced by the next push's. A merge group has
+  # no PR number; its github.ref (refs/heads/gh-readonly-queue/main/pr-…) is unique per entry.
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Superseded PR pushes are cancelled; every commit on main gets a full run.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Superseded PR pushes are cancelled; every commit on main and every queue entry gets a full run.
+  cancel-in-progress: ${{ github.event_name != 'merge_group' && github.ref != 'refs/heads/main' }}
 
 jobs:
   lint:
