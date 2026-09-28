@@ -6,13 +6,15 @@ import {
   googleModel,
   OPENCODE_CLI_VERSION,
   OPENCODE_CREDENTIAL_ENV,
-  OPENCODE_WARM_COMMAND,
+  openCodeConfig,
+  openCodeEnv,
 } from '../src/opencode-harness.ts'
 import {
   OPENCODE_PACKAGE_JSON,
   OPENCODE_PNPM_LOCK,
   OPENCODE_PNPM_WORKSPACE,
 } from '../src/opencode-install.ts'
+import { OPENCODE_BUILTIN_TOOLS } from '../src/opencode-tools.ts'
 import { VERSION } from '../src/version.ts'
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
@@ -21,20 +23,126 @@ test("VERSION is package.json's", () => {
   assert.equal(VERSION, pkg.version)
 })
 
-test('the install, its lockfile, its allowed build and the warm step pin one release', () => {
+test('the install, its lockfile and its allowed build pin one @opencode/cli release', () => {
   assert.deepEqual(JSON.parse(OPENCODE_PACKAGE_JSON).dependencies, {
-    'opencode-ai': OPENCODE_CLI_VERSION,
+    '@opencode/cli': OPENCODE_CLI_VERSION,
   })
-  assert.match(OPENCODE_PNPM_LOCK, new RegExp(`^  opencode-ai@${OPENCODE_CLI_VERSION}:$`, 'm'))
+  assert.match(OPENCODE_PNPM_LOCK, new RegExp(`^  '@opencode/cli@${OPENCODE_CLI_VERSION}':$`, 'm'))
   assert.match(
     OPENCODE_PNPM_LOCK,
-    new RegExp(`^  opencode-linux-x64@${OPENCODE_CLI_VERSION}:$`, 'm'),
+    new RegExp(`^  '@opencode/cli-linux-x64@${OPENCODE_CLI_VERSION}':$`, 'm'),
   )
-  assert.equal(
-    OPENCODE_PNPM_WORKSPACE,
-    `allowBuilds:\n  'opencode-ai@${OPENCODE_CLI_VERSION}': true\n`,
+  assert.ok(
+    OPENCODE_PNPM_WORKSPACE.startsWith(
+      `allowBuilds:\n  '@opencode/cli@${OPENCODE_CLI_VERSION}': true\n`,
+    ),
   )
-  assert.ok(OPENCODE_WARM_COMMAND.includes(`"%s"}}\\n' ${OPENCODE_CLI_VERSION} `))
+  assert.doesNotMatch(OPENCODE_PNPM_LOCK, /opencode-ai/)
+})
+
+test('the musl builds are left out of the install, and only those', () => {
+  const ignored = (text: string) =>
+    [...text.matchAll(/^ {2}- '(@opencode\/cli-[^']+)'$/gm)].map((m) => m[1])
+  const musl = [
+    '@opencode/cli-linux-arm64-musl',
+    '@opencode/cli-linux-x64-baseline-musl',
+    '@opencode/cli-linux-x64-musl',
+  ]
+  assert.deepEqual(ignored(OPENCODE_PNPM_WORKSPACE), musl)
+  assert.deepEqual(ignored(OPENCODE_PNPM_LOCK), musl)
+  assert.doesNotMatch(OPENCODE_PNPM_LOCK, /^ {2}'@opencode\/cli-linux-x64-musl@/m)
+  assert.match(OPENCODE_PNPM_LOCK, /^ {2}'@opencode\/cli-linux-x64-baseline@/m)
+})
+
+test('the config turns off updates, sharing and the tools an eval has no use for', () => {
+  const config = openCodeConfig()
+  assert.equal(config.update, 'disable')
+  assert.equal(config.share, 'disabled')
+  // Appended to an eval's own rules, where the last match wins: ES only denies.
+  assert.deepEqual(config.permissions, [
+    { action: 'question', resource: '*', effect: 'deny' },
+    { action: 'browser', resource: '*', effect: 'deny' },
+  ])
+  assert.deepEqual(config.websearch, { provider: 'exa' })
+  assert.equal('agents' in config, false)
+  assert.equal('mcp' in config, false)
+})
+
+test("session titles run on the turn's model, not a second one", () => {
+  assert.deepEqual(openCodeConfig({ model: 'gemini-3.8-flash' }).agents, {
+    title: { model: 'google/gemini-3.8-flash' },
+  })
+  const env = openCodeEnv({ model: 'gemini-3.8-flash' })
+  assert.deepEqual(
+    JSON.parse(env.OPENCODE_CONFIG_CONTENT),
+    openCodeConfig({ model: 'gemini-3.8-flash' }),
+  )
+  // Only variables 2.0.18 still reads, and the gate's.
+  assert.deepEqual(Object.keys(env).sort(), [
+    'ES_OPENCODE_MCP_SERVERS',
+    'OPENCODE_CONFIG_CONTENT',
+    'OPENCODE_DISABLE_AUTOUPDATE',
+    'OPENCODE_DISABLE_MODELS_FETCH',
+  ])
+})
+
+test('MCP servers go in the config with codemode off, and the gate waits for them', () => {
+  const mcpServers = {
+    stamp: { type: 'local', command: ['node', 's.mjs'], environment: { A: 'b' } },
+    docs: { type: 'remote', url: 'https://docs.test/mcp', headers: {}, oauth: false },
+  } as const
+  assert.deepEqual(openCodeConfig({ mcpServers }).mcp, {
+    servers: {
+      stamp: {
+        type: 'local',
+        command: ['node', 's.mjs'],
+        environment: { A: 'b' },
+        codemode: false,
+      },
+      docs: {
+        type: 'remote',
+        url: 'https://docs.test/mcp',
+        headers: {},
+        oauth: false,
+        codemode: false,
+      },
+    },
+  })
+  assert.deepEqual(JSON.parse(openCodeEnv({ mcpServers }).ES_OPENCODE_MCP_SERVERS), [
+    'stamp',
+    'docs',
+  ])
+  assert.deepEqual(JSON.parse(openCodeEnv().ES_OPENCODE_MCP_SERVERS), [])
+})
+
+test("the catalog names 2.0.18's tools, with its path inputs", () => {
+  assert.equal(OPENCODE_BUILTIN_TOOLS.bash.nativeName, 'shell')
+  assert.deepEqual(Object.keys(OPENCODE_BUILTIN_TOOLS).sort(), [
+    'bash',
+    'edit',
+    'execute',
+    'glob',
+    'grep',
+    'read',
+    'skill',
+    'subagent',
+    'webFetch',
+    'webSearch',
+    'write',
+  ])
+  for (const name of ['read', 'write', 'edit'] as const) {
+    const schema = OPENCODE_BUILTIN_TOOLS[name].inputSchema as unknown as {
+      safeParse: (v: unknown) => { success: boolean }
+    }
+    assert.equal(
+      schema.safeParse({ path: 'a.txt', content: '', oldString: '', newString: '' }).success,
+      true,
+    )
+    assert.equal(
+      schema.safeParse({ filePath: 'a.txt', content: '', oldString: '', newString: '' }).success,
+      false,
+    )
+  }
 })
 
 test('auth is an environment with the Gemini key, or it throws', () => {

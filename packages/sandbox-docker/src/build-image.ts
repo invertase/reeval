@@ -60,8 +60,6 @@ const BOOTSTRAPS: Record<
     cli: string
     version?: string
     adapter: () => Promise<HarnessAgentAdapter>
-    /** What the CLI would otherwise install into the sandbox on every start, baked in once. */
-    warm?: () => Promise<string>
   }
 > = {
   cursor: {
@@ -88,8 +86,6 @@ const BOOTSTRAPS: Record<
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
       }),
-    // Its plugin runtime (63 MB from npm), which it installs into its config directory at start.
-    warm: async () => (await import('@evalsuite/harness-opencode')).OPENCODE_WARM_COMMAND,
   },
   goose: {
     name: 'Goose',
@@ -392,12 +388,6 @@ async function bake(
     harnesses: [await bootstrap.adapter()],
     sandboxConfig: { workDir: WORKSPACE_DIR },
   })
-  if (bootstrap.warm) {
-    const warmed = await session.run({ command: await bootstrap.warm() })
-    if (warmed.exitCode !== 0) {
-      throw new Error(`Warming the ${bootstrap.name} image failed:\n${tail(warmed.stderr)}`)
-    }
-  }
   let probe = bootstrap.version
   if (!probe) {
     const found = await session.run({

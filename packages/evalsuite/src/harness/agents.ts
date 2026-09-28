@@ -1,4 +1,5 @@
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
+import type { OpenCodeMcpServer } from '@evalsuite/harness-opencode'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -185,17 +186,24 @@ export function antigravityMcpServers(
   )
 }
 
-const pairs = (values: Record<string, string> = {}) =>
-  Object.entries(values).map(([name, value]) => ({ name, value }))
-
-/** The ACP `session/new` shape: variables and headers as `{ name, value }` lists. */
-export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Record<string, unknown> {
+/**
+ * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on;
+ * 2.0.18 has no SSE transport.
+ */
+export function opencodeMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, OpenCodeMcpServer> {
   return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
-        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
-    ),
+    Object.entries(servers).map(([name, s]): [string, OpenCodeMcpServer] => {
+      if (s.transport === 'sse') {
+        throw new InfraError(
+          `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      return s.transport === 'stdio'
+        ? [name, { type: 'local', command: [s.command, ...s.args], environment: s.env ?? {} }]
+        : [name, { type: 'remote', url: s.url, headers: s.headers ?? {}, oauth: false }]
+    }),
   )
 }
 
@@ -251,8 +259,8 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
   },
-  // With OPENCODE_DISABLE_CLAUDE_CODE and OPENCODE_DISABLE_EXTERNAL_SKILLS, 1.18.32 reads only its
-  // own skill directories (not .claude/skills or .agents/skills), and AGENTS.md but not CLAUDE.md.
+  // 2.0.18 reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
+  // the workspace and the home directory; nothing turns that off.
   opencode: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
@@ -374,14 +382,15 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'OpenCode',
     factory: 'opencode',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 1.18.32 sends the key on (its model, and the same model for titles).
+    // The only request 2.0.18 sends the key on (its model, and the same model for titles).
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    mcpServers: acpMcpServers,
-    adapter: async ({ auth, mcpServers }) =>
+    mcpServers: opencodeMcpServers,
+    adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth,
-        ...(mcpServers ? { mcpServers } : {}),
+        model: descriptor.model,
+        ...(mcpServers ? { mcpServers: mcpServers as Record<string, OpenCodeMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
   },
@@ -457,9 +466,9 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
- * Why a harness's agent can't take the environment's MCP servers (pi takes none, Goose no
- * `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt starts;
- * undefined when it can.
+ * Why a harness's agent can't take the environment's MCP servers (pi takes none; Goose, OpenCode
+ * and Codex no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
+ * starts; undefined when it can.
  */
 export function refusedMcp(
   harness: HarnessDescriptor,

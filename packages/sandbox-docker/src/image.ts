@@ -11,7 +11,7 @@ export const HARNESS_PACKAGES: Record<
   cursor: { name: '@evalsuite/harness-cursor-sdk', version: '0.1.0' },
   'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.128', patch: '5d1c985c' },
   antigravity: { name: '@evalsuite/harness-antigravity', version: '0.1.0' },
-  opencode: { name: '@evalsuite/harness-opencode', version: '0.1.0' },
+  opencode: { name: '@evalsuite/harness-opencode', version: '0.2.0' },
   goose: { name: '@evalsuite/harness-goose', version: '0.1.0' },
   pi: { name: '@evalsuite/harness-pi', version: '0.1.0' },
   codex: { name: '@evalsuite/harness-codex', version: '0.1.0' },

@@ -176,46 +176,62 @@ for (const harness of Object.keys(translators))
   })
 
 // OpenCode's ACP events become parts inside @ai-sdk/harness-acp's bridge, so only the adapter's
-// own step replays: the names it gives calls the bridge couldn't name.
+// own step replays: the names it gives calls the bridge couldn't name, and the output text it
+// takes from the ACP content.
 describe('replay: the OpenCode adapter, from the captured parts', () => {
-  /** The captured parts as the bridge sends them: calls it couldn't name are `acp_tool_<id>`. */
-  const fromBridge = (lines: Line[], named: Set<string>) =>
-    lines.map((l) =>
-      (l.part.type === 'tool-call' || l.part.type === 'tool-result') &&
-      named.has(String(l.part.toolName))
-        ? { ...l.part, toolName: `acp_tool_${l.part.toolCallId}` }
-        : l.part,
-    )
-  const names = (parts: Array<{ type: string; [k: string]: unknown }>) =>
+  type Part = { type: string; [k: string]: unknown }
+  const record = (v: unknown) =>
+    typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+  /**
+   * The captured parts as the bridge sends them: calls it couldn't name are `acp_tool_<id>`, and
+   * a result is its `rawOutput` as `result` (no `output` text).
+   */
+  const fromBridge = (lines: Line[], named: Set<string>): Part[] =>
+    lines.map((l) => {
+      const part = l.part
+      if (part.type !== 'tool-call' && part.type !== 'tool-result') return part
+      const renamed = named.has(String(part.toolName))
+        ? { ...part, toolName: `acp_tool_${part.toolCallId}` }
+        : part
+      if (renamed.type === 'tool-call') return { ...renamed, input: JSON.stringify(renamed.input) }
+      const { output, ...rest } = renamed
+      const { output: _text, ...raw } = record(output)
+      return { ...rest, result: raw }
+    })
+  const replay = (lines: Line[], named: string[], mcpServers: string[] = []) => {
+    const t = new OpenCodeStreamTranslator({ mcpServers })
+    return fromBridge(lines, new Set(named)).flatMap((p) => t.push(p))
+  }
+  const names = (parts: Part[]) =>
     parts.filter((p) => p.type === 'tool-call').map((p) => p.toolName)
+  const resultOf = (parts: Part[], name: string) =>
+    record(parts.find((p) => p.type === 'tool-result' && p.toolName === name)?.result)
 
-  for (const [file, named, mcp] of [
-    ['edit-and-run.raw.jsonl', 'bash', []],
-    ['mcp.raw.jsonl', 'mcp__stamp__house_stamp', ['stamp']],
+  for (const [file, named, mcp, output] of [
+    ['edit-and-run.raw.jsonl', 'bash', [], /contract-42/],
+    ['mcp.raw.jsonl', 'mcp__stamp__house_stamp', ['stamp'], /STAMP-7Q/],
   ] as const) {
-    test(`${file}: ${named} is named again from OpenCode's first update`, () => {
+    test(`${file}: ${named} is named again from OpenCode's first update, with its output`, () => {
       const lines = parse(read('opencode', file))
       const captured = names(lines.map((l) => l.part))
       assert.ok(captured.includes(named), `${named} is in the capture`)
-      const t = new OpenCodeStreamTranslator({ mcpServers: mcp })
-      assert.deepEqual(names(fromBridge(lines, new Set([named])).map((p) => t.push(p))), captured)
+      const out = replay(lines, [named], [...mcp])
+      assert.deepEqual(names(out), captured)
+      assert.match(String(resultOf(out, named).output), output)
     })
   }
 
-  test('twin: without its first update, the call keeps the generic name', () => {
-    const lines = parse(read('opencode', 'edit-and-run.raw.jsonl')).filter(
-      (l) =>
-        !(
-          l.part.type === 'raw' &&
-          (l.part.rawValue as { sessionUpdate?: string })?.sessionUpdate === 'tool_call'
-        ),
+  test('twin: without its first update, or the server, a call keeps the generic name', () => {
+    const edit = parse(read('opencode', 'edit-and-run.raw.jsonl')).filter(
+      (l) => !(l.part.type === 'raw' && record(l.part.rawValue).sessionUpdate === 'tool_call'),
     )
-    const t = new OpenCodeStreamTranslator()
-    const out = names(fromBridge(lines, new Set(['bash'])).map((p) => t.push(p)))
+    const out = names(replay(edit, ['bash']))
     assert.ok(
       out.some((n) => String(n).startsWith('acp_tool_')),
       JSON.stringify(out),
     )
+    const mcp = names(replay(parse(read('opencode', 'mcp.raw.jsonl')), ['mcp__stamp__house_stamp']))
+    assert.ok(!mcp.includes('mcp__stamp__house_stamp'), JSON.stringify(mcp))
   })
 })
 

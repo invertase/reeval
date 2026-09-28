@@ -102,7 +102,7 @@ export const harnesses: HarnessRow[] = [
     },
     image: 'opencode',
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
-    autoHosts: ['generativelanguage.googleapis.com'],
+    autoHosts: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
     apiHost: 'generativelanguage.googleapis.com',
     tokens: false,
     tokensWhy:
