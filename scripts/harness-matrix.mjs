@@ -7,7 +7,12 @@ import { join } from 'node:path'
 
 const root = join(import.meta.dirname, '..')
 const src = join(root, 'packages/evalsuite/src')
-const { AGENTS, gooseMcpServers, refusedMcp } = await import(join(src, 'harness/agents.ts'))
+const { AGENTS, agentFor, gooseMcpServers, refusedMcp } = await import(
+  join(src, 'harness/agents.ts')
+)
+const { OPENCODE_PROVIDERS, REFUSED_OPENCODE_PROVIDERS } = await import(
+  join(root, 'packages/harness-opencode/src/opencode-providers.ts')
+)
 const { InfraError } = await import(join(src, 'sandbox/types.ts'))
 const { harnesses } = await import(join(root, 'packages/evalsuite/test/support/harnesses.ts'))
 
@@ -37,10 +42,10 @@ function mcpSupport(kind, agent) {
 }
 
 /** The web events ES records for an agent: its adapter's tools that the transcript maps to them. */
-async function webEvents(kind, agent) {
+async function webEvents(kind, agent, model) {
   const adapter = await agent.adapter({
     auth: { [agent.credential]: 'probe' },
-    descriptor: { kind, model: 'probe' },
+    descriptor: { kind, model },
   })
   const tools = Object.keys(adapter.builtinTools ?? {})
   return {
@@ -56,6 +61,10 @@ const code = (s) => `\`${s}\``
 
 /** Each note is said only while its fact holds. */
 const NOTES = [
+  (h) =>
+    h.agent.forModel &&
+    h.kind === 'opencode' &&
+    `Its key is the model's provider's (${code('anthropic/claude-haiku-4-5')} takes ${code('ANTHROPIC_API_KEY')}), on any of the ${OPENCODE_PROVIDERS.length} providers whose key OpenCode sends in a header on known hosts; the other ${REFUSED_OPENCODE_PROVIDERS.length} are refused at plan time.`,
   (h) =>
     h.agent.tokens &&
     `The gateway also swaps the session tokens the ${h.agent.name} SDK exchanges its key for (${list(h.agent.tokens.fields.map(code))}) on ${list(h.agent.tokens.hosts.map(code))}.`,
@@ -129,9 +138,10 @@ export async function harnessFacts() {
     const page = `reference/harness/${kind}`
     if (!existsSync(join(root, 'docs', `${page}.mdx`)))
       problems.push(`harness ${kind} has no docs/${page}.mdx`)
-    if (row.key?.name !== agent.credential) {
+    const credential = agentFor({ kind, model: row.model }).credential
+    if (row.key?.name !== credential) {
       problems.push(
-        `${kind}: the contract row's key is ${row.key?.name}, the catalog's ${agent.credential}`,
+        `${kind}: the contract row's key is ${row.key?.name}, the catalog's ${credential}`,
       )
     }
     if (!!row.wireModel !== !!agent.servedModel) {
@@ -145,13 +155,21 @@ export async function harnessFacts() {
     if ((row.mcp !== false) !== mcp.stdio.ok) {
       problems.push(`${kind}: the contract row's mcp and the catalog disagree on stdio MCP servers`)
     }
-    const h = { kind, agent, row, page, mcp, web: await webEvents(kind, agent) }
+    const web = await webEvents(kind, agentFor({ kind, model: row.model }), row.model)
+    const h = { kind, agent, row, page, mcp, web }
     h.notes = NOTES.map((note) => note(h)).filter(Boolean)
     facts.push(h)
   }
   for (const row of harnesses) {
-    if (row.id !== 'fake' && !AGENTS[row.id])
+    if (row.id !== 'fake' && !AGENTS[row.harness ?? row.id])
       problems.push(`contract row ${row.id} isn't in AGENTS`)
+    if (row.harness) {
+      const credential = agentFor({ kind: row.harness, model: row.model }).credential
+      if (row.key?.name !== credential)
+        problems.push(
+          `${row.id}: the contract row's key is ${row.key?.name}, the catalog's ${credential}`,
+        )
+    }
   }
   return { facts, problems }
 }
@@ -181,7 +199,7 @@ export function renderMatrix(facts, { href, text = (s) => s }) {
   ]
   const rows = facts.map((h) => [
     `[${h.agent.name}](${href(h.page)})`,
-    code(h.agent.credential),
+    h.agent.forModel ? "The model's provider's" : code(h.agent.credential),
     yes(h.agent.endpoints.length > 0),
     code(h.agent.rulesFile),
     yes(!!h.agent.workspaceSkillDir),
@@ -213,6 +231,35 @@ export function renderLayout(facts) {
     ...facts.map(
       (h) =>
         `| ${h.agent.name} | ${code(h.agent.rulesFile)} | ${code(h.agent.workspaceSkillDir)} | ${code(`~/${h.agent.harnessSkillDir}`)} |`,
+    ),
+  ].join('\n')
+}
+
+const cell = (s) => s.replaceAll('|', '\\|')
+
+/** Every provider OpenCode runs on in ES: its model ids, key, the header it goes in, its hosts. */
+export function renderOpenCodeProviders() {
+  return [
+    '| Provider | Model ids | Key | Header | Hosts |',
+    '|---|---|---|---|---|',
+    ...OPENCODE_PROVIDERS.map((p) => {
+      const headers = p.headers.map((h) =>
+        code(h.scheme === 'bearer' ? 'Authorization: Bearer' : h.name),
+      )
+      const hosts = [...new Set(p.endpoints.map((e) => e.host))].map(code)
+      return `| ${cell(p.name)} | ${code(`${p.id}/…`)} | ${code(p.env)} | ${headers.join(', ')} | ${hosts.join(', ')} |`
+    }),
+  ].join('\n')
+}
+
+/** Every provider ES refuses for OpenCode, and why. */
+export function renderOpenCodeRefused() {
+  return [
+    '| Provider | Model ids | Why ES refuses it |',
+    '|---|---|---|',
+    ...REFUSED_OPENCODE_PROVIDERS.map(
+      (p) =>
+        `| ${cell(p.name)} | ${code(`${p.id}/…`)} | ${cell(p.why[0].toUpperCase() + p.why.slice(1))}. |`,
     ),
   ].join('\n')
 }

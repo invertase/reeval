@@ -28,7 +28,14 @@ import {
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
-import { AGENTS, type AgentKind, agentAuth, authHint, brokeringFor } from '../src/harness/agents.ts'
+import {
+  AGENTS,
+  type AgentKind,
+  agentAuth,
+  agentFor,
+  authHint,
+  brokeringFor,
+} from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -44,7 +51,7 @@ import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
-  const brokerLine = (kind: AgentKind) => {
+  const brokerLine = (kind: AgentKind, model = 'm') => {
     const lines: string[] = []
     const debug = {
       log: (phase: string, text: string) => lines.push(`${phase} ${text}`),
@@ -60,7 +67,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
     }
     traceEnvironment(
       debug as unknown as AttemptDebug,
-      { harness: { kind } } as unknown as AttemptSpec,
+      { harness: { kind, model } } as unknown as AttemptSpec,
       {
         record,
         substitutions: [],
@@ -80,8 +87,12 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
   assert.deepEqual(brokerLine('cursor'), [
     'broker CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key',
   ])
+  assert.deepEqual(brokerLine('opencode', 'anthropic/claude-haiku-4-5'), [
+    'broker ANTHROPIC_API_KEY stays on the host · the gateway swaps it in on POST api.anthropic.com/v1/messages',
+  ])
   for (const kind of Object.keys(AGENTS) as AgentKind[]) {
-    assert.doesNotMatch(brokerLine(kind).join('\n'), /\[object /, kind)
+    const model = kind === 'opencode' ? 'google/m' : 'm'
+    assert.doesNotMatch(brokerLine(kind, model).join('\n'), /\[object /, kind)
   }
 })
 
@@ -262,11 +273,20 @@ test('an auth failure names the credential; other errors get no hint', () => {
   for (const [kind, message] of refused) {
     const { credential } = AGENTS[kind]
     assert.equal(
-      authHint(kind, message),
+      authHint(AGENTS[kind], message),
       `The API rejected ${credential}: set a valid key in the environment or .env.local`,
       message,
     )
   }
+  // OpenCode's words for any provider refusing its key (Bedrock's 403, 28 Sep 2026), naming the
+  // model's provider's variable.
+  assert.equal(
+    authHint(
+      agentFor({ kind: 'opencode', model: 'amazon-bedrock/m' }),
+      'ACP prompt update stream failed: Authentication required: provider authentication required',
+    ),
+    'The API rejected AWS_BEARER_TOKEN_BEDROCK: set a valid key in the environment or .env.local',
+  )
   // The twins: a rate limit, a server error, a missing model and a refused host aren't the key.
   for (const message of [
     'HTTP 429: Resource has been exhausted (e.g. check quota).',
@@ -275,7 +295,7 @@ test('an auth failure names the credential; other errors get no hint', () => {
     'CONNECT blocked.example.net:443 → 403 · blocked',
     'The Antigravity CLI exited with code 1 before reporting a result',
   ]) {
-    assert.equal(authHint('antigravity', message), undefined, message)
+    assert.equal(authHint(AGENTS.antigravity, message), undefined, message)
   }
 })
 

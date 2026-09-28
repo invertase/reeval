@@ -67,7 +67,7 @@ describe('es init', () => {
       assert.match(init.stdout, new RegExp(`with ${AGENTS[h.kind].credential} in \\.env\\.local`))
       const cell = (doc: { evals: Array<{ cells: Array<{ harness: string }> }> }) =>
         doc.evals[0]?.cells[0]?.harness
-      assert.equal(cell(await planOf(p.dir)), `${h.kind}:${h.model}`)
+      assert.equal(cell(await planOf(p.dir)), `${h.kind}:${h.model.split('/').at(-1)}`)
       assert.equal(cell(await planOf(p.dir, ['--profile', 'fake'])), 'fake')
       const pr = await planOf(p.dir, ['--profile', 'pr'])
       assert.equal(pr.profile?.name ?? pr.profile, 'pr')

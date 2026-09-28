@@ -52,7 +52,7 @@ Under `'deny-all'` or an allowlist, ES adds the hosts the attempt can't work wit
 | `cursor()` | `api2.cursor.sh`, `*.cursor.sh` |
 | `claudeCode()` | `api.anthropic.com`, `*.anthropic.com` |
 | `antigravity()` | `generativelanguage.googleapis.com` |
-| `opencode()` | `generativelanguage.googleapis.com`, `mcp.exa.ai` (its web search) |
+| `opencode()` | The model's provider's API hosts (`generativelanguage.googleapis.com` for `google/…`, `api.anthropic.com` for `anthropic/…`, [every provider](/reference/harness/opencode#supported-providers)) and `mcp.exa.ai` (its web search) |
 | `goose()`, `pi()` | `generativelanguage.googleapis.com` |
 | `codex()` | `api.openai.com` |
 | `fakeHarness({ layout })` | That agent's hosts |

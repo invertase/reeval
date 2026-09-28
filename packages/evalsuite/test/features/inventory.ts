@@ -809,7 +809,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.opencode',
     area: 'Harnesses',
-    name: '`opencode()`: OpenCode 2 over ACP on a brokered Gemini key, its image, config, rules, skills, tool names, web search and config MCP servers',
+    name: "`opencode()`: OpenCode 2 over ACP on a brokered provider's key, its image, config, rules, skills, tool names, web search and config MCP servers",
     fixtures: [
       'harness/opencode-rules',
       'harness/opencode-workspace-skills',
@@ -838,6 +838,41 @@ export const inventory: InventoryFeature[] = [
       ),
       opencodeAdapter('unit', "session titles run on the turn's model, not a second one"),
       opencodeAdapter('unit', 'the musl builds are left out of the install, and only those'),
+    ],
+  },
+  {
+    id: 'harness.opencode.providers',
+    area: 'Harnesses',
+    name: "`opencode({ model: '<provider>/<model>' })`: OpenCode on any provider whose key goes in a header on known hosts, with only that provider's key brokered, its hosts automatic and its served model recorded; the others refused at plan time",
+    fixtures: ['harness/opencode-provider-key'],
+    plan: ['opencode/opencode', 'opencode/bedrock-region'],
+    tests: [
+      "evalsuite/test/plan.test.ts › OpenCode on a provider ES can't broker exits 2 at plan time",
+      harness('is plain data with its own cell id, and needs a model on a provider it can broker'),
+      harness("the config refuses a hand-made descriptor on a provider it can't broker"),
+      harness("needs only the model's provider's key"),
+      harness("each provider's hosts are its automatic egress hosts, with Exa's for web search"),
+      harness("elsewhere the gateway reads the served model from each model call's response"),
+      harness("OpenCode's adapter brokers only the model's provider's key, to its API"),
+      harness(
+        "on Bedrock, it needs AWS_BEARER_TOKEN_BEDROCK, and AWS_REGION's hosts are its egress hosts",
+      ),
+      opencodeAdapter('providers', "Bedrock's hosts are its AWS_REGION's, us-east-1 by default"),
+      opencodeAdapter('providers', 'Bedrock brokers its API key as a Bearer token'),
+      opencodeAdapter(
+        'providers',
+        "the main providers' keys go where OpenCode 2.0.18 was seen to send them",
+      ),
+      opencodeAdapter('providers', 'a model that can’t run says why'),
+      opencodeAdapter(
+        'providers',
+        'the served model comes from the URL where it names one, else the response',
+      ),
+      opencodeAdapter(
+        'unit',
+        "the model's provider calls over HTTP, where the gateway reads the served model",
+      ),
+      "evalsuite/test/replay.test.ts › GPT's patch tool is an edit, and the files it changed are file edits",
     ],
   },
   {

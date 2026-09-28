@@ -1399,9 +1399,9 @@ evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
     },
   )
 
-  for (const [factory, harness] of [
-    ['opencode', 'opencode'],
-    ['pi', 'pi'],
+  for (const [factory, harness, model] of [
+    ['opencode', 'opencode', 'google/gemini-3.8-flash'],
+    ['pi', 'pi', 'gemini-3.8-flash'],
   ] as const) {
     test(
       `${factory}: Gemini refusing the key fails the turn and names the host variable`,
@@ -1411,7 +1411,7 @@ evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })
           'es.config.ts': `import { defineConfig } from 'evalsuite'
 import { ${factory} } from 'evalsuite/harness'
 import { docker } from 'evalsuite/sandbox'
-export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }), sandbox: docker(), timeout: '90s' })
+export default defineConfig({ harness: ${factory}({ model: '${model}' }), sandbox: docker(), timeout: '90s' })
 `,
           'evals/d.es.ts': `import { evaluate } from 'evalsuite'
 evaluate('hi', async (t) => { await t.send('Reply with the word hi.') })

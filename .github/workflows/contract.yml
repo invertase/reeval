@@ -8,7 +8,8 @@
 # to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
 # It also checks the newest @ai-sdk/harness-claude-code against ES's patch to the pinned one
 # (scripts/drift/claude-code-patch.mjs): it fails once upstream fixes the bug or the patch stops
-# applying.
+# applying. And it re-probes the newest @opencode/cli's providers (scripts/drift/
+# opencode-providers.mjs): it fails, with a diff, when the OpenCode provider table would change.
 name: contract
 
 on:
@@ -26,16 +27,17 @@ jobs:
   contract:
     name: contract and e2e
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # The latest leg also probes OpenCode's providers (about 20 minutes), and skips the e2e.
+    timeout-minutes: ${{ inputs.versions == 'latest' && 75 || 55 }}
     env:
       ES_TEST_REAL: '1'
       ES_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key fails, naming the variable.
-      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,goose,pi,codex
-      # The hard cap for this job: the contract (12 attempts) and the e2e (2) on all seven rows,
-      # and the real-tier fixtures (2 each, 7 of them). Each reserves its attempts in the ledger
-      # first, and fails rather than go over.
-      ES_REAL_ATTEMPT_BUDGET: '112'
+      ES_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex
+      # The hard cap for this job: the contract (12 attempts) on all nine rows, the e2e (2) on the
+      # seven harnesses' own rows, and the real-tier fixtures (2 each, 8 of them). Each reserves its
+      # attempts in the ledger first, and fails rather than go over.
+      ES_REAL_ATTEMPT_BUDGET: '138'
       ES_REAL_LEDGER: ${{ github.workspace }}/../es-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
@@ -81,6 +83,12 @@ jobs:
           ES_TEST_KEEP: '1'
           TMPDIR: ${{ runner.temp }}/es-tests
         run: node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings test/features.test.ts
+      # Key-free (the probe's proxy answers every request itself), and whatever the contract did:
+      # the newest @opencode/cli probed per provider as the committed table was, failing with a
+      # diff when the table would change (scripts/drift/opencode-providers.mjs).
+      - if: ${{ !cancelled() && inputs.versions == 'latest' }}
+        name: whether the newest @opencode/cli sends each provider's key where the table says
+        run: node --experimental-strip-types --no-warnings scripts/drift/opencode-providers.mjs
       - if: always()
         name: summary
         run: |

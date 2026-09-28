@@ -1,5 +1,12 @@
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import type { OpenCodeMcpServer } from '@evalsuite/harness-opencode'
+import {
+  providerEndpoints,
+  providerHosts,
+  providerModelResponses,
+  providerServedModel,
+  resolveOpenCodeProvider,
+} from '@evalsuite/harness-opencode/providers'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -60,6 +67,18 @@ export type Agent = Layout & {
   servedModel?: ServedModel
   /** Requests whose response body names the model that served them, for `servedModel`. */
   modelResponses?: readonly EndpointMatch[]
+  /**
+   * Hosts a restricted egress policy allows for it, in place of its image's (`HARNESS_HOSTS`);
+   * set by `forModel` for an agent whose hosts depend on the model's provider.
+   */
+  hosts?: readonly string[]
+  /**
+   * What depends on the model, for an agent that runs on several providers (OpenCode): the
+   * model's provider's credential, endpoints, hosts and served-model reader, with hosts built from
+   * the host's variables (Bedrock's `AWS_REGION`). Throws an `InfraError` naming why a model can't
+   * run.
+   */
+  forModel?: (model: string, env?: NodeJS.ProcessEnv) => ModelSpecific
   /** ES's MCP servers in the shape the adapter forwards to the agent as is. */
   mcpServers: (servers: Record<string, ResolvedMcpServer>) => Record<string, unknown>
   /**
@@ -71,6 +90,12 @@ export type Agent = Layout & {
     auth: Record<string, string>
     descriptor: AgentHarnessDescriptor
   }) => Promise<HarnessAgentAdapter>
+}
+
+/** The part of an agent's catalog entry its model's provider decides. */
+export type ModelSpecific = Pick<Agent, 'credential' | 'endpoints' | 'servedModel'> & {
+  modelResponses?: readonly EndpointMatch[]
+  hosts: readonly string[]
 }
 
 /** A harness's known noise: the hosts, and what they are, for the `-v` summary. */
@@ -141,6 +166,38 @@ const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEff
   host === 'api.openai.com' && path === '/v1/responses' && responseModel
     ? `${responseModel}${responseEffort ? `[effort=${responseEffort}]` : ''}`
     : undefined
+
+/**
+ * OpenCode on the model's provider (`anthropic/claude-haiku-4-5` is Anthropic's): its key, the
+ * requests OpenCode sends it on, its hosts plus Exa's for web search, and the served model from
+ * the URL (Gemini's API, Bedrock's) or the response body. Bedrock's hosts are its `AWS_REGION`'s.
+ */
+export function opencodeForModel(
+  model: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ModelSpecific {
+  const resolved = resolveOpenCodeProvider(model, env)
+  if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
+  const { provider } = resolved
+  const modelResponses = providerModelResponses(provider)
+  return {
+    credential: provider.env,
+    endpoints: providerEndpoints(provider),
+    ...(modelResponses.length ? { modelResponses } : {}),
+    servedModel: (request) => providerServedModel(provider, request),
+    hosts: [...providerHosts(provider), 'mcp.exa.ai'],
+  }
+}
+
+/**
+ * The variables besides its key that OpenCode's provider takes from the host, as they are:
+ * Bedrock's `AWS_REGION` (default `us-east-1`); none for most providers.
+ */
+export function opencodeVars(model: string, env: NodeJS.ProcessEnv = process.env) {
+  const resolved = resolveOpenCodeProvider(model, env)
+  if ('error' in resolved) throw new InfraError(`opencode(): ${resolved.error}`)
+  return resolved.vars
+}
 
 /** Codex's `config.toml` `[mcp_servers]` shape. */
 export function codexMcpServers(
@@ -381,15 +438,19 @@ export const AGENTS: Record<AgentKind, Agent> = {
     ...LAYOUTS.opencode,
     name: 'OpenCode',
     factory: 'opencode',
+    // Google's, for what names no model; forModel gives the model's provider's.
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 2.0.18 sends the key on (its model, and the same model for titles).
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
+    // The requests 2.0.18 sends each provider's key on (its model, and the same model for titles),
+    // probed per provider (harness-opencode's opencode-provider-table.ts).
+    forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth,
         model: descriptor.model,
+        vars: opencodeVars(descriptor.model),
         ...(mcpServers ? { mcpServers: mcpServers as Record<string, OpenCodeMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
@@ -494,9 +555,18 @@ export function refusedMcp(
   }
 }
 
+/** A real agent's catalog entry, with what its model's provider decides. */
+export function agentFor(h: AgentHarnessDescriptor): Agent {
+  const agent = AGENTS[h.kind]
+  return agent.forModel ? { ...agent, ...agent.forModel(h.model) } : agent
+}
+
 /** The catalog entry for a harness's agent; undefined for the fake harness. */
 export const agentOf = (h: HarnessDescriptor): Agent | undefined =>
-  h.kind === 'fake' ? undefined : AGENTS[h.kind]
+  h.kind === 'fake' ? undefined : agentFor(h)
+
+/** The host variable a harness authenticates with; undefined for the fake harness. */
+export const credentialOf = (h: HarnessDescriptor): string | undefined => agentOf(h)?.credential
 
 /** The fake agent's own layout. */
 const FAKE_LAYOUT: Layout = {
@@ -519,16 +589,16 @@ export function expectedBlockedFor(descriptor: HarnessDescriptor): ExpectedBlock
 
 /**
  * How the APIs behind the harnesses say they refused a key: an HTTP 401, Anthropic's and OpenAI's
- * wording, Google's (which answers 400). A bare 403 isn't here: the gateway and MCP servers send
+ * wording, Google's (which answers 400), and OpenCode's for any provider's 401 or 403. A bare 403 isn't here: the gateway and MCP servers send
  * those for reasons that have nothing to do with the harness's key.
  */
 const REFUSED_KEY =
-  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b/i
+  /\bHTTP 401\b|\b401\b.{0,40}\bunauthori[sz]ed\b|\bunauthori[sz]ed\b.{0,40}\b401\b|\b(?:invalid|incorrect) (?:x-)?api[ _-]?key\b|\bapi key not valid\b|\bAPI_KEY_INVALID\b|\bauthentication_error\b|\bprovider authentication required\b/i
 
 /** What to do when a harness error says its API refused the key, naming the variable; else undefined. */
-export function authHint(kind: AgentKind, message: string): string | undefined {
+export function authHint(agent: Agent, message: string): string | undefined {
   if (!REFUSED_KEY.test(message)) return undefined
-  return `The API rejected ${AGENTS[kind].credential}: set a valid key in the environment or .env.local`
+  return `The API rejected ${agent.credential}: set a valid key in the environment or .env.local`
 }
 
 /** The agent's credential from the host, as the adapter's explicit `auth`. Fails closed. */

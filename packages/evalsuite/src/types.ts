@@ -284,11 +284,15 @@ export type AntigravityHarnessDescriptor = {
 }
 /**
  * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
- * Google models on a Gemini API key, and reports no usage (its ACP server counts one call).
+ * on any provider whose key OpenCode sends in a header on known hosts, with that provider's key,
+ * and reports no usage (its ACP server counts one call).
  */
 export type OpenCodeHarnessDescriptor = {
   kind: 'opencode'
-  /** A Gemini model id, run on OpenCode's `google` provider, e.g. `gemini-3.8-flash`. */
+  /**
+   * OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or
+   * `anthropic/claude-haiku-4-5`; the provider picks the key.
+   */
   model: string
   /** Cell id; defaults to `opencode:<model>`. */
   id?: string

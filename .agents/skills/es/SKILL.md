@@ -60,9 +60,14 @@ export default defineConfig({
   the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
-  `gemini-3.8-flash-medium`), `opencode({ model })` (OpenCode 2; `GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini
-  model id, e.g. `gemini-3.8-flash`; no `mcp.sse`; web search via Exa, whose host it allows;
-  it also reads `.claude/skills` and `.agents/skills`), `goose({ model })` and `pi({ model })` (the same key and model ids; pi has no MCP),
+  `gemini-3.8-flash-medium`), `opencode({ model })` (OpenCode 2 on any brokerable provider: the model is
+  `<provider>/<model>`, e.g. `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5`,
+  `openrouter/…`, and needs only that provider's key, e.g. `ANTHROPIC_API_KEY`; `amazon-bedrock/…`
+  takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local
+  providers are refused at plan time; no `mcp.sse`; web search via Exa,
+  whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
+  and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
+  `gemini-3.8-flash`; pi has no MCP),
   `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.4-mini`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that ES's gateway swaps on the
@@ -281,6 +286,7 @@ them to `evals/.history/` to commit.
 | `import { baseline }` | `evalsuite has no baseline` | Leave `environment` unset; the control is empty |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
+| `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `t.judge() has no model` | Set one, or `fakeJudge()` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |

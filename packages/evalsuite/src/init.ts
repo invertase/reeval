@@ -7,8 +7,10 @@ import type { Readable, Writable } from 'node:stream'
 import type { Flags } from './cli-spec.ts'
 import { CONFIG_FILES } from './config.ts'
 import { UsageError } from './errors.ts'
-import { AGENTS, type AgentKind } from './harness/agents.ts'
+import { type AgentKind, agentFor } from './harness/agents.ts'
+import { harnessId } from './options.ts'
 import { PACKAGE_DIR } from './root.ts'
+import type { AgentHarnessDescriptor } from './types.ts'
 
 /** The agents `es init` offers, in the order it lists them, with the model it pins. */
 export const INIT_HARNESSES: ReadonlyArray<{
@@ -25,13 +27,20 @@ export const INIT_HARNESSES: ReadonlyArray<{
     factory: 'antigravity',
     model: 'gemini-3.8-flash-medium',
   },
-  { kind: 'opencode', label: 'OpenCode', factory: 'opencode', model: 'gemini-3.8-flash' },
+  { kind: 'opencode', label: 'OpenCode', factory: 'opencode', model: 'google/gemini-3.8-flash' },
   { kind: 'goose', label: 'Goose', factory: 'goose', model: 'gemini-3.8-flash' },
   { kind: 'pi', label: 'pi', factory: 'pi', model: 'gemini-3.8-flash' },
   { kind: 'codex', label: 'Codex', factory: 'codex', model: 'gpt-5.4-mini' },
 ]
 
 export type InitChoice = AgentKind | 'none'
+
+const descriptorOf = (h: { kind: AgentKind; model: string }) =>
+  ({ kind: h.kind, model: h.model }) as AgentHarnessDescriptor
+/** The key an offered agent's pinned model needs. */
+const keyOf = (h: { kind: AgentKind; model: string }) => agentFor(descriptorOf(h)).credential
+/** The cell id an offered agent runs as, e.g. `opencode:gemini-3.8-flash`. */
+const cellOf = (h: { kind: AgentKind; model: string }) => harnessId(descriptorOf(h))
 
 const CHOICES: InitChoice[] = [...INIT_HARNESSES.map((h) => h.kind), 'none']
 const DEFAULT_CHOICE: InitChoice = 'cursor'
@@ -73,7 +82,7 @@ const fakeAgent = fakeHarness({
       budget: { attempts: 80, duration: '2h' },
     },`
   const body = real
-    ? `  harness: ${real.factory}({ model: '${real.model}' }), // needs ${AGENTS[real.kind].credential}
+    ? `  harness: ${real.factory}({ model: '${real.model}' }), // needs ${keyOf(real)}
   sandbox: docker(),
   timeout: '15m',
   // For t.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
@@ -229,7 +238,7 @@ export function planInit(options: {
       'es.config.ts',
       configSource(pkg, choice),
       real
-        ? `harness ${real.kind}:${real.model}; profiles fake, pr, nightly`
+        ? `harness ${cellOf(real)}; profiles fake, pr, nightly`
         : 'the fake agent; profiles pr, nightly',
       force,
       conflicts,
@@ -245,10 +254,7 @@ export function planInit(options: {
 export async function askHarness(input: Readable, output: Writable): Promise<InitChoice> {
   const lines = [
     'Which agent should es.config.ts run? The fake profile needs no keys or Docker.',
-    ...INIT_HARNESSES.map(
-      (h, i) =>
-        `  ${i + 1}) ${h.label.padEnd(12)} ${h.kind}:${h.model}, ${AGENTS[h.kind].credential}`,
-    ),
+    ...INIT_HARNESSES.map((h, i) => `  ${i + 1}) ${h.label.padEnd(12)} ${cellOf(h)}, ${keyOf(h)}`),
     `  ${CHOICES.length}) None         the fake agent only`,
   ]
   output.write(`${lines.join('\n')}\n`)
@@ -348,10 +354,7 @@ export async function initCommand(flags: Flags, args: string[], io: InitIO): Pro
     ...(real
       ? ([
           [`${pm.exec} image build`, `bakes ${real.label} into its sandbox image (needs Docker)`],
-          [
-            `${pm.exec} run`,
-            `on ${real.label}, with ${AGENTS[real.kind].credential} in .env.local`,
-          ],
+          [`${pm.exec} run`, `on ${real.label}, with ${keyOf(real)} in .env.local`],
         ] as Array<[string, string]>)
       : []),
   ]

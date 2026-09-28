@@ -31,7 +31,13 @@ import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
 import { type GitHttp, gitHttpServer } from './support/git-http.ts'
-import { type HarnessRow, harnesses, keyOf, reserveAttempts } from './support/harnesses.ts'
+import {
+  type HarnessRow,
+  harnesses,
+  harnessOf,
+  keyOf,
+  reserveAttempts,
+} from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
 
 /** `real` is Docker with real Cursor (ES_FIXTURE_HARNESS=cursor), one fixture at a time. */
@@ -888,6 +894,25 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/opencode-provider-key',
+    tiers: ['real'],
+    realHarness: 'opencode-anthropic',
+    env: 'closed',
+    canary: /to have a length of 2 but got 1/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      assert.ok(
+        attempt?.servedModels?.some((m) => /^claude-haiku-4-5/.test(m)),
+        JSON.stringify(attempt?.servedModels),
+      )
+      assert.ok(
+        attempt?.egress?.contacted.some((h) => h.host === 'api.anthropic.com'),
+        JSON.stringify(attempt?.egress),
+      )
+      assert.deepEqual(attempt?.egress?.blocked, [], 'nothing it needed was refused')
+    },
+  },
+  {
     dir: 'harness/claude-code-harness-skills',
     tiers: ['fake', 'docker'],
     image: 'claude-code',
@@ -1250,7 +1275,7 @@ function fixtureTests(tiers: Tier[]) {
             ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
             ...(tier === 'real'
               ? {
-                  ES_FIXTURE_HARNESS: row.id,
+                  ES_FIXTURE_HARNESS: harnessOf(row),
                   ES_REAL_MODEL: realModelOf(row),
                   ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
                 }
@@ -1259,7 +1284,8 @@ function fixtureTests(tiers: Tier[]) {
           timeoutMs: timeout - 10_000,
         })
         const sandbox = tier === 'fake' ? 'fake' : 'docker'
-        const harness = tier === 'real' ? `${row.id}:${realModelOf(row)}` : 'fake'
+        const harness =
+          tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'
         const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,

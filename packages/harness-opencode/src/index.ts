@@ -1,13 +1,8 @@
-// `@evalsuite/harness-opencode`: OpenCode on a Gemini API key, as an AI SDK harness over ACP.
+// `@evalsuite/harness-opencode`: OpenCode on any brokerable provider, as an AI SDK harness over ACP.
 export {
   createOpenCode,
-  GEMINI_API_KEY_HEADER,
-  GEMINI_API_URL,
-  googleModel,
   OPENCODE_CLI_VERSION,
-  OPENCODE_CREDENTIAL_ENV,
   OPENCODE_DENIED_TOOLS,
-  OPENCODE_ENDPOINTS,
   OPENCODE_HARNESS_ID,
   OPENCODE_HOME_SKILLS_DIR,
   OPENCODE_WEB_SEARCH,
@@ -16,8 +11,25 @@ export {
   type OpenCodeHarnessSettings,
   type OpenCodeMcpServer,
   openCodeConfig,
+  openCodeEndpoints,
   openCodeEnv,
 } from './opencode-harness.ts'
+export {
+  OPENCODE_PROVIDERS,
+  type OpenCodeEndpoint,
+  type OpenCodeKeyHeader,
+  type OpenCodeProvider,
+  openCodeProvider,
+  providerEndpoints,
+  providerHosts,
+  providerModelResponses,
+  providerServedModel,
+  providerTransformations,
+  REFUSED_OPENCODE_PROVIDERS,
+  type RefusedOpenCodeProvider,
+  resolveOpenCodeProvider,
+  splitModel,
+} from './opencode-providers.ts'
 export { OpenCodeStreamTranslator } from './opencode-stream.ts'
 export { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-tools.ts'
 export { VERSION } from './version.ts'
