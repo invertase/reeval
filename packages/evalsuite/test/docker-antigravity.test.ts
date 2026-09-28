@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { describe, test } from 'node:test'
 import { imageFor, LABEL } from '@evalsuite/sandbox-docker'
 import { project, readRun, runCli } from './helpers.ts'
+import { harnesses, keyOf } from './support/harnesses.ts'
 
 const liveContainers = (runId: string) =>
   execFileSync('docker', ['ps', '-aq', '--filter', `label=${LABEL.run}=${runId}`], {
@@ -24,12 +25,17 @@ const agyImage = {
   skip: !agyImageBuilt && !requireDocker && `needs Docker and ${imageFor('antigravity')}`,
   timeout: 300_000,
 }
-// The real-agent run needs a real key: without one it skips, even when Docker is required, unless
-// ES_TEST_REAL=1 asks for real agents, when it fails naming the key.
+// The real-agent run needs a real Gemini API key, read as the contract's Antigravity row reads it
+// (GEMINI_API_KEY, then GOOGLE_GENERATIVE_AI_API_KEY): without one it skips, even when Docker is
+// required, unless ES_TEST_REAL=1 asks for real agents, when it fails naming both.
+const agyRow = harnesses.find((row) => row.id === 'antigravity')
+assert.ok(agyRow?.key, 'the contract has an Antigravity row with a key')
+const agyKeyNames = agyRow.key.from.join(' or ')
+const realKey = keyOf(agyRow) ?? ''
 const realAgy = {
   skip:
-    !process.env.GEMINI_API_KEY && process.env.ES_TEST_REAL !== '1'
-      ? 'needs GEMINI_API_KEY (a Gemini API key) for a real Antigravity run'
+    !realKey && process.env.ES_TEST_REAL !== '1'
+      ? `needs ${agyKeyNames} (a Gemini API key) for a real Antigravity run`
       : agyImage.skip,
   timeout: 600_000,
 }
@@ -123,8 +129,8 @@ evaluate('hi', async (t) => {
     'a real Antigravity run edits the workspace, reads its rules and home skill, and never sees the key',
     realAgy,
     async () => {
-      const key = process.env.GEMINI_API_KEY ?? ''
-      assert.ok(key, "GEMINI_API_KEY isn't set, and ES_TEST_REAL=1 asks for a real Antigravity run")
+      const key = realKey
+      assert.ok(key, `${agyKeyNames} isn't set, and ES_TEST_REAL=1 asks for a real Antigravity run`)
       const p = await project('docker-agy-real', {
         'es.config.ts': `
 import { defineConfig } from 'evalsuite'
