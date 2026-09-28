@@ -108,9 +108,8 @@ export default defineConfig({
     sandbox: 'src/sandbox.ts',
     judge: 'src/judge.ts',
     'view/index': 'src/view/index.ts',
-    cli: 'src/cli.ts',
-    // The engine forks this for each eval file, by path (src/engine/pool.ts).
-    worker: 'src/engine/worker-entry.ts',
+    // `es`, and `es __worker`, which the engine starts for each eval file (src/engine/pool.ts).
+    cli: 'src/bin.ts',
   },
   platform: 'node',
   fixedExtension: false,
