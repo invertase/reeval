@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { AttemptSpec } from '../src/attempt/state.ts'
 import {
@@ -144,6 +145,25 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
     assert.equal(readFileSync(join(box.home, '.config/es/hint.txt'), 'utf8'), 'from home')
     assert.equal(await box.readFile('.config/es/hint.txt'), null, 'not in the workspace')
     assert.equal((await box.exec('cat ~/.config/es/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('an aborted fake sandbox command stops, with everything it started', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    const abort = new AbortController()
+    const started = Date.now()
+    const running = box.exec('touch ~/started && sleep 30 && touch ~/finished', {
+      signal: abort.signal,
+    })
+    while (!existsSync(join(box.home, 'started'))) await sleep(20)
+    abort.abort(new Error('stop'))
+    // It settles only once nothing holds its output pipes: the sleep is gone, not left to finish.
+    await assert.rejects(running, /stop/)
+    assert.ok(Date.now() - started < 20_000, `settled after ${Date.now() - started}ms`)
+    assert.equal(existsSync(join(box.home, 'finished')), false)
   } finally {
     await box.destroy()
   }
