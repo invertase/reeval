@@ -12,7 +12,7 @@ import { adapterVersion } from '@evalsuite/sandbox-docker'
 import { git, repoTop } from '../git.ts'
 import { sha256 } from '../ids.ts'
 import { DIRECT_PROVIDERS } from '../judge/index.ts'
-import { ownRequire } from '../root.ts'
+import { ownVersion } from '../root.ts'
 import type { RunRecord } from './types.ts'
 
 const LOCKFILES = [
@@ -96,7 +96,7 @@ export function packageVersions(engine: Record<string, string>): Record<string, 
   }
   for (const name of PACKAGES) {
     try {
-      out[name] = ownRequire(`${name}/package.json`).version
+      out[name] = ownVersion(name)
     } catch {}
   }
   return out

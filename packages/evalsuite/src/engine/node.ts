@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
-import { ownRequire, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
+import { ownVersion, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
 import { Scheduler } from '../scheduler/core.ts'
 import { capMiddle } from '../text.ts'
 import { esFrames, formatError, type SerializedError } from './errors.ts'
@@ -39,12 +39,10 @@ export type {
   PlannedItem,
 } from './types.ts'
 
-const versionOf = (name: string): string => ownRequire(`${name}/package.json`).version
-
 /** What runs eval files, for the record. */
 export const engineVersions: Record<string, string> = {
-  '@vitest/expect': versionOf('@vitest/expect'),
-  jiti: versionOf('jiti'),
+  '@vitest/expect': ownVersion('@vitest/expect'),
+  jiti: ownVersion('jiti'),
 }
 
 const onlyInCi = (file: string) =>

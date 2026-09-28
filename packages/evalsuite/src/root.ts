@@ -1,6 +1,17 @@
-import { readFileSync, statSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+import { basename, dirname, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 // ES's one resource locator: every other module finds ES's own files (package.json, dist/,
@@ -11,24 +22,93 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 const HERE = import.meta.url
 
 /**
- * Whether ES runs as a single-file executable (`bun build --compile`), where modules live in a
- * virtual filesystem. It finds its own files beside the executable, in a package's layout.
+ * Whether ES runs as a single-file executable (`bun build --compile`, scripts/bun-compile.mjs).
+ * Its own files are embedded in it, in a package's layout, at the root of Bun's virtual
+ * filesystem, beside the bundled code.
  */
 export const COMPILED = /^file:\/\/\/(?:\$bunfs|[A-Za-z]:\/~BUN)\//.test(HERE)
 
-export const PACKAGE_DIR = COMPILED
-  ? dirname(process.execPath)
-  : fileURLToPath(new URL('../', HERE))
+export const PACKAGE_DIR = fileURLToPath(new URL(COMPILED ? './' : '../', HERE))
 export const DIST_DIR = join(PACKAGE_DIR, 'dist')
 
 /** One of ES's own files, by its path in the package (`docker`, `dist/studio-app`, …). */
 export const ownFile = (path: string): string => join(PACKAGE_DIR, path)
 
-/** `ownFile` as a URL; a trailing `/` stays, so the URL resolves names inside the directory. */
-export const ownFileURL = (path: string): URL => pathToFileURL(ownFile(path))
+/**
+ * `ownFile` as a URL; a trailing `/` stays, so the URL resolves names inside the directory.
+ * Compiled, a directory is `ownDir`'s copy on disk.
+ */
+export function ownFileURL(path: string): URL {
+  const file = ownFile(path)
+  if (!COMPILED || !statSync(file, { throwIfNoEntry: false })?.isDirectory())
+    return pathToFileURL(file)
+  return pathToFileURL(ownDir(path) + (/[\\/]$/.test(path) ? sep : ''))
+}
+
+const extracted = new Map<string, string>()
+
+/**
+ * One of ES's own directories, as a real one on disk. Compiled, it's copied out of the
+ * executable once, to a cache directory named for its contents: `docker build` and copying the
+ * studio app need real files.
+ */
+export function ownDir(path: string): string {
+  const from = ownFile(path)
+  if (!COMPILED) return from
+  const known = extracted.get(from)
+  if (known) return known
+  const files = readdirSync(from, { recursive: true, encoding: 'utf8' })
+    .filter((f) => statSync(join(from, f)).isFile())
+    .sort()
+  const hash = createHash('sha256')
+  for (const f of files)
+    hash.update(`${f.replaceAll(sep, '/')}\0`).update(readFileSync(join(from, f)))
+  const to = join(cacheDir(), `${basename(from)}-${hash.digest('hex').slice(0, 16)}`)
+  if (!existsSync(to)) {
+    const partial = `${to}.${process.pid}.partial`
+    for (const f of files) {
+      mkdirSync(dirname(join(partial, f)), { recursive: true })
+      writeFileSync(join(partial, f), readFileSync(join(from, f)))
+    }
+    try {
+      renameSync(partial, to)
+    } catch (error) {
+      rmSync(partial, { recursive: true, force: true })
+      if (!existsSync(to)) throw error
+    }
+  }
+  extracted.set(from, to)
+  return to
+}
+
+/** Where a compiled es keeps what it copies out of itself. */
+function cacheDir(): string {
+  const base =
+    process.env.XDG_CACHE_HOME ||
+    (process.platform === 'win32'
+      ? process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local')
+      : process.platform === 'darwin'
+        ? join(homedir(), 'Library', 'Caches')
+        : join(homedir(), '.cache'))
+  return join(base, 'evalsuite')
+}
 
 /** `require` as seen from ES's package: its dependencies and Node's built-ins. */
 export const ownRequire = createRequire(ownFile('package.json'))
+
+let versions: Record<string, string> | undefined
+
+/**
+ * The version of one of ES's dependencies, as installed; compiled, as bundled, from the
+ * `versions.json` embedded beside its files. Throws for a package it doesn't have.
+ */
+export function ownVersion(name: string): string {
+  if (!COMPILED) return ownRequire(`${name}/package.json`).version
+  versions ??= JSON.parse(readFileSync(ownFile('versions.json'), 'utf8')) as Record<string, string>
+  const version = versions[name]
+  if (!version) throw new Error(`Cannot find module '${name}/package.json'`)
+  return version
+}
 
 const manifest = JSON.parse(readFileSync(ownFile('package.json'), 'utf8'))
 

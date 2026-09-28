@@ -1,7 +1,9 @@
 // jiti as ES uses it, for the config and eval files.
+
+import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { createJiti, type Jiti, type JitiOptions } from 'jiti'
-import { COMPILED, ownRequire, PACKAGE_NAMES } from './root.ts'
+import { COMPILED, ownDir, ownRequire, PACKAGE_NAMES } from './root.ts'
 
 type Transform = NonNullable<JitiOptions['transform']>
 
@@ -9,11 +11,17 @@ let babel: Transform | undefined
 
 /**
  * jiti's own Babel transform. jiti requires it lazily from beside its code, which a compiled es
- * doesn't have, so ES requires the same file from the jiti package on disk.
+ * doesn't have, so ES requires the same file: from the jiti package on disk, or, compiled, from
+ * the copy embedded in it (`vendor/jiti/babel.cjs`), copied out to disk.
  */
 export const jitiTransform: Transform = (options) => {
-  babel ??= ownRequire(join(dirname(ownRequire.resolve('jiti/package.json')), 'dist/babel.cjs'))
-  return (babel as Transform)(options)
+  if (!babel) {
+    const file = COMPILED
+      ? join(ownDir('vendor/jiti'), 'babel.cjs')
+      : join(dirname(ownRequire.resolve('jiti/package.json')), 'dist/babel.cjs')
+    babel = createRequire(file)(file) as Transform
+  }
+  return babel(options)
 }
 
 /**

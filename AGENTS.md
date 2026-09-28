@@ -96,14 +96,19 @@ pnpm coverage    # the same tests with code coverage from every process they sta
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
-node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a working es
+node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone es
 ```
 
 ES runs on Node only. `scripts/bun-compile.mjs` (it needs `bun` on your PATH, and `pnpm build`)
-compiles `dist/` into `packages/evalsuite/es`, which reads ES's own files from beside itself, and
-checks it plans and runs `examples/hello`'s fake config as Node does, answers `es query` and `es
-studio build`, and, with Docker, runs an egress fixture. Run it after changing how ES finds its
-files, starts processes or loads TypeScript; CI doesn't.
+compiles `dist/` into `packages/evalsuite/es` with ES's own files embedded (`--asset`:
+`package.json`, `docker/`, `assets/`, the studio app, the Claude Code bridge, jiti's Babel build
+and a `versions.json` of the bundled dependencies). It copies the binary into an empty directory
+and checks it plans and runs a copy of `examples/hello` with no `node_modules` as Node does,
+answers `es query` and `es studio build`, and, with Docker, runs an egress fixture. Compiled,
+`src/root.ts` finds those files at the root of Bun's virtual filesystem, and `ownDir` copies a
+directory that must be real (Docker's build context, the studio app, jiti's Babel) to
+`~/.cache/evalsuite/<dir>-<content hash>` (`XDG_CACHE_HOME`, or the platform's cache directory).
+Run it after changing how ES finds its files, starts processes or loads TypeScript; CI doesn't.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `@invertase/foobar`
 (`packages/evalsuite/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -113,7 +118,7 @@ import only the package's `dependencies`, so an inlined package's runtime depend
 among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
 files (`dist/studio-app`, `dist/bridge`, `docker/`, `package.json`) from `src/root.ts`, not from
 the module's `import.meta.url`. `src/root.ts` is ES's one resource locator (`ownFile`,
-`ownFileURL`, `ownRequire`, the package's name, version and build id): the build rewrites an
+`ownFileURL`, `ownDir`, `ownRequire`, `ownVersion`, the package's name, version and build id): the build rewrites an
 inlined package's `new URL('<path>', import.meta.url)` to its `ownFileURL` and fails on any other
 `import.meta.url`. `dist/cli.js` (`src/bin.ts`) is the only entry besides the exports: `es
 __worker` is how the engine starts a worker for each eval file, so a compiled `es` can start its

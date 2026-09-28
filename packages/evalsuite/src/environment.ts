@@ -3,7 +3,7 @@ import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
-import { PACKAGE_DIR } from './root.ts'
+import { COMPILED, PACKAGE_DIR } from './root.ts'
 import type {
   Duration,
   EgressPolicy,
@@ -66,7 +66,10 @@ export const isEnvironment = (value: unknown): value is Environment =>
   Array.isArray((value as Environment).layers)
 
 // ES's own files, so a stack trace's first frame outside them is the file that called us.
-const OWN_DIRS = ['src', 'dist'].map((dir) => join(PACKAGE_DIR, dir, sep))
+// Compiled, all of ES's code is one module at the root of the executable's filesystem.
+const OWN_DIRS = COMPILED
+  ? [join(PACKAGE_DIR, sep)]
+  : ['src', 'dist'].map((dir) => join(PACKAGE_DIR, dir, sep))
 
 /** The directory of the file that called into ES, from the stack; relative paths resolve here. */
 export function callerDir(): string | undefined {
