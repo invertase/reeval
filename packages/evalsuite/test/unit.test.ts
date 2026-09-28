@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { traceEnvironment } from '../src/attempt/debug.ts'
 import type { AttemptSpec } from '../src/attempt/state.ts'
 import {
@@ -22,11 +23,19 @@ import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environ
 import {
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
+  helpersFor,
   isMovingRef,
   layered,
   parseGitRepo,
 } from '../src/environment.ts'
-import { AGENTS, type AgentKind, agentAuth, authHint, brokeringFor } from '../src/harness/agents.ts'
+import {
+  AGENTS,
+  type AgentKind,
+  agentAuth,
+  agentFor,
+  authHint,
+  brokeringFor,
+} from '../src/harness/agents.ts'
 import { createFakeHarness } from '../src/harness/fake.ts'
 import { capText, OUTPUT_CAP } from '../src/history/assemble.ts'
 import { warnings } from '../src/history/state.ts'
@@ -42,7 +51,7 @@ import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
 
 test("the -v broker line names each brokered endpoint's path matcher", () => {
-  const brokerLine = (kind: AgentKind) => {
+  const brokerLine = (kind: AgentKind, model = 'm') => {
     const lines: string[] = []
     const debug = {
       log: (phase: string, text: string) => lines.push(`${phase} ${text}`),
@@ -58,7 +67,7 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
     }
     traceEnvironment(
       debug as unknown as AttemptDebug,
-      { harness: { kind } } as unknown as AttemptSpec,
+      { harness: { kind, model } } as unknown as AttemptSpec,
       {
         record,
         substitutions: [],
@@ -78,8 +87,12 @@ test("the -v broker line names each brokered endpoint's path matcher", () => {
   assert.deepEqual(brokerLine('cursor'), [
     'broker CURSOR_API_KEY stays on the host · the gateway swaps it in on POST api2.cursor.sh/auth/exchange_user_api_key',
   ])
+  assert.deepEqual(brokerLine('opencode', 'anthropic/claude-haiku-4-5'), [
+    'broker ANTHROPIC_API_KEY stays on the host · the gateway swaps it in on POST api.anthropic.com/v1/messages',
+  ])
   for (const kind of Object.keys(AGENTS) as AgentKind[]) {
-    assert.doesNotMatch(brokerLine(kind).join('\n'), /\[object /, kind)
+    const model = kind === 'opencode' ? 'google/m' : 'm'
+    assert.doesNotMatch(brokerLine(kind, model).join('\n'), /\[object /, kind)
   }
 })
 
@@ -143,6 +156,25 @@ test('the fake sandbox reads and writes ~/ paths in its home', async () => {
     assert.equal(readFileSync(join(box.home, '.config/es/hint.txt'), 'utf8'), 'from home')
     assert.equal(await box.readFile('.config/es/hint.txt'), null, 'not in the workspace')
     assert.equal((await box.exec('cat ~/.config/es/hint.txt')).stdout, 'from home')
+  } finally {
+    await box.destroy()
+  }
+})
+
+test('an aborted fake sandbox command stops, with everything it started', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  try {
+    const abort = new AbortController()
+    const started = Date.now()
+    const running = box.exec('touch ~/started && sleep 30 && touch ~/finished', {
+      signal: abort.signal,
+    })
+    while (!existsSync(join(box.home, 'started'))) await sleep(20)
+    abort.abort(new Error('stop'))
+    // It settles only once nothing holds its output pipes: the sleep is gone, not left to finish.
+    await assert.rejects(running, /stop/)
+    assert.ok(Date.now() - started < 20_000, `settled after ${Date.now() - started}ms`)
+    assert.equal(existsSync(join(box.home, 'finished')), false)
   } finally {
     await box.destroy()
   }
@@ -241,11 +273,20 @@ test('an auth failure names the credential; other errors get no hint', () => {
   for (const [kind, message] of refused) {
     const { credential } = AGENTS[kind]
     assert.equal(
-      authHint(kind, message),
+      authHint(AGENTS[kind], message),
       `The API rejected ${credential}: set a valid key in the environment or .env.local`,
       message,
     )
   }
+  // OpenCode's words for any provider refusing its key (Bedrock's 403, 28 Sep 2026), naming the
+  // model's provider's variable.
+  assert.equal(
+    authHint(
+      agentFor({ kind: 'opencode', model: 'amazon-bedrock/m' }),
+      'ACP prompt update stream failed: Authentication required: provider authentication required',
+    ),
+    'The API rejected AWS_BEARER_TOKEN_BEDROCK: set a valid key in the environment or .env.local',
+  )
   // The twins: a rate limit, a server error, a missing model and a refused host aren't the key.
   for (const message of [
     'HTTP 429: Resource has been exhausted (e.g. check quota).',
@@ -254,7 +295,7 @@ test('an auth failure names the credential; other errors get no hint', () => {
     'CONNECT blocked.example.net:443 → 403 · blocked',
     'The Antigravity CLI exited with code 1 before reporting a result',
   ]) {
-    assert.equal(authHint('antigravity', message), undefined, message)
+    assert.equal(authHint(AGENTS.antigravity, message), undefined, message)
   }
 })
 
@@ -936,6 +977,68 @@ test('git refs and repo shorthands', () => {
     ref: 'v1',
     path: 'skills/genkit',
   })
+})
+
+test('git(): URLs, GitHub shorthands and local paths, resolved against the calling file', () => {
+  const { git } = helpersFor('/p/evals')
+  assert.deepEqual(git('https://github.com/acme/app', { ref: 'v1', path: 'examples/basic/' }), {
+    kind: 'git',
+    repo: 'https://github.com/acme/app',
+    url: 'https://github.com/acme/app',
+    ref: 'v1',
+    path: 'examples/basic',
+  })
+  assert.deepEqual(git('github:acme/app'), {
+    kind: 'git',
+    repo: 'github:acme/app',
+    url: 'https://github.com/acme/app.git',
+  })
+  assert.deepEqual(git('https://github.com/acme/app/tree/v2/apps/web'), {
+    kind: 'git',
+    repo: 'https://github.com/acme/app',
+    url: 'https://github.com/acme/app.git',
+    ref: 'v2',
+    path: 'apps/web',
+  })
+  assert.equal(git('../fixtures/app').url, resolve('/p/evals', '../fixtures/app'))
+  assert.equal(git('git@github.com:acme/app.git').url, 'git@github.com:acme/app.git')
+  assert.throws(() => git('https://tok@github.com/acme/app'), /password or token in it/)
+  assert.throws(() => git('github:acme/app', { ref: '--upload-pack=x' }), /ref is a branch/)
+  assert.throws(
+    () => git('github:acme/app', { path: '../secrets' }),
+    /^DefinitionError: git\("github:acme\/app"\): path is a directory in the repository, relative, with forward slashes and no \. or \.\. \(got "\.\.\/secrets"\)$/,
+  )
+  assert.throws(
+    () => git('github:acme/app', { branch: 'main' } as never),
+    /git\("github:acme\/app"\): unknown option "branch"; it takes ref, path, init and token\. Use ref for a branch, tag or commit\./,
+  )
+  assert.deepEqual(git('github:acme/app', { ref: 'v1', init: true, token: 'GITHUB_TOKEN' }), {
+    kind: 'git',
+    repo: 'github:acme/app',
+    url: 'https://github.com/acme/app.git',
+    ref: 'v1',
+    init: true,
+    token: 'GITHUB_TOKEN',
+  })
+  assert.throws(() => git('github:acme/app', { init: 'yes' } as never), /init is true or false/)
+  for (const pasted of ['ghp_abcdef1234567890', 'glpat-abc123', 'not a name']) {
+    assert.throws(
+      () => git('github:acme/app', { token: pasted }),
+      (error: Error) =>
+        /token names the host variable that holds the token, e\.g\. token: 'GITHUB_TOKEN'\. Don't put the token itself in the eval\.$/.test(
+          error.message,
+        ) && !error.message.includes(pasted),
+    )
+  }
+  assert.throws(
+    () => git('git@github.com:acme/app.git', { token: 'GITHUB_TOKEN' }),
+    /token only works with an https:\/\/ URL; for SSH or a local repository, git uses this machine's own credentials/,
+  )
+  assert.throws(() => git('../fixtures/app', { token: 'GITHUB_TOKEN' }), /token only works/)
+  assert.throws(
+    () => defineEnvironment('app', { repo: 'github:acme/app' } as never),
+    /Unknown field "repo" in defineEnvironment\("app"\)\. Did you mean "workspace"\?/,
+  )
 })
 
 test('selectProfile: --profile, then ES_PROFILE, then defaultProfile', () => {

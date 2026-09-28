@@ -3,9 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
   createOpenCode,
-  googleModel,
   OPENCODE_CLI_VERSION,
-  OPENCODE_CREDENTIAL_ENV,
   openCodeConfig,
   openCodeEnv,
 } from '../src/opencode-harness.ts'
@@ -65,17 +63,28 @@ test('the config turns off updates, sharing and the tools an eval has no use for
   ])
   assert.deepEqual(config.websearch, { provider: 'exa' })
   assert.equal('agents' in config, false)
+  assert.equal('providers' in config, false)
   assert.equal('mcp' in config, false)
 })
 
+test("the model's provider calls over HTTP, where the gateway reads the served model", () => {
+  // OpenCode's default for OpenAI and xAI is a Responses WebSocket.
+  assert.deepEqual(openCodeConfig({ model: 'openai/gpt-5.4-mini' }).providers, {
+    openai: { settings: { transport: 'http' } },
+  })
+  assert.deepEqual(openCodeConfig({ model: 'openrouter/anthropic/claude-haiku-4.5' }).providers, {
+    openrouter: { settings: { transport: 'http' } },
+  })
+})
+
 test("session titles run on the turn's model, not a second one", () => {
-  assert.deepEqual(openCodeConfig({ model: 'gemini-3.8-flash' }).agents, {
+  assert.deepEqual(openCodeConfig({ model: 'google/gemini-3.8-flash' }).agents, {
     title: { model: 'google/gemini-3.8-flash' },
   })
-  const env = openCodeEnv({ model: 'gemini-3.8-flash' })
+  const env = openCodeEnv({ model: 'google/gemini-3.8-flash' })
   assert.deepEqual(
     JSON.parse(env.OPENCODE_CONFIG_CONTENT),
-    openCodeConfig({ model: 'gemini-3.8-flash' }),
+    openCodeConfig({ model: 'google/gemini-3.8-flash' }),
   )
   // Only variables 2.0.18 still reads, and the gate's.
   assert.deepEqual(Object.keys(env).sort(), [
@@ -145,30 +154,48 @@ test("the catalog names 2.0.18's tools, with its path inputs", () => {
   }
 })
 
-test('auth is an environment with the Gemini key, or it throws', () => {
+test("auth is an environment with the model's provider's key, or it throws", () => {
+  const model = 'anthropic/claude-haiku-4-5'
   assert.throws(
-    () => createOpenCode({ auth: {} }),
-    /OpenCode auth must be an environment object with GOOGLE_GENERATIVE_AI_API_KEY/,
+    () => createOpenCode({ auth: {}, model }),
+    /OpenCode auth must be an environment object with ANTHROPIC_API_KEY \(the Anthropic key for anthropic\/claude-haiku-4-5\)/,
   )
-  assert.throws(() => createOpenCode({ auth: 'auto' as never }), /OpenCode auth must be/)
-  assert.equal(
-    createOpenCode({ auth: { [OPENCODE_CREDENTIAL_ENV]: 'AIza-k' } }).harnessId,
-    'opencode',
+  assert.throws(
+    () => createOpenCode({ auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'k' }, model }),
+    /with ANTHROPIC_API_KEY/,
+  )
+  assert.throws(() => createOpenCode({ auth: 'auto' as never, model }), /OpenCode auth must be/)
+  assert.equal(createOpenCode({ auth: { ANTHROPIC_API_KEY: 'k' }, model }).harnessId, 'opencode')
+})
+
+test('a model without a brokerable provider throws, saying why', () => {
+  assert.throws(
+    () => createOpenCode({ auth: { X: 'k' }, model: 'gemini-3.8-flash' }),
+    /names its provider, <provider>\/<model>/,
+  )
+  assert.throws(
+    () => createOpenCode({ auth: { X: 'k' }, model: 'google-vertex/gemini-3.8-flash' }),
+    /can't run OpenCode on Vertex \(google-vertex\): it takes a service account/,
+  )
+  assert.throws(
+    () =>
+      createOpenCode({
+        auth: { AWS_BEARER_TOKEN_BEDROCK: 'k' },
+        model: 'amazon-bedrock/m',
+        vars: { AWS_REGION: 'evil.example.com' },
+      }),
+    /AWS_REGION is "evil\.example\.com", which isn't one Amazon Bedrock \(amazon-bedrock\) takes/,
   )
 })
 
 test("with requireCredentialBrokering, a sandbox that can't broker never gets the key", async () => {
   const harness = createOpenCode({
-    auth: { [OPENCODE_CREDENTIAL_ENV]: 'AIza-k' },
+    auth: { OPENAI_API_KEY: 'sk-k' },
+    model: 'openai/gpt-5.4-mini',
     requireCredentialBrokering: true,
   })
   await assert.rejects(
     harness.doStart({ sandboxSession: { run: async () => ({}) } } as never),
-    /The sandbox can't broker GOOGLE_GENERATIVE_AI_API_KEY .* so the key stays out of it/,
+    /The sandbox can't broker OPENAI_API_KEY .* so the key stays out of it/,
   )
-})
-
-test("a Gemini model id runs on OpenCode's google provider", () => {
-  assert.equal(googleModel('gemini-3.8-flash'), 'google/gemini-3.8-flash')
-  assert.equal(googleModel('google/gemini-3.8-flash'), 'google/gemini-3.8-flash')
 })

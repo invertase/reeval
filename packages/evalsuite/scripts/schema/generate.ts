@@ -2,7 +2,7 @@
 // that write and read them, with TypeScript 7's (unstable) checker API.
 import { join } from 'node:path'
 import { API, SymbolFlags, TypeFlags } from 'typescript/unstable/sync'
-import { PACKAGE_DIR, type PersistedShape, SHAPES } from './shapes.ts'
+import { PACKAGE_DIR, type PersistedShape, type PlanShape, SHAPES } from './shapes.ts'
 
 export type Schema = {
   $ref?: string
@@ -139,7 +139,9 @@ class Generator {
 }
 
 /** Every shape in `SHAPES`, as the code describes it today. */
-export function generate(shapes: PersistedShape[] = SHAPES): Map<string, ShapeSchema> {
+export function generate(
+  shapes: Array<PersistedShape | PlanShape> = SHAPES,
+): Map<string, ShapeSchema> {
   const api = new API({ cwd: PACKAGE_DIR })
   try {
     const snapshot = api.updateSnapshot({ openProject: join(PACKAGE_DIR, 'tsconfig.json') })
@@ -163,10 +165,11 @@ export function generate(shapes: PersistedShape[] = SHAPES): Map<string, ShapeSc
         $ref: root.$ref ?? '',
         $defs: Object.fromEntries([...gen.defs].sort(([a], [b]) => a.localeCompare(b))),
       }
-      const version = shape.versionField && resolve(doc, root).properties?.[shape.versionField]
-      if (shape.versionField) {
+      const field = 'versionField' in shape ? shape.versionField : undefined
+      const version = field && resolve(doc, root).properties?.[field]
+      if (field) {
         if (typeof version?.const !== 'number') {
-          throw new Error(`${shape.type}.${shape.versionField} isn't a number literal`)
+          throw new Error(`${shape.type}.${field} isn't a number literal`)
         }
         doc['x-schemaVersion'] = version.const
       }

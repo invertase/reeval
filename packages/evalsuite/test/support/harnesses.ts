@@ -6,8 +6,23 @@ import { appendFileSync, existsSync, readFileSync } from 'node:fs'
 import { type BakedHarness, imageFor } from '@evalsuite/sandbox-docker'
 
 export type HarnessRow = {
-  /** `ES_CONTRACT_HARNESS`, and the name in test titles. */
-  id: 'fake' | 'cursor' | 'antigravity' | 'claude-code' | 'opencode' | 'goose' | 'pi' | 'codex'
+  /** The name in test titles, `ES_CONTRACT_HARNESSES` and the capture directory. */
+  id:
+    | 'fake'
+    | 'cursor'
+    | 'antigravity'
+    | 'claude-code'
+    | 'opencode'
+    | 'opencode-anthropic'
+    | 'opencode-openai'
+    | 'goose'
+    | 'pi'
+    | 'codex'
+  /**
+   * `ES_CONTRACT_HARNESS`, the harness it runs, when it isn't `id`: OpenCode's rows on other
+   * providers than Google's.
+   */
+  harness?: 'opencode'
   /** The cheapest model that does the job; null for the fake agent. */
   model: string | null
   /**
@@ -95,7 +110,7 @@ export const harnesses: HarnessRow[] = [
   },
   {
     id: 'opencode',
-    model: 'gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash',
     key: {
       name: 'GOOGLE_GENERATIVE_AI_API_KEY',
       from: ['GOOGLE_GENERATIVE_AI_API_KEY', 'GEMINI_API_KEY'],
@@ -110,6 +125,40 @@ export const harnesses: HarnessRow[] = [
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
+  },
+  {
+    // OpenCode on another provider: Anthropic's key, in x-api-key, and its served model from the
+    // response.
+    id: 'opencode-anthropic',
+    harness: 'opencode',
+    model: 'anthropic/claude-haiku-4-5',
+    key: { name: 'ANTHROPIC_API_KEY', from: ['ANTHROPIC_API_KEY'] },
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.anthropic.com', 'mcp.exa.ai'],
+    apiHost: 'api.anthropic.com',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /^claude-haiku-4-5/,
+    wireModel: /^claude-haiku-4-5/,
+  },
+  {
+    // And OpenAI's: a Bearer key, the Responses API over HTTP (not OpenCode's WebSocket), and
+    // the dated model and effort from the response.
+    id: 'opencode-openai',
+    harness: 'opencode',
+    model: 'openai/gpt-5.4-mini',
+    key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
+    image: 'opencode',
+    skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
+    autoHosts: ['api.openai.com', 'mcp.exa.ai'],
+    apiHost: 'api.openai.com',
+    tokens: false,
+    tokensWhy:
+      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    servedModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
+    wireModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
   },
   {
     id: 'goose',
@@ -166,8 +215,15 @@ export const harnesses: HarnessRow[] = [
 export const keyOf = (row: HarnessRow) =>
   row.key?.from.map((name) => process.env[name]).find(Boolean)
 
-/** The cell's harness id in attempt ids: `cursor:composer-2.5`, or `fake`. */
-export const cellOf = (row: HarnessRow) => (row.model ? `${row.id}:${row.model}` : row.id)
+/** The harness a row runs: its `harness`, or the one its id names. */
+export const harnessOf = (row: HarnessRow) => row.harness ?? row.id
+
+/**
+ * The cell's harness id in attempt ids: `cursor:composer-2.5`, `opencode:claude-haiku-4-5` (the
+ * model's last segment), or `fake`.
+ */
+export const cellOf = (row: HarnessRow) =>
+  row.model ? `${harnessOf(row)}:${row.model.split('/').at(-1)}` : row.id
 
 const imageBuilt = (ref: string) => {
   try {
@@ -201,7 +257,7 @@ export function skipRow(row: HarnessRow): string | false {
 export function rowEnv(row: HarnessRow): NodeJS.ProcessEnv {
   const key = keyOf(row)
   return {
-    ...(row.id === 'fake' ? {} : { ES_CONTRACT_HARNESS: row.id }),
+    ...(row.id === 'fake' ? {} : { ES_CONTRACT_HARNESS: harnessOf(row) }),
     ...(row.model ? { ES_CONTRACT_MODEL: row.model } : {}),
     ...(row.key && key ? { [row.key.name]: key } : {}),
     ...(process.env.ES_RAW_TRANSCRIPT ? { ES_RAW_TRANSCRIPT: process.env.ES_RAW_TRANSCRIPT } : {}),

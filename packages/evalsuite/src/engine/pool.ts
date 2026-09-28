@@ -1,12 +1,12 @@
-// The main process's side of one worker: a fresh `node dist/worker.js` per eval file, in its own
-// process group (a terminal's Ctrl-C reaches the CLI, which cancels over IPC), with its output
-// piped rather than mixed into ES's own.
-import { fork } from 'node:child_process'
+// The main process's side of one worker: a fresh `es __worker` per eval file, in its own process
+// group (a terminal's Ctrl-C reaches the CLI, which cancels over IPC), with its output piped
+// rather than mixed into ES's own.
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { UsageError } from '../errors.ts'
-import { DIST_DIR } from '../root.ts'
+import { DIST_DIR, esCommand } from '../root.ts'
 import { type FromWorker, PROTOCOL, type ToWorker } from './protocol.ts'
 
 export type Exit = { code: number | null; signal: NodeJS.Signals | null }
@@ -20,16 +20,18 @@ export type WorkerProcess = {
   kill(): void
 }
 
+/** Starts a worker from `entry`, an ES's `dist/cli.js`, in `cwd`. */
 export type Spawn = (entry: string, cwd: string) => WorkerProcess
 
 export const forkWorker: Spawn = (entry, cwd) => {
-  const child = fork(entry, [], {
+  const [command, ...args] = esCommand(entry, ['__worker'], ['--enable-source-maps'])
+  const child = spawn(command, args, {
     cwd,
     detached: true,
     windowsHide: true,
-    execArgv: ['--enable-source-maps'],
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    serialization: 'advanced',
+    // The protocol is JSON (PROTOCOL.md): nothing sent may need structured clone.
+    serialization: 'json',
   })
   // Done once it has exited and its last messages are in. On Windows 'exit' can come first; they
   // all arrive before 'disconnect', which Windows doesn't always send, so at most a second later.
@@ -62,7 +64,7 @@ export const forkWorker: Spawn = (entry, cwd) => {
 }
 
 /**
- * The worker entry of the ES the project resolves, so the worker and the eval files share one
+ * The `dist/cli.js` of the ES the project resolves, so the worker and the eval files share one
  * copy of ES; ES's own when the project resolves none.
  */
 export function workerEntry(root: string, names: readonly string[]): string {
@@ -73,10 +75,10 @@ export function workerEntry(root: string, names: readonly string[]): string {
     } catch {
       continue
     }
-    const entry = join(dirname(manifest), 'dist', 'worker.js')
+    const entry = join(dirname(manifest), 'dist', 'cli.js')
     if (existsSync(entry)) return entry
   }
-  return join(DIST_DIR, 'worker.js')
+  return join(DIST_DIR, 'cli.js')
 }
 
 /** Resolves once the worker has said hello in this engine's protocol. */

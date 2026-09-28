@@ -69,7 +69,8 @@ export type TokenUsage = {
 }
 
 /** One agent turn. Immutable once `t.send()` resolves. */
-export type Turn = {
+/** A turn as data, as a record or another language's runner carries it: `Turn` without its methods. */
+export type TurnData = {
   prompt: string
   /** The agent's final message for this turn. */
   text: string
@@ -93,6 +94,9 @@ export type Turn = {
   unreported: WebEventType[]
   /** Workspace changes since the eval started, as of the end of this turn. */
   diff: Diff
+}
+
+export type Turn = TurnData & {
   /** Runs in the eval's sandbox. Same as `t.exec`. */
   exec(command: string): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
@@ -280,11 +284,15 @@ export type AntigravityHarnessDescriptor = {
 }
 /**
  * OpenCode through `@evalsuite/harness-opencode` (`opencode acp`), made by `opencode()`. It runs
- * Google models on a Gemini API key, and reports no usage (its ACP server counts one call).
+ * on any provider whose key OpenCode sends in a header on known hosts, with that provider's key,
+ * and reports no usage (its ACP server counts one call).
  */
 export type OpenCodeHarnessDescriptor = {
   kind: 'opencode'
-  /** A Gemini model id, run on OpenCode's `google` provider, e.g. `gemini-3.8-flash`. */
+  /**
+   * OpenCode's model id, `<provider>/<model>`, e.g. `google/gemini-3.8-flash` or
+   * `anthropic/claude-haiku-4-5`; the provider picks the key.
+   */
   model: string
   /** Cell id; defaults to `opencode:<model>`. */
   id?: string
@@ -485,8 +493,34 @@ export type SetupStep = string | { run: string; timeout?: Duration; cwd?: string
  */
 export type EgressPolicy = 'allow-all' | 'deny-all' | { allow: readonly string[] }
 
+/**
+ * A git repository (or one directory of it) the workspace starts as, from the `git` helper. `url`
+ * is what ES fetches: the clone URL, or an absolute path for a local repository.
+ */
+export type GitWorkspace = {
+  kind: 'git'
+  /** As written: a URL, `github:owner/repo`, or a local path. */
+  repo: string
+  url: string
+  /** A branch, tag or commit SHA; unset is the remote's `HEAD`. */
+  ref?: string
+  /** A directory in the repository whose contents become the workspace. */
+  path?: string
+  /** Give the workspace a `.git`: one commit of the fetched tree, with no remote. */
+  init?: boolean
+  /** The host variable holding a token for the fetch; read on the host only. */
+  token?: string
+}
+
+export type GitHelper = (
+  repo: string | URL,
+  options?: { ref?: string; path?: string; init?: boolean; token?: string },
+) => GitWorkspace
+
 /** What an eval runs in: the declarative, phased spec of one environment. */
 export type EnvironmentSpec = {
+  /** The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's. */
+  workspace?: GitWorkspace
   env?: EnvVars
   /** Replaces the inherited policy; an `extend` child's replaces its parent's. */
   egress?: EgressPolicy
@@ -521,6 +555,8 @@ export type EnvironmentHelpers = {
   mcp: McpHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
+  /** A git repository for `workspace`: a URL, `github:owner/repo`, or a local path. */
+  git: GitHelper
 }
 
 export type SecretHelper = {
@@ -578,19 +614,29 @@ export type McpHelper = {
 /** A spec, or a callback that gets the typed helpers and returns one (synchronously). */
 export type EnvironmentInput = EnvironmentSpec | ((helpers: EnvironmentHelpers) => EnvironmentSpec)
 
-/** One value, a list (each is its own cell), or an edit of the inherited list. */
+/**
+ * An edit of the inherited harness list, as data: `add` appends harnesses, `only` keeps the
+ * inherited ones with these ids, in their order.
+ */
+export type HarnessEdit =
+  | { add: HarnessDescriptor | HarnessDescriptor[] }
+  | { only: string | string[] }
+
+/** One value, a list (each is its own cell), or an edit of the inherited list, as data. */
+export type HarnessData = HarnessDescriptor | HarnessDescriptor[] | HarnessEdit
+
+/** `HarnessData`, or a function that edits the inherited list (TypeScript only). */
 export type HarnessOption =
-  | HarnessDescriptor
-  | HarnessDescriptor[]
+  | HarnessData
   | ((inherited: HarnessDescriptor[]) => HarnessDescriptor | HarnessDescriptor[])
 
 export type CompareGate = 'variants' | 'all' | 'none'
 
 /** Variants run next to the inherited environment (the control), with the same prompt and checks. */
-export type CompareOptions =
-  | Environment[]
+export type CompareOptions<E = Environment> =
+  | E[]
   | {
-      variants: Environment[]
+      variants: E[]
       /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
       gate?: CompareGate
       /** Lift in points from -1 to 1; a variant cell below it fails. */
@@ -637,6 +683,20 @@ export type EvalOptions = {
   pin?: PinnableKey[]
 }
 export type GroupOptions = EvalOptions
+
+/**
+ * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model
+ * by name or a fake judge, and environments without `extend`.
+ */
+export type EvalOptionsData = Omit<EvalOptions, 'harness' | 'judge' | 'environment' | 'compare'> & {
+  harness?: HarnessData
+  judge?: ConfigJudgeOptions
+  environment?: EnvironmentData
+  compare?: CompareOptions<EnvironmentData>
+}
+
+/** An `Environment` as data, as JSON carries it: without `extend`. */
+export type EnvironmentData = Omit<Environment, 'extend'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
@@ -795,8 +855,9 @@ export type ErrorKind = 'assertion' | 'timeout' | 'aborted' | 'infra' | 'judge'
 /**
  * The sandbox an attempt needed that couldn't be prepared before the run, on each attempt that
  * needed it: its provider's stage (Docker's `image`, `from`, `dockerfile`, `harness` or
- * `install`), what was being made, the class (`config`, `transient` after the retries, or
- * `resource`), a named cause (`enospc`, `oom`), the build log, and the levels that set it.
+ * `install`, or `workspace` for a git workspace, whose `ref` is `repo#ref:path`), what was being
+ * made, the class (`config`, `transient` after the retries, or `resource`), a named cause
+ * (`enospc`, `oom`), the build log, and the levels that set it.
  */
 export type PrepareFailureRecord = {
   class: 'config' | 'transient' | 'resource'
@@ -877,6 +938,20 @@ export type EnvironmentRecord = {
   unset: string[]
   /** The policy the attempt ran under, from the options and the environment; in the digest unless `allow-all`. */
   egress: EgressPolicy
+  /**
+   * The git repository the workspace started as: the repo as written (a local one relative to the
+   * project root), the ref and path asked for (null when unset), the commit the ref resolved to
+   * and the hash of the tree that was copied in, which is in the digest.
+   */
+  workspace?: {
+    source: string
+    ref: string | null
+    path: string | null
+    commit: string
+    tree: string
+    /** `init: true`: the workspace had a `.git` with one commit of the tree. */
+    init?: boolean
+  }
 }
 
 /**
@@ -987,6 +1062,8 @@ export type EvalPlan = {
   brokered: string[]
   /** Each distinct restricted egress policy its attempts run under, as the plan prints it. */
   egress: string[]
+  /** Each distinct git workspace its attempts start from, as `repo#ref:path`. */
+  workspaces: string[]
 }
 
 /**
@@ -1035,6 +1112,8 @@ export type AttemptMeta = {
    */
   secretVars: string[]
   egress: PlannedEgress
+  /** The git repository its workspace starts as, which the CLI fetches before any attempt. */
+  workspace?: GitWorkspace
   plan: EvalPlan
 }
 

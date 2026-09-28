@@ -35,7 +35,8 @@ const filesUnder = (dir: string, prefix = ''): string[] =>
     d.isDirectory() ? filesUnder(dir, join(prefix, d.name)) : [join(prefix, d.name)],
   )
 
-for (const row of harnesses) {
+// One row per harness: the CLI's history, compare and queries don't depend on the provider.
+for (const row of harnesses.filter((r) => !r.harness)) {
   describe(`e2e CLI: ${row.id}`, { skip: skipRow(row), concurrency: false }, () => {
     const env = rowEnv(row)
     let dir = ''

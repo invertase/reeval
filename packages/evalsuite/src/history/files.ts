@@ -1,5 +1,4 @@
 import { randomBytes } from 'node:crypto'
-import { statSync } from 'node:fs'
 import {
   link,
   mkdir,
@@ -12,10 +11,9 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { countSecrets } from '../redact.ts'
-import { PACKAGE_VERSION } from '../root.ts'
+import { BUILD_ID } from '../root.ts'
 import { runHeader } from '../view/header.ts'
 import { NewerSchemaError, readableRecord } from '../view/record.ts'
 import { renderSummary } from './summary.ts'
@@ -117,14 +115,14 @@ export async function recentRecords(dirs: string[], limit: number): Promise<RunR
 
 type Cache = {
   /**
-   * ES's version and this module's mtime: another ES, or a rebuild, drops entries derived by the
-   * old code. npm gives every installed file the same mtime, so the version tells releases apart.
+   * This build of ES (`BUILD_ID`): another ES, or a rebuild, drops entries derived by the old
+   * code.
    */
   build: string
   files: Record<string, { size: number; mtimeMs: number; entry: HistoryEntry }>
 }
 
-const BUILD = `${PACKAGE_VERSION}:${statSync(fileURLToPath(import.meta.url)).mtimeMs}`
+const BUILD = BUILD_ID
 
 async function readCache(root: string): Promise<Cache> {
   try {

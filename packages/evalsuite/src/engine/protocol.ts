@@ -1,14 +1,14 @@
-// Messages between the main process (./pool.ts) and a worker (./worker.ts) over Node's IPC
-// channel. A worker may come from another copy of ES (the project's own), so both check
-// PROTOCOL before anything else.
+// Messages between the main process (./pool.ts) and a worker (./worker.ts): JSON over Node's IPC
+// channel, specified in ./PROTOCOL.md, with JSON Schemas in schema/plan/. A worker may come from
+// another copy of ES (the project's own), so both check PROTOCOL before anything else.
 import type { Limits, Rank } from '../scheduler/core.ts'
 import type { AttemptMeta, EvalMeta, RunContext } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
 import type { DebugLine } from '../view/debug.ts'
 import type { SerializedError } from './errors.ts'
 
-/** Bumped whenever a message changes shape. */
-export const PROTOCOL = 1
+/** Bumped whenever a message changes shape or meaning, or the framing changes (PROTOCOL.md). */
+export const PROTOCOL = 2
 
 /** What one registered test looks like to the main process. */
 export type WireTest = {

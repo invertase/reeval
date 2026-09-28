@@ -394,13 +394,28 @@ describe('studio in a browser', () => {
 
   test('es studio shows a run in progress attempt by attempt, until its record replaces it', async (t) => {
     if (!browser) return t.skip('no Chrome or Chromium found')
-    // Each turn takes 1.5 s: hello.es.ts's two evals × two runs, two attempts at a time.
-    const slow = join(demo, 'es.slow.config.ts')
+    // Four attempts, two at a time, each held until the test writes its gate: the run is in
+    // progress for as long as the test needs, however slow the machine.
+    const gates = join(demo, 'live-gate')
+    const release = (...ns: number[]) => {
+      for (const n of ns) writeFileSync(join(gates, String(n)), '')
+    }
+    mkdirSync(gates, { recursive: true })
     writeFileSync(
-      slow,
-      readFileSync(config, 'utf8')
-        .replace(/include: \[[^\]]*\]/, 'include: ["evals/hello.es.ts"]')
-        .replace('"text":', '"delayMs": 1500,\n  "text":'),
+      join(demo, 'evals/gated.es.ts'),
+      `import { existsSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
+import { evaluate, expect } from 'evalsuite'
+evaluate('waits for its gate', async (t) => {
+  while (!existsSync(new URL(\`../live-gate/\${t.attempt.n}\`, import.meta.url))) await sleep(50)
+  await expect(await t.send('Create greet.js')).toHaveFile('greet.js')
+})
+`,
+    )
+    const gated = join(demo, 'es.gated.config.ts')
+    writeFileSync(
+      gated,
+      readFileSync(config, 'utf8').replace(/include: \[[^\]]*\]/, 'include: ["evals/gated.es.ts"]'),
     )
     const child = spawn(process.execPath, [cli, 'studio', '--config', config, '--port', '47433'], {
       env: { ...process.env, NO_COLOR: '1' },
@@ -423,7 +438,7 @@ describe('studio in a browser', () => {
 
     const run = spawn(
       process.execPath,
-      [cli, 'run', '--config', slow, '--runs', '2', '--concurrency', '2'],
+      [cli, 'run', '--config', gated, '--runs', '4', '--concurrency', '2'],
       { cwd: demo, env: { ...process.env, NO_COLOR: '1', ES_UI: 'plain', CI: '' } },
     )
     children.push(run)
@@ -460,6 +475,8 @@ describe('studio in a browser', () => {
     await page.getByRole('heading', { name: 'Run in progress' }).waitFor()
     assert.match(page.url(), new RegExp(`#/live/${runId}$`))
     assert.equal(await page.locator('[data-live-attempt]').count(), 4)
+    // The first attempt finishes; the second, started with it, still waits for its gate.
+    release(1)
     await page.waitForFunction(
       () => {
         const done = document.querySelectorAll('[data-live-attempt=pass]').length
@@ -471,7 +488,7 @@ describe('studio in a browser', () => {
     )
     const shot = process.env.ES_STUDIO_LIVE_SCREENSHOT
     if (shot) await page.screenshot({ path: shot })
-    assert.match((await page.getByText(/^Running \d\/4$/).textContent()) ?? '', /Running [1-3]\/4/)
+    assert.equal(await page.getByText(/^Running \d\/4$/).textContent(), 'Running 1/4')
 
     // A finished attempt opens its transcript while the run goes on.
     await page.locator('[data-live-attempt=pass] a').first().click()
@@ -484,6 +501,7 @@ describe('studio in a browser', () => {
     await page.goBack()
 
     // When the record lands, the live page becomes the run's own page.
+    release(2, 3, 4)
     assert.equal(await ran, 0, runOut)
     await page.waitForURL(new RegExp(`#/runs/${runId}$`), { timeout: 20_000 })
     await page.waitForSelector('h2')

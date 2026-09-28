@@ -305,11 +305,18 @@ for (const name of ['a', 'b']) {
       attempts.map((a) => a.outcome),
       ['pass', 'pass', 'pass'],
     )
-    // Each takes its own turn and sandbox (slow on Windows), not the wait: the third, 2.4 s queued,
-    // stays within one turn of the fastest.
-    const fastest = Math.min(...attempts.map((a) => a.durationMs))
-    for (const a of attempts)
-      assert.ok(a.durationMs < fastest + 1200, `${a.id}: ${a.durationMs}ms, fastest ${fastest}ms`)
+    // All three queue before the first starts, so a duration that counted the wait would span the
+    // first attempt's turn to the third's end. Counted from its own start, the third's spans only
+    // its own sandbox and turn: shorter by two whole attempts, however slow the machine.
+    const trace = readTrace(p.dir)
+    const at = (name: string, event: string) =>
+      (trace.find((t) => t.name === name && t.event === event) as Trace).at
+    const third = attempts.find((a) => a.n === 3) as (typeof attempts)[number]
+    const span = at('a fake#3', 'end') - at('a fake#1', 'start')
+    assert.ok(
+      third.durationMs < span,
+      `${third.id}: ${third.durationMs}ms, first turn to its end ${span}ms`,
+    )
     assert.match(r.stdout, /\[eval#3 fake\] ▶/)
   })
 

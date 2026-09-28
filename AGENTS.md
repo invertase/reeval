@@ -58,8 +58,8 @@ its files import `evalsuite`.
 | Path | What it is |
 |---|---|
 | `packages/evalsuite` | The published `@invertase/foobar` package and its `es` CLI |
-| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, `worker-entry.ts`), the IPC messages (`protocol.ts`), `expect` (`expect.ts`), error printing (`errors.ts`) and the budget marker (`budget.ts`). The only code that imports `@vitest/*` |
-| `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: options cascade, the matrix, and registering one test per attempt |
+| `packages/evalsuite/src/engine` | ES's engine: file discovery (`files.ts`), the collector (`collector.ts`), the jiti loader and tsconfig check (`loader.ts`), the fork pool (`pool.ts`), the orchestrator (`node.ts`), the worker (`worker.ts`, `run.ts`, and `worker-entry.ts`, which `es __worker` runs), the IPC messages (`protocol.ts`, JSON, specified in `PROTOCOL.md`), `expect` (`expect.ts`), error printing (`errors.ts`) and the budget marker (`budget.ts`). The only code that imports `@vitest/*` |
+| `packages/evalsuite/src/evaluate.ts` | `evaluate` and `group`: they record the file's declaration tree (`declaration.ts`, JSON when its options are data) and register one test per attempt; `declareTree` declares a tree. `plan-eval.ts`'s pure `planEval` turns one declared eval into its tests: the options cascade, the matrix, the refusals and each attempt's gate, as data |
 | `packages/evalsuite/src/attempt` | One attempt's lifecycle, a module per phase sharing one `Attempt`: `environment.ts` (resolve it, look up the image preflight prepared), `session.ts` (sandbox, files, setup steps, harness), `turns.ts`, `checks.ts` and `judge.ts`, `context.ts` (what the agent could see), `record.ts`, `debug.ts` (the plan and environment in the debug trace); `index.ts` runs them in order and tears down |
 | `packages/evalsuite/src/sandbox` | ES's sandbox adapters (Docker and a fake), the provider prepare contract (`provider.ts`), preflight's generic layer (`preflight.ts`: check, prepare in parallel, retry, cache, scope or stop) and Docker's image preparation |
 | `packages/evalsuite/src/egress.ts` | Egress policies at plan time: the cascade, the automatic hosts, and what each sandbox can enforce |
@@ -71,13 +71,13 @@ its files import `evalsuite`.
 | `packages/evalsuite/src/report` | `es report`: the command log (`.es/cli.jsonl`, written by `cli.ts` as each command ends), collecting the bundle, its redaction (records' masking plus `.env` values and path scrubbing), report.md/JSON/tar.gz, and the issue URL or `gh issue create` |
 | `packages/evalsuite/src/analysis` | `es analyze`: the digest, the schema and prompt, the model call, validation, rendering, and the cache and saved files |
 | `packages/evalsuite/src/cli-spec.ts` | Every command, flag and help line as data: `cli-parse.ts` builds `es`'s [commander](https://github.com/tj/commander.js) parser from it, `es --help` (and so the docs' CLI help) is its help lines, and `es analyze` checks verify commands against it. A new flag or command goes here, then `test/cli.test.ts` parses it and `ES_UPDATE_SNAPSHOTS=1` refreshes the help golden file |
-| `packages/evalsuite/schema` | JSON Schema snapshots of every shape ES persists and reads back, generated from the types by `scripts/schema/` and checked in CI (`pnpm schema:check`) |
+| `packages/evalsuite/schema` | JSON Schema snapshots of every shape ES persists and reads back, generated from the types by `scripts/schema/` and checked in CI (`pnpm schema:check`); `schema/plan/` has the plan and protocol shapes (the declaration tree, `WireTest` and the engine's messages), which only have to match the code |
 | `packages/evalsuite/src/studio` | `es studio` (Hono server, watcher, SSE, runs in progress from `.es/staging` in `live.ts`) and `es studio build` |
 | `packages/evalsuite/test` | The test suite, including `features/` (feature fixtures), `plan/` (plan snapshots), `contract/` (the harness contract every real harness passes), `e2e/` (the CLI end to end on real agents) and `replay/` (captured real streams and each CLI's known stream format) |
 | `packages/studio-web` | The web studio app (React, Vite, shadcn/ui, TanStack Router and Query); private, shipped prebuilt inside `@invertase/foobar` |
 | `packages/harness-antigravity` | `@evalsuite/harness-antigravity`: an AI SDK harness adapter for Google's Antigravity CLI (`agy`), shaped like the `@ai-sdk/harness-*` packages so it can go upstream. The CLI has no ACP mode, so each turn is one `agy -p … --output-format stream-json` process and the adapter translates its events. It imports nothing from `evalsuite`; private, and bundled into `@invertase/foobar` like `sandbox-docker` |
 | `packages/harness-cursor-sdk` | `@evalsuite/harness-cursor-sdk`: an AI SDK harness adapter for Cursor's agent over the [Cursor TypeScript SDK](https://cursor.com/docs/sdk/typescript)'s local runtime, shaped like the `@ai-sdk/harness-*` packages. One `node runner.mjs` in the sandbox serves a session's turns (the agent loop is local, inference is Cursor's), keeping the agent loaded between them; a new runner resumes it by agent id. Its `SDKMessage` NDJSON becomes stream parts with per-turn token usage and the resolved model. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
-| `packages/harness-opencode` | `@evalsuite/harness-opencode`: OpenCode 2 (`@opencode/cli`, from a pinned lockfile without its musl builds) on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` can't broker a Google key). Its settings go in `OPENCODE_CONFIG_CONTENT`: no updates or sharing, session titles on the run's model, `websearch` on Exa's keyless hosted MCP server (`mcp.exa.ai`, an automatic egress host), `question` and the browser tools off, and the MCP servers in `mcp.servers` with `codemode: false` (over ACP they'd be Code Mode only). `harness-acp` runs `opencode acp` through a gate (`opencode-gate.ts`) that holds the first prompt until those servers have connected. It rebuilds each tool's output from the ACP `content`, names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and drops the turn's usage, which OpenCode's ACP server reports for its last model call only. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
+| `packages/harness-opencode` | `@evalsuite/harness-opencode`: OpenCode 2 (`@opencode/cli`, from a pinned lockfile without its musl builds) on any provider whose key it sends in a header on known hosts, as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `opencode acp` in the sandbox (`@ai-sdk/harness-opencode` targets OpenCode 1 and can't broker a Google key). The model's provider (`anthropic/…`) picks the one key used and brokered; `opencode-provider-table.ts` (generated by `scripts/probe-providers.ts`, which runs the pinned CLI through a local MITM proxy, and `scripts/provider-table.ts`) lists each provider's variable, headers and endpoints, and why the others are refused. Its settings go in `OPENCODE_CONFIG_CONTENT`: no updates or sharing, session titles on the run's model, the provider's model calls over HTTP (not a WebSocket, so the gateway reads the served model), `websearch` on Exa's keyless hosted MCP server (`mcp.exa.ai`, an automatic egress host), `question` and the browser tools off, and the MCP servers in `mcp.servers` with `codemode: false` (over ACP they'd be Code Mode only). `harness-acp` runs `opencode acp` through a gate (`opencode-gate.ts`) that holds the first prompt until those servers have connected. It rebuilds each tool's output from the ACP `content`, names the tool calls `harness-acp` can't from OpenCode's first `tool_call` update, and drops the turn's usage, which OpenCode's ACP server reports for its last model call only. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/harness-goose` | `@evalsuite/harness-goose`: Goose on a Gemini API key as an AI SDK harness, thin config over `@ai-sdk/harness-acp` running `goose acp` in the sandbox. Its bootstrap downloads the pinned release and checks its sha256, and gives Goose a private home. MCP servers go in Goose's `config.yaml` as enabled extensions (servers from ACP `session/new` start disabled). It names the tool calls `harness-acp` can't from Goose's `_meta.goose.toolCall`, and drops the turn's usage, which Goose's ACP server reports for its last model call only. Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
 | `packages/harness-pi` | `@evalsuite/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in ES's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused at plan time. Private, and bundled into `@invertase/foobar` like `harness-antigravity`, with its `assets/` beside `dist/` |
 | `packages/harness-codex` | `@evalsuite/harness-codex`: OpenAI's Codex CLI on an OpenAI API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-codex` carries none of Codex's native events and drops reasoning tokens). Each turn is one `codex exec --json` process (later turns `resume` the thread), the pinned native build downloaded from npm and checked against its sha512. Its `config.toml` gives Codex an HTTP-only provider for the OpenAI API and turns off analytics and the plugin sync, so a turn contacts only `api.openai.com`; its NDJSON becomes stream parts with each turn's tokens, reasoning included. Codex reports no served model, so the gateway reads it, and the effort, from each Responses API response (`modelResponses` in the catalog). Private, and bundled into `@invertase/foobar` like `harness-antigravity` |
@@ -96,7 +96,19 @@ pnpm coverage    # the same tests with code coverage from every process they sta
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
+node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone es
 ```
+
+ES runs on Node only. `scripts/bun-compile.mjs` (it needs `bun` on your PATH, and `pnpm build`)
+compiles `dist/` into `packages/evalsuite/es` with ES's own files embedded (`--asset`:
+`package.json`, `docker/`, `assets/`, the studio app, the Claude Code bridge, jiti's Babel build
+and a `versions.json` of the bundled dependencies). It copies the binary into an empty directory
+and checks it plans and runs a copy of `examples/hello` with no `node_modules` as Node does,
+answers `es query` and `es studio build`, and, with Docker, runs an egress fixture. Compiled,
+`src/root.ts` finds those files at the root of Bun's virtual filesystem, and `ownDir` copies a
+directory that must be real (Docker's build context, the studio app, jiti's Babel) to
+`~/.cache/evalsuite/<dir>-<content hash>` (`XDG_CACHE_HOME`, or the platform's cache directory).
+Run it after changing how ES finds its files, starts processes or loads TypeScript; CI doesn't.
 
 **The build.** [tsdown](https://tsdown.dev) bundles `@invertase/foobar`
 (`packages/evalsuite/tsdown.config.mjs`) into chunks directly in `dist/`, with its `.d.ts`. The
@@ -104,8 +116,13 @@ pnpm example     # es run in examples/hello (pnpm --filter hello-example es run)
 `devDependencies`, from its `src/`, so a new one needs only that entry. The published code may
 import only the package's `dependencies`, so an inlined package's runtime dependencies must be
 among them; the build fails otherwise. A module's code lands in some chunk, so find ES's own
-files (`dist/worker.js`, `dist/studio-app`, `package.json`) from `src/root.ts`, not from the
-module's `import.meta.url`; the build fails if a chunk below `dist/`'s top level uses it.
+files (`dist/studio-app`, `dist/bridge`, `docker/`, `package.json`) from `src/root.ts`, not from
+the module's `import.meta.url`. `src/root.ts` is ES's one resource locator (`ownFile`,
+`ownFileURL`, `ownDir`, `ownRequire`, `ownVersion`, the package's name, version and build id): the build rewrites an
+inlined package's `new URL('<path>', import.meta.url)` to its `ownFileURL` and fails on any other
+`import.meta.url`. `dist/cli.js` (`src/bin.ts`) is the only entry besides the exports: `es
+__worker` is how the engine starts a worker for each eval file, so a compiled `es` can start its
+own.
 An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, `harness-pi`'s
 `assets/` lockfile) ship at the
 root of `@invertase/foobar`, beside `dist/` as in their own package, so a `../docker` from one of
@@ -223,14 +240,14 @@ have fixtures on which tier is a separate, generated matrix:
 
 ### CI and releases
 
-GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with Node from
-`engines`, plus Windows and macOS legs (below):
+GitHub Actions runs on every PR, every merge-queue entry (`merge_group`) and every push to
+`main`, on `ubuntu-24.04` with Node from `engines`, plus Windows and macOS legs (below):
 
 | Workflow | Jobs |
 |---|---|
 | `ci.yml` | `lint` (`biome ci`), `typecheck`, `engine coverage` (100% of the engine's files), `unit and plan` (on Node 22.13 and the newest that `engines` allows; sandbox-docker's container tests skip there), `features (fake)`, `docker (…)` for each package with `ES_TEST_REQUIRE_DOCKER=1`, `studio` (with the browser test), `packed install` (uploads the packed tarball, then the pack test and `npm publish --dry-run`), `coverage` (below), `windows (unit 1/6 … 6/6, tiers, packed)` with the `windows` check over them, and `macos` |
-| `commits.yml` | `conventional commits`: the PR title and every commit in the PR |
-| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch); any change to a CLI's output format, the stored conversation or behaviour fails it; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
+| `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
+| `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned, and `scripts/drift/claude-code-patch.mjs` checks whether the newest adapter still needs ES's patch), then re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`, key-free); any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
 | `contract.yml` | Called by `real.yml`: one leg on real agents, with a hard attempt budget (`ES_REAL_ATTEMPT_BUDGET`, a ledger every real row reserves from before it runs), the contract table in the job summary and the runs uploaded |
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
@@ -256,6 +273,10 @@ GitHub Actions runs on every PR and every push to `main`, on `ubuntu-24.04` with
 - **Merge with squash,** so the PR title (checked by `commits.yml`) is the commit release-please
   reads. `feat` bumps the minor version and `fix` or `perf` the patch; before 1.0 a breaking
   change bumps the minor too.
+- **Merge queue:** `ci.yml` and `commits.yml` run every required check on `merge_group`, with
+  nothing skipped or path-filtered; each queue entry has its own concurrency group (its
+  `gh-readonly-queue/…` ref), so entries never cancel each other or PR runs. The queue's merge
+  method must be squash. `real.yml` and `contract.yml` don't run in the queue.
 - **Releases:** release-please keeps a `chore(main): release X.Y.Z` PR open with the new version
   (in `packages/evalsuite/package.json`, the root `package.json` and
   `.release-please-manifest.json`) and `CHANGELOG.md`. Merging it tags `vX.Y.Z` and creates the

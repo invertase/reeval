@@ -15,7 +15,7 @@ import {
 } from './config.ts'
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
-import { AGENTS, isAgentKind } from './harness/agents.ts'
+import { credentialOf } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
@@ -376,8 +376,8 @@ export async function checkKeys(
 ): Promise<Check[]> {
   const byKey = new Map<string, { who: string[]; required: boolean }>()
   for (const use of configuredUses(config)) {
-    if (!isAgentKind(use.harness.kind)) continue
-    const key = AGENTS[use.harness.kind].credential
+    const key = credentialOf(use.harness)
+    if (!key) continue
     const entry = byKey.get(key) ?? { who: [], required: false }
     const who = use.profile
       ? `${harnessId(use.harness)} in profile ${use.profile}`

@@ -117,6 +117,26 @@ evaluate('inherits', async (t) => { await t.send('x') })
     assert.deepEqual(cells, { replaced: ['c'], added: ['c', 'd'], inherits: ['a', 'b'] })
   })
 
+  test('harness edits as data: { add } appends to the inherited list, { only } keeps by id', async () => {
+    const p = await project('harness-edits', {
+      'es.config.ts': config('', `[fakeHarness({ id: 'a' }), fakeHarness({ id: 'b' })]`),
+      'evals/e.es.ts': `import { evaluate, group } from 'evalsuite'
+import { fakeHarness } from 'evalsuite/harness'
+group('only a', { harness: { only: 'a' } }, () => {
+  evaluate('kept', async (t) => { await t.send('x') })
+  evaluate('added', { harness: { add: [fakeHarness({ id: 'd' })] } }, async (t) => { await t.send('x') })
+})
+evaluate('kept both', { harness: { only: ['b', 'a'] } }, async (t) => { await t.send('x') })
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const cells = Object.fromEntries(
+      readRun(p.dir).evals.map((e) => [e.name, e.cells.map((c) => c.harness)]),
+    )
+    assert.deepEqual(cells, { kept: ['a'], added: ['a', 'd'], 'kept both': ['a', 'b'] })
+  })
+
   test('tags filter, todo, for, and a filter that matches nothing exits 2', async () => {
     const p = await project('tags', {
       'es.config.ts': fakeConfig(),
@@ -584,6 +604,16 @@ describe('common mistakes', () => {
       /defineEnvironment\("docs"\) returned a Promise\. The callback runs once at definition time and must return the environment synchronously; fetch remote content in a setup step instead\./,
     ],
     [
+      'a harness edit naming a harness the eval does not inherit',
+      `evaluate('e', { harness: { only: 'cursor' } }, async () => {})`,
+      /harness \{ only: "cursor" \} in evaluate\("e"\) names no inherited harness \(inherited: fake\)/,
+    ],
+    [
+      'a harness edit that adds and keeps at once',
+      `evaluate('e', { harness: { add: [], only: 'fake' } as never }, async () => {})`,
+      /harness takes \{ add \} or \{ only \}, not both, in evaluate\("e"\)/,
+    ],
+    [
       'a list of sandboxes',
       `evaluate('e', { sandbox: [fakeSandbox(), fakeSandbox()] }, async () => {})`,
       /sandbox takes one sandbox, not a list \(evaluate\("e"\)\)/,
@@ -807,6 +837,21 @@ describe('common mistakes', () => {
       'two harnesses with one id',
       `evaluate('e', { harness: [fakeHarness(), fakeHarness()] }, async () => {})`,
       /Two harnesses in evaluate\("e"\) resolve to the id "fake"/,
+    ],
+    [
+      'a repository URL as the workspace',
+      `defineEnvironment('app', { workspace: 'https://github.com/acme/app' as never })`,
+      /workspace in defineEnvironment\("app"\) must come from the git helper, e\.g\. workspace: git\('https:\/\/github\.com\/acme\/app', \{ ref: 'v1\.0\.0' \}\)/,
+    ],
+    [
+      "the token itself as git()'s token",
+      `defineEnvironment('app', ({ git }) => ({ workspace: git('github:acme/app', { token: 'ghp_abc123def456' }) }))`,
+      /git\("github:acme\/app"\): token names the host variable that holds the token, e\.g\. token: 'GITHUB_TOKEN'\. Don't put the token itself in the eval\./,
+    ],
+    [
+      'a token in the workspace URL',
+      `defineEnvironment('app', ({ git }) => ({ workspace: git('https://x-access-token:ghp_abc123@github.com/acme/app') }))`,
+      /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. ES fetches the repository on the host with your own git credentials/,
     ],
   ]
   for (const [what, body, message] of cases) {

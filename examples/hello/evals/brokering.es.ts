@@ -11,6 +11,8 @@ const keys = [
   process.env.CURSOR_API_KEY,
   process.env.ANTHROPIC_API_KEY,
   process.env.GEMINI_API_KEY,
+  process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+  process.env.OPENAI_API_KEY,
 ].filter((key): key is string => Boolean(key))
 
 /** The rolling hash scan.mjs uses: base 257, mod 2^32, over the bytes. */
@@ -53,7 +55,7 @@ evaluate(
     // now, so `environ` alone can't show it for every harness.
     const seen = (await t.readFile('env.txt')) ?? ''
     const environ = await t.exec('env; cat /proc/[0-9]*/environ | tr "\\0" "\\n"')
-    expect(seen).toMatch(/^(CURSOR|ANTHROPIC|GEMINI)_API_KEY=aisdkhc_[\w-]{43}$/m)
+    expect(seen).toMatch(/^\w+_API_KEY=aisdkhc_[\w-]{43}$/m)
     expect(holdsAKey(`${seen}\n${environ.stdout}`), 'env or /proc holds a key').toBe(false)
 
     const scan = await t.exec(`node ~/.es-scan/scan.mjs '${targets}'`)

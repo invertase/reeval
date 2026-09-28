@@ -1,24 +1,21 @@
 // `.es/history.db`: a gitignored SQLite projection of the run records, for `es query`. Nothing in
 // it isn't in `evals/.history` or `.es/runs`; it's rebuilt incrementally from them on every query
 // and can be deleted at any time.
-import { statSync } from 'node:fs'
 import { mkdir, readFile, stat } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'
-import { fileURLToPath } from 'node:url'
 import { isRuntimeState } from '../attempt/context.ts'
 import { UsageError } from '../errors.ts'
 import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
-import { PACKAGE_VERSION } from '../root.ts'
+import { BUILD_ID, ownRequire } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
 /** Bump when the tables or views change: a database from another version is rebuilt. */
 const DB_VERSION = 2
-/** ES's version and this module's mtime, like the header cache: another ES re-derives every row. */
-const BUILD = `${PACKAGE_VERSION}:${statSync(fileURLToPath(import.meta.url)).mtimeMs}`
+/** This build of ES, like the header cache: another ES re-derives every row. */
+const BUILD = BUILD_ID
 
 export const historyDbPath = (root: string) => join(root, '.es', 'history.db')
 
@@ -45,7 +42,7 @@ function loadSqlite(): typeof import('node:sqlite') {
     return (emit as (...args: unknown[]) => void).call(process, warning, ...rest)
   }) as typeof process.emitWarning
   try {
-    return createRequire(import.meta.url)('node:sqlite')
+    return ownRequire('node:sqlite')
   } finally {
     process.emitWarning = emit
   }

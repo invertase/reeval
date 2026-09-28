@@ -6,7 +6,7 @@ import { isDockerSandbox } from '../sandbox/docker.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { AgentHarnessDescriptor, TokenUsage, TranscriptEvent, TurnStatus } from '../types.ts'
 import { addUsage } from '../usage.ts'
-import { AGENTS, agentAuth, authHint } from './agents.ts'
+import { agentAuth, agentFor, authHint } from './agents.ts'
 import { errorText, normaliseStream, type StampedPart } from './transcript.ts'
 import type { Harness } from './types.ts'
 
@@ -101,7 +101,7 @@ export function observed(
 
 /** A real agent through its AI SDK harness adapter, in the Docker sandbox's container. */
 export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness {
-  const catalog = AGENTS[descriptor.kind]
+  const catalog = agentFor(descriptor)
   return {
     async start(sandbox, signal, { skills, mcp }) {
       const auth = agentAuth(catalog)
@@ -134,7 +134,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
       } catch (error) {
         if (signal.aborted) throw error
         const message = (error as Error).message
-        const hint = authHint(descriptor.kind, message)
+        const hint = authHint(catalog, message)
         throw new InfraError(
           `${hint ? `${hint}. ` : ''}${catalog.name} harness failed to start: ${message}`,
         )
@@ -163,7 +163,7 @@ export function createAgentHarness(descriptor: AgentHarnessDescriptor): Harness 
             durationMs: Date.now() - startedAt,
             transcript: [...normaliseStream(parts, startedAt), ...extra].map((e) => {
               if (e.type !== 'error') return e
-              const hint = authHint(descriptor.kind, e.message)
+              const hint = authHint(catalog, e.message)
               return hint ? { ...e, message: `${hint}. ${e.message}` } : e
             }),
             ...(process.env.ES_RAW_TRANSCRIPT ? { raw: parts } : {}),

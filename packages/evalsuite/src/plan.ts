@@ -9,6 +9,7 @@ import type {
   CellGate,
   Duration,
   EvalPlan,
+  HarnessDescriptor,
   PlannedEgress,
   ResolvedProfile,
   SandboxDescriptor,
@@ -39,7 +40,8 @@ export type RunPlan = {
   /** Advice that doesn't stop the run, e.g. about the default gate. */
   hints: string[]
   sandboxes: SandboxDescriptor[]
-  harnessKinds: string[]
+  /** The harnesses the planned attempts run on, for their credentials. */
+  harnessDescriptors: HarnessDescriptor[]
   /** The harness ids the planned attempts run on, for the run header. */
   harnesses: string[]
 }
@@ -94,7 +96,7 @@ export async function buildPlan(options: {
   const warnings = new Set<string>()
   const sandboxWarnings = new Map<string, SandboxWarning>()
   const sandboxes = new Map<string, SandboxDescriptor>()
-  const kinds = new Set<string>()
+  const descriptors = new Map<string, HarnessDescriptor>()
   const harnesses = new Set<string>()
   // A filter can leave out some of an eval's cells: each row counts what it actually plans.
   const counted = new Map<string, { harnesses: Set<string>; variants: Set<string>; n: number }>()
@@ -111,7 +113,7 @@ export async function buildPlan(options: {
     cells.add(`${id}\0${attempt.cell.key}`)
     estimateMs += estimate(id, attempt.cell.harness, attempt.harness.kind)
     sandboxes.set(JSON.stringify(attempt.sandbox), attempt.sandbox)
-    kinds.add(attempt.harness.kind)
+    descriptors.set(JSON.stringify(attempt.harness), attempt.harness)
     harnesses.add(attempt.cell.harness)
     const row = counted.get(id) ?? { harnesses: new Set(), variants: new Set(), n: 0 }
     row.harnesses.add(attempt.cell.harness)
@@ -145,7 +147,7 @@ export async function buildPlan(options: {
     ),
     hints: gateHint([...rows.values()]),
     sandboxes: [...sandboxes.values()],
-    harnessKinds: [...kinds],
+    harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
   }
 }
@@ -208,6 +210,7 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
       ...p.notes,
       p.brokered.length ? `brokered: ${p.brokered.join('; ')}` : '',
       p.egress.length ? `egress: ${p.egress.join('; ')}` : '',
+      p.workspaces.length ? `workspace: ${p.workspaces.join('; ')}` : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -229,6 +232,8 @@ export type PlanCell = Cell & {
   /** Secrets its attempts broker, as `NAME → host, host`. */
   brokered: string[]
   egress: PlannedEgress
+  /** The git repository its workspace starts as; unset for an empty workspace. */
+  workspace?: { repo: string; ref: string | null; path: string | null }
 }
 
 export type PlanEval = {
@@ -301,6 +306,13 @@ export function planDocument(
         runs: 1,
         brokered: attempt.brokered,
         egress: attempt.egress,
+        ...(attempt.workspace && {
+          workspace: {
+            repo: attempt.workspace.repo,
+            ref: attempt.workspace.ref ?? null,
+            path: attempt.workspace.path ?? null,
+          },
+        }),
       })
     }
   }

@@ -3,6 +3,7 @@
 // with test/plan/<dir>/expected/<case>.txt. ES_UPDATE_SNAPSHOTS=1 rewrites them; review the diff.
 import assert from 'node:assert/strict'
 import { readdirSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { describe, test } from 'node:test'
 import { project, runCli } from './helpers.ts'
 import { fixture } from './support/fixture.ts'
@@ -23,8 +24,10 @@ export const cases: PlanCase[] = [
   { dir: 'selection', name: 'group-and-eval-filter', args: ['slow things › big'] },
   { dir: 'images', name: 'install-from-dockerfile', args: [] },
   { dir: 'harnesses', name: 'claude-code', args: [] },
+  { dir: 'harness-edits', name: 'data-and-functions', args: [] },
   { dir: 'antigravity', name: 'antigravity', args: [] },
   { dir: 'opencode', name: 'opencode', args: [] },
+  { dir: 'opencode', name: 'bedrock-region', args: ['Bedrock'], env: { AWS_REGION: 'eu-west-1' } },
   { dir: 'goose', name: 'goose', args: [] },
   { dir: 'pi', name: 'pi', args: [] },
   { dir: 'codex', name: 'codex', args: [] },
@@ -34,9 +37,14 @@ export const cases: PlanCase[] = [
   { dir: 'egress', name: 'profile-defaults', args: ['--profile', 'locked', 'evals/cascade.es.ts'] },
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
+  { dir: 'workspace', name: 'git', args: [] },
 ]
 
-describe('plan snapshots', { concurrency: true }, () => {
+// Each case starts an `es` and its worker. All 25 at once swamp a small CI runner (Windows'
+// has 4 CPUs) until each takes over 30 s; as many at a time as there are CPUs keeps each quick.
+const CLIS = availableParallelism()
+
+describe('plan snapshots', { concurrency: CLIS }, () => {
   for (const c of cases) {
     test(`${c.dir}: ${c.name}`, async () => {
       matchFile(`plan/${c.dir}/expected/${c.name}.txt`, renderPlan(await planJson(c)))
@@ -44,7 +52,7 @@ describe('plan snapshots', { concurrency: true }, () => {
   }
 })
 
-describe('the JSON plan', { concurrency: true }, () => {
+describe('the JSON plan', { concurrency: CLIS }, () => {
   test('is one document with the host-dependent fields the snapshots leave out', async () => {
     const plan = await planJson({ dir: 'matrix', args: [] })
     assert.deepEqual(Object.keys(plan), [
@@ -99,11 +107,57 @@ describe('the JSON plan', { concurrency: true }, () => {
     assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
   })
 
+  test("OpenCode on a provider ES can't broker exits 2 at plan time, naming it and why", async () => {
+    for (const [where, model, refusal, env] of [
+      [
+        'config',
+        'google-vertex/gemini-3.8-flash',
+        /opencode\(\): ES can't run OpenCode on Vertex \(google-vertex\): it takes a service account \(Vertex refuses API keys for most models\), not a key in a header, so the gateway can't keep its key out of the sandbox/,
+      ],
+      [
+        'config',
+        'amazon-bedrock/global.anthropic.claude-haiku-4-5',
+        /opencode\(\): AWS_REGION is "evil\.example\.com\/x", which isn't one Amazon Bedrock \(amazon-bedrock\) takes: OpenCode builds its API's host from it, so it must match/,
+        { AWS_REGION: 'evil.example.com/x' },
+      ],
+      [
+        'eval',
+        'lmstudio/qwen3-coder',
+        /opencode\(\): ES can't run OpenCode on LMStudio \(lmstudio\): it runs on your machine, and the sandbox can't reach the host's localhost/,
+      ],
+      [
+        'eval',
+        'gemini-3.8-flash',
+        /opencode\(\): an OpenCode model id names its provider, <provider>\/<model>/,
+      ],
+    ] as const) {
+      const harness = `opencode({ model: '${model}' })`
+      const p = await project(`refused-${where}-${model.split('/')[0]}${env ? '-env' : ''}`, {
+        'es.config.ts': `import { defineConfig } from 'evalsuite'
+import { cursor, opencode } from 'evalsuite/harness'
+import { docker } from 'evalsuite/sandbox'
+export default defineConfig({
+  harness: ${where === 'config' ? harness : "cursor({ model: 'composer-2.5' })"},
+  sandbox: docker(),
+})
+`,
+        'evals/r.es.ts': `import { evaluate } from 'evalsuite'
+import { opencode } from 'evalsuite/harness'
+evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async () => {})
+`,
+      })
+      const r = await runCli(p.dir, ['run', '--dry-run'], { env: env ?? {} })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, refusal)
+      assert.deepEqual(readdirSync(p.dir).includes('.es'), false, 'nothing ran')
+    }
+  })
+
   test('an mcp.sse server on OpenCode, Goose, pi or Codex exits 2 at plan time, naming the eval and the server', async () => {
     for (const [factory, model, refusal] of [
       [
         'opencode',
-        'gemini-3.8-flash',
+        'google/gemini-3.8-flash',
         /evaluate\("streams"\) on opencode:gemini-3\.8-flash: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
       [
@@ -234,7 +288,7 @@ function assertRootWarning(output: string): void {
   assert.ok(output.split('\n').includes(ROOT_LINE), `no root warning in:\n${output}`)
 }
 
-describe('sandbox privilege warnings', { concurrency: true }, () => {
+describe('sandbox privilege warnings', { concurrency: CLIS }, () => {
   test('are structured in the JSON plan, one per level that set the sandbox', async () => {
     const plan = await planJson({ dir: 'privileges', args: [] })
     assert.deepEqual(plan.sandboxWarnings, [

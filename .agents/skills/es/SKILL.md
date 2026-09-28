@@ -60,9 +60,14 @@ export default defineConfig({
   the record shows as `composer-2.5[fast=true]`, so pin them for reproducible evals),
   `claudeCode({ model })` (`ANTHROPIC_API_KEY`, model required),
   `antigravity({ model })` (`GEMINI_API_KEY`, a Gemini API key; model required, e.g.
-  `gemini-3.8-flash-medium`), `opencode({ model })` (OpenCode 2; `GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini
-  model id, e.g. `gemini-3.8-flash`; no `mcp.sse`; web search via Exa, whose host it allows;
-  it also reads `.claude/skills` and `.agents/skills`), `goose({ model })` and `pi({ model })` (the same key and model ids; pi has no MCP),
+  `gemini-3.8-flash-medium`), `opencode({ model })` (OpenCode 2 on any brokerable provider: the model is
+  `<provider>/<model>`, e.g. `google/gemini-3.8-flash`, `anthropic/claude-haiku-4-5`,
+  `openrouter/…`, and needs only that provider's key, e.g. `ANTHROPIC_API_KEY`; `amazon-bedrock/…`
+  takes `AWS_BEARER_TOKEN_BEDROCK` and an optional `AWS_REGION`; Vertex, Azure, Copilot and local
+  providers are refused at plan time; no `mcp.sse`; web search via Exa,
+  whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
+  and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
+  `gemini-3.8-flash`; pi has no MCP),
   `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.4-mini`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that ES's gateway swaps on the
@@ -134,15 +139,16 @@ group('hello', () => {
 ## Options and the cascade
 
 `defineConfig`, `group` and `evaluate` take the same options; inner levels win: `harness` (one
-or a list, or a function of the inherited list), `environment` (one), `sandbox` (one), `runs`,
+or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
+a function), `environment` (one), `sandbox` (one), `runs`,
 `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `timeout`, `tags`, `pin`.
 `compare` goes only on groups and evals. Options are plain objects, never functions. Unknown keys
 are errors with a hint (`repeat` → "Did you mean runs?").
 
 ## Environments
 
-What the agent runs *in*, per attempt: skills, MCP servers, files, rules, env vars, secrets and
-setup steps. Pass a spec, or a synchronous callback that destructures the helpers it needs:
+What the agent runs *in*, per attempt: the code the workspace starts as, skills, MCP servers,
+files, rules, env vars, secrets and setup steps. Pass a spec, or a synchronous callback that destructures the helpers it needs:
 
 ```ts
 // evals/envs.ts
@@ -158,7 +164,22 @@ export const withDocs = houseStyle.extend('with-docs', ({ file, mcp }) => ({
   mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose, pi or Codex)
   setup: [{ run: 'npm ci', timeout: '5m' }],         // every attempt, before the agent
 }))
+
+// Start from existing code: a repo, or one directory of it, at a pinned ref
+export const app = defineEnvironment('acme-app', ({ git }) => ({
+  workspace: git('https://github.com/acme/app', { ref: 'v2.3.0', path: 'examples/basic' }),
+  setup: ['npm ci'],
+}))
 ```
+
+`workspace: git(repo, { ref, path })` takes a URL, `github:owner/repo`, a GitHub `/tree/` URL or
+a local path (relative to the file). ES fetches it on the host before any attempt, with the
+host's git credentials or `token: 'GITHUB_TOKEN'` (a host variable's name; never a token in the
+URL or the eval), copies the tree in before `files` (which win) and `setup`, and records the
+commit and tree hash. `init: true` adds a `.git` with one commit of the tree (no remote), for
+agents that expect a repo. Pin `ref` to a tag or full SHA; a branch warns. The agent's diff starts
+after setup, so the repo never counts as its change. A bad ref, path, URL or token fails only
+the attempts that use it (infra error, exit 3). Submodules and LFS files aren't fetched.
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
 writes them into the repo's skill directory). `extend` is the only composition; the child wins
@@ -265,10 +286,12 @@ them to `evals/.history/` to commit.
 | `import { baseline }` | `evalsuite has no baseline` | Leave `environment` unset; the control is empty |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
+| `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `t.judge() has no model` | Set one, or `fakeJudge()` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |
+| `workspace: 'https://…'` | `must come from the git helper` | `({ git }) => ({ workspace: git('https://…', { ref }) })` |
 | `async` environment callback | returned a Promise | Return synchronously; fetch in a `setup` step |
 | Test file named `*.test.ts` | `No eval files match … (config.include)` (exit 2) | `*.es.ts` under `evals/` |
 | `.env.local` outside the config's directory | `Missing credentials: …` | Put it next to `es.config.ts` |

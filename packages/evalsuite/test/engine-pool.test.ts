@@ -1,6 +1,7 @@
 // The main process's side of a worker (engine/pool.ts): forking, the handshake, finding the
 // project's own worker entry, and running files a few at a time.
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
@@ -29,7 +30,7 @@ process.send({ t: 'hello', protocol: ${PROTOCOL} })
 process.on('message', (m) => {
   console.log('stdout text')
   console.error('stderr text')
-  process.send({ t: 'done', echo: m.t }, () => process.exit(0))
+  process.send({ t: 'done', echo: m.t, argv: process.argv.slice(2) }, () => process.exit(0))
 })
 `)
     const worker = forkWorker(entry, tempDir('cwd'))
@@ -41,8 +42,29 @@ process.on('message', (m) => {
     worker.send({ t: 'cancel' })
     assert.deepEqual(await worker.exited, { code: 0, signal: null })
     worker.send({ t: 'cancel' })
-    assert.deepEqual(messages.at(-1), { t: 'done', echo: 'cancel' })
+    assert.deepEqual(messages.at(-1), { t: 'done', echo: 'cancel', argv: ['__worker'] })
     assert.deepEqual(output.sort(), ['stderr:stderr text\n', 'stdout:stdout text\n'])
+  })
+
+  test("messages cross as JSON: what JSON can't carry arrives as JSON has it", async () => {
+    const entry = script(`
+process.send({ t: 'hello', protocol: ${PROTOCOL} })
+process.on('message', (m) => {
+  process.send({ t: 'echo', got: m, at: new Date(0), gone: undefined, n: NaN }, () => process.exit(0))
+})
+`)
+    const worker = forkWorker(entry, tempDir('cwd'))
+    const messages: unknown[] = []
+    worker.onMessage((m) => messages.push(m))
+    await handshake(worker, entry)
+    worker.send({ t: 'grant', id: 'l1' })
+    await worker.exited
+    assert.deepEqual(messages.at(-1), {
+      t: 'echo',
+      got: { t: 'grant', id: 'l1' },
+      at: '1970-01-01T00:00:00.000Z',
+      n: null,
+    })
   })
 
   test('a worker in another protocol is refused and killed', async () => {
@@ -74,8 +96,16 @@ process.on('message', (m) => {
   })
 })
 
+test("es __worker, which isn't a command, refuses to start without the engine", () => {
+  const r = spawnSync(process.execPath, [join(DIST_DIR, 'cli.js'), '__worker'], {
+    encoding: 'utf8',
+  })
+  assert.equal(r.status, 2)
+  assert.match(r.stderr, /es __worker is the process ES starts for each eval file/)
+})
+
 describe('workerEntry', () => {
-  test("the project's own copy of ES, when it has a worker; else this ES's", () => {
+  test("the project's own copy of ES, when it has a CLI; else this ES's", () => {
     const root = tempDir('entry')
     const pkg = join(root, 'node_modules/evalsuite')
     mkdirSync(join(pkg, 'dist'), { recursive: true })
@@ -83,10 +113,10 @@ describe('workerEntry', () => {
       join(pkg, 'package.json'),
       JSON.stringify({ name: 'evalsuite', exports: { './package.json': './package.json' } }),
     )
-    assert.equal(workerEntry(root, ['@invertase/foobar', 'evalsuite']), join(DIST_DIR, 'worker.js'))
-    writeFileSync(join(pkg, 'dist/worker.js'), '')
-    assert.equal(workerEntry(root, ['@invertase/foobar', 'evalsuite']), join(pkg, 'dist/worker.js'))
-    assert.equal(workerEntry(tempDir('none'), ['evalsuite']), join(DIST_DIR, 'worker.js'))
+    assert.equal(workerEntry(root, ['@invertase/foobar', 'evalsuite']), join(DIST_DIR, 'cli.js'))
+    writeFileSync(join(pkg, 'dist/cli.js'), '')
+    assert.equal(workerEntry(root, ['@invertase/foobar', 'evalsuite']), join(pkg, 'dist/cli.js'))
+    assert.equal(workerEntry(tempDir('none'), ['evalsuite']), join(DIST_DIR, 'cli.js'))
   })
 })
 

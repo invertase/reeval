@@ -40,6 +40,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `ES_MCP_TOKEN` | `--token` | `es mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
 | `ES_NO_REPORT_HINT` | | `1` hides the line suggesting `es report` after an infra error or a crash |
 | `ES_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
+| `ES_FAKE_EXEC` | | Not read from your shell: on Windows, a random id ES sets in each fake-sandbox command's environment, so that stopping the command also stops every MSYS process it started |
 | `ES_BASE` | | Not read from your shell: the build argument ES passes to a `docker({ dockerfile })` build, naming ES's image for the cell's harness. Start a Dockerfile `ARG ES_BASE` / `FROM ${ES_BASE}` |
 
 ## CI and agent detection

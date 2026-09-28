@@ -1,15 +1,22 @@
 import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { createJiti } from 'jiti'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { AGENTS, DEFAULT_HARNESS, HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
+import {
+  AGENTS,
+  credentialOf,
+  DEFAULT_HARNESS,
+  HARNESS_EXAMPLE,
+  isAgentKind,
+} from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
+import { esJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkHarnesses, checkOptions } from './options.ts'
+import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
   Budget,
@@ -112,7 +119,7 @@ export async function loadConfig(
   const configPath = configLabel(path)
   let user: EsConfig = {}
   if (existsSync(path)) {
-    const jiti = createJiti(import.meta.url, { moduleCache: false })
+    const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
     const module = (await jiti.import(path)) as Record<string, unknown>
     // Without this, a config that forgets `export default` would run the default harness for real.
     if (!module || typeof module !== 'object' || !('default' in module)) {
@@ -513,13 +520,11 @@ export function secretSources(env: EnvVars): Array<[string, string]> {
 export function missingCredentials(
   config: ResolvedConfig,
   env = process.env,
-  options: { harnessKinds?: string[]; profile?: ResolvedProfile | null } = {},
+  options: { harnesses?: HarnessDescriptor[]; profile?: ResolvedProfile | null } = {},
 ): string[] {
   const missing: string[] = []
-  const kinds = options.harnessKinds ?? config.harness.map((h) => h.kind)
-  for (const kind of new Set(kinds)) {
-    if (isAgentKind(kind) && !env[AGENTS[kind].credential]) missing.push(AGENTS[kind].credential)
-  }
+  const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
+  for (const key of keys) if (!env[key]) missing.push(key)
   if (config.judge.model !== undefined) {
     const judgeKeys = judgeCredentials(config.judge.model)
     if (judgeKeys.length && !judgeKeys.some((k) => env[k])) missing.push(judgeKeys.join(' or '))
@@ -544,12 +549,9 @@ export const badCharacterAt = (value: string) =>
 export function malformedCredentials(
   config: ResolvedConfig,
   env = process.env,
-  options: { harnessKinds?: string[] } = {},
+  options: { harnesses?: HarnessDescriptor[] } = {},
 ): string[] {
-  const kinds = options.harnessKinds ?? config.harness.map((h) => h.kind)
-  const names = [...new Set(kinds)].flatMap((kind) =>
-    isAgentKind(kind) ? [AGENTS[kind].credential] : [],
-  )
+  const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
   if (config.judge.model !== undefined) names.push(...judgeCredentials(config.judge.model))
   return [...new Set(names)].flatMap((name) => {
     const at = badCharacterAt(env[name] ?? '')

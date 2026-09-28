@@ -1,0 +1,1521 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from FromWorker in src/engine/protocol.ts by `pnpm schema:update`; don't edit. A message from a worker to the main process (src/engine/PROTOCOL.md).",
+  "title": "FromWorker",
+  "$ref": "#/$defs/FromWorker",
+  "$defs": {
+    "AntigravityHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "antigravity"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "AttemptMeta": {
+      "type": "object",
+      "properties": {
+        "brokered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cell": {
+          "$ref": "#/$defs/Cell"
+        },
+        "egress": {
+          "$ref": "#/$defs/PlannedEgress"
+        },
+        "gate": {
+          "$ref": "#/$defs/CellGate"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "harness": {
+          "$ref": "#/$defs/HarnessDescriptor"
+        },
+        "label": {
+          "type": "string"
+        },
+        "minLift": {
+          "type": "number"
+        },
+        "n": {
+          "type": "number"
+        },
+        "name": {
+          "type": "string"
+        },
+        "plan": {
+          "$ref": "#/$defs/EvalPlan"
+        },
+        "sandbox": {
+          "$ref": "#/$defs/SandboxDescriptor"
+        },
+        "secretVars": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "setBy": {
+          "type": "object",
+          "properties": {
+            "harness": {
+              "type": "string"
+            },
+            "sandbox": {
+              "type": "string"
+            }
+          },
+          "required": ["harness", "sandbox"]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "workspace": {
+          "$ref": "#/$defs/GitWorkspace"
+        }
+      },
+      "required": [
+        "brokered",
+        "cell",
+        "egress",
+        "gate",
+        "groups",
+        "harness",
+        "label",
+        "n",
+        "name",
+        "plan",
+        "sandbox",
+        "secretVars",
+        "setBy",
+        "tags"
+      ]
+    },
+    "Cell": {
+      "type": "object",
+      "properties": {
+        "environment": {
+          "type": "string"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/CellRole"
+        },
+        "sandbox": {
+          "type": "string"
+        },
+        "variant": {
+          "type": "string"
+        }
+      },
+      "required": ["environment", "harness", "key", "role", "sandbox"]
+    },
+    "CellGate": {
+      "anyOf": [
+        {
+          "enum": ["all", "none"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "passRate": {
+              "type": "number"
+            }
+          },
+          "required": ["passRate"]
+        }
+      ]
+    },
+    "CellRole": {
+      "enum": ["control", "variant"]
+    },
+    "ClaudeCodeHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "claude-code"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "CodexHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "codex"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "CursorHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "cursor"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "DebugLine": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "number"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "level": {
+          "enum": [1, 2]
+        },
+        "phase": {
+          "enum": [
+            "broker",
+            "check",
+            "container",
+            "docker",
+            "env",
+            "gateway",
+            "harness",
+            "image",
+            "judge",
+            "plan",
+            "teardown"
+          ]
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": ["at", "level", "phase", "text"]
+    },
+    "DockerSandboxDescriptor": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cpus": {
+          "type": "number"
+        },
+        "dockerfile": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "install": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InstallStep"
+          }
+        },
+        "kind": {
+          "const": "docker"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "pids": {
+          "type": "number"
+        },
+        "root": {
+          "type": "boolean"
+        }
+      },
+      "required": ["kind"]
+    },
+    "EgressPolicy": {
+      "anyOf": [
+        {
+          "enum": ["allow-all", "deny-all"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allow": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["allow"]
+        }
+      ]
+    },
+    "EvalMeta": {
+      "type": "object",
+      "properties": {
+        "errorKind": {
+          "anyOf": [
+            {
+              "enum": ["aborted", "assertion", "infra", "judge", "timeout"]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "judgements": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string"
+              },
+              "score": {
+                "type": "number"
+              },
+              "threshold": {
+                "type": "number"
+              },
+              "verdict": {
+                "enum": ["fail", "pass"]
+              }
+            },
+            "required": ["question", "score", "threshold", "verdict"]
+          }
+        },
+        "outcome": {
+          "enum": ["fail", "infra_error", "pass"]
+        },
+        "prepare": {
+          "type": "object",
+          "properties": {
+            "ref": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "stage": {
+              "type": "string"
+            }
+          },
+          "required": ["ref", "stage"]
+        },
+        "turnErrors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": ["errorKind", "judgements", "outcome"]
+    },
+    "EvalPlan": {
+      "type": "object",
+      "properties": {
+        "attempts": {
+          "type": "number"
+        },
+        "brokered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "egress": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gate": {
+          "anyOf": [
+            {
+              "const": "all"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "passRate": {
+                  "type": "number"
+                }
+              },
+              "required": ["passRate"]
+            }
+          ]
+        },
+        "harnesses": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "runs": {
+          "type": "number"
+        },
+        "sandboxWarnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SandboxWarning"
+          }
+        },
+        "skip": {
+          "type": "string"
+        },
+        "variants": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "of": {
+                  "type": "number"
+                },
+                "run": {
+                  "type": "number"
+                }
+              },
+              "required": ["of", "run"]
+            }
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "workspaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "attempts",
+        "brokered",
+        "egress",
+        "harnesses",
+        "notes",
+        "runs",
+        "sandboxWarnings",
+        "variants",
+        "warnings",
+        "workspaces"
+      ]
+    },
+    "FakeHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "delayMs": {
+          "type": "number"
+        },
+        "failWith": {
+          "type": "string"
+        },
+        "files": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "flakeRate": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "ignoreAbort": {
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "fake"
+        },
+        "layout": {
+          "enum": ["antigravity", "claude-code", "codex", "cursor", "goose", "opencode", "pi"]
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "script": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FakeScriptStep"
+            }
+          }
+        },
+        "servedModel": {
+          "type": "string"
+        },
+        "startHangs": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "input": {},
+              "ok": {
+                "type": "boolean"
+              },
+              "output": {},
+              "tool": {
+                "type": "string"
+              }
+            },
+            "required": ["input", "output", "tool"]
+          }
+        },
+        "withSkill": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": []
+        }
+      },
+      "required": ["kind"]
+    },
+    "FakeSandboxDescriptor": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "fake"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        }
+      },
+      "required": ["kind"]
+    },
+    "FakeScriptStep": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": ["error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exec": {
+              "type": "string"
+            }
+          },
+          "required": ["exec"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mcp": {
+              "type": "string"
+            }
+          },
+          "required": ["mcp"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reply": {
+              "type": "string"
+            }
+          },
+          "required": ["reply"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "write": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["write"]
+        }
+      ]
+    },
+    "FromWorker": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "index": {
+              "type": "number"
+            },
+            "stream": {
+              "enum": ["stderr", "stdout"]
+            },
+            "t": {
+              "const": "log"
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": ["at", "stream", "t", "text"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "index": {
+              "type": "number"
+            },
+            "t": {
+              "const": "start"
+            }
+          },
+          "required": ["at", "index", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/SerializedError"
+            },
+            "t": {
+              "const": "load-error"
+            }
+          },
+          "required": ["error", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "$ref": "#/$defs/SerializedError"
+            },
+            "t": {
+              "const": "unhandled"
+            }
+          },
+          "required": ["error", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "limits": {
+              "$ref": "#/$defs/Limits"
+            },
+            "rank": {
+              "$ref": "#/$defs/Rank"
+            },
+            "t": {
+              "const": "request"
+            }
+          },
+          "required": ["id", "limits", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "t": {
+              "const": "release"
+            }
+          },
+          "required": ["id", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "number"
+            },
+            "line": {
+              "$ref": "#/$defs/DebugLine"
+            },
+            "t": {
+              "const": "debug"
+            }
+          },
+          "required": ["index", "line", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "number"
+            },
+            "meta": {
+              "$ref": "#/$defs/EvalMeta"
+            },
+            "t": {
+              "const": "meta"
+            }
+          },
+          "required": ["index", "meta", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "number"
+            },
+            "progress": {
+              "$ref": "#/$defs/Progress"
+            },
+            "t": {
+              "const": "progress"
+            }
+          },
+          "required": ["index", "progress", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "index": {
+              "type": "number"
+            },
+            "result": {
+              "$ref": "#/$defs/WireResult"
+            },
+            "t": {
+              "const": "result"
+            }
+          },
+          "required": ["index", "result", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "protocol": {
+              "type": "number"
+            },
+            "t": {
+              "const": "hello"
+            }
+          },
+          "required": ["protocol", "t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "collected"
+            },
+            "tests": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WireTest"
+              }
+            }
+          },
+          "required": ["t", "tests"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "done"
+            }
+          },
+          "required": ["t"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "t": {
+              "const": "ready"
+            }
+          },
+          "required": ["t"]
+        }
+      ]
+    },
+    "GitWorkspace": {
+      "type": "object",
+      "properties": {
+        "init": {
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "git"
+        },
+        "path": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "repo", "url"]
+    },
+    "GooseHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "goose"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "HarnessDescriptor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AntigravityHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/CodexHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/CursorHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/FakeHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/GooseHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/PiHarnessDescriptor"
+        }
+      ]
+    },
+    "InstallStep": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run": {
+              "type": "string"
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": ["run"]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "Limits": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "OpenCodeHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "opencode"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "PiHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "pi"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "PlannedEgress": {
+      "type": "object",
+      "properties": {
+        "auto": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/EgressPolicy"
+        }
+      },
+      "required": ["auto", "policy"]
+    },
+    "Progress": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "command": {
+              "type": "string"
+            },
+            "exitCode": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "check-end"
+            },
+            "ms": {
+              "type": "number"
+            }
+          },
+          "required": ["at", "command", "exitCode", "kind", "ms"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "command": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "check-start"
+            }
+          },
+          "required": ["at", "command", "kind"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "error": {
+              "type": "string"
+            },
+            "fileEdits": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "turn-end"
+            },
+            "ms": {
+              "type": "number"
+            },
+            "status": {
+              "$ref": "#/$defs/TurnStatus"
+            },
+            "tools": {
+              "type": "number"
+            },
+            "turn": {
+              "type": "number"
+            }
+          },
+          "required": ["at", "fileEdits", "kind", "ms", "status", "tools", "turn"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "cleanup"
+            }
+          },
+          "required": ["at", "kind"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "judge-end"
+            },
+            "ms": {
+              "type": "number"
+            },
+            "question": {
+              "type": "string"
+            },
+            "score": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "threshold": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "verdict": {
+              "enum": ["error", "fail", "pass"]
+            }
+          },
+          "required": ["at", "kind", "ms", "question", "score", "threshold", "verdict"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "judge-start"
+            },
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": ["at", "kind", "question"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "sandbox-ready"
+            },
+            "ms": {
+              "type": "number"
+            }
+          },
+          "required": ["at", "kind", "ms"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "sandbox"
+            }
+          },
+          "required": ["at", "kind"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
+            "kind": {
+              "const": "turn-start"
+            },
+            "turn": {
+              "type": "number"
+            }
+          },
+          "required": ["at", "kind", "turn"]
+        }
+      ]
+    },
+    "Rank": {
+      "type": "object",
+      "properties": {
+        "cell": {
+          "type": "number"
+        },
+        "eval": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "n": {
+          "type": "number"
+        },
+        "order": {
+          "type": "number"
+        }
+      },
+      "required": ["cell", "eval", "file", "n", "order"]
+    },
+    "SandboxDescriptor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DockerSandboxDescriptor"
+        },
+        {
+          "$ref": "#/$defs/FakeSandboxDescriptor"
+        }
+      ]
+    },
+    "SandboxWarning": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "file": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "kind": {
+          "enum": ["capabilities", "root"]
+        },
+        "level": {
+          "enum": ["config", "eval", "group", "profile"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "where": {
+          "type": "string"
+        }
+      },
+      "required": ["file", "kind", "level", "message", "where"]
+    },
+    "SerializedError": {
+      "type": "object",
+      "properties": {
+        "cause": {},
+        "codeFrame": {
+          "type": "string"
+        },
+        "diff": {
+          "type": "string"
+        },
+        "frame": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "stack": {},
+        "stacks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "column": {
+                "type": "number"
+              },
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "number"
+              },
+              "method": {
+                "type": "string"
+              }
+            },
+            "required": ["column", "file", "line", "method"]
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": {}
+    },
+    "TurnStatus": {
+      "enum": ["aborted", "completed", "error"]
+    },
+    "WireResult": {
+      "type": "object",
+      "properties": {
+        "durationMs": {
+          "type": "number"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SerializedError"
+          }
+        },
+        "meta": {
+          "$ref": "#/$defs/EvalMeta"
+        },
+        "state": {
+          "enum": ["failed", "passed", "skipped"]
+        }
+      },
+      "required": ["durationMs", "errors", "state"]
+    },
+    "WireTest": {
+      "type": "object",
+      "properties": {
+        "attempt": {
+          "$ref": "#/$defs/AttemptMeta"
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "index": {
+          "type": "number"
+        },
+        "mode": {
+          "enum": ["only", "run", "skip", "todo"]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["groups", "index", "mode", "name"]
+    }
+  }
+}

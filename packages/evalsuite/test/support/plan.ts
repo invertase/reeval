@@ -21,7 +21,13 @@ export async function planJson(c: Omit<PlanCase, 'name'>): Promise<PlanDocument>
   })
   assert.equal(r.code, 0, r.stdout + r.stderr)
   assert.equal(existsSync(join(p.dir, '.es/runs')), false, 'a dry run writes no run')
-  return JSON.parse(r.stdout) as PlanDocument
+  try {
+    return JSON.parse(r.stdout) as PlanDocument
+  } catch (error) {
+    throw new Error(
+      `es run --dry-run --json printed ${r.stdout.length} characters that aren't one JSON document (${(error as Error).message}):\n${r.stdout.slice(0, 400)}\n…\n${r.stdout.slice(-400)}\nstderr:\n${r.stderr}`,
+    )
+  }
 }
 
 /** Aligns columns; a short row (a skipped eval) only shares the first column's width. */
@@ -77,6 +83,9 @@ export function renderPlan(plan: PlanDocument): string {
           c.minLift === undefined ? '' : `minLift ${c.minLift}`,
           ...(i === 0 ? e.notes : []),
           c.brokered.length ? `brokered: ${c.brokered.join('; ')}` : '',
+          c.workspace
+            ? `workspace ${c.workspace.repo}${c.workspace.ref ? `#${c.workspace.ref}` : ''}${c.workspace.path ? `:${c.workspace.path}` : ''}`
+            : '',
           c.egress.policy === 'allow-all'
             ? ''
             : `egress ${JSON.stringify(c.egress.policy)}${c.egress.auto.length ? ` + ${c.egress.auto.join(', ')}` : ''}`,

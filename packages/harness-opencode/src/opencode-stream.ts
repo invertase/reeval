@@ -2,13 +2,17 @@ import { OPENCODE_BUILTIN_TOOLS } from './opencode-tools.ts'
 
 type Part = { type: string; [key: string]: unknown }
 
-/** The builtin's key for each name OpenCode gives its tools. */
-const BUILTIN_BY_NATIVE = new Map<string, string>(
-  Object.entries(OPENCODE_BUILTIN_TOOLS).map(([key, t]) => [
+/**
+ * The builtin's key for each name OpenCode gives its tools. `patch`, the edit tool OpenCode gives
+ * GPT models in place of `edit`, reports the files it changed as `edit` does, so it's an `edit`.
+ */
+const BUILTIN_BY_NATIVE = new Map<string, string>([
+  ...Object.entries(OPENCODE_BUILTIN_TOOLS).map(([key, t]): [string, string] => [
     'nativeName' in t && typeof t.nativeName === 'string' ? t.nativeName : key,
     key,
   ]),
-)
+  ['patch', 'edit'],
+])
 
 const NO_USAGE = {
   inputTokens: {
@@ -48,8 +52,8 @@ const searchResults = (text: string) =>
  *   `content`, and `harness-acp` passes on its `rawOutput`, `{ metadata }`. A web search's also
  *   lists its `references`, `{ title, url }`.
  * - A call it couldn't name (`acp_tool_<id>`) is named from OpenCode's first `tool_call` update,
- *   whose title is the tool's name: `shell` (its later titles are the command), or
- *   `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
+ *   whose title is the tool's name: `shell` (its later titles are the command), `patch` (an
+ *   `edit`), or `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
  * - The `finish` part's usage is dropped: OpenCode's ACP `PromptResponse.usage` is its last model
  *   call's, not the turn's, and an undercount is worse than none. Its `usage_update` is no help:
  *   `used` is the last call's context size, and `cost` the whole session's.

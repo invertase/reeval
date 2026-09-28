@@ -1,7 +1,5 @@
-#!/usr/bin/env node
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
 import { appendFile, readFile, rm } from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
@@ -23,6 +21,7 @@ import {
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
+import { workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
@@ -34,6 +33,7 @@ import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
+import { PACKAGE_VERSION } from './root.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -53,7 +53,7 @@ const EXPECTED_ERRORS = ['CommandError', 'RefError', 'HistoryError', 'StudioBuil
 
 const EXIT = { ok: 0, failed: 1, usage: 2, infra: 3, interrupted: 130, terminated: 143 } as const
 
-const version: string = createRequire(import.meta.url)('../package.json').version
+const version = PACKAGE_VERSION
 
 const HELP = helpText(version)
 
@@ -606,7 +606,7 @@ async function executeRun(
     if (setup.dryRun) return false
     checkAttemptBudget(plan, setup.force, config.file)
     const missing = missingCredentials(config, process.env, {
-      harnessKinds: plan.harnessKinds,
+      harnesses: plan.harnessDescriptors,
       profile,
     })
     if (missing.length) {
@@ -615,12 +615,49 @@ async function executeRun(
       )
     }
     const malformed = malformedCredentials(config, process.env, {
-      harnessKinds: plan.harnessKinds,
+      harnesses: plan.harnessDescriptors,
     })
     if (malformed.length) {
       throw new UsageError(
         `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
+    }
+    const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
+    const live = planned.filter((p) => !p.attempt.plan.skip)
+    const outcomes = await prepareWorkspaces(
+      live.flatMap(({ attempt: a }) =>
+        a.workspace ? [{ workspace: a.workspace, environment: a.cell.environment }] : [],
+      ),
+      { root: config.root, runId },
+    )
+    for (const o of outcomes) {
+      const at = Date.now()
+      if (o.ok) {
+        const text = `workspace ${workspaceLabel(o.workspace)} at ${o.prepared.commit.slice(0, 12)}`
+        renderer.onEvent({ type: 'notice', at, level: 'info', text })
+        continue
+      }
+      // Reported like a sandbox that failed to prepare: once, and only its attempts fail.
+      const key = workspaceKey(o.workspace)
+      const user = live.find(
+        (p) => p.attempt.workspace && workspaceKey(p.attempt.workspace) === key,
+      )
+      if (!user) continue
+      const target = {
+        kind: 'workspace',
+        key: o.label,
+        label: `workspace ${o.label}`,
+        sandbox: user.attempt.sandbox,
+        harness: user.attempt.harness,
+        setBy: o.setBy,
+        runWide: false,
+      }
+      renderer.onEvent({
+        type: 'prepare',
+        at,
+        state: 'failed',
+        outcome: { target, ok: false, failure: o.failure, ms: 0 },
+      })
     }
     try {
       sandboxVersions = await preflight(
@@ -742,6 +779,8 @@ async function executeRun(
     clearTimeout(budgetTimer)
     const { removePrepared } = await import('./sandbox/preflight.ts')
     removePrepared(config.root, runId)
+    const { removePreparedWorkspaces } = await import('./workspace.ts')
+    removePreparedWorkspaces(config.root, runId)
   }
   if (preflightStop) throw preflightStop
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted))

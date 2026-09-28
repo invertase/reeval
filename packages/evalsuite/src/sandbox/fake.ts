@@ -1,3 +1,5 @@
+import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -36,6 +38,29 @@ export function posixShell(
   )
 }
 
+const EXEC_TAG = 'ES_FAKE_EXEC'
+
+// Kills every MSYS process whose environment carries the command's tag, until none is left.
+const KILL_TAGGED = `for pass in 1 2 3 4 5; do
+  found=
+  for f in $(grep -lzx "${EXEC_TAG}=$1" /proc/[0-9]*/environ 2>/dev/null); do
+    p=\${f#/proc/}; kill -9 "\${p%/environ}" 2>/dev/null; found=1
+  done
+  [ -n "$found" ] || break
+done`
+
+/**
+ * Stops a command's MSYS processes on Windows. `taskkill /t` doesn't reach them: Git's `sh.exe`
+ * starts bash, whose fork and exec leave each new process's Windows parent gone, so a timed-out
+ * `sleep 30` would run on, holding the command's pipes and working directory.
+ */
+function killTagged(sh: string, tag: string) {
+  spawn(sh, ['-c', KILL_TAGGED, 'sh', tag], {
+    stdio: 'ignore',
+    windowsHide: true,
+  }).on('error', () => {})
+}
+
 /**
  * A temp directory on the host. Commands run unisolated on the host shell, so this is
  * only meant for tests and for the fake harness.
@@ -58,12 +83,16 @@ export async function createFakeSandbox(
     workdir,
     // The shell changes into `cwd`, so a missing one fails the command (as in Docker) rather
     // than the spawn.
-    exec: (command, { cwd, env: extra, signal } = {}) =>
-      run(sh, ['-c', cwd ? `cd ${shellQuote(cwd)} && ${command}` : command], {
+    exec: (command, { cwd, env: extra, signal } = {}) => {
+      const tag = process.platform === 'win32' && signal ? randomUUID() : undefined
+      const stop = () => killTagged(sh, tag as string)
+      if (tag) signal?.addEventListener('abort', stop, { once: true })
+      return run(sh, ['-c', cwd ? `cd ${shellQuote(cwd)} && ${command}` : command], {
         cwd: workdir,
-        env: { HOME: base, ...env, ...extra },
+        env: { HOME: base, ...env, ...extra, ...(tag ? { [EXEC_TAG]: tag } : {}) },
         signal,
-      }),
+      }).finally(() => signal?.removeEventListener('abort', stop))
+    },
     home: base,
     readFile: (path) => readFile(resolve(path), 'utf8').catch(() => null),
     async writeFile(path, content) {

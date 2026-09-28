@@ -17,6 +17,7 @@ import {
   cellOf,
   type HarnessRow,
   harnesses,
+  harnessOf,
   keyOf,
   reserveAttempts,
   rowEnv,
@@ -264,19 +265,21 @@ export const behaviours: Behaviour[] = [
     name: 'native stream format unchanged',
     canary: false,
     check(ran, row) {
-      if (!hasFormat(row.id)) return 'n/a'
+      // One format per CLI: OpenCode's rows on other providers share OpenCode's.
+      const cli = harnessOf(row)
+      if (!hasFormat(cli)) return 'n/a'
       const events = rawTranscripts(ran.runDir).flatMap((f) =>
         nativeEvents(readFileSync(f, 'utf8')),
       )
       assert.ok(events.length > 0, 'no native events in the raw transcripts')
-      const seen = signatures(row.id, events)
-      if (process.env.ES_UPDATE_FORMATS === '1') learnSignatures(row.id, seen)
-      const known = new Set(knownSignatures(row.id))
+      const seen = signatures(cli, events)
+      if (process.env.ES_UPDATE_FORMATS === '1') learnSignatures(cli, seen)
+      const known = new Set(knownSignatures(cli))
       const unknown = seen.filter((s) => !known.has(s))
       assert.deepEqual(
         unknown,
         [],
-        `${row.id}'s CLI sent what test/replay/formats/${row.id}.json doesn't know: its output format changed. Check the adapter handles it, then accept it with ES_UPDATE_FORMATS=1.`,
+        `${row.id}'s CLI sent what test/replay/formats/${cli}.json doesn't know: its output format changed. Check the adapter handles it, then accept it with ES_UPDATE_FORMATS=1.`,
       )
     },
   },
@@ -343,7 +346,8 @@ for (const row of harnesses) {
         const { run, dir } = readRun(p.dir)
         ran = { cli, run, runDir: dir, project: p.dir }
         spent.set(row.id, withTurns(run).length)
-        if (process.env.ES_UPDATE_CAPTURES === '1') capture(ran, row)
+        // One set of captures per CLI: its row on another provider sends the same stream.
+        if (process.env.ES_UPDATE_CAPTURES === '1' && !row.harness) capture(ran, row)
       },
       { timeout: 26 * 60_000 },
     )

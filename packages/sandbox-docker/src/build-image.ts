@@ -81,10 +81,11 @@ const BOOTSTRAPS: Record<
   opencode: {
     name: 'OpenCode',
     cli: 'opencode',
-    // The bootstrap only installs the CLI; the key is never used.
+    // The bootstrap only installs the CLI; the key and model are never used.
     adapter: async () =>
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
+        model: 'google/unused',
       }),
   },
   goose: {

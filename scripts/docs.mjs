@@ -14,7 +14,13 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
-import { harnessFacts, renderLayout, renderMatrix } from './harness-matrix.mjs'
+import {
+  harnessFacts,
+  renderLayout,
+  renderMatrix,
+  renderOpenCodeProviders,
+  renderOpenCodeRefused,
+} from './harness-matrix.mjs'
 
 const root = join(import.meta.dirname, '..')
 const docsDir = join(root, 'docs')
@@ -346,6 +352,8 @@ async function blocks() {
   out.set('harness-matrix', renderMatrix(harness.facts, { href: (p) => `/${p}`, text: mdxText }))
   out.set('readme:harness-matrix', renderMatrix(harness.facts, { href: (p) => `./docs/${p}.mdx` }))
   out.set('harness-layout', renderLayout(harness.facts))
+  out.set('opencode-providers', renderOpenCodeProviders())
+  out.set('opencode-refused', renderOpenCodeRefused())
   return out
 }
 
