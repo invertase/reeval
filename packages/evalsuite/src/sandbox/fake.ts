@@ -92,6 +92,9 @@ export async function createFakeSandbox(
         cwd: workdir,
         env: { HOME: base, ...env, ...extra, ...(tag ? { [EXEC_TAG]: tag } : {}) },
         signal,
+        // Detached on Windows means no console, and MSYS then starts a cygwin-console-helper
+        // that outlives a killed shell, in the workspace. Hidden, it gets a console of its own.
+        detached: process.platform !== 'win32',
       }).finally(() => signal?.removeEventListener('abort', stop))
     },
     home: base,
