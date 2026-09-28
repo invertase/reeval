@@ -2,8 +2,17 @@ import type { HarnessV1, HarnessV1AuthenticationEnvironment } from '@ai-sdk/harn
 import {
   createCredentialRequestTransformation,
   isHarnessAuthenticationEnvironment,
+  resolveSandboxHomeDir,
+  shellQuote,
 } from '@ai-sdk/harness/utils'
 import { createACP } from '@ai-sdk/harness-acp'
+import type { Experimental_SandboxSession } from '@ai-sdk/provider-utils'
+import {
+  OPENCODE_GATE,
+  OPENCODE_GATE_EXECUTABLE,
+  OPENCODE_GATE_PATH,
+  OPENCODE_GATE_SERVERS_ENV,
+} from './opencode-gate.ts'
 import {
   OPENCODE_PACKAGE_JSON,
   OPENCODE_PNPM_LOCK,
@@ -29,40 +38,68 @@ export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
 export const OPENCODE_WORKSPACE_SKILLS_DIR = '.opencode/skills'
 
 /**
- * The tools OpenCode offers that can't work in an eval, which the config turns off: `websearch`
- * needs a search integration (without one every call is "Web search cancelled"), `question`
+ * The tools OpenCode offers that can't work in an eval, which the config turns off: `question`
  * waits for a person to answer, and `browser` drives a desktop browser.
  */
-export const OPENCODE_DENIED_TOOLS = ['websearch', 'question', 'browser'] as const
+export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
+
+/**
+ * The search service `websearch` uses: Exa's hosted MCP server, keyless. Without a provider in
+ * the config, the tool asks the user to pick one, which in an eval ends "Web search cancelled".
+ */
+export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
 
 /**
  * The config OpenCode runs with, as `OPENCODE_CONFIG_CONTENT` (2.0.18 no longer reads the
- * `OPENCODE_DISABLE_*` variables for these): no self-update or share links, every tool allowed
- * without asking but {@link OPENCODE_DENIED_TOOLS}, and session titles on the run's own model
- * (OpenCode's default is a second one, `gemini-flash-lite-latest`). An eval's own
- * `opencode.json` still loads, under it.
+ * `OPENCODE_DISABLE_*` variables for these): no self-update or share links,
+ * {@link OPENCODE_DENIED_TOOLS} off, web search on {@link OPENCODE_WEB_SEARCH},
+ * session titles on the run's own model (OpenCode's default is a second one,
+ * `gemini-flash-lite-latest`), and the MCP servers. It loads after an eval's own
+ * `opencode.json(c)`: a key both set is ES's, objects merge (MCP servers by name), and permission
+ * rules append to the eval's.
  */
-export function openCodeConfig(model?: string) {
+export function openCodeConfig(options: OpenCodeConfigOptions = {}) {
+  const servers = Object.entries(options.mcpServers ?? {})
   return {
     update: 'disable',
     share: 'disabled',
-    permissions: [
-      { action: '*', resource: '*', effect: 'allow' },
-      ...OPENCODE_DENIED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' })),
-    ],
-    ...(model ? { agents: { title: { model: googleModel(model) } } } : {}),
+    // Appended to an eval's own rules, and the last match wins, so ES only denies: anything that
+    // asks is answered by harness-acp, which allows it.
+    permissions: OPENCODE_DENIED_TOOLS.map((action) => ({ action, resource: '*', effect: 'deny' })),
+    websearch: { provider: OPENCODE_WEB_SEARCH.provider },
+    ...(options.model ? { agents: { title: { model: googleModel(options.model) } } } : {}),
+    ...(servers.length
+      ? {
+          mcp: {
+            servers: Object.fromEntries(
+              servers.map(([name, server]) => [name, { ...server, codemode: false }]),
+            ),
+          },
+        }
+      : {}),
   }
 }
+
+export type OpenCodeConfigOptions = Pick<OpenCodeHarnessSettings, 'model' | 'mcpServers'>
 
 /**
  * The environment `opencode acp` runs with: its config, and no self-update or model-catalog
  * fetch (it uses the catalog built into the release).
  */
-export const openCodeEnv = (model?: string) => ({
+export const openCodeEnv = (options: OpenCodeConfigOptions = {}) => ({
   OPENCODE_DISABLE_AUTOUPDATE: '1',
   OPENCODE_DISABLE_MODELS_FETCH: '1',
-  OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig(model)),
+  OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig(options)),
+  [OPENCODE_GATE_SERVERS_ENV]: JSON.stringify(Object.keys(options.mcpServers ?? {})),
 })
+
+/**
+ * An MCP server in OpenCode's config: `{ type: 'local', command: [cmd, ...args], environment }`
+ * or `{ type: 'remote', url, headers }`.
+ */
+export type OpenCodeMcpServer =
+  | { type: 'local'; command: string[]; environment?: Record<string, string> }
+  | { type: 'remote'; url: string; headers?: Record<string, string>; oauth?: false }
 
 export type OpenCodeHarnessSettings = {
   /** `{ GOOGLE_GENERATIVE_AI_API_KEY }`, the only key used. The host environment is never read. */
@@ -72,8 +109,12 @@ export type OpenCodeHarnessSettings = {
    * it, OpenCode titles it with its own small model, a second model in the requests.
    */
   readonly model?: string
-  /** ACP `session/new` MCP servers, keyed by name. */
-  readonly mcpServers?: Record<string, unknown>
+  /**
+   * MCP servers, keyed by name, which go in OpenCode's config with `codemode: false`, so its
+   * model calls their tools directly. Over ACP `session/new`, OpenCode 2.0.18 offers them only
+   * through Code Mode (`execute`), which reports no call's input or output.
+   */
+  readonly mcpServers?: Record<string, OpenCodeMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
 }
@@ -121,10 +162,11 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
       pnpmLockYaml: OPENCODE_PNPM_LOCK,
       pnpmWorkspaceYaml: OPENCODE_PNPM_WORKSPACE,
     },
-    executable: 'opencode',
-    args: ['acp'],
+    // The gate, which runs `opencode acp` (see OPENCODE_GATE).
+    executable: OPENCODE_GATE_EXECUTABLE,
+    args: [],
     auth: settings.auth,
-    env: openCodeEnv(settings.model),
+    env: openCodeEnv(settings),
     credentialEnv: [OPENCODE_CREDENTIAL_ENV],
     credentialBrokering: ({ env, sandboxEnv, headers }) => {
       const key = env[OPENCODE_CREDENTIAL_ENV]
@@ -140,7 +182,6 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
     },
     modelMapping: { type: 'session-config-option', path: 'model' },
     skillsDirectory: OPENCODE_HOME_SKILLS_DIR,
-    ...(settings.mcpServers ? { mcpServers: settings.mcpServers } : {}),
   })
   return {
     ...acp,
@@ -154,9 +195,25 @@ export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<Ope
           `The sandbox can't broker ${OPENCODE_CREDENTIAL_ENV} (it has no request transformations), and requireCredentialBrokering is set, so the key stays out of it.`,
         )
       }
-      return translated(await acp.doStart(options), Object.keys(settings.mcpServers ?? {}))
+      const session = await acp.doStart(options)
+      // After the bootstrap, which installs OpenCode's bin directory; the first turn runs it.
+      await writeGate(options.sandboxSession, options.abortSignal)
+      return translated(session, Object.keys(settings.mcpServers ?? {}))
     },
   }
+}
+
+/** Writes the gate where `harness-acp` runs its executable from, executable. */
+async function writeGate(sandbox: Experimental_SandboxSession, abortSignal?: AbortSignal) {
+  const home = await resolveSandboxHomeDir({ sandbox, ...(abortSignal ? { abortSignal } : {}) })
+  const path = `${home}/${OPENCODE_GATE_PATH}`
+  await sandbox.run({
+    command: `mkdir -p ${shellQuote(path.slice(0, path.lastIndexOf('/')))}`,
+    abortSignal,
+  })
+  await sandbox.writeTextFile({ path, content: OPENCODE_GATE, abortSignal })
+  const chmod = await sandbox.run({ command: `chmod 755 ${shellQuote(path)}`, abortSignal })
+  if (chmod.exitCode !== 0) throw new Error(`OpenCode's gate isn't executable: ${path}`)
 }
 
 type Session = Awaited<ReturnType<HarnessV1['doStart']>>

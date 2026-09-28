@@ -1,6 +1,6 @@
 ---
 title: opencode()
-description: The OpenCode 2 harness, its options and id, its Gemini API key, the tokens it can't report, its settings and how its MCP calls are recorded.
+description: The OpenCode 2 harness, its options and id, its Gemini API key, the tokens it can't report, its settings, web search and MCP servers.
 ---
 
 `opencode()` runs [OpenCode](https://opencode.ai) 2 in the Docker sandbox over its ACP server (`opencode acp`), on a Google model with a Gemini API key. `model` is required.
@@ -45,7 +45,7 @@ export default defineConfig({
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
-| Egress hosts added | `generativelanguage.googleapis.com` |
+| Egress hosts added | `generativelanguage.googleapis.com`, `mcp.exa.ai` (web search) |
 | Tokens | Not reported (below) |
 
 Build its image once with `es image build` in a project whose config uses `opencode()`.
@@ -66,41 +66,66 @@ None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports
 
 ## Settings
 
-ES starts OpenCode with this config, as `OPENCODE_CONFIG_CONTENT`, and with `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`, so the CLI stays the image's and its model catalog is the one it shipped with:
+ES starts OpenCode with this config in `OPENCODE_CONFIG_CONTENT`, plus `OPENCODE_DISABLE_AUTOUPDATE=1` and `OPENCODE_DISABLE_MODELS_FETCH=1`. The CLI stays the image's, and its model catalog is the one it shipped with:
 
 ```json
 {
   "update": "disable",
   "share": "disabled",
   "permissions": [
-    { "action": "*", "resource": "*", "effect": "allow" },
-    { "action": "websearch", "resource": "*", "effect": "deny" },
     { "action": "question", "resource": "*", "effect": "deny" },
     { "action": "browser", "resource": "*", "effect": "deny" }
   ],
-  "agents": { "title": { "model": "google/<model>" } }
+  "websearch": { "provider": "exa" },
+  "agents": { "title": { "model": "google/<model>" } },
+  "mcp": { "servers": { "<name>": { "…": "…", "codemode": false } } }
 }
 ```
 
 | Setting | Why |
 |---|---|
 | `update`, `share` | No self-update and no share links. |
-| The `allow` rule | Every tool runs without asking, as on every harness. |
-| `websearch` denied | It needs a search integration the sandbox doesn't have; every call would end "Web search cancelled". |
 | `question` denied | It waits for a person to answer. |
 | `browser` denied | Its tools drive a desktop browser. |
+| `websearch` | Web search on Exa, below. |
 | `agents.title.model` | Session titles run on your model. OpenCode's default is a second one, `gemini-flash-lite-latest`. |
+| `mcp.servers` | The environment's MCP servers, below. |
 
-An `opencode.json` in the eval's files still loads. OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, it also reads `.claude/skills` and `.agents/skills` in the workspace and the home directory, and nothing turns that off, so keep other agents' skills out of an OpenCode eval's files.
+Every other tool runs without asking, as on every harness: ES answers OpenCode's permission requests with allow.
+
+## Your own opencode.jsonc
+
+```jsonc title="opencode.jsonc (in the eval's files)"
+{
+  "agents": { "title": { "model": "google/gemini-2.5-flash" } },
+  "permissions": [{ "action": "webfetch", "resource": "*", "effect": "deny" }],
+  "mcp": { "servers": { "files": { "type": "local", "command": ["node", "files.mjs"] } } }
+}
+```
+
+OpenCode loads `~/.config/opencode`, then the workspace's `opencode.json(c)`, then ES's config last. With the file above, session titles still run on your cell's model (a key both set is ES's), `files` loads beside the environment's MCP servers (objects merge, servers by name), and `webfetch` is off. Permission rules append, the last match winning, so ES's rules only deny: your own denies stand.
+
+OpenCode reads `AGENTS.md`, not `CLAUDE.md`. Besides its own skill directories, it also reads `.claude/skills` and `.agents/skills` in the workspace and the home directory, and nothing turns that off, so keep other agents' skills out of an OpenCode eval's files.
+
+## Web search
+
+```json title="transcript.jsonl"
+{"type":"web-search","toolCallId":"call_782405","query":"anomalyco opencode github","references":8,…}
+```
+
+OpenCode's `websearch` tool calls a search service it's configured with; with none, it asks the user to pick one, which in an eval ends "Web search cancelled". ES points it at Exa's hosted MCP server (`https://mcp.exa.ai/mcp`), which answers without a key. The search runs from the sandbox, so `mcp.exa.ai` is one of OpenCode's automatic hosts and works under `egress: 'deny-all'`.
+
+Exa's free tier is rate-limited. OpenCode sends an Exa key as a URL parameter, which the gateway can't swap in, so ES uses none rather than put a key in the container.
 
 ## MCP servers
 
 ```json title="transcript.jsonl"
-{"type":"tool","tool":"execute","input":{"code":"const result = await tools.stamp.house_stamp();…"},"output":{"metadata":{"toolCalls":[{"tool":"stamp.house_stamp","status":"completed"}],…},"output":"STAMP-7Q"},"ok":true,…}
-{"type":"tool","toolCallId":"call_554042/0","tool":"mcp__stamp__house_stamp","input":{},"output":{"status":"completed"},"ok":true,…}
+{"type":"tool","toolCallId":"call_451616","tool":"mcp__stamp__house_stamp","input":{},"output":{"metadata":{"truncated":false},"output":"STAMP-7Q"},"ok":true,…}
 ```
 
-MCP servers are passed in ACP's `session/new` shape; OpenCode accepts `stdio` and `http` servers. An `sse` server is refused at plan time (exit 2). OpenCode offers the servers' tools only through Code Mode: its model writes JavaScript for its `execute` tool, which calls them. ES records the `execute` call, then each MCP tool it called as `mcp__<server>__<tool>`, with OpenCode's status for it but no input or output, which OpenCode doesn't report per call.
+The environment's MCP servers go in OpenCode's config (`mcp.servers`), `stdio` as `local` and `http` as `remote`, with `codemode: false`, so the model calls their tools directly and the transcript has each call's input and output. An `sse` server is refused at plan time (exit 2). Over ACP's `session/new`, OpenCode would offer them only through Code Mode, its `execute` tool.
+
+OpenCode connects config MCP servers in the background once the session exists. ES runs `opencode acp` behind a small gate that holds the first prompt until each server has connected or failed (at most 30 seconds), so the first step has their tools.
 
 ## Errors
 

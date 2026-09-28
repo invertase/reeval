@@ -15,9 +15,10 @@ const native = (title: string, toolUseKind?: 'readonly' | 'edit' | 'bash'): Buil
  * when it first has input, when OpenCode's title is still the tool's name, except for `shell`,
  * whose title is already the command by then: that one is matched by its `command` input.
  * read, write and edit take `path`, not the common `file_path`, so they aren't common tools.
- * `execute` runs JavaScript that calls the Code Mode tools, MCP servers' among them; the
- * translator reports each MCP call it made. websearch, question and the browser tools are off
- * (see OPENCODE_DENIED_TOOLS).
+ * `execute` runs JavaScript that calls OpenCode's own Code Mode tools; the adapter gives MCP
+ * servers `codemode: false`, so their tools are called directly. `websearch` is kind `other`,
+ * so it has no toolUseKind to rule its title out. question and the browser tools are off (see
+ * OPENCODE_DENIED_TOOLS).
  */
 export const OPENCODE_BUILTIN_TOOLS = {
   bash: {
@@ -73,6 +74,13 @@ export const OPENCODE_BUILTIN_TOOLS = {
     ...tool({ title: 'webfetch', inputSchema: z.looseObject({ url: z.string() }) }),
     nativeName: 'webfetch',
     toolUseKind: 'readonly',
+  },
+  webSearch: {
+    ...commonTool('webSearch', {
+      nativeName: 'websearch',
+      inputSchema: z.looseObject({ query: z.string() }),
+    }),
+    title: 'websearch',
   },
   skill: native('skill', 'readonly'),
   subagent: native('subagent'),

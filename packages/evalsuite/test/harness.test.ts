@@ -50,7 +50,6 @@ import { observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
   type AgentKind,
-  acpMcpServers,
   agentAuth,
   antigravityMcpServers,
   brokeringFor,
@@ -331,20 +330,28 @@ describe('the OpenCode harness', () => {
     assert.deepEqual(AGENTS.opencode.endpoints, OPENCODE_ENDPOINTS)
   })
 
-  test('gets MCP servers in the ACP session/new shape, variables and headers as pairs', () => {
+  test("gets MCP servers in its config's shape, and refuses SSE", () => {
     assert.deepEqual(
-      acpMcpServers({
+      AGENTS.opencode.mcpServers({
         files: { transport: 'stdio', command: 'npx', args: ['mcp-files'], env: { ROOT: '/es' } },
         docs: { transport: 'http', url: 'https://docs.example/mcp', headers: { A: 'b' } },
       }),
       {
-        files: { command: 'npx', args: ['mcp-files'], env: [{ name: 'ROOT', value: '/es' }] },
+        files: { type: 'local', command: ['npx', 'mcp-files'], environment: { ROOT: '/es' } },
         docs: {
-          type: 'http',
+          type: 'remote',
           url: 'https://docs.example/mcp',
-          headers: [{ name: 'A', value: 'b' }],
+          headers: { A: 'b' },
+          oauth: false,
         },
       },
+    )
+    assert.throws(
+      () =>
+        AGENTS.opencode.mcpServers({
+          old: { transport: 'sse', url: 'https://x.example/sse', headers: {} },
+        }),
+      /^InfraError: OpenCode has no SSE MCP transport, so it can't use the old server \(mcp\.sse\)/,
     )
   })
 

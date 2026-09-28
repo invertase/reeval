@@ -58,31 +58,61 @@ test('the config turns off updates, sharing and the tools an eval has no use for
   const config = openCodeConfig()
   assert.equal(config.update, 'disable')
   assert.equal(config.share, 'disabled')
-  // Ordered rules: the later denies win over the leading allow.
-  assert.deepEqual(config.permissions[0], { action: '*', resource: '*', effect: 'allow' })
-  assert.deepEqual(
-    config.permissions.slice(1).map((p) => [p.action, p.effect]),
-    [
-      ['websearch', 'deny'],
-      ['question', 'deny'],
-      ['browser', 'deny'],
-    ],
-  )
+  // Appended to an eval's own rules, where the last match wins: ES only denies.
+  assert.deepEqual(config.permissions, [
+    { action: 'question', resource: '*', effect: 'deny' },
+    { action: 'browser', resource: '*', effect: 'deny' },
+  ])
+  assert.deepEqual(config.websearch, { provider: 'exa' })
   assert.equal('agents' in config, false)
+  assert.equal('mcp' in config, false)
 })
 
 test("session titles run on the turn's model, not a second one", () => {
-  assert.deepEqual(openCodeConfig('gemini-3.8-flash').agents, {
+  assert.deepEqual(openCodeConfig({ model: 'gemini-3.8-flash' }).agents, {
     title: { model: 'google/gemini-3.8-flash' },
   })
-  const env = openCodeEnv('gemini-3.8-flash')
-  assert.deepEqual(JSON.parse(env.OPENCODE_CONFIG_CONTENT), openCodeConfig('gemini-3.8-flash'))
-  // Only variables 2.0.18 still reads.
+  const env = openCodeEnv({ model: 'gemini-3.8-flash' })
+  assert.deepEqual(
+    JSON.parse(env.OPENCODE_CONFIG_CONTENT),
+    openCodeConfig({ model: 'gemini-3.8-flash' }),
+  )
+  // Only variables 2.0.18 still reads, and the gate's.
   assert.deepEqual(Object.keys(env).sort(), [
+    'ES_OPENCODE_MCP_SERVERS',
     'OPENCODE_CONFIG_CONTENT',
     'OPENCODE_DISABLE_AUTOUPDATE',
     'OPENCODE_DISABLE_MODELS_FETCH',
   ])
+})
+
+test('MCP servers go in the config with codemode off, and the gate waits for them', () => {
+  const mcpServers = {
+    stamp: { type: 'local', command: ['node', 's.mjs'], environment: { A: 'b' } },
+    docs: { type: 'remote', url: 'https://docs.test/mcp', headers: {}, oauth: false },
+  } as const
+  assert.deepEqual(openCodeConfig({ mcpServers }).mcp, {
+    servers: {
+      stamp: {
+        type: 'local',
+        command: ['node', 's.mjs'],
+        environment: { A: 'b' },
+        codemode: false,
+      },
+      docs: {
+        type: 'remote',
+        url: 'https://docs.test/mcp',
+        headers: {},
+        oauth: false,
+        codemode: false,
+      },
+    },
+  })
+  assert.deepEqual(JSON.parse(openCodeEnv({ mcpServers }).ES_OPENCODE_MCP_SERVERS), [
+    'stamp',
+    'docs',
+  ])
+  assert.deepEqual(JSON.parse(openCodeEnv().ES_OPENCODE_MCP_SERVERS), [])
 })
 
 test("the catalog names 2.0.18's tools, with its path inputs", () => {
@@ -97,6 +127,7 @@ test("the catalog names 2.0.18's tools, with its path inputs", () => {
     'skill',
     'subagent',
     'webFetch',
+    'webSearch',
     'write',
   ])
   for (const name of ['read', 'write', 'edit'] as const) {

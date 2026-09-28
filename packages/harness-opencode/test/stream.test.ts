@@ -105,71 +105,45 @@ test('twin: a result with no content keeps its raw output', () => {
   })
 })
 
-/** An `execute` call that ran `tools.stamp.house_stamp()` in Code Mode. */
-const execute = (calls: unknown[]) =>
-  call(
-    'e1',
-    'execute',
-    'execute',
-    { code: 'return await tools.stamp.house_stamp()' },
-    {
-      content: [text('STAMP-7Q')],
-      rawOutput: { metadata: { toolCalls: calls, truncated: false } },
-    },
-    'execute',
-  )
-
-test('each MCP call an execute call made follows it, named mcp__<server>__<tool>', () => {
+test("a web search's results are its references", () => {
   const out = turn(
-    execute([
-      { tool: 'stamp.house_stamp', status: 'completed' },
-      { tool: 'opencode.models', status: 'completed' },
-      { tool: 'stamp.house_stamp', status: 'error' },
-    ]),
-    ['stamp'],
+    call(
+      's1',
+      'websearch',
+      'websearch',
+      { query: 'opencode' },
+      {
+        content: [
+          text(
+            '## [anomalyco/opencode](https://github.com/anomalyco/opencode)\n\nThe agent.\n\n## [OpenCode](https://opencode.ai)\n',
+          ),
+        ],
+        rawOutput: { metadata: { provider: 'exa', truncated: false } },
+      },
+    ),
   )
-  assert.deepEqual(names(out), [
-    'execute',
-    'execute',
-    'mcp__stamp__house_stamp',
-    'mcp__stamp__house_stamp',
-    'mcp__stamp__house_stamp',
-    'mcp__stamp__house_stamp',
+  assert.deepEqual(names(out), ['webSearch', 'webSearch'])
+  const result = out.find((p) => p.type === 'tool-result')?.result as Record<string, unknown>
+  assert.deepEqual(result.references, [
+    { title: 'anomalyco/opencode', url: 'https://github.com/anomalyco/opencode' },
+    { title: 'OpenCode', url: 'https://opencode.ai' },
   ])
-  const inner = out.filter((p) => String(p.toolCallId).startsWith('e1/'))
-  assert.deepEqual(
-    inner.map((p) => [p.type, p.toolCallId, p.isError ?? false]),
-    [
-      ['tool-call', 'e1/0', false],
-      ['tool-result', 'e1/0', false],
-      ['tool-call', 'e1/2', false],
-      ['tool-result', 'e1/2', true],
-    ],
-  )
 })
 
-test('twin: an MCP call to a server the session has no such name for is not reported', () => {
-  const out = turn(execute([{ tool: 'stamp.house_stamp', status: 'completed' }]), ['other'])
-  assert.deepEqual(names(out), ['execute', 'execute'])
-})
-
-test("a server's name matches OpenCode's namespace for it, longest first", () => {
+test('twin: another tool with the same text has no references', () => {
   const out = turn(
-    execute([
-      { tool: 'my_docs.search', status: 'completed' },
-      { tool: 'docs_api.search', status: 'completed' },
-    ]),
-    ['my.docs', 'docs', 'docs_api'],
+    call(
+      'f1',
+      'webfetch',
+      'https://opencode.ai',
+      { url: 'https://opencode.ai' },
+      {
+        content: [text('## [OpenCode](https://opencode.ai)')],
+      },
+    ),
   )
-  assert.deepEqual(
-    names(out).filter((n) => n.startsWith('mcp__')),
-    [
-      'mcp__my.docs__search',
-      'mcp__my.docs__search',
-      'mcp__docs_api__search',
-      'mcp__docs_api__search',
-    ],
-  )
+  const result = out.find((p) => p.type === 'tool-result')?.result as Record<string, unknown>
+  assert.equal('references' in result, false)
 })
 
 test('a call harness-acp already named is left alone', () => {
@@ -182,7 +156,7 @@ test('a call harness-acp already named is left alone', () => {
   assert.deepEqual(t.push(part), [part])
 })
 
-test('a directly called MCP tool is named from its title', () => {
+test('an MCP tool is named from its title, by the longest server', () => {
   const out = turn(call('m1', 'docs_api_search', 'x', {}), ['docs', 'docs_api'])
   assert.deepEqual(names(out), ['mcp__docs_api__search', 'mcp__docs_api__search'])
 })

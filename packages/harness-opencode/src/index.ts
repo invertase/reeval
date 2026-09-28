@@ -10,8 +10,11 @@ export {
   OPENCODE_ENDPOINTS,
   OPENCODE_HARNESS_ID,
   OPENCODE_HOME_SKILLS_DIR,
+  OPENCODE_WEB_SEARCH,
   OPENCODE_WORKSPACE_SKILLS_DIR,
+  type OpenCodeConfigOptions,
   type OpenCodeHarnessSettings,
+  type OpenCodeMcpServer,
   openCodeConfig,
   openCodeEnv,
 } from './opencode-harness.ts'

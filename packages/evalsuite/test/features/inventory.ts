@@ -764,7 +764,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.opencode',
     area: 'Harnesses',
-    name: '`opencode()`: OpenCode 2 over ACP on a brokered Gemini key, its image, config, rules, skills, tool names and Code Mode MCP calls',
+    name: '`opencode()`: OpenCode 2 over ACP on a brokered Gemini key, its image, config, rules, skills, tool names, web search and config MCP servers',
     fixtures: [
       'harness/opencode-rules',
       'harness/opencode-workspace-skills',
@@ -778,9 +778,14 @@ export const inventory: InventoryFeature[] = [
       harness("OpenCode's edits and writes are file edits, relative to the workspace"),
       opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
       opencodeAdapter('stream', "a tool's output is its content's text, with its metadata"),
+      opencodeAdapter('stream', "a web search's results are its references"),
       opencodeAdapter(
-        'stream',
-        'each MCP call an execute call made follows it, named mcp__<server>__<tool>',
+        'unit',
+        'MCP servers go in the config with codemode off, and the gate waits for them',
+      ),
+      opencodeAdapter(
+        'gate',
+        'the first prompt waits for the MCP servers to connect, and what follows keeps its order',
       ),
       opencodeAdapter(
         'unit',
@@ -897,7 +902,7 @@ export const inventory: InventoryFeature[] = [
     id: 'harness.web-events',
     area: 'Harnesses',
     name: "Web search and fetch events (Cursor's recovered from its stored conversation), `turn.unreported`, `toHaveSearched` and `toHaveFetched`",
-    fixtures: ['harness/cursor-web-fetch'],
+    fixtures: ['harness/cursor-web-fetch', 'harness/opencode-web-search'],
     tests: [
       harness('web calls the runner recovers survive the adapter, HarnessAgent and the normaliser'),
       harness('SDK 1.0.32 loses them before our first layer'),

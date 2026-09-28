@@ -30,7 +30,7 @@ import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@evalsuite/sa
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
-import { harnesses, reserveAttempts } from './support/harnesses.ts'
+import { type HarnessRow, harnesses, keyOf, reserveAttempts } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
 
 /** `real` is Docker with real Cursor (ES_FIXTURE_HARNESS=cursor), one fixture at a time. */
@@ -66,6 +66,11 @@ type Feature = {
   }) => void | Promise<void>
   /** ES's image the Docker tier needs, when it isn't Cursor's (a fake agent with `layout`). */
   image?: BakedHarness
+  /**
+   * The harness the real tier runs it on, with that contract row's model and key, when it isn't
+   * Cursor: a harness-specific behaviour only that agent has.
+   */
+  realHarness?: HarnessRow['id']
 }
 
 const TOKEN = 'es-fixture-token-7c1d9a0b52e4'
@@ -721,6 +726,22 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'harness/opencode-web-search',
+    tiers: ['real'],
+    realHarness: 'opencode',
+    env: 'closed',
+    canary: /expected no web searches, got \[/,
+    record: ({ run }) => {
+      const attempt = landed(run)
+      assert.ok((attempt?.activity.webSearches ?? 0) >= 1, 'the search is in the record')
+      assert.ok(
+        attempt?.egress?.contacted.some((h) => h.host === 'mcp.exa.ai'),
+        JSON.stringify(attempt?.egress),
+      )
+      assert.deepEqual(attempt?.egress?.blocked, [], 'nothing it needed was refused')
+    },
+  },
+  {
     dir: 'harness/claude-code-harness-skills',
     tiers: ['fake', 'docker'],
     image: 'claude-code',
@@ -1029,6 +1050,11 @@ const dockerReady = imageBuilt(DEFAULT_IMAGE)
 const requireDocker = process.env.ES_TEST_REQUIRE_DOCKER === '1'
 /** Real Cursor, for the attempt ledger (support/harnesses.ts). */
 const cursorRow = harnesses.find((h) => h.id === 'cursor') as (typeof harnesses)[number]
+/** The contract row a fixture's real tier runs on: Cursor, or its `realHarness`. */
+const realRowOf = (f: Feature) =>
+  f.realHarness ? (harnesses.find((h) => h.id === f.realHarness) as HarnessRow) : cursorRow
+/** Cursor's is ES_REAL_MODEL's (default composer-2.5); another row's is its contract model. */
+const realModelOf = (row: HarnessRow) => (row === cursorRow ? realModel : (row.model ?? ''))
 /** The real tier runs only when asked, since it spends money; asked, it needs the key. */
 const real = process.env.ES_TEST_REAL === '1'
 const realModel = process.env.ES_REAL_MODEL ?? 'composer-2.5'
@@ -1065,8 +1091,9 @@ function fixtureTests(tiers: Tier[]) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
       const timeout = { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, async () => {
+        const row = realRowOf(f)
         if (tier === 'real') {
-          reserveAttempts(cursorRow, 2, `fixture ${f.dir}`)
+          reserveAttempts(row, 2, `fixture ${f.dir}`)
         }
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
@@ -1077,16 +1104,16 @@ function fixtureTests(tiers: Tier[]) {
             ES_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
             ...(tier === 'real'
               ? {
-                  ES_FIXTURE_HARNESS: 'cursor',
-                  ES_REAL_MODEL: realModel,
-                  CURSOR_API_KEY: process.env.CURSOR_API_KEY,
+                  ES_FIXTURE_HARNESS: row.id,
+                  ES_REAL_MODEL: realModelOf(row),
+                  ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
                 }
               : {}),
           },
           timeoutMs: timeout - 10_000,
         })
         const sandbox = tier === 'fake' ? 'fake' : 'docker'
-        const harness = tier === 'real' ? `cursor:${realModel}` : 'fake'
+        const harness = tier === 'real' ? `${row.id}:${realModelOf(row)}` : 'fake'
         const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,

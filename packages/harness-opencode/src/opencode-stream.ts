@@ -23,7 +23,7 @@ const NO_USAGE = {
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 
-/** OpenCode's name for an MCP server in tool names and Code Mode paths. */
+/** OpenCode's name for an MCP server in its tools' names. */
 const namespaceOf = (server: string) => server.replace(/[^a-zA-Z0-9_-]/g, '_')
 
 /** The text items of an ACP tool call's `content`, joined. */
@@ -36,18 +36,20 @@ function contentText(content: unknown): string | undefined {
   return texts.length ? texts.join('\n') : undefined
 }
 
+/** A web search's results, from the `## [title](url)` heading OpenCode gives each. */
+const searchResults = (text: string) =>
+  [...text.matchAll(/^## \[(.*)\]\((\S+)\)$/gm)].map(([, title, url]) => ({ title, url }))
+
 /**
  * Fixes up one OpenCode turn's parts from `@ai-sdk/harness-acp`'s bridge (a tool result's value
  * is its `result`, a failure's marked `isError`):
  *
  * - A tool's output is `{ output, metadata }`: OpenCode sends the text only in the call's
- *   `content`, and `harness-acp` passes on its `rawOutput`, `{ metadata }`.
- * - Each MCP tool an `execute` call ran (OpenCode offers the servers' tools only through Code
- *   Mode) follows it as its own call, `mcp__<server>__<tool>`, with the status OpenCode reports
- *   and no input or output, which OpenCode doesn't report per call.
+ *   `content`, and `harness-acp` passes on its `rawOutput`, `{ metadata }`. A web search's also
+ *   lists its `references`, `{ title, url }`.
  * - A call it couldn't name (`acp_tool_<id>`) is named from OpenCode's first `tool_call` update,
  *   whose title is the tool's name: `shell` (its later titles are the command), or
- *   `<server>_<tool>` for an MCP tool called directly, named `mcp__<server>__<tool>`.
+ *   `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
  * - The `finish` part's usage is dropped: OpenCode's ACP `PromptResponse.usage` is its last model
  *   call's, not the turn's, and an undercount is worse than none. Its `usage_update` is no help:
  *   `used` is the last call's context size, and `cost` the whole session's.
@@ -55,7 +57,6 @@ function contentText(content: unknown): string | undefined {
 export class OpenCodeStreamTranslator {
   private readonly titles = new Map<string, string>()
   private readonly texts = new Map<string, string>()
-  private readonly innerCalls = new Map<string, unknown[]>()
   private readonly servers: string[]
 
   constructor(options: { mcpServers?: readonly string[] } = {}) {
@@ -80,9 +81,10 @@ export class OpenCodeStreamTranslator {
     const text = this.texts.get(id)
     const result = record(out.result)
     if (text !== undefined && typeof result.output !== 'string') {
-      out = { ...out, result: { ...result, output: text } }
+      const references = out.toolName === 'webSearch' ? { references: searchResults(text) } : {}
+      out = { ...out, result: { ...result, output: text, ...references } }
     }
-    return out.toolName === 'execute' ? [out, ...this.mcpCalls(id)] : [out]
+    return [out]
   }
 
   private observe(update: Record<string, unknown>) {
@@ -94,32 +96,6 @@ export class OpenCodeStreamTranslator {
     if (update.sessionUpdate !== 'tool_call' && update.sessionUpdate !== 'tool_call_update') return
     const text = contentText(update.content)
     if (text !== undefined) this.texts.set(id, text)
-    const calls = record(record(update.rawOutput).metadata).toolCalls
-    if (Array.isArray(calls)) this.innerCalls.set(id, calls)
-  }
-
-  /** The MCP calls an `execute` call made, as calls of their own after it. */
-  private mcpCalls(id: string): Part[] {
-    return (this.innerCalls.get(id) ?? []).flatMap((call, i) => {
-      const { tool, status } = record(call)
-      if (typeof tool !== 'string') return []
-      const server = this.servers.find((s) => tool.startsWith(`${namespaceOf(s)}.`))
-      if (!server) return []
-      const toolName = `mcp__${server}__${tool.slice(namespaceOf(server).length + 1)}`
-      const toolCallId = `${id}/${i}`
-      return [
-        { type: 'tool-call', toolCallId, toolName, input: '{}', providerExecuted: true },
-        status === 'completed'
-          ? { type: 'tool-result', toolCallId, toolName, result: { status } }
-          : {
-              type: 'tool-result',
-              toolCallId,
-              toolName,
-              result: { error: `${tool}: ${String(status)}` },
-              isError: true,
-            },
-      ]
-    })
   }
 
   private nameFor(title: string | undefined): string | undefined {

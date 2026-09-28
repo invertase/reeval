@@ -93,12 +93,11 @@ const NOTES = [
     `Its SDK leaves web search and fetch calls out of the stream; ES recovers them from the stored conversation, and a turn it can't recover is marked ${code('unreported')} so web matchers refuse it.`,
   (h) =>
     h.kind === 'opencode' &&
-    !h.web.search &&
-    h.web.fetch &&
-    `Web fetch only: OpenCode's ${code('websearch')} needs a search integration the sandbox doesn't have, so ES turns it off.`,
+    h.web.search &&
+    `Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: ${code('mcp.exa.ai')} is one of its automatic hosts.`,
   (h) =>
     h.kind === 'opencode' &&
-    `Its model calls MCP tools from JavaScript through its ${code('execute')} tool (Code Mode); ES records each call it made as ${code('mcp__<server>__<tool>')}, without its input or output.`,
+    `MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its ${code('execute')} tool; the first prompt waits until they've connected.`,
   (h) =>
     h.agent.modelResponses &&
     `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.4-mini-2026-03-17[effort=medium]')}): its CLI doesn't report them.`,

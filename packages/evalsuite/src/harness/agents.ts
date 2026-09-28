@@ -1,4 +1,5 @@
 import type { HarnessAgentAdapter } from '@ai-sdk/harness/agent'
+import type { OpenCodeMcpServer } from '@evalsuite/harness-opencode'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@evalsuite/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -185,32 +186,25 @@ export function antigravityMcpServers(
   )
 }
 
-const pairs = (values: Record<string, string> = {}) =>
-  Object.entries(values).map(([name, value]) => ({ name, value }))
-
-/** The ACP `session/new` shape: variables and headers as `{ name, value }` lists. */
-export function acpMcpServers(servers: Record<string, ResolvedMcpServer>): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(servers).map(([name, s]) =>
-      s.transport === 'stdio'
-        ? [name, { command: s.command, args: s.args, env: pairs(s.env) }]
-        : [name, { type: s.transport, url: s.url, headers: pairs(s.headers) }],
-    ),
-  )
-}
-
-/** OpenCode's ACP `session/new` shape; 2.0.18 has no SSE transport (`mcpCapabilities.sse`). */
+/**
+ * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on;
+ * 2.0.18 has no SSE transport.
+ */
 export function opencodeMcpServers(
   servers: Record<string, ResolvedMcpServer>,
-): Record<string, unknown> {
-  for (const [name, s] of Object.entries(servers)) {
-    if (s.transport === 'sse') {
-      throw new InfraError(
-        `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
-      )
-    }
-  }
-  return acpMcpServers(servers)
+): Record<string, OpenCodeMcpServer> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]): [string, OpenCodeMcpServer] => {
+      if (s.transport === 'sse') {
+        throw new InfraError(
+          `OpenCode has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      return s.transport === 'stdio'
+        ? [name, { type: 'local', command: [s.command, ...s.args], environment: s.env ?? {} }]
+        : [name, { type: 'remote', url: s.url, headers: s.headers ?? {}, oauth: false }]
+    }),
+  )
 }
 
 /** Goose's extension shape (its `config.yaml`); it has no SSE transport. */
@@ -396,7 +390,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       (await import('@evalsuite/harness-opencode')).createOpenCode({
         auth,
         model: descriptor.model,
-        ...(mcpServers ? { mcpServers } : {}),
+        ...(mcpServers ? { mcpServers: mcpServers as Record<string, OpenCodeMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
   },

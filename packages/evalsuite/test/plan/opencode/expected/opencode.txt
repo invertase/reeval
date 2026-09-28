@@ -3,7 +3,7 @@ evals/a.es.ts › both harnesses                                cursor:composer-
                                                               opencode:gemini-3.8-flash/-/docker                   control  gated  ×1
 evals/a.es.ts › opencode only, own id                         oc/-/docker                                          control  gated  ×1
 evals/a.es.ts › opencode on a toolchain base, under deny-all  cursor:composer-2.5/-/docker:python:3.12-slim        control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
-                                                              opencode:gemini-3.8-flash/-/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + generativelanguage.googleapis.com
+                                                              opencode:gemini-3.8-flash/-/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + generativelanguage.googleapis.com, mcp.exa.ai
 excluded: —
 image docker · 1 evals
   base  evalsuite-sandbox:cursor-0.1.0  (ES's image: built when missing or when its base changed)
