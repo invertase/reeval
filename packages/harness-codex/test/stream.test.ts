@@ -8,7 +8,7 @@ const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8').split('\n')
 
 function translate(name: string, exit = { exitCode: 0 }) {
-  const t = new CodexStreamTranslator({ workDir: '/es/workspace' })
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
   const parts: HarnessV1StreamPart[] = []
   for (const line of fixture(name)) parts.push(...t.push(line))
   parts.push(...t.end(exit))
@@ -72,7 +72,7 @@ test("a refused key: each retry a failed step, then the turn's error and an erro
 })
 
 test('a process that dies before the turn ends is an error naming its exit code', () => {
-  const t = new CodexStreamTranslator({ workDir: '/es/workspace' })
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
   t.push('{"type":"thread.started","thread_id":"t"}')
   t.push('not json')
   const parts = t.end({ exitCode: 3, stderr: 'boom' })
@@ -85,7 +85,7 @@ test('a process that dies before the turn ends is an error naming its exit code'
 })
 
 test('an aborted turn finishes as other, without an error', () => {
-  const t = new CodexStreamTranslator({ workDir: '/es/workspace' })
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
   t.push('{"type":"turn.started"}')
   assert.deepEqual(
     t
@@ -96,7 +96,7 @@ test('an aborted turn finishes as other, without an error', () => {
 })
 
 test('an MCP call is mcp__<server>__<tool>; a failed one carries its error', () => {
-  const t = new CodexStreamTranslator({ workDir: '/es/workspace' })
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
   const item = {
     id: 'm1',
     type: 'mcp_tool_call',
@@ -142,7 +142,7 @@ test('a real web turn: the page Codex opened is a web fetch of its URL, known wh
     p.type === 'tool-call' ? [[p.toolName, JSON.parse(p.input)]] : [],
   )
   assert.deepEqual(calls, [['webFetch', { url: 'https://example.com/' }]])
-  const t = new CodexStreamTranslator({ workDir: '/es/workspace' })
+  const t = new CodexStreamTranslator({ workDir: '/reeval/workspace' })
   const search = t.push(
     JSON.stringify({
       type: 'item.completed',

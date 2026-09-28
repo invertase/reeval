@@ -35,7 +35,7 @@ for pair in $images; do
   version=${pinned##* }
   version=${version#v}
   new_label=""
-  bootstrap=/home/es/.ai-sdk-harness/.harness-bootstrap
+  bootstrap=/home/reeval/.ai-sdk-harness/.harness-bootstrap
   case "$harness" in
     antigravity)
       latest=${REEVAL_DRIFT_ANTIGRAVITY_VERSION:-}
@@ -119,7 +119,7 @@ expect \"$latest\" \"\$(bin/codex --version)\""
   context=$(mktemp -d)
   printf '%s\n%s\n' "$expect_fn" "$swap" > "$context/swap.sh"
   # As the sandbox user, who owns the bootstraps and runs them; the image stays root for builds.
-  printf 'FROM %s\nCOPY --chown=es swap.sh /tmp/swap.sh\nUSER es\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nUSER root\nLABEL ai.reeval.agent-version=%s\n' \
+  printf 'FROM %s\nCOPY --chown=reeval swap.sh /tmp/swap.sh\nUSER reeval\nRUN bash /tmp/swap.sh && rm /tmp/swap.sh\nUSER root\nLABEL ai.reeval.agent-version=%s\n' \
     "$image" "\"$new_label\"" > "$context/Dockerfile"
   docker build -q -t "$image" "$context" >/dev/null
   rm -rf "$context"

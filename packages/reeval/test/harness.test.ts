@@ -785,7 +785,7 @@ describe('the Cursor harness', () => {
   })
 
   test('a real turn normalises: relative edits, mcp__ names, timed tools', () => {
-    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
     const ndjson = readFileSync(
       new URL('../../harness-cursor-sdk/test/fixtures/tools-mcp-skills.ndjson', import.meta.url),
       'utf8',
@@ -1260,11 +1260,11 @@ describe('OpenCode transcripts', () => {
     // OpenCode 2.0.18's outputs: its content's text, with its ACP rawOutput's metadata.
     const events = normaliseStream(
       [
-        call('w', 'write', { path: '/es/workspace/b.txt', content: 'bee\nsting\n' }),
+        call('w', 'write', { path: '/reeval/workspace/b.txt', content: 'bee\nsting\n' }),
         result('w', { output: 'Created file successfully: b.txt', metadata: {} }),
         call('o', 'write', { path: 'b.txt', content: 'bee\n' }),
         result('o', { output: 'Wrote file successfully: b.txt', metadata: {} }),
-        call('e', 'edit', { path: '/es/workspace/src/a.ts', oldString: 'a', newString: 'b' }),
+        call('e', 'edit', { path: '/reeval/workspace/src/a.ts', oldString: 'a', newString: 'b' }),
         result('e', {
           output: 'Edited src/a.ts (1 replacement)',
           metadata: {
@@ -1300,7 +1300,7 @@ describe('Claude Code transcripts', () => {
     })
     const events = normaliseStream(
       [
-        call('w', 'write', { file_path: '/es/workspace/greet.js', content: 'hi\n' }),
+        call('w', 'write', { file_path: '/reeval/workspace/greet.js', content: 'hi\n' }),
         result('w', 'ok'),
         call('e', 'edit', { file_path: 'greet.js', old_string: 'hi', new_string: 'hello' }),
         result('e', 'ok'),
@@ -1313,7 +1313,7 @@ describe('Claude Code transcripts', () => {
     assert.deepEqual(
       events.map((e) => [e.type, 'path' in e ? e.path : 'tool' in e ? e.tool : '']),
       [
-        ['file-edit', '/es/workspace/greet.js'],
+        ['file-edit', '/reeval/workspace/greet.js'],
         ['file-edit', 'greet.js'],
         ['tool', 'bash'],
         ['error', ''],
@@ -1377,10 +1377,10 @@ describe('Claude Code transcripts', () => {
           userModified: false,
           replaceAll: false,
         }),
-        call('u', 'write', { file_path: '/es/workspace/notes.md', content: 'a\nb\n' }),
+        call('u', 'write', { file_path: '/reeval/workspace/notes.md', content: 'a\nb\n' }),
         result('u', {
           type: 'update',
-          filePath: '/es/workspace/notes.md',
+          filePath: '/reeval/workspace/notes.md',
           content: 'a\nb\n',
           structuredPatch: [],
           originalFile: 'a\n',
@@ -1395,7 +1395,7 @@ describe('Claude Code transcripts', () => {
       [
         ['greet.js', 'create', 5, 0],
         ['greet.js', 'modify', 1, 1],
-        ['/es/workspace/notes.md', 'modify', 1, 0],
+        ['/reeval/workspace/notes.md', 'modify', 1, 0],
       ],
     )
   })
@@ -1465,9 +1465,15 @@ describe('Antigravity transcripts', () => {
   test("its native tool shapes normalise like the other agents' (CLI 1.2.11)", () => {
     const events = normaliseStream(
       [
-        call('w', 'write', { TargetFile: '/es/workspace/a.txt', file_path: '/es/workspace/a.txt' }),
+        call('w', 'write', {
+          TargetFile: '/reeval/workspace/a.txt',
+          file_path: '/reeval/workspace/a.txt',
+        }),
         result('w', null),
-        call('e', 'edit', { TargetFile: '/es/workspace/a.txt', file_path: '/es/workspace/a.txt' }),
+        call('e', 'edit', {
+          TargetFile: '/reeval/workspace/a.txt',
+          file_path: '/reeval/workspace/a.txt',
+        }),
         result('e', null),
         call('b', 'bash', { CommandLine: 'cat a.txt', command: 'cat a.txt' }),
         result('b', 'hi\r\nthere\r\n'),
@@ -1496,8 +1502,8 @@ describe('Antigravity transcripts', () => {
                 : [e.type],
       ),
       [
-        ['file-edit', '/es/workspace/a.txt', 'modify'],
-        ['file-edit', '/es/workspace/a.txt', 'modify'],
+        ['file-edit', '/reeval/workspace/a.txt', 'modify'],
+        ['file-edit', '/reeval/workspace/a.txt', 'modify'],
         ['tool', 'bash', 'hi\nthere\n', true],
         ['web-search', 'antigravity cli'],
         ['web-fetch', 'https://example.com', true],
@@ -1666,7 +1672,7 @@ describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalise
       .filter((l) => l.type === 'event' && l.event.type === 'tool_call' && WEB.has(l.event.name))
       .filter((l) => l.event.status === 'running')
       .map((l) => l.event.name as string)
-    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
     const parts = lines.flatMap((l) => t.push(l))
     const webCalls = (ps: Array<{ type: string; toolName?: string }>) =>
       ps.flatMap((p) => (p.type === 'tool-call' && WEB.has(p.toolName ?? '') ? [p.toolName] : []))

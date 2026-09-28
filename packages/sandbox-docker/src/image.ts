@@ -57,12 +57,12 @@ export const LABEL = {
  * The user the agent, setup steps and checks run as, which every image reeval builds creates. Image
  * builds (`install`, Dockerfiles) stay root.
  */
-export const SANDBOX_USER = 'es'
+export const SANDBOX_USER = 'reeval'
 /** {@link SANDBOX_USER}'s home. */
 export const SANDBOX_HOME = `/home/${SANDBOX_USER}`
 
 /** The container's default working directory, as seen by the harness. */
-export const SANDBOX_ROOT = '/es'
+export const SANDBOX_ROOT = '/reeval'
 /** The agent's working directory, relative to {@link SANDBOX_ROOT}. */
 export const WORKSPACE_DIR = 'workspace'
 export const BRIDGE_PORT = 43210

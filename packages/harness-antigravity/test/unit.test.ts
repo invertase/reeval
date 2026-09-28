@@ -159,12 +159,16 @@ describe('tools', () => {
 })
 
 describe('command', () => {
-  const base = { cli: '/root/.ai-sdk-harness/bin/agy', workDir: '/es/workspace', promptFile: '/p' }
+  const base = {
+    cli: '/root/.ai-sdk-harness/bin/agy',
+    workDir: '/reeval/workspace',
+    promptFile: '/p',
+  }
 
   test('the default turn', () => {
     assert.equal(
       buildAntigravityCommand(base),
-      "exec '/root/.ai-sdk-harness/bin/agy' '--output-format' 'stream-json' '--add-dir' '/es/workspace' '--disable-slash-commands' '--print-timeout' '0' '--dangerously-skip-permissions' -p \"$(cat '/p')\"",
+      "exec '/root/.ai-sdk-harness/bin/agy' '--output-format' 'stream-json' '--add-dir' '/reeval/workspace' '--disable-slash-commands' '--print-timeout' '0' '--dangerously-skip-permissions' -p \"$(cat '/p')\"",
     )
   })
 

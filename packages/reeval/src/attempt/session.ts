@@ -94,11 +94,11 @@ async function copyWorkspace(
       {
         signal,
         env: {
-          GIT_AUTHOR_NAME: 'es',
-          GIT_AUTHOR_EMAIL: 'es@localhost',
+          GIT_AUTHOR_NAME: 'reeval',
+          GIT_AUTHOR_EMAIL: 'reeval@localhost',
           GIT_AUTHOR_DATE: at,
-          GIT_COMMITTER_NAME: 'es',
-          GIT_COMMITTER_EMAIL: 'es@localhost',
+          GIT_COMMITTER_NAME: 'reeval',
+          GIT_COMMITTER_EMAIL: 'reeval@localhost',
           GIT_COMMITTER_DATE: at,
         },
       },

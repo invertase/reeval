@@ -76,7 +76,7 @@
 | Sandbox `exec`, `readFile`, `writeFile` and `~/`, fake and Docker | ✓ 2 | — | — | — | — |
 | `docker({ install })` layers | ✓ 3 | ✓ 1 | — | — | — |
 | `docker({ dockerfile })` and `REEVAL_BASE` | ✓ 3 | ✓ 1 | — | ● 6 | — |
-| Docker confinement: the `es` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 7 | — | — | ● 1 | — |
+| Docker confinement: the `reeval` user, no capabilities, `no-new-privileges`, and `docker({ root, capabilities })` | ✓ 7 | — | — | ● 1 | — |
 | Warnings for `docker({ root: true })` and `docker({ capabilities })`, per level that sets them | ✓ 4 | ✓ 2 | — | — | — |
 | `docker({ memory, cpus, pids })` and their defaults | ✓ 4 | — | — | ● 1 | — |
 | `docker({ from })` toolchain images | ✓ 2 | — | — | — | — |

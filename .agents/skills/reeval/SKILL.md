@@ -234,7 +234,7 @@ docker({ memory: '8g', cpus: 4, pids: 4096 })        // limits; defaults 4g (no 
 docker({ root: true })                               // opt in: apt-get at run time (default: user es)
 ```
 
-The agent, setup and `t.exec` run as `es` (home `/home/es`) with no capabilities; builds run as root.
+The agent, setup and `t.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
 `root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
 
 One sandbox per eval (a list is an error). `npx reeval image build` builds every image the plan needs.
