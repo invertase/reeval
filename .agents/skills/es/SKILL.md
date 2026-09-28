@@ -167,11 +167,13 @@ export const app = defineEnvironment('acme-app', ({ git }) => ({
 ```
 
 `workspace: git(repo, { ref, path })` takes a URL, `github:owner/repo`, a GitHub `/tree/` URL or
-a local path (relative to the file). ES fetches it on the host before any attempt (with the
-host's git credentials; never a token in the URL), copies the tree in without `.git` before
-`files` (which win) and `setup`, and records the commit and tree hash. Pin `ref` to a tag or
-full SHA; a branch warns. The agent's diff starts after setup, so the repo never counts as its
-change. A bad ref, path or URL exits 2 before anything runs.
+a local path (relative to the file). ES fetches it on the host before any attempt, with the
+host's git credentials or `token: 'GITHUB_TOKEN'` (a host variable's name; never a token in the
+URL or the eval), copies the tree in before `files` (which win) and `setup`, and records the
+commit and tree hash. `init: true` adds a `.git` with one commit of the tree (no remote), for
+agents that expect a repo. Pin `ref` to a tag or full SHA; a branch warns. The agent's diff starts
+after setup, so the repo never counts as its change. A bad ref, path, URL or token fails only
+the attempts that use it (infra error, exit 3). Submodules and LFS files aren't fetched.
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
 writes them into the repo's skill directory). `extend` is the only composition; the child wins

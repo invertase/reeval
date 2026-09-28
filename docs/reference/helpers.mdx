@@ -181,6 +181,8 @@ export const app = defineEnvironment('app', ({ git }) => ({
   workspace: git('https://github.com/acme/app', {
     ref: 'v2.3.0',
     path: 'examples/basic',
+    init: true,
+    token: 'GITHUB_TOKEN',
   }),
 }))
 ```
@@ -197,7 +199,15 @@ export const app = defineEnvironment('app', ({ git }) => ({
   A directory in the repository, relative, with forward slashes. Its contents become the workspace root. ES fetches only that directory's files (a partial fetch), so a subdirectory of a large monorepo stays cheap.
 </Property>
 
-ES runs `git` on the host, with your git credentials (credential helpers, `gh auth setup-git`, SSH keys), and copies only the tree into the sandbox: no `.git`, no remote and no credentials. A URL with a password or token in it is refused. A branch or no `ref` warns in the plan, as for `skill.git`:
+<Property name="init" type="boolean" optional>
+  Gives the workspace a `.git`: a new repository with one commit of the fetched tree, on `main`, with no remote. The commit is by `es` at a fixed date, so every attempt starts at the same `HEAD`. `files` and `setup` run after it, so their changes show in `git status`. The image needs `git`, which ES's images have.
+</Property>
+
+<Property name="token" type="string" optional>
+  The name of a host variable holding a token for the fetch, such as `'GITHUB_TOKEN'`, read like `secret.fromEnv`. ES sends it to the repository's own origin only, as an HTTP header in `git`'s environment, never its arguments; it never reaches the sandbox, the record or `.es`, and it's masked in errors. Only for `https://` (or `http://`) URLs. A variable that isn't set fails the workspace's attempts.
+</Property>
+
+Without `token`, ES runs `git` on the host with your own git credentials (credential helpers, `gh auth setup-git`, SSH keys). Either way it copies only the tree into the sandbox, with no remote and no credentials. A URL with a password or token in it is refused. Submodules and Git LFS files aren't fetched: a submodule is left as an empty directory and an LFS file as its pointer. A branch or no `ref` warns in the plan, as for `skill.git`:
 
 ```text
 warning: workspace git(github:acme/template) uses no ref (the default branch): results aren't comparable over time. Pin a tag or SHA (the resolved commit is recorded either way).
@@ -219,6 +229,8 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | No command | `mcp.stdio() needs a command` |
 | A token in the URL | `git("https://***:***@github.com/acme/app"): the URL has a password or token in it. ES fetches the repository on the host with your own git credentials (a credential helper, gh auth setup-git or an SSH key), and the sandbox never gets them; remove it from the URL.` |
 | A bad `path` | `git("github:acme/app"): path is a directory in the repository, relative, with forward slashes and no . or .. (got "../secrets")` |
+| The token itself as `token` | `git("github:acme/app"): token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.` (the value isn't echoed) |
+| `token` on an SSH or local repository | `git("git@github.com:acme/app.git"): token only works with an https:// URL; for SSH or a local repository, git uses this machine's own credentials` |
 | An unknown option | `git("github:acme/app"): unknown option "branch"; it takes ref, path, init and token. Use ref for a branch, tag or commit.` |
 
 ## Related

@@ -55,7 +55,7 @@ It returns a frozen `Environment` with `name`, `layers` and an `extend` method.
 ## Fields
 
 <Property name="workspace" type="GitWorkspace" optional>
-  The code every attempt's workspace starts as: a git repository, or one directory of it, from the `git` helper (`git(repo, { ref, path })`; see [Helpers](/reference/helpers#git)). ES fetches it on the host once per run, before any attempt, and copies its tree in, without `.git`, before `files` and `setup`. The record's `workspace` keeps the commit the ref resolved to and the tree's hash, which is in the environment's digest.
+  The code every attempt's workspace starts as: a git repository, or one directory of it, from the `git` helper (`git(repo, { ref, path, init, token })`; see [Helpers](/reference/helpers#git)). ES fetches it on the host once per run, before any attempt, and copies its tree in before `files` and `setup`: without `.git`, or with a new one holding one commit of the tree when `init: true`. Submodules and Git LFS files aren't fetched. The record's `workspace` keeps the commit the ref resolved to and the tree's hash, which is in the environment's digest.
 </Property>
 
 <Property name="env" type="Record<string, string | Secret>" optional>
@@ -158,7 +158,7 @@ These stop the run with exit 2, prefixed by the eval file.
 | A `workspace` that isn't from `git()` | `workspace in defineEnvironment("e") must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got "https://github.com/acme/app")` |
 | A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: [a, b]; the inherited environment is the control.` |
 
-Before any attempt starts, a `workspace` whose repository, ref or directory can't be found stops the run with exit 2 (exit 3 when the network fails); see [Errors](/reference/errors#git-workspaces). When an attempt starts, a missing secret, a skill directory without `SKILL.md`, or a failing setup step is an infra error for that attempt. See [Errors](/reference/errors).
+A `workspace` whose repository, ref, directory or token doesn't work is reported before any attempt starts and fails only the attempts that use it, as infra errors (exit 3), like a sandbox image that failed to prepare; see [Errors](/reference/errors#git-workspaces). When an attempt starts, a missing secret, a skill directory without `SKILL.md`, or a failing setup step is an infra error for that attempt. See [Errors](/reference/errors).
 
 ## Related
 

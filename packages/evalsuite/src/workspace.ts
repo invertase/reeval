@@ -167,7 +167,15 @@ async function prepareOne(
         'fetch.negotiationAlgorithm=noop',
       ])
     }
-    const archived = await git(dir, ['archive', '--format=tar', tree], { env: GIT_ENV })
+    // Git LFS files stay pointers: nothing is fetched beyond the repository itself.
+    const archived = await git(
+      dir,
+      [
+        ...['-c', 'filter.lfs.process=', '-c', 'filter.lfs.smudge=cat'],
+        ...['-c', 'filter.lfs.required=false', 'archive', '--format=tar', tree],
+      ],
+      { env: GIT_ENV },
+    )
     if (archived.code !== 0) {
       throw new WorkspaceError(
         `${what}: couldn't export ${tree.slice(0, 12)}: ${firstLine(archived.stderr)}`,
