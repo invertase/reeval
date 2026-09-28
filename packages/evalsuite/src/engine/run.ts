@@ -111,7 +111,7 @@ async function runTest(
   if (signal.aborted) return skip()
   let lease: Lease | undefined
   if (options.gate) {
-    const { limits, rank } = options.gate(file)
+    const { limits, rank } = options.gate
     try {
       lease = await acquire(limits, { rank, signal })
     } catch (error) {

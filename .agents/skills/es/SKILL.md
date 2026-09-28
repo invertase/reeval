@@ -134,7 +134,8 @@ group('hello', () => {
 ## Options and the cascade
 
 `defineConfig`, `group` and `evaluate` take the same options; inner levels win: `harness` (one
-or a list, or a function of the inherited list), `environment` (one), `sandbox` (one), `runs`,
+or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
+a function), `environment` (one), `sandbox` (one), `runs`,
 `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `timeout`, `tags`, `pin`.
 `compare` goes only on groups and evals. Options are plain objects, never functions. Unknown keys
 are errors with a hint (`repeat` → "Did you mean runs?").

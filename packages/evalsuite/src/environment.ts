@@ -8,6 +8,7 @@ import type {
   Duration,
   EgressPolicy,
   Environment,
+  EnvironmentData,
   EnvironmentHelpers,
   EnvironmentInput,
   EnvironmentLayer,
@@ -672,6 +673,10 @@ function buildSpec(input: EnvironmentInput, where: string, base: string): Enviro
   }
   return checkSpec(spec, where)
 }
+
+/** An environment from its data, as a declaration tree carries it: `extend` works again. */
+export const environmentFrom = (data: EnvironmentData): Environment =>
+  makeEnvironment(data.name, [...data.layers])
 
 function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment {
   const env = { kind: 'environment' as const, name, layers: Object.freeze(layers) }

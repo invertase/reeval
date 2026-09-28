@@ -27,6 +27,8 @@ export type {
   EvalOptions,
   ExecResult,
   GroupOptions,
+  HarnessData,
+  HarnessEdit,
   HarnessOption,
   HistoryConfig,
   HostFile,
@@ -43,6 +45,7 @@ export type {
   SkillSource,
   TranscriptEvent,
   Turn,
+  TurnData,
   Verdict,
   WebEventType,
 } from './types.ts'

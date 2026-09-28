@@ -60,3 +60,40 @@ export const SHAPES: PersistedShape[] = [
     where: 'One line of .es/cli.jsonl, the last es commands es report reads',
   },
 ]
+
+/** Where the plan shapes' snapshots live: `schema/plan/<name>.schema.json`. */
+export const PLAN_SNAPSHOT_DIR = fileURLToPath(new URL('../../schema/plan/', import.meta.url))
+
+/**
+ * A shape the engine sends, not one ES persists: the spec a runner in another language codes
+ * against. Its snapshot only has to match the code; `PROTOCOL` in src/engine/protocol.ts versions
+ * a change.
+ */
+export type PlanShape = { name: string; file: string; type: string; where: string }
+
+export const PLAN_SHAPES: PlanShape[] = [
+  {
+    name: 'declaration',
+    file: 'src/declaration.ts',
+    type: 'DeclarationTree',
+    where: "An eval file's groups and evals as declared, with their options as data",
+  },
+  {
+    name: 'wire-test',
+    file: 'src/engine/protocol.ts',
+    type: 'WireTest',
+    where: "One planned test, with its attempt, in a worker's collected message",
+  },
+  {
+    name: 'to-worker',
+    file: 'src/engine/protocol.ts',
+    type: 'ToWorker',
+    where: 'A message from the main process to a worker (src/engine/PROTOCOL.md)',
+  },
+  {
+    name: 'from-worker',
+    file: 'src/engine/protocol.ts',
+    type: 'FromWorker',
+    where: 'A message from a worker to the main process (src/engine/PROTOCOL.md)',
+  },
+]

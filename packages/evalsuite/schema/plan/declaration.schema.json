@@ -1,0 +1,1467 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Generated from DeclarationTree in src/declaration.ts by `pnpm schema:update`; don't edit. An eval file's groups and evals as declared, with their options as data.",
+  "title": "DeclarationTree",
+  "$ref": "#/$defs/DeclarationTree",
+  "$defs": {
+    "AntigravityHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "antigravity"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "ClaudeCodeHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "claude-code"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "CodexHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "codex"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "ConfigJudgeOptions": {
+      "type": "object",
+      "properties": {
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FakeJudgeModel"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "providerOptions": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "$ref": "#/$defs/JSONValue"
+            }
+          }
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "required": []
+    },
+    "CursorHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "cursor"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "params": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "DeclarationTree": {
+      "type": "object",
+      "properties": {
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeclaredNode"
+          }
+        }
+      },
+      "required": ["children"]
+    },
+    "DeclaredEval": {
+      "type": "object",
+      "properties": {
+        "body": {
+          "type": "string"
+        },
+        "mode": {
+          "$ref": "#/$defs/DeclaredMode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/EvalOptionsData"
+        },
+        "type": {
+          "const": "eval"
+        }
+      },
+      "required": ["body", "mode", "name", "options", "type"]
+    },
+    "DeclaredGroup": {
+      "type": "object",
+      "properties": {
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DeclaredNode"
+          }
+        },
+        "mode": {
+          "$ref": "#/$defs/DeclaredMode"
+        },
+        "name": {
+          "type": "string"
+        },
+        "options": {
+          "$ref": "#/$defs/EvalOptionsData"
+        },
+        "type": {
+          "const": "group"
+        }
+      },
+      "required": ["children", "mode", "name", "options", "type"]
+    },
+    "DeclaredMode": {
+      "enum": ["only", "run", "skip"]
+    },
+    "DeclaredNode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DeclaredEval"
+        },
+        {
+          "$ref": "#/$defs/DeclaredGroup"
+        },
+        {
+          "$ref": "#/$defs/DeclaredTodo"
+        }
+      ]
+    },
+    "DeclaredTodo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "const": "todo"
+        }
+      },
+      "required": ["name", "type"]
+    },
+    "DockerSandboxDescriptor": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cpus": {
+          "type": "number"
+        },
+        "dockerfile": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "image": {
+          "type": "string"
+        },
+        "install": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/InstallStep"
+          }
+        },
+        "kind": {
+          "const": "docker"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "pids": {
+          "type": "number"
+        },
+        "root": {
+          "type": "boolean"
+        }
+      },
+      "required": ["kind"]
+    },
+    "EnvironmentData": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "environment"
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EnvironmentLayer"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "layers", "name"]
+    },
+    "EnvironmentLayer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "spec": {
+          "$ref": "#/$defs/EnvironmentSpec"
+        }
+      },
+      "required": ["name", "spec"]
+    },
+    "EnvironmentSpec": {
+      "type": "object",
+      "properties": {
+        "egress": {
+          "anyOf": [
+            {
+              "enum": ["allow-all", "deny-all"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "allow": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["allow"]
+            }
+          ]
+        },
+        "env": {
+          "$ref": "#/$defs/EnvVars"
+        },
+        "files": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HostFile"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "mcp": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "$ref": "#/$defs/McpServer"
+          }
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HostFile"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "setup": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SetupStep"
+          }
+        },
+        "skills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkillSource"
+          }
+        },
+        "workspace": {
+          "$ref": "#/$defs/GitWorkspace"
+        }
+      },
+      "required": []
+    },
+    "EnvValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Secret"
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "EnvVars": {
+      "type": "object",
+      "properties": {},
+      "required": [],
+      "additionalProperties": {
+        "$ref": "#/$defs/EnvValue"
+      }
+    },
+    "EvalOptionsData": {
+      "type": "object",
+      "properties": {
+        "compare": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/EnvironmentData"
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "enum": ["all", "none", "variants"]
+                },
+                "harness": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/AntigravityHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/CodexHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/CursorHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/FakeHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/GooseHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/PiHarnessDescriptor"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "minLift": {
+                  "type": "number"
+                },
+                "variants": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/EnvironmentData"
+                  }
+                }
+              },
+              "required": ["variants"]
+            }
+          ]
+        },
+        "egress": {
+          "anyOf": [
+            {
+              "enum": ["allow-all", "deny-all"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "allow": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": ["allow"]
+            }
+          ]
+        },
+        "env": {
+          "$ref": "#/$defs/EnvVars"
+        },
+        "environment": {
+          "$ref": "#/$defs/EnvironmentData"
+        },
+        "gate": {
+          "anyOf": [
+            {
+              "const": "all"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "passRate": {
+                  "type": "number"
+                }
+              },
+              "required": ["passRate"]
+            }
+          ]
+        },
+        "harness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AntigravityHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/CodexHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/CursorHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/FakeHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/GooseHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+            },
+            {
+              "$ref": "#/$defs/PiHarnessDescriptor"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/HarnessDescriptor"
+              }
+            },
+            {
+              "type": "object",
+              "properties": {
+                "add": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AntigravityHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/CodexHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/CursorHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/FakeHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/GooseHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+                    },
+                    {
+                      "$ref": "#/$defs/PiHarnessDescriptor"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/HarnessDescriptor"
+                      }
+                    }
+                  ]
+                }
+              },
+              "required": ["add"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "only": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "required": ["only"]
+            }
+          ]
+        },
+        "judge": {
+          "$ref": "#/$defs/ConfigJudgeOptions"
+        },
+        "pin": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PinnableKey"
+          }
+        },
+        "runs": {
+          "type": "number"
+        },
+        "sandbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DockerSandboxDescriptor"
+            },
+            {
+              "$ref": "#/$defs/FakeSandboxDescriptor"
+            }
+          ]
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": []
+    },
+    "FakeHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "delayMs": {
+          "type": "number"
+        },
+        "failWith": {
+          "type": "string"
+        },
+        "files": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "flakeRate": {
+          "type": "number"
+        },
+        "id": {
+          "type": "string"
+        },
+        "ignoreAbort": {
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "fake"
+        },
+        "layout": {
+          "enum": ["antigravity", "claude-code", "codex", "cursor", "goose", "opencode", "pi"]
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "reasoning": {
+          "type": "string"
+        },
+        "script": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/FakeScriptStep"
+            }
+          }
+        },
+        "servedModel": {
+          "type": "string"
+        },
+        "startHangs": {
+          "anyOf": [
+            {
+              "const": false
+            },
+            {
+              "type": "number"
+            }
+          ]
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "text": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "input": {},
+              "ok": {
+                "type": "boolean"
+              },
+              "output": {},
+              "tool": {
+                "type": "string"
+              }
+            },
+            "required": ["input", "output", "tool"]
+          }
+        },
+        "withSkill": {
+          "type": "object",
+          "properties": {
+            "files": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "text": {
+              "type": "string"
+            }
+          },
+          "required": []
+        }
+      },
+      "required": ["kind"]
+    },
+    "FakeJudgeModel": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "fake-judge"
+        },
+        "score": {
+          "type": "number"
+        }
+      },
+      "required": ["kind", "score"]
+    },
+    "FakeSandboxDescriptor": {
+      "type": "object",
+      "properties": {
+        "dir": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "fake"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        }
+      },
+      "required": ["kind"]
+    },
+    "FakeScriptStep": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "error": {
+              "type": "string"
+            }
+          },
+          "required": ["error"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exec": {
+              "type": "string"
+            }
+          },
+          "required": ["exec"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "mcp": {
+              "type": "string"
+            }
+          },
+          "required": ["mcp"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reply": {
+              "type": "string"
+            }
+          },
+          "required": ["reply"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "write": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          },
+          "required": ["write"]
+        }
+      ]
+    },
+    "GitWorkspace": {
+      "type": "object",
+      "properties": {
+        "init": {
+          "type": "boolean"
+        },
+        "kind": {
+          "const": "git"
+        },
+        "path": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "repo": {
+          "type": "string"
+        },
+        "token": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "repo", "url"]
+    },
+    "GooseHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "goose"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "HarnessDescriptor": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AntigravityHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/CodexHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/CursorHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/FakeHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/GooseHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+        },
+        {
+          "$ref": "#/$defs/PiHarnessDescriptor"
+        }
+      ]
+    },
+    "HostFile": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "file"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "path"]
+    },
+    "InstallStep": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "run": {
+              "type": "string"
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": ["run"]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "JSONValue": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": {
+            "$ref": "#/$defs/JSONValue"
+          }
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "McpServer": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "args": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "command": {
+              "type": "string"
+            },
+            "env": {
+              "$ref": "#/$defs/EnvVars"
+            },
+            "kind": {
+              "const": "mcp"
+            },
+            "transport": {
+              "const": "stdio"
+            }
+          },
+          "required": ["args", "command", "env", "kind", "transport"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Secret"
+                  },
+                  {
+                    "$ref": "#/$defs/SecretTemplate"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              }
+            },
+            "kind": {
+              "const": "mcp"
+            },
+            "transport": {
+              "enum": ["http", "sse"]
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": ["headers", "kind", "transport", "url"]
+        }
+      ]
+    },
+    "OpenCodeHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "opencode"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "PiHarnessDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "const": "pi"
+        },
+        "maxConcurrent": {
+          "type": "number"
+        },
+        "model": {
+          "type": "string"
+        },
+        "startTimeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "required": ["kind", "model"]
+    },
+    "PinnableKey": {
+      "enum": ["compare", "harness", "runs"]
+    },
+    "Secret": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string"
+        },
+        "hosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "in": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SubstituteIn"
+          }
+        },
+        "kind": {
+          "const": "secret"
+        },
+        "optional": {
+          "type": "boolean"
+        },
+        "to": {
+          "enum": ["agent", "checks"]
+        }
+      },
+      "required": ["kind"]
+    },
+    "SecretTemplate": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "secret-template"
+        },
+        "template": {
+          "type": "string"
+        }
+      },
+      "required": ["kind", "template"]
+    },
+    "SetupStep": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "cwd": {
+              "type": "string"
+            },
+            "run": {
+              "type": "string"
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": ["run"]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
+    "SkillPlacement": {
+      "enum": ["harness", "workspace"]
+    },
+    "SkillSource": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "files": {
+              "type": "object",
+              "properties": {},
+              "required": [],
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "const": "skill"
+            },
+            "name": {
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "const": "inline"
+            }
+          },
+          "required": ["content", "description", "files", "kind", "name", "placement", "source"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "const": "skill"
+            },
+            "only": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "ref": {
+              "type": "string"
+            },
+            "repo": {
+              "type": "string"
+            },
+            "source": {
+              "const": "git"
+            }
+          },
+          "required": ["kind", "placement", "repo", "source"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "const": "skill"
+            },
+            "only": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "const": "local"
+            }
+          },
+          "required": ["kind", "path", "placement", "source"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "exclude": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "kind": {
+              "const": "skill"
+            },
+            "only": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "path": {
+              "type": "string"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "const": "npm"
+            },
+            "spec": {
+              "type": "string"
+            }
+          },
+          "required": ["kind", "path", "placement", "source", "spec"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "skill"
+            },
+            "placement": {
+              "$ref": "#/$defs/SkillPlacement"
+            },
+            "source": {
+              "const": "registry"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": ["id", "kind", "placement", "source"]
+        }
+      ]
+    },
+    "SubstituteIn": {
+      "enum": ["body", "header", "query"]
+    }
+  }
+}

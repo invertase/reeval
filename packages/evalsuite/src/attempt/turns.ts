@@ -4,7 +4,7 @@ import type { HarnessSession } from '../harness/types.ts'
 import { redactSecrets } from '../redact.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
-import type { Diff, ExecResult, Turn } from '../types.ts'
+import type { Diff, ExecResult, Turn, TurnData } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 /** How long a turn gets to stop once its attempt is aborted, before ES stops waiting for it. */
@@ -115,7 +115,8 @@ export function turnSender(
     a.signal.throwIfAborted()
     const diff: Diff = await a.timed('diffMs', () => diffSinceSnapshot(box, a.signal))
     a.record.diff = diff
-    const turn: Turn = Object.freeze({ prompt, ...result, diff, ...checks })
+    const data: TurnData = { prompt, ...result, diff }
+    const turn: Turn = Object.freeze({ ...data, ...checks })
     a.turns.push(turn)
     return turn
   }

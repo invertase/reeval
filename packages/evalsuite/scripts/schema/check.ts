@@ -15,7 +15,14 @@ import {
 import { type Change, checkDefaults, compare } from './compat.ts'
 import { CORPUS_DIR, corpus } from './corpus.ts'
 import { generate, type ShapeSchema } from './generate.ts'
-import { PACKAGE_DIR, type PersistedShape, SHAPES, SNAPSHOT_DIR } from './shapes.ts'
+import {
+  PACKAGE_DIR,
+  type PersistedShape,
+  PLAN_SHAPES,
+  PLAN_SNAPSHOT_DIR,
+  SHAPES,
+  SNAPSHOT_DIR,
+} from './shapes.ts'
 import { validate } from './validate.ts'
 
 export const snapshotFile = (shape: Pick<PersistedShape, 'name'>, dir = SNAPSHOT_DIR) =>
@@ -180,9 +187,18 @@ function readSnapshot(shape: PersistedShape): ShapeSchema | null {
   return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as ShapeSchema) : null
 }
 
+/** The plan shapes whose snapshot in schema/plan/ isn't what the code generates. */
+export function stalePlanShapes(current: Map<string, ShapeSchema>) {
+  return PLAN_SHAPES.filter((shape) => {
+    const file = snapshotFile(shape, PLAN_SNAPSHOT_DIR)
+    const doc = current.get(shape.name) as ShapeSchema
+    return !existsSync(file) || encode(JSON.parse(readFileSync(file, 'utf8'))) !== encode(doc)
+  })
+}
+
 function main(argv: string[]): number {
   const update = argv.includes('--update')
-  const current = generate()
+  const current = generate([...SHAPES, ...PLAN_SHAPES])
   const reports = SHAPES.map((s) =>
     checkShape(s, current.get(s.name) as ShapeSchema, readSnapshot(s)),
   )
@@ -196,31 +212,31 @@ function main(argv: string[]): number {
     return 1
   }
   const stale = reports.filter((r) => r.stale)
+  const plan = stalePlanShapes(current)
   for (const r of reports) {
     for (const c of r.changes) process.stdout.write(`  ${r.shape.type}: ${c.message}\n`)
   }
-  if (!stale.length) {
+  if (!stale.length && !plan.length) {
     process.stdout.write(
-      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads\n`,
+      `✓ ${SHAPES.length} persisted shapes match their snapshots in schema/, and every corpus file reads; ${PLAN_SHAPES.length} plan shapes match schema/plan/\n`,
     )
     return 0
   }
   if (!update) {
+    const names = [...stale.map((r) => r.shape.type), ...plan.map((s) => s.type)]
     process.stderr.write(
-      `✗ ${stale.map((r) => r.shape.type).join(', ')} changed compatibly, but schema/ wasn't updated. Run \`pnpm --filter @invertase/foobar schema:update\` and commit schema/.\n`,
+      `✗ ${names.join(', ')} changed compatibly, but schema/ wasn't updated. Run \`pnpm --filter @invertase/foobar schema:update\` and commit schema/.\n`,
     )
     return 1
   }
   mkdirSync(SNAPSHOT_DIR, { recursive: true })
-  writeSnapshots(
-    stale.map((r) => ({
-      file: snapshotFile(r.shape),
-      doc: current.get(r.shape.name) as ShapeSchema,
-    })),
-  )
-  for (const r of stale) {
-    process.stdout.write(`updated ${relative(PACKAGE_DIR, snapshotFile(r.shape))}\n`)
-  }
+  mkdirSync(PLAN_SNAPSHOT_DIR, { recursive: true })
+  const written = [
+    ...stale.map((r) => ({ file: snapshotFile(r.shape), doc: current.get(r.shape.name) })),
+    ...plan.map((s) => ({ file: snapshotFile(s, PLAN_SNAPSHOT_DIR), doc: current.get(s.name) })),
+  ] as Array<{ file: string; doc: ShapeSchema }>
+  writeSnapshots(written)
+  for (const { file } of written) process.stdout.write(`updated ${relative(PACKAGE_DIR, file)}\n`)
   return 0
 }
 

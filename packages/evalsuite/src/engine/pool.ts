@@ -30,7 +30,8 @@ export const forkWorker: Spawn = (entry, cwd) => {
     detached: true,
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-    serialization: 'advanced',
+    // The protocol is JSON (PROTOCOL.md): nothing sent may need structured clone.
+    serialization: 'json',
   })
   // Done once it has exited and its last messages are in. On Windows 'exit' can come first; they
   // all arrive before 'disconnect', which Windows doesn't always send, so at most a second later.

@@ -160,10 +160,11 @@ evals/guide-matrix.es.ts › house greeting on every agent ›…  3          1 
 ## Add to the inherited list
 
 ```ts
-{ harness: (inherited) => [...inherited, cursor({ model: 'composer-2' })] }
+{ harness: { add: cursor({ model: 'composer-2' }) } }
+{ harness: { only: 'cursor:composer-2.5' } }
 ```
 
-A list replaces the inherited harnesses. A function gets the inherited list and returns a new one.
+A list replaces the inherited harnesses. `add` appends one or a list to them, and `only` keeps those with these ids. A function, `(inherited) => [...inherited, cursor({ model: 'composer-2' })]`, gets the inherited list and returns a new one.
 
 ## What each harness supports
 

@@ -1,51 +1,51 @@
-import { type AttemptSpec, runAttempt, setupAllowance } from './attempt/index.ts'
-import { parseDuration } from './config.ts'
-import { unenforceable } from './egress.ts'
-import {
-  collectingFile,
-  getRunContext,
-  registerGroup,
-  registerTest,
-  type TestMode,
-} from './engine/runtime.ts'
+import { runAttempt } from './attempt/index.ts'
+import type { DeclarationTree, DeclaredGroup, DeclaredMode, DeclaredNode } from './declaration.ts'
+import { collectingFile, getRunContext, registerGroup, registerTest } from './engine/runtime.ts'
 import { inCI } from './env.ts'
-import { workspaceOf } from './environment.ts'
+import { environmentFrom } from './environment.ts'
 import { UsageError } from './errors.ts'
-import { refusedMcp } from './harness/agents.ts'
-import { attemptId, evalId, relativeFile } from './ids.ts'
-import {
-  brokeredIn,
-  cascade,
-  checkOptions,
-  evalPlan,
-  expand,
-  harnessId,
-  type Level,
-  matchesTags,
-  type PlannedAttempt,
-  type Resolved,
-  secretVarsIn,
-  unbrokered,
-  unbrokeredError,
-} from './options.ts'
-import type { Limits } from './scheduler/core.ts'
+import { checkOptions, matchesTags } from './options.ts'
+import { planEval } from './plan-eval.ts'
 import type {
-  AttemptMeta,
+  EnvironmentData,
   EvalContext,
   EvalFn,
   EvalOptions,
+  EvalOptionsData,
   GroupOptions,
-  ResolvedConfig,
 } from './types.ts'
 
 export type { EvalOptions, GroupOptions }
 
-/** Lets the attempt's own eval timer fire before the engine's backstop, so the message and cleanup are its own. */
-const GRACE_MS = 5_000
+type Declaring = { name: string; options: GroupOptions; node: DeclaredGroup }
 
 // The groups enclosing the code being collected. The collector runs a nested group's callback
 // after its parent's callback has returned, so each group captures its parents when declared.
-let groupStack: { name: string; options: GroupOptions }[] = []
+let groupStack: Declaring[] = []
+
+/** Each eval file's declarations as `evaluate` and `group` were called, and each eval's body by id. */
+const trees = new Map<string, DeclarationTree>()
+const bodies = new Map<string, EvalFn>()
+
+/** What the file being collected has declared so far. */
+export function declaredTree(file: string): DeclarationTree | undefined {
+  return trees.get(file)
+}
+
+/** An eval's body, by the id its declaration names. */
+export const declaredBody = (id: string): EvalFn | undefined => bodies.get(id)
+
+/** Options as the tree holds them; from TypeScript they may still hold function forms. */
+const data = (options: EvalOptions) => options as EvalOptionsData
+
+function declare(node: DeclaredNode): void {
+  const parent = groupStack.at(-1)?.node
+  if (parent) return void parent.children.push(node)
+  const file = collectingFile() ?? ''
+  const tree = trees.get(file) ?? { children: [] }
+  trees.set(file, tree)
+  tree.children.push(node)
+}
 
 /** `(name, fn)`, `(name, options, fn)` as in Vitest, or `(name, fn, options)`. */
 function splitArgs<F extends (...args: never[]) => unknown>(
@@ -74,7 +74,7 @@ type GroupFn = {
 }
 
 /** `evaluate.only` and `group.only` are refused in CI, where they'd silently skip the rest. */
-function checkOnly(mode: TestMode, what: string): void {
+function checkOnly(mode: DeclaredMode, what: string): void {
   if (mode !== 'only' || !inCI()) return
   const error = new Error(`${what}.only isn't allowed in CI`)
   error.name = 'OnlyInCiError'
@@ -82,12 +82,14 @@ function checkOnly(mode: TestMode, what: string): void {
 }
 
 const defineGroup =
-  (mode: TestMode): GroupFn =>
+  (mode: DeclaredMode): GroupFn =>
   (name: string, a?: GroupOptions | (() => void), b?: GroupOptions | (() => void)) => {
     checkOnly(mode, 'group')
     const [options, fn] = splitArgs<() => void>('group', name, a, b)
     checkOptions(options, `group("${name}")`)
-    const stack = [...groupStack, { name, options }]
+    const node: DeclaredGroup = { type: 'group', name, mode, options: data(options), children: [] }
+    declare(node)
+    const stack = [...groupStack, { name, options, node }]
     registerGroup(name, mode, () => {
       const outer = groupStack
       groupStack = stack
@@ -111,6 +113,7 @@ export const group: GroupFn & { skip: GroupFn; only: GroupFn; todo: (name: strin
  * skipped and shown as todo. The enclosing groups' tags filter it as they do an eval.
  */
 function registerTodo(name: string) {
+  declare({ type: 'todo', name })
   const tags = [...new Set(groupStack.flatMap((g) => g.options.tags ?? []))]
   if (matchesTags(tags, getRunContext().tags)) registerTest(name, { mode: 'todo' }, async () => {})
 }
@@ -118,24 +121,6 @@ function registerTodo(name: string) {
 type EvaluateFn<F = EvalFn> = {
   (name: string, fn: F, options?: EvalOptions): void
   (name: string, options: EvalOptions, fn: F): void
-}
-
-function configLevel(config: ResolvedConfig): Resolved {
-  return {
-    harness: config.harness,
-    sandbox: config.sandbox,
-    environment: config.environment,
-    compare: undefined,
-    runs: config.runs,
-    gate: config.gate,
-    env: config.env,
-    egress: config.egress !== undefined ? { inherited: config.egress } : {},
-    judge: config.judge,
-    timeout: undefined,
-    tags: [],
-    pin: [],
-    sources: {},
-  }
 }
 
 /** The evals declared so far, by file and name path, so a second one with the same id is refused. */
@@ -151,137 +136,36 @@ function checkUnique(where: string, groups: string[], name: string, hint: string
   declared.add(key)
 }
 
-function register(mode: TestMode, name: string, own: EvalOptions, fn: EvalFn, hint = ''): void {
+function register(mode: DeclaredMode, name: string, own: EvalOptions, fn: EvalFn, hint = ''): void {
   const groups = groupStack.map((g) => g.name)
-  const where = `evaluate("${[...groups, name].join(' › ')}")`
-  checkUnique(where, groups, name, hint)
-  checkOptions(own, where)
-  const ctx = getRunContext()
-  const levels: Level[] = [
-    ...groupStack.map((g) => ({ options: g.options, where: `group("${g.name}")` })),
-    { options: own, where },
-  ]
-  const resolvedEval = cascade(configLevel(ctx.config), levels, where, {
-    profile: ctx.profile,
-    runs: ctx.runs,
-  })
-  const { resolved } = resolvedEval
-  if (!matchesTags(resolved.tags, ctx.tags)) return
-  const timeoutMs =
-    resolved.timeout === undefined ? ctx.config.timeoutMs : parseDuration(resolved.timeout)
-  const order = registered++
-  const plannedAttempts = resolvedEval.skip ? [] : expand(resolved)
-  if (ctx.config.secrets.unbrokered === 'error') {
-    const [first] = unbrokered(resolved.env, plannedAttempts)
-    if (first) throw new UsageError(unbrokeredError(first, where, ctx.config.file))
-  }
-  for (const planned of plannedAttempts) {
-    const why = unenforceable(planned.egress, planned.sandbox, where)
-    if (why) throw new UsageError(why)
-    const mcp = refusedMcp(planned.harness, planned.environment.layers)
-    if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
-  }
-  const file = collectingFile()
-  const setBy = {
-    sandbox: resolved.sources?.sandbox ?? ctx.config.file,
-    harness: resolved.sources?.harness ?? ctx.config.file,
-  }
-  const plan = evalPlan(resolvedEval, plannedAttempts, {
-    configFile: ctx.config.file,
-    file: file ? relativeFile(ctx.config.root, file) : null,
-  })
-  if (resolvedEval.skip) {
-    const [first] = expand(resolved)
-    if (!first) return
-    const attempt: AttemptMeta = {
+  checkUnique(`evaluate("${[...groups, name].join(' › ')}")`, groups, name, hint)
+  const body = `b${bodies.size + 1}`
+  bodies.set(body, fn)
+  declare({ type: 'eval', name, mode, options: data(own), body })
+  const tests = planEval(
+    {
       name,
-      groups,
-      tags: resolved.tags,
-      cell: first.cell,
-      n: 1,
-      label: '',
-      harness: first.harness,
-      sandbox: first.sandbox,
-      setBy,
-      gate: 'none',
-      brokered: [],
-      secretVars: [],
-      egress: first.egress,
-      plan,
-    }
+      mode,
+      groups: groupStack.map(({ name, options }) => ({ name, options })),
+      options: own,
+    },
+    { ...getRunContext(), file: collectingFile(), order: registered },
+  )
+  if (!tests) return
+  registered++
+  for (const { name: testName, spec, ...options } of tests)
     registerTest(
-      `${name} [${attemptId(first.cell.key, 1)}]`,
-      { mode: 'skip', attempt },
-      async () => {},
+      testName,
+      options,
+      spec ? (handle) => runAttempt(spec, fn, handle) : async () => {},
     )
-    return
-  }
-  const cells: string[] = []
-  for (const planned of plannedAttempts) {
-    if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
-    const workspace = workspaceOf(planned.environment.layers)
-    const attempt: AttemptMeta = {
-      name,
-      groups,
-      tags: resolved.tags,
-      cell: planned.cell,
-      n: planned.n,
-      label: planned.label,
-      harness: planned.harness,
-      sandbox: planned.sandbox,
-      setBy,
-      gate: planned.gate,
-      ...(planned.minLift !== undefined ? { minLift: planned.minLift } : {}),
-      brokered: brokeredIn(resolved.env, planned),
-      secretVars: secretVarsIn(resolved.env, planned),
-      egress: planned.egress,
-      ...(workspace ? { workspace } : {}),
-      plan,
-    }
-    const spec: AttemptSpec = {
-      ...planned,
-      name,
-      groups,
-      timeoutMs,
-      env: resolved.env,
-      judge: resolved.judge,
-      sources: resolved.sources ?? {},
-      notes: resolvedEval.notes,
-    }
-    const cell = cells.indexOf(planned.cell.key)
-    registerTest(
-      `${name} [${attemptId(planned.cell.key, planned.n)}]`,
-      {
-        timeout: timeoutMs + setupAllowance(planned) + GRACE_MS,
-        mode,
-        attempt,
-        gate: (file) => {
-          const path = relativeFile(ctx.config.root, file)
-          return {
-            limits: attemptLimits(planned, ctx.concurrency),
-            rank: { eval: evalId(path, [...groups, name]), file: path, order, n: planned.n, cell },
-          }
-        },
-      },
-      (handle) => runAttempt(spec, fn, handle),
-    )
-  }
 }
 
 /** Evals registered so far in this worker, for the scheduler's tie-break. */
 let registered = 0
 
-/** The run-wide cap, plus the sandbox provider's and harness's own caps when they set one. */
-function attemptLimits(planned: PlannedAttempt, concurrency: number): Limits {
-  const limits: Limits = { attempts: concurrency }
-  const { sandbox, harness } = planned
-  if (sandbox.maxConcurrent) limits[`sandbox:${sandbox.kind}`] = sandbox.maxConcurrent
-  if (harness.maxConcurrent) limits[`harness:${harness.kind}`] = harness.maxConcurrent
-  return limits
-}
-
 const defineEval =
-  (mode: TestMode): EvaluateFn =>
+  (mode: DeclaredMode): EvaluateFn =>
   (name: string, a?: EvalOptions | EvalFn, b?: EvalOptions | EvalFn) => {
     checkOnly(mode, 'evaluate')
     const [own, fn] = splitArgs<EvalFn>('evaluate', name, a, b)
@@ -327,3 +211,33 @@ export const evaluate: EvaluateFn & {
   todo: registerTodo,
   for: evalFor,
 })
+
+/**
+ * Declares a tree's groups and evals as the calls that made it would, in the file being
+ * collected; `bodyFor` gives each eval's body by its id.
+ */
+export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string) => EvalFn): void {
+  for (const node of nodes) {
+    if (node.type === 'todo') registerTodo(node.name)
+    else if (node.type === 'group') {
+      const children = node.children
+      defineGroup(node.mode)(node.name, optionsFrom(node.options), () =>
+        declareTree(children, bodyFor),
+      )
+    } else defineEval(node.mode)(node.name, optionsFrom(node.options), bodyFor(node.body))
+  }
+}
+
+/** Options from their data forms: environments become `Environment`s again. */
+function optionsFrom({ environment, compare, ...rest }: EvalOptionsData): EvalOptions {
+  const variants = (list: EnvironmentData[]) => list.map(environmentFrom)
+  return {
+    ...rest,
+    ...(environment !== undefined && { environment: environmentFrom(environment) }),
+    ...(compare !== undefined && {
+      compare: Array.isArray(compare)
+        ? variants(compare)
+        : compare && { ...compare, variants: variants(compare.variants) },
+    }),
+  }
+}

@@ -69,7 +69,8 @@ export type TokenUsage = {
 }
 
 /** One agent turn. Immutable once `t.send()` resolves. */
-export type Turn = {
+/** A turn as data, as a record or another language's runner carries it: `Turn` without its methods. */
+export type TurnData = {
   prompt: string
   /** The agent's final message for this turn. */
   text: string
@@ -93,6 +94,9 @@ export type Turn = {
   unreported: WebEventType[]
   /** Workspace changes since the eval started, as of the end of this turn. */
   diff: Diff
+}
+
+export type Turn = TurnData & {
   /** Runs in the eval's sandbox. Same as `t.exec`. */
   exec(command: string): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
@@ -606,19 +610,29 @@ export type McpHelper = {
 /** A spec, or a callback that gets the typed helpers and returns one (synchronously). */
 export type EnvironmentInput = EnvironmentSpec | ((helpers: EnvironmentHelpers) => EnvironmentSpec)
 
-/** One value, a list (each is its own cell), or an edit of the inherited list. */
+/**
+ * An edit of the inherited harness list, as data: `add` appends harnesses, `only` keeps the
+ * inherited ones with these ids, in their order.
+ */
+export type HarnessEdit =
+  | { add: HarnessDescriptor | HarnessDescriptor[] }
+  | { only: string | string[] }
+
+/** One value, a list (each is its own cell), or an edit of the inherited list, as data. */
+export type HarnessData = HarnessDescriptor | HarnessDescriptor[] | HarnessEdit
+
+/** `HarnessData`, or a function that edits the inherited list (TypeScript only). */
 export type HarnessOption =
-  | HarnessDescriptor
-  | HarnessDescriptor[]
+  | HarnessData
   | ((inherited: HarnessDescriptor[]) => HarnessDescriptor | HarnessDescriptor[])
 
 export type CompareGate = 'variants' | 'all' | 'none'
 
 /** Variants run next to the inherited environment (the control), with the same prompt and checks. */
-export type CompareOptions =
-  | Environment[]
+export type CompareOptions<E = Environment> =
+  | E[]
   | {
-      variants: Environment[]
+      variants: E[]
       /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
       gate?: CompareGate
       /** Lift in points from -1 to 1; a variant cell below it fails. */
@@ -665,6 +679,20 @@ export type EvalOptions = {
   pin?: PinnableKey[]
 }
 export type GroupOptions = EvalOptions
+
+/**
+ * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model
+ * by name or a fake judge, and environments without `extend`.
+ */
+export type EvalOptionsData = Omit<EvalOptions, 'harness' | 'judge' | 'environment' | 'compare'> & {
+  harness?: HarnessData
+  judge?: ConfigJudgeOptions
+  environment?: EnvironmentData
+  compare?: CompareOptions<EnvironmentData>
+}
+
+/** An `Environment` as data, as JSON carries it: without `extend`. */
+export type EnvironmentData = Omit<Environment, 'extend'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
