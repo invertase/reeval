@@ -46,6 +46,27 @@ process.on('message', (m) => {
     assert.deepEqual(output.sort(), ['stderr:stderr text\n', 'stdout:stdout text\n'])
   })
 
+  test("messages cross as JSON: what JSON can't carry arrives as JSON has it", async () => {
+    const entry = script(`
+process.send({ t: 'hello', protocol: ${PROTOCOL} })
+process.on('message', (m) => {
+  process.send({ t: 'echo', got: m, at: new Date(0), gone: undefined, n: NaN }, () => process.exit(0))
+})
+`)
+    const worker = forkWorker(entry, tempDir('cwd'))
+    const messages: unknown[] = []
+    worker.onMessage((m) => messages.push(m))
+    await handshake(worker, entry)
+    worker.send({ t: 'grant', id: 'l1' })
+    await worker.exited
+    assert.deepEqual(messages.at(-1), {
+      t: 'echo',
+      got: { t: 'grant', id: 'l1' },
+      at: '1970-01-01T00:00:00.000Z',
+      n: null,
+    })
+  })
+
   test('a worker in another protocol is refused and killed', async () => {
     const entry = script(
       `process.send({ t: 'hello', protocol: ${PROTOCOL + 1} }); setInterval(() => {}, 1000)`,

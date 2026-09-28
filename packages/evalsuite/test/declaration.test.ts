@@ -1,8 +1,10 @@
 // An eval file's declarations as data (src/declaration.ts): what evaluate and group record, and
 // that the tree, through JSON and declared again, plans the same tests as the calls did.
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { test } from 'node:test'
+import { validate } from '../scripts/schema/validate.ts'
 import { resolveConfig } from '../src/config.ts'
 import type { DeclarationTree } from '../src/declaration.ts'
 import { collect, collectingFile, registerGroup, registerTest } from '../src/engine/collector.ts'
@@ -138,3 +140,21 @@ test('planEval is pure: the same declaration and context give the same tests, ga
   )
 })
 
+test('the tree and the collected tests fit their JSON Schemas in schema/plan/', async () => {
+  const schema = (name: string) =>
+    JSON.parse(readFileSync(new URL(`../schema/plan/${name}.schema.json`, import.meta.url), 'utf8'))
+  const { file, tests } = await collected(tempDir('schemas'), declarations)
+  const tree = JSON.parse(JSON.stringify(declaredTree(file)))
+  assert.deepEqual(validate(schema('declaration'), tree), [])
+  const wire = tests.map(({ index, name, groups, mode, options }) => ({
+    index,
+    name,
+    groups,
+    mode,
+    ...(options.attempt ? { attempt: options.attempt } : {}),
+  }))
+  for (const test of JSON.parse(JSON.stringify(wire)))
+    assert.deepEqual(validate(schema('wire-test'), test), [], test.name)
+  // The canary: a tree the schema rules out.
+  assert.notDeepEqual(validate(schema('declaration'), { children: [{ type: 'eval' }] }), [])
+})
