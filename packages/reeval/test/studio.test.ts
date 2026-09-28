@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises'
+import fsp, { cp, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import { syncBuiltinESMExports } from 'node:module'
+import { tmpdir } from 'node:os'
 import { join, relative, sep } from 'node:path'
-import { before, describe, test } from 'node:test'
+import { before, describe, mock, test } from 'node:test'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
@@ -568,6 +570,59 @@ const filesIn = (root: string): string[] =>
     .filter((e) => e.isFile())
     .map((e) => relative(root, join(e.parentPath, e.name)).replaceAll(sep, '/'))
     .sort()
+
+describe('a record landing while the studio lists runs', () => {
+  test("Windows refusing the cache's rename or a record's read skips it until the next read", async () => {
+    const root = await mkdtemp(join(tmpdir(), 'reeval-landing-'))
+    await cp(source.historyDir, join(root, 'evals/.history'), { recursive: true })
+    await cp(join(dir, '.reeval/runs'), join(root, '.reeval/runs'), { recursive: true })
+    const fresh: StudioSource = { root, historyDir: join(root, 'evals/.history'), scratch: true }
+    const [landing] = headers
+    const landingFile = `${(landing as HistoryEntry).runId}.json`
+    const refuse = (code: string) => Object.assign(new Error(`${code}: refused`), { code })
+    const readFileOf = fsp.readFile
+    mock.method(fsp, 'rename', async () => {
+      throw refuse('EPERM')
+    })
+    mock.method(fsp, 'readFile', (async (path: string, ...rest: []) => {
+      if (String(path).endsWith(landingFile)) throw refuse('EBUSY')
+      return readFileOf(path, ...rest)
+    }) as typeof fsp.readFile)
+    syncBuiltinESMExports()
+    try {
+      const listed = await listHeaders(fresh)
+      assert.deepEqual(
+        listed.map((h) => h.runId),
+        headers.map((h) => h.runId).filter((id) => id !== landing?.runId),
+      )
+      const app = createStudioApp({
+        source: fresh,
+        appDir: await fakeApp(),
+        es: 'test',
+        project: 'studio',
+        token: TOKEN,
+        hosts: [HOST],
+      })
+      const res = await app.request(`http://${HOST}/${manifestPath}`, {
+        headers: { host: HOST, cookie: `${COOKIE}=${TOKEN}` },
+      })
+      assert.equal(res.status, 200)
+    } finally {
+      mock.restoreAll()
+      syncBuiltinESMExports()
+    }
+    assert.equal(existsSync(join(root, '.reeval/history-cache.json')), false)
+    assert.deepEqual(
+      readdirSync(join(root, '.reeval')).filter((n) => n.startsWith('history-cache')),
+      [],
+      'no temporary cache file is left behind',
+    )
+    assert.deepEqual(
+      (await listHeaders(fresh)).map((h) => h.runId),
+      headers.map((h) => h.runId),
+    )
+  })
+})
 
 describe('reeval studio build', () => {
   test('writes a static site with the same paths the server answers', async () => {
