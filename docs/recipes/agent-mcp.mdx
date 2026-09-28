@@ -54,11 +54,27 @@ npx es mcp --http
 ```text
 es mcp · acme · evals/.history/
   http://127.0.0.1:4986/mcp
-  Authorization: Bearer tL_JWJcpcJXwM9Qy-DIdH14NdPWSjveq3oLMVBm_ewg
 Ctrl-C to stop.
 ```
 
-Give the client the URL and the header, for example `"url"` and `"headers"` in `.cursor/mcp.json`, or `claude mcp add --transport http es <url> --header "Authorization: Bearer <token>"`. The token changes every start.
+Give the client the URL: `"url"` in `.cursor/mcp.json`, or `claude mcp add --transport http es http://127.0.0.1:4986/mcp`. It answers only on `127.0.0.1`, to local names and origins, with no token.
+
+On a shared machine, or with the port reachable beyond it, set a token and send it as a header:
+
+```bash
+ES_MCP_TOKEN=$(openssl rand -hex 32) npx es mcp --http
+```
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "es": {
+      "url": "http://127.0.0.1:4986/mcp",
+      "headers": { "Authorization": "Bearer ${env:ES_MCP_TOKEN}" }
+    }
+  }
+}
+```
 
 ## What the agent gets
 

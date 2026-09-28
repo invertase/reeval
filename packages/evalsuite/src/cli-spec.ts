@@ -39,6 +39,7 @@ export const FLAGS = {
   scratch: { type: 'boolean' },
   'no-scratch': { type: 'boolean' },
   'no-token': { type: 'boolean' },
+  token: { type: 'string' },
   'no-artifacts': { type: 'boolean' },
   schema: { type: 'boolean' },
   rebuild: { type: 'boolean' },
@@ -212,15 +213,15 @@ export const COMMANDS: Record<string, CommandSpec> = {
     --json --md --no-cache  The analysis as JSON or Markdown; --no-cache calls the model again`,
   },
   mcp: {
-    flags: ['http', 'port', 'host', 'no-token'],
+    flags: ['http', 'port', 'host', 'token'],
     positionals: 0,
     help: `
   es mcp                    Serve the run history to other agents over MCP (stdio): read-only
                             tools for es query's views and SQL, history, show, compare,
                             transcripts and saved analyses, and runs as resources
-    --http                  Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp, behind a
-                            bearer token it prints; --port <n> (default 4986), --host <addr>
-    --no-token              With --http, skip the token (anyone local can then read it)`,
+    --http                  Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
+                            --port <n> (default 4986), --host <addr>
+    --token <value>         With --http, require it as a bearer token (also ES_MCP_TOKEN)`,
   },
   studio: {
     flags: ['port', 'host', 'open', 'no-scratch', 'no-token'],

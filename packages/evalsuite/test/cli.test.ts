@@ -103,9 +103,9 @@ describe('cli', () => {
       'no-scratch': true,
     })
     assert.deepEqual(parseCli(['studio', 'build', '--scratch']).values, { scratch: true })
-    assert.deepEqual(parseCli(['mcp', '--http', '--port', '4990', '--no-token']), {
+    assert.deepEqual(parseCli(['mcp', '--http', '--port', '4990', '--token', 't']), {
       positionals: ['mcp'],
-      values: { http: true, port: '4990', 'no-token': true },
+      values: { http: true, port: '4990', token: 't' },
     })
   })
 
@@ -136,6 +136,7 @@ describe('cli', () => {
     usage(['studio', 'foo'], /^es studio takes no arguments \(got foo\)$/)
     usage(['mcp', 'x'], /^es mcp takes no arguments \(got x\)$/)
     usage(['mcp', '--json'], /^--json isn't an option of es mcp\b/)
+    usage(['mcp', '--no-token'], /^--no-token isn't an option of es mcp\b/)
     // Every command refuses every flag that isn't its own.
     for (const { path, spec } of PATHS) {
       for (const flag of Object.keys(FLAGS) as FlagName[]) {

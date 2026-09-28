@@ -37,6 +37,7 @@ A credential with whitespace or a line break in it (a key copied from a wrapped 
 | `ES_OUTPUT_LOGS` | `--output-logs` | `full`, `errors-only` or `none` |
 | `ES_HEARTBEAT` | | Plain mode's "still running" line after silence, e.g. `30s`. Default `60s`; `0` turns it off |
 | `ES_DEBUG` | | `1` streams the hidden engine's output and the Docker sandbox and image-build logs to stderr, and prints stacks for unexpected errors |
+| `ES_MCP_TOKEN` | `--token` | `es mcp --http`: the bearer token every request must send; unset, none is needed. The flag wins |
 | `ES_NO_REPORT_HINT` | | `1` hides the line suggesting `es report` after an infra error or a crash |
 | `ES_RAW_TRANSCRIPT` | | `1` also writes the harness's unnormalised stream to `transcript.raw.jsonl` |
 | `ES_BASE` | | Not read from your shell: the build argument ES passes to a `docker({ dockerfile })` build, naming ES's image for the cell's harness. Start a Dockerfile `ARG ES_BASE` / `FROM ${ES_BASE}` |

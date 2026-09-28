@@ -306,65 +306,109 @@ describe('es mcp', () => {
     assert.ok(JSON.stringify(await json(modern, 'show')).includes(PLANTED), 'unmasked without it')
   })
 
-  test('--http serves stateless Streamable HTTP behind a Host check and a bearer token', async () => {
+  /** Starts `es mcp --http` on a free port; resolves once it's listening. */
+  async function serveHttp(args: string[] = [], env: NodeJS.ProcessEnv = {}) {
     const port = await freePort()
     const child: ChildProcess = spawn(
       process.execPath,
-      [cli, 'mcp', '--http', '--port', String(port)],
-      {
-        cwd: dir,
-        env: baseEnv,
-        detached: process.platform !== 'win32',
-      },
+      [cli, 'mcp', '--http', '--port', String(port), ...args],
+      { cwd: dir, env: { ...baseEnv, ...env }, detached: process.platform !== 'win32' },
     )
-    try {
-      let out = ''
-      await new Promise<void>((resolve, reject) => {
-        child.on('exit', (code) => reject(new Error(`es mcp --http exited ${code}`)))
-        child.stdout?.on('data', (d) => {
-          out += d
-          if (out.includes('Ctrl-C')) resolve()
-        })
+    let out = ''
+    await new Promise<void>((resolve, reject) => {
+      child.on('exit', (code) => reject(new Error(`es mcp --http exited ${code}`)))
+      child.stdout?.on('data', (d) => {
+        out += d
+        if (out.includes('Ctrl-C')) resolve()
       })
-      const url = /(http:\/\/\S+\/mcp)/.exec(out)?.[1] as string
-      const token = /Authorization: Bearer (\S+)/.exec(out)?.[1] as string
-      assert.equal(url, `http://127.0.0.1:${port}/mcp`)
-      assert.ok(token)
+    })
+    const url = `http://127.0.0.1:${port}/mcp`
+    assert.ok(out.includes(url), out)
+    const raw = (headers: Record<string, string>, method = 'POST') =>
+      new Promise<number>((resolve, reject) => {
+        const req = request(url, { method, headers }, (res) => {
+          res.resume()
+          resolve(res.statusCode ?? 0)
+        })
+        req.on('error', reject)
+        req.end(method === 'POST' ? '{}' : undefined)
+      })
+    const stop = () => child.pid && killTree(child.pid)
+    return { url, port, out, raw, stop }
+  }
 
-      const client = new Client(
-        { name: 'es-test', version: '1.0.0' },
-        { versionNegotiation: { mode: MODERN } },
-      )
-      await client.connect(
-        new StreamableHTTPClientTransport(new URL(url), {
-          requestInit: { headers: { Authorization: `Bearer ${token}` } },
-        }),
-      )
+  async function httpClient(url: string, headers: Record<string, string> = {}) {
+    const client = new Client(
+      { name: 'es-test', version: '1.0.0' },
+      { versionNegotiation: { mode: MODERN } },
+    )
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(url), { requestInit: { headers } }),
+    )
+    return client
+  }
+
+  const JSON_POST = {
+    'content-type': 'application/json',
+    accept: 'application/json, text/event-stream',
+  }
+
+  test('--http serves stateless Streamable HTTP with no token, behind Host and Origin checks', async () => {
+    const http = await serveHttp()
+    try {
+      assert.doesNotMatch(http.out, /Bearer/, 'no token by default')
+      const client = await httpClient(http.url)
       assert.ok(client.getDiscoverResult())
       assert.deepEqual(await json(client, 'show'), await cliJson(dir, ['show']))
       await client.close()
-
-      const raw = (headers: Record<string, string>, method = 'POST') =>
-        new Promise<number>((resolve, reject) => {
-          const req = request(url, { method, headers }, (res) => {
-            res.resume()
-            resolve(res.statusCode ?? 0)
-          })
-          req.on('error', reject)
-          req.end(method === 'POST' ? '{}' : undefined)
-        })
-      const json2 = {
-        'content-type': 'application/json',
-        accept: 'application/json, text/event-stream',
-      }
-      assert.equal(await raw(json2), 401, 'no token')
-      assert.equal(await raw({ ...json2, authorization: 'Bearer wrong' }), 401, 'a wrong token')
-      const auth = { ...json2, authorization: `Bearer ${token}` }
-      assert.equal(await raw({ ...auth, host: `evil.example:${port}` }), 403, 'a foreign Host')
-      assert.equal(await raw({ ...auth, origin: 'http://evil.example' }), 403, 'a foreign Origin')
-      assert.equal(await raw(auth, 'GET'), 405, 'no GET stream in 2026-07-28')
+      assert.equal(
+        await http.raw({ ...JSON_POST, host: `evil.example:${http.port}` }),
+        403,
+        'a foreign Host',
+      )
+      assert.equal(
+        await http.raw({ ...JSON_POST, origin: 'http://evil.example' }),
+        403,
+        'a foreign Origin',
+      )
+      assert.equal(await http.raw(JSON_POST, 'GET'), 405, 'no GET stream in 2026-07-28')
     } finally {
-      if (child.pid) killTree(child.pid)
+      http.stop()
+    }
+  })
+
+  test('--http with a token (--token beats ES_MCP_TOKEN) wants it as a bearer token', async () => {
+    const http = await serveHttp(['--token', 'flag-token-123'], { ES_MCP_TOKEN: 'env-token-456' })
+    try {
+      assert.match(http.out, /requires Authorization: Bearer/)
+      assert.ok(!http.out.includes('flag-token-123'), 'the token is never printed')
+      assert.equal(await http.raw(JSON_POST), 401, 'no token')
+      assert.equal(
+        await http.raw({ ...JSON_POST, authorization: 'Bearer wrong' }),
+        401,
+        'a wrong one',
+      )
+      const env = { ...JSON_POST, authorization: 'Bearer env-token-456' }
+      assert.equal(await http.raw(env), 401, 'the flag wins over ES_MCP_TOKEN')
+      const auth = { authorization: 'Bearer flag-token-123' }
+      assert.equal(
+        await http.raw({ ...JSON_POST, ...auth, host: `evil.example:${http.port}` }),
+        403,
+      )
+      const client = await httpClient(http.url, auth)
+      assert.deepEqual(await json(client, 'show'), await cliJson(dir, ['show']))
+      await client.close()
+    } finally {
+      http.stop()
+    }
+    const fromEnv = await serveHttp([], { ES_MCP_TOKEN: 'env-token-456' })
+    try {
+      assert.equal(await fromEnv.raw(JSON_POST), 401, 'ES_MCP_TOKEN alone sets it')
+      const client = await httpClient(fromEnv.url, { authorization: 'Bearer env-token-456' })
+      assert.ok(client.getDiscoverResult())
+      await client.close()
+    } finally {
+      fromEnv.stop()
     }
   })
 
@@ -372,6 +416,9 @@ describe('es mcp', () => {
     const r = await runCli(dir, ['mcp', '--port', '1234'])
     assert.equal(r.code, 2)
     assert.match(r.stderr, /--port needs --http/)
+    const token = await runCli(dir, ['mcp', '--token', 'x'])
+    assert.equal(token.code, 2)
+    assert.match(token.stderr, /--token needs --http/)
     const bad = await runCli(dir, ['mcp', '--http', '--port', 'x'])
     assert.equal(bad.code, 2)
     assert.match(bad.stderr, /--port must be a port number/)

@@ -1,14 +1,14 @@
 // `es mcp`: serves the run history over MCP, on stdio (the host launches it) or, with `--http`,
 // as stateless Streamable HTTP on a local port.
-import { randomBytes, timingSafeEqual } from 'node:crypto'
+import { timingSafeEqual } from 'node:crypto'
 import { basename } from 'node:path'
 import { UsageError } from '../errors.ts'
 import { fromCwd } from '../ids.ts'
-import { redactSecrets } from '../redact.ts'
+import { redactSecrets, registerSecret } from '../redact.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { serverFactory } from './server.ts'
 
-export type McpFlags = { http?: boolean; port?: string; host?: string; 'no-token'?: boolean }
+export type McpFlags = { http?: boolean; port?: string; host?: string; token?: string }
 
 type Args = { config: ResolvedConfig; flags: McpFlags; version: string }
 
@@ -24,7 +24,7 @@ const stopped = () =>
 
 export async function mcpCommand({ config, flags, version }: Args): Promise<number> {
   if (!flags.http) {
-    for (const name of ['port', 'host', 'no-token'] as const) {
+    for (const name of ['port', 'host', 'token'] as const) {
       if (flags[name] !== undefined) throw new UsageError(`--${name} needs --http`)
     }
   }
@@ -65,8 +65,10 @@ async function serveHttp(
   if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
     console.error(`warning: es mcp is listening on ${host}, reachable beyond this machine`)
   }
-  const token = flags['no-token'] ? null : randomBytes(32).toString('base64url')
-  if (!token) console.error('warning: --no-token lets any local process or user read the history')
+  // Off by default: bound to loopback behind the Host and Origin checks, like any local dev server.
+  const token = flags.token ?? (process.env.ES_MCP_TOKEN || undefined)
+  if (token !== undefined && !token.trim()) throw new UsageError('--token needs a value')
+  registerSecret(token)
   const { createMcpHandler } = await import('@modelcontextprotocol/server')
   const { Hono } = await import('hono')
   const { serve } = await import('@hono/node-server')
@@ -83,7 +85,7 @@ async function serveHttp(
     if (token) {
       const offered = /^Bearer (.+)$/.exec(c.req.header('authorization') ?? '')?.[1]
       if (!offered || !sameToken(offered, token)) {
-        return c.text('es mcp needs the bearer token it printed when it started', 401, {
+        return c.text('es mcp needs its bearer token (--token or ES_MCP_TOKEN)', 401, {
           'WWW-Authenticate': 'Bearer',
         })
       }
@@ -104,7 +106,7 @@ async function serveHttp(
   const url = `http://${host.includes(':') ? `[${host}]` : host}:${port}/mcp`
   console.log(`es mcp · ${basename(config.root)} · ${fromCwd(config.history.dir) || '.'}/`)
   console.log(`  ${url}`)
-  if (token) console.log(`  Authorization: Bearer ${token}`)
+  if (token) console.log('  requires Authorization: Bearer <the --token or ES_MCP_TOKEN value>')
   console.log('Ctrl-C to stop.')
   await stopped()
   await handler.close()
