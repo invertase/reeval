@@ -134,7 +134,8 @@
       "pages": [
         { "title": "Evals without Docker or keys", "href": "/recipes/fake-harness" },
         { "title": "PR gate in GitHub Actions", "href": "/recipes/github-pr-gate" },
-        { "title": "Nightly matrix and Pages", "href": "/recipes/nightly-pages" }
+        { "title": "Nightly matrix and Pages", "href": "/recipes/nightly-pages" },
+        { "title": "Query history from your agent", "href": "/recipes/agent-mcp" }
       ]
     },
     {
@@ -208,6 +209,7 @@
         { "title": "es history, show, compare", "href": "/reference/cli/history" },
         { "title": "es query", "href": "/reference/cli/query" },
         { "title": "es analyze", "href": "/reference/cli/analyze" },
+        { "title": "es mcp", "href": "/reference/cli/mcp" },
         { "title": "es studio", "href": "/reference/cli/studio" },
         { "title": "es image build, es clean", "href": "/reference/cli/image-clean" },
         { "title": "es report", "href": "/reference/cli/report" }

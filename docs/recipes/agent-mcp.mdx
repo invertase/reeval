@@ -1,0 +1,120 @@
+---
+title: Query history from your agent
+description: Point Cursor or Claude Code at es mcp, so your coding agent can read runs, compare them and query lift itself.
+---
+
+**Goal:** let the agent you code with answer "what regressed?" or "did the skill help?" from your ES history, without you pasting output.
+
+`es mcp` serves the history as read-only MCP tools. Your agent calls `compare`, `show`, `transcript` or `query_lift` and gets the JSON the CLI prints with `--json`.
+
+## Cursor
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "es": {
+      "command": "npx",
+      "args": [
+        "es",
+        "mcp",
+        "--config",
+        "${workspaceFolder}/es.config.ts"
+      ]
+    }
+  }
+}
+```
+
+`${workspaceFolder}` is the folder holding `.cursor/mcp.json`, so `es mcp` reads that project whatever directory Cursor starts it in. Enable the server under Customize; its tools then show as `es` tools in chat.
+
+## Claude Code
+
+```bash
+claude mcp add --scope project es -- npx es mcp
+```
+
+`--scope project` writes `.mcp.json` at the project root, so everyone who clones the repository gets the server:
+
+```json title=".mcp.json"
+{
+  "mcpServers": {
+    "es": { "command": "npx", "args": ["es", "mcp"] }
+  }
+}
+```
+
+Claude Code starts it in the project root, where `es mcp` finds `es.config.ts`.
+
+## Over HTTP
+
+```bash
+npx es mcp --http
+```
+
+```text
+es mcp · acme · evals/.history/
+  http://127.0.0.1:4986/mcp
+Ctrl-C to stop.
+```
+
+Give the client the URL: `"url"` in `.cursor/mcp.json`, or `claude mcp add --transport http es http://127.0.0.1:4986/mcp`. It answers only on `127.0.0.1`, to local names and origins, with no token.
+
+On a shared machine, or with the port reachable beyond it, set a token and send it as a header:
+
+```bash
+ES_MCP_TOKEN=$(openssl rand -hex 32) npx es mcp --http
+```
+
+```json title=".cursor/mcp.json"
+{
+  "mcpServers": {
+    "es": {
+      "url": "http://127.0.0.1:4986/mcp",
+      "headers": { "Authorization": "Bearer ${env:ES_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+## What the agent gets
+
+Asked "which evals pass on the latest run?", an agent calls `query_eval_trend` with `{ "where": { "outcome": "pass" } }`:
+
+```json
+{
+  "columns": ["eval_key", "run_id", "started_at", "branch", "pr_number", …],
+  "rows": [
+    {
+      "eval_key": "evals/a.es.ts › writes ok",
+      "run_id": "20260928T064231Z_e404369_cursor-agent_xxa1",
+      "outcome": "pass",
+      "pass_rate": 1,
+      …
+    }
+  ],
+  "truncated": false
+}
+```
+
+The server's instructions tell it where to start: `history` or `show`, then `compare`, the `query_*` views and `transcript`. Every tool and resource is on the [es mcp](/reference/cli/mcp) page.
+
+<Info>
+  `es mcp` never runs evals. When the agent should run one, it runs `es run` in its terminal, behind your command approval.
+</Info>
+
+## Variations
+
+- **Another project:** pass `--config path/to/es.config.ts`.
+- **A narrower agent:** most clients let you turn tools off one by one; `show`, `compare` and `query_failing_attempts` cover a regression hunt.
+- **Unrecorded runs:** `history` takes `all: true`; `show`, `compare` and the queries already include scratch runs from `.es/runs`.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="es mcp" icon="plug" href="/reference/cli/mcp">
+    Every tool, resource and security check.
+  </Card>
+  <Card title="History" icon="clock-rotate-left" href="/guide/history">
+    Record runs so there's history to query.
+  </Card>
+</CardGroup>

@@ -625,8 +625,8 @@ export type QueryResult = { columns: string[]; rows: Array<Record<string, unknow
 
 export type HistoryDb = {
   sync: SyncResult
-  /** Runs one read-only statement. */
-  query(sql: string): QueryResult
+  /** Runs one read-only statement, with `params` bound to its `?`s. */
+  query(sql: string, params?: SQLInputValue[]): QueryResult
   /** Every table and view, with its columns. */
   schema(): Array<{ name: string; type: 'table' | 'view'; columns: string[] }>
   close(): void
@@ -655,10 +655,10 @@ export async function openHistoryDb(
   db.exec('PRAGMA busy_timeout = 5000')
   return {
     sync: synced,
-    query(sql) {
+    query(sql, params = []) {
       try {
         const statement = db.prepare(sql)
-        const rows = statement.all() as Array<Record<string, unknown>>
+        const rows = statement.all(...params) as Array<Record<string, unknown>>
         // `columns()` is newer than the Node floor; without it, a query with no rows has none.
         const columns =
           typeof statement.columns === 'function'

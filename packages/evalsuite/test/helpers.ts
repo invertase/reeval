@@ -28,7 +28,13 @@ const cli = join(pkgRoot, 'dist/cli.js')
 const tmpRoot = realpathSync(mkdtempSync(join(tmpdir(), 'es-test-')))
 writeFileSync(join(tmpRoot, '.gitconfig-empty'), '')
 process.on('exit', () => {
-  if (!process.env.ES_TEST_KEEP) rmSync(tmpRoot, { recursive: true, force: true })
+  if (process.env.ES_TEST_KEEP) return
+  try {
+    rmSync(tmpRoot, { recursive: true, force: true, maxRetries: 3 })
+  } catch (error) {
+    // Windows refuses (EPERM) while a process a test killed still holds a file under it.
+    process.stderr.write(`warning: left ${tmpRoot}: ${(error as Error).message}\n`)
+  }
 })
 
 /** A fresh directory for one test, e.g. a checkout target next to a project. */

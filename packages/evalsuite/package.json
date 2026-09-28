@@ -76,6 +76,7 @@
     "@ai-sdk/provider-utils": "5.0.47",
     "@ai-sdk/typesafe-ai": "3.0.6",
     "@hono/node-server": "2.1.1",
+    "@modelcontextprotocol/server": "2.1.0",
     "@vitest/expect": "5.0.2",
     "@vitest/utils": "5.0.2",
     "ai": "7.0.114",
@@ -98,6 +99,7 @@
     "@evalsuite/harness-opencode": "workspace:0.2.0",
     "@evalsuite/harness-pi": "workspace:0.1.0",
     "@evalsuite/sandbox-docker": "workspace:*",
+    "@modelcontextprotocol/client": "2.1.0",
     "studio-web": "workspace:*",
     "tsdown": "0.23.0"
   }

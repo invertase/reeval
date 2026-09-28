@@ -1,0 +1,107 @@
+---
+title: es mcp
+description: Serve the run history to other agents over MCP, as read-only tools and resources.
+---
+
+`es mcp` is an MCP server built into the CLI. Cursor, Claude Code or any MCP client launches it and asks the history what `es query`, `es show`, `es compare` and `es history` answer.
+
+```bash
+npx es mcp
+npx es mcp --http --port 4986
+```
+
+## Help
+
+[//]: # (generated:cli-help:mcp)
+
+```text
+es mcp                    Serve the run history to other agents over MCP (stdio): read-only
+                          tools for es query's views and SQL, history, show, compare,
+                          transcripts and saved analyses, and runs as resources
+  --http                  Stateless Streamable HTTP on 127.0.0.1 instead, at /mcp;
+                          --port <n> (default 4986), --host <addr>
+  --token <value>         With --http, require it as a bearer token (also ES_MCP_TOKEN)
+```
+
+[//]: # (/generated:cli-help:mcp)
+
+```text
+es mcp · acme · evals/.history/
+  http://127.0.0.1:4986/mcp
+Ctrl-C to stop.
+```
+
+- **Protocol:** MCP 2026-07-28, stateless (`server/discover`, no sessions). Clients that still open with the 2025 `initialize` handshake are served too.
+- **stdio** (the default): the client starts `es mcp` and it ends when the client closes its stdin. Its stdout is the protocol, so anything the config prints goes to stderr.
+- **`--http`:** Streamable HTTP, POST `/mcp`, a fresh server per request, on `127.0.0.1` until Ctrl-C. No token by default. A taken port fails; there's no next port.
+- **Project:** the one `--config` names, or the nearest config to the current directory.
+
+## Tools
+
+| Tool | Arguments | Returns |
+|---|---|---|
+| `history` | `filter`, `limit`, `all` | `es history --json` |
+| `show` | `run`, `format` (`json` or `md`) | `es show --json`, or `summary.md` as `markdown` |
+| `compare` | `base`, `head` | `es compare --json` |
+| `analysis` | `run` | Saved and cached analyses of the run, newest first; never calls a model |
+| `transcript` | `run`, `attempt`, `offset`, `limit` | An attempt's transcript lines (200 by default), `total` and its resource `uri` |
+| `query_<view>` | `where`, `limit` | `{ columns, rows, truncated }` from the view |
+| `query` | `sql`, `limit` | The same, for one `SELECT` or `WITH` statement |
+| `query_schema` | none | `es query --schema --json`, as `objects` |
+
+There's one `query_<view>` tool per [view](/reference/cli/query#views): `query_lift`, `query_effort`, `query_factor_effects`, `query_skill_reads`, `query_flaky_cells`, `query_drift`, `query_failing_attempts`, `query_eval_trend` and `query_verdict_flips`. Its `where` takes the view's columns, each equal to a value (`null` matches `NULL`). Rows default to 100 and stop at 1000; `truncated` says there were more.
+
+A `run` is a [run reference](/reference/cli#run-references), `latest` by default. An `attempt` is its key from `show` (`evals/a.es.ts › writes ok # fake/-/fake#1`), or its id (`fake/-/fake#1`) when only one eval has it.
+
+```json
+{
+  "columns": ["eval_key", "run_id", "started_at", "branch", "pr_number", "recorded", "outcome", …],
+  "rows": [
+    {
+      "eval_key": "evals/a.es.ts › writes ok",
+      "run_id": "20260928T064231Z_e404369_cursor-agent_xxa1",
+      "outcome": "pass",
+      "pass_rate": 1,
+      …
+    }
+  ],
+  "truncated": false
+}
+```
+
+Each result is that JSON as text and as `structuredContent`. Every tool is marked read-only and idempotent.
+
+## Resources
+
+| URI | Contents |
+|---|---|
+| `es://runs/<runId>` | The run record; the list has every recorded and scratch run, newest first |
+| `es://runs/<runId>/transcripts/<attempt>` | The attempt's `transcript.jsonl`, with the attempt key percent-encoded |
+
+## Security
+
+- **Read-only.** SQL runs on the same read-only connection as `es query`, one `SELECT` or `WITH` statement at a time, so `ATTACH`, `PRAGMA` and `VACUUM INTO` are refused. The only write is `.es/history.db` catching up with new records.
+- **No evals run.** A run spends keys, starts containers and takes minutes: run it with `es run` in a terminal.
+- **Masked.** Records are masked when ES writes them, and everything `es mcp` returns is masked again against its own environment. It loads no `.env` files.
+- **Scoped.** Runs are references, never paths. A transcript is read only from inside its run's folder, after resolving symlinks.
+- **HTTP:** it binds `127.0.0.1` and checks `Host` and `Origin`, so a web page can't reach it through DNS rebinding. Other hosts and origins get 403; GET gets 405.
+
+## A token
+
+```bash
+ES_MCP_TOKEN=$(openssl rand -hex 32) npx es mcp --http
+npx es mcp --http --token "$ES_MCP_TOKEN"
+```
+
+With `--token <value>` or `ES_MCP_TOKEN` set (the flag wins), every request needs `Authorization: Bearer <value>`; without it, or with another value, it gets 401. ES never prints the token, and masks it like any secret.
+
+Set one when something other than you can reach the port:
+
+- **Beyond localhost:** a `--host` other than `127.0.0.1`, `localhost` or `::1` (ES warns), or a forwarded port.
+- **Shared machines:** other users on the same host can reach `127.0.0.1` too.
+
+## Related
+
+- [Query history from your agent](/recipes/agent-mcp)
+- [es query](/reference/cli/query)
+- [es history, show, compare](/reference/cli/history)
