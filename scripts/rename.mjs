@@ -50,7 +50,7 @@ const READS_ANALYSIS =
   /\/test\/(analysis\.test\.ts|features\/inventory\.ts|differential\/vitest\/analysis\.test\.ts\.jsonl)$/
 const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|tgz|gz|zip|wasm)$/i
 const COMMANDS =
-  'init|doctor|run|clean|record|history|show|compare|checkout|query|analyze|mcp|studio|report|image|help|eval'
+  'init|doctor|run|clean|record|history|show|compare|checkout|query|analyze|mcp|studio|report|image|help|eval|__worker'
 
 const git = (...a) => execFileSync('git', a, { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 })
 const tracked = () => git('ls-files', '-z').split('\0').filter(Boolean)
@@ -153,6 +153,13 @@ const RULES = [
   [/(blocked by the reeval egress policy: )(?:the |bloc)…/g, '$1…', /\/test\/features\.test\.ts$/],
 ]
 
+/** Every corpus project's config, before the rename. */
+function corpusConfigs() {
+  return tracked().filter((f) =>
+    /^packages\/evalsuite\/test\/fixtures\/records\/[^/]+\/es\.config\.ts$/.test(f),
+  )
+}
+
 /**
  * Hand edits the rules can't make, applied to the original text before them. Each `from` must be
  * there (or its `to` already), so a `main` that moved on fails loudly instead of renaming half.
@@ -207,8 +214,8 @@ const PATCHES = [
     'REEVAL_OPENCODE_MCP_SERVERS',
   ])`,
   },
-  ...['before-100', 'fake-matrix', 'real-harnesses'].map((entry) => ({
-    file: `packages/evalsuite/test/fixtures/records/${entry}/es.config.ts`,
+  ...corpusConfigs().map((file) => ({
+    file,
     from: '  sandbox: fakeSandbox(),\n',
     to: "  sandbox: fakeSandbox(),\n  // Its evals keep the names their records were made under.\n  include: ['evals/**/*.es.ts'],\n",
   })),
