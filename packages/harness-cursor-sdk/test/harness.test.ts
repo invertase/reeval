@@ -16,7 +16,7 @@ const start = async (
   createCursorSdk({ auth: { CURSOR_API_KEY: KEY }, modelCatalog: CATALOG, ...settings }).doStart({
     sessionId: 's1',
     sandboxSession: sandbox as never,
-    sessionWorkDir: '/es/workspace',
+    sessionWorkDir: '/reeval/workspace',
     permissionMode: 'allow-all',
     ...extra,
   })
@@ -57,7 +57,7 @@ describe('createCursorSdk', () => {
     const everything = JSON.stringify([...sandbox.spawned, ...sandbox.files])
     assert.ok(!everything.includes(KEY), 'the key never reaches the sandbox')
     assert.equal(sandbox.transformations.length, 1)
-    assert.equal(spawned.workingDirectory, '/es/workspace')
+    assert.equal(spawned.workingDirectory, '/reeval/workspace')
     assert.match(
       spawned.command,
       /^exec node '\/root\/\.ai-sdk-harness\/\.harness-bootstrap\/cursor-sdk\/runner\.mjs' '/,

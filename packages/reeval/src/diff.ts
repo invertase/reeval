@@ -2,7 +2,7 @@ import type { Sandbox } from './sandbox/types.ts'
 import { InfraError } from './sandbox/types.ts'
 import type { Diff, FileChange } from './types.ts'
 
-const GIT = 'git -c user.name=es -c user.email=es@localhost -c core.hooksPath=/dev/null'
+const GIT = 'git -c user.name=reeval -c user.email=reeval@localhost -c core.hooksPath=/dev/null'
 
 /** Records the workspace state before the agent runs, in a git dir outside the workspace. */
 export async function snapshot(sandbox: Sandbox, signal?: AbortSignal): Promise<void> {

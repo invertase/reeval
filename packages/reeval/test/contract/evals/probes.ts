@@ -15,7 +15,7 @@ export const ruled = defineEnvironment('ruled', {
 })
 export const stamped = defineEnvironment('stamped', ({ file, mcp }) => ({
   files: { '~/reeval-mcp/stamp.mjs': file('../stamp.mjs') },
-  mcp: { stamp: mcp.stdio('node', ['/home/es/reeval-mcp/stamp.mjs']) },
+  mcp: { stamp: mcp.stdio('node', ['/home/reeval/reeval-mcp/stamp.mjs']) },
 }))
 export const notes = defineEnvironment('notes', { files: { 'notes.txt': 'status: draft\n' } })
 export const scanned = defineEnvironment('scanned', ({ file }) => ({

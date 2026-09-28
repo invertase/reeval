@@ -30,7 +30,7 @@ test('the bootstrap installs the pinned pi from its lockfile, without build scri
 test('each turn runs pi in print mode on one session id, the prompt from its file', () => {
   const command = buildPiCommand({
     cli: '/h/pi',
-    workDir: '/es/workspace',
+    workDir: '/reeval/workspace',
     promptFile: '/d/prompt-1.txt',
     model: 'gemini-3.8-flash',
     sessionId: 'abc',
@@ -38,7 +38,7 @@ test('each turn runs pi in print mode on one session id, the prompt from its fil
   })
   assert.equal(
     command,
-    `cd '/es/workspace' && exec '/h/pi' --mode json -p --offline --approve --no-extensions --provider google --model 'gemini-3.8-flash' --session-id 'abc' --session-dir '/h/.pi/agent/sessions' -- "$(cat '/d/prompt-1.txt')"`,
+    `cd '/reeval/workspace' && exec '/h/pi' --mode json -p --offline --approve --no-extensions --provider google --model 'gemini-3.8-flash' --session-id 'abc' --session-dir '/h/.pi/agent/sessions' -- "$(cat '/d/prompt-1.txt')"`,
   )
 })
 

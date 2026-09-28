@@ -11,9 +11,9 @@ RUN apt-get update \
 # in src/build-image.ts. The harness bridge installs its dependencies with pnpm.
 RUN npm install --global npm@11.20.0 && npm install --global pnpm@10.33.3
 
-# The agent, setup steps and checks run as `es` (SANDBOX_USER in src/image.ts); image builds stay
+# The agent, setup steps and checks run as `reeval` (SANDBOX_USER in src/image.ts); image builds stay
 # root. Keep in step with toolchainDockerfile in src/build-image.ts.
-RUN useradd --create-home --shell /bin/bash --uid 10001 --user-group es \
-  && mkdir -p /es/workspace && chown -R es:es /es
-ENV PATH=/home/es/.local/bin:$PATH
-WORKDIR /es/workspace
+RUN useradd --create-home --shell /bin/bash --uid 10001 --user-group reeval \
+  && mkdir -p /reeval/workspace && chown -R reeval:reeval /reeval
+ENV PATH=/home/reeval/.local/bin:$PATH
+WORKDIR /reeval/workspace

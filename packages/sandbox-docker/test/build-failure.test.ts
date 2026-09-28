@@ -19,11 +19,11 @@ const ENOSPC = `#4 [1/2] FROM docker.io/library/debian:bookworm-slim@sha256:3783
 #4 DONE 0.0s
 
 #5 [2/2] RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh
-#5 0.101 es: install 1/1: 'dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'
+#5 0.101 reeval: install 1/1: 'dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'
 #5 0.122 about to fail
 #5 0.140 dd: error writing '/dev/shm/fill': No space left on device
 #5 0.140 65+0 records in
-#5 0.141 es: install 1/1 exited 1: 'dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'
+#5 0.141 reeval: install 1/1 exited 1: 'dd if=/dev/zero of=/dev/shm/fill bs=1M count=200'
 #5 ERROR: process "/bin/sh -c echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh" did not complete successfully: exit code: 1
 ------
  > [2/2] RUN echo Y2QgLwplY2hvIGhp | base64 -d > /tmp/reeval-install.sh && bash /tmp/reeval-install.sh:

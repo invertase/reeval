@@ -15,7 +15,7 @@ const start = async (
   createAntigravity({ auth: { GEMINI_API_KEY: KEY }, ...settings }).doStart({
     sessionId: 's1',
     sandboxSession: sandbox as never,
-    sessionWorkDir: '/es/workspace',
+    sessionWorkDir: '/reeval/workspace',
     permissionMode: 'allow-all',
     ...extra,
   })
@@ -62,7 +62,7 @@ describe('createAntigravity', () => {
       { key: { exact: 'x-goog-api-key' }, value: { exact: placeholder } },
     ])
     assert.deepEqual(sandbox.transformations[0]?.transform.headers, { 'x-goog-api-key': KEY })
-    assert.equal(spawned.workingDirectory, '/es/workspace')
+    assert.equal(spawned.workingDirectory, '/reeval/workspace')
     assert.match(spawned.command, /'--model' 'gemini-3\.8-flash-low'/)
     assert.match(spawned.command, /--dangerously-skip-permissions/)
     assert.equal(visible(parts).at(-1)?.type, 'finish')

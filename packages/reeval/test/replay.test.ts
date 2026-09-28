@@ -114,9 +114,9 @@ const renamedTool: Record<string, [string, string]> = {
 /** Each harness's translator, fresh for one turn: the native events go back through it. */
 const translators: Record<string, () => { push(line: string): HarnessV1StreamPart[] }> = {
   antigravity: () => new AntigravityStreamTranslator({ turn: 1 }),
-  cursor: () => new CursorSdkStreamTranslator({ workDir: '/es/workspace' }),
+  cursor: () => new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' }),
   pi: () => new PiStreamTranslator(),
-  codex: () => new CodexStreamTranslator({ workDir: '/es/workspace' }),
+  codex: () => new CodexStreamTranslator({ workDir: '/reeval/workspace' }),
 }
 
 for (const harness of Object.keys(translators))
@@ -136,7 +136,7 @@ for (const harness of Object.keys(translators))
         .map((p) => [
           p.toolName,
           // The harness layer makes paths workspace-relative after the adapter.
-          JSON.parse(text(p.input).replaceAll('/es/workspace/', '')),
+          JSON.parse(text(p.input).replaceAll('/reeval/workspace/', '')),
         ]),
       text: parts
         .filter((p) => p.type === 'text-delta')
@@ -623,7 +623,7 @@ describe('replay: Cursor web calls, streamed and recovered', () => {
       : lines.map((l) => JSON.stringify({ ...JSON.parse(l), recovered: undefined }))
   }
   const webCalls = (lines: string[]) => {
-    const t = new CursorSdkStreamTranslator({ workDir: '/es/workspace' })
+    const t = new CursorSdkStreamTranslator({ workDir: '/reeval/workspace' })
     return lines
       .flatMap((l) => t.push(l))
       .flatMap((p) => (p.type === 'tool-call' ? [p.toolName] : []))

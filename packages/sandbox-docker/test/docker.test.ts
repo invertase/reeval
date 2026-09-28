@@ -476,7 +476,7 @@ describe('egress gateway in Docker', {
         image: 'busybox:1.37',
         labels: { 'ai.reeval.test': 'no-user' },
       }),
-      /busybox:1\.37 has no es user to run the sandbox as[\s\S]*docker\(\{ root: true \}\)/,
+      /busybox:1\.37 has no reeval user to run the sandbox as[\s\S]*docker\(\{ root: true \}\)/,
     )
     await retry(async () =>
       assert.equal(

@@ -44,7 +44,7 @@ describe('stream translation', () => {
         [
           'write',
           'write_to_file',
-          { TargetFile: '/es/workspace/hello.txt', file_path: '/es/workspace/hello.txt' },
+          { TargetFile: '/reeval/workspace/hello.txt', file_path: '/reeval/workspace/hello.txt' },
         ],
         ['bash', 'run_command', { CommandLine: 'cat hello.txt', command: 'cat hello.txt' }],
       ],
@@ -87,7 +87,10 @@ describe('stream translation', () => {
       [
         ['webSearch', { query: 'antigravity cli headless' }],
         ['webFetch', { Url: 'https://example.com', url: 'https://example.com' }],
-        ['write', { TargetFile: '/es/workspace/new.txt', file_path: '/es/workspace/new.txt' }],
+        [
+          'write',
+          { TargetFile: '/reeval/workspace/new.txt', file_path: '/reeval/workspace/new.txt' },
+        ],
         ['read', { AbsolutePath: '/nope.txt', file_path: '/nope.txt' }],
       ],
     )

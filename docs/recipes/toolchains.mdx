@@ -62,7 +62,7 @@ evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
 })
 ```
 
-`install` commands run once, as root with `HOME=/home/es`, with no secrets and no workspace. The agent itself runs as the unprivileged `es` user, so bake packages in here rather than having it `apt-get` them. reeval caches the result by the base image and the exact command list, so any edit builds a new layer.
+`install` commands run once, as root with `HOME=/home/reeval`, with no secrets and no workspace. The agent itself runs as the unprivileged `reeval` user, so bake packages in here rather than having it `apt-get` them. reeval caches the result by the base image and the exact command list, so any edit builds a new layer.
 
 ## Your own Dockerfile
 
@@ -187,7 +187,7 @@ flutter · 1 eval
 - An idle agent container takes about 300 MB, and an SDK's builds take far more. Lower `--concurrency` on small machines.
 
 <Warning>
-  Keep the image's user as `root` and leave `/es` alone: reeval's bootstrap and the harness live there. `install` doesn't combine with `dockerfile`; put those commands in the Dockerfile as `RUN` lines.
+  Keep the image's user as `root` and leave `/reeval` alone: reeval's bootstrap and the harness live there. `install` doesn't combine with `dockerfile`; put those commands in the Dockerfile as `RUN` lines.
 </Warning>
 
 ## Variations

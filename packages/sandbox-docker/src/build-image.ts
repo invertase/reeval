@@ -45,9 +45,12 @@ const slugify = (text: string, max: number) =>
 /** The build context of reeval's base image, shipped in the package. */
 export const DOCKER_CONTEXT = fileURLToPath(new URL('../docker', import.meta.url))
 
-/** The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. */
+/**
+ * The image `docker({ from })` evals run in: `from` plus Node, git and the harness's CLI. The hash
+ * covers the toolchain layer too, so a change to the sandbox user or paths builds anew.
+ */
 export const harnessImageFor = (harness: BakedHarness, from: string) =>
-  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(from).slice(0, 8)}`
+  `${imageFor(harness)}-${slugify(from, 40) || 'image'}-${sha256(toolchainDockerfile(from)).slice(0, 8)}`
 
 /**
  * How each harness's CLI gets into an image: its adapter's bootstrap, and the binary it leaves

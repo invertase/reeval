@@ -44,7 +44,7 @@ Without options, `docker()` uses reeval's sandbox image for the harness, which `
 </Property>
 
 <Property name="install" type="Array<string | { run: string, timeout?: string | number }>" optional>
-  Shell commands baked onto the base in one cached layer. They run in order, as root with `HOME=/home/es` (what they put there is handed to the `es` user), from `/`, with bash, and never see secrets or the workspace: what needs either belongs in the environment's `setup`. A step's `timeout` kills it (there's none by default). Not with `dockerfile`: put the commands in it as `RUN` lines.
+  Shell commands baked onto the base in one cached layer. They run in order, as root with `HOME=/home/reeval` (what they put there is handed to the `reeval` user), from `/`, with bash, and never see secrets or the workspace: what needs either belongs in the environment's `setup`. A step's `timeout` kills it (there's none by default). Not with `dockerfile`: put the commands in it as `RUN` lines.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -70,7 +70,7 @@ These set what the container runs with, not what's in its image, so changing the
 </Property>
 
 <Property name="root" type="boolean" optional>
-  Run the agent, setup steps and checks as root instead of the `es` user, with the capabilities `apt-get` needs added back (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Default `false`. For evals that install system packages during the attempt; baking them in with `install` needs no opt-in. Every run that uses it prints a `WARNING:` line (see [Privilege warnings](#privilege-warnings)).
+  Run the agent, setup steps and checks as root instead of the `reeval` user, with the capabilities `apt-get` needs added back (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`). Default `false`. For evals that install system packages during the attempt; baking them in with `install` needs no opt-in. Every run that uses it prints a `WARNING:` line (see [Privilege warnings](#privilege-warnings)).
 </Property>
 
 <Property name="capabilities" type="string[]" optional>
@@ -127,15 +127,15 @@ A rebuild removes the image its tag pointed at before, unless a container or ano
 
 Adapter versions: Cursor `0.1.0` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.32), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
-What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `es` user, and the workspace at `/es/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
+What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `reeval` user, and the workspace at `/reeval/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
 
 Image builds don't count toward the eval timeout.
 
 ## Inside the container
 
-Every attempt gets a fresh container with the workspace at `/es/workspace`. The agent, setup steps and checks run as `es` (uid 10001, home `/home/es`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image reeval builds has.
+Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The agent, setup steps and checks run as `reeval` (uid 10001, home `/home/reeval`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image reeval builds has.
 
-Every image reeval builds has the `es` user. `docker({ image })` with an image that doesn't fails with `<image> has no es user to run the sandbox as. …`: rebuild it with reeval, or pass `root: true`.
+Every image reeval builds has the `reeval` user. `docker({ image })` with an image that doesn't fails with `<image> has no reeval user to run the sandbox as. …`: rebuild it with reeval, or pass `root: true`.
 
 ## Errors
 

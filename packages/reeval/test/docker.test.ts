@@ -107,7 +107,7 @@ evaluate('docker', async (t) => {
   await expect(turn).toHaveFile('greet.js', /Hello/)
   await expect(t.exec('node -e "import(\\'./greet.js\\').then(m => console.log(m.greet(\\'Ada\\')))"')).toSucceed()
   const r = await t.exec('pwd && git --version && ls -A')
-  expect(r.stdout).toContain('/es/workspace')
+  expect(r.stdout).toContain('/reeval/workspace')
   expect(turn.diff.files).toEqual(expect.arrayContaining([{ path: 'greet.js', status: 'added' }]))
 })
 `,
@@ -134,7 +134,7 @@ evaluate('docker', async (t) => {
     async () => {
       const install = [
         {
-          run: 'pwd > /opt/reeval-cwd && ls /es/workspace | wc -l > /opt/reeval-workspace',
+          run: 'pwd > /opt/reeval-cwd && ls /reeval/workspace | wc -l > /opt/reeval-workspace',
           timeout: '2m',
         },
         '(printenv DB_URL || echo none) > /opt/reeval-secret && echo layer > /opt/reeval-layer && date +%s%N > /opt/reeval-built',
@@ -142,7 +142,7 @@ evaluate('docker', async (t) => {
       const eval_ = `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const tools = defineEnvironment('tools', ({ secret }) => ({
-  files: { '~/.config/es/hint.txt': 'from home' },
+  files: { '~/.config/reeval/hint.txt': 'from home' },
   env: {
     DB_URL: secret.fromEnv('REEVAL_TEST_DB_URL'),
     CHECK_ONLY: secret.fromEnv('REEVAL_TEST_DB_URL', { to: 'checks' }),
@@ -156,7 +156,7 @@ evaluate('layered', { environment: tools, sandbox: docker({ install: ${JSON.stri
   expect((await t.exec('cat /opt/reeval-workspace')).stdout).toBe('0\\n')
   expect((await t.exec('cat /opt/reeval-secret')).stdout).toBe('none\\n')
   expect((await t.exec('printf %s "$DB_URL"')).stdout).toBe('postgres://u:pw-long-enough@db')
-  expect((await t.exec('cat ~/.config/es/hint.txt')).stdout).toBe('from home')
+  expect((await t.exec('cat ~/.config/reeval/hint.txt')).stdout).toBe('from home')
   await t.exec('cat /opt/reeval-built')
   expect((await t.exec('cat /tmp/check-only')).stdout).toBe('postgres://u:pw-long-enough@db')
   const pid1 = (await t.exec("tr '\\\\0' '\\\\n' < /proc/1/environ")).stdout
@@ -785,7 +785,7 @@ evaluate('tools', { sandbox: docker({ dockerfile: './tools/Dockerfile' }) }, asy
   const greeting = (await t.exec('cat /opt/greeting.txt')).stdout
   expect(greeting).toMatch(/^(hello|bonjour)\\n$/)
   expect((await t.exec('cat /opt/nonce')).stdout).toBe('${nonce}\\n')
-  expect((await t.exec('pwd')).stdout).toBe('/es/workspace\\n')
+  expect((await t.exec('pwd')).stdout).toBe('/reeval/workspace\\n')
 })
 evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (t) => {
   await t.send('x')
@@ -868,7 +868,7 @@ evaluate('bakes', { sandbox: bookworm }, async (t) => {
   expect(shell.join('')).toMatch(/^v22\\./)
   expect((await t.exec('grep -c bookworm /etc/os-release')).exitCode).toBe(0)
   expect((await t.exec('git --version && curl --version && pnpm --version')).exitCode).toBe(0)
-  expect((await t.exec('pwd')).stdout).toBe('/es/workspace\\n')
+  expect((await t.exec('pwd')).stdout).toBe('/reeval/workspace\\n')
 })
 evaluate('canary', { sandbox: bookworm }, async (t) => {
   await t.sandbox()
@@ -937,7 +937,7 @@ evaluate('deb', { sandbox: docker({ dockerfile: './deb.Dockerfile' }) }, async (
           'run',
           '--rm',
           '--user',
-          'es',
+          'reeval',
           '--entrypoint',
           'sh',
           ref,
@@ -1453,7 +1453,7 @@ export default defineConfig({ harness: codex({ model: 'gpt-5.4-mini' }), sandbox
 evaluate('hi', async (t) => {
   await t.send('Reply with the word hi.')
   // Each turn is its own codex process, gone by now: the files it left are what can hold the key.
-  const found = await t.exec('grep -rl not_a_real_key "$HOME" /es /tmp 2>/dev/null; true')
+  const found = await t.exec('grep -rl not_a_real_key "$HOME" /reeval /tmp 2>/dev/null; true')
   expect(found.stdout).toBe('')
   expect(await t.exec('cat ~/.codex/config.toml').then((r) => r.stdout)).toContain('openai-http')
 })

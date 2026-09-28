@@ -39,17 +39,17 @@ test("the bootstrap installs the pinned Codex build for the sandbox's arch, chec
 test('the first turn starts a thread; later ones resume it, the prompt from its file', () => {
   const base = {
     binDir: '/h/bin',
-    workDir: '/es/workspace',
+    workDir: '/reeval/workspace',
     promptFile: '/d/prompt-1.txt',
     model: 'gpt-5.4-mini',
   }
   assert.equal(
     buildCodexCommand({ ...base, threadId: undefined }),
-    `cd '/es/workspace' && PATH='/h/bin':"$PATH" exec codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --model 'gpt-5.4-mini' -- "$(cat '/d/prompt-1.txt')" < /dev/null`,
+    `cd '/reeval/workspace' && PATH='/h/bin':"$PATH" exec codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --model 'gpt-5.4-mini' -- "$(cat '/d/prompt-1.txt')" < /dev/null`,
   )
   assert.equal(
     buildCodexCommand({ ...base, threadId: 't-1' }),
-    `cd '/es/workspace' && PATH='/h/bin':"$PATH" exec codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --model 'gpt-5.4-mini' resume 't-1' -- "$(cat '/d/prompt-1.txt')" < /dev/null`,
+    `cd '/reeval/workspace' && PATH='/h/bin':"$PATH" exec codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox --model 'gpt-5.4-mini' resume 't-1' -- "$(cat '/d/prompt-1.txt')" < /dev/null`,
   )
 })
 
@@ -112,10 +112,10 @@ test('a sandbox that brokers gets a placeholder, swapped for the key on the Open
   const harness = createCodex({ auth: { [CODEX_CREDENTIAL_ENV]: 'sk-real' } })
   const session = await harness.doStart({
     sessionId: 's1',
-    sessionWorkDir: '/es/workspace',
+    sessionWorkDir: '/reeval/workspace',
     sandboxSession: {
       addRequestTransformations: async (r: typeof rules) => void rules.push(...r),
-      run: async () => ({ exitCode: 0, stdout: '/home/es', stderr: '' }),
+      run: async () => ({ exitCode: 0, stdout: '/home/reeval', stderr: '' }),
       writeTextFile: async (w: { path: string; content: string }) => void writes.push(w),
     },
   } as never)
@@ -128,7 +128,7 @@ test('a sandbox that brokers gets a placeholder, swapped for the key on the Open
   assert.doesNotMatch(placeholder, /sk-real/)
   assert.deepEqual(
     writes.map((w) => w.path),
-    ['/home/es/.codex/config.toml'],
+    ['/home/reeval/.codex/config.toml'],
   )
   assert.doesNotMatch(writes[0]?.content ?? '', /sk-real/)
 })
