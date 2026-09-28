@@ -600,14 +600,20 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
   })
 
   test('a killed run is shown as stopped, with what it had finished', async () => {
-    // No shell command, and the worker's pid: the kill's whole tree is gone before the test ends.
+    // The second attempt parks in Node after its turn, so the kill lands while no shell or git
+    // is running in the sandbox: on Windows, taskkill doesn't reach what MSYS starts. The worker
+    // writes its pid, so the test ends only once the whole tree is gone.
     const p = await project('live-killed', {
-      'es.config.ts': fakeConfig({ harness: agent(300) }),
+      'es.config.ts': fakeConfig({ harness: agent(0) }),
       'evals/hello.es.ts': `import { writeFileSync } from 'node:fs'
+import { setTimeout as sleep } from 'node:timers/promises'
 import { evaluate } from 'evalsuite'
 evaluate('writes hello', { runs: 20 }, async (t) => {
   writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
   await t.send('write hello.txt')
+  if (t.attempt.n === 1) return
+  writeFileSync(new URL('../parked', import.meta.url), '')
+  await sleep(600_000, undefined, { signal: t.signal }).catch(() => {})
 })
 `,
     })
@@ -619,7 +625,7 @@ evaluate('writes hello', { runs: 20 }, async (t) => {
     })
     const source = { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true }
     let runs: LiveRun[] = []
-    for (let i = 0; i < 400 && !(runs[0]?.counts.done ?? 0); i++) {
+    while (!existsSync(join(p.dir, 'parked')) || runs[0]?.counts.done !== 1) {
       await sleep(50)
       runs = await listLive(source)
     }
@@ -645,8 +651,7 @@ evaluate('writes hello', { runs: 20 }, async (t) => {
     runs = await listLive(source)
     assert.equal(runs.length, 1)
     assert.equal(runs[0]?.state, 'stopped')
-    assert.ok((runs[0]?.counts.done ?? 0) >= 1)
-    assert.ok((runs[0]?.counts.done ?? 0) < 20)
+    assert.equal(runs[0]?.counts.done, 1)
   })
 
   test('a run that stops at the plan leaves no progress file', async () => {
