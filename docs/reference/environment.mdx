@@ -28,7 +28,7 @@ export const withSkill = base.extend('with-skill', ({ file, mcp, skill }) => ({
 Use it with the `environment` option, or as a `compare` variant:
 
 ```ts title="evals/style.eval.ts"
-group('house style', { environment: base, compare: [withSkill] }, () => {
+group('house style', { environment: base, compare: { variants: [withSkill] } }, () => {
   evaluate('formats with tabs', async (t) => {
     await t.send('Format src/index.ts.')
   })
@@ -156,7 +156,7 @@ These stop the run with exit 2, prefixed by the eval file.
 | A bad file value | `files["a.txt"] in defineEnvironment("e") must be a string or file(path)` |
 | Bad rules | `rules in defineEnvironment("e") must be markdown or file(path)` |
 | A `workspace` that isn't from `git()` | `workspace in defineEnvironment("e") must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got "https://github.com/acme/app")` |
-| A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: [a, b]; the inherited environment is the control.` |
+| A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { variants: [a, b] }; the inherited environment is the control.` |
 
 A `workspace` whose repository, ref, directory or token doesn't work is reported before any attempt starts and fails only the attempts that use it, as infra errors (exit 3), like a sandbox image that failed to prepare; see [Errors](/reference/errors#git-workspaces). When an attempt starts, a missing secret, a skill directory without `SKILL.md`, or a failing setup step is an infra error for that attempt. See [Errors](/reference/errors).
 

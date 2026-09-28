@@ -736,7 +736,7 @@ const base: Resolved = {
 
 test('expand: per harness, the control then each variant; labels name the role', () => {
   const skill = defineEnvironment('skill', { env: { A: '1' } })
-  const { resolved } = cascade(base, [{ options: { compare: [skill], runs: 1 }, where: 'e' }], 'e')
+  const { resolved } = cascade(base, [{ options: { compare: { variants: [skill] }, runs: 1 }, where: 'e' }], 'e')
   const attempts = expand(resolved)
   assert.deepEqual(
     attempts.map((a) => [a.cell.key, a.cell.role, a.gate !== 'none', a.label]),
@@ -760,7 +760,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     tags: [],
     budget: {},
   }
-  const narrowed = cascade(base, [{ options: { compare: [skill] }, where: 'e' }], 'e', { profile })
+  const narrowed = cascade(base, [{ options: { compare: { variants: [skill] } }, where: 'e' }], 'e', { profile })
   assert.equal(narrowed.resolved.runs, 1)
   assert.deepEqual(
     narrowed.resolved.harness.map((h) => h.id),
@@ -774,7 +774,7 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   ])
   const pinned = cascade(
     base,
-    [{ options: { compare: [skill], pin: ['runs', 'compare'] }, where: 'e' }],
+    [{ options: { compare: { variants: [skill] }, pin: ['runs', 'compare'] }, where: 'e' }],
     'e',
     { profile, runs: 2 },
   )

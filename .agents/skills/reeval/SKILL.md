@@ -200,7 +200,7 @@ import { houseStyle } from './envs.ts'
 const greetsAda = `node -e "import('./greet.js').then((m) =>
   process.exit(m.greet('Ada') === 'Ahoy, Ada!' ? 0 : 1))"`
 
-group('greetings', { compare: [houseStyle], runs: 2 }, () => {
+group('greetings', { compare: { variants: [houseStyle] }, runs: 2 }, () => {
   evaluate('greets in the house style', async (t) => {
     await t.send('Create greet.js exporting greet(name) in our house greeting style.')
     await expect(t.exec(greetsAda)).toSucceed()
@@ -212,7 +212,8 @@ group('greetings', { compare: [houseStyle], runs: 2 }, () => {
   (`<harness>/-/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
 - A variant runs `control.extend(variant)`. There's no `baseline`: leave `environment` unset and
   the control is empty.
-- Only variant cells gate by default (`compare: { variants, gate: 'variants' | 'all' | 'none' }`);
+- Only variant cells gate by default (`compare: { variants, strategy?: 'extend' | 'peer', gate?: 'variants' | 'all' | 'none' }`);
+- **`extend`** (default) layers variants on the control; **`peer`** runs each variant standalone with `environment` as the control (required).
   a control's miss prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent
   output), never under `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on
   some harnesses only.
@@ -282,7 +283,8 @@ them to `evals/.history/` to commit.
 | Mistake | reeval says | Fix |
 |---|---|---|
 | `compare` in `reeval.config.ts` | `compare can't be set in reeval.config.ts` | Put it on the group or eval |
-| `environment: [a, b]` | `environment takes one environment, not a list` | `compare: [b]` with `a` inherited (or nothing) |
+| `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { variants: [b] }` with `a` inherited (or nothing) |
+| `compare: [b]` | `array form was removed` | `compare: { variants: [b] }` |
 | `import { baseline }` | `reeval has no baseline` | Leave `environment` unset; the control is empty |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |

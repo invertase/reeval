@@ -15,7 +15,7 @@ description: A real suite that asked whether a skill helps a coding agent use re
 |---|---|
 | Harness | `cursor({ model: 'composer-2.5' })` in Docker, concurrency 4 |
 | Judge | `google/gemini-3.8-flash`, threshold 0.8 |
-| Cells per eval | control (no skill), `reeval-weak` and `reeval-good`, via `compare: [esWeak, esGood]` |
+| Cells per eval | control (no skill), `reeval-weak` and `reeval-good`, via `compare: { variants: [esWeak, esGood] }` |
 | Runs | `runs: 2`, `gate: { passRate: 0.5 }`, budget 20 attempts and 1 hour |
 | Sandbox | reeval's image plus npm 11 and the packed reeval tarball, from a `FROM ${REEVAL_BASE}` Dockerfile |
 | Egress | `DEFAULT_EGRESS_ALLOW`: npm, PyPI and GitHub, plus Cursor's own hosts |
@@ -83,7 +83,7 @@ const question =
 
 group(
   'broken project',
-  { environment: brokenProject, compare: [esWeak, esGood] },
+  { environment: brokenProject, compare: { variants: [esWeak, esGood] } },
   () => {
     evaluate('fixes a broken config and explains it', async (t) => {
       await t.send(task)

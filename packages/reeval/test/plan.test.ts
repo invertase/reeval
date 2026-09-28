@@ -13,6 +13,7 @@ export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'default', args: [] },
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
+  { dir: 'compare', name: 'peer-challengers', args: ['evals/peer.eval.ts'] },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },

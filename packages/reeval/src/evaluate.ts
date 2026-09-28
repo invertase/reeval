@@ -234,10 +234,9 @@ function optionsFrom({ environment, compare, ...rest }: EvalOptionsData): EvalOp
   return {
     ...rest,
     ...(environment !== undefined && { environment: environmentFrom(environment) }),
-    ...(compare !== undefined && {
-      compare: Array.isArray(compare)
-        ? variants(compare)
-        : compare && { ...compare, variants: variants(compare.variants) },
-    }),
+    ...(compare !== undefined &&
+      compare !== false && {
+        compare: { ...compare, variants: variants(compare.variants) },
+      }),
   }
 }

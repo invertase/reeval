@@ -348,6 +348,11 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
               #{t}
             </Badge>
           ))}
+          {entry.compare ? (
+            <Badge variant="outline" className="font-mono text-[11px]">
+              compare {entry.compare.strategy}
+            </Badge>
+          ) : null}
         </div>
       </div>
 

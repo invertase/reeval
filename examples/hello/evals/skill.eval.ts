@@ -14,7 +14,7 @@ const greetAda = `node -e "import('./greet.js').then((m) => {
 group(
   'house greeting',
   // Without its variant the question is meaningless, so a profile can't turn compare off here.
-  { compare: [withHouseGreeting], pin: ['compare'] },
+  { compare: { variants: [withHouseGreeting] }, pin: ['compare'] },
   () => {
     evaluate('greets in the house style', async (t) => {
       await t.send(

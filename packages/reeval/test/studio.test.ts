@@ -75,7 +75,7 @@ describe('studio data paths', () => {
 // two runs) and one scratch run.
 const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
 const other = defineEnvironment('other', {})
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: [other], runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { variants: [other] }, runs: 2 } : {}, () => {
   evaluate('writes hello', async (t) => {
     await t.send('write hello.txt')
     await expect(t.exec('test -f hello.txt')).toSucceed()
@@ -123,7 +123,9 @@ describe('run outcome and activity, as the CLI has them', () => {
 const skilled = defineEnvironment('skilled', ({ skill }) => ({
   skills: [skill.inline({ name: 'ok', description: 'Writes ok.txt', content: 'Write ok.txt.' })],
 }))
-const compare = process.env.REEVAL_TEST_GATE_ALL ? { variants: [skilled], gate: 'all' as const } : [skilled]
+const compare = process.env.REEVAL_TEST_GATE_ALL
+  ? { variants: [skilled], gate: 'all' as const }
+  : { variants: [skilled] }
 evaluate('writes ok', { compare }, async (t) => {
   await t.send('write ok.txt')
   await expect(t.exec('test -f ok.txt')).toSucceed()

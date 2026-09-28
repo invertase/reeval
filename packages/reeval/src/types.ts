@@ -632,11 +632,15 @@ export type HarnessOption =
 
 export type CompareGate = 'variants' | 'all' | 'none'
 
+/** How variant environments combine with the control. Default `extend`. */
+export type CompareStrategy = 'extend' | 'peer'
+
 /** Variants run next to the inherited environment (the control), with the same prompt and checks. */
 export type CompareOptions<E = Environment> =
-  | E[]
   | {
       variants: E[]
+      /** `extend` layers each variant on the control; `peer` runs each variant standalone. */
+      strategy?: CompareStrategy
       /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
       gate?: CompareGate
       /** Lift in points from -1 to 1; a variant cell below it fails. */
@@ -897,7 +901,8 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With
- * `compare`, the control runs the inherited environment and each variant runs it extended.
+ * `compare`, the control runs the inherited environment; each variant runs extended (`extend`) or
+ * standalone (`peer`).
  */
 export type Cell = {
   key: string
@@ -1042,11 +1047,18 @@ export type EvalRecord = {
   servedModels?: string[] | null
 }
 
+/** Compare options recorded on the eval plan and run record. */
+export type EvalCompareMeta = {
+  strategy: CompareStrategy
+}
+
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */
 export type EvalPlan = {
   harnesses: number
   /** Variants run, of those the eval compares; null without `compare`. */
   variants: { run: number; of: number } | null
+  /** Set when the eval compares variant cells. */
+  compare?: EvalCompareMeta
   runs: number
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy

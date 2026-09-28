@@ -23,6 +23,7 @@ import type {
   Cell,
   CellGate,
   CompareGate,
+  CompareStrategy,
   Duration,
   EgressPolicy,
   Environment,
@@ -133,34 +134,43 @@ const describe = (value: unknown) => {
   return JSON.stringify(value) ?? String(value)
 }
 
+const STRATEGIES: CompareStrategy[] = ['extend', 'peer']
+
 function checkCompare(value: unknown, where: string): void {
   if (value === false) return
-  const variants = Array.isArray(value) ? value : (value as { variants?: unknown })?.variants
-  if (!Array.isArray(value)) {
-    if (typeof value !== 'object' || value === null || !Array.isArray(variants)) {
-      throw new UsageError(
-        `compare takes environments (got ${describe(value)}) in ${where}. Use compare: [a, b], or { variants: [a, b], gate?, minLift?, harness? }.`,
-      )
+  if (Array.isArray(value)) {
+    throw new UsageError(
+      `compare must be an object in ${where}. Use compare: { variants: [...] }; array form was removed.`,
+    )
+  }
+  const variants = (value as { variants?: unknown })?.variants
+  if (typeof value !== 'object' || value === null || !Array.isArray(variants)) {
+    throw new UsageError(
+      `compare takes { variants: [...] } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], strategy?, gate?, minLift?, harness? }.`,
+    )
+  }
+  for (const key of Object.keys(value)) {
+    if (!['variants', 'gate', 'minLift', 'harness', 'strategy'].includes(key)) {
+      throw new UsageError(`Unknown compare option "${key}" in ${where}`)
     }
-    for (const key of Object.keys(value)) {
-      if (!['variants', 'gate', 'minLift', 'harness'].includes(key)) {
-        throw new UsageError(`Unknown compare option "${key}" in ${where}`)
-      }
-    }
-    const { gate, minLift, harness } = value as {
-      gate?: unknown
-      minLift?: unknown
-      harness?: unknown
-    }
-    if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
-      throw new UsageError(`compare.gate must be one of ${GATES.join(', ')} in ${where}`)
-    }
-    if (minLift !== undefined && !(typeof minLift === 'number' && minLift >= -1 && minLift <= 1)) {
-      throw new UsageError(`compare.minLift is points from -1 to 1 (got ${minLift}) in ${where}`)
-    }
-    if (harness !== undefined && !Array.isArray(harness)) {
-      throw new UsageError(`compare.harness must be a list of harness ids in ${where}`)
-    }
+  }
+  const { gate, minLift, harness, strategy } = value as {
+    gate?: unknown
+    minLift?: unknown
+    harness?: unknown
+    strategy?: unknown
+  }
+  if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
+    throw new UsageError(`compare.gate must be one of ${GATES.join(', ')} in ${where}`)
+  }
+  if (minLift !== undefined && !(typeof minLift === 'number' && minLift >= -1 && minLift <= 1)) {
+    throw new UsageError(`compare.minLift is points from -1 to 1 (got ${minLift}) in ${where}`)
+  }
+  if (harness !== undefined && !Array.isArray(harness)) {
+    throw new UsageError(`compare.harness must be a list of harness ids in ${where}`)
+  }
+  if (strategy !== undefined && !STRATEGIES.includes(strategy as CompareStrategy)) {
+    throw new UsageError(`compare.strategy must be one of ${STRATEGIES.join(', ')} in ${where}`)
   }
   if ((variants as unknown[]).length === 0) {
     throw new UsageError(`compare has no variants in ${where}. Give at least one environment.`)
@@ -212,7 +222,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
       throw new UsageError(
-        `environment takes one environment, not a list (${where}). To compare environments, use compare: [a, b]; the inherited environment is the control.`,
+        `environment takes one environment, not a list (${where}). To compare environments, use compare: { variants: [a, b] }; the inherited environment is the control.`,
       )
     }
     if (!isEnvironment(o.environment)) {
@@ -339,6 +349,7 @@ export type Level = { options: EvalOptions; where: string }
 
 export type NormalizedCompare = {
   variants: Environment[]
+  strategy: CompareStrategy
   gate: CompareGate
   minLift?: number
   /** Harness ids; unset means every harness the eval runs. */
@@ -368,9 +379,9 @@ export type Resolved = {
 
 function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
   if (value === undefined || value === false) return undefined
-  if (Array.isArray(value)) return { variants: value, gate: 'variants', of: value.length }
   return {
     variants: value.variants,
+    strategy: value.strategy ?? 'extend',
     gate: value.gate ?? 'variants',
     ...(value.minLift !== undefined ? { minLift: value.minLift } : {}),
     ...(value.harness
@@ -463,6 +474,11 @@ export function cascade(
   const names = out.compare?.variants.map((v) => v.name) ?? []
   const dupe = names.find((n, i) => names.indexOf(n) !== i)
   if (dupe) throw new UsageError(`compare in ${where} lists two variants named ${dupe}`)
+  if (out.compare?.strategy === 'peer' && !out.environment) {
+    throw new UsageError(
+      `compare.strategy is "peer" in ${where} but no environment is inherited. Set environment to the control baseline; list challengers in compare.variants only.`,
+    )
+  }
 
   let skip: string | undefined
   const limit = profile?.limit
@@ -548,7 +564,8 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
     ]
     if (compare && (!compare.harness || compare.harness.includes(hid))) {
       for (const v of compare.variants) {
-        const env = layered(resolved.environment, v)
+        const env =
+          compare.strategy === 'peer' ? applied(v) : layered(resolved.environment, v)
         cells.push({
           env,
           cell: {
@@ -717,6 +734,7 @@ export function evalPlan(
     variants: resolved.compare
       ? { run: resolved.compare.variants.length, of: resolved.compare.of }
       : null,
+    ...(resolved.compare ? { compare: { strategy: resolved.compare.strategy } } : {}),
     runs: resolved.runs,
     ...(resolved.gate !== undefined ? { gate: resolved.gate } : {}),
     attempts: skip ? 0 : attempts.length,

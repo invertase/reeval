@@ -24,7 +24,7 @@ const docs = defineEnvironment('docs', ({ mcp, secret }) => ({
 }))
 
 evaluate('a preset host', { environment: gemini }, async () => {})
-evaluate('a variant brokers it', { environment: plain, compare: [brokered] }, async () => {})
+evaluate('a variant brokers it', { environment: plain, compare: { variants: [brokered] } }, async () => {})
 evaluate('MCP headers go to their server', { environment: docs }, async () => {})
 evaluate(
   'the fake sandbox gets placeholders too, and no warning',

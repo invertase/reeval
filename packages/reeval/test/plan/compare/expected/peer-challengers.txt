@@ -1,0 +1,8 @@
+no profile · 1 evals · 6 cells · 6 attempts
+evals/peer.eval.ts › peer challengers vs base  a/base/fake     control          ungated  ×1
+                                               a/skilled/fake  variant skilled  gated    ×1
+                                               a/terse/fake    variant terse    gated    ×1
+                                               b/base/fake     control          ungated  ×1
+                                               b/skilled/fake  variant skilled  gated    ×1
+                                               b/terse/fake    variant terse    gated    ×1
+excluded: —

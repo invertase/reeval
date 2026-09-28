@@ -328,6 +328,7 @@ class Seen {
         group: e.group,
         name: e.name,
         tags: e.attempt?.tags ?? [],
+        ...(e.attempt?.plan.compare ? { compare: e.attempt.plan.compare } : {}),
         fingerprint: '',
         sources,
         outcome: 'skipped',

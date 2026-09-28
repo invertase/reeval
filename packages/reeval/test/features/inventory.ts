@@ -117,7 +117,7 @@ export const inventory: InventoryFeature[] = [
     id: 'compare',
     area: 'Config and selection',
     name: '`compare`: control, variants, lift and `minLift`',
-    plan: ['compare/control-and-variants'],
+    plan: ['compare/control-and-variants', 'compare/peer-challengers'],
     tests: [
       options('variants run next to the control, lift is stored'),
       'reeval/test/results.test.ts › Newcombe',

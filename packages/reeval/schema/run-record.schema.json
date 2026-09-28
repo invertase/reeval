@@ -487,6 +487,9 @@
     "CellRole": {
       "enum": ["control", "variant"]
     },
+    "CompareStrategy": {
+      "enum": ["extend", "peer"]
+    },
     "ContextFile": {
       "type": "object",
       "properties": {
@@ -822,6 +825,15 @@
     "ErrorKind": {
       "enum": ["aborted", "assertion", "infra", "judge", "timeout"]
     },
+    "EvalCompareMeta": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "$ref": "#/$defs/CompareStrategy"
+        }
+      },
+      "required": ["strategy"]
+    },
     "EvalEntry": {
       "type": "object",
       "properties": {
@@ -836,6 +848,9 @@
           "items": {
             "$ref": "#/$defs/CellRecord"
           }
+        },
+        "compare": {
+          "$ref": "#/$defs/EvalCompareMeta"
         },
         "file": {
           "type": "string"

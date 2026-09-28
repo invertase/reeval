@@ -6,7 +6,7 @@ description: Every option groups, evals, profiles and the config accept, and how
 `defineConfig`, `group` and `evaluate` take the same options. They cascade config → profile `defaults` → outer group → inner group → eval, then the profile's `limit` narrows them, then `--runs` overrides.
 
 ```ts title="evals/skill.eval.ts"
-group('house greeting', { compare: [withHouseGreeting], runs: 2, pin: ['compare'] }, () => {
+group('house greeting', { compare: { variants: [withHouseGreeting] }, runs: 2, pin: ['compare'] }, () => {
   evaluate('greets in the house style', { timeout: '10m', tags: ['skills'] }, async (t) => {
     // …
   })

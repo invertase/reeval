@@ -27,7 +27,7 @@ const greetAda = `node -e "import('./greet.js').then((m) => {
 
 group(
   'house greeting',
-  { compare: [withHouseGreeting], pin: ['compare'] },
+  { compare: { variants: [withHouseGreeting] }, pin: ['compare'] }, // strategy defaults to extend
   () => {
     evaluate('greets in the house style', async (t) => {
       await t.send(
@@ -100,6 +100,24 @@ flowchart LR
 
 The control runs the eval's own environment, here none. Each variant runs the control's environment extended with its own, with the same prompt and checks. Each is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
 
+## Extend vs peer
+
+`compare` is always an object. **`strategy: 'extend'`** (the default) layers each variant on the inherited `environment`, which is the control. Use it for skill, MCP or rules lifts on a shared baseline.
+
+**`strategy: 'peer'`** runs each variant **standalone**: the control is `environment`, and challengers in `variants` are not layered on it. Set `environment` on the group or eval; peer compare without one is rejected at plan time. Lift and effort still pair each variant with that control.
+
+```ts
+group('email sign-in', {
+  environment: firebaseAuth,
+  compare: { strategy: 'peer', variants: [firebaseUi], minLift: 0 },
+  runs: 5,
+}, () => { /* same prompt and checks */ })
+```
+
+<Info>
+  Skill list replace (`compare.skills: 'replace'`) is deferred; extend keeps today's merge-by-name skill layering.
+</Info>
+
 ## Choose which cells gate
 
 ```ts
@@ -111,7 +129,7 @@ By default only variant cells decide pass or fail. The control is expected to do
 ## Gate on a pass rate
 
 ```ts
-{ compare: [withHouseGreeting], gate: { passRate: 0.8 } }
+{ compare: { variants: [withHouseGreeting] }, gate: { passRate: 0.8 } }
 ```
 
 A cell passes only when every attempt passes, by default. That gets harder as `runs` grows, even for an agent that's no worse, which is what the plan's hint says. `gate: { passRate: 0.8 }` passes a cell when at least 80% of its attempts pass. Infra errors don't count either way.

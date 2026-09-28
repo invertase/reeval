@@ -56,7 +56,7 @@ function declarations() {
       evaluate('b', async () => {})
     })
     group('both', { harness: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
-      evaluate('c', { compare: [skill] }, async () => {})
+      evaluate('c', { compare: { variants: [skill] } }, async () => {})
     })
   })
   evaluate('d', { timeout: '2m', egress: 'deny-all', environment: skill }, async () => {})

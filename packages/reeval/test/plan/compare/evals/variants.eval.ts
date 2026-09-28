@@ -3,7 +3,7 @@ import { base, skilled, terse } from './envs.ts'
 
 evaluate(
   'control and two variants',
-  { environment: base, compare: [skilled, terse] },
+  { environment: base, compare: { variants: [skilled, terse] } },
   async () => {},
 )
 evaluate(

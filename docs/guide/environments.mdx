@@ -23,7 +23,7 @@ group('greet with context', { environment: base }, () => {
   // …
 })
 
-group('greet with skills', { compare: [withSkills, withDocsMcp] }, () => {
+group('greet with skills', { compare: { variants: [withSkills, withDocsMcp] } }, () => {
   // …
 })
 ```

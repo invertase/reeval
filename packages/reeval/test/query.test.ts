@@ -31,7 +31,7 @@ describe('reeval query', () => {
       'skills/house-greeting/SKILL.md': skill('house-greeting'),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }))
-evaluate('greets', { compare: [skilled], runs: 3 }, async (t) => {
+evaluate('greets', { compare: { variants: [skilled] }, runs: 3 }, async (t) => {
   await t.send('go')
   await expect(t).toHaveFile('ok.txt')
 })

@@ -249,7 +249,7 @@ export const skilled = base.extend('skilled', ({ skill }) => ({
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { base, skilled } from './envs.ts'
-group('g', { environment: base, compare: [skilled], runs: 2 }, () => {
+group('g', { environment: base, compare: { variants: [skilled] }, runs: 2 }, () => {
   evaluate('writes ok.txt', async (t) => {
     await t.send('go')
     const mode = (await t.exec('printf %s "$MODE"')).stdout
@@ -561,11 +561,11 @@ describe('common mistakes', () => {
     [
       'a list of environments',
       `group('genkit', { environment: [a, b] }, () => {})`,
-      /environment takes one environment, not a list \(group\("genkit"\)\)\. To compare environments, use compare: \[a, b\]; the inherited environment is the control\./,
+      /environment takes one environment, not a list \(group\("genkit"\)\)\. To compare environments, use compare: \{ variants: \[a, b\] \}; the inherited environment is the control\./,
     ],
     [
       'a variant with its own checks',
-      `evaluate('e', { compare: [{ environment: a, check: () => {} }] }, async () => {})`,
+      `evaluate('e', { compare: { variants: [{ environment: a, check: () => {} }] } }, async () => {})`,
       /compare takes environments \(got an object with "environment", "check"\) in evaluate\("e"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
     ],
     [
@@ -575,8 +575,18 @@ describe('common mistakes', () => {
     ],
     [
       'importing baseline',
-      `evaluate('e', { compare: [(await import('reeval') as never as { baseline: never }).baseline] }, async () => {})`,
+      `evaluate('e', { compare: { variants: [(await import('reeval') as never as { baseline: never }).baseline] } }, async () => {})`,
       /compare lists undefined in evaluate\("e"\)\. reeval has no baseline: the inherited environment is the control of compare; with none, the control is empty\./,
+    ],
+    [
+      'compare as an array',
+      `evaluate('e', { compare: [a] }, async () => {})`,
+      /compare must be an object in evaluate\("e"\)\. Use compare: \{ variants: \[\.\.\.\] \}; array form was removed\./,
+    ],
+    [
+      'peer compare without a control environment',
+      `evaluate('e', { compare: { strategy: 'peer', variants: [a] } }, async () => {})`,
+      /compare\.strategy is "peer" in evaluate\("e"\) but no environment is inherited/,
     ],
     [
       'pinning something that cannot be pinned',
@@ -875,7 +885,7 @@ ${body}
   const configCases: Array<[string, string, RegExp]> = [
     [
       'compare in the config',
-      `compare: [defineEnvironment('x', {})],`,
+      `compare: { variants: [defineEnvironment('x', {})] },`,
       /compare can't be set in reeval\.config\.ts: it would multiply every eval\. Put it on the group or eval that asks the question\./,
     ],
     [
@@ -952,7 +962,7 @@ ${body}
       )
     const p = await project('config-path', {
       'reeval.config.ts': bad('harnesses: [],'),
-      'reeval.compare.config.ts': bad(`compare: [defineEnvironment('x', {})],`),
+      'reeval.compare.config.ts': bad(`compare: { variants: [defineEnvironment('x', {})] },`),
       'reeval.secret.config.ts': bad(`env: { GOOGLE_API_KEY: 'AIza-not-really' },`),
       'reeval.empty.config.ts': bad('harness: [],'),
       'reeval.none.config.ts': fakeConfig().replace(
@@ -1198,7 +1208,7 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
 `,
       'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
 import { withSkill } from './envs.ts'
-evaluate('greets', { compare: [withSkill] }, async (t) => {
+evaluate('greets', { compare: { variants: [withSkill] } }, async (t) => {
   const turn = await t.send('greet')
   const loaded = turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting; mcp: docs')
   const token = (await t.exec('printf %s "$APP_TOKEN"')).stdout

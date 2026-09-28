@@ -6,7 +6,7 @@ description: Evals for coding agents. Check that agents use your SDK, skills and
 Does a coding agent actually use your SDK, your skills and your docs correctly? reeval answers that with evals you write like tests.
 
 ```ts title="evals/skill.eval.ts"
-group('house greeting', { compare: [withHouseGreeting] }, () => {
+group('house greeting', { compare: { variants: [withHouseGreeting] } }, () => {
   evaluate('greets in the house style', async (t) => {
     await t.send('Create greet.js exporting greet(name) that greets in our house style.')
     await expect(t.exec(greetAda)).toSucceed()

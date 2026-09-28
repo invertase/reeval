@@ -468,12 +468,6 @@
               "const": false
             },
             {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/EnvironmentData"
-              }
-            },
-            {
               "type": "object",
               "properties": {
                 "gate": {
@@ -515,6 +509,9 @@
                 },
                 "minLift": {
                   "type": "number"
+                },
+                "strategy": {
+                  "enum": ["extend", "peer"]
                 },
                 "variants": {
                   "type": "array",
