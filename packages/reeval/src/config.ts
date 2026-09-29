@@ -13,6 +13,8 @@ import {
   isAgentKind,
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
+import { loadDartConfig } from './dart/config.ts'
+import { DART_CONFIG, DART_INCLUDE, detectLanguage, isDartConfig } from './dart/project.ts'
 import { esJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkHarnesses, checkOptions } from './options.ts'
@@ -77,7 +79,7 @@ export const defineConfig = <T extends ConfigInput>(config: T): T => config
 export { parseDuration }
 
 /** The file names `reeval` looks for in each directory, first match first, as Vitest orders its own. */
-export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map(
+export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs', 'dart'].map(
   (ext) => `reeval.config.${ext}`,
 )
 
@@ -114,10 +116,21 @@ export async function loadConfig(
   command = 'run',
   profile: string | undefined = undefined,
 ): Promise<ResolvedConfig> {
-  if (path === undefined) return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
+  const dartContext = { ci: inCI(process.env), command, ...(profile ? { profile } : {}) }
+  if (path === undefined) {
+    if (detectLanguage(process.cwd()) === 'dart') {
+      const user = await loadDartConfig(process.cwd(), undefined, dartContext)
+      return resolveConfig(user, process.cwd(), DART_CONFIG)
+    }
+    return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
+  }
   const root = dirname(path)
   const configPath = configLabel(path)
   let user: EsConfig = {}
+  if (isDartConfig(path) && existsSync(path)) {
+    user = await loadDartConfig(root, path, dartContext)
+    return resolveConfig({ include: DART_INCLUDE, ...user }, root, configPath)
+  }
   if (existsSync(path)) {
     const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
     const module = (await jiti.import(path)) as Record<string, unknown>

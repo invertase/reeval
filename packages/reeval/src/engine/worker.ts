@@ -1,6 +1,7 @@
 // One eval file's worker: loads the file, reports what it declares, and with a selection, runs
 // those attempts and exits. The main process starts a fresh one per file (./pool.ts), from the
 // copy of reeval the project itself resolves, so the file registers with the reeval it imports.
+import { loadDartFile } from '../dart/loader.ts'
 import { matchers } from '../matchers.ts'
 import { useSchedulerChannel } from '../scheduler/client.ts'
 import type { RunContext } from '../types.ts'
@@ -56,7 +57,11 @@ export function startWorker(channel: Channel): Worker {
     extendExpect(matchers)
     routeConsole(reporter)
     try {
-      const tests = await collect(file, () => loadEvalFile(file, run.config.root))
+      const tests = await collect(file, () =>
+        file.endsWith('.dart')
+          ? loadDartFile(file, run.config.root)
+          : loadEvalFile(file, run.config.root),
+      )
       channel.send({
         t: 'collected',
         tests: tests.map(({ index, name, groups, mode, options }) => ({

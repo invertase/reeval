@@ -1,0 +1,10 @@
+name: dart_hello
+description: reeval evals written in Dart.
+publish_to: none
+
+environment:
+  sdk: ^3.13.0
+
+dev_dependencies:
+  reeval:
+    path: ../../sdks/dart
