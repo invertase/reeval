@@ -1,5 +1,5 @@
 import { clip, formatDuration } from '../text.ts'
-import type { Outcome } from '../types.ts'
+import type { CompareAnswer, Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
 import { harnessLabel, isUngatedMiss } from '../view/model.ts'
 import { warnings } from './state.ts'
@@ -45,6 +45,30 @@ export function liftLabel(lift: NonNullable<CellRecord['lift']>): string {
   const range = `95% ${signedPoints(interval.lo)}…${signedPoints(interval.hi)}`
   const counts = `${variant.pass}/${variant.counted} vs ${control.pass}/${control.counted}`
   return `lift ${signedPoints(lift.points)} pts (${range}, ${counts})${lift.withinNoise ? ', within noise' : ''}`
+}
+
+const rateText = (r: CompareAnswer['rates'][number]) =>
+  `${r.name} ${r.wins}/${r.n} (${Math.round((r.wins / r.n) * 100)}%)`
+
+/**
+ * One compare question's answer: `"Which is cleaner?" within: with-skill 2/2 (100%), plain 0/2
+ * (0%) · 2 votes, 0 ties · google/gemini-3.8-flash`, or why it has no votes.
+ */
+export function answersLabel(answer: CompareAnswer): string {
+  const q = `"${clip(answer.question, 80)}"`
+  const ties = answer.votes.filter((v) => v.winner === 'tie').length
+  const cuts = (['within', 'across'] as const).flatMap((cut) => {
+    const rates = answer.rates.filter((r) => r.cut === cut)
+    return rates.length ? [`${cut}: ${rates.map(rateText).join(', ')}`] : []
+  })
+  const votes = answer.votes.length
+  const tally = `${votes} vote${votes === 1 ? '' : 's'}, ${ties} tie${ties === 1 ? '' : 's'}`
+  const by = answer.resolvedModel ?? answer.model
+  const failed = answer.error !== undefined ? ` · failed: ${clip(answer.error, 200)}` : ''
+  if (votes === 0 && answer.error === undefined) {
+    return `${q} no pairs to judge: a pair needs both attempts to pass their checks`
+  }
+  return `${q} ${[...cuts, tally, by].join(' · ')}${failed}`
 }
 
 /** `fake/-/fake 0/2 (control, not gated) · fake/with-skill/fake 2/2 (lift +100 pts …)`. */
@@ -190,6 +214,10 @@ export function renderSummary(run: RunRecord): string {
     lines.push('', `### ${OUTCOME_MARK[e.outcome]} ${e.id}`, '')
     const multi = e.attempts.length > 1
     if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
+    if (e.answers?.length) {
+      for (const a of e.answers) lines.push(`- Question: ${cell(answersLabel(a))}`)
+      lines.push('')
+    }
     const attemptRank = (a: AttemptRecord) => (isUngatedMiss(e, a) ? 3 : rank(a.outcome))
     for (const a of [...e.attempts].sort((x, y) => attemptRank(x) - attemptRank(y))) {
       if (a.outcome === 'skipped') continue

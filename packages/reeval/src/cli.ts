@@ -6,6 +6,7 @@ import { detectAgent } from 'std-env'
 import type { NoteRun } from './analysis/agent/index.ts'
 import { parseCli } from './cli-parse.ts'
 import { type Flags, helpText } from './cli-spec.ts'
+import type { EvalQuestions, questionRunner } from './compare/questions.ts'
 import {
   configLabel,
   configPathFor,
@@ -35,6 +36,7 @@ import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
 import { PACKAGE_VERSION } from './root.ts'
+import { clip } from './text.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
 import { createRenderer, resolveOutput } from './ui/index.ts'
@@ -207,6 +209,8 @@ async function cleanCommand(flags: Flags, configPath: string | undefined): Promi
   return EXIT.ok
 }
 
+type QuestionRunner = ReturnType<typeof questionRunner>
+
 /** `-v` is 1 and `-vv` (or `--trace`) is 2. */
 function verbosityOf(flags: Flags): 0 | 1 | 2 {
   if (flags.trace) return 2
@@ -323,7 +327,7 @@ async function runCommand(
     await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const { engineRun, plan, sandboxVersions, budgetReached, live, notes } = executed
+  const { engineRun, plan, sandboxVersions, budgetReached, live, notes, questions } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   if ((interrupted || engineRun.cancelled) && plan?.sandboxes.some((s) => s.kind === 'docker')) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
@@ -345,6 +349,9 @@ async function runCommand(
     return EXIT.ok
   }
 
+  const stopped = interrupted || engineRun.cancelled
+  // Asked of attempts that have all finished; a cancelled run answers nothing.
+  const answers = questions && !stopped ? await questions.settle() : undefined
   const { lockfiles } = await import('./history/state.ts')
   const { writeScratchRun } = await import('./results.ts')
   const run = await writeScratchRun(
@@ -354,7 +361,7 @@ async function runCommand(
       engine: engineRun,
       startedAt: ctx.startedAt,
       endedAt: new Date(),
-      interrupted: interrupted || engineRun.cancelled,
+      interrupted: stopped,
       budgetReached: budgetReached(),
       plan,
       es: version,
@@ -364,6 +371,7 @@ async function runCommand(
       lockfiles: await lockfiles(ctx.config.root),
       git: ctx.git,
       runner: runnerInfo(),
+      ...(answers?.size ? { answers } : {}),
     },
     // Until the record lands, the studio shows the run as live.
     () => live?.stop(),
@@ -562,6 +570,7 @@ async function executeRun(
   let toRun: PlannedItem[] = []
   let live: LiveProgressWriter | undefined
   let notes: NoteRun | undefined
+  let questions: QuestionRunner | undefined
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
@@ -623,12 +632,15 @@ async function executeRun(
     const analysis = config.analysis.agent ? await import('./analysis/model.ts') : null
     analysis?.analysisModelName(config, 'agent')
     const questionModels = new Set<string>()
+    const asked: EvalQuestions[] = []
     for (const row of plan.rows) {
       if (row.plan.skip || !models) continue
-      for (const q of row.plan.questions ?? []) {
-        const model = models.questionModel(config, q, row.id)
-        if (typeof model === 'string') questionModels.add(model)
-      }
+      const questions = (row.plan.questions ?? []).map((q) => ({
+        question: q.question,
+        model: models.questionModel(config, q, row.id),
+      }))
+      for (const q of questions) if (typeof q.model === 'string') questionModels.add(q.model)
+      if (questions.length) asked.push({ row, questions })
     }
     const missing = missingCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
@@ -658,6 +670,24 @@ async function executeRun(
         stagingDir,
         planned,
         warn: (text) => renderer.onEvent({ type: 'notice', at: Date.now(), level: 'warn', text }),
+      })
+    }
+    if (asked.length) {
+      const { questionRunner } = await import('./compare/questions.ts')
+      questions = questionRunner({
+        evals: asked,
+        stagingDir,
+        maxInputTokens: config.analysis.maxInputTokens,
+        maxOutputTokens: config.analysis.maxOutputTokens,
+        onAnswer: (id, answer) => {
+          if (answer.error === undefined) return
+          renderer.onEvent({
+            type: 'notice',
+            at: Date.now(),
+            level: 'warn',
+            text: `compare question "${clip(answer.question, 80)}" on ${id} failed: ${answer.error}. Outcomes are unchanged.`,
+          })
+        },
       })
     }
     const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
@@ -785,6 +815,7 @@ async function executeRun(
         if (e.type === 'eval-end') {
           live?.end(e.result)
           notes?.onResult(e.result)
+          questions?.onEvalEnd(e.result)
         }
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
         if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
@@ -799,6 +830,7 @@ async function executeRun(
             process.exit(stopCode)
           }
           interrupted = true
+          questions?.cancel()
           live?.phase('cancelling')
           renderer.onEvent({
             type: 'notice',
@@ -834,7 +866,15 @@ async function executeRun(
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted)) {
     throw noMatch(config, filters, tags)
   }
-  return { engineRun, plan, sandboxVersions, budgetReached: () => reached, live, notes }
+  return {
+    engineRun,
+    plan,
+    sandboxVersions,
+    budgetReached: () => reached,
+    live,
+    notes,
+    questions,
+  }
 }
 
 // `reeval run | head` closes stdout early; that isn't an error.
