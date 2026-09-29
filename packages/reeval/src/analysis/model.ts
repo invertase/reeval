@@ -34,12 +34,18 @@ function judgeAside(config: ResolvedConfig, task: string): string {
   return ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't ${task})`
 }
 
+/** Who needs the analysis model: `reeval analyze`, or `analysis.agent` during `reeval run`. */
+export type AnalysisUse = 'analyze' | 'agent'
+
 /** Which model analyses: `analysis.model`, else the judge's when it's a language model. */
-export function analysisModelName(config: ResolvedConfig): string | FakeAnalysisModel {
+export function analysisModelName(
+  config: ResolvedConfig,
+  use: AnalysisUse = 'analyze',
+): string | FakeAnalysisModel {
   const model = defaultModel(config)
   if (model !== undefined) return model
   throw new UsageError(
-    `reeval analyze needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}, or run reeval analyze --context to hand the digest to your own coding agent.`,
+    `${use === 'agent' ? 'config.analysis.agent' : 'reeval analyze'} needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}${use === 'agent' ? ', or turn agent off' : ', or run reeval analyze --context to hand the digest to your own coding agent'}.`,
   )
 }
 
@@ -76,10 +82,13 @@ export function questionModel(
 }
 
 /** Checks the model and its credentials before any work; throws a UsageError (exit 2). */
-export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisModel {
-  const model = analysisModelName(config)
+export function resolveAnalysisModel(
+  config: ResolvedConfig,
+  use: AnalysisUse = 'analyze',
+): ResolvedAnalysisModel {
+  const model = analysisModelName(config, use)
   if (isFake(model)) return { name: 'fake', route: 'fake', fake: model }
-  if (model.startsWith('typesafe-ai/')) {
+  if (isEvaluationModel(model)) {
     throw new UsageError(
       `config.analysis.model "${model}" is an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
     )
@@ -87,14 +96,18 @@ export function resolveAnalysisModel(config: ResolvedConfig): ResolvedAnalysisMo
   try {
     return { name: model, route: judgeRoute(model).kind }
   } catch (error) {
+    const message = (error as Error).message.replace('judge model', 'analysis model')
     throw new UsageError(
-      `${(error as Error).message.replace('judge model', 'analysis model')} Or run reeval analyze --context, which needs no key.`,
+      use === 'agent' ? message : `${message} Or run reeval analyze --context, which needs no key.`,
     )
   }
 }
 
 /** A language model that answers with the fake's output, through the AI SDK's own parsing. */
 function fakeModel(fake: FakeAnalysisModel, digest: Digest): LanguageModel {
+  if (fake.output === undefined) {
+    throw new Error('fakeAnalysis() has no output, so reeval analyze has no answer to return')
+  }
   const output = typeof fake.output === 'function' ? fake.output(digest) : fake.output
   const text = typeof output === 'string' ? output : JSON.stringify(output)
   return {
@@ -120,6 +133,11 @@ function fakeModel(fake: FakeAnalysisModel, digest: Digest): LanguageModel {
 
 async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Promise<LanguageModel> {
   if (model.fake) return fakeModel(model.fake, digest)
+  return providerModel(model)
+}
+
+/** The provider's own model for a direct route, else the AI Gateway's by name. */
+export async function providerModel(model: ResolvedAnalysisModel): Promise<LanguageModel> {
   if (model.route === 'gateway') return model.name
   const provider = model.name.slice(0, model.name.indexOf('/'))
   const id = model.name.slice(provider.length + 1)

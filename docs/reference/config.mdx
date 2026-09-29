@@ -167,8 +167,10 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
   `keep` is how many runs of `.reeval/debug` data to keep (default `20`); `traceBufferMb` caps each attempt's in-memory trace (default `8`). See [Debug data](/reference/debug-data).
 </Property>
 
-<Property name="analysis" type="{ model?, instructions?, maxInputTokens?, maxOutputTokens? }">
+<Property name="analysis" type="{ model?, agent?, instructions?, maxInputTokens?, maxOutputTokens? }">
   Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. See [reeval analyze](/reference/cli/analyze).
+
+  `agent: true` (default `false`) makes `reeval run` write a note on each eval and harness once its attempts finish, into `.reeval/analysis/<runId>/notes/`, with the same model and caps: one call per eval and harness, every run. With no language model it exits 2 before anything runs. See [Notes during a run](/guide/analysis#notes-during-a-run).
 </Property>
 
 `compare`, `tags` and `pin` belong on groups and evals, not in the config.
@@ -191,6 +193,8 @@ reeval: Unknown option "harnesses" in reeval.config.ts. Did you mean "harness"?
 | A zero or negative duration | `Invalid duration 0. A duration is more than zero: use e.g. "90s" or "15m".` |
 | A bad concurrency | `config.concurrency must be a whole number of at least 1 (got 0)` |
 | An unknown `debug` key | `Unknown option "keepRuns" in config.debug. Use keep, traceBufferMb.` |
+| `analysis.agent` that isn't `true` or `false` | `config.analysis.agent must be a boolean` |
+| `analysis.agent` with no language model | `config.analysis.agent needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in reeval.config.ts …, or turn agent off.` |
 | A missing default profile | `defaultProfile names "pr", which isn't in profiles (none)` |
 | A `Promise` from the callback | `The defineConfig callback in reeval.config.ts returned a Promise. …` |
 

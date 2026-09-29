@@ -2,6 +2,8 @@
 // lift, and `reeval analyze`. The facts come out exactly on two real dogfood histories (trimmed by
 // fixtures/analysis/trim.mjs), each verdict rule has a canary where the opposite data must flip it,
 // and the model step runs on a fake model that returns canned (and deliberately wrong) answers.
+// `analysis.agent`'s notes run on a fake model that calls the real tools through the AI SDK's loop,
+// over real harness transcripts and diffs from the record corpus (test/support/real-runs.ts).
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import {
@@ -15,12 +17,30 @@ import {
 } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
+import type { ShapeSchema } from '../scripts/schema/generate.ts'
+import { validate } from '../scripts/schema/validate.ts'
+import { noteTools, writeAgentNote } from '../src/analysis/agent/note.ts'
+import {
+  type AttemptView,
+  attemptSummary,
+  divergence,
+  fromRecorded,
+  listOutcomes,
+  stagedAttempts,
+} from '../src/analysis/agent/tools.ts'
+import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
+import { recordFileName } from '../src/ids.ts'
+import { fakeAnalysis } from '../src/judge.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
-import { analysisDataPath } from '../src/view/analysis.ts'
+import type { EvalResult } from '../src/ui/events.ts'
+import { type AnalysisNote, analysisDataPath } from '../src/view/analysis.ts'
 import { contrastEffort, effortLabel } from '../src/view/effort.ts'
-import { fakeConfig, pkgRoot, project, readRun, runCli } from './helpers.ts'
+import { parseTranscript } from '../src/view/model.ts'
+import { NewerSchemaError, readableAnalysisNote } from '../src/view/record.ts'
+import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
+import { REAL_HARNESSES, type RealAttempt, realAttempts } from './support/real-runs.ts'
 
 type Row = Record<string, unknown>
 const FIXTURES = join(pkgRoot, 'test/fixtures/analysis')
@@ -698,5 +718,539 @@ describe('reeval analyze', () => {
       r.stderr,
       /isn't recorded, so there's no history folder to save into\. Run reeval record/,
     )
+  })
+})
+
+/** One staged worker record, with each turn's steps as tool calls, and its engine result. */
+function staged(
+  dir: string,
+  cell: string,
+  n: number,
+  outcome: 'pass' | 'fail',
+  shells: string[],
+  more: { exit?: number; files?: string[]; verdict?: 'pass' | 'fail' } = {},
+): EvalResult {
+  const id = 'evals/s.eval.ts › writes'
+  const key = `${id} # ${cell}#${n}`
+  const record = {
+    outcome,
+    error: outcome === 'fail' ? { kind: 'assertion', message: 'expected ok.txt' } : null,
+    turns: [
+      {
+        prompt: 'Write ok.txt',
+        text: outcome === 'pass' ? 'Wrote ok.txt.' : 'Could not write it.',
+        status: 'completed',
+        transcript: shells.map((command, i) => ({
+          type: 'tool',
+          toolCallId: `c${i}`,
+          tool: 'shell',
+          input: { command },
+          output: '',
+          ok: true,
+          durationMs: 1,
+        })),
+      },
+    ],
+    diff: { patch: '', files: (more.files ?? []).map((path) => ({ path, status: 'added' })) },
+    checks: [
+      {
+        command: 'test -f ok.txt',
+        exitCode: more.exit ?? 0,
+        stdout: '',
+        stderr: more.exit ? 'no ok.txt' : '',
+      },
+    ],
+    judgements: more.verdict
+      ? [
+          {
+            question: 'Is it tidy?',
+            verdict: more.verdict,
+            score: more.verdict === 'pass' ? 0.9 : 0.2,
+            threshold: 0.5,
+            model: 'fake',
+          },
+        ]
+      : [],
+  }
+  mkdirSync(join(dir, 'evals'), { recursive: true })
+  writeFileSync(join(dir, 'evals', recordFileName(key)), JSON.stringify(record))
+  const [harness = '', environment = ''] = cell.split('/')
+  return {
+    id,
+    key,
+    file: 'evals/s.eval.ts',
+    group: [],
+    name: 'writes',
+    attempt: { cell: { key: cell, harness, environment }, n } as EvalResult['attempt'],
+    state: outcome === 'pass' ? 'passed' : 'failed',
+    durationMs: 1,
+    errors: outcome === 'fail' ? ['expected ok.txt'] : [],
+    formattedErrors: [],
+    meta: undefined,
+  }
+}
+
+const realRunDir = (r: RealAttempt) =>
+  join(pkgRoot, 'test/fixtures/records', r.entry, 'evals/.history', r.runId)
+
+/** A real recorded attempt as its worker staged it: turns from transcript.jsonl, and diff.patch. */
+function stageReal(dir: string, r: RealAttempt, as: { cell: string; n: number }): EvalResult {
+  const lines = parseTranscript(r.transcript ? readFileSync(r.transcript, 'utf8') : '')
+  const run = realRunDir(r)
+  const record = {
+    outcome: r.attempt.outcome,
+    error: r.attempt.error,
+    turns: r.attempt.turns.map((t, i) => ({
+      ...t,
+      transcript: lines.filter((l) => l.turn === i && l.type !== 'prompt' && l.type !== 'turn-end'),
+    })),
+    diff: r.diff ? { patch: readFileSync(r.diff, 'utf8'), files: r.attempt.changedFiles } : null,
+    checks: r.attempt.checks.map((c) => ({
+      command: c.command,
+      exitCode: c.exitCode,
+      durationMs: c.durationMs,
+      stdout: c.log ? readFileSync(join(run, c.log.path), 'utf8') : '',
+      stderr: '',
+    })),
+    judgements: r.attempt.judgements,
+  }
+  const key = `${r.eval.id} # ${as.cell}#${as.n}`
+  mkdirSync(join(dir, 'evals'), { recursive: true })
+  writeFileSync(join(dir, 'evals', recordFileName(key)), JSON.stringify(record))
+  const cell = r.eval.cells.find((c) => c.key === r.attempt.cell)
+  return {
+    id: r.eval.id,
+    key,
+    file: r.eval.file,
+    group: r.eval.group,
+    name: r.eval.name,
+    attempt: { cell: { ...cell, key: as.cell }, n: as.n } as EvalResult['attempt'],
+    state: r.attempt.outcome === 'pass' ? 'passed' : 'failed',
+    durationMs: r.attempt.durationMs,
+    errors: r.attempt.error ? [r.attempt.error.message] : [],
+    formattedErrors: [],
+    meta: undefined,
+  }
+}
+
+/**
+ * One real harness's contract run as a note's attempts: each eval is a cell, and its canary (which
+ * fails before the agent runs) that cell's second run.
+ */
+async function contractGroup(harness: string): Promise<AttemptView[]> {
+  const rows = realAttempts('real-contract').filter((r) => r.harness === harness)
+  return Promise.all(
+    rows.map(async (r) => {
+      const cell = `${harness}/${r.eval.name.replace(/ canary$/, '')}`
+      const n = r.eval.name.endsWith(' canary') ? 2 : 1
+      return { ...(await fromRecorded(realRunDir(r), r.attempt)), id: `${cell}#${n}`, cell, n }
+    }),
+  )
+}
+
+const AGENT_CONFIG = (analysis: string) => `import { appendFileSync } from 'node:fs'
+import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeSandbox } from 'reeval/sandbox'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+const called = () => appendFileSync(new URL('./calls.log', import.meta.url), 'call\\n')
+export default defineConfig({
+  harness: [fakeHarness({ id: 'steady', files: { 'ok.txt': 'yes' } }), fakeHarness({ id: 'wobbly', files: { 'ok.txt': 'yes' } })],
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  ${analysis}
+})
+`
+
+const AGENT_EVALS = {
+  'evals/w.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes ok.txt', { runs: 3 }, async (t) => {
+  await t.send('Write ok.txt')
+  const wobble = t.attempt.cell.harness === 'wobbly' && t.attempt.n === 2
+  await expect(t).toHaveFile(wobble ? 'missing.txt' : 'ok.txt')
+})
+evaluate('reads ok.txt', async (t) => {
+  await t.send('Read ok.txt')
+  await expect(t).toHaveFile('ok.txt')
+})
+`,
+}
+
+const notesOf = (dir: string) => {
+  const runs = join(dir, '.reeval/analysis')
+  const [runId] = readdirSync(runs)
+  const folder = join(runs, runId as string, 'notes')
+  return {
+    runId: runId as string,
+    names: readdirSync(folder).sort(),
+    notes: readdirSync(folder)
+      .sort()
+      .map((n) => JSON.parse(readFileSync(join(folder, n), 'utf8')) as AnalysisNote),
+  }
+}
+
+describe('analysis.agent: a note per eval and harness during reeval run', () => {
+  test('on made-up staged records, missing and cut-short ones too, the tools pair failures and find where steps diverge', async () => {
+    const dir = join(tempDir('notes-staging'), 'staging')
+    const results = [
+      staged(dir, 'fake/-/fake', 1, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
+        files: ['ok.txt'],
+        verdict: 'pass',
+      }),
+      staged(dir, 'fake/-/fake', 2, 'fail', ['ls', 'cat SKILL.md', 'touch ok.tx'], {
+        exit: 1,
+        files: ['ok.tx'],
+        verdict: 'fail',
+      }),
+      staged(dir, 'fake/-/fake', 3, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
+        files: ['ok.txt'],
+      }),
+      staged(dir, 'fake/skilled/fake', 1, 'fail', ['ls'], { exit: 1 }),
+    ]
+    // Attempts whose record is missing (a worker died) or cut short: the engine's result is all there is.
+    const lost = { ...staged(dir, 'fake/skilled/fake', 2, 'fail', []), key: 'no record' }
+    const cut = staged(dir, 'fake/skilled/fake', 3, 'fail', [])
+    writeFileSync(join(dir, 'evals', recordFileName(cut.key)), '{"outcome": "fa')
+    const attempts = await stagedAttempts(dir, [...results, lost, cut])
+    assert.deepEqual(
+      attempts.map((a) => [a.id, a.outcome, a.error?.kind ?? null]),
+      [
+        ['fake/-/fake#1', 'pass', null],
+        ['fake/-/fake#2', 'fail', 'assertion'],
+        ['fake/-/fake#3', 'pass', null],
+        ['fake/skilled/fake#1', 'fail', 'assertion'],
+        ['fake/skilled/fake#2', 'fail', 'assertion'],
+        ['fake/skilled/fake#3', 'fail', 'assertion'],
+      ],
+    )
+    const listed = listOutcomes(attempts)
+    assert.deepEqual(listed.pairs, [
+      { failed: 'fake/-/fake#2', passed: 'fake/-/fake#1', match: 'cell' },
+      { failed: 'fake/skilled/fake#1', passed: 'fake/-/fake#1', match: 'harness' },
+      { failed: 'fake/skilled/fake#2', passed: 'fake/-/fake#1', match: 'harness' },
+      { failed: 'fake/skilled/fake#3', passed: 'fake/-/fake#3', match: 'harness' },
+    ])
+    assert.deepEqual(listed.attempts[1]?.failedChecks, ['test -f ok.txt'])
+    assert.equal(listed.attempts[0]?.steps, 3)
+
+    const d = divergence(attempts[1] as AttemptView, attempts[0] as AttemptView)
+    assert.equal(d.stepsInCommon, 2)
+    assert.equal(d.divergedAt, 3, 'the third step differs')
+    assert.deepEqual(d.failedSteps, ['shell: ls', 'shell: cat SKILL.md', 'shell: touch ok.tx'])
+    assert.deepEqual(d.passedSteps, ['shell: ls', 'shell: cat SKILL.md', 'shell: touch ok.txt'])
+    assert.deepEqual(d.checks, [
+      { command: 'test -f ok.txt', failed: 1, passed: 0, failedOutput: 'no ok.txt' },
+    ])
+    assert.deepEqual(d.judgements, [{ question: 'Is it tidy?', failed: 'fail', passed: 'pass' }])
+    assert.deepEqual(d.files, { onlyFailed: ['ok.tx'], onlyPassed: ['ok.txt'] })
+    assert.equal(
+      divergence(attempts[2] as AttemptView, attempts[0] as AttemptView).divergedAt,
+      null,
+      'the same steps never diverge',
+    )
+
+    const tools = noteTools(attempts, JSON.stringify(listed).length + 10)
+    const call = (name: keyof typeof tools, input: object) =>
+      (tools[name].execute as (i: object, o: object) => Promise<unknown>)(input, {
+        toolCallId: 't',
+        messages: [],
+      })
+    assert.deepEqual(
+      await call('compare_attempts', { failed: 'nope#1', passed: 'fake/-/fake#1' }),
+      {
+        error: `No attempt nope#1. The attempts are ${attempts.map((a) => a.id).join(', ')}.`,
+      },
+    )
+    assert.ok(!('error' in ((await call('list_attempts', {})) as object)))
+    assert.match(
+      String(((await call('open_attempt', { id: 'fake/-/fake#1' })) as { error?: string }).error),
+      /The input budget \(analysis\.maxInputTokens\) is spent/,
+      'the tools stop at the input budget',
+    )
+  })
+
+  test('real harness transcripts and diffs read the same from a staged record and a recorded run', async () => {
+    const dir = join(tempDir('notes-real-staging'), 'staging')
+    const reached = realAttempts().filter((r) => r.transcript)
+    assert.deepEqual([...new Set(reached.map((r) => r.harness))].sort(), [...REAL_HARNESSES].sort())
+    for (const r of reached) {
+      const recorded = await fromRecorded(realRunDir(r), r.attempt)
+      const [staged] = await stagedAttempts(dir, [
+        stageReal(dir, r, { cell: r.attempt.cell, n: r.attempt.n }),
+      ])
+      const what = `${r.entry} ${r.harness} ${r.eval.name}`
+      assert.deepEqual(staged, recorded, what)
+      assert.deepEqual(
+        recorded.files,
+        r.attempt.changedFiles.map((f) => f.path),
+        what,
+      )
+      assert.equal(recorded.patch, r.diff ? readFileSync(r.diff, 'utf8') : '', what)
+    }
+    for (const harness of REAL_HARNESSES) {
+      const steps = await Promise.all(
+        reached
+          .filter((r) => r.harness === harness)
+          .map(async (r) =>
+            (await fromRecorded(realRunDir(r), r.attempt)).turns.flatMap((t) => t.steps),
+          ),
+      )
+      assert.ok(
+        steps.filter((s) => s.length > 0).length >= 6,
+        `${harness}: most attempts used tools`,
+      )
+    }
+    const edits = reached.filter(
+      (r) => r.entry === 'real-contract' && r.eval.name === 'edit and run',
+    )
+    for (const r of edits) {
+      const view = await fromRecorded(realRunDir(r), r.attempt)
+      const steps = view.turns.flatMap((t) => t.steps)
+      assert.ok(steps.includes('edit (modify): notes.txt'), `${r.harness}: ${steps.join(' | ')}`)
+      assert.ok(
+        steps.some((s) => s.includes('echo contract-$((6*7))')),
+        r.harness,
+      )
+      assert.match(attemptSummary(view).diff, /^\+\+\+ b\/notes\.txt$/m, r.harness)
+    }
+  })
+
+  test('on real traces, a failed canary pairs with its passing eval and diverges at its first step', async () => {
+    for (const harness of REAL_HARNESSES) {
+      const attempts = await contractGroup(harness)
+      const listed = listOutcomes(attempts)
+      assert.equal(listed.attempts.length, 12, harness)
+      assert.deepEqual(
+        listed.pairs.map((p) => [p.failed, p.passed, p.match]),
+        [...new Set(attempts.map((a) => a.cell))].map((cell) => [`${cell}#2`, `${cell}#1`, 'cell']),
+        harness,
+      )
+      const failed = attempts.find((a) => a.id === `${harness}/edit and run#2`) as AttemptView
+      const passed = attempts.find((a) => a.id === `${harness}/edit and run#1`) as AttemptView
+      const d = divergence(failed, passed)
+      assert.deepEqual(
+        [d.stepsInCommon, d.divergedAt, d.failedSteps],
+        [0, 1, []],
+        `${harness}: the canary never reached the agent`,
+      )
+      assert.deepEqual(d.passedSteps, passed.turns[0]?.steps.slice(0, 6), harness)
+      assert.deepEqual(d.files, { onlyFailed: [], onlyPassed: ['notes.txt'] }, harness)
+      assert.match(d.diff.passed, /^\+\+\+ b\/notes\.txt$/m, harness)
+    }
+    // Two passing runs of one eval on a real harness: equal up to the first differing step.
+    for (const harness of REAL_HARNESSES) {
+      const [a, b] = await Promise.all(
+        realAttempts('real-e2e-pairs')
+          .filter((r) => r.harness === harness)
+          .map((r) => fromRecorded(realRunDir(r), r.attempt)),
+      )
+      const x = (a as AttemptView).turns.flatMap((t) => t.steps)
+      const y = (b as AttemptView).turns.flatMap((t) => t.steps)
+      const d = divergence(a as AttemptView, b as AttemptView)
+      assert.deepEqual(x.slice(0, d.stepsInCommon), y.slice(0, d.stepsInCommon), harness)
+      if (d.divergedAt === null) assert.deepEqual(x, y, harness)
+      else assert.notEqual(x[d.stepsInCommon], y[d.stepsInCommon], harness)
+    }
+  })
+
+  test('the analyst replays each real harness\u2019s contract run on the fake model, within its input budget', async () => {
+    for (const harness of REAL_HARNESSES) {
+      const attempts = await contractGroup(harness)
+      const note = (maxInputTokens: number) =>
+        writeAgentNote({
+          model: {
+            name: 'fake',
+            route: 'fake',
+            fake: fakeAnalysis({ note: (input) => JSON.stringify(input) }),
+          },
+          runId: 'replay',
+          evalId: 'the harness contract',
+          harness,
+          attempts,
+          maxInputTokens,
+          maxOutputTokens: 8000,
+        })
+      const full = await note(20_000)
+      assert.equal(full.error, undefined, harness)
+      assert.deepEqual(
+        full.attempts,
+        attempts.map((a) => a.id),
+        harness,
+      )
+      const input = JSON.parse(full.text)
+      assert.deepEqual(
+        input.attempts.map((a: { outcome: string }) => a.outcome),
+        attempts.map((a) => a.outcome),
+        harness,
+      )
+      assert.deepEqual(
+        input.compared,
+        listOutcomes(attempts)
+          .pairs.slice(0, 3)
+          .map((p) => ({
+            failed: p.failed,
+            passed: p.passed,
+            // The canary has no steps, so they part at the passing run's first one, if it has any.
+            divergedAt: attempts.find((a) => a.id === p.passed)?.turns.some((t) => t.steps.length)
+              ? 1
+              : null,
+          })),
+        `${harness}: three failed-vs-passing pairs, compared on real traces`,
+      )
+      // At the smallest budget the listing fits, then the comparisons run out; the note is still written.
+      const tight = await note(1000)
+      const compared = JSON.parse(tight.text).compared
+      assert.equal(tight.error, undefined, harness)
+      assert.ok(
+        compared.length > 0 && compared.length < 3,
+        `${harness}: ${compared.length} compared`,
+      )
+    }
+  })
+
+  test('a fake run writes one note per eval and harness, with its attempt ids; outcomes stand', async () => {
+    const p = await project('agent-notes', {
+      'reeval.config.ts': AGENT_CONFIG(
+        `analysis: { agent: true, model: fakeAnalysis({ note: (i) => { called(); return JSON.stringify(i) } }) },`,
+      ),
+      ...AGENT_EVALS,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, 'wobbly#2 fails its check, as it would without notes')
+    const { runId, names, notes } = notesOf(p.dir)
+    assert.match(
+      r.stdout,
+      new RegExp(`^analysis: 4 notes in \\.reeval/analysis/${runId}/notes$`, 'm'),
+    )
+    assert.equal(calls(p.dir), 4)
+    assert.deepEqual(
+      notes.map((n) => [n.evalId, n.harness, n.attempts]),
+      [
+        ['evals/w.eval.ts › reads ok.txt', 'steady', ['steady/-/fake#1']],
+        ['evals/w.eval.ts › reads ok.txt', 'wobbly', ['wobbly/-/fake#1']],
+        [
+          'evals/w.eval.ts › writes ok.txt',
+          'steady',
+          ['steady/-/fake#1', 'steady/-/fake#2', 'steady/-/fake#3'],
+        ],
+        [
+          'evals/w.eval.ts › writes ok.txt',
+          'wobbly',
+          ['wobbly/-/fake#1', 'wobbly/-/fake#2', 'wobbly/-/fake#3'],
+        ],
+      ].sort((a, b) =>
+        noteFileName(a[0] as string, a[1] as string).localeCompare(
+          noteFileName(b[0] as string, b[1] as string),
+        ),
+      ),
+    )
+    assert.deepEqual(
+      names,
+      notes.map((n) => noteFileName(n.evalId, n.harness)),
+    )
+    const wobbly = notes.find((n) => n.harness === 'wobbly' && n.evalId.endsWith('writes ok.txt'))
+    const input = JSON.parse(wobbly?.text ?? '{}')
+    assert.deepEqual(input.compared, [
+      { failed: 'wobbly/-/fake#2', passed: 'wobbly/-/fake#1', divergedAt: null },
+    ])
+    assert.deepEqual(
+      input.attempts.map((a: { outcome: string }) => a.outcome),
+      ['pass', 'fail', 'pass'],
+    )
+
+    const record = readRun(p.dir).run
+    assert.equal(record.runId, runId)
+    assert.deepEqual(
+      record.evals.map((e) => [e.name, e.outcome]),
+      [
+        ['writes ok.txt', 'fail'],
+        ['reads ok.txt', 'pass'],
+      ],
+    )
+    const doc: ShapeSchema = JSON.parse(
+      readFileSync(join(pkgRoot, 'schema/analysis-note.schema.json'), 'utf8'),
+    )
+    for (const note of await listNotes(p.dir, runId)) {
+      assert.deepEqual(validate(doc, readableAnalysisNote(note)), [], note.evalId)
+      assert.deepEqual(
+        [note.kind, note.schemaVersion, note.model, note.error],
+        ['reeval-analysis-note', 1, 'fake', undefined],
+      )
+    }
+    assert.throws(
+      () => readableAnalysisNote({ ...(notes[0] as AnalysisNote), schemaVersion: 2 as never }),
+      NewerSchemaError,
+    )
+    assert.deepEqual(
+      await listAnalyses(p.dir, [join(p.dir, 'evals/.history')], runId, true),
+      [],
+      "the notes' folder in the cache isn't an analysis",
+    )
+  })
+
+  test('a note that errors is written with its error and a warning; the run still passes', async () => {
+    const p = await project('agent-note-error', {
+      'reeval.config.ts': AGENT_CONFIG(
+        `analysis: { agent: true, model: fakeAnalysis({ note: { error: 'the model is down' } }) },`,
+      ),
+      'evals/w.eval.ts': AGENT_EVALS['evals/w.eval.ts'].replace(
+        "t.attempt.cell.harness === 'wobbly' && t.attempt.n === 2",
+        'false',
+      ),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /^analysis note on evals\/w\.eval\.ts › writes ok\.txt \(wobbly\) failed: the model is down$/m,
+    )
+    assert.match(r.stdout, /^analysis: 4 notes \(4 failed\) in /m)
+    assert.match(r.stdout, /8 passed \(8 attempts, 2 evals\)/)
+    const { notes } = notesOf(p.dir)
+    assert.ok(notes.every((n) => n.error === 'the model is down' && n.text === ''))
+    assert.ok(readRun(p.dir).run.evals.every((e) => e.outcome === 'pass'))
+  })
+
+  test('without agent, a run makes no analysis call, even with analysis.model set', async () => {
+    for (const agent of ['', 'agent: false,']) {
+      const p = await project('agent-off', {
+        'reeval.config.ts': AGENT_CONFIG(
+          `analysis: { ${agent} model: fakeAnalysis({ note: () => { called(); return 'x' } }) },`,
+        ),
+        ...AGENT_EVALS,
+      })
+      assert.equal((await runCli(p.dir)).code, 1)
+      assert.equal(calls(p.dir), 0, agent || 'agent unset')
+      assert.equal(existsSync(join(p.dir, '.reeval/analysis')), false)
+    }
+  })
+
+  test('agent without a language model exits 2 at plan time; --dry-run still plans', async () => {
+    const cases: Array<[string, RegExp]> = [
+      [
+        'analysis: { agent: true },',
+        /config\.analysis\.agent needs a language model\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't write an analysis\), or turn agent off\./,
+      ],
+      [
+        "analysis: { agent: true, model: 'typesafe-ai/jev-1.13.0' },",
+        /config\.analysis\.model "typesafe-ai\/jev-1\.13\.0" is an evaluation model/,
+      ],
+      [
+        "analysis: { agent: true, model: 'google/gemini-3.8-flash' },",
+        /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+      ],
+    ]
+    for (const [analysis, message] of cases) {
+      const p = await project('agent-no-model', {
+        'reeval.config.ts': AGENT_CONFIG(analysis),
+        ...AGENT_EVALS,
+      })
+      const r = await runCli(p.dir)
+      assert.equal(r.code, 2, analysis)
+      assert.match(r.stderr, message, analysis)
+      assert.equal(existsSync(join(p.dir, 'sandboxes')), false, 'no attempt ran')
+      const dry = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(dry.code, 0, dry.stderr)
+    }
   })
 })

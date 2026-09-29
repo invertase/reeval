@@ -89,6 +89,18 @@ analysis: { model: fakeAnalysis({ output: { … } }) }
 
 The same idea for `reeval analyze`: it answers with `output`, or `output(digest)` when you pass a function, and reeval parses and validates it as it would a real model's answer. Use it to test the analysis without a key. See [reeval analyze](/reference/cli/analyze).
 
+```ts
+analysis: {
+  agent: true,
+  model: fakeAnalysis({
+    note: ({ harness, attempts }) =>
+      `${attempts.length} attempts on ${harness}`,
+  }),
+}
+```
+
+With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
+
 ## Errors
 
 | Mistake | Message |

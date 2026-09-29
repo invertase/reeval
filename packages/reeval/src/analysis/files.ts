@@ -2,15 +2,20 @@
 // A saved analysis is two new files in the run's history folder, `<run>/analysis/<stamp>_<author>_
 // <hash8>.{json,md}`, written create-only: the record is never touched, so two teammates who save
 // never conflict, and the static studio build picks them up with the run's other files.
+// `analysis.agent`'s notes are cache too: `.reeval/analysis/<run>/notes/<eval>__<harness>.json`.
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { HistoryError, runDir } from '../history/files.ts'
-import { fromCwd } from '../ids.ts'
-import { countSecrets } from '../redact.ts'
-import type { AnalysisDoc, AnalysisEntry } from '../view/analysis.ts'
-import { NewerSchemaError, readableAnalysis } from '../view/record.ts'
+import { evalSlug, fromCwd } from '../ids.ts'
+import { countSecrets, redactSecrets } from '../redact.ts'
+import type { AnalysisDoc, AnalysisEntry, AnalysisNote } from '../view/analysis.ts'
+import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../view/record.ts'
 
 export const analysisCacheDir = (root: string) => join(root, '.reeval', 'analysis')
+export const notesDir = (root: string, runId: string) =>
+  join(analysisCacheDir(root), runId, 'notes')
+export const noteFileName = (evalId: string, harness: string) =>
+  `${evalSlug(evalId)}__${evalSlug(harness)}.json`
 export const savedAnalysisDir = (historyDir: string, runId: string) =>
   join(runDir(historyDir, runId), 'analysis')
 
@@ -124,4 +129,35 @@ export async function listAnalyses(
     }
   }
   return entries
+}
+
+/** Writes one note, replacing an earlier one for the same eval and harness, with secrets masked. */
+export async function writeNote(root: string, note: AnalysisNote): Promise<string> {
+  const dir = notesDir(root, note.runId)
+  await mkdir(dir, { recursive: true })
+  const path = join(dir, noteFileName(note.evalId, note.harness))
+  const tmp = `${path}.${process.pid}.tmp`
+  await writeFile(tmp, `${redactSecrets(JSON.stringify(note, null, 2))}\n`)
+  await rename(tmp, path)
+  return path
+}
+
+/** A run's notes, by file name; files that aren't notes are skipped, newer ones with a warning. */
+export async function listNotes(root: string, runId: string): Promise<AnalysisNote[]> {
+  const dir = notesDir(root, runId)
+  const names = (await readdir(dir).catch(() => [] as string[])).filter((n) => n.endsWith('.json'))
+  const notes: AnalysisNote[] = []
+  for (const name of names.sort()) {
+    const file = join(dir, name)
+    try {
+      const note = JSON.parse(await readFile(file, 'utf8')) as AnalysisNote
+      if (note?.kind === 'reeval-analysis-note') notes.push(readableAnalysisNote(note, file))
+    } catch (error) {
+      if (error instanceof NewerSchemaError && !warned.has(file)) {
+        warned.add(file)
+        process.stderr.write(`warning: skipped ${fromCwd(file)}: ${error.reason}\n`)
+      }
+    }
+  }
+  return notes
 }

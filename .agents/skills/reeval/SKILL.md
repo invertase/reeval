@@ -283,6 +283,8 @@ reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> -
 reeval record            reeval history      reeval show [run]      reeval compare [base] [head] [--md]
 reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
 reeval analyze           (one checked LLM reading of a run; --context for your own agent)
+                         analysis: { agent: true } also notes each eval × harness during reeval run
+                         (.reeval/analysis/<run>/notes/; a model call each, off by default; never gates)
 reeval studio            reeval studio build --out site      reeval image build [--dry-run]      reeval clean
 reeval mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
 ```

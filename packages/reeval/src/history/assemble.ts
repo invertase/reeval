@@ -115,7 +115,7 @@ const readRecord = async (path: string): Promise<EvalRecord | null> =>
 type Merged = Pick<EvalRecord, 'error'> & { outcome: Outcome }
 
 /** The engine and the worker's record can disagree, e.g. when a timeout fails the eval first. */
-function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
+export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   if (e.state === 'skipped' && record && record.outcome !== 'pass') {
     return { outcome: record.outcome, error: record.error }
   }

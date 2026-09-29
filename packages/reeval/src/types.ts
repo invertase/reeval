@@ -785,17 +785,33 @@ export type Profile = {
   tags?: string[]
 }
 
+/** What a fake note is written from: the eval, the harness, and what its tools returned. */
+export type FakeNoteInput = {
+  eval: string
+  harness: string
+  attempts: Array<{ id: string; outcome: string }>
+  /** Each failed attempt the fake opened beside a passing one, and the step where they diverged. */
+  compared: Array<{ failed: string; passed: string; divergedAt: number | null }>
+}
+
 /** A canned analysis for tests; see `fakeAnalysis()` in `reeval/judge`. */
 export type FakeAnalysisModel = {
   kind: 'fake-analysis'
   /** The model's structured answer, or a function of the digest it was given. */
-  output: unknown | ((digest: unknown) => unknown)
+  output?: unknown | ((digest: unknown) => unknown)
+  /** `analysis.agent`'s note on each eval and harness: text, a function of its tools' results, or an error to throw. */
+  note?: string | ((input: FakeNoteInput) => string) | { error: string }
 }
 
 /** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
   /** `'provider/model'`, e.g. `'google/gemini-3.8-flash'`; default: the judge's, if it's one. */
   model?: string | FakeAnalysisModel
+  /**
+   * `reeval run` writes a note on each eval and harness once its attempts finish, with the analysis
+   * model (default false: one call per eval and harness, every run).
+   */
+  agent?: boolean
   /** Added to the prompt, e.g. "Fewer tool calls count as a win. The skill under test is reeval-good." */
   instructions?: string
   /** The digest's cap; evidence is dropped, lowest priority first, to fit (default 20000). */

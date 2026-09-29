@@ -416,9 +416,30 @@
         "kind": {
           "const": "fake-analysis"
         },
+        "note": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": ["error"]
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": []
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "output": {}
       },
-      "required": ["kind", "output"]
+      "required": ["kind"]
     },
     "FakeHarnessDescriptor": {
       "type": "object",
@@ -1110,6 +1131,9 @@
         "analysis": {
           "type": "object",
           "properties": {
+            "agent": {
+              "type": "boolean"
+            },
             "instructions": {
               "type": "string"
             },

@@ -314,10 +314,11 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 Every shape reeval writes to disk and reads back later, maybe from an older or newer reeval, is listed in
 `packages/reeval/scripts/schema/shapes.ts` and snapshotted as a JSON Schema generated from its
 TypeScript type in `packages/reeval/schema/`: the run record (`RunRecord`), transcript lines
-(`TranscriptLine`), analysis documents (`AnalysisDoc`), `.reeval/debug` request lines
+(`TranscriptLine`), analysis documents (`AnalysisDoc`), `analysis.agent`'s notes (`AnalysisNote`,
+`.reeval/analysis/<run>/notes/`), `.reeval/debug` request lines
 (`DebugRequest`) and a running `reeval run`'s progress file, `.reeval/staging/<run>/live.json`
 (`LiveProgress`, read by `reeval studio`; never part of a record). Every reader goes through `src/view/record.ts` (`readableRecord`,
-`readableTranscriptLine`, `readableAnalysis`, `readableDebugRequest`).
+`readableTranscriptLine`, `readableAnalysis`, `readableAnalysisNote`, `readableDebugRequest`).
 
 ```bash
 pnpm --filter reeval schema:check    # CI (typecheck job); fails on a breaking change
