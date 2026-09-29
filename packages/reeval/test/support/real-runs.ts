@@ -2,8 +2,12 @@
 // `real-e2e-pairs` holds two recorded runs of one eval per harness, and `real-contract` one run of
 // the harness contract per harness, with passing checks and failing canaries. Key-free readers of
 // real transcripts and diffs build on these.
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { type PairAttempt, pairsOf } from '../../src/compare/pairs.ts'
+import { answerQuestion } from '../../src/compare/questions.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../../src/history/types.ts'
+import type { BlindPair, CompareAnswer, FakeVote } from '../../src/types.ts'
 import { readableRecord } from '../../src/view/record.ts'
 import { corpusEntries } from './corpus.ts'
 
@@ -55,3 +59,44 @@ export function realAttempts(only?: RealEntry): RealAttempt[] {
   }
   return out
 }
+
+/** The arms `real-e2e-pairs`' two runs of each harness stand in for, oldest first. */
+export const E2E_ARMS = ['first-run', 'second-run'] as const
+
+/**
+ * `real-e2e-pairs` as compare-question sides: each harness's two recorded runs as two arms of
+ * one run, so the real diffs give within and across pairs.
+ */
+export function e2ePairSides(): PairAttempt[] {
+  const attempts = realAttempts('real-e2e-pairs')
+  return REAL_HARNESSES.flatMap((harness) => {
+    const mine = attempts.filter((a) => a.harness === harness)
+    if (mine.length !== 2) throw new Error(`${mine.length} recorded runs on ${harness}, not 2`)
+    return mine.map((a, i) => ({
+      harness,
+      arm: E2E_ARMS[i] as string,
+      run: 1,
+      diff: readFileSync(a.diff as string, 'utf8'),
+      checksPassed: a.attempt.outcome === 'pass',
+      prompts: a.attempt.turns.map((t) => t.prompt),
+      id: a.attempt.key,
+    }))
+  })
+}
+
+/** Codex ends hello.txt with a newline; Cursor and Claude Code don't. */
+const endsWithNewline = (diff: string) => !diff.includes('No newline at end of file')
+
+/** A pick that favours the diff whose hello.txt ends with a newline, and ties otherwise. */
+export const newlineVote = (p: BlindPair): FakeVote =>
+  endsWithNewline(p.a) === endsWithNewline(p.b) ? 'tie' : endsWithNewline(p.a) ? 'A' : 'B'
+
+/** A question about the real diffs, answered by `newlineVote` over every pair of them. */
+export const e2eNewlineAnswer = (): Promise<CompareAnswer> =>
+  answerQuestion({
+    question: 'Which ends hello.txt with a newline?',
+    model: { kind: 'fake-analysis', vote: newlineVote },
+    pairs: pairsOf(e2ePairSides()),
+    maxInputTokens: 20_000,
+    maxOutputTokens: 100,
+  })
