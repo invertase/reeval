@@ -3,7 +3,7 @@ import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
-// A record corpus entry (before evals[].answers), recorded by reeval 0.2.0 at 336bb72 (compare questions in the plan) merged with main f4c43ab.
+// A record corpus entry (before evals[].answers), recorded by reeval 0.2.0 at 879749e.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
   harness: fakeHarness(),
