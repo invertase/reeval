@@ -1214,6 +1214,20 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'analysis.agent',
+    area: 'Records and studio',
+    name: '`analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/`',
+    tests: [
+      analysis('the tools pair each failed attempt with a passing one'),
+      analysis('recorded runs read as the same attempts'),
+      analysis('a fake run writes one note per eval and harness'),
+      analysis('a note that errors is written with its error and a warning'),
+      analysis('without agent, a run makes no analysis call'),
+      analysis('agent without a language model exits 2 at plan time'),
+      options('common mistakes'),
+    ],
+  },
+  {
     id: 'studio',
     area: 'Records and studio',
     name: '`reeval studio` and `reeval studio build`',

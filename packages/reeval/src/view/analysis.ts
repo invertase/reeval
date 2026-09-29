@@ -97,6 +97,29 @@ export type AnalysisDoc = {
   cited: Record<string, string>
 }
 
+/**
+ * `analysis.agent`'s note on one eval and harness of a run, written once that harness's attempts
+ * finish: `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.
+ */
+export type AnalysisNote = {
+  kind: 'es-analysis-note'
+  schemaVersion: 1
+  runId: string
+  evalId: string
+  /** The harness id, as in the cell key. */
+  harness: string
+  model: string
+  resolvedModel: string | null
+  createdAt: string
+  /** The attempt ids (`<cell key>#<n>`) the note covers. */
+  attempts: string[]
+  /** Empty when the call failed. */
+  text: string
+  /** Why the call failed; the run's outcomes don't change. */
+  error?: string
+  usage: { inputTokens: number | null; outputTokens: number | null }
+}
+
 /** One analysis file the studio can show: saved in the run's folder, or in the local cache. */
 export type AnalysisEntry = { file: string; source: 'saved' | 'cached'; doc: AnalysisDoc }
 export type AnalysisIndex = { runId: string; entries: AnalysisEntry[] }

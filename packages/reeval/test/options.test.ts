@@ -940,6 +940,11 @@ ${body}
       /config\.debug\.traceBufferMb must be a number of megabytes above 0 \(got 8MB\)/,
     ],
     [
+      'analysis.agent as text',
+      `analysis: { agent: 'yes' as never },`,
+      /config\.analysis\.agent must be a boolean/,
+    ],
+    [
       'a debug folder option',
       `debug: { dir: '/tmp/debug' } as never,`,
       /Unknown option "dir" in config\.debug\. Use keep, traceBufferMb\./,

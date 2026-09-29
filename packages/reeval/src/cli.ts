@@ -3,6 +3,7 @@ import { appendFile, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { inspect } from 'node:util'
 import { detectAgent } from 'std-env'
+import type { NoteRun } from './analysis/agent/index.ts'
 import { parseCli } from './cli-parse.ts'
 import { type Flags, helpText } from './cli-spec.ts'
 import {
@@ -322,11 +323,21 @@ async function runCommand(
     await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
-  const { engineRun, plan, sandboxVersions, budgetReached, live } = executed
+  const { engineRun, plan, sandboxVersions, budgetReached, live, notes } = executed
   invocation.unhandledErrors = engineRun.unhandledErrors
   if ((interrupted || engineRun.cancelled) && plan?.sandboxes.some((s) => s.kind === 'docker')) {
     const { removeRunContainers } = await import('./sandbox/docker.ts')
     await removeRunContainers(ctx.runId)
+  }
+  if (notes) {
+    // Before the record is written: the notes read the staged attempts, which it removes.
+    const cancelled = interrupted || engineRun.cancelled
+    const written = await notes.finish(cancelled)
+    if (!cancelled && written.length) {
+      const { notesLine } = await import('./analysis/agent/index.ts')
+      const text = notesLine(ctx.config.root, ctx.runId, written)
+      renderer.onEvent({ type: 'notice', at: Date.now(), level: 'info', text })
+    }
   }
   if (engineRun.stopped || !plan) {
     live?.remove()
@@ -550,6 +561,7 @@ async function executeRun(
   let budgetTimer: NodeJS.Timeout | undefined
   let toRun: PlannedItem[] = []
   let live: LiveProgressWriter | undefined
+  let notes: NoteRun | undefined
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
@@ -605,6 +617,8 @@ async function executeRun(
     })
     if (setup.dryRun) return false
     checkAttemptBudget(plan, setup.force, config.file)
+    const analysis = config.analysis.agent ? await import('./analysis/model.ts') : null
+    analysis?.analysisModelName(config, 'agent')
     const missing = missingCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
       profile,
@@ -621,6 +635,17 @@ async function executeRun(
       throw new UsageError(
         `Credentials with whitespace or a line break in them: ${malformed.join(', ')}. A key copied from a wrapped terminal line picks these up; set it again as one line.`,
       )
+    }
+    if (analysis) {
+      const { startNotes } = await import('./analysis/agent/index.ts')
+      notes = startNotes({
+        config,
+        model: analysis.resolveAnalysisModel(config, 'agent'),
+        runId,
+        stagingDir,
+        planned,
+        warn: (text) => renderer.onEvent({ type: 'notice', at: Date.now(), level: 'warn', text }),
+      })
     }
     const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
     const live = planned.filter((p) => !p.attempt.plan.skip)
@@ -744,7 +769,10 @@ async function executeRun(
           startBudget()
           live?.start(e.key, e.at)
         }
-        if (e.type === 'eval-end') live?.end(e.result)
+        if (e.type === 'eval-end') {
+          live?.end(e.result)
+          notes?.onResult(e.result)
+        }
         // Attempts cut short by Ctrl-C are reported from the merged record, in the summary.
         if (interrupted && e.type === 'eval-end' && e.result.state === 'skipped') return
         renderer.onEvent(e)
@@ -793,7 +821,7 @@ async function executeRun(
   if (engineRun.noFiles || (!engineRun.stopped && engineRun.evals.length === 0 && !interrupted)) {
     throw noMatch(config, filters, tags)
   }
-  return { engineRun, plan, sandboxVersions, budgetReached: () => reached, live }
+  return { engineRun, plan, sandboxVersions, budgetReached: () => reached, live, notes }
 }
 
 // `reeval run | head` closes stdout early; that isn't an error.

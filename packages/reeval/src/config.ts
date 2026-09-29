@@ -378,11 +378,12 @@ function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis
   }
   unknownKey(
     analysis,
-    ['model', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
+    ['model', 'agent', 'instructions', 'maxInputTokens', 'maxOutputTokens'],
     'config.analysis',
   )
   const {
     model,
+    agent,
     instructions,
     maxInputTokens = ANALYSIS_DEFAULTS.maxInputTokens,
     maxOutputTokens = ANALYSIS_DEFAULTS.maxOutputTokens,
@@ -394,6 +395,9 @@ function checkAnalysis(analysis: EsConfig['analysis']): ResolvedConfig['analysis
     throw new UsageError(
       "config.analysis.model must be a 'provider/model' string, e.g. 'google/gemini-3.8-flash'",
     )
+  }
+  if (agent !== undefined && typeof agent !== 'boolean') {
+    throw new UsageError('config.analysis.agent must be a boolean')
   }
   if (instructions !== undefined && typeof instructions !== 'string') {
     throw new UsageError('config.analysis.instructions must be a string')
@@ -513,9 +517,18 @@ export function secretSources(env: EnvVars): Array<[string, string]> {
   )
 }
 
+/** The provider model `analysis.agent` calls during a run, if it's on: `analysis.model`, else the judge's. */
+function agentModel(config: ResolvedConfig): string | null {
+  if (!config.analysis.agent) return null
+  const model = config.analysis.model ?? config.judge.model
+  // An evaluation model can't analyse: the plan stops on that before it asks for keys.
+  return typeof model === 'string' && !model.startsWith('typesafe-ai/') ? model : null
+}
+
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
- * plans (default: the config's), the config's judge, and required config and profile secrets.
+ * plans (default: the config's), the config's judge and, with `analysis.agent`, the analysis
+ * model, and required config and profile secrets.
  */
 export function missingCredentials(
   config: ResolvedConfig,
@@ -528,6 +541,12 @@ export function missingCredentials(
   if (config.judge.model !== undefined) {
     const judgeKeys = judgeCredentials(config.judge.model)
     if (judgeKeys.length && !judgeKeys.some((k) => env[k])) missing.push(judgeKeys.join(' or '))
+  }
+  const analyst = agentModel(config)
+  if (analyst) {
+    const keys = judgeCredentials(analyst)
+    const named = keys.join(' or ')
+    if (keys.length && !keys.some((k) => env[k]) && !missing.includes(named)) missing.push(named)
   }
   const vars = { ...config.env, ...options.profile?.defaults.env }
   for (const [name, from] of secretSources(vars)) {
@@ -553,6 +572,8 @@ export function malformedCredentials(
 ): string[] {
   const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
   if (config.judge.model !== undefined) names.push(...judgeCredentials(config.judge.model))
+  const analyst = agentModel(config)
+  if (analyst) names.push(...judgeCredentials(analyst))
   return [...new Set(names)].flatMap((name) => {
     const at = badCharacterAt(env[name] ?? '')
     return at ? [`${name} (character ${at})`] : []

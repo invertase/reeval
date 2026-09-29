@@ -1,10 +1,11 @@
 // Runs the evals that need no credentials, Docker or network: a fake agent writes canned files
 // into a temp dir, and the judge returns a canned verdict. The fake agent writes the house-style
 // greeting only when it's given a skill, so skill.eval.ts shows the compare and its lift.
+// analysis.agent writes a canned note on each eval and harness into .reeval/analysis/.
 // (python.eval.ts needs the real agent and custom.eval.ts needs a Gemini key in the sandbox.)
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { fakeJudge } from 'reeval/judge'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 const packageJson = '{ "type": "module" }\n'
@@ -37,6 +38,13 @@ export default defineConfig({
   }),
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: 0.95 }) },
+  analysis: {
+    agent: true,
+    model: fakeAnalysis({
+      note: ({ harness, attempts }) =>
+        `${attempts.filter((a) => a.outcome === 'pass').length} of ${attempts.length} attempts passed on ${harness}.`,
+    }),
+  },
   timeout: '2m',
   profiles: {
     smoke: { limit: { runs: 1, compare: false }, budget: { attempts: 12 } },

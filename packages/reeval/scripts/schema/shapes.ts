@@ -41,6 +41,14 @@ export const SHAPES: PersistedShape[] = [
     versionField: 'schemaVersion',
   },
   {
+    name: 'analysis-note',
+    file: 'src/view/analysis.ts',
+    type: 'AnalysisNote',
+    where:
+      'An analysis.agent note on one eval and harness: .reeval/analysis/<run>/notes/<eval>__<harness>.json',
+    versionField: 'schemaVersion',
+  },
+  {
     name: 'debug-request',
     file: 'src/view/debug.ts',
     type: 'DebugRequest',
