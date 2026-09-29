@@ -73,7 +73,7 @@ const INTENDED = [
     file: 'example.test.ts.jsonl',
     key: /^hello-copy run --config reeval\.fake\.config\.ts( --dry-run --json)?$/,
     fields: ['summary', 'live', 'record'],
-    why: "compare question answers: skill.eval.ts's compare asks a question, so the plan lists it and the run records and prints its answer.",
+    why: "compare question answers (#152): skill.eval.ts's compare asks a question, so the plan lists it and the run records and prints its answer.",
   },
 ]
 
