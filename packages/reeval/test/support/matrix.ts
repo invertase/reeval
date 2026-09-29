@@ -17,7 +17,11 @@ export type Sources = {
   contract: { name: string; canary: boolean }[]
 }
 
-const E2E = 'reeval/test/e2e-real.test.ts'
+/** The real-agent suites besides the contract, by the name an inventory `real` entry uses. */
+const REAL_SUITES: Record<string, string> = {
+  e2e: 'reeval/test/e2e-real.test.ts',
+  questions: 'reeval/test/questions-real.test.ts',
+}
 
 type Cell = { count: number; canaries: number }
 export type MatrixRow = { feature: InventoryFeature; cells: Record<Tier, Cell> }
@@ -77,15 +81,15 @@ export function buildMatrix(inventory: InventoryFeature[], sources: Sources): Ma
     for (const ref of feature.real ?? []) {
       const [suite, title, ...rest] = ref.split(' › ')
       const behaviour = sources.contract.find((b) => b.name === title)
-      if (rest.length || !title || (suite !== 'contract' && suite !== 'e2e'))
-        problems.push(`${at}: "${ref}" isn't "contract › <behaviour>" or "e2e › <title>"`)
+      const file = suite ? REAL_SUITES[suite] : undefined
+      if (rest.length || !title || (suite !== 'contract' && !file))
+        problems.push(
+          `${at}: "${ref}" isn't "contract › <behaviour>", "e2e › <title>" or "questions › <title>"`,
+        )
       else if (suite === 'contract' && !behaviour)
         problems.push(`${at}: contract.test.ts has no behaviour "${title}"`)
-      else if (
-        suite === 'e2e' &&
-        !testTitles(sources.testSource(E2E) ?? '').some((t) => t.includes(title))
-      )
-        problems.push(`${at}: e2e-real.test.ts has no test "${title}"`)
+      else if (file && !testTitles(sources.testSource(file) ?? '').some((t) => t.includes(title)))
+        problems.push(`${at}: ${file.split('/').at(-1)} has no test "${title}"`)
       else {
         cells.real.count++
         if (behaviour?.canary) cells.real.canaries++

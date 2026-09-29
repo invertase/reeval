@@ -437,7 +437,28 @@
             }
           ]
         },
-        "output": {}
+        "output": {},
+        "vote": {
+          "anyOf": [
+            {
+              "enum": ["A", "B", "tie"]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": ["error"]
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          ]
+        }
       },
       "required": ["kind"]
     },

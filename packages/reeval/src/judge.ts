@@ -10,29 +10,31 @@ export const fakeJudge = ({ score = 1 }: { score?: number } = {}): FakeJudgeMode
 
 /**
  * An analysis model for tests: `reeval analyze` gets `output` (or `output(digest)`) back as the
- * model's structured answer, through the same parsing and validation as a real one. With
- * `analysis.agent`, each note calls the same tools a real model would, then answers with `note`
- * (or `note(input)`), or throws `note.error`.
+ * model's structured answer, and each compare question's pair gets `vote` (a fixed `'A'`, `'B'` or
+ * `'tie'`, a function of the blinded pair, or `{ error }`), through the same parsing and
+ * validation as a real one. With `analysis.agent`, each note calls the same tools a real model
+ * would, then answers with `note` (or `note(input)`), or throws `note.error`.
  */
 export const fakeAnalysis = ({
   output,
   note,
-}: {
-  output?: FakeAnalysisModel['output']
-  note?: FakeAnalysisModel['note']
-}): FakeAnalysisModel => ({
+  vote,
+}: Pick<FakeAnalysisModel, 'output' | 'note' | 'vote'>): FakeAnalysisModel => ({
   kind: 'fake-analysis',
   ...(output !== undefined ? { output } : {}),
   ...(note !== undefined ? { note } : {}),
+  ...(vote !== undefined ? { vote } : {}),
 })
 
 export { DEFAULT_THRESHOLD, RECOMMENDED_JUDGE_MODEL } from './judge/index.ts'
 export type {
   AnalysisConfig,
+  BlindPair,
   ConfigJudgeOptions,
   FakeAnalysisModel,
   FakeJudgeModel,
   FakeNoteInput,
+  FakeVote,
   JudgeCallOptions,
   JudgeModel,
   JudgeOptions,

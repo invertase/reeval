@@ -1,4 +1,4 @@
-import { gateLabel, liftLabel } from '../history/summary.ts'
+import { answersLabel, gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
@@ -119,6 +119,14 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
   })
 }
 
+/** One row per compare question: its win rates, or why it has none. They never gate. */
+function questionRows(c: Colors, e: EvalEntry, indent: string): string[] {
+  return (e.answers ?? []).map((a) => {
+    const label = answersLabel(a)
+    return `${indent}${c.dim('question')}  ${a.error !== undefined ? c.yellow(label) : label}`
+  })
+}
+
 /** The run's evals as a file › group tree, one row per eval and per cell of a matrix. */
 function tree(c: Colors, evals: EvalEntry[]): string[] {
   const rows: Array<{ indent: number; text: string; entry?: EvalEntry }> = []
@@ -141,7 +149,11 @@ function tree(c: Colors, evals: EvalEntry[]): string[] {
     if (!entry) return [` ${pad}${text}`]
     const name = `${mark(c, entryOutcome(entry))} ${text}`
     const fill = ' '.repeat(Math.max(0, width - indent * 2 - 2 - text.length))
-    return [` ${pad}${name}${fill}  ${evalColumns(c, entry)}`, ...cellRows(c, entry, ` ${pad}    `)]
+    return [
+      ` ${pad}${name}${fill}  ${evalColumns(c, entry)}`,
+      ...cellRows(c, entry, ` ${pad}    `),
+      ...questionRows(c, entry, ` ${pad}    `),
+    ]
   })
 }
 

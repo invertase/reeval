@@ -14,6 +14,7 @@ import { liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
   CellGate,
+  CompareAnswer,
   EnvironmentRecord,
   EvalRecord,
   FileChange,
@@ -97,6 +98,8 @@ export type AssembleInput = {
   worktreePatch: Buffer | null
   lockfiles: RunRecord['dependencies']['lockfiles']
   runner: RunnerInfo
+  /** Each eval's compare questions, answered after its attempts, by eval id. */
+  answers?: Map<string, CompareAnswer[]>
 }
 
 export type AssembledRun = {
@@ -701,6 +704,10 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const evals = [...seen.byEval.values()]
   rollUp(evals)
   sequence(evals)
+  for (const e of evals) {
+    const answers = input.answers?.get(e.id)
+    if (answers?.length) e.answers = answers
+  }
 
   const attempts = evals.flatMap((e) => e.attempts)
   const count = (o: Outcome) => attempts.filter((a) => a.outcome === o).length

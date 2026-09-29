@@ -9,6 +9,7 @@ wrote; the `reeval.config.ts` follows the config API like any other project.
 |---|---|
 | `before-100` | A run from before `stack.harnesses[].resolvedModels` (#80), `evals[].todo` (#82) and `plan.sandboxWarnings` (#100) |
 | `before-workspace` | The corpus project's fake-harness runs from before `environment.workspace` (an environment started from a git repository) |
+| `before-answers` | The corpus project's fake-harness runs from before `evals[].answers` (compare questions answered with pairwise win rates) |
 | `before-runtime` | The corpus project's fake-harness runs from before `stack.runtime` and `stack.language` (the runtime reeval ran on, and the evals' language) |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
