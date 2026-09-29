@@ -1,69 +1,37 @@
-// The Dart side of a reeval run. The binary generates a bootstrap that imports the config and
-// every eval file and calls `runReeval`; it starts the compiled bootstrap for the config and for
-// each eval file's worker, and this answers over the socket: the config, a file's declaration
-// tree, and each attempt's body, whose `t.*` calls go back to the binary.
+// An eval file's isolate, spawned by the host (host.dart) with the file's `main`. It answers the
+// binary's lines, which the host relays: the file's declaration tree, and each attempt's body,
+// whose `t.*` calls go back to the binary.
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
+import 'dart:isolate';
 
 import 'package:stack_trace/stack_trace.dart';
 
-import 'config.dart';
 import 'context.dart';
 import 'declare.dart';
 import 'expect.dart';
-import 'options.dart';
 import 'protocol.dart';
 
-const sdkVersion = '0.1.0';
-
-typedef ConfigMain = FutureOr<ReevalConfig> Function();
-
-/// Serves the binary until it closes the connection. `files` maps each eval file's path, relative
-/// to the project root with `/`, to its `main`.
-Future<void> runReeval(
-  List<String> args, {
-  ConfigMain? config,
-  required Map<String, void Function()> files,
-}) async {
-  final (host, port, token) = switch ((
-    Platform.environment['REEVAL_RUNNER']?.split(':'),
-    Platform.environment['REEVAL_RUNNER_TOKEN'],
-  )) {
-    ([final host, final port], final String token) => (host, int.parse(port), token),
-    _ => throw StateError(
-      "This is reeval's Dart runner, which the reeval binary starts. Run your evals with reeval run.",
-    ),
-  };
-  final socket = await Socket.connect(host, port);
-  socket.setOption(SocketOption.tcpNoDelay, true);
-  await _Runner(Connection(socket), config, files).serve(token);
-  exit(0);
+/// Serves the binary, through the host, until the host process exits.
+Future<void> serveIsolate(SendPort host, void Function() main) async {
+  final inbox = ReceivePort();
+  host.send(inbox.sendPort);
+  await _Runner((message) => host.send(jsonEncode(message)), main).serve(inbox);
 }
 
 final class _Runner implements Calls {
-  _Runner(this._conn, this._config, this._files);
+  _Runner(this._send, this._main);
 
-  final Connection _conn;
-  final ConfigMain? _config;
-  final Map<String, void Function()> _files;
+  final void Function(Map<String, Object?> message) _send;
+  final void Function() _main;
   Declarer? _declarer;
   final Map<int, Completer<Object?>> _pending = {};
   final Map<String, EvalContext> _attempts = {};
   int _calls = 0;
 
-  Future<void> serve(String token) async {
-    _conn.send({
-      't': 'hello',
-      'protocol': runnerProtocol,
-      'token': token,
-      'sdk': 'dart',
-      'version': sdkVersion,
-      'runtime': Platform.version.split(' ').first,
-    });
-    await for (final message in _conn.messages) {
-      switch (message) {
-        case LoadConfig(:final context):
-          await _loadConfig(context);
+  Future<void> serve(ReceivePort inbox) async {
+    await for (final line in inbox.cast<String>()) {
+      switch (ToRunner.decode(jsonDecode(line))) {
         case Collect(:final file):
           _collect(file);
         case Run(:final attempt, :final body, :final info):
@@ -78,34 +46,12 @@ final class _Runner implements Calls {
     }
   }
 
-  Future<void> _loadConfig(ConfigContext context) async {
-    configContext = context;
-    try {
-      final config = _config == null ? defineConfig() : await _config();
-      _conn.send({'t': 'config', 'config': toData(config)});
-    } catch (error, stack) {
-      _conn.send({'t': 'load-error', 'error': _serialize(error, stack)});
-    }
-  }
-
   void _collect(String file) {
-    final main = _files[file];
-    if (main == null) {
-      _conn.send({
-        't': 'load-error',
-        'error': {
-          'name': 'UsageError',
-          'message':
-              "$file isn't one of the project's eval files. Dart eval files end in _eval.dart.",
-        },
-      });
-      return;
-    }
     try {
-      final declarer = _declarer = declare(main);
-      _conn.send({'t': 'declared', 'file': file, 'tree': declarer.tree});
+      final declarer = _declarer = declare(_main);
+      _send({'t': 'declared', 'file': file, 'tree': declarer.tree});
     } catch (error, stack) {
-      _conn.send({'t': 'load-error', 'error': _serialize(error, stack)});
+      _send({'t': 'load-error', 'error': _serialize(error, stack)});
     }
   }
 
@@ -114,7 +60,7 @@ final class _Runner implements Calls {
   Future<Object?> call(String method, Map<String, Object?> params) {
     final id = ++_calls;
     final reply = _pending[id] = Completer<Object?>();
-    _conn.send({
+    _send({
       't': 'call',
       'id': id,
       'attempt': Zone.current[#reeval.attempt],
@@ -129,7 +75,7 @@ final class _Runner implements Calls {
     final t = _attempts[attempt] = EvalContext(this, info);
     final outcome = Completer<Map<String, Object?>?>();
     void log(String stream, String text) =>
-        _conn.send({'t': 'log', 'attempt': attempt, 'stream': stream, 'text': text});
+        _send({'t': 'log', 'attempt': attempt, 'stream': stream, 'text': text});
     Future<void> start() async {
       if (body == null) throw StateError('No eval body $bodyId: was the file changed mid-run?');
       await body(t);
@@ -149,7 +95,7 @@ final class _Runner implements Calls {
     );
     final error = await outcome.future;
     _attempts.remove(attempt);
-    _conn.send({
+    _send({
       't': 'done',
       'attempt': attempt,
       'state': error == null ? 'passed' : 'failed',

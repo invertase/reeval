@@ -7,7 +7,7 @@ import { relative } from 'node:path'
 import { declareTree } from '../evaluate.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { EvalContext, EvalFn, JudgeCallOptions, Turn } from '../types.ts'
-import { prepareDartRunner, type RunnerCommand } from './project.ts'
+import { prepareDartHost, type RunnerCommand } from './project.ts'
 import type { FromRunner } from './protocol.ts'
 import { type DartRunner, errorFrom, startDartRunner } from './runner.ts'
 
@@ -21,7 +21,7 @@ type Live = {
 export async function loadDartFile(file: string, root: string): Promise<void> {
   const command: RunnerCommand = process.env.REEVAL_DART_RUNNER
     ? JSON.parse(process.env.REEVAL_DART_RUNNER)
-    : await prepareDartRunner(root, undefined)
+    : await prepareDartHost(root, [file])
   const runner = await startDartRunner(command, root)
   const rel = relative(root, file).replaceAll('\\', '/')
   runner.send({ t: 'collect', file: rel })

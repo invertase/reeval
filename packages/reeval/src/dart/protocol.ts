@@ -3,9 +3,9 @@
 // REEVAL_RUNNER_TOKEN. Not the runner's stdio, which eval code prints to, and not Node's IPC
 // channel, which Dart can't open.
 import type { DeclarationTree } from '../declaration.ts'
-import type { EsConfig } from '../types.ts'
 
-export const RUNNER_PROTOCOL = 1
+/** 2: the host spawns each eval file in an isolate; the config is reeval.yml, not Dart. */
+export const RUNNER_PROTOCOL = 2
 
 export type WireError = {
   name: string
@@ -18,7 +18,6 @@ export type WireError = {
 }
 
 export type ToRunner =
-  | { t: 'config'; context: { ci: boolean; command: string; profile?: string } }
   | { t: 'collect'; file: string }
   | { t: 'run'; attempt: string; body: string; info: unknown }
   | { t: 'reply'; id: number; result?: unknown; error?: { name: string; message: string } }
@@ -26,7 +25,6 @@ export type ToRunner =
 
 export type FromRunner =
   | { t: 'hello'; protocol: number; token: string; sdk: string; version: string; runtime: string }
-  | { t: 'config'; config: EsConfig }
   | { t: 'declared'; file: string; tree: DeclarationTree }
   | { t: 'load-error'; error: WireError }
   | { t: 'call'; id: number; attempt: string; method: string; params: Record<string, unknown> }

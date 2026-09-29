@@ -1,153 +1,74 @@
-// A Dart project: found by its `reeval.config.dart` or `pubspec.yaml`. reeval writes a bootstrap
-// that imports the config and every `*_eval.dart` file and calls package:reeval's `runReeval`,
-// compiles it once (cached by the content of every Dart file it can reach), and starts the result
-// for the config and for each eval file's worker.
-import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { basename, dirname, join, relative, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+// A Dart project: found by its `pubspec.yaml`. Before workers start, reeval writes one bootstrap,
+// `.dart_tool/reeval/runner.dart`, naming the eval files it found, and each worker runs it with
+// `dart run`. The bootstrap is package:reeval's host: it spawns the worker's eval file in an
+// isolate of its own (`Isolate.spawnUri`), so a file that doesn't compile fails as that file's
+// load error while the rest run, as package:test isolates test files.
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { run } from '@reeval/sandbox-docker/process'
-import { glob } from 'tinyglobby'
 import { UsageError } from '../errors.ts'
-
-export const DART_CONFIG = 'reeval.config.dart'
+import { relativeFile } from '../ids.ts'
 
 /** Eval files in a Dart project, as package:test names test files `*_test.dart`. */
 export const DART_INCLUDE = ['evals/**/*_eval.dart']
 
-const IGNORED = [
-  '**/.dart_tool/**',
-  '**/build/**',
-  '**/.reeval/**',
-  '**/node_modules/**',
-  '**/.git/**',
-]
-
-export const isDartConfig = (path: string | undefined): path is string => !!path?.endsWith('.dart')
-
-/** The language `dir` is written in, from its clues: a Dart config, or a pubspec without a TS config. */
+/** The language `dir` is written in, from its clues: a TypeScript config wins, then a pubspec. */
 export function detectLanguage(dir: string): 'dart' | 'typescript' {
-  if (existsSync(join(dir, DART_CONFIG))) return 'dart'
   if (existsSync(join(dir, 'reeval.config.ts'))) return 'typescript'
   return existsSync(join(dir, 'pubspec.yaml')) ? 'dart' : 'typescript'
 }
 
-/** How the runner starts: `[exe]` (AOT, the default) or `[dart, runner.dill]` (kernel). */
+/** How a worker starts the runner, in the project root. */
 export type RunnerCommand = string[]
 
-const posix = (path: string) => path.replaceAll('\\', '/')
+export const BOOTSTRAP = '.dart_tool/reeval/runner.dart'
 
-/** Runs `dart`, failing with an install hint when there's none. */
-async function dart(args: string[], cwd: string) {
-  try {
-    return await run('dart', args, { cwd })
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      throw new UsageError(
-        'This is a Dart project (reeval.config.dart or pubspec.yaml), but dart is not on PATH. Install the Dart SDK: https://dart.dev/get-dart',
-      )
-    }
-    throw error
-  }
-}
-
-/** Every package root a path dependency resolves to, from `.dart_tool/package_config.json`. */
-function pathPackages(root: string): string[] {
-  const config = join(root, '.dart_tool/package_config.json')
-  const { packages } = JSON.parse(readFileSync(config, 'utf8')) as {
-    packages: { rootUri: string }[]
-  }
-  return packages
-    .map(({ rootUri }) =>
-      rootUri.startsWith('file:')
-        ? fileURLToPath(rootUri)
-        : resolve(dirname(config), decodeURIComponent(rootUri)),
+const onPath = (name: string) =>
+  (process.env.PATH ?? '')
+    .split(delimiter)
+    .some((dir) =>
+      ['', '.exe', '.bat'].some((ext) => dir && existsSync(join(dir, `${name}${ext}`))),
     )
-    .filter((dir) => !dir.includes(`${join('.pub-cache')}`) && resolve(dir) !== resolve(root))
-}
 
-function dartFilesUnder(dir: string): string[] {
-  if (!existsSync(dir)) return []
-  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
-    .filter((f) => f.endsWith('.dart') && !f.includes('.dart_tool'))
-    .map((f) => join(dir, f))
-    .filter((f) => statSync(f).isFile())
-}
-
-/**
- * Resolves packages if needed, writes the bootstrap for `configPath` (none: package:reeval's
- * defaults), and compiles it unless a runner for the same sources is already built.
- */
-export async function prepareDartRunner(
-  root: string,
-  configPath: string | undefined,
-  log: (line: string) => void = () => {},
-): Promise<RunnerCommand> {
-  if (!existsSync(join(root, 'pubspec.yaml'))) {
+/** Resolves packages when the lockfile is stale and writes the bootstrap for `files`. */
+export async function prepareDartHost(root: string, files: string[]): Promise<RunnerCommand> {
+  if (!onPath('dart')) {
     throw new UsageError(
-      `${DART_CONFIG} needs a pubspec.yaml beside it, with reeval in dev_dependencies.`,
+      'This is a Dart project (it has a pubspec.yaml and *_eval.dart files), but dart is not on PATH. Install the Dart SDK: https://dart.dev/get-dart',
     )
+  }
+  const pubspec = join(root, 'pubspec.yaml')
+  if (!existsSync(pubspec)) {
+    throw new UsageError('Dart eval files need a pubspec.yaml with reeval in dev_dependencies.')
   }
   const lock = join(root, 'pubspec.lock')
-  const packageConfig = join(root, '.dart_tool/package_config.json')
   if (
-    !existsSync(packageConfig) ||
+    !existsSync(join(root, '.dart_tool/package_config.json')) ||
     !existsSync(lock) ||
-    statSync(join(root, 'pubspec.yaml')).mtimeMs > statSync(lock).mtimeMs
+    statSync(pubspec).mtimeMs > statSync(lock).mtimeMs
   ) {
-    log('Resolving Dart packages (dart pub get)')
-    const got = await dart(['pub', 'get'], root)
+    process.stderr.write('Resolving Dart packages (dart pub get)\n')
+    const got = await run('dart', ['pub', 'get'], { cwd: root })
     if (got.exitCode !== 0)
       throw new UsageError(`dart pub get failed:\n${got.stderr || got.stdout}`)
   }
-  const evals = (await glob(['**/*_eval.dart'], { cwd: root, ignore: IGNORED })).sort()
-  const dir = join(root, '.reeval/dart')
-  mkdirSync(dir, { recursive: true })
-  const name = configPath ? basename(configPath, '.dart').replaceAll('.', '_') : 'defaults'
-  const bootstrap = join(dir, `${name}.bootstrap.dart`)
-  const from = (path: string) => posix(relative(dir, path))
   const source = [
-    '// Generated by reeval: imports the config and every eval file for the Dart runner.',
-    "import 'package:reeval/runner.dart';",
-    ...(configPath ? [`import '${from(configPath)}' as config;`] : []),
-    ...evals.map((file, i) => `import '${from(join(root, file))}' as e${i};`),
+    '// Generated by reeval for each run: the eval files it found. Each worker runs this with',
+    "// `dart run`, and it spawns the worker's file in an isolate of its own.",
+    "import 'package:reeval/host.dart';",
     '',
-    'Future<void> main(List<String> args) => runReeval(',
-    '  args,',
-    ...(configPath ? ['  config: config.main,'] : []),
-    '  files: {',
-    ...evals.map((file, i) => `    '${posix(file)}': e${i}.main,`),
-    '  },',
-    ');',
+    'Future<void> main(List<String> args) => runHost(args, files: const [',
+    ...files
+      .filter((file) => file.endsWith('.dart'))
+      .map((file) => `  '${relativeFile(root, file)}',`),
+    ']);',
     '',
   ].join('\n')
+  const bootstrap = join(root, BOOTSTRAP)
   if (!existsSync(bootstrap) || readFileSync(bootstrap, 'utf8') !== source) {
-    writeFileSync(bootstrap, source)
+    mkdirSync(join(root, '.dart_tool/reeval'), { recursive: true })
+    writeFileSync(`${bootstrap}.tmp`, source)
+    renameSync(`${bootstrap}.tmp`, bootstrap)
   }
-
-  const kernel = process.env.REEVAL_DART_COMPILE === 'kernel'
-  const hash = createHash('sha256')
-    .update(source)
-    .update(kernel ? 'kernel' : 'exe')
-  const sources = [
-    ...(await glob(['**/*.dart'], { cwd: root, ignore: IGNORED, absolute: true })),
-    ...pathPackages(root).flatMap((pkg) => dartFilesUnder(join(pkg, 'lib'))),
-  ].sort()
-  for (const file of [...sources, lock]) hash.update(file).update(readFileSync(file))
-  const id = hash.digest('hex').slice(0, 16)
-  const output = join(dir, `${name}-${id}.${kernel ? 'dill' : 'exe'}`)
-  if (!existsSync(output)) {
-    const started = performance.now()
-    const compiled = await dart(
-      ['compile', kernel ? 'kernel' : 'exe', bootstrap, '-o', output],
-      root,
-    )
-    if (compiled.exitCode !== 0) {
-      throw new UsageError(
-        `The Dart evals don't compile (dart compile ${kernel ? 'kernel' : 'exe'}):\n${(compiled.stdout + compiled.stderr).trim()}`,
-      )
-    }
-    log(`Compiled the Dart evals in ${((performance.now() - started) / 1000).toFixed(1)}s`)
-  }
-  return kernel ? ['dart', output] : [output]
+  return process.env.REEVAL_DART_RUN === 'direct' ? ['dart', BOOTSTRAP] : ['dart', 'run', BOOTSTRAP]
 }

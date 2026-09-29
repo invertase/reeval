@@ -45,25 +45,31 @@ void main() {
     expect(() => reeval.evaluate('x', (t) async {}), throwsStateError);
   });
 
-  test('defineConfig emits the binary option keys, without nulls', () {
-    final config = reeval.defineConfig(
-      sandbox: reeval.docker(from: 'dart:stable'),
-      judge: reeval.Judge.model('google/gemini-3.8-flash', threshold: 0.8),
-      env: {
-        'KEY': reeval.secret(hosts: ['api.example.com']),
-      },
-    );
-    expect(config.toJson(), {
-      'include': ['evals/**/*_eval.dart'],
-      'sandbox': {'kind': 'docker', 'from': 'dart:stable'},
-      'judge': {'model': 'google/gemini-3.8-flash', 'threshold': 0.8},
-      'env': {
-        'KEY': {
-          'kind': 'secret',
-          'hosts': ['api.example.com'],
+  test('per-eval overrides emit the binary option keys, without nulls', () {
+    final declared = declare(() {
+      reeval.evaluate(
+        'in docker',
+        (t) async {},
+        sandbox: reeval.docker(from: 'dart:stable'),
+        judge: reeval.Judge.model('google/gemini-3.8-flash', threshold: 0.8),
+        env: {
+          'KEY': reeval.secret(hosts: ['api.example.com']),
         },
-      },
+      );
     });
+    expect(
+      (declared.tree['children'] as List).single,
+      containsPair('options', {
+        'sandbox': {'kind': 'docker', 'from': 'dart:stable'},
+        'judge': {'model': 'google/gemini-3.8-flash', 'threshold': 0.8},
+        'env': {
+          'KEY': {
+            'kind': 'secret',
+            'hosts': ['api.example.com'],
+          },
+        },
+      }),
+    );
   });
 
   test('a failed plain-value expectation carries both values for the diff', () {

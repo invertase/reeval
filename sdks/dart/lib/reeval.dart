@@ -3,7 +3,6 @@ library;
 
 export 'package:matcher/matcher.dart';
 
-export 'src/config.dart' show ConfigContext, Profile, ReevalConfig, configContext, defineConfig;
 export 'src/context.dart'
     show
         AbortedError,

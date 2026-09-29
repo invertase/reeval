@@ -4,6 +4,7 @@
 import { availableParallelism } from 'node:os'
 import { join } from 'node:path'
 import { stripVTControlCharacters } from 'node:util'
+import { prepareDartHost } from '../dart/project.ts'
 import { UsageError } from '../errors.ts'
 import { attemptKey, evalId, relativeFile } from '../ids.ts'
 import { ownVersion, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
@@ -68,6 +69,10 @@ export async function runEngine(
   const specs = filterFiles(files, pathFilters, root)
   if (specs.length === 0)
     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+  // Every worker for a Dart file runs the same bootstrap, written (and packages resolved) once.
+  if (specs.some((file) => file.endsWith('.dart'))) {
+    process.env.REEVAL_DART_RUNNER = JSON.stringify(await prepareDartHost(root, specs))
+  }
 
   // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
   const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
@@ -105,6 +110,18 @@ export async function runEngine(
     }
   })
   if (usage) throw new UsageError(usage)
+  // A Dart file that fails to load (it doesn't compile, in an isolate of its own) fails the run as
+  // an unhandled error, and the other files run, as a load error while running does.
+  const loadErrors: string[] = []
+  for (const [message, rels] of failed) {
+    const dart = rels.filter((rel) => rel.endsWith('.dart'))
+    for (const rel of dart)
+      loadErrors.push(`${rel} failed to load, so its evals didn't run: ${message}`)
+    const rest = rels.filter((rel) => !rel.endsWith('.dart'))
+    if (rest.length) failed.set(message, rest)
+    else failed.delete(message)
+  }
+  for (const error of loadErrors) process.stderr.write(`reeval: ${error}\n`)
   // A file that fails to load registers none of its evals: running the rest would drop them.
   if (failed.size) {
     const lines = [...failed]
@@ -130,8 +147,23 @@ export async function runEngine(
     ? collected.filter(({ rel, tests }) => tests.some((t) => matchesName(identify(rel, t))))
     : collected
   if (picked.length === 0)
-    return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
-  return runFiles({ ...options, spawn, entry, hide, workers, collected: picked, matchesName })
+    return {
+      evals: [],
+      unhandledErrors: loadErrors,
+      cancelled: false,
+      noFiles: loadErrors.length === 0,
+      stopped: false,
+    }
+  return runFiles({
+    ...options,
+    spawn,
+    entry,
+    hide,
+    workers,
+    collected: picked,
+    matchesName,
+    loadErrors,
+  })
 }
 
 /** Who a collected test is: its eval id, attempt key, groups and name. */
@@ -183,6 +215,8 @@ type RunInput = EngineOptions & {
   workers: number
   collected: Collected[]
   matchesName: (e: ReturnType<typeof identify>) => boolean
+  /** Dart files that failed to load, reported as unhandled errors. */
+  loadErrors: string[]
 }
 
 type FileRun = {
@@ -197,7 +231,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
   const specs = collected.map((c) => c.file)
   const root = run.config.root
   const emit = input.onEvent ?? (() => {})
-  const unhandledErrors: string[] = []
+  const unhandledErrors: string[] = [...input.loadErrors]
   const live = new Set<WorkerProcess>()
   const byFile = new Map<string, FileRun>()
   // Every file in the first round asks for its leases before any is granted, so the first
