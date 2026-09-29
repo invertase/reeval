@@ -47,6 +47,7 @@ async function collected(root: string, declare: () => void) {
   }
 }
 
+const plain = defineEnvironment('plain', {})
 const skill = defineEnvironment('skill', { rules: 'Use the house style.' })
 
 function declarations() {
@@ -56,7 +57,7 @@ function declarations() {
       evaluate('b', async () => {})
     })
     group('both', { harness: { add: cursor({ model: 'composer-2', id: 'fast' }) } }, () => {
-      evaluate('c', { compare: [skill] }, async () => {})
+      evaluate('c', { compare: { baseline: plain, variants: [skill] } }, async () => {})
     })
   })
   evaluate('d', { timeout: '2m', egress: 'deny-all', environment: skill }, async () => {})
@@ -115,7 +116,7 @@ test('a tree through JSON, declared again, plans the same tests as the calls', a
       'run outer › a [fake/-/docker#1]',
       'run outer › a [fake/-/docker#2]',
       'skip outer › skipped › b [fake/-/docker#1]',
-      'run outer › both › c [fake/-/docker#1]',
+      'run outer › both › c [fake/plain/docker#1]',
     ],
   )
 })

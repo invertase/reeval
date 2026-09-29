@@ -5,7 +5,7 @@ evaluate('a pinned subdirectory', { environment: pinned }, async () => {})
 evaluate('the default branch warns', { environment: moving }, async () => {})
 evaluate(
   'a variant swaps the starting code',
-  { environment: pinned, compare: [next] },
+  { compare: { baseline: pinned, variants: [next] } },
   async () => {},
 )
 evaluate('no workspace', async () => {})

@@ -39,7 +39,7 @@ evals/offline.eval.ts › works offline           2          —         1     2
 
 Hosts are names or IPv4 addresses, without a scheme or port. `*.example.com` matches subdomains, not `example.com` itself, and `*.com` is refused. `DEFAULT_EGRESS_ALLOW` is the package registries and GitHub, for an allowlist that still installs.
 
-Each level replaces the one before: the config, a profile's defaults, the environment (an `extend` child's replaces its parent's), groups, then the eval. A `compare` variant's own policy applies to its cell.
+Each level replaces the one before: the config, a profile's defaults, the environment (an `extendEnvironment` child's replaces its parent's), groups, then the eval. A compare variant runs as its own environment, so its policy is the one that cell uses.
 
 ## Automatic hosts
 

@@ -5,7 +5,7 @@ const gemini = defineEnvironment('gemini', ({ secret }) => ({
   env: { GEMINI_API_KEY: secret.fromEnv('GEMINI_API_KEY', { hosts: secret.hosts.gemini }) },
 }))
 
-// A later layer replaces a variable: the variant brokers what the control has as its value.
+// The variant is its own environment: it brokers the key the control holds in the clear.
 const plain = defineEnvironment('plain', ({ secret }) => ({ env: { API_KEY: secret() } }))
 const brokered = defineEnvironment('brokered', ({ secret }) => ({
   env: {
@@ -24,7 +24,11 @@ const docs = defineEnvironment('docs', ({ mcp, secret }) => ({
 }))
 
 evaluate('a preset host', { environment: gemini }, async () => {})
-evaluate('a variant brokers it', { environment: plain, compare: [brokered] }, async () => {})
+evaluate(
+  'a variant brokers it',
+  { compare: { baseline: plain, variants: [brokered] } },
+  async () => {},
+)
 evaluate('MCP headers go to their server', { environment: docs }, async () => {})
 evaluate(
   'the fake sandbox gets placeholders too, and no warning',

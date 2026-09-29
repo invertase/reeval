@@ -8,15 +8,19 @@ A skill is only worth shipping if agents do better with it. `compare` runs the s
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const withHouseGreeting = defineEnvironment(
+export const plain = defineEnvironment('plain', {})
+
+export const withHouseGreeting = plain.extendEnvironment(
   'with-house-greeting',
-  ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }),
+  ({ skill }) => ({
+    skills: [skill.local('../skills/house-greeting')],
+  }),
 )
 ```
 
 ```ts title="evals/skill.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
-import { withHouseGreeting } from './environments.ts'
+import { plain, withHouseGreeting } from './environments.ts'
 
 const greetAda = `node -e "import('./greet.js').then((m) => {
   const greet = m.greet ?? m.default?.greet ?? m.default
@@ -27,7 +31,10 @@ const greetAda = `node -e "import('./greet.js').then((m) => {
 
 group(
   'house greeting',
-  { compare: [withHouseGreeting], pin: ['compare'] },
+  {
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    pin: ['compare'],
+  },
   () => {
     evaluate('greets in the house style', async (t) => {
       await t.send(
@@ -74,7 +81,7 @@ Summary
  evals/skill.eval.ts
    house greeting
      ✓ greets in the house style      2/4 · 100% gated  4 attempts
-         cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+         cursor:composer-2.5/plain/docker               control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
            effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 …
@@ -92,18 +99,56 @@ The eval line reads `2/4 100%`: two of the four attempts passed, but only the va
 
 ```mermaid
 flowchart LR
-  E[greets in the house style] --> C["control: no environment"]
+  E[greets in the house style] --> C["control: plain"]
   E --> V["variant: with-house-greeting"]
   C --> C1[attempt 1] & C2[attempt 2]
   V --> V1[attempt 1] & V2[attempt 2]
 ```
 
-The control runs the eval's own environment, here none. Each variant runs the control's environment extended with its own, with the same prompt and checks. Each is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
+`baseline` is the control. Each variant runs as that environment on its own, with the same prompt and checks. `compare` does not layer, inherit or extend. Each is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
+
+Share setup before compare, with `extendEnvironment`. The child keeps the parent's layers and wins on shared keys. The house-greeting variant above is `plain` plus the skill. Do not set `environment` on the same object as a compare object. A parent `environment` is allowed when the eval only sets `compare`, and reeval does not apply that inherited environment.
+
+## Two stacks, not a layer
+
+Name both arms yourself when neither should inherit the other:
+
+```ts
+const firebaseAuth = defineEnvironment('firebase-auth', {
+  files: { 'AGENTS.md': 'Use the Firebase Auth SDK.\n' },
+})
+const firebaseUi = defineEnvironment('firebase-ui', {
+  files: { 'AGENTS.md': 'Use the FirebaseUI library.\n' },
+})
+
+group(
+  'email sign-in',
+  {
+    compare: {
+      baseline: firebaseAuth,
+      variants: [firebaseUi],
+      minLift: 0,
+    },
+    runs: 5,
+  },
+  () => {
+    /* same prompt and checks */
+  },
+)
+```
+
+Lift and effort still pair each variant with the baseline. They do not pair variants with each other.
 
 ## Choose which cells gate
 
 ```ts
-{ compare: { variants: [withHouseGreeting], gate: 'all' } }
+{
+  compare: {
+    baseline: plain,
+    variants: [withHouseGreeting],
+    gate: 'all',
+  },
+}
 ```
 
 By default only variant cells decide pass or fail. The control is expected to do worse, so its misses print in their own `Expected misses, not gated` section, one line of why each, never under `Failures`, and never break CI. `gate: 'all'` gates the control too, and `'none'` only reports.
@@ -111,7 +156,10 @@ By default only variant cells decide pass or fail. The control is expected to do
 ## Gate on a pass rate
 
 ```ts
-{ compare: [withHouseGreeting], gate: { passRate: 0.8 } }
+{
+  compare: { baseline: plain, variants: [withHouseGreeting] },
+  gate: { passRate: 0.8 },
+}
 ```
 
 A cell passes only when every attempt passes, by default. That gets harder as `runs` grows, even for an agent that's no worse, which is what the plan's hint says. `gate: { passRate: 0.8 }` passes a cell when at least 80% of its attempts pass. Infra errors don't count either way.
@@ -119,7 +167,13 @@ A cell passes only when every attempt passes, by default. That gets harder as `r
 ## Require a minimum lift
 
 ```ts
-{ compare: { variants: [withHouseGreeting], minLift: 0 } }
+{
+  compare: {
+    baseline: plain,
+    variants: [withHouseGreeting],
+    minLift: 0,
+  },
+}
 ```
 
 `minLift` is in points from -1 to 1. It fails a variant cell when the lower bound of its interval is below it, so `minLift: 0` means "confidently no worse than the control".

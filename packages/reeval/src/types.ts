@@ -538,14 +538,17 @@ export type EnvironmentLayer = { name: string; spec: EnvironmentSpec }
 
 /**
  * What an eval runs in: skills, MCP servers, files, rules, variables, secrets and setup. Plain
- * data (`layers` root first), plus a non-enumerable `extend`; see `defineEnvironment`.
+ * data (`layers` root first), plus a non-enumerable `extendEnvironment`; see `defineEnvironment`.
  */
 export type Environment = {
   readonly kind: 'environment'
   readonly name: string
   readonly layers: readonly EnvironmentLayer[]
-  /** A child environment layered on this one; wherever it sets a key this one has, it wins. */
-  extend(name: string, spec: EnvironmentInput): Environment
+  /**
+   * A child environment layered on this one; wherever it sets a key this one has, it wins.
+   * This is how two `compare` arms share setup: `compare` itself never layers.
+   */
+  extendEnvironment(name: string, spec: EnvironmentInput): Environment
 }
 
 /** Typed helpers for environment specs, passed to `defineEnvironment` and `extend` callbacks. */
@@ -632,19 +635,23 @@ export type HarnessOption =
 
 export type CompareGate = 'variants' | 'all' | 'none'
 
-/** Variants run next to the inherited environment (the control), with the same prompt and checks. */
-export type CompareOptions<E = Environment> =
-  | E[]
-  | {
-      variants: E[]
-      /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
-      gate?: CompareGate
-      /** Lift in points from -1 to 1; a variant cell below it fails. */
-      minLift?: number
-      /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
-      harness?: Array<string | HarnessDescriptor>
-    }
-  | false
+/**
+ * The baseline and each variant run as their own environments, with the same prompt and checks.
+ * `compare` does not layer them. Share setup first with `environment.extendEnvironment`.
+ * `false` is not a value here: a profile turns compare off with `limit.compare`.
+ */
+export type CompareOptions<E = Environment> = {
+  /** The control. Not layered under the variants, and not the eval's `environment`. */
+  baseline: E
+  /** Other environments, each planned and run as itself. */
+  variants: E[]
+  /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
+  gate?: CompareGate
+  /** Lift in points from -1 to 1; a variant cell below it fails. */
+  minLift?: number
+  /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
+  harness?: Array<string | HarnessDescriptor>
+}
 
 export type PinnableKey = 'harness' | 'runs' | 'compare'
 
@@ -657,13 +664,14 @@ export type GatePolicy = 'all' | { passRate: number }
 /** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
 export type CellGate = GatePolicy | 'none'
 
-export type EvalOptions = {
+/** A compare object: `baseline` and `variants`. Same as `CompareOptions`. */
+export type CompareSpec<E = Environment> = CompareOptions<E>
+
+/** Options other than `environment` and `compare`, which are exclusive of each other. */
+type EvalOptionFields = {
   /** The only list: each harness is its own cell. */
   harness?: HarnessOption
   sandbox?: SandboxDescriptor
-  /** What the eval runs in; the control of `compare`. */
-  environment?: Environment
-  compare?: CompareOptions
   /** Attempts per cell. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -682,21 +690,39 @@ export type EvalOptions = {
   /** Keys a profile's `limit` may not narrow for this group or eval. */
   pin?: PinnableKey[]
 }
+
+/**
+ * One or the other. `compare: false` is not an option here: a profile's `limit.compare: false`
+ * strips variants. A parent `environment` and a child that only sets `compare` are two objects,
+ * so that cascade is allowed; the inherited environment is not applied.
+ */
+type EnvironmentOrCompare<E> =
+  | {
+      /** What this group or eval runs in. Not together with `compare`. */
+      environment?: E
+      compare?: never
+    }
+  | {
+      /** Forbidden beside `compare`. The compare object names every arm. */
+      environment?: never
+      compare: CompareSpec<E>
+    }
+
+export type EvalOptions = EvalOptionFields & EnvironmentOrCompare<Environment>
 export type GroupOptions = EvalOptions
 
 /**
  * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model
- * by name or a fake judge, and environments without `extend`.
+ * by name or a fake judge, and environments without `extend`. The same `environment` / compare
+ * object split as `EvalOptions`.
  */
-export type EvalOptionsData = Omit<EvalOptions, 'harness' | 'judge' | 'environment' | 'compare'> & {
+export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
   harness?: HarnessData
   judge?: ConfigJudgeOptions
-  environment?: EnvironmentData
-  compare?: CompareOptions<EnvironmentData>
-}
+} & EnvironmentOrCompare<EnvironmentData>
 
-/** An `Environment` as data, as JSON carries it: without `extend`. */
-export type EnvironmentData = Omit<Environment, 'extend'>
+/** An `Environment` as data, as JSON carries it: without `extendEnvironment`. */
+export type EnvironmentData = Omit<Environment, 'extendEnvironment'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
@@ -897,7 +923,7 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With
- * `compare`, the control runs the inherited environment and each variant runs it extended.
+ * `compare`, the control is `baseline` and each variant is that environment on its own.
  */
 export type Cell = {
   key: string
@@ -912,7 +938,7 @@ export type Cell = {
 /** An environment as it was applied, without secret values. */
 export type EnvironmentRecord = {
   name: string
-  /** The environment this one extends (for a variant cell, the control), else null. */
+  /** The previous `extendEnvironment` layer's name, else null. */
   parent: string | null
   /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
   overrides: string[]
@@ -1042,11 +1068,18 @@ export type EvalRecord = {
   servedModels?: string[] | null
 }
 
+/** Which environment ran as the control, so the studio can show it. */
+export type EvalCompareMeta = {
+  baseline: string
+}
+
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */
 export type EvalPlan = {
   harnesses: number
   /** Variants run, of those the eval compares; null without `compare`. */
   variants: { run: number; of: number } | null
+  /** Set when the eval compares variant cells. */
+  compare?: EvalCompareMeta
   runs: number
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy

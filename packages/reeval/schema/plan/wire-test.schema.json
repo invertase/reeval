@@ -367,6 +367,15 @@
         }
       ]
     },
+    "EvalCompareMeta": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "string"
+        }
+      },
+      "required": ["baseline"]
+    },
     "EvalPlan": {
       "type": "object",
       "properties": {
@@ -378,6 +387,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "compare": {
+          "$ref": "#/$defs/EvalCompareMeta"
         },
         "egress": {
           "type": "array",

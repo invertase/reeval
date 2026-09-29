@@ -12,7 +12,9 @@ The server goes in an [environment](/guide/environments). A `compare` runs the e
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const withDocsMcp = defineEnvironment(
+export const plain = defineEnvironment('plain', {})
+
+export const withDocsMcp = plain.extendEnvironment(
   'with-docs-mcp',
   ({ mcp, secret }) => ({
     mcp: {
@@ -28,11 +30,15 @@ export const withDocsMcp = defineEnvironment(
 
 ```ts title="evals/docs-mcp.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
-import { withDocsMcp } from './environments.ts'
+import { plain, withDocsMcp } from './environments.ts'
 
 group(
   'acme docs MCP',
-  { compare: [withDocsMcp], runs: 3, gate: { passRate: 0.6 } },
+  {
+    compare: { baseline: plain, variants: [withDocsMcp] },
+    runs: 3,
+    gate: { passRate: 0.6 },
+  },
   () => {
     evaluate('looks up the latest SDK version', async (t) => {
       const turn = await t.send(
@@ -178,7 +184,7 @@ Summary
 
 - **A published stdio server:** `mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0'])`. Pin the version, and give its env secrets `hosts` to broker them: `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })`.
 - **Check the answer, not the call:** drop the tool check and add `t.judge('Does the reply name 4.2.0 as the latest version?')`.
-- **Server plus docs skill:** `compare: [withDocsMcp, withDocsSkill]` compares both against the same control, and `withDocsMcp.extend('mcp-and-skill', …)` adds a cell with both.
+- **Server plus docs skill:** `compare: { baseline: plain, variants: [withDocsMcp, withDocsSkill] }` compares both against the same control, and `withDocsMcp.extendEnvironment('mcp-and-skill', …)` adds a cell with both.
 - **Every harness:** set `harness: [cursor(…), claudeCode(…)]`. The `mcp__<server>__<tool>` name is the same on each (see [Compare agents](/recipes/compare-agents)).
 
 ## Next

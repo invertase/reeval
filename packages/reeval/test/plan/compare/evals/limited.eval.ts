@@ -1,6 +1,14 @@
 import { evaluate } from 'reeval'
-import { skilled, terse } from './envs.ts'
+import { base, skilled, terse } from './envs.ts'
 
-evaluate('two variants', { compare: [skilled, terse] }, async () => {})
-evaluate('one variant', { compare: [skilled] }, async () => {})
-evaluate('pinned', { compare: [skilled, terse], pin: ['compare'] }, async () => {})
+evaluate(
+  'two variants',
+  { compare: { baseline: base, variants: [skilled, terse] } },
+  async () => {},
+)
+evaluate('one variant', { compare: { baseline: base, variants: [skilled] } }, async () => {})
+evaluate(
+  'pinned',
+  { compare: { baseline: base, variants: [skilled, terse] }, pin: ['compare'] },
+  async () => {},
+)

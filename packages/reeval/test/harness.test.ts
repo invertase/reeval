@@ -46,7 +46,7 @@ import { applyTransformations, hostAllowed, onEndpoint } from '@reeval/sandbox-d
 import { malformedCredentials, missingCredentials, resolveConfig } from '../src/config.ts'
 import { plannedEgress } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
-import { defineEnvironment, layered } from '../src/environment.ts'
+import { applied, defineEnvironment } from '../src/environment.ts'
 import { observed, tokenUsage } from '../src/harness/agent.ts'
 import {
   AGENTS,
@@ -185,8 +185,7 @@ describe('the Claude Code harness', () => {
       rules: 'Always write tests.',
       files: { 'notes.txt': 'hi' },
     })
-    const forFile = (file: string) =>
-      resolveEnvironment(layered(undefined, house), {}, '/p', 'e', file)
+    const forFile = (file: string) => resolveEnvironment(applied(house), {}, '/p', 'e', file)
     const claude = await forFile('CLAUDE.md')
     const composer = await forFile('AGENTS.md')
     const rulesAt = (r: Awaited<typeof claude>) =>
@@ -202,7 +201,7 @@ describe('the Claude Code harness', () => {
       rules: 'Never write tests.',
       files: { 'notes.txt': 'hi' },
     })
-    const changed = await resolveEnvironment(layered(undefined, edited), {}, '/p', 'e', 'CLAUDE.md')
+    const changed = await resolveEnvironment(applied(edited), {}, '/p', 'e', 'CLAUDE.md')
     assert.notEqual(changed.record.digest, claude.record.digest, 'the rules are in the digest')
   })
 
@@ -211,7 +210,7 @@ describe('the Claude Code harness', () => {
       files: { 'CLAUDE.md': 'from files' },
       rules: 'from rules',
     })
-    const r = await resolveEnvironment(layered(undefined, env), {}, '/p', 'e', 'CLAUDE.md')
+    const r = await resolveEnvironment(applied(env), {}, '/p', 'e', 'CLAUDE.md')
     assert.equal(r.files.findLast((f) => f.path === 'CLAUDE.md')?.content, 'from rules')
   })
 
@@ -558,7 +557,7 @@ describe('mcp.sse', () => {
     const env = defineEnvironment('events', ({ mcp }) => ({
       mcp: { events: mcp.sse('http://events.example/sse', { headers: { A: 'b' } }) },
     }))
-    const { mcp } = await resolveEnvironment(layered(undefined, env), {}, '/p', 'e', 'AGENTS.md')
+    const { mcp } = await resolveEnvironment(applied(env), {}, '/p', 'e', 'AGENTS.md')
     assert.deepEqual(mcp, {
       events: { transport: 'sse', url: 'http://events.example/sse', headers: { A: 'b' } },
     })

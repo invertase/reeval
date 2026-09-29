@@ -7,8 +7,13 @@ export type EvalExpectation = {
   outcome: Outcome
   /** Every attempt id, exactly: an eval that silently didn't register or run fails this. */
   attempts: string[]
-  /** For a failing eval: why every attempt failed. */
+  /** For a failing eval: why the failing attempts failed. */
   error?: { kind: ErrorKind; message: RegExp }
+  /**
+   * Attempt ids that must pass with no error. With `error` set, every other attempt must match
+   * it. A compare canary fails on the variant and leaves the ungated control clean.
+   */
+  clean?: string[]
 }
 
 export type RunExpectation = {
@@ -41,7 +46,7 @@ export function expectRun(cli: CliRun, run: RunRecord, expected: RunExpectation)
       detail,
     )
     for (const a of e.attempts) {
-      if (!want.error) {
+      if (!want.error || want.clean?.includes(a.id)) {
         assert.equal(a.error, null, detail)
         continue
       }

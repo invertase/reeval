@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import type { Substitution } from '@reeval/sandbox-docker'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
-import { defineEnvironment, layered, unbrokeredSecrets } from '../src/environment.ts'
+import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
@@ -22,7 +22,7 @@ process.env.REEVAL_UNIT_OTHER = OTHER
 const PLACEHOLDER = /^reeval_secret_[0-9A-Za-z]{32}$/
 
 const resolve = (input: EnvironmentInput) =>
-  resolveEnvironment(layered(undefined, defineEnvironment('e', input)), {}, '/p', 'e', 'AGENTS.md')
+  resolveEnvironment(applied(defineEnvironment('e', input)), {}, '/p', 'e', 'AGENTS.md')
 
 describe('resolving brokered secrets', () => {
   test('the sandbox gets a placeholder, and the gateway the value on its hosts', async () => {
@@ -301,7 +301,7 @@ describe('unbrokered secrets', () => {
 
   test('a later layer that brokers a variable leaves nothing unbrokered', () => {
     const parent = defineEnvironment('parent', ({ secret }) => ({ env: { KEY: secret() } }))
-    const child = parent.extend('child', ({ secret }) => ({
+    const child = parent.extendEnvironment('child', ({ secret }) => ({
       env: { KEY: secret({ hosts: ['api.example.com'] }) },
     }))
     assert.deepEqual(unbrokeredSecrets({}, child.layers), [])
@@ -311,7 +311,7 @@ describe('unbrokered secrets', () => {
     const parent = defineEnvironment('parent', ({ secret }) => ({
       env: { KEY: secret({ hosts: ['api.example.com'] }) },
     }))
-    const child = parent.extend('child', ({ secret }) => ({ env: { KEY: secret() } }))
+    const child = parent.extendEnvironment('child', ({ secret }) => ({ env: { KEY: secret() } }))
     assert.deepEqual(unbrokeredSecrets({}, child.layers), [{ label: 'KEY', from: 'KEY' }])
   })
 
@@ -338,7 +338,7 @@ describe('unbrokered secrets', () => {
         }),
       },
     }))
-    const attempt = { environment: layered(undefined, env) } as PlannedAttempt
+    const attempt = { environment: applied(env) } as PlannedAttempt
     assert.deepEqual(secretVarsIn({}, attempt), ['ACME_USER', 'ACME_PASS'])
     const https = defineEnvironment('e', ({ secret, mcp }) => ({
       mcp: {
@@ -348,7 +348,7 @@ describe('unbrokered secrets', () => {
         }),
       },
     }))
-    assert.deepEqual(brokeredIn({}, { environment: layered(undefined, https) } as PlannedAttempt), [
+    assert.deepEqual(brokeredIn({}, { environment: applied(https) } as PlannedAttempt), [
       'mcp.remote.headers.auth → mcp.example.com',
     ])
     assert.deepEqual(unbrokeredSecrets({}, env.layers), [
@@ -360,7 +360,7 @@ describe('unbrokered secrets', () => {
   test('only Docker attempts count', () => {
     const env = defineEnvironment('e', ({ secret }) => ({ env: { PLAIN: secret() } }))
     const attempt = (kind: 'fake' | 'docker') =>
-      ({ sandbox: { kind }, environment: layered(undefined, env) }) as PlannedAttempt
+      ({ sandbox: { kind }, environment: applied(env) }) as PlannedAttempt
     assert.deepEqual(unbrokered({}, [attempt('fake')]), [])
     assert.deepEqual(unbrokered({}, [attempt('docker'), attempt('docker')]), [
       { label: 'PLAIN', from: 'PLAIN' },

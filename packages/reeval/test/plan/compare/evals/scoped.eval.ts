@@ -1,4 +1,8 @@
 import { evaluate } from 'reeval'
-import { skilled } from './envs.ts'
+import { base, skilled } from './envs.ts'
 
-evaluate('variant on b only', { compare: { variants: [skilled], harness: ['b'] } }, async () => {})
+evaluate(
+  'variant on b only',
+  { compare: { baseline: base, variants: [skilled], harness: ['b'] } },
+  async () => {},
+)

@@ -229,15 +229,33 @@ export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string
 }
 
 /** Options from their data forms: environments become `Environment`s again. */
-function optionsFrom({ environment, compare, ...rest }: EvalOptionsData): EvalOptions {
-  const variants = (list: EnvironmentData[]) => list.map(environmentFrom)
+function optionsFrom(data: EvalOptionsData): EvalOptions {
+  const { environment, compare, ...rest } = data
+  const asEnv = (env: EnvironmentData) => environmentFrom(env)
+  // A declaration may still carry `compare: false`. Keep it so checkOptions rejects it.
+  if ((compare as unknown) === false) {
+    return {
+      ...rest,
+      ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
+      compare: false,
+    } as unknown as EvalOptions
+  }
+  if (compare !== undefined) {
+    const revived = {
+      ...rest,
+      compare: {
+        ...compare,
+        baseline: asEnv(compare.baseline),
+        variants: compare.variants.map(asEnv),
+      },
+    }
+    // Invalid data may set both. Keep `environment` so checkOptions names both keys.
+    return (
+      environment === undefined ? revived : { ...revived, environment: asEnv(environment) }
+    ) as EvalOptions
+  }
   return {
     ...rest,
-    ...(environment !== undefined && { environment: environmentFrom(environment) }),
-    ...(compare !== undefined && {
-      compare: Array.isArray(compare)
-        ? variants(compare)
-        : compare && { ...compare, variants: variants(compare.variants) },
-    }),
+    ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
   }
 }

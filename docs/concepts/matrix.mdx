@@ -35,12 +35,19 @@ export default defineConfig({
 ```
 
 ```ts title="evals/skill.eval.ts"
-group('house greeting', { compare: [withHouseGreeting], runs: 2 }, () => {
-  evaluate('greets in the house style', async (t) => {
-    await t.send('Create greet.js exporting greet(name) in our house style.')
-    await expect(t.exec(greetAda)).toSucceed()
-  })
-})
+group(
+  'house greeting',
+  {
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    runs: 2,
+  },
+  () => {
+    evaluate('greets in the house style', async (t) => {
+      await t.send('Create greet.js exporting greet(name) in our house style.')
+      await expect(t.exec(greetAda)).toSucceed()
+    })
+  },
+)
 ```
 
 That's 2 harnesses × (1 control + 1 variant) × 2 runs = 8 attempts in 4 cells. `--dry-run` shows it without keys or Docker:
@@ -114,9 +121,9 @@ reeval run --dry-run --json --config reeval.fake.config.ts skill
 …
       "cells": [
         {
-          "key": "fake/-/fake",
+          "key": "fake/plain/fake",
           "harness": "fake",
-          "environment": "-",
+          "environment": "plain",
           "sandbox": "fake",
           "role": "control",
           "gate": "none",

@@ -49,10 +49,19 @@ type Feature = {
   tiers: Tier[]
   /** The environment the evals run in: attempt ids are `fake/<env>/<sandbox>#1`. */
   env: string
+  /**
+   * Cell environments in plan order, when an eval runs more than one (a compare).
+   * Defaults to `[env]`.
+   */
+  cells?: string[]
+  /** Canary cell environments in plan order. Defaults to `cells`, then `[canaryEnv ?? env]`. */
+  canaryCells?: string[]
   /** What the canary's failure says: proof it failed on the check, not on setup. */
   canary: RegExp
   /** The canary's environment, when it needs another one; defaults to `env`. */
   canaryEnv?: string
+  /** Canary cell environments that must pass. The other canary attempts must match `canary`. */
+  canaryPass?: string[]
   /** When the check is that the attempt fails, e.g. an infra error; else it must pass. */
   lands?: Pick<EvalExpectation, 'outcome' | 'error'>
   /**
@@ -796,6 +805,27 @@ export const features: Feature[] = [
     canary: /expected null to be 'from home'/,
   },
   {
+    dir: 'compare/independent',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canaryPass: ['baseline'],
+    canary: /expected null to be 'baseline-only'/,
+    record: ({ run }) => {
+      assert.deepEqual(run.environments.map((e) => e.name).sort(), ['baseline', 'variant'])
+      const variant = run.environments.find((e) => e.name === 'variant')
+      assert.equal(variant?.parent, null)
+      assert.deepEqual(
+        variant?.files.map((f) => f.path),
+        ['from-variant.txt'],
+      )
+      assert.ok(
+        run.evals.every((e) => e.compare?.baseline === 'baseline'),
+        JSON.stringify(run.evals.map((e) => e.compare)),
+      )
+    },
+  },
+  {
     dir: 'env/files-binary',
     tiers: ['fake', 'docker'],
     env: 'binary-file',
@@ -1292,15 +1322,21 @@ function fixtureTests(tiers: Tier[]) {
         const sandbox = tier === 'fake' ? 'fake' : 'docker'
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'
+        const ids = (names: string[]) => names.map((env) => `${harness}/${env}/${sandbox}#1`)
         const { run, dir: runDir } = readRun(p.dir)
         expectRun(r, run, {
           code: 1,
           evals: {
-            lands: { outcome: 'pass', ...f.lands, attempts: [`${harness}/${f.env}/${sandbox}#1`] },
+            lands: {
+              outcome: 'pass',
+              ...f.lands,
+              attempts: ids(f.cells ?? [f.env]),
+            },
             canary: {
               outcome: 'fail',
-              attempts: [`${harness}/${f.canaryEnv ?? f.env}/${sandbox}#1`],
+              attempts: ids(f.canaryCells ?? f.cells ?? [f.canaryEnv ?? f.env]),
               error: { kind: 'assertion', message: f.canary },
+              ...(f.canaryPass ? { clean: ids(f.canaryPass) } : {}),
             },
           },
         })

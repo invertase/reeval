@@ -289,6 +289,10 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 
 <Property name="tags" type="string[]"></Property>
 
+<Property name="compare" type="EvalCompareMeta" optional>
+  The baseline environment, when the eval uses `compare`.
+</Property>
+
 <Property name="outcome" type="Outcome">
   Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.
 </Property>
@@ -553,7 +557,7 @@ One failed judge try that was retried, and the backoff before the next.
 
 ### Cell
 
-One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With `compare`, the control runs the inherited environment and each variant runs it extended.
+One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With `compare`, the control is `baseline` and each variant is that environment on its own.
 
 <Property name="key" type="string"></Property>
 
@@ -576,7 +580,7 @@ An environment as it was applied, without secret values.
 <Property name="name" type="string"></Property>
 
 <Property name="parent" type="string | null">
-  The environment this one extends (for a variant cell, the control), else null.
+  The previous `extendEnvironment` layer's name, else null.
 </Property>
 
 <Property name="overrides" type="string[]">

@@ -13,7 +13,7 @@ import {
   unenforceable,
 } from '../src/egress.ts'
 import { resolveEnvironment } from '../src/environment/resolve.ts'
-import { defineEnvironment, layered } from '../src/environment.ts'
+import { applied, defineEnvironment } from '../src/environment.ts'
 import { cascade, expand, type Resolved } from '../src/options.ts'
 import type { EgressPolicy, HarnessDescriptor } from '../src/types.ts'
 
@@ -163,7 +163,7 @@ describe('the environment digest', () => {
   const digest = async (egress?: EgressPolicy) =>
     (
       await resolveEnvironment(
-        layered(undefined, defineEnvironment('e', {})),
+        applied(defineEnvironment('e', {})),
         {},
         '/p',
         'e',
@@ -186,8 +186,8 @@ describe('the environment digest', () => {
 
   test("an extend child's policy is an override", async () => {
     const parent = defineEnvironment('p', { egress: 'deny-all' })
-    const child = parent.extend('c', { egress: { allow: ['a.example.com'] } })
-    const r = await resolveEnvironment(layered(undefined, child), {}, '/p', 'e', 'AGENTS.md')
+    const child = parent.extendEnvironment('c', { egress: { allow: ['a.example.com'] } })
+    const r = await resolveEnvironment(applied(child), {}, '/p', 'e', 'AGENTS.md')
     assert.deepEqual(r.record.overrides, ['egress'])
   })
 })

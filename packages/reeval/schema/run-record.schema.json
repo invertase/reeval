@@ -822,6 +822,15 @@
     "ErrorKind": {
       "enum": ["aborted", "assertion", "infra", "judge", "timeout"]
     },
+    "EvalCompareMeta": {
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "string"
+        }
+      },
+      "required": ["baseline"]
+    },
     "EvalEntry": {
       "type": "object",
       "properties": {
@@ -836,6 +845,9 @@
           "items": {
             "$ref": "#/$defs/CellRecord"
           }
+        },
+        "compare": {
+          "$ref": "#/$defs/EvalCompareMeta"
         },
         "file": {
           "type": "string"

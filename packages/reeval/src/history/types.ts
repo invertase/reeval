@@ -5,6 +5,7 @@ import type {
   CellGate,
   EgressRecord,
   EnvironmentRecord,
+  EvalCompareMeta,
   FileChange,
   Outcome,
   PhaseTimings,
@@ -172,6 +173,8 @@ export type EvalEntry = {
   /** The eval file and every local file it imports, directly or not, by content hash. */
   sources: Array<{ path: string; sha256: string }>
   tags: string[]
+  /** The baseline environment, when the eval uses `compare`. */
+  compare?: EvalCompareMeta
   /**
    * Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if
    * all were, else `pass`. An ungated cell's failures don't fail the eval.

@@ -18,21 +18,28 @@ export const base = defineEnvironment('base', ({ secret }) => ({
   egress: { allow: [...DEFAULT_EGRESS_ALLOW] },
 }))
 
-export const withSkill = base.extend('with-skill', ({ file, mcp, skill }) => ({
-  skills: [skill.local('./skills/house-style')],
-  rules: file('./rules/house.md'),
-  mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) },
-}))
+export const withSkill = base.extendEnvironment(
+  'with-skill',
+  ({ file, mcp, skill }) => ({
+    skills: [skill.local('./skills/house-style')],
+    rules: file('./rules/house.md'),
+    mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) },
+  }),
+)
 ```
 
-Use it with the `environment` option, or as a `compare` variant:
+Use it as `environment` when the eval does not compare. For a compare, pass the baseline and the variants. Share layers first with `extendEnvironment`; `compare` does not layer them:
 
 ```ts title="evals/style.eval.ts"
-group('house style', { environment: base, compare: [withSkill] }, () => {
-  evaluate('formats with tabs', async (t) => {
-    await t.send('Format src/index.ts.')
-  })
-})
+group(
+  'house style',
+  { compare: { baseline: base, variants: [withSkill] } },
+  () => {
+    evaluate('formats with tabs', async (t) => {
+      await t.send('Format src/index.ts.')
+    })
+  },
+)
 ```
 
 ## Signature
@@ -50,7 +57,7 @@ defineEnvironment(name, (helpers) => spec)
   The fields below, or a callback that gets `secret`, `skill`, `mcp`, `file` and `git` (see [Helpers](/reference/helpers)). The callback runs once, synchronously, when the file loads; returning a `Promise` is an error. Relative paths resolve against the file that calls `defineEnvironment`.
 </Property>
 
-It returns a frozen `Environment` with `name`, `layers` and an `extend` method.
+It returns a frozen `Environment` with `name`, `layers` and `extendEnvironment`.
 
 ## Fields
 
@@ -108,14 +115,14 @@ Every attempt applies an environment in the same order:
   </Step>
 </Steps>
 
-## extend
+## extendEnvironment
 
 ```ts
-parent.extend(name, spec)
-parent.extend(name, (helpers) => spec)
+parent.extendEnvironment(name, spec)
+parent.extendEnvironment(name, (helpers) => spec)
 ```
 
-`extend` is the only way to compose environments. The child's spec layers on its parent's:
+`extendEnvironment` is how two environments share setup. The child's spec layers on its parent's:
 
 | Field | When both set it |
 |---|---|
@@ -127,7 +134,7 @@ parent.extend(name, (helpers) => spec)
 | `egress` | The child's replaces the parent's |
 | `setup` | Concatenated, parent first |
 
-Every key the child replaced is listed in the environment's `overrides` in the record (`env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `mcp.docs`, `egress`). A `compare` variant runs as `control.extend(variant)`, so the same rules apply there.
+Every key the child replaced is listed in the environment's `overrides` in the record (`env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `mcp.docs`, `egress`). Call it before `compare`. A variant cell then runs as that environment alone.
 
 ## Refused fields
 
@@ -156,7 +163,7 @@ These stop the run with exit 2, prefixed by the eval file.
 | A bad file value | `files["a.txt"] in defineEnvironment("e") must be a string or file(path)` |
 | Bad rules | `rules in defineEnvironment("e") must be markdown or file(path)` |
 | A `workspace` that isn't from `git()` | `workspace in defineEnvironment("e") must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got "https://github.com/acme/app")` |
-| A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: [a, b]; the inherited environment is the control.` |
+| A list as `environment` | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` |
 
 A `workspace` whose repository, ref, directory or token doesn't work is reported before any attempt starts and fails only the attempts that use it, as infra errors (exit 3), like a sandbox image that failed to prepare; see [Errors](/reference/errors#git-workspaces). When an attempt starts, a missing secret, a skill directory without `SKILL.md`, or a failing setup step is an infra error for that attempt. See [Errors](/reference/errors).
 

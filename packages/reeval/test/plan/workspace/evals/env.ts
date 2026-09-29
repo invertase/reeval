@@ -9,6 +9,6 @@ export const moving = defineEnvironment('moving', ({ git }) => ({
   workspace: git('github:acme/template'),
 }))
 
-export const next = pinned.extend('next', ({ git }) => ({
+export const next = pinned.extendEnvironment('next', ({ git }) => ({
   workspace: git('https://github.com/acme/app/tree/v3.0.0/examples/basic'),
 }))

@@ -74,8 +74,9 @@ describe('studio data paths', () => {
 // A real history: three recorded runs of the fake agent (pass, fail, a control and a variant ×
 // two runs) and one scratch run.
 const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
+const plain = defineEnvironment('plain', {})
 const other = defineEnvironment('other', {})
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: [other], runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other] }, runs: 2 } : {}, () => {
   evaluate('writes hello', async (t) => {
     await t.send('write hello.txt')
     await expect(t.exec('test -f hello.txt')).toSucceed()
@@ -120,10 +121,13 @@ before(async () => {
 
 describe('run outcome and activity, as the CLI has them', () => {
   const skilled = `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
 const skilled = defineEnvironment('skilled', ({ skill }) => ({
   skills: [skill.inline({ name: 'ok', description: 'Writes ok.txt', content: 'Write ok.txt.' })],
 }))
-const compare = process.env.REEVAL_TEST_GATE_ALL ? { variants: [skilled], gate: 'all' as const } : [skilled]
+const compare = process.env.REEVAL_TEST_GATE_ALL
+  ? { baseline: plain, variants: [skilled], gate: 'all' as const }
+  : { baseline: plain, variants: [skilled] }
 evaluate('writes ok', { compare }, async (t) => {
   await t.send('write ok.txt')
   await expect(t.exec('test -f ok.txt')).toSucceed()
@@ -323,7 +327,7 @@ describe('view-models over a real history', () => {
     assert.deepEqual(
       rows.map((r) => [r.environment, r.role, r.gated, r.pass, r.runs, r.lift, r.attempts.length]),
       [
-        ['-', 'control', false, 2, 2, null, 2],
+        ['plain', 'control', false, 2, 2, null, 2],
         ['other', 'variant', true, 2, 2, 0, 2],
       ],
     )

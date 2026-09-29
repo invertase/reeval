@@ -64,23 +64,35 @@ export default defineConfig({
 
 ## Compare with a skill
 
-Give the agent a skill and check that it helps. The control runs without the environment and
-the variant runs with it, with the same prompt and the same checks:
+Give the agent a skill and check that it helps. `plain` is the baseline. The variant is
+that environment plus the skill, and compare runs the two apart, with the same prompt and
+the same checks:
 
 ```ts
 // evals/skill.eval.ts (trimmed from examples/hello)
 import { defineEnvironment, evaluate, expect, group } from 'reeval'
 
-const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) => ({
-  skills: [skill.local('../skills/house-greeting')],
-}))
+const plain = defineEnvironment('plain', {})
+const withHouseGreeting = plain.extendEnvironment(
+  'with-house-greeting',
+  ({ skill }) => ({
+    skills: [skill.local('../skills/house-greeting')],
+  }),
+)
 
-group('house greeting', { compare: [withHouseGreeting] }, () => {
-  evaluate('greets in the house style', async (t) => {
-    await t.send('Create greet.js exporting greet(name) that greets the person in our house style.')
-    await expect(t.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
-  })
-})
+group(
+  'house greeting',
+  { compare: { baseline: plain, variants: [withHouseGreeting] } },
+  () => {
+    evaluate('greets in the house style', async (t) => {
+      await t.send(
+        'Create greet.js exporting greet(name) that greets the person ' +
+          'in our house style.',
+      )
+      await expect(t.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
+    })
+  },
+)
 ```
 
 ```text
@@ -88,7 +100,7 @@ $ reeval run skill --runs 2
 plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 …
      ✓ greets in the house style      2/4 · 100% gated  4 attempts
-         cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+         cursor:composer-2.5/plain/docker                control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
            effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 ```

@@ -44,7 +44,12 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `evaluate("e") is declared twice in this file. …` | Give each eval its own name. For `evaluate.for`, put `$key`, `%s` or `%#` in the name. |
 | `evaluate("x") got two functions. Options must be a plain object; …` | Options are a plain object. Put secrets in an environment or the config's `env`. |
 | `sandbox takes one sandbox, not a list (…). Different toolchains need different checks, so write a separate eval per sandbox.` | One sandbox per eval. |
-| `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: [a, b]; the inherited environment is the control.` | Use `compare`. |
+| `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` | Use `compare`. |
+| `compare must be an object in evaluate("e"). Use compare: { baseline, variants: [...] }.` | Pass `{ baseline, variants }`, not a bare array. |
+| `compare.baseline in evaluate("e") must be an environment from defineEnvironment (got undefined).` | Set `baseline` to the control. Variants are not layered on it. |
+| `Unknown compare option "strategy" in evaluate("e")` | Drop `strategy`. Share setup with `extendEnvironment` before `compare`. |
+| `environment and compare can't both be set in evaluate("e")` | Drop `environment`. A parent `environment` can stay when only the child sets `compare`. |
+| `compare: false can't be set in evaluate("e")` | Omit `compare`, or pass `{ baseline, variants }`. A profile uses `limit.compare: false`. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |
 | `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (t) => { … })`. |
 | `evaluate.only isn't allowed in CI` | Remove the `.only` before pushing. |
