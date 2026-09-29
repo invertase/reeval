@@ -4,7 +4,8 @@
 # there on the host, and the judge returns a canned verdict. No credentials or Docker.
 #   --profile docker   the same fake agent in a sandbox built from the official Dart image
 #   --profile cursor   Cursor's agent in that sandbox, judged by Gemini (CURSOR_API_KEY and
-#                      GOOGLE_GENERATIVE_AI_API_KEY); build the image with reeval image build
+#                      GOOGLE_GENERATIVE_AI_API_KEY)
+# Build their image once with: REEVAL_PROFILE=docker reeval image build
 harness:
   kind: fake
   files:
