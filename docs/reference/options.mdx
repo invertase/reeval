@@ -6,11 +6,23 @@ description: Every option groups, evals, profiles and the config accept, and how
 `defineConfig`, `group` and `evaluate` take the same options. They cascade config → profile `defaults` → outer group → inner group → eval, then the profile's `limit` narrows them, then `--runs` overrides.
 
 ```ts title="evals/skill.eval.ts"
-group('house greeting', { compare: { variants: [withHouseGreeting] }, runs: 2, pin: ['compare'] }, () => {
-  evaluate('greets in the house style', { timeout: '10m', tags: ['skills'] }, async (t) => {
-    // …
-  })
-})
+group(
+  'house greeting',
+  {
+    compare: { baseline: plain, variants: [withHouseGreeting] },
+    runs: 2,
+    pin: ['compare'],
+  },
+  () => {
+    evaluate(
+      'greets in the house style',
+      { timeout: '10m', tags: ['skills'] },
+      async (t) => {
+        // …
+      },
+    )
+  },
+)
 ```
 
 ## Where each key is accepted
@@ -53,13 +65,14 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="environment" type="Environment">
-  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list: to compare environments, use `compare`. It's the control of `compare`. Default none.
+  What the eval runs in, from `defineEnvironment`, when it has no `compare`. **Replaces**. One environment, never a list. With `compare`, `baseline` is the control and this is ignored. Default none.
 </Property>
 
-<Property name="compare" type="Environment[] | { variants, gate?, minLift?, harness? } | false">
-  Variants to run next to the inherited environment, reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `false` opts out.
+<Property name="compare" type="{ baseline, variants, gate?, minLift?, harness? } | false">
+  A baseline and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `false` opts out. `compare` does not layer them.
 
-  - `variants`: environments. Each variant cell runs `control.extend(variant)`.
+  - `baseline`: the control, an environment from `defineEnvironment`.
+  - `variants`: the other environments. Each cell runs that environment alone.
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it.
   - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.

@@ -248,9 +248,6 @@
       },
       "required": ["kind", "model"]
     },
-    "CompareStrategy": {
-      "enum": ["extend", "peer"]
-    },
     "CursorHarnessDescriptor": {
       "type": "object",
       "properties": {
@@ -373,11 +370,11 @@
     "EvalCompareMeta": {
       "type": "object",
       "properties": {
-        "strategy": {
-          "$ref": "#/$defs/CompareStrategy"
+        "baseline": {
+          "type": "string"
         }
       },
-      "required": ["strategy"]
+      "required": ["baseline"]
     },
     "EvalPlan": {
       "type": "object",

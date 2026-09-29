@@ -30,8 +30,9 @@ describe('reeval query', () => {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/house-greeting/SKILL.md': skill('house-greeting'),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }))
-evaluate('greets', { compare: { variants: [skilled] }, runs: 3 }, async (t) => {
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 }, async (t) => {
   await t.send('go')
   await expect(t).toHaveFile('ok.txt')
 })
@@ -59,7 +60,7 @@ evaluate('greets', { compare: { variants: [skilled] }, runs: 3 }, async (t) => {
 
     const failing = await query(p.dir, 'SELECT * FROM failing_attempts')
     assert.equal(failing.length, 3, 'the control fails its three attempts')
-    assert.ok(failing.every((f) => f.cell_key === 'fake/-/fake' && f.skill === null))
+    assert.ok(failing.every((f) => f.cell_key === 'fake/plain/fake' && f.skill === null))
 
     const trend = await query(p.dir, 'eval_trend')
     assert.deepEqual(

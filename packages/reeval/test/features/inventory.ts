@@ -117,7 +117,8 @@ export const inventory: InventoryFeature[] = [
     id: 'compare',
     area: 'Config and selection',
     name: '`compare`: control, variants, lift and `minLift`',
-    plan: ['compare/control-and-variants', 'compare/peer-challengers'],
+    plan: ['compare/control-and-variants', 'compare/independent'],
+    fixtures: ['compare/independent'],
     tests: [
       options('variants run next to the control, lift is stored'),
       'reeval/test/results.test.ts › Newcombe',
@@ -508,9 +509,12 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'env.extend',
     area: 'Environments',
-    name: '`extend`, overrides and the environment digest',
+    name: '`extendEnvironment`, overrides and the environment digest',
     fixtures: ['env/setup-order'],
-    tests: [unit('layered environments and overrides'), harness('one environment has one digest')],
+    tests: [
+      unit('extendEnvironment layers and overrides; a separate environment does not'),
+      harness('one environment has one digest'),
+    ],
   },
   {
     id: 't.sandbox',

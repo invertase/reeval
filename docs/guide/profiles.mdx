@@ -51,7 +51,7 @@ An eval that sets `runs: 5` still runs five times under `nightly`, because defau
 ```ts title="evals/skill.eval.ts"
 group(
   'house greeting',
-  { compare: { variants: [withHouseGreeting] }, pin: ['compare'] },
+  { compare: { baseline: plain, variants: [withHouseGreeting] }, pin: ['compare'] },
   () => { /* … */ },
 )
 ```

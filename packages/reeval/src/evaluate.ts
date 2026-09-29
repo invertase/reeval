@@ -230,13 +230,19 @@ export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string
 
 /** Options from their data forms: environments become `Environment`s again. */
 function optionsFrom({ environment, compare, ...rest }: EvalOptionsData): EvalOptions {
-  const variants = (list: EnvironmentData[]) => list.map(environmentFrom)
+  const asEnv = (data: EnvironmentData) => environmentFrom(data)
   return {
     ...rest,
-    ...(environment !== undefined && { environment: environmentFrom(environment) }),
-    ...(compare !== undefined &&
-      compare !== false && {
-        compare: { ...compare, variants: variants(compare.variants) },
-      }),
+    ...(environment !== undefined && { environment: asEnv(environment) }),
+    ...(compare !== undefined && {
+      compare:
+        compare === false
+          ? false
+          : {
+              ...compare,
+              baseline: asEnv(compare.baseline),
+              variants: compare.variants.map(asEnv),
+            },
+    }),
   }
 }

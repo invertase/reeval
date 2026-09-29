@@ -674,17 +674,17 @@ function buildSpec(input: EnvironmentInput, where: string, base: string): Enviro
   return checkSpec(spec, where)
 }
 
-/** An environment from its data, as a declaration tree carries it: `extend` works again. */
+/** An environment from its data, as a declaration tree carries it: `extendEnvironment` works again. */
 export const environmentFrom = (data: EnvironmentData): Environment =>
   makeEnvironment(data.name, [...data.layers])
 
 function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment {
   const env = { kind: 'environment' as const, name, layers: Object.freeze(layers) }
-  Object.defineProperty(env, 'extend', {
+  Object.defineProperty(env, 'extendEnvironment', {
     enumerable: false,
     value(child: string, input: EnvironmentInput) {
-      checkName(child, `${name}.extend`)
-      const where = `${name}.extend("${child}")`
+      checkName(child, `${name}.extendEnvironment`)
+      const where = `${name}.extendEnvironment("${child}")`
       const base = callerDir() ?? process.cwd()
       return makeEnvironment(child, [
         ...layers,
@@ -722,7 +722,7 @@ export function defineEnvironment(name: string, input: EnvironmentInput): Enviro
   ])
 }
 
-/** What an attempt runs in: the environment's layers, or the control's then the variant's. */
+/** What an attempt runs in: one environment's own layers. */
 export type AppliedEnvironment = {
   name: string
   parent: string | null
@@ -737,19 +737,5 @@ export function applied(env: Pick<Environment, 'name' | 'layers'> | undefined): 
     name: env.name,
     parent: env.layers.at(-2)?.name ?? null,
     layers: [...env.layers],
-  }
-}
-
-/** `control.extend(variant)`: the variant's own layers on the control's, skipping shared ones. */
-export function layered(
-  control: Pick<Environment, 'name' | 'layers'> | undefined,
-  variant: Pick<Environment, 'name' | 'layers'>,
-): AppliedEnvironment {
-  const base = control?.layers ?? []
-  const seen = new Set(base.map((l) => JSON.stringify(l)))
-  return {
-    name: variant.name,
-    parent: control?.name ?? null,
-    layers: [...base, ...variant.layers.filter((l) => !seen.has(JSON.stringify(l)))],
   }
 }

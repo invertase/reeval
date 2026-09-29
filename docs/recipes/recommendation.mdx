@@ -129,7 +129,7 @@ A verdict is a probability, not an explanation, so read the final message in `su
 
 ## Variations
 
-- **Does your docs skill change the answer?** Add `compare: { variants: [withDocsSkill] }` to the group and read the lift (see [Prove a skill helps](/recipes/skill-lift)).
+- **Does your docs skill change the answer?** Add `compare: { baseline: plain, variants: [withDocsSkill] }` to the group and read the lift (see [Prove a skill helps](/recipes/skill-lift)).
 - **Across agents:** `harness: [cursor(…), claudeCode(…)]` asks each agent the same question (see [Compare agents](/recipes/compare-agents)).
 - **Answers vary:** set `runs: 3` and `gate: { passRate: 0.6 }` so one odd answer doesn't fail the eval.
 - **A stricter bar:** raise `threshold` for one question with `t.judge(question, { threshold: 0.9 })`.

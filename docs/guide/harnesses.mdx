@@ -112,10 +112,10 @@ Summary
  evals/skill.eval.ts
    house greeting
      ✓ greets in the house style                    4/8 · 100% gated  8 attempts
-         cursor:composer-2.5/-/docker                                    control    0/2    0%   not gated
+         cursor:composer-2.5/plain/docker                                control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker                  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3 vs 11.5 (×0.26), agent 9s vs 22s (×0.39): too few attempts to test
-         antigravity:gemini-3.8-flash-medium/-/docker                    control    0/2    0%   not gated
+         antigravity:gemini-3.8-flash-medium/plain/docker                control    0/2    0%   not gated
          antigravity:gemini-3.8-flash-medium/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)   gate passRate 0.5
            effort: tools 3.5 vs 24.5 (×0.14), agent 17s vs 1m 00s (×0.28): too few attempts to test
 …
@@ -152,6 +152,7 @@ Filter a run by id, as in `npx reeval run skill antigravity`, and a profile's `l
 {
   harness: [composer, claude, agy],
   compare: {
+    baseline: plain,
     variants: [withHouseGreeting],
     harness: ['cursor:composer-2.5'],
   },

@@ -21,7 +21,7 @@ export const notes = defineEnvironment('notes', { files: { 'notes.txt': 'status:
 export const scanned = defineEnvironment('scanned', ({ file }) => ({
   files: { '~/.reeval-contract/scan.mjs': file('../scan.mjs') },
 }))
-export const planted = scanned.extend('planted', {
+export const planted = scanned.extendEnvironment('planted', {
   env: { CONTRACT_PLANTED: PLANTED },
   files: { '~/.contract-planted': `${PLANTED}\n` },
 })

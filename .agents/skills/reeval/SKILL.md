@@ -158,7 +158,9 @@ export const houseStyle = defineEnvironment('house-style', ({ skill }) => ({
   skills: [skill.local('../skills/house-style')],   // a dir with SKILL.md, relative to this file
 }))
 
-export const withDocs = houseStyle.extend('with-docs', ({ file, mcp }) => ({
+export const withDocs = houseStyle.extendEnvironment(
+  'with-docs',
+  ({ file, mcp }) => ({
   files: { 'docs/api.md': file('../docs/api.md') },  // written into the workspace
   rules: file('../rules/house.md'),                  // AGENTS.md (CLAUDE.md for Claude Code)
   mcp: { docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']) }, // or mcp.http(url) / mcp.sse(url) (not on Goose, pi or Codex)
@@ -182,47 +184,55 @@ after setup, so the repo never counts as its change. A bad ref, path, URL or tok
 the attempts that use it (infra error, exit 3). Submodules and LFS files aren't fetched.
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
-writes them into the repo's skill directory). `extend` is the only composition; the child wins
-on shared keys. A skill is a directory whose `SKILL.md` has YAML frontmatter (`name`,
+writes them into the repo's skill directory). `extendEnvironment` is the only composition; the
+child wins on shared keys. A skill is a directory whose `SKILL.md` has YAML frontmatter (`name`,
 `description`; quote values containing `: `). Baking (`image`, `install`) is the sandbox's job,
 never the environment's.
 
 ## compare, cells and lift
 
-`compare` answers "does this environment help?". Each variant runs next to the inherited
-environment (the **control**: the group's `environment`, or nothing), with the same prompt and
-checks:
+`compare` answers "does this environment help?". `baseline` is the control. Each variant runs
+as that environment on its own, with the same prompt and checks. `compare` does not layer,
+inherit or extend. Share setup first:
 
 ```ts
-import { evaluate, expect, group } from 'reeval'
-import { houseStyle } from './envs.ts'
-
 const greetsAda = `node -e "import('./greet.js').then((m) =>
   process.exit(m.greet('Ada') === 'Ahoy, Ada!' ? 0 : 1))"`
+const plain = defineEnvironment('plain', {})
+const houseStyle = plain.extendEnvironment('house-style', ({ skill }) => ({
+  skills: [skill.local('./skills/house-greeting')],
+}))
 
-group('greetings', { compare: { variants: [houseStyle] }, runs: 2 }, () => {
-  evaluate('greets in the house style', async (t) => {
-    await t.send('Create greet.js exporting greet(name) in our house greeting style.')
-    await expect(t.exec(greetsAda)).toSucceed()
-  })
-})
+group(
+  'greetings',
+  { compare: { baseline: plain, variants: [houseStyle] }, runs: 2 },
+  () => {
+    evaluate('greets in the house style', async (t) => {
+      await t.send('Create greet.js exporting greet(name) in our house greeting style.')
+      await expect(t.exec(greetsAda)).toSucceed()
+    })
+  },
+)
 ```
 
 - Attempts = evals × harnesses × (1 control + variants) × runs. The example is 1 eval, 2 cells
-  (`<harness>/-/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
-- A variant runs `control.extend(variant)`. There's no `baseline`: leave `environment` unset and
-  the control is empty.
-- Only variant cells gate by default (`compare: { variants, strategy?: 'extend' | 'peer', gate?: 'variants' | 'all' | 'none' }`);
-- **`extend`** (default) layers variants on the control; **`peer`** runs each variant standalone with `environment` as the control (required).
-  a control's miss prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent
-  output), never under `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on
-  some harnesses only.
+  (`<harness>/plain/<sandbox>` control, `<harness>/house-style/<sandbox>` variant), 4 attempts.
+- `parent.extendEnvironment(name, spec)` appends the child's spec as a new layer. The child wins
+  on shared keys; `setup` concatenates. Call it before `compare`. Two stacks that should not
+  share are two `defineEnvironment` calls, then `{ baseline, variants }`.
+- When `compare` is set, the eval's own `environment` is ignored. It is not the control and it
+  is not layered under the variants.
+- Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
+  prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
+  `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
 - **Lift** is variant pass rate minus control pass rate, with a 95% interval; with few runs it's
   usually "within noise". The summary also prints **effort** under each variant (median tool
   calls and agent time vs the control's), which often shows a skill's effect before pass rates
-  do: `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`. `compare: { variants: [x], minLift: 0 }` fails a variant whose
-  interval's lower bound is below 0.
+  do: `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
+  `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
+  bound is below 0.
 - With `runs > 1`, a cell passes only if every attempt passes, unless `gate: { passRate: 0.8 }`.
+- There is no `strategy` field. `compare: false` still opts out (a profile's `limit.compare`).
 
 ## Sandboxes
 
@@ -283,9 +293,10 @@ them to `evals/.history/` to commit.
 | Mistake | reeval says | Fix |
 |---|---|---|
 | `compare` in `reeval.config.ts` | `compare can't be set in reeval.config.ts` | Put it on the group or eval |
-| `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { variants: [b] }` with `a` inherited (or nothing) |
-| `compare: [b]` | `array form was removed` | `compare: { variants: [b] }` |
-| `import { baseline }` | `reeval has no baseline` | Leave `environment` unset; the control is empty |
+| `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { baseline: a, variants: [b] }` |
+| `compare: [b]` | `compare must be an object` | `compare: { baseline, variants: [b] }` |
+| `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
+| `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |

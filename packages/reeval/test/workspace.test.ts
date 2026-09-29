@@ -258,7 +258,7 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
       }),
       'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const base = defineEnvironment('base', ({ git }) => ({ workspace: git('../repo', { ref: 'v1' }) }))
-const sub = base.extend('sub', ({ git }) => ({ workspace: git('../repo', { ref: 'v1', path: 'app' }) }))
+const sub = base.extendEnvironment('sub', ({ git }) => ({ workspace: git('../repo', { ref: 'v1', path: 'app' }) }))
 evaluate('edits the repo', { environment: base }, async (t) => {
   const turn = await t.send('x')
   expect(turn.diff.files).toEqual([

@@ -538,14 +538,17 @@ export type EnvironmentLayer = { name: string; spec: EnvironmentSpec }
 
 /**
  * What an eval runs in: skills, MCP servers, files, rules, variables, secrets and setup. Plain
- * data (`layers` root first), plus a non-enumerable `extend`; see `defineEnvironment`.
+ * data (`layers` root first), plus a non-enumerable `extendEnvironment`; see `defineEnvironment`.
  */
 export type Environment = {
   readonly kind: 'environment'
   readonly name: string
   readonly layers: readonly EnvironmentLayer[]
-  /** A child environment layered on this one; wherever it sets a key this one has, it wins. */
-  extend(name: string, spec: EnvironmentInput): Environment
+  /**
+   * A child environment layered on this one; wherever it sets a key this one has, it wins.
+   * This is how two `compare` arms share setup: `compare` itself never layers.
+   */
+  extendEnvironment(name: string, spec: EnvironmentInput): Environment
 }
 
 /** Typed helpers for environment specs, passed to `defineEnvironment` and `extend` callbacks. */
@@ -632,15 +635,16 @@ export type HarnessOption =
 
 export type CompareGate = 'variants' | 'all' | 'none'
 
-/** How variant environments combine with the control. Default `extend`. */
-export type CompareStrategy = 'extend' | 'peer'
-
-/** Variants run next to the inherited environment (the control), with the same prompt and checks. */
+/**
+ * The baseline and each variant run as their own environments, with the same prompt and checks.
+ * `compare` does not layer them. Share setup first with `environment.extendEnvironment`.
+ */
 export type CompareOptions<E = Environment> =
   | {
+      /** The control. Not layered under the variants, and not the eval's `environment`. */
+      baseline: E
+      /** Other environments, each planned and run as itself. */
       variants: E[]
-      /** `extend` layers each variant on the control; `peer` runs each variant standalone. */
-      strategy?: CompareStrategy
       /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
       gate?: CompareGate
       /** Lift in points from -1 to 1; a variant cell below it fails. */
@@ -665,7 +669,7 @@ export type EvalOptions = {
   /** The only list: each harness is its own cell. */
   harness?: HarnessOption
   sandbox?: SandboxDescriptor
-  /** What the eval runs in; the control of `compare`. */
+  /** What the eval runs in when it has no `compare`. With `compare`, `baseline` is the control. */
   environment?: Environment
   compare?: CompareOptions
   /** Attempts per cell. */
@@ -699,8 +703,8 @@ export type EvalOptionsData = Omit<EvalOptions, 'harness' | 'judge' | 'environme
   compare?: CompareOptions<EnvironmentData>
 }
 
-/** An `Environment` as data, as JSON carries it: without `extend`. */
-export type EnvironmentData = Omit<Environment, 'extend'>
+/** An `Environment` as data, as JSON carries it: without `extendEnvironment`. */
+export type EnvironmentData = Omit<Environment, 'extendEnvironment'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
@@ -901,8 +905,7 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With
- * `compare`, the control runs the inherited environment; each variant runs extended (`extend`) or
- * standalone (`peer`).
+ * `compare`, the control is `baseline` and each variant is that environment on its own.
  */
 export type Cell = {
   key: string
@@ -917,7 +920,7 @@ export type Cell = {
 /** An environment as it was applied, without secret values. */
 export type EnvironmentRecord = {
   name: string
-  /** The environment this one extends (for a variant cell, the control), else null. */
+  /** The previous `extendEnvironment` layer's name, else null. */
   parent: string | null
   /** Keys a later layer replaced, e.g. `env.KEY`, `skills.genkit`, `mcp.docs`, `rules`. */
   overrides: string[]
@@ -1047,9 +1050,9 @@ export type EvalRecord = {
   servedModels?: string[] | null
 }
 
-/** Compare options recorded on the eval plan and run record. */
+/** Which environment ran as the control, so the studio can show it. */
 export type EvalCompareMeta = {
-  strategy: CompareStrategy
+  baseline: string
 }
 
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */

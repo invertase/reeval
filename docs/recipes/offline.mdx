@@ -127,7 +127,7 @@ reeval: evals/offline.eval.ts: evaluate("writes a CSV parser offline") runs unde
 ## Variations
 
 - **One policy for the whole suite:** set `egress` in `reeval.config.ts` or a profile's `defaults`; groups, environments and evals can still override it.
-- **Offline as a compare:** `compare: { variants: [offline] }` with `const offline = defineEnvironment('offline', { egress: 'deny-all' })` shows how much the agent relies on the network, as lift.
+- **Offline as a compare:** `compare: { baseline: online, variants: [offline] }` with `defineEnvironment('online', {})` and `defineEnvironment('offline', { egress: 'deny-all' })` shows how much the agent relies on the network, as lift.
 - **Your API only:** `{ allow: ['api.acme.dev'] }` without `DEFAULT_EGRESS_ALLOW` blocks installs as well.
 - **A brokered key:** `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })` adds `api.acme.dev` to the automatic hosts and keeps the token out of the sandbox.
 

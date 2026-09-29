@@ -487,9 +487,6 @@
     "CellRole": {
       "enum": ["control", "variant"]
     },
-    "CompareStrategy": {
-      "enum": ["extend", "peer"]
-    },
     "ContextFile": {
       "type": "object",
       "properties": {
@@ -828,11 +825,11 @@
     "EvalCompareMeta": {
       "type": "object",
       "properties": {
-        "strategy": {
-          "$ref": "#/$defs/CompareStrategy"
+        "baseline": {
+          "type": "string"
         }
       },
-      "required": ["strategy"]
+      "required": ["baseline"]
     },
     "EvalEntry": {
       "type": "object",

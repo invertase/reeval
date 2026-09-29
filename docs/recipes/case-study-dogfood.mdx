@@ -15,7 +15,7 @@ description: A real suite that asked whether a skill helps a coding agent use re
 |---|---|
 | Harness | `cursor({ model: 'composer-2.5' })` in Docker, concurrency 4 |
 | Judge | `google/gemini-3.8-flash`, threshold 0.8 |
-| Cells per eval | control (no skill), `reeval-weak` and `reeval-good`, via `compare: { variants: [esWeak, esGood] }` |
+| Cells per eval | control `broken-project`, plus `reeval-weak` and `reeval-good`, via `compare: { baseline: brokenProject, variants: [esWeak, esGood] }` |
 | Runs | `runs: 2`, `gate: { passRate: 0.5 }`, budget 20 attempts and 1 hour |
 | Sandbox | reeval's image plus npm 11 and the packed reeval tarball, from a `FROM ${REEVAL_BASE}` Dockerfile |
 | Egress | `DEFAULT_EGRESS_ALLOW`: npm, PyPI and GitHub, plus Cursor's own hosts |
@@ -31,19 +31,9 @@ Two skills and a broken project, as environments:
 ```ts title="evals/envs.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-/** A hastily written skill: shallow, vague and partly out of date. */
-export const esWeak = defineEnvironment('reeval-weak', ({ skill }) => ({
-  skills: [skill.local('../skills/reeval-weak')],
-}))
-
-/** An in-depth, accurate skill for writing and running reeval evals. */
-export const esGood = defineEnvironment('reeval-good', ({ skill }) => ({
-  skills: [skill.local('../skills/reeval-good')],
-}))
-
 const broken = '../fixtures/broken-project'
 
-/** A reeval project someone got wrong. The variants add a skill on top. */
+/** A reeval project someone got wrong. The compare baseline. */
 export const brokenProject = defineEnvironment(
   'broken-project',
   ({ file }) => ({
@@ -55,6 +45,22 @@ export const brokenProject = defineEnvironment(
       'docs/api.md': file(`${broken}/docs/api.md`),
     },
     setup: [{ run: 'npm install --no-audit --no-fund', timeout: '3m' }],
+  }),
+)
+
+/** A hastily written skill on that project: shallow, vague and partly out of date. */
+export const esWeak = brokenProject.extendEnvironment(
+  'reeval-weak',
+  ({ skill }) => ({
+    skills: [skill.local('../skills/reeval-weak')],
+  }),
+)
+
+/** An in-depth, accurate skill for writing and running reeval evals. */
+export const esGood = brokenProject.extendEnvironment(
+  'reeval-good',
+  ({ skill }) => ({
+    skills: [skill.local('../skills/reeval-good')],
   }),
 )
 ```
@@ -77,13 +83,13 @@ const task =
 const question =
   'Pass only if the final message names all three mistakes correctly: ' +
   'compare cannot be set in reeval.config.ts (it goes on the group or eval); ' +
-  'environment takes one environment, not a list, and there is no ' +
-  'baseline export (compare against the inherited environment instead); ' +
+  'environment takes one environment, not a list; compare takes ' +
+  '{ baseline, variants } and does not layer them; ' +
   'and the option is runs, not repeat.'
 
 group(
   'broken project',
-  { environment: brokenProject, compare: { variants: [esWeak, esGood] } },
+  { compare: { baseline: brokenProject, variants: [esWeak, esGood] } },
   () => {
     evaluate('fixes a broken config and explains it', async (t) => {
       await t.send(task)

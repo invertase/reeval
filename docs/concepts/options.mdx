@@ -106,7 +106,7 @@ A profile's `limit` sits over every eval and only narrows: `runs` becomes at mos
 ```ts title="evals/skill.eval.ts"
 group(
   'house greeting',
-  { compare: { variants: [withHouseGreeting] }, pin: ['compare'] },
+  { compare: { baseline: plain, variants: [withHouseGreeting] }, pin: ['compare'] },
   () => { /* … */ },
 )
 ```

@@ -21,11 +21,11 @@ import type { AttemptDebug } from '../src/debug/attempt.ts'
 import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
+  applied,
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
   helpersFor,
   isMovingRef,
-  layered,
   parseGitRepo,
 } from '../src/environment.ts'
 import {
@@ -735,21 +735,40 @@ const base: Resolved = {
 }
 
 test('expand: per harness, the control then each variant; labels name the role', () => {
+  const plain = defineEnvironment('plain', { files: { 'from-baseline.txt': 'base' } })
   const skill = defineEnvironment('skill', { env: { A: '1' } })
-  const { resolved } = cascade(base, [{ options: { compare: { variants: [skill] }, runs: 1 }, where: 'e' }], 'e')
+  const extra = defineEnvironment('extra', { files: { 'from-eval.txt': 'no' } })
+  const { resolved } = cascade(
+    base,
+    [
+      {
+        options: { environment: extra, compare: { baseline: plain, variants: [skill] }, runs: 1 },
+        where: 'e',
+      },
+    ],
+    'e',
+  )
   const attempts = expand(resolved)
   assert.deepEqual(
     attempts.map((a) => [a.cell.key, a.cell.role, a.gate !== 'none', a.label]),
     [
-      ['a/-/fake', 'control', false, 'a · control'],
+      ['a/plain/fake', 'control', false, 'a · control'],
       ['a/skill/fake', 'variant', true, 'a · skill'],
-      ['b/-/fake', 'control', false, 'b · control'],
+      ['b/plain/fake', 'control', false, 'b · control'],
       ['b/skill/fake', 'variant', true, 'b · skill'],
     ],
   )
+  const variant = attempts.find((a) => a.cell.role === 'variant')
+  assert.deepEqual(
+    variant?.environment.layers.map((l) => l.name),
+    ['skill'],
+    'a variant is not layered on the baseline or the eval environment',
+  )
+  assert.equal(attempts[0]?.environment.layers[0]?.name, 'plain')
 })
 
 test('cascade: profile defaults sit under evals, limits narrow unless pinned, --runs wins', () => {
+  const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
   const profile = {
     name: 'pr',
@@ -760,7 +779,12 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
     tags: [],
     budget: {},
   }
-  const narrowed = cascade(base, [{ options: { compare: { variants: [skill] } }, where: 'e' }], 'e', { profile })
+  const narrowed = cascade(
+    base,
+    [{ options: { compare: { baseline: plain, variants: [skill] } }, where: 'e' }],
+    'e',
+    { profile },
+  )
   assert.equal(narrowed.resolved.runs, 1)
   assert.deepEqual(
     narrowed.resolved.harness.map((h) => h.id),
@@ -774,7 +798,12 @@ test('cascade: profile defaults sit under evals, limits narrow unless pinned, --
   ])
   const pinned = cascade(
     base,
-    [{ options: { compare: { variants: [skill] }, pin: ['runs', 'compare'] }, where: 'e' }],
+    [
+      {
+        options: { compare: { baseline: plain, variants: [skill] }, pin: ['runs', 'compare'] },
+        where: 'e',
+      },
+    ],
     'e',
     { profile, runs: 2 },
   )
@@ -810,29 +839,31 @@ test('effort under 10s reads in tenths, so a ratio matches its times', async () 
   ])
 })
 
-test('layered environments and overrides', async () => {
+test('extendEnvironment layers and overrides; a separate environment does not', async () => {
   const main = defineEnvironment('main', ({ secret }) => ({
     env: { KEY: secret.fromEnv('REEVAL_UNIT_KEY', { optional: true }), MODE: 'main' },
     files: { 'a.txt': 'main' },
     setup: ['echo one'],
   }))
-  const branch = main.extend('branch', { env: { MODE: 'branch' }, setup: ['echo two'] })
+  const branch = main.extendEnvironment('branch', { env: { MODE: 'branch' }, setup: ['echo two'] })
   const other = defineEnvironment('other', { files: { 'a.txt': 'other' }, rules: 'Be terse.' })
-  const applied = layered(main, branch)
+  const child = applied(branch)
   assert.deepEqual(
-    applied.layers.map((l) => l.name),
+    child.layers.map((l) => l.name),
     ['main', 'branch'],
-    'the variant layers skip what the control already has',
+    'extendEnvironment keeps the parent layers',
   )
-  const r = await resolveEnvironment(applied, {}, '/p', 'e', 'AGENTS.md')
+  const r = await resolveEnvironment(child, {}, '/p', 'e', 'AGENTS.md')
   assert.deepEqual(r.record.overrides, ['env.MODE'])
   assert.deepEqual(r.record.setup, ['echo one', 'echo two'])
   assert.deepEqual(r.record.unset, ['KEY'])
   assert.equal(r.vars.MODE, 'branch')
-  const crossed = await resolveEnvironment(layered(main, other), {}, '/p', 'e', 'AGENTS.md')
-  assert.deepEqual(crossed.record.overrides, ['files.a.txt'])
-  assert.equal(crossed.record.parent, 'main')
-  assert.ok(crossed.files.some((f) => f.path === 'AGENTS.md' && f.content === 'Be terse.'))
+  assert.equal(r.record.parent, 'main')
+  const alone = await resolveEnvironment(applied(other), {}, '/p', 'e', 'AGENTS.md')
+  assert.deepEqual(alone.record.overrides, [])
+  assert.equal(alone.record.parent, null)
+  assert.equal(alone.files.find((f) => f.path === 'a.txt')?.content, 'other')
+  assert.ok(alone.files.some((f) => f.path === 'AGENTS.md' && f.content === 'Be terse.'))
 })
 
 test('SKILL.md frontmatter is parsed as YAML', () => {
@@ -920,7 +951,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
       defineEnvironment('e', ({ skill }) => ({
         skills: [skill.local(join(root, 'skills'), exclude ? { exclude } : {})],
       }))
-    const r = await resolveEnvironment(layered(undefined, env()), {}, root, 'e', 'AGENTS.md')
+    const r = await resolveEnvironment(applied(env()), {}, root, 'e', 'AGENTS.md')
     const [s] = r.skills
     assert.equal(s?.description, 'Greets.\nPolitely.')
     assert.deepEqual(
@@ -930,7 +961,7 @@ test('skill directories leave out eval material, recorded as excluded', async ()
     assert.deepEqual(r.record.skills[0]?.excluded, ['evals/', 'greet.eval.ts', 'scripts/.history/'])
 
     const custom = await resolveEnvironment(
-      layered(undefined, env([...DEFAULT_SKILL_EXCLUDE, 'drafts/'])),
+      applied(env([...DEFAULT_SKILL_EXCLUDE, 'drafts/'])),
       {},
       root,
       'e',
@@ -944,13 +975,13 @@ test('skill directories leave out eval material, recorded as excluded', async ()
     ])
     assert.notEqual(custom.record.skills[0]?.sha256, r.record.skills[0]?.sha256)
 
-    const none = await resolveEnvironment(layered(undefined, env([])), {}, root, 'e', 'AGENTS.md')
+    const none = await resolveEnvironment(applied(env([])), {}, root, 'e', 'AGENTS.md')
     assert.deepEqual(none.record.skills[0]?.excluded, [], 'an empty list replaces the defaults')
     assert.ok(none.skills[0]?.files.some((f) => f.path === 'evals/evals.json'))
     assert.ok(!none.skills[0]?.files.some((f) => f.path.startsWith('.git/')), '.git always goes')
 
     writeFileSync(join(root, 'skills/greet/evals/evals.json'), '{"prompts":["changed"]}')
-    const edited = await resolveEnvironment(layered(undefined, env()), {}, root, 'e', 'AGENTS.md')
+    const edited = await resolveEnvironment(applied(env()), {}, root, 'e', 'AGENTS.md')
     assert.equal(edited.record.digest, r.record.digest, 'editing evals keeps the fingerprint')
   } finally {
     rmSync(root, { recursive: true, force: true })

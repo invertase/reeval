@@ -9,7 +9,6 @@ import {
   checkEnv,
   isEnvironment,
   isMovingRef,
-  layered,
   plannedSecrets,
   type UnbrokeredSecret,
   unbrokeredSecrets,
@@ -23,7 +22,6 @@ import type {
   Cell,
   CellGate,
   CompareGate,
-  CompareStrategy,
   Duration,
   EgressPolicy,
   Environment,
@@ -87,6 +85,7 @@ export function checkGate(value: unknown, where: string): void {
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 const GATES: CompareGate[] = ['variants', 'all', 'none']
+const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness']
 
 const ID = /^[A-Za-z0-9._:@+-]+$/
 
@@ -134,31 +133,35 @@ const describe = (value: unknown) => {
   return JSON.stringify(value) ?? String(value)
 }
 
-const STRATEGIES: CompareStrategy[] = ['extend', 'peer']
-
 function checkCompare(value: unknown, where: string): void {
   if (value === false) return
   if (Array.isArray(value)) {
     throw new UsageError(
-      `compare must be an object in ${where}. Use compare: { variants: [...] }; array form was removed.`,
+      `compare must be an object in ${where}. Use compare: { baseline, variants: [...] }.`,
     )
   }
-  const variants = (value as { variants?: unknown })?.variants
-  if (typeof value !== 'object' || value === null || !Array.isArray(variants)) {
+  const spec = value as { baseline?: unknown; variants?: unknown }
+  if (typeof value !== 'object' || value === null || !Array.isArray(spec.variants)) {
     throw new UsageError(
-      `compare takes { variants: [...] } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], strategy?, gate?, minLift?, harness? }.`,
+      `compare takes { baseline, variants } (got ${describe(value)}) in ${where}. Use compare: { baseline, variants: [a, b], gate?, minLift?, harness? }.`,
     )
   }
   for (const key of Object.keys(value)) {
-    if (!['variants', 'gate', 'minLift', 'harness', 'strategy'].includes(key)) {
+    if (!COMPARE_KEYS.includes(key)) {
       throw new UsageError(`Unknown compare option "${key}" in ${where}`)
     }
   }
-  const { gate, minLift, harness, strategy } = value as {
+  const { baseline, variants, gate, minLift, harness } = spec as {
+    baseline?: unknown
+    variants: unknown[]
     gate?: unknown
     minLift?: unknown
     harness?: unknown
-    strategy?: unknown
+  }
+  if (!isEnvironment(baseline)) {
+    throw new UsageError(
+      `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment.`,
+    )
   }
   if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
     throw new UsageError(`compare.gate must be one of ${GATES.join(', ')} in ${where}`)
@@ -169,18 +172,10 @@ function checkCompare(value: unknown, where: string): void {
   if (harness !== undefined && !Array.isArray(harness)) {
     throw new UsageError(`compare.harness must be a list of harness ids in ${where}`)
   }
-  if (strategy !== undefined && !STRATEGIES.includes(strategy as CompareStrategy)) {
-    throw new UsageError(`compare.strategy must be one of ${STRATEGIES.join(', ')} in ${where}`)
-  }
-  if ((variants as unknown[]).length === 0) {
+  if (variants.length === 0) {
     throw new UsageError(`compare has no variants in ${where}. Give at least one environment.`)
   }
-  for (const v of variants as unknown[]) {
-    if (v === undefined) {
-      throw new UsageError(
-        `compare lists undefined in ${where}. reeval has no baseline: the inherited environment is the control of compare; with none, the control is empty.`,
-      )
-    }
+  for (const v of variants) {
     if (!isEnvironment(v)) {
       throw new UsageError(
         `compare takes environments (got ${describe(v)}) in ${where}. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval.`,
@@ -222,7 +217,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
       throw new UsageError(
-        `environment takes one environment, not a list (${where}). To compare environments, use compare: { variants: [a, b] }; the inherited environment is the control.`,
+        `environment takes one environment, not a list (${where}). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.`,
       )
     }
     if (!isEnvironment(o.environment)) {
@@ -348,8 +343,8 @@ function checkUnique(list: HarnessDescriptor[], where: string) {
 export type Level = { options: EvalOptions; where: string }
 
 export type NormalizedCompare = {
+  baseline: Environment
   variants: Environment[]
-  strategy: CompareStrategy
   gate: CompareGate
   minLift?: number
   /** Harness ids; unset means every harness the eval runs. */
@@ -380,8 +375,8 @@ export type Resolved = {
 function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
   if (value === undefined || value === false) return undefined
   return {
+    baseline: value.baseline,
     variants: value.variants,
-    strategy: value.strategy ?? 'extend',
     gate: value.gate ?? 'variants',
     ...(value.minLift !== undefined ? { minLift: value.minLift } : {}),
     ...(value.harness
@@ -465,20 +460,15 @@ export function cascade(
     )
   }
   for (const v of out.compare?.variants ?? []) {
-    if (v.name === out.environment?.name) {
+    if (v.name === out.compare?.baseline.name) {
       throw new UsageError(
-        `compare in ${where} lists ${v.name}, which is already the control (its environment). List only the alternatives.`,
+        `compare in ${where} lists ${v.name}, which is the baseline. List only the other environments.`,
       )
     }
   }
   const names = out.compare?.variants.map((v) => v.name) ?? []
   const dupe = names.find((n, i) => names.indexOf(n) !== i)
   if (dupe) throw new UsageError(`compare in ${where} lists two variants named ${dupe}`)
-  if (out.compare?.strategy === 'peer' && !out.environment) {
-    throw new UsageError(
-      `compare.strategy is "peer" in ${where} but no environment is inherited. Set environment to the control baseline; list challengers in compare.variants only.`,
-    )
-  }
 
   let skip: string | undefined
   const limit = profile?.limit
@@ -543,7 +533,9 @@ export type PlannedAttempt = {
 export function expand(resolved: Resolved): PlannedAttempt[] {
   const { compare } = resolved
   const sandbox = sandboxId(resolved.sandbox)
-  const control = applied(resolved.environment)
+  // `compare` ignores the eval's own environment: baseline is the control, and each
+  // variant is applied on its own. Share layers with `extendEnvironment` before compare.
+  const control = applied(compare ? compare.baseline : resolved.environment)
   const policy = resolved.gate ?? 'all'
   const gateIf = (gated: boolean): CellGate => (gated ? policy : 'none')
   const attempts: PlannedAttempt[] = []
@@ -564,8 +556,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
     ]
     if (compare && (!compare.harness || compare.harness.includes(hid))) {
       for (const v of compare.variants) {
-        const env =
-          compare.strategy === 'peer' ? applied(v) : layered(resolved.environment, v)
+        const env = applied(v)
         cells.push({
           env,
           cell: {
@@ -734,7 +725,7 @@ export function evalPlan(
     variants: resolved.compare
       ? { run: resolved.compare.variants.length, of: resolved.compare.of }
       : null,
-    ...(resolved.compare ? { compare: { strategy: resolved.compare.strategy } } : {}),
+    ...(resolved.compare ? { compare: { baseline: resolved.compare.baseline.name } } : {}),
     runs: resolved.runs,
     ...(resolved.gate !== undefined ? { gate: resolved.gate } : {}),
     attempts: skip ? 0 : attempts.length,

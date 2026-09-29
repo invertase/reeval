@@ -27,7 +27,9 @@ description: The house style for greetings in this organisation. Use when
 ```ts title="evals/skill.eval.ts"
 import { defineEnvironment, evaluate, expect, group } from '{{ pkg }}'
 
-const withHouseGreeting = defineEnvironment(
+const plain = defineEnvironment('plain', {})
+
+const withHouseGreeting = plain.extendEnvironment(
   'with-house-greeting',
   ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }),
 )
@@ -41,7 +43,7 @@ const greetAda = `node -e "import('./greet.js').then((m) => {
 group(
   'house greeting',
   {
-    compare: { variants: [withHouseGreeting], minLift: 0 },
+    compare: { baseline: plain, variants: [withHouseGreeting], minLift: 0 },
     runs: 3,
     gate: { passRate: 0.6 },
     pin: ['compare', 'runs'],
@@ -99,7 +101,7 @@ Summary
  evals/skill.eval.ts
    house greeting
      ✓ greets in the house style      2/4 · 100% gated  4 attempts
-         cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+         cursor:composer-2.5/plain/docker                control    0/2    0%   not gated
          cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
            effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 …
@@ -116,7 +118,7 @@ The recipe as written, under the [fake harness](/recipes/fake-harness) (which wr
 
 ```text
      ✓ greets in the house style      3/6 · 100% gated  6 attempts
-         fake/-/fake                    control    0/3    0%   not gated
+         fake/plain/fake                control    0/3    0%   not gated
          fake/with-house-greeting/fake  variant    3/3  100%   lift +100 pts (95% +21…+100, 3/3 vs 0/3) (minLift 0)   gate passRate 0.6
            effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.50): too few attempts to test
 ```
@@ -147,7 +149,7 @@ The same eval, with an agent that already writes `Ahoy` without the skill:
 
 ```text
      ✗ greets in the house style      6/6 · 100% gated  6 attempts
-         fake/-/fake                    control    3/3  100%
+         fake/plain/fake                control    3/3  100%
          fake/with-house-greeting/fake  variant    3/3  100%   lift +0 pts (95% −56…+56, 3/3 vs 3/3), within noise (minLift 0) ✗   gate passRate 0.6
            effort: tools 0 vs 0 (×–), agent 0s vs 0s (×0.90): too few attempts to test
 
@@ -163,10 +165,10 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 
 ## Variations
 
-- **Several skills:** `compare: { variants: [good, weak], minLift: 0 }` gives each its own cell and lift against the same control.
+- **Several skills:** `compare: { baseline: plain, variants: [good, weak], minLift: 0 }` gives each its own cell and lift against the same control.
 - **Skill from git or npm:** `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan.
-- **A shared starting point:** set `environment: base` on the group; each variant runs as `base.extend(variant)`.
-- **Report only:** drop `minLift` and set `compare: { variants, gate: 'none' }` to see lift without failing anything.
+- **A shared starting point:** `const withSkill = base.extendEnvironment('with-skill', …)` then `compare: { baseline: base, variants: [withSkill] }`. `compare` does not layer them.
+- **Report only:** drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything.
 - **Across runs:** `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
 
 ## Next

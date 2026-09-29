@@ -4,8 +4,8 @@ import type {
   Cell,
   CellGate,
   EgressRecord,
-  EvalCompareMeta,
   EnvironmentRecord,
+  EvalCompareMeta,
   FileChange,
   Outcome,
   PhaseTimings,
@@ -173,7 +173,7 @@ export type EvalEntry = {
   /** The eval file and every local file it imports, directly or not, by content hash. */
   sources: Array<{ path: string; sha256: string }>
   tags: string[]
-  /** How variant cells were planned when the eval uses `compare`. */
+  /** The baseline environment, when the eval uses `compare`. */
   compare?: EvalCompareMeta
   /**
    * Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if

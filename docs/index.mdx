@@ -6,19 +6,25 @@ description: Evals for coding agents. Check that agents use your SDK, skills and
 Does a coding agent actually use your SDK, your skills and your docs correctly? reeval answers that with evals you write like tests.
 
 ```ts title="evals/skill.eval.ts"
-group('house greeting', { compare: { variants: [withHouseGreeting] } }, () => {
-  evaluate('greets in the house style', async (t) => {
-    await t.send('Create greet.js exporting greet(name) that greets in our house style.')
-    await expect(t.exec(greetAda)).toSucceed()
-  })
-})
+group(
+  'house greeting',
+  { compare: { baseline: plain, variants: [withHouseGreeting] } },
+  () => {
+    evaluate('greets in the house style', async (t) => {
+      await t.send(
+        'Create greet.js exporting greet(name) that greets in our house style.',
+      )
+      await expect(t.exec(greetAda)).toSucceed()
+    })
+  },
+)
 ```
 
 A real agent does the task in a fresh Docker sandbox, once without the skill and once with it. reeval checks the result and reports the difference as lift:
 
 ```text
 ✓ greets in the house style      2/4 · 100% gated  4 attempts
-    cursor:composer-2.5/-/docker                    control    0/2    0%   not gated
+    cursor:composer-2.5/plain/docker               control    0/2    0%   not gated
     cursor:composer-2.5/with-house-greeting/docker  variant    2/2  100%   lift +100 pts (95% +7…+100, 2/2 vs 0/2)
       effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 ```

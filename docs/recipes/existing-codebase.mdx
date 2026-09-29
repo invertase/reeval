@@ -140,7 +140,7 @@ Those attempts are infra errors, so the run exits 3. [Errors](/reference/errors#
 ## Variations
 
 - **Patch the starting code:** `files` are written over the repository, so `files: { 'src/config.ts': … }` swaps one file.
-- **Compare two versions:** `compare: { variants: [reactTs.extend('v5', ({ git }) => ({ workspace: git(…, { ref: 'v5.4.0', path: … }) }))] }` runs the same task on each; the child's `workspace` replaces its parent's.
+- **Compare two versions:** `const v5 = reactTs.extendEnvironment('v5', ({ git }) => ({ workspace: git(…, { ref: 'v5.4.0', path: … }) }))`, then `compare: { baseline: reactTs, variants: [v5] }`. The child's `workspace` replaces its parent's. `compare` runs the two apart.
 - **A repository next to your evals:** `git('../fixtures/app', { ref: 'v1' })` resolves against the calling file, as `file()` does.
 
 ## Next

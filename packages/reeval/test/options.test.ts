@@ -236,7 +236,7 @@ evaluate('judged', async (t) => {
 describe('compare', () => {
   const envs = `import { defineEnvironment } from 'reeval'
 export const base = defineEnvironment('base', { env: { MODE: 'base' } })
-export const skilled = base.extend('skilled', ({ skill }) => ({
+export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
   env: { MODE: 'skilled' },
   skills: [skill.local('../skills')],
 }))
@@ -249,7 +249,7 @@ export const skilled = base.extend('skilled', ({ skill }) => ({
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { base, skilled } from './envs.ts'
-group('g', { environment: base, compare: { variants: [skilled] }, runs: 2 }, () => {
+group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => {
   evaluate('writes ok.txt', async (t) => {
     await t.send('go')
     const mode = (await t.exec('printf %s "$MODE"')).stdout
@@ -306,6 +306,7 @@ group('g', { environment: base, compare: { variants: [skilled] }, runs: 2 }, () 
     const { run, evals } = readRun(p.dir)
     const [e] = evals
     assert.equal(e?.outcome, 'pass', 'the ungated control fails without failing the eval')
+    assert.equal(e?.compare?.baseline, 'base')
     assert.equal(run.summary.notGated, 2)
     const [control, variant] = e?.cells ?? []
     assert.deepEqual(
@@ -339,11 +340,11 @@ group('g', { environment: base, compare: { variants: [skilled] }, runs: 2 }, () 
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('all gated', { environment: base, compare: { variants: [skilled], gate: 'all' } }, async (t) => {
+evaluate('all gated', { compare: { baseline: base, variants: [skilled], gate: 'all' } }, async (t) => {
   await t.send('go')
   await expect(t).toHaveFile('ok.txt')
 })
-evaluate('no worse', { compare: { variants: [skilled], minLift: 0.5, gate: 'none' } }, async (t) => {
+evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (t) => {
   await t.send('go')
   if (t.attempt.cell.role === 'variant') throw new Error('the variant is worse')
 })
@@ -374,15 +375,15 @@ evaluate('no worse', { compare: { variants: [skilled], minLift: 0.5, gate: 'none
       'skills/house-greeting/SKILL.md': SKILL,
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate } from 'reeval'
-import { skilled } from './envs.ts'
-evaluate('scoped', { compare: { variants: [skilled], harness: ['b'] } }, async (t) => { await t.send('x') })
+import { base, skilled } from './envs.ts'
+evaluate('scoped', { compare: { baseline: base, variants: [skilled], harness: ['b'] } }, async (t) => { await t.send('x') })
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.deepEqual(
       readRun(p.dir).evals[0]?.cells.map((c) => c.key),
-      ['a/-/fake', 'b/-/fake', 'b/skilled/fake'],
+      ['a/base/fake', 'b/base/fake', 'b/skilled/fake'],
     )
   })
 })
@@ -561,32 +562,32 @@ describe('common mistakes', () => {
     [
       'a list of environments',
       `group('genkit', { environment: [a, b] }, () => {})`,
-      /environment takes one environment, not a list \(group\("genkit"\)\)\. To compare environments, use compare: \{ variants: \[a, b\] \}; the inherited environment is the control\./,
+      /environment takes one environment, not a list \(group\("genkit"\)\)\. To compare environments, use compare: \{ baseline, variants: \[a, b\] \}\. baseline is the control; variants are not layered on it\./,
     ],
     [
       'a variant with its own checks',
-      `evaluate('e', { compare: { variants: [{ environment: a, check: () => {} }] } }, async () => {})`,
+      `evaluate('e', { compare: { baseline: a, variants: [{ environment: a, check: () => {} }] } }, async () => {})`,
       /compare takes environments \(got an object with "environment", "check"\) in evaluate\("e"\)\. Variants share the eval's prompt and checks; if a variant needs different checks, write a separate eval\./,
     ],
     [
       'compare scoped to a harness the eval does not run',
-      `evaluate('e', { compare: { variants: [a], harness: ['sonnet'] } }, async () => {})`,
+      `evaluate('e', { compare: { baseline: b, variants: [a], harness: ['sonnet'] } }, async () => {})`,
       /compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
     ],
     [
-      'importing baseline',
-      `evaluate('e', { compare: { variants: [(await import('reeval') as never as { baseline: never }).baseline] } }, async () => {})`,
-      /compare lists undefined in evaluate\("e"\)\. reeval has no baseline: the inherited environment is the control of compare; with none, the control is empty\./,
+      'compare without a baseline',
+      `evaluate('e', { compare: { variants: [a] } }, async () => {})`,
+      /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got undefined\)/,
     ],
     [
       'compare as an array',
       `evaluate('e', { compare: [a] }, async () => {})`,
-      /compare must be an object in evaluate\("e"\)\. Use compare: \{ variants: \[\.\.\.\] \}; array form was removed\./,
+      /compare must be an object in evaluate\("e"\)\. Use compare: \{ baseline, variants: \[\.\.\.\] \}\./,
     ],
     [
-      'peer compare without a control environment',
-      `evaluate('e', { compare: { strategy: 'peer', variants: [a] } }, async () => {})`,
-      /compare\.strategy is "peer" in evaluate\("e"\) but no environment is inherited/,
+      'a compare strategy',
+      `evaluate('e', { compare: { baseline: a, variants: [b], strategy: 'peer' } }, async () => {})`,
+      /Unknown compare option "strategy" in evaluate\("e"\)/,
     ],
     [
       'pinning something that cannot be pinned',
@@ -1206,9 +1207,9 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
   setup: [{ run: 'printf %s "$EXTRA_TOKEN$CHECK_TOKEN" | wc -c > secret-length.txt', timeout: '10s' }],
 }))
 `,
-      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+      'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { withSkill } from './envs.ts'
-evaluate('greets', { compare: { variants: [withSkill] } }, async (t) => {
+evaluate('greets', { compare: { baseline: defineEnvironment('plain', {}), variants: [withSkill] } }, async (t) => {
   const turn = await t.send('greet')
   const loaded = turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting; mcp: docs')
   const token = (await t.exec('printf %s "$APP_TOKEN"')).stdout
@@ -1236,7 +1237,7 @@ evaluate('greets', { compare: { variants: [withSkill] } }, async (t) => {
     assert.match(r.stdout, /with-skill\/fake +variant +1\/1 +100% +lift \+100 pts/)
     const { run, evals, dir } = readRun(p.dir)
     const envs = Object.fromEntries(run.environments.map((e) => [e.name, e]))
-    assert.deepEqual(Object.keys(envs), ['with-skill'], 'the empty control records no environment')
+    assert.deepEqual(Object.keys(envs).sort(), ['plain', 'with-skill'])
     const w = envs['with-skill']
     assert.deepEqual(
       w?.skills.map((s) => [s.name, s.source, s.commit]),

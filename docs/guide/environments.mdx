@@ -8,7 +8,9 @@ The sandbox is where the agent runs. An environment is what it runs with: a star
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
 
-export const withHouseGreeting = defineEnvironment(
+export const plain = defineEnvironment('plain', {})
+
+export const withHouseGreeting = plain.extendEnvironment(
   'with-house-greeting',
   ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }),
 )
@@ -23,17 +25,23 @@ group('greet with context', { environment: base }, () => {
   // …
 })
 
-group('greet with skills', { compare: { variants: [withSkills, withDocsMcp] } }, () => {
-  // …
-})
+group(
+  'greet with skills',
+  { compare: { baseline: plain, variants: [withSkills, withDocsMcp] } },
+  () => {
+    // …
+  },
+)
 ```
 
-`environment` sets what every eval in the group runs in, and is the control of a compare. Each `compare` entry is another environment, run next to it as a variant.
+`environment` sets what every eval in the group runs in when it does not compare. With `compare`, `baseline` is the control and each variant runs as itself. Share setup with `extendEnvironment` first.
 
 ## Add skills
 
 ```ts title="evals/guide-environments.ts"
-export const withSkills = base.extend('with-skills', ({ skill }) => ({
+export const withSkills = base.extendEnvironment(
+  'with-skills',
+  ({ skill }) => ({
   skills: [
     skill.local('../skills/house-greeting'),
     skill.git('github:acme/skills', { ref: 'v2.4.0', only: ['greet'] }),
@@ -65,7 +73,9 @@ The harness adapter puts skills where its agent reads them. `placement: 'workspa
 ## Connect MCP servers
 
 ```ts title="evals/guide-environments.ts"
-export const withDocsMcp = base.extend('with-docs-mcp', ({ mcp }) => ({
+export const withDocsMcp = base.extendEnvironment(
+  'with-docs-mcp',
+  ({ mcp }) => ({
   mcp: {
     docs: mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0']),
     search: mcp.http('https://mcp.acme.dev/mcp'),
@@ -116,13 +126,15 @@ flowchart LR
 
 reeval snapshots the workspace after setup, so the repository, files, rules and setup output never show in the agent's diff. Anything baked into the image instead belongs to the [sandbox](/guide/sandboxes).
 
-## Layer environments with extend
+## Layer environments with extendEnvironment
 
 ```ts
-const withSkills = base.extend('with-skills', ({ skill }) => ({ /* … */ }))
+const withSkills = base.extendEnvironment('with-skills', ({ skill }) => ({
+  /* … */
+}))
 ```
 
-`extend` is the only way to compose environments. The child's spec layers on the parent's: where both set the same key (a variable, a file path, a skill or server name, `rules`, `workspace`), the child wins, and the record lists it under `overrides`. `setup` steps concatenate, parent first.
+`extendEnvironment` is how two environments share setup. The child's spec layers on the parent's: where both set the same key (a variable, a file path, a skill or server name, `rules`, `workspace`), the child wins, and the record lists it under `overrides`. `setup` steps concatenate, parent first. `compare` does not do this for you.
 
 ## Check what the environment set up
 

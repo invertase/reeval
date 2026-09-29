@@ -2,7 +2,7 @@ import { DEFAULT_EGRESS_ALLOW, defineEnvironment, evaluate, group } from 'reeval
 import { fakeHarness } from 'reeval/harness'
 
 const closed = defineEnvironment('closed', { egress: 'deny-all' })
-const reopened = closed.extend('reopened', { egress: 'allow-all' })
+const reopened = closed.extendEnvironment('reopened', { egress: 'allow-all' })
 const installs = defineEnvironment('installs', {
   egress: { allow: [...DEFAULT_EGRESS_ALLOW, 'api.example.com'] },
 })
@@ -22,7 +22,7 @@ group('a group', { egress: { allow: ['group.example.com'] } }, () => {
 })
 evaluate(
   'a variant runs under its own policy',
-  { environment: plain, compare: { variants: [closed] } },
+  { compare: { baseline: plain, variants: [closed] } },
   async () => {},
 )
 evaluate(

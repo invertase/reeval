@@ -299,8 +299,9 @@ describe('effort next to lift', () => {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
       'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const plain = defineEnvironment('plain', {})
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
-evaluate('greets', { compare: { variants: [skilled] }, runs: 2 }, async (t) => {
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (t) => {
   await t.send('go')
   await expect(t).toHaveFile('ok.txt')
 })
