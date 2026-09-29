@@ -44,6 +44,8 @@ export type RunPlan = {
   harnessDescriptors: HarnessDescriptor[]
   /** The harness ids the planned attempts run on, for the run header. */
   harnesses: string[]
+  /** The model that answers a compare question naming none; null when there's no language model. */
+  questionModel: string | null
 }
 
 const median = (values: number[]) => {
@@ -88,6 +90,7 @@ export async function buildPlan(options: {
   concurrency: number
   root: string
   historyDir: string
+  questionModel?: string | null
 }): Promise<RunPlan> {
   const { planned } = options
   const estimate = await historyDurations(options.root, options.historyDir)
@@ -149,7 +152,30 @@ export async function buildPlan(options: {
     sandboxes: [...sandboxes.values()],
     harnessDescriptors: [...descriptors.values()],
     harnesses: [...harnesses],
+    questionModel: options.questionModel ?? null,
   }
+}
+
+export type PlanQuestion = {
+  question: string
+  /** Its own model, else the plan's question model; null when there's no language model. */
+  model: string | null
+}
+
+/** An eval's compare questions, each with the model that will answer it. */
+export const planQuestions = (plan: RunPlan, p: EvalPlan): PlanQuestion[] =>
+  (p.skip ? [] : (p.questions ?? [])).map((q) => ({
+    question: q.question,
+    model: q.model ?? plan.questionModel,
+  }))
+
+/** `  question 1/2  Which is cleaner? · after the run · google/gemini-3.8-flash` */
+function questionLines(plan: RunPlan, p: EvalPlan): string[] {
+  const questions = planQuestions(plan, p)
+  return questions.map(
+    (q, i) =>
+      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · ${q.model ?? 'needs a language model: set analysis.model'}`,
+  )
 }
 
 /** One line when evals run several times under the default gate, which every attempt must pass. */
@@ -222,7 +248,13 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
       .map((c, i) => (i === cols.length - 1 ? c : c.padEnd(widths[i] ?? 0)))
       .join('  ')
       .trimEnd()
-  return [line(header), ...rows.map(line)]
+  return [
+    line(header),
+    ...rows.flatMap((row, i) => {
+      const p = plan.rows[i]?.plan
+      return [line(row), ...(p ? questionLines(plan, p) : [])]
+    }),
+  ]
 }
 
 export type PlanCell = Cell & {
@@ -246,6 +278,8 @@ export type PlanEval = {
   skip: string | null
   notes: string[]
   cells: PlanCell[]
+  /** The compare's questions, answered after the run; unset without any. */
+  questions?: PlanQuestion[]
 }
 
 /** A Docker sandbox image the plan needs, and how it's made, as `reeval image build --dry-run` lists it. */
@@ -283,6 +317,7 @@ export function planDocument(
   for (const { id, file, attempt } of planned) {
     let e = evals.get(id)
     if (!e) {
+      const questions = planQuestions(plan, attempt.plan)
       e = {
         id,
         file,
@@ -292,6 +327,7 @@ export function planDocument(
         skip: attempt.plan.skip ?? null,
         notes: attempt.plan.notes,
         cells: [],
+        ...(questions.length ? { questions } : {}),
       }
       evals.set(id, e)
     }

@@ -115,6 +115,25 @@
       },
       "required": ["kind", "model"]
     },
+    "CompareQuestion": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": ["question"]
+        },
+        {
+          "type": "string"
+        }
+      ]
+    },
     "ConfigJudgeOptions": {
       "type": "object",
       "properties": {
@@ -509,6 +528,31 @@
                 },
                 "minLift": {
                   "type": "number"
+                },
+                "question": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/CompareQuestion"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "model": {
+                          "type": "string"
+                        },
+                        "question": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["question"]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "variants": {
                   "type": "array",

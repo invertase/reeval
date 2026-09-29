@@ -11,6 +11,7 @@ export type {
   Cell,
   CellRole,
   CompareOptions,
+  CompareQuestion,
   ConfigHelpers,
   Diff,
   Duration,

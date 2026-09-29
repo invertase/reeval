@@ -422,6 +422,12 @@
             "type": "string"
           }
         },
+        "questions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PlannedQuestion"
+          }
+        },
         "runs": {
           "type": "number"
         },
@@ -885,6 +891,18 @@
         }
       },
       "required": ["auto", "policy"]
+    },
+    "PlannedQuestion": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": ["question"]
     },
     "SandboxDescriptor": {
       "anyOf": [
