@@ -1,6 +1,6 @@
 ---
 title: pi()
-description: The pi harness, its options and id, its Gemini API key, the tokens it reports, and why it has no MCP servers.
+description: The pi harness, its options and id, its Gemini API key, the tokens it reports, and how its MCP servers are set up.
 ---
 
 `pi()` runs [pi](https://github.com/earendil-works/pi) in the Docker sandbox, one `pi --mode json` process per turn, on its `google` provider with a Gemini API key. `model` is required.
@@ -38,16 +38,16 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`) |
-| Adapter | `@reeval/harness-pi` 0.1.0, bundled with reeval |
-| CLI | `@earendil-works/pi-coding-agent` 0.87.1, from a pinned lockfile |
+| Adapter | `@reeval/harness-pi` 0.2.0, bundled with reeval |
+| CLI | `@earendil-works/pi-coding-agent` 0.99.1, from a pinned lockfile |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:pi-0.1.0` |
+| Image | `reeval-sandbox:pi-0.2.0` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.pi/agent/skills` |
 | Skills (`placement: 'workspace'`) | `.pi/skills` in the workspace |
 | Egress hosts added | `generativelanguage.googleapis.com` |
 | Tokens | Reported for each model call |
-| MCP | None (refused, below) |
+| MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
 
 Build its image once with `reeval image build` in a project whose config uses `pi()`.
 
@@ -57,7 +57,7 @@ That adapter runs pi's agent loop in reeval's own process on the host: its model
 
 ## The key
 
-reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives pi a placeholder as `GEMINI_API_KEY`. The gateway swaps the real key in on one kind of request, the only one pi 0.87.1 sends it on:
+reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives pi a placeholder as `GEMINI_API_KEY`. The gateway swaps the real key in on one kind of request, the only one pi 0.99.1 sends it on:
 
 | Host | Endpoint |
 |---|---|
@@ -75,13 +75,37 @@ Each turn runs `pi --mode json -p --offline --approve --no-extensions --provider
 
 - `--offline` stops pi's startup network operations, so a turn contacts only the Gemini API.
 - `--approve` trusts the workspace, which pi needs to read `.pi/skills` there.
-- `--no-extensions` stops pi loading extensions from the workspace or home, so what the agent can do is what the eval set up.
+- `--no-extensions` stops pi loading extensions from the workspace or home, and its built-in ones, so what the agent can do is what the eval set up.
+- `-e builtin:mcp`, only when the eval gives it MCP servers, loads pi's built-in MCP extension back.
 
 The prompt is a command-line argument, so it must stay under 128 KiB. Instructions go to `~/.pi/agent/AGENTS.md`, which pi reads before the workspace's.
 
 ## MCP
 
-pi has no MCP client. An eval that gives `pi()` MCP servers is refused at plan time, naming them, rather than running without them: the run (and `--dry-run`) exits 2 before any attempt starts.
+```json title="~/.pi/agent/mcp.json"
+{
+  "mcpServers": {
+    "stamp": {
+      "command": "node",
+      "args": ["stamp.mjs"],
+      "env": { "TOKEN": "$$STAMP" },
+      "exposure": "direct"
+    },
+    "docs": {
+      "url": "https://mcp.example.com/mcp",
+      "headers": { "x-api-key": "…" },
+      "exposure": "direct"
+    }
+  },
+  "autoEnableCodemode": false
+}
+```
+
+The adapter writes `mcp.stdio` servers as `command`, `args` and `env`, and `mcp.http` ones as `url` and `headers`. Each has `"exposure": "direct"`, so the model sees its tools as `mcp__<server>__<tool>`, their name in the transcript too; pi's default exposure reaches them only through its `codemode` tool, which the adapter doesn't load. pi also reads a `.pi/mcp.json` in the workspace, which `--approve` trusts.
+
+pi expands `$NAME` and `${NAME}` in `env` and header values, and runs a value that starts with `!` as a shell command. The adapter escapes both (`$` as `$$`, a leading `!` as `$!`), so every value, a brokered placeholder included, reaches the server as written.
+
+pi has no SSE transport, and skips a server whose name isn't letters, digits, `_` and `-`. An eval that gives it either is refused at plan time, naming the server: the run (and `--dry-run`) exits 2 before any attempt starts.
 
 ## Errors
 
@@ -89,7 +113,8 @@ pi has no MCP client. An eval that gives `pi()` MCP servers is refused at plan t
 |---|---|
 | No model, or one with a provider | `pi() needs a Gemini model id, without a provider, since it runs on a Gemini API key, e.g. pi({ model: 'gemini-3.8-flash' }) (got …)` |
 | No key when the attempt starts | `GOOGLE_GENERATIVE_AI_API_KEY isn't set, so the pi harness can't authenticate. Set it in the environment or .env.local.` |
-| MCP servers (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi has no MCP client, so it can't use the <names> MCP server` |
+| `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |
+| An MCP server name pi skips (at plan time, exit 2) | `evaluate("<eval>") on pi:<model>: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the <name> server: rename it` |
 | A non-Docker sandbox | `The pi harness needs the Docker sandbox` |
 | pi dies mid-turn | `pi exited with code <n> before ending the turn: …` |
 

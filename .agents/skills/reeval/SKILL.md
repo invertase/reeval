@@ -67,7 +67,7 @@ export default defineConfig({
   providers are refused at plan time; no `mcp.sse`; web search via Exa,
   whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
   and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
-  `gemini-3.8-flash`; pi has no MCP),
+  `gemini-3.8-flash`; neither takes `mcp.sse`),
   `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.4-mini`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
