@@ -487,6 +487,54 @@
     "CellRole": {
       "enum": ["control", "variant"]
     },
+    "CompareAnswer": {
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "rates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "cut": {
+                "$ref": "#/$defs/CompareCut"
+              },
+              "n": {
+                "type": "number"
+              },
+              "name": {
+                "type": "string"
+              },
+              "wins": {
+                "type": "number"
+              }
+            },
+            "required": ["cut", "n", "name", "wins"]
+          }
+        },
+        "resolvedModel": {
+          "type": "string"
+        },
+        "votes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PairVote"
+          }
+        }
+      },
+      "required": ["model", "question", "rates", "votes"]
+    },
+    "CompareCut": {
+      "enum": ["across", "within"]
+    },
     "ContextFile": {
       "type": "object",
       "properties": {
@@ -834,6 +882,12 @@
     "EvalEntry": {
       "type": "object",
       "properties": {
+        "answers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompareAnswer"
+          }
+        },
         "attempts": {
           "type": "array",
           "items": {
@@ -1176,6 +1230,39 @@
     },
     "Outcome": {
       "enum": ["fail", "infra_error", "pass", "skipped"]
+    },
+    "PairVote": {
+      "type": "object",
+      "properties": {
+        "a": {
+          "type": "string"
+        },
+        "arm": {
+          "type": "string"
+        },
+        "b": {
+          "type": "string"
+        },
+        "cut": {
+          "$ref": "#/$defs/CompareCut"
+        },
+        "harness": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        },
+        "run": {
+          "type": "number"
+        },
+        "swapped": {
+          "type": "boolean"
+        },
+        "winner": {
+          "type": "string"
+        }
+      },
+      "required": ["a", "b", "cut", "question", "run", "swapped", "winner"]
     },
     "PhaseTimings": {
       "type": "object",
