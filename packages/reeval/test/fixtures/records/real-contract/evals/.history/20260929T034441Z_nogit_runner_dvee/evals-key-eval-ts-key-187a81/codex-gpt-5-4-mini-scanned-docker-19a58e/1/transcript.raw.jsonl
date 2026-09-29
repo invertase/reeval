@@ -1,0 +1,12 @@
+{"turn":0,"ms":920,"part":{"type":"start"}}
+{"turn":0,"ms":1415,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":1416,"part":{"type":"raw","rawValue":{"type":"thread.started","thread_id":"01a0eb44-1649-77a0-b4d2-308369303757"}}}
+{"turn":0,"ms":1530,"part":{"type":"raw","rawValue":{"type":"turn.started"}}}
+{"turn":0,"ms":4307,"part":{"type":"text-start","id":"item_0"}}
+{"turn":0,"ms":4307,"part":{"type":"text-delta","id":"item_0","text":"OK"}}
+{"turn":0,"ms":4308,"part":{"type":"text-end","id":"item_0"}}
+{"turn":0,"ms":4308,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"OK"}}}}
+{"turn":0,"ms":4321,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":10474,"inputTokenDetails":{"noCacheTokens":10474,"cacheReadTokens":0,"cacheWriteTokens":0},"outputTokens":23,"outputTokenDetails":{"textTokens":7,"reasoningTokens":16},"totalTokens":10497},"response":{"id":"GZUiz8d3sJqOuelV-0","timestamp":"2026-09-29T03:45:06.019Z","modelId":"gpt-5.4-mini","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":4322,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":4322,"part":{"type":"raw","rawValue":{"type":"turn.completed","usage":{"input_tokens":10474,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":23,"reasoning_output_tokens":16}}}}
+{"turn":0,"ms":4364,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":10474,"inputTokenDetails":{"noCacheTokens":10474,"cacheReadTokens":0,"cacheWriteTokens":0},"outputTokens":23,"outputTokenDetails":{"textTokens":7,"reasoningTokens":16},"totalTokens":10497}}}

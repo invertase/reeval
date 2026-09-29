@@ -1,14 +1,16 @@
 // Every reader against every run in the record corpus (test/fixtures/records/), so a record reeval
 // wrote at any point since keeps loading in the CLI. The studio's browser test opens the same runs.
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join, relative } from 'node:path'
 import { describe, test } from 'node:test'
 import type { RunRecord } from '../src/history/types.ts'
+import { countSecrets } from '../src/redact.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { runCli } from './helpers.ts'
-import { corpusEntries } from './support/corpus.ts'
+import { CORPUS_DIR, corpusEntries } from './support/corpus.ts'
 import { fixture } from './support/fixture.ts'
+import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
 
 const entries = corpusEntries()
 
@@ -24,6 +26,7 @@ const REQUIRED = [
   'status budget',
   'saved analysis',
   'transcript',
+  'diff',
   'tokens',
   'harness cursor',
   'harness claude-code',
@@ -44,6 +47,7 @@ function covers(record: RunRecord, raw: Record<string, unknown>, hasAnalysis: bo
     for (const j of a.judgements) out.add(`judge ${j.verdict}`)
     out.add(`outcome ${a.outcome}`)
     if (a.files.transcript) out.add('transcript')
+    if (a.files.diff) out.add('diff')
     if (a.usage) out.add('tokens')
   }
   for (const e of record.evals) {
@@ -70,6 +74,47 @@ describe('the record corpus', () => {
     )
     const missing = REQUIRED.filter((k) => !found.has(k))
     assert.deepEqual(missing, [], 'add a corpus entry that has them (scripts/corpus/add.ts)')
+  })
+
+  test('holds nothing that looks like a key', () => {
+    // Beyond reeval's own token shapes: Cursor's API keys.
+    const CURSOR_KEY = /\b(?:crsr_[A-Za-z0-9]{20,}|key_[0-9a-f]{32,})/g
+    const hits: string[] = []
+    const walk = (dir: string) => {
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, e.name)
+        if (e.isDirectory()) walk(path)
+        else {
+          const text = readFileSync(path, 'utf8')
+          const n = countSecrets(text, {}) + (text.match(CURSOR_KEY)?.length ?? 0)
+          if (n) hits.push(`${relative(CORPUS_DIR, path)}: ${n}`)
+        }
+      }
+    }
+    walk(CORPUS_DIR)
+    assert.deepEqual(hits, [])
+  })
+
+  test('real-harness runs have the transcripts and diffs later readers use', () => {
+    const attempts = realAttempts()
+    for (const harness of REAL_HARNESSES) {
+      const e2e = attempts.filter((a) => a.entry === 'real-e2e-pairs' && a.harness === harness)
+      assert.equal(new Set(e2e.map((a) => a.runId)).size, 2, `${harness}: two e2e runs`)
+      const contract = attempts.filter((a) => a.entry === 'real-contract' && a.harness === harness)
+      assert.equal(new Set(contract.map((a) => a.runId)).size, 1, `${harness}: one contract run`)
+      assert.ok(
+        contract.some((a) => a.attempt.outcome === 'fail'),
+        `${harness}: a canary fails`,
+      )
+      const agent = [...e2e, ...contract].filter((a) => a.attempt.turns.length)
+      assert.ok(agent.length >= 8, `${harness}: e2e and contract attempts that reached the agent`)
+      for (const a of agent) {
+        const where = `${a.entry} ${a.runId} ${a.attempt.key}`
+        assert.equal(a.attempt.outcome, 'pass', where)
+        assert.ok(a.transcript && existsSync(a.transcript), `${where}: transcript`)
+        assert.ok(a.diff && existsSync(a.diff), `${where}: diff`)
+      }
+    }
   })
 
   for (const entry of entries) {

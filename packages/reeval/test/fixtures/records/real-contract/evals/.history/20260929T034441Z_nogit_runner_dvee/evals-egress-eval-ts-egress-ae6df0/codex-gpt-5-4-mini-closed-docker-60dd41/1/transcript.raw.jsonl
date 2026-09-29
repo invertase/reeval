@@ -1,0 +1,20 @@
+{"turn":0,"ms":555,"part":{"type":"start"}}
+{"turn":0,"ms":734,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":734,"part":{"type":"raw","rawValue":{"type":"thread.started","thread_id":"01a0eb43-eb05-7422-bff9-e5443febff34"}}}
+{"turn":0,"ms":759,"part":{"type":"raw","rawValue":{"type":"turn.started"}}}
+{"turn":0,"ms":5319,"part":{"type":"text-start","id":"item_0"}}
+{"turn":0,"ms":5319,"part":{"type":"text-delta","id":"item_0","text":"I’m going to run the exact command once, capture the result into `blocked.txt`, and then stop there."}}
+{"turn":0,"ms":5319,"part":{"type":"text-end","id":"item_0"}}
+{"turn":0,"ms":5319,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’m going to run the exact command once, capture the result into `blocked.txt`, and then stop there."}}}}
+{"turn":0,"ms":9098,"part":{"type":"tool-call","toolCallId":"item_1","toolName":"bash","input":{"command":"/bin/bash -lc \"curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt\""},"providerExecuted":true,"title":"shell"}}
+{"turn":0,"ms":9098,"part":{"type":"raw","rawValue":{"type":"item.started","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt\"","aggregated_output":"","exit_code":null,"status":"in_progress"}}}}
+{"turn":0,"ms":9099,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"/bin/bash -lc \"curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt\"","aggregated_output":"curl: (56) CONNECT tunnel failed, response 403\n","exit_code":56,"status":"failed"}}}}
+{"turn":0,"ms":10321,"part":{"type":"text-start","id":"item_2"}}
+{"turn":0,"ms":10321,"part":{"type":"text-delta","id":"item_2","text":"Ran it once. It failed with `curl: (56) CONNECT tunnel failed, response 403`."}}
+{"turn":0,"ms":10321,"part":{"type":"text-end","id":"item_2"}}
+{"turn":0,"ms":10321,"part":{"type":"raw","rawValue":{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Ran it once. It failed with `curl: (56) CONNECT tunnel failed, response 403`."}}}}
+{"turn":0,"ms":10347,"part":{"type":"tool-error","toolCallId":"item_1","toolName":"bash","error":"curl: (56) CONNECT tunnel failed, response 403\n","providerExecuted":true}}
+{"turn":0,"ms":10347,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":21273,"inputTokenDetails":{"noCacheTokens":10649,"cacheReadTokens":10624,"cacheWriteTokens":0},"outputTokens":233,"outputTokenDetails":{"textTokens":130,"reasoningTokens":103},"totalTokens":21506},"response":{"id":"b1fHlNubnMnQi6L9-0","timestamp":"2026-09-29T03:45:01.603Z","modelId":"gpt-5.4-mini","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":10348,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":10348,"part":{"type":"raw","rawValue":{"type":"turn.completed","usage":{"input_tokens":21273,"cached_input_tokens":10624,"cache_write_input_tokens":0,"output_tokens":233,"reasoning_output_tokens":103}}}}
+{"turn":0,"ms":10400,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":21273,"inputTokenDetails":{"noCacheTokens":10649,"cacheReadTokens":10624,"cacheWriteTokens":0},"outputTokens":233,"outputTokenDetails":{"textTokens":130,"reasoningTokens":103},"totalTokens":21506}}}

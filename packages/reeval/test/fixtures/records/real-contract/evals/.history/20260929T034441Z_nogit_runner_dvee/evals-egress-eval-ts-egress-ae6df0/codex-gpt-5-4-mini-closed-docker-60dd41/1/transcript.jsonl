@@ -1,0 +1,5 @@
+{"ts":"2026-09-29T03:44:51.262Z","atMs":0,"turn":0,"type":"prompt","text":"Run this exact shell command once, then stop: curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt"}
+{"turn":0,"ts":"2026-09-29T03:44:56.581Z","atMs":5319,"type":"text","text":"I’m going to run the exact command once, capture the result into `blocked.txt`, and then stop there.","durationMs":0}
+{"turn":0,"ts":"2026-09-29T03:45:00.360Z","atMs":9098,"durationMs":1249,"type":"tool","toolCallId":"item_1","tool":"bash","input":{"command":"/bin/bash -lc \"curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt\""},"output":"curl: (56) CONNECT tunnel failed, response 403\n","ok":false}
+{"turn":0,"ts":"2026-09-29T03:45:01.583Z","atMs":10321,"type":"text","text":"Ran it once. It failed with `curl: (56) CONNECT tunnel failed, response 403`.","durationMs":0}
+{"ts":"2026-09-29T03:45:01.663Z","atMs":10401,"turn":0,"type":"turn-end","status":"completed","durationMs":10401}

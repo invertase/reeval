@@ -1,0 +1,292 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T034536Z_a7bf43a_runner_7ftv",
+  "status": "complete",
+  "startedAt": "2026-09-29T03:45:36.305Z",
+  "endedAt": "2026-09-29T03:45:47.470Z",
+  "durationMs": 11165,
+  "author": "runner",
+  "git": {
+    "sha": "a7bf43aa4ac4091565450f60eb95f2bf43c533cd",
+    "branch": "main",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-29T03:45:24Z",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "795d68a28cbb"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "24.21.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.0",
+        "id": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+        "agentCli": "@cursor/sdk 1.0.32",
+        "base": "reeval-sandbox:cursor-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "cursor:composer-2.5",
+        "kind": "cursor",
+        "model": "composer-2.5",
+        "resolvedModels": [
+          "composer-2.5[fast=false]"
+        ]
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "0e2a4839495b"
+    },
+    "context": [
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 9245,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "attempts": 1
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 240000,
+    "concurrency": 2,
+    "configHash": "cd9e8d3d1f09e0d7d027e55e76ffdfc20b3f34bc235a502628b9648fee2e3e6b"
+  },
+  "cost": {
+    "inputTokens": 26771,
+    "outputTokens": 113,
+    "usage": {
+      "input": 15566,
+      "output": 113,
+      "cacheRead": 11205,
+      "cacheWrite": 0,
+      "reasoning": null
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/hello.eval.ts › writes hello",
+      "key": "evals/hello.eval.ts › writes hello",
+      "slug": "evals-hello-eval-ts-writes-hello-98d896",
+      "file": "evals/hello.eval.ts",
+      "group": [],
+      "name": "writes hello",
+      "tags": [],
+      "fingerprint": "dabbd63013412dd11f4664e47d7cb0c476925a94b9f7df7c615009a380d2d134",
+      "sources": [
+        {
+          "path": "evals/hello.eval.ts",
+          "sha256": "2c0e6fe80b403ab5368edadcb32a8dfc85f8cd31b6ed2c8be5c8590b915b9c71"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/-/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "b79f887d8a5a092aeb15199fb9401a138c9b4f5d3c9d186c7466d166b1204db6",
+          "fingerprintParts": {
+            "sources": "797ec956ab47fcddabad7e496619cf9e5c11b16fad93adf4a3f138894b2cc90f",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": null,
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/hello.eval.ts › writes hello # cursor:composer-2.5/-/docker#1",
+          "id": "cursor:composer-2.5/-/docker#1",
+          "cell": "cursor:composer-2.5/-/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T03:45:37.395Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 8,
+                "sent": 56942,
+                "received": 187763
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 10064,
+          "turns": [
+            {
+              "prompt": "Create a file named hello.txt whose only content is `hello from es`, then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:45:40.290Z",
+              "durationMs": 6613,
+              "usage": {
+                "input": 15566,
+                "output": 113,
+                "cacheRead": 11205,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "Created `hello.txt` with the content `hello from es`."
+            }
+          ],
+          "usage": {
+            "input": 15566,
+            "output": 113,
+            "cacheRead": 11205,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 2893,
+            "agentMs": 6614,
+            "diffMs": 136,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 79
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-eval-ts-writes-hello-98d896/cursor-composer-2-5-docker-76739b/1/transcript.jsonl",
+              "sha256": "08c7d1cbf8c07a90173422509b1b5275d37a8358e60a7d372855c16d2a3d558f",
+              "bytes": 941
+            },
+            "diff": {
+              "path": "evals-hello-eval-ts-writes-hello-98d896/cursor-composer-2-5-docker-76739b/1/diff.patch",
+              "sha256": "02a002c67644b6a80471d56aaec5c66494a68a1615bfa30e49920c66a5318439",
+              "bytes": 166
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

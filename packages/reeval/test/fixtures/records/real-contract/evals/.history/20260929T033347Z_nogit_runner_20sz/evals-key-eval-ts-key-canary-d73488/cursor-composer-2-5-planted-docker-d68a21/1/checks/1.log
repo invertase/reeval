@@ -1,0 +1,7 @@
+$ node ~/.reeval-contract/scan.mjs '[{"form":"raw","len":33,"roll":3425781250,"sha256":"be3b833b6d42abc50a865348ebd66fad2f0cdac18a9e9c421ada12dde88737ed"},{"form":"base64","len":44,"roll":320935815,"sha256":"9d2bcbdf3d08022a51162ba9db6d779735642c49c7429781a716a6504275c930"}]'
+exit 0
+--- stdout
+{"files":2072,"bytes":71078307,"hits":["/proc/1/environ (raw)","/proc/1239/environ (raw)","/proc/7/environ (raw)","/home/reeval/.contract-planted (raw)"]}
+--- stderr
+(node:1239) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
