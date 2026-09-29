@@ -77,6 +77,26 @@ export function normaliseText(text: string, roots: string[]): string {
       // where the build and the package store put things.
       .replace(/\bnode (v?)\d+\.\d+\.\d+/gi, 'node $1<version>')
       .replace(/"node": ?"\d+\.\d+\.\d+"/g, '"node": "<version>"')
+      // The published version is which build ran, not what the engine did. The judge
+      // version hashes it, so a release also moves judge versions, the fingerprints
+      // that include them, and compare lines that name that judge change.
+      .replace(/\breeval(\s+\|\s+|\s+)\d+\.\d+\.\d+\b/g, 'reeval$1<version>')
+      .replace(/"es": ?"\d+\.\d+\.\d+"/g, '"es": "<version>"')
+      .replace(/^( *)\d+\.\d+\.\d+$/gm, '$1<version>')
+      .replace(/"(?:judgeVersion|version)": ?"[0-9a-f]{12}"/g, (m) =>
+        m.replace(/[0-9a-f]{12}/, '<judge>'),
+      )
+      .replace(/\bversion [0-9a-f]{12}\b/g, 'version <judge>')
+      .replace(/"judge": ?"[0-9a-f]{64}"/g, '"judge": "<judge>"')
+      .replace(/"fingerprint": ?"[0-9a-f]{64}"/g, '"fingerprint": "<fp>"')
+      .replace(/\b[0-9a-f]{16,}…/g, '<fp>…')
+      .replace(/, judge changed/g, '')
+      .replace(
+        /^stack changed: judge version (?:<judge>|[0-9a-f]{12}) → (?:<judge>|[0-9a-f]{12})\n?/gm,
+        '',
+      )
+      .replace(/; judge version (?:<judge>|[0-9a-f]{12}) → (?:<judge>|[0-9a-f]{12})/g, '')
+      .replace(/judge version (?:<judge>|[0-9a-f]{12}) → (?:<judge>|[0-9a-f]{12}); /g, '')
       .replace(/ · concurrency \d+ · /g, ' · concurrency <n> · ')
       .replace(/"(author|hostHash)": ?"[^"]*"/g, '"$1": <x>')
       .replace(/\blocal · \S+/g, 'local · <user>')
@@ -123,7 +143,7 @@ export function normaliseText(text: string, roots: string[]): string {
 
 /** Keys that are times, ids or hashes of what ran rather than what happened. */
 const VOLATILE =
-  /^(runId|startedAt|endedAt|seq|hostHash|author|git|packages|version|estimateMs|sha256|bytes|configHash|commit|node|concurrency)$|Ms$|fingerprint/i
+  /^(runId|startedAt|endedAt|seq|hostHash|author|git|packages|version|estimateMs|sha256|bytes|configHash|commit|node|es|concurrency)$|Ms$|fingerprint/i
 
 export function normaliseRecord(value: unknown, roots: string[]): unknown {
   if (Array.isArray(value)) return value.map((v) => normaliseRecord(v, roots))
