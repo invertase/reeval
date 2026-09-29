@@ -513,6 +513,137 @@ export default defineConfig({
         ['variant', 'pass', 1, 0],
       ],
     )
+    // fakeAnalysis() without a vote calls every pair a tie.
+    assert.deepEqual(
+      e?.answers?.map((a) => [a.question, a.votes.map((v) => v.winner), a.rates]),
+      [
+        ['Which is cleaner?', ['tie', 'tie'], []],
+        ['Which is shorter?', ['tie', 'tie'], []],
+      ],
+    )
+  })
+
+  // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
+  // its check on every attempt, so it's in no pair but still in the pass rate and the exit code.
+  const threeHarnesses = (analysis: string) => `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: [
+    fakeHarness({ id: 'one', files: { 'ok.txt': 'yes' } }),
+    fakeHarness({ id: 'two', files: { 'ok.txt': 'yes', 'extra.txt': 'more' } }),
+    fakeHarness({ id: 'bad', files: { 'no.txt': 'no' } }),
+  ],
+  runs: 2,
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  ${analysis}
+})
+`
+  const extra = `analysis: { model: fakeAnalysis({ vote: (p) => (p.a.includes('extra.txt') ? 'A' : p.b.includes('extra.txt') ? 'B' : 'tie') }) },`
+
+  test('votes are recorded after the attempts, and the outcome and exit code are the checks', async () => {
+    const asked = await project('questions-votes', {
+      'reeval.config.ts': threeHarnesses(extra),
+      ...asks(`'Which is cleaner?'`),
+    })
+    const plain = await project('questions-votes-none', {
+      'reeval.config.ts': threeHarnesses(extra),
+      ...asks(`undefined`),
+    })
+    const r = await runCli(asked.dir)
+    const without = await runCli(plain.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.equal(r.code, without.code, 'the exit code is the checks’')
+    const [e] = readRun(asked.dir).evals
+    const [w] = readRun(plain.dir).evals
+    assert.ok(e && w)
+    assert.equal(w.answers, undefined, 'no answers without questions')
+    assert.deepEqual(
+      [e.outcome, e.passRate, e.cells.map((c) => [c.key, c.outcome, c.pass, c.fail])],
+      [w.outcome, w.passRate, w.cells.map((c) => [c.key, c.outcome, c.pass, c.fail])],
+    )
+    assert.equal(e.passRate, 8 / 12, "bad's failures count in the pass rate")
+    const [answer] = e.answers ?? []
+    assert.ok(answer)
+    assert.equal(answer.model, 'fake')
+    assert.equal(answer.error, undefined)
+    // Within: 2 harnesses with passing attempts × 2 runs; across: 2 arms × 2 runs, one vs two.
+    assert.equal(answer.votes.length, 16)
+    assert.ok(!answer.votes.some((v) => [v.a, v.b, v.harness].includes('bad')), 'bad is in no pair')
+    assert.equal(answer.votes.filter((v) => v.swapped).length, 8)
+    assert.deepEqual(
+      answer.votes
+        .filter((v) => v.cut === 'across')
+        .map((v) => [v.arm, v.run, v.a, v.b, v.winner, v.swapped]),
+      ['base', 'skilled'].flatMap((arm) =>
+        [1, 2].flatMap((run) => [
+          [arm, run, 'one', 'two', 'two', false],
+          [arm, run, 'one', 'two', 'two', true],
+        ]),
+      ),
+    )
+    assert.deepEqual(
+      answer.rates.filter((x) => x.cut === 'across'),
+      [
+        { cut: 'across', name: 'one', wins: 0, n: 8 },
+        { cut: 'across', name: 'two', wins: 8, n: 8 },
+      ],
+    )
+    assert.match(
+      r.stdout,
+      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties · fake$/m,
+    )
+    const run = readRun(asked.dir)
+    assert.match(
+      run.read('summary.md'),
+      /^- Question: "Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · across: one 0\/8 \(0%\), two 8\/8 \(100%\) · 16 votes, 4 ties · fake$/m,
+    )
+    const agent = await runCli(asked.dir, ['run', '--ui', 'agent'])
+    assert.equal(agent.code, 1, agent.stdout + agent.stderr)
+    assert.match(
+      agent.stdout,
+      /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties · fake$/m,
+    )
+  })
+
+  test('a model error is kept on its answer and warned about; the outcome and exit code stand', async () => {
+    const p = await project('questions-model-error', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: ${OK},
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: { model: fakeAnalysis({ vote: { error: 'the model is over quota' } }) },
+})
+`,
+      ...asks(`'Which is cleaner?'`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(
+      r.stdout,
+      /compare question "Which is cleaner\?" on evals\/q\.eval\.ts › asks failed: the model is over quota\. Outcomes are unchanged\./,
+    )
+    assert.match(
+      r.stdout,
+      /question {2}"Which is cleaner\?" 0 votes, 0 ties · fake · failed: the model is over quota$/m,
+    )
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.outcome, 'pass')
+    assert.deepEqual(e?.answers, [
+      {
+        question: 'Which is cleaner?',
+        model: 'fake',
+        votes: [],
+        rates: [],
+        error: 'the model is over quota',
+      },
+    ])
   })
 })
 

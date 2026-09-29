@@ -3,17 +3,22 @@
 // history.test.ts.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
+import { answerQuestion, blindPair, stagedAttempt } from '../src/compare/questions.ts'
+import type { EngineEval } from '../src/engine/node.ts'
 import { cellOutcome, fingerprintOf, judgementKey } from '../src/history/assemble.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import { traceSources } from '../src/history/sources.ts'
 import type { FingerprintParts } from '../src/history/types.ts'
+import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
 import { liftInterval, wilson } from '../src/stats.ts'
-import type { Outcome } from '../src/types.ts'
+import type { BlindPair, EvalRecord, FakeAnalysisModel, FakeVote, Outcome } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
+import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
 
 const near = (actual: number, expected: number, what: string) =>
   assert.ok(Math.abs(actual - expected) < 5e-4, `${what}: ${actual} is not ${expected}`)
@@ -190,5 +195,260 @@ describe('CI pull request provenance', () => {
       CI_MERGE_REQUEST_TARGET_BRANCH_NAME: 'develop',
     })
     assert.deepEqual(gl.kind === 'ci' ? gl.pr : null, { number: 7, baseRef: 'develop' })
+  })
+})
+
+describe('compare question pairs', () => {
+  const side = (harness: string, arm: string, run: number, checksPassed = true): PairAttempt => ({
+    harness,
+    arm,
+    run,
+    diff: `diff --git a/${harness}-${arm}-${run}.txt b/${harness}-${arm}-${run}.txt\n+${harness}\n`,
+    checksPassed,
+    prompts: ['Write the file.'],
+  })
+  const matrix = (harnesses: string[], arms: string[], runs: number) =>
+    harnesses.flatMap((h) =>
+      arms.flatMap((a) => Array.from({ length: runs }, (_, i) => side(h, a, i + 1))),
+    )
+  const fake = (vote: FakeAnalysisModel['vote']): FakeAnalysisModel => ({
+    kind: 'fake-analysis',
+    vote,
+  })
+  const ask = (pairs: ReturnType<typeof pairsOf>, vote: FakeAnalysisModel['vote']) =>
+    answerQuestion({
+      question: 'Which is cleaner?',
+      model: fake(vote),
+      pairs,
+      maxInputTokens: 20_000,
+      maxOutputTokens: 100,
+    })
+
+  test('4 harnesses × 2 arms × N runs is 4N within pairs and 6N across pairs', () => {
+    for (const n of [1, 3]) {
+      const pairs = pairsOf(matrix(['h1', 'h2', 'h3', 'h4'], ['sdk', 'ui'], n))
+      assert.equal(pairs.filter((p) => p.cut === 'within').length, 4 * n)
+      assert.equal(pairs.filter((p) => p.cut === 'across').length, 6 * n * 2, 'six per arm per run')
+      for (const p of pairs) {
+        assert.equal(p.a.run, p.b.run, 'a pair is one run')
+        if (p.cut === 'within') assert.equal(p.a.harness, p.b.harness)
+        else assert.equal(p.a.arm, p.b.arm)
+      }
+    }
+  })
+
+  test('an attempt that failed its checks is in no pair', () => {
+    const attempts = matrix(['h1', 'h2'], ['sdk', 'ui'], 2)
+    const failed = attempts.find((a) => a.harness === 'h2' && a.arm === 'ui' && a.run === 2)
+    if (failed) failed.checksPassed = false
+    const pairs = pairsOf(attempts)
+    assert.ok(!pairs.some((p) => p.a === failed || p.b === failed))
+    // Without it, h2's run-2 arms and run 2's ui harnesses have no pair; the rest stand.
+    assert.equal(pairs.filter((p) => p.cut === 'within').length, 3)
+    assert.equal(pairs.filter((p) => p.cut === 'across').length, 3)
+  })
+
+  test('every pair is sent twice, swapped, and each pick maps back to its name', async () => {
+    const pairs = pairsOf(matrix(['h1', 'h2'], ['sdk', 'ui'], 1))
+    const seen: BlindPair[] = []
+    const answer = await ask(pairs, (p) => {
+      seen.push(p)
+      return 'A'
+    })
+    assert.equal(answer.error, undefined)
+    assert.equal(answer.votes.length, pairs.length * 2)
+    assert.equal(seen.length, pairs.length * 2)
+    for (const pair of pairs) {
+      const votes = answer.votes.filter(
+        (v) =>
+          v.cut === pair.cut &&
+          v.run === pair.run &&
+          (pair.cut === 'within' ? v.harness === pair.harness : v.arm === pair.arm),
+      )
+      assert.deepEqual(
+        votes.map((v) => [v.swapped, v.winner]),
+        [
+          [false, pair.cut === 'within' ? pair.a.arm : pair.a.harness],
+          [true, pair.cut === 'within' ? pair.b.arm : pair.b.harness],
+        ],
+        'always picking the first slot picks each side once',
+      )
+      const [first, second] = [
+        blindPair('Which is cleaner?', pair, false, 20_000),
+        blindPair('Which is cleaner?', pair, true, 20_000),
+      ]
+      assert.equal(first.a, second.b)
+      assert.equal(first.b, second.a)
+      assert.ok(first.a.includes(`+${pair.a.harness}`), 'a pair is two diffs')
+    }
+  })
+
+  test('the labels and prompt name no arm or harness', () => {
+    const [pair] = pairsOf([side('secret-harness', 'arm-x', 1), side('secret-harness', 'arm-y', 1)])
+    assert.ok(pair)
+    const blind = blindPair(
+      'Which?',
+      { ...pair, a: { ...pair.a, diff: '+one\n' }, b: { ...pair.b, diff: '+two\n' } },
+      false,
+      20_000,
+    )
+    for (const name of ['secret-harness', 'arm-x', 'arm-y', 'run 1', 'baseline', 'variant']) {
+      assert.ok(!blind.prompt.includes(name), `${name} is not in the prompt`)
+    }
+    assert.match(blind.prompt, /<attempt label="A">\n\+one\n\n<\/attempt>/)
+    assert.match(blind.prompt, /<task>\nWrite the file\.\n<\/task>/)
+  })
+
+  test('rates count wins over decided votes; ties count for neither side', () => {
+    const [pair] = pairsOf([side('h', 'sdk', 1), side('h', 'ui', 1)])
+    assert.ok(pair)
+    const votes = [
+      voteOf('q', pair, false, 'B'),
+      voteOf('q', pair, true, 'A'),
+      voteOf('q', pair, false, 'tie'),
+      voteOf('q', pair, true, 'B'),
+    ]
+    assert.deepEqual(
+      votes.map((v) => v.winner),
+      ['ui', 'ui', 'tie', 'sdk'],
+    )
+    assert.deepEqual(ratesOf(votes), [
+      { cut: 'within', name: 'sdk', wins: 1, n: 3 },
+      { cut: 'within', name: 'ui', wins: 2, n: 3 },
+    ])
+  })
+
+  test('a model error is kept on the answer, with no votes', async () => {
+    const pairs = pairsOf(matrix(['h1'], ['sdk', 'ui'], 1))
+    const answer = await ask(pairs, { error: 'quota exceeded' })
+    assert.deepEqual(answer, {
+      question: 'Which is cleaner?',
+      model: 'fake',
+      votes: [],
+      rates: [],
+      error: 'quota exceeded',
+    })
+  })
+
+  test("a staged attempt's checks held when it passed, or failed on a judge only", () => {
+    const e = (state: EngineEval['state']) =>
+      ({
+        state,
+        attempt: { cell: { key: 'h/sdk/fake', harness: 'h', environment: 'sdk' }, n: 2 },
+      }) as unknown as EngineEval
+    const record = (kind?: 'judge' | 'assertion') =>
+      ({
+        diff: { patch: '+x\n' },
+        error: kind ? { kind, message: '' } : null,
+        turns: [{ prompt: 'go' }],
+      }) as unknown as EvalRecord
+    assert.equal(stagedAttempt(e('passed'), record())?.checksPassed, true)
+    assert.equal(stagedAttempt(e('failed'), record('judge'))?.checksPassed, true)
+    assert.equal(stagedAttempt(e('failed'), record('assertion'))?.checksPassed, false)
+    assert.equal(stagedAttempt(e('skipped'), null)?.checksPassed, false)
+    assert.deepEqual(stagedAttempt(e('passed'), record()), {
+      harness: 'h',
+      arm: 'sdk',
+      run: 2,
+      diff: '+x\n',
+      checksPassed: true,
+      prompts: ['go'],
+      id: 'h/sdk/fake#2',
+    })
+  })
+})
+
+// The nightly contract's e2e runs: one eval, recorded twice on each of Cursor, Claude Code and
+// Codex. Their two runs stand in for two arms, so the real diffs give within and across pairs.
+describe('compare questions over real-harness runs (real-e2e-pairs)', () => {
+  const attempts = realAttempts('real-e2e-pairs')
+  const arms = ['first-run', 'second-run']
+  const sides: PairAttempt[] = REAL_HARNESSES.flatMap((harness) => {
+    const mine = attempts.filter((a) => a.harness === harness)
+    assert.equal(mine.length, 2, `two recorded runs on ${harness}`)
+    return mine.map((a, i) => ({
+      harness,
+      arm: arms[i] as string,
+      run: 1,
+      diff: readFileSync(a.diff as string, 'utf8'),
+      checksPassed: a.attempt.outcome === 'pass',
+      prompts: a.attempt.turns.map((t) => t.prompt),
+      id: a.attempt.key,
+    }))
+  })
+  const pairs = pairsOf(sides)
+  // Codex ends hello.txt with a newline; Cursor and Claude Code don't.
+  const endsWithNewline = (diff: string) => !diff.includes('No newline at end of file')
+  const vote = (p: BlindPair): FakeVote =>
+    endsWithNewline(p.a) === endsWithNewline(p.b) ? 'tie' : endsWithNewline(p.a) ? 'A' : 'B'
+
+  test('within: each harness’s two runs; across: the three harnesses per run', () => {
+    assert.ok(
+      sides.every((s) => s.checksPassed),
+      'every e2e attempt passed',
+    )
+    assert.deepEqual(
+      pairs.filter((p) => p.cut === 'within').map((p) => [p.harness, p.a.arm, p.b.arm]),
+      REAL_HARNESSES.map((h) => [h, 'first-run', 'second-run']),
+    )
+    assert.deepEqual(
+      pairs.filter((p) => p.cut === 'across').map((p) => [p.arm, p.a.harness, p.b.harness]),
+      arms.flatMap((arm) => [
+        [arm, 'cursor', 'claude-code'],
+        [arm, 'cursor', 'codex'],
+        [arm, 'claude-code', 'codex'],
+      ]),
+    )
+  })
+
+  test('each pair goes in both orders, blinded, with the two real diffs', async () => {
+    const seen: BlindPair[] = []
+    const answer = await answerQuestion({
+      question: 'Which ends hello.txt with a newline?',
+      model: {
+        kind: 'fake-analysis',
+        vote: (p) => {
+          seen.push(p)
+          return vote(p)
+        },
+      },
+      pairs,
+      maxInputTokens: 20_000,
+      maxOutputTokens: 100,
+    })
+    assert.equal(seen.length, pairs.length * 2)
+    const names = [
+      ...REAL_HARNESSES,
+      'claude',
+      'composer',
+      'haiku',
+      'gpt-',
+      ...arms,
+      ...new Set(attempts.map((a) => a.runId)),
+    ]
+    for (const [i, pair] of pairs.entries()) {
+      const [first, second] = [seen[i * 2], seen[i * 2 + 1]] as [BlindPair, BlindPair]
+      assert.ok(first.prompt.includes(patchForJudge(pair.a.diff).trimEnd()), 'A is a real diff')
+      assert.ok(first.prompt.includes(patchForJudge(pair.b.diff).trimEnd()), 'B is a real diff')
+      assert.equal(first.a, second.b, 'the repeat swaps the order')
+      assert.equal(first.b, second.a)
+      assert.match(first.prompt, /Create a file named hello\.txt/, 'the task both were given')
+      for (const name of names) {
+        assert.ok(!first.prompt.toLowerCase().includes(name), `${name} is not in the prompt`)
+      }
+    }
+    assert.equal(answer.error, undefined)
+    assert.equal(answer.votes.length, 18)
+    assert.equal(answer.votes.filter((v) => v.swapped).length, 9)
+    assert.equal(answer.votes.filter((v) => v.winner === 'tie').length, 10)
+    assert.ok(
+      answer.votes.filter((v) => v.winner !== 'tie').every((v) => v.winner === 'codex'),
+      'the side with the newline wins in either order',
+    )
+    assert.deepEqual(answer.rates, [
+      { cut: 'across', name: 'cursor', wins: 0, n: 4 },
+      { cut: 'across', name: 'codex', wins: 8, n: 8 },
+      { cut: 'across', name: 'claude-code', wins: 0, n: 4 },
+    ])
   })
 })
