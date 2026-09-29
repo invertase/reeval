@@ -612,6 +612,41 @@ describe('profiles', () => {
     )
   })
 
+  test("a profile's judge needs its own key, and a malformed one exits 2", async () => {
+    const p = await project('profile-judge-key', {
+      'reeval.config.ts': fakeConfig({
+        extra: `profiles: { real: { judge: { model: 'google/gemini-3.8-flash' } } },`,
+      }),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('judged', async (t) => {
+  await t.send('x')
+  expect(await t.judge('Did it?')).toPass()
+})
+`,
+    })
+    const noKeys = {
+      GOOGLE_GENERATIVE_AI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    const canary = await runCli(p.dir, ['run'], { env: noKeys })
+    assert.equal(canary.code, 0, "the config's fake judge needs no key")
+    const missing = await runCli(p.dir, ['run', '--profile', 'real'], { env: noKeys })
+    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+    assert.match(
+      missing.stderr,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+    )
+    const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
+      env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
+    })
+    assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+    assert.match(
+      malformed.stderr,
+      /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
+    )
+  })
+
   test('a profile name typo exits 2 and lists the profiles', async () => {
     const p = await fixture('plan/profiles')
     const typo = await runCli(p.dir, ['run', '--profile', 'nigthly'])

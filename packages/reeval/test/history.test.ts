@@ -356,10 +356,7 @@ describe('recording runs into evals/.history', () => {
   },`,
       }),
     })
-    // The credential check still asks for the config judge's key; the fake judge never uses it.
-    const r = await runCli(withProfile.dir, ['run', '--profile', 'ci'], {
-      env: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
-    })
+    const r = await runCli(withProfile.dir, ['run', '--profile', 'ci'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const { run } = readRun(withProfile.dir)
     assert.equal(run.evals[0]?.attempts[0]?.judgements[0]?.threshold, 0.8, 'the profile judged')
