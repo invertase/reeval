@@ -1174,7 +1174,7 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
       assert.deepEqual(validate(doc, readableAnalysisNote(note)), [], note.evalId)
       assert.deepEqual(
         [note.kind, note.schemaVersion, note.model, note.error],
-        ['es-analysis-note', 1, 'fake', undefined],
+        ['reeval-analysis-note', 1, 'fake', undefined],
       )
     }
     assert.throws(

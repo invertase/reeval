@@ -102,7 +102,7 @@ export type AnalysisDoc = {
  * finish: `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.
  */
 export type AnalysisNote = {
-  kind: 'es-analysis-note'
+  kind: 'reeval-analysis-note'
   schemaVersion: 1
   runId: string
   evalId: string

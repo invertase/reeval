@@ -95,7 +95,7 @@ export function noteTools(attempts: AttemptView[], maxChars: number) {
 export async function writeAgentNote(input: NoteInput): Promise<AnalysisNote> {
   const { model, runId, evalId, harness, attempts } = input
   const base = {
-    kind: 'es-analysis-note' as const,
+    kind: 'reeval-analysis-note' as const,
     schemaVersion: 1 as const,
     runId,
     evalId,

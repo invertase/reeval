@@ -151,7 +151,7 @@ export async function listNotes(root: string, runId: string): Promise<AnalysisNo
     const file = join(dir, name)
     try {
       const note = JSON.parse(await readFile(file, 'utf8')) as AnalysisNote
-      if (note?.kind === 'es-analysis-note') notes.push(readableAnalysisNote(note, file))
+      if (note?.kind === 'reeval-analysis-note') notes.push(readableAnalysisNote(note, file))
     } catch (error) {
       if (error instanceof NewerSchemaError && !warned.has(file)) {
         warned.add(file)
