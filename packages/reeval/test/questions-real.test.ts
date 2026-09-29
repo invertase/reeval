@@ -100,9 +100,10 @@ test('examples/hello --profile questions: every pair is voted in both orders', {
     )
   }
 
-  // The studio's run page reads the same answer from a static build: one row, its rates per cut.
+  // The studio's run page reads the same answer from a static build (the run isn't recorded, so
+  // --scratch): one row, its rates per cut.
   const out = join(dir, 'site')
-  const built = await runCli(dir, ['studio', 'build', '--out', out])
+  const built = await runCli(dir, ['studio', 'build', '--out', out, '--scratch'])
   assert.equal(built.code, 0, built.stderr)
   const page = JSON.parse(readFileSync(join(out, recordPath(run.runId)), 'utf8')) as RunRecord
   const [row, ...more] = answerRows(page.evals[0] as RunRecord['evals'][number])
