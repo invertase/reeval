@@ -1,0 +1,347 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T215535Z_2e1894e_cursor-agent_9d9e",
+  "status": "complete",
+  "startedAt": "2026-09-29T21:55:35.213Z",
+  "endedAt": "2026-09-29T21:55:49.004Z",
+  "durationMs": 13791,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "2e1894e26720822b44641bcfadfc8fd94e426547",
+    "branch": "ehesp/experiment-dart-evals-ca15",
+    "dirty": true,
+    "diffHash": "3f624b99da341e5db34f43a497484250a4b6af198e116e9b42151c04344af64e",
+    "worktreePatch": {
+      "path": "worktree.patch",
+      "sha256": "3f624b99da341e5db34f43a497484250a4b6af198e116e9b42151c04344af64e",
+      "bytes": 9298
+    },
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-29T21:52:51+00:00",
+    "shallow": false,
+    "remote": "https://github.com/invertase/evalsuite"
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "5c7602959760"
+  },
+  "dependencies": {
+    "lockfiles": [
+      {
+        "path": "pubspec.lock",
+        "sha256": "ab6935ea2be8ad438682e0829e64df94c6df39bda00d7067ef4bfdb9afe77977"
+      },
+      {
+        "path": "../../pnpm-lock.yaml",
+        "sha256": "a01135b30fcde5231d94c7f162f4cc7e9a8b4bd84b77b8082571c832ce7516dc"
+      }
+    ]
+  },
+  "stack": {
+    "es": "0.2.0",
+    "node": "26.3.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.0-dart-stable-038975bd",
+        "id": "sha256:1e36d8abcc2034df4287fb956f2c0cbb32761caa309158f907b397ae0863243b",
+        "agentCli": "@cursor/sdk 1.0.32",
+        "base": "reeval-sandbox:cursor-0.1.0-dart-stable-038975bd",
+        "install": [],
+        "dockerfile": null,
+        "from": {
+          "ref": "dart:stable",
+          "digest": "sha256:6e80d60cb5679cb17b9cc40f6d299c0b7ca92ab31a692a5394c07ee0549d3c8d"
+        },
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "cursor:composer-2.5",
+        "kind": "cursor",
+        "model": "composer-2.5",
+        "resolvedModels": [
+          "composer-2.5[fast=true]"
+        ]
+      }
+    ],
+    "judge": {
+      "model": "google/gemini-3.8-flash",
+      "resolvedModels": [
+        "gemini-3.8-flash"
+      ],
+      "threshold": 0.8,
+      "version": "1cae8d47733e"
+    },
+    "context": [
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 180000,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "docker:dart:stable",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": "google/gemini-3.8-flash",
+    "threshold": 0.8,
+    "timeoutMs": 600000,
+    "concurrency": 4,
+    "configHash": "5de136a164dcceff6c219d459bb90382d76a38b5c06f0b74b63f9faafcc9c156"
+  },
+  "cost": {
+    "inputTokens": 50447,
+    "outputTokens": 706,
+    "usage": {
+      "input": 32399,
+      "output": 706,
+      "cacheRead": 18048,
+      "cacheWrite": 0,
+      "reasoning": null
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/greet_eval.dart › greet library › writes a greet function",
+      "key": "evals/greet_eval.dart › greet library › writes a greet function",
+      "slug": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb",
+      "file": "evals/greet_eval.dart",
+      "group": [
+        "greet library"
+      ],
+      "name": "writes a greet function",
+      "tags": [
+        "smoke"
+      ],
+      "fingerprint": "9d5a7a38b8a4f54a71813baecf41471a57d4e9089b15db4f1c76ebcfcf4efa82",
+      "sources": [
+        {
+          "path": "evals/greet_eval.dart",
+          "sha256": "d43e05efb748972633bd2a98507a4d9bd4c1b227269286f71a1d0f2d7621101e"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/-/docker:dart:stable",
+          "harness": "cursor:composer-2.5",
+          "environment": "-",
+          "sandbox": "docker:dart:stable",
+          "role": "control",
+          "fingerprint": "195c3a1588eb07930cbba1afa2f78b87fd5529c087e95c513c00e7f2ad908041",
+          "fingerprintParts": {
+            "sources": "84f891a6b863f582d9de5c99cdd63ea52d6a4accef82ce2e492f8f246e33aacf",
+            "harness": "84f8a02aabf8cc5f94e282a5b85d7148d3089b2f44fd550dcea1d89cbe80870b",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:1e36d8abcc2034df4287fb956f2c0cbb32761caa309158f907b397ae0863243b",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "b9f0d30838b6beb522545f4300a563401b098291300b45131d5f10f070feb791",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": null,
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet_eval.dart › greet library › writes a greet function # cursor:composer-2.5/-/docker:dart:stable#1",
+          "id": "cursor:composer-2.5/-/docker:dart:stable#1",
+          "cell": "cursor:composer-2.5/-/docker:dart:stable",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T21:55:35.773Z",
+          "imageId": "sha256:1e36d8abcc2034df4287fb956f2c0cbb32761caa309158f907b397ae0863243b",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 14,
+                "sent": 115792,
+                "received": 252530
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 13228,
+          "turns": [
+            {
+              "prompt": "Create lib/greet.dart exporting String greet(String name) that returns \"Hello, <name>!\", and bin/main.dart that prints greet() of its first argument, or of \"Dart\" without one. Import lib/greet.dart with a relative import. No dependencies.",
+              "status": "completed",
+              "startedAt": "2026-09-29T21:55:37.651Z",
+              "durationMs": 9092,
+              "usage": {
+                "input": 32399,
+                "output": 706,
+                "cacheRead": 18048,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=true]",
+              "unreported": [],
+              "error": null,
+              "text": "Checking the workspace structure, then creating the Dart files.\n\n\nCreating a minimal Dart package with `lib/greet.dart` and `bin/main.dart`.\n\n\nHere’s what was added:\n\n**`lib/greet.dart`** — `greet` returns `\"Hello, <name>!\"`.\n\n**`bin/main.dart`** — uses `import '../lib/greet.dart';`, prints `greet` for the first CLI argument, or `greet('Dart')` when there are no args.\n\nA minimal **`pubspec.yaml`** (name + SDK constraint, no dependencies) is included so `dart run bin/main.dart` works in a normal Dart setup. Dart isn’t available in this environment, so it wasn’t run here.\n\n```bash\ndart run bin/main.dart          # Hello, Dart!\ndart run bin/main.dart Alice    # Hello, Alice!\n```"
+            }
+          ],
+          "usage": {
+            "input": 32399,
+            "output": 706,
+            "cacheRead": 18048,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 1877,
+            "agentMs": 9093,
+            "diffMs": 140,
+            "checksMs": 283,
+            "judgeMs": 1297
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 3,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 717
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 1,
+              "threshold": 0.8,
+              "question": "Does the final message describe the files it created?",
+              "model": "google/gemini-3.8-flash",
+              "resolvedModel": "gemini-3.8-flash",
+              "key": "0:f516b985fec3"
+            }
+          ],
+          "checks": [
+            {
+              "command": "dart bin/main.dart",
+              "exitCode": 0,
+              "durationMs": 283,
+              "log": {
+                "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/cursor-composer-2-5-docker-dart-stable-460ee2/1/checks/1.log",
+                "sha256": "68750d7501579ff32801bf353942aadb759f6831f991d37b0cf1d84aa2c90a4e",
+                "bytes": 63
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "bin/main.dart",
+              "status": "added"
+            },
+            {
+              "path": "lib/greet.dart",
+              "status": "added"
+            },
+            {
+              "path": "pubspec.yaml",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/cursor-composer-2-5-docker-dart-stable-460ee2/1/transcript.jsonl",
+              "sha256": "e6c123e2d254df4de52bb81e5ca297ea4d6ce290cf20e69b43f9d005efeebef5",
+              "bytes": 3696
+            },
+            "diff": {
+              "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/cursor-composer-2-5-docker-dart-stable-460ee2/1/diff.patch",
+              "sha256": "1c841afd81550ae646409b8b91d1b567bfeea7bb2ef73abd8b7e29580f396ba0",
+              "bytes": 643
+            },
+            "judgeInput": {
+              "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/cursor-composer-2-5-docker-dart-stable-460ee2/1/judge-input.json",
+              "sha256": "11940ff891b85e962d75be7b468350e23c5c482e7203db9890521fb38f065225",
+              "bytes": 1396
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

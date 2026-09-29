@@ -96,7 +96,7 @@ export async function startDartRunner(command: RunnerCommand, cwd: string): Prom
     if (goneReason !== undefined) return
     goneReason = await Promise.race([
       exited,
-      new Promise<string>((r) => setTimeout(() => r('it closed its connection'), 1_000)),
+      new Promise<string>((r) => setTimeout(() => r('it closed its connection'), 1_000).unref()),
     ])
     for (const listener of gone) listener(goneReason)
   }

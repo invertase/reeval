@@ -1,0 +1,16 @@
+diff --git a/bin/main.dart b/bin/main.dart
+new file mode 100644
+index 0000000..e3f12f6
+--- /dev/null
++++ b/bin/main.dart
+@@ -0,0 +1,3 @@
++import '../lib/greet.dart';
++
++void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
+diff --git a/lib/greet.dart b/lib/greet.dart
+new file mode 100644
+index 0000000..000d6e1
+--- /dev/null
++++ b/lib/greet.dart
+@@ -0,0 +1 @@
++String greet(String name) => 'Hello, $name!';

@@ -1,0 +1,268 @@
+diff --git a/examples/dart_hello/evals/fake_agent.dart b/examples/dart_hello/evals/fake_agent.dart
+new file mode 100644
+index 0000000..339b34a
+--- /dev/null
++++ b/examples/dart_hello/evals/fake_agent.dart
+@@ -0,0 +1,17 @@
++import 'package:reeval/reeval.dart';
++
++const _greet = '''
++String greet(String name) => 'Hello, \$name!';
++''';
++
++const _main = '''
++import '../lib/greet.dart';
++
++void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
++''';
++
++/// A fake agent that writes the files the evals ask for, for runs without credentials.
++final fakeAgent = fakeHarness(
++  files: {'lib/greet.dart': _greet, 'bin/main.dart': _main},
++  text: 'I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.',
++);
+diff --git a/examples/dart_hello/reeval.config.dart b/examples/dart_hello/reeval.config.dart
+index 1f4dcdd..1f75772 100644
+--- a/examples/dart_hello/reeval.config.dart
++++ b/examples/dart_hello/reeval.config.dart
+@@ -2,21 +2,10 @@
+ // the checks run there on the host, and the judge returns a canned verdict.
+ import 'package:reeval/reeval.dart';
+ 
+-const _greet = '''
+-String greet(String name) => 'Hello, \$name!';
+-''';
+-
+-const _main = '''
+-import '../lib/greet.dart';
+-
+-void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
+-''';
++import 'evals/fake_agent.dart';
+ 
+ ReevalConfig main() => defineConfig(
+-  harness: fakeHarness(
+-    files: {'lib/greet.dart': _greet, 'bin/main.dart': _main},
+-    text: 'I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.',
+-  ),
++  harness: fakeAgent,
+   sandbox: fakeSandbox(),
+   judge: Judge.fake(score: 0.92),
+   timeout: const Duration(minutes: 2),
+diff --git a/examples/dart_hello/reeval.cursor.config.dart b/examples/dart_hello/reeval.cursor.config.dart
+new file mode 100644
+index 0000000..96086c5
+--- /dev/null
++++ b/examples/dart_hello/reeval.cursor.config.dart
+@@ -0,0 +1,11 @@
++// Cursor's agent in a Docker sandbox built from the official Dart image, judged by Gemini. Needs
++// CURSOR_API_KEY and GOOGLE_GENERATIVE_AI_API_KEY, and the image:
++// reeval image build --config reeval.cursor.config.dart
++import 'package:reeval/reeval.dart';
++
++ReevalConfig main() => defineConfig(
++  harness: cursor(model: 'composer-2.5'),
++  sandbox: docker(from: 'dart:stable'),
++  judge: Judge.model('google/gemini-3.8-flash', threshold: 0.8),
++  timeout: const Duration(minutes: 10),
++);
+diff --git a/examples/dart_hello/reeval.docker.config.dart b/examples/dart_hello/reeval.docker.config.dart
+new file mode 100644
+index 0000000..99a87a2
+--- /dev/null
++++ b/examples/dart_hello/reeval.docker.config.dart
+@@ -0,0 +1,12 @@
++// The fake agent in a Docker sandbox built from the official Dart image, so `t.exec('dart ...')`
++// runs in the container. Build it once: reeval image build --config reeval.docker.config.dart
++import 'package:reeval/reeval.dart';
++
++import 'evals/fake_agent.dart';
++
++ReevalConfig main() => defineConfig(
++  harness: fakeAgent,
++  sandbox: docker(from: 'dart:stable'),
++  judge: Judge.fake(score: 0.92),
++  timeout: const Duration(minutes: 5),
++);
+diff --git a/scripts/install.sh b/scripts/install.sh
+new file mode 100755
+index 0000000..6a0960b
+--- /dev/null
++++ b/scripts/install.sh
+@@ -0,0 +1,51 @@
++#!/bin/sh
++# Installs the reeval binary: curl -fsSL https://reeval.ai/install.sh | sh
++#
++#   REEVAL_DOWNLOAD_URL  where to get the binary (default: reeval.ai's build for this platform);
++#                        a file:// URL installs a local build
++#   REEVAL_INSTALL       where to install (default: ~/.reeval); the binary goes in its bin/
++#
++# Experimental: nothing publishes binaries yet. Build one with node scripts/bun-compile.mjs.
++set -eu
++
++fail() {
++  echo "reeval install: $*" >&2
++  exit 1
++}
++
++case "$(uname -s)" in
++  Linux) os=linux ;;
++  Darwin) os=darwin ;;
++  *) fail "no reeval build for $(uname -s); install the npm package instead: npm i -D reeval" ;;
++esac
++case "$(uname -m)" in
++  x86_64 | amd64) arch=x64 ;;
++  arm64 | aarch64) arch=arm64 ;;
++  *) fail "no reeval build for $(uname -m)" ;;
++esac
++
++command -v curl >/dev/null 2>&1 || fail "curl is required"
++
++url="${REEVAL_DOWNLOAD_URL:-https://reeval.ai/download/latest/reeval-$os-$arch}"
++dir="${REEVAL_INSTALL:-$HOME/.reeval}"
++bin="$dir/bin"
++mkdir -p "$bin"
++
++tmp="$(mktemp "$bin/.reeval.XXXXXX")"
++trap 'rm -f "$tmp"' EXIT
++echo "Downloading reeval ($os-$arch) from $url"
++curl -fsSL "$url" -o "$tmp" || fail "download failed: $url"
++chmod 755 "$tmp"
++version="$("$tmp" --version 2>/dev/null)" || fail "the downloaded file doesn't run on this machine"
++mv "$tmp" "$bin/reeval"
++trap - EXIT
++
++echo "Installed reeval $version to $bin/reeval"
++case ":$PATH:" in
++  *":$bin:"*) ;;
++  *)
++    echo
++    echo "Add it to your PATH, e.g. in ~/.profile or ~/.zshrc:"
++    echo "  export PATH=\"$bin:\$PATH\""
++    ;;
++esac
+diff --git a/sdks/dart/lib/src/expect.dart b/sdks/dart/lib/src/expect.dart
+index 77c8854..0ad65e0 100644
+--- a/sdks/dart/lib/src/expect.dart
++++ b/sdks/dart/lib/src/expect.dart
+@@ -83,10 +83,7 @@ void _check(Object? actual, Object? expected, String? reason) {
+   // Plain values get the binary's diff, so the message stays one line, as `expect(a).toBe(b)` does.
+   if (expected is! Matcher && _plain(expected) && _plain(actual)) {
+     throw ReevalAssertion(
+-      [
+-        'expected ${_oneLine(actual)} to equal ${_oneLine(expected)}',
+-        ?reason,
+-      ].join('\n'),
++      ['expected ${_oneLine(actual)} to equal ${_oneLine(expected)}', ?reason].join('\n'),
+       expected: expected,
+       actual: actual,
+       diffable: true,
+@@ -94,9 +91,7 @@ void _check(Object? actual, Object? expected, String? reason) {
+   }
+   final which = StringDescription();
+   matcher.describeMismatch(actual, which, state, false);
+-  throw ReevalAssertion(
+-    _format(description.toString(), _show(actual), which.toString(), reason),
+-  );
++  throw ReevalAssertion(_format(description.toString(), _show(actual), which.toString(), reason));
+ }
+ 
+ final class _ExitsWith extends Matcher {
+diff --git a/sdks/dart/test/declare_test.dart b/sdks/dart/test/declare_test.dart
+new file mode 100644
+index 0000000..4e67912
+--- /dev/null
++++ b/sdks/dart/test/declare_test.dart
+@@ -0,0 +1,92 @@
++import 'package:reeval/reeval.dart' as reeval;
++import 'package:reeval/src/declare.dart' show declare;
++import 'package:test/test.dart';
++
++void main() {
++  test('records groups, evals, modes and options as the declaration tree', () {
++    final declared = declare(() {
++      reeval.group('greet', tags: ['smoke'], harness: reeval.fakeHarness(text: 'hi'), () {
++        reeval.evaluate('writes it', (t) async {}, runs: 2, timeout: const Duration(seconds: 90));
++        reeval.evaluate('skipped', (t) async {}, skip: 'flaky');
++      });
++      reeval.evaluate('only this', (t) async {}, solo: true);
++      reeval.todo('later');
++    });
++
++    expect(declared.tree, {
++      'children': [
++        {
++          'type': 'group',
++          'name': 'greet',
++          'mode': 'run',
++          'options': {
++            'harness': {'kind': 'fake', 'text': 'hi'},
++            'tags': ['smoke'],
++          },
++          'children': [
++            {
++              'type': 'eval',
++              'name': 'writes it',
++              'mode': 'run',
++              'options': {'runs': 2, 'timeout': '90000ms'},
++              'body': 'b1',
++            },
++            {'type': 'eval', 'name': 'skipped', 'mode': 'skip', 'options': {}, 'body': 'b2'},
++          ],
++        },
++        {'type': 'eval', 'name': 'only this', 'mode': 'only', 'options': {}, 'body': 'b3'},
++        {'type': 'todo', 'name': 'later'},
++      ],
++    });
++    expect(declared.bodies.keys, ['b1', 'b2', 'b3']);
++  });
++
++  test('refuses evaluate() outside an eval file being loaded', () {
++    expect(() => reeval.evaluate('x', (t) async {}), throwsStateError);
++  });
++
++  test('defineConfig emits the binary option keys, without nulls', () {
++    final config = reeval.defineConfig(
++      sandbox: reeval.docker(from: 'dart:stable'),
++      judge: reeval.Judge.model('google/gemini-3.8-flash', threshold: 0.8),
++      env: {
++        'KEY': reeval.secret(hosts: ['api.example.com']),
++      },
++    );
++    expect(config.toJson(), {
++      'include': ['evals/**/*_eval.dart'],
++      'sandbox': {'kind': 'docker', 'from': 'dart:stable'},
++      'judge': {'model': 'google/gemini-3.8-flash', 'threshold': 0.8},
++      'env': {
++        'KEY': {
++          'kind': 'secret',
++          'hosts': ['api.example.com'],
++        },
++      },
++    });
++  });
++
++  test('a failed plain-value expectation carries both values for the diff', () {
++    expect(
++      () => reeval.expect('Hello', 'Ahoy'),
++      throwsA(
++        isA<reeval.ReevalAssertion>()
++            .having((e) => e.diffable, 'diffable', isTrue)
++            .having((e) => e.message, 'message', "expected 'Hello' to equal 'Ahoy'"),
++      ),
++    );
++    expect(
++      () => reeval.expect(
++        reeval.ExecResult({'exitCode': 1, 'stdout': '', 'stderr': 'boom'}),
++        reeval.succeeds,
++      ),
++      throwsA(
++        isA<reeval.ReevalAssertion>().having(
++          (e) => e.message,
++          'message',
++          contains('exited with 1; stderr:\nboom'),
++        ),
++      ),
++    );
++  });
++}

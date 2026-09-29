@@ -2,21 +2,10 @@
 // the checks run there on the host, and the judge returns a canned verdict.
 import 'package:reeval/reeval.dart';
 
-const _greet = '''
-String greet(String name) => 'Hello, \$name!';
-''';
-
-const _main = '''
-import '../lib/greet.dart';
-
-void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
-''';
+import 'evals/fake_agent.dart';
 
 ReevalConfig main() => defineConfig(
-  harness: fakeHarness(
-    files: {'lib/greet.dart': _greet, 'bin/main.dart': _main},
-    text: 'I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.',
-  ),
+  harness: fakeAgent,
   sandbox: fakeSandbox(),
   judge: Judge.fake(score: 0.92),
   timeout: const Duration(minutes: 2),

@@ -1,0 +1,672 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T215641Z_2e1894e_cursor-agent_k6ev",
+  "status": "complete",
+  "startedAt": "2026-09-29T21:56:41.444Z",
+  "endedAt": "2026-09-29T21:56:42.218Z",
+  "durationMs": 774,
+  "author": "cursor-agent",
+  "git": {
+    "sha": "2e1894e26720822b44641bcfadfc8fd94e426547",
+    "branch": "ehesp/experiment-dart-evals-ca15",
+    "dirty": true,
+    "diffHash": "3f624b99da341e5db34f43a497484250a4b6af198e116e9b42151c04344af64e",
+    "worktreePatch": {
+      "path": "worktree.patch",
+      "sha256": "3f624b99da341e5db34f43a497484250a4b6af198e116e9b42151c04344af64e",
+      "bytes": 9298
+    },
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-29T21:52:51+00:00",
+    "shallow": false,
+    "remote": "https://github.com/invertase/evalsuite"
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "5c7602959760"
+  },
+  "dependencies": {
+    "lockfiles": [
+      {
+        "path": "pubspec.lock",
+        "sha256": "ab6935ea2be8ad438682e0829e64df94c6df39bda00d7067ef4bfdb9afe77977"
+      },
+      {
+        "path": "../../pnpm-lock.yaml",
+        "sha256": "a01135b30fcde5231d94c7f162f4cc7e9a8b4bd84b77b8082571c832ce7516dc"
+      }
+    ]
+  },
+  "stack": {
+    "es": "0.2.0",
+    "node": "26.3.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "fake",
+        "kind": "fake",
+        "model": null,
+        "resolvedModels": []
+      }
+    ],
+    "judge": {
+      "model": "fake",
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "5f5bd2b4c5f3"
+    },
+    "context": [],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 3,
+    "cells": 3,
+    "attempts": 3,
+    "estimateMs": 5155,
+    "sandboxWarnings": []
+  },
+  "budget": null,
+  "config": {
+    "sandbox": "fake",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": "fake",
+    "threshold": 0.8,
+    "timeoutMs": 120000,
+    "concurrency": 4,
+    "configHash": "92de184ee98815fbaba9d03b202e933edd21bf5f4858e2c792f5e8b1d7b2d4cd"
+  },
+  "cost": {
+    "inputTokens": null,
+    "outputTokens": null,
+    "usage": null,
+    "source": "unreported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 4,
+    "attempts": 4,
+    "pass": 3,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 1
+  },
+  "evals": [
+    {
+      "id": "evals/greet_eval.dart › greet library › writes a greet function",
+      "key": "evals/greet_eval.dart › greet library › writes a greet function",
+      "slug": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb",
+      "file": "evals/greet_eval.dart",
+      "group": [
+        "greet library"
+      ],
+      "name": "writes a greet function",
+      "tags": [
+        "smoke"
+      ],
+      "fingerprint": "b1fe5a805f6d2ec9f19f54128f23bc8b8a9c6269da8b11729ee7924ca8a783c8",
+      "sources": [
+        {
+          "path": "evals/greet_eval.dart",
+          "sha256": "d43e05efb748972633bd2a98507a4d9bd4c1b227269286f71a1d0f2d7621101e"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "dc59f869da1efbb1c0b609919af27f9f0cafd4eb0716c60970ca14b9e8ad22ce",
+          "fingerprintParts": {
+            "sources": "84f891a6b863f582d9de5c99cdd63ea52d6a4accef82ce2e492f8f246e33aacf",
+            "harness": "bfa974bdcc3fa89a728defdda5c83baa1e9ee5478044a17937e4fcca5b1ce1ae",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "bc161c64b483bdf715289dd074ffec47a255381bbe9ea0cd03bd887028e0589f",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet_eval.dart › greet library › writes a greet function # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T21:56:41.919Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 288,
+          "turns": [
+            {
+              "prompt": "Create lib/greet.dart exporting String greet(String name) that returns \"Hello, <name>!\", and bin/main.dart that prints greet() of its first argument, or of \"Dart\" without one. Import lib/greet.dart with a relative import. No dependencies.",
+              "status": "completed",
+              "startedAt": "2026-09-29T21:56:41.938Z",
+              "durationMs": 2,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I created lib/greet.dart with greet(name), and bin/main.dart, which prints it."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 15,
+            "agentMs": 3,
+            "diffMs": 8,
+            "checksMs": 247,
+            "judgeMs": 1
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [
+            {
+              "verdict": "pass",
+              "score": 0.92,
+              "threshold": 0.8,
+              "question": "Does the final message describe the files it created?",
+              "model": "fake",
+              "key": "0:f516b985fec3"
+            }
+          ],
+          "checks": [
+            {
+              "command": "dart bin/main.dart",
+              "exitCode": 0,
+              "durationMs": 247,
+              "log": {
+                "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "68750d7501579ff32801bf353942aadb759f6831f991d37b0cf1d84aa2c90a4e",
+                "bytes": 63
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "bin/main.dart",
+              "status": "added"
+            },
+            {
+              "path": "lib/greet.dart",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "047a1e94da207ec777b2abf98575c6df4573e1a2e9fb3b6ccbdac93066ab6051",
+              "bytes": 1279
+            },
+            "diff": {
+              "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/fake-fake-70e87d/1/diff.patch",
+              "sha256": "bd9006afcf6c4722aff2edd37a641335047fba7a409d3d03bebfb93130d27947",
+              "bytes": 428
+            },
+            "judgeInput": {
+              "path": "evals-greet-eval-dart-greet-library-writes-a-greet-function-e7e3eb/fake-fake-70e87d/1/judge-input.json",
+              "sha256": "167e3c70c176e8e9a5ef1b65213e603c8a5a1978025eb9a03345cc51fc19f888",
+              "bytes": 712
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet_eval.dart › greet library › greets Ada",
+      "key": "evals/greet_eval.dart › greet library › greets Ada",
+      "slug": "evals-greet-eval-dart-greet-library-greets-ada-a10b99",
+      "file": "evals/greet_eval.dart",
+      "group": [
+        "greet library"
+      ],
+      "name": "greets Ada",
+      "tags": [
+        "smoke"
+      ],
+      "fingerprint": "b1fe5a805f6d2ec9f19f54128f23bc8b8a9c6269da8b11729ee7924ca8a783c8",
+      "sources": [
+        {
+          "path": "evals/greet_eval.dart",
+          "sha256": "d43e05efb748972633bd2a98507a4d9bd4c1b227269286f71a1d0f2d7621101e"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "dc59f869da1efbb1c0b609919af27f9f0cafd4eb0716c60970ca14b9e8ad22ce",
+          "fingerprintParts": {
+            "sources": "84f891a6b863f582d9de5c99cdd63ea52d6a4accef82ce2e492f8f246e33aacf",
+            "harness": "bfa974bdcc3fa89a728defdda5c83baa1e9ee5478044a17937e4fcca5b1ce1ae",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "bc161c64b483bdf715289dd074ffec47a255381bbe9ea0cd03bd887028e0589f",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet_eval.dart › greet library › greets Ada # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-09-29T21:56:41.922Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 293,
+          "turns": [
+            {
+              "prompt": "Create lib/greet.dart exporting String greet(String name) that returns \"Hello, <name>!\", and bin/main.dart that prints greet() of its first argument, or of \"Dart\" without one. Import lib/greet.dart with a relative import. No dependencies.",
+              "status": "completed",
+              "startedAt": "2026-09-29T21:56:41.939Z",
+              "durationMs": 0,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I created lib/greet.dart with greet(name), and bin/main.dart, which prints it."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 14,
+            "agentMs": 1,
+            "diffMs": 9,
+            "checksMs": 262,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "dart bin/main.dart Ada",
+              "exitCode": 0,
+              "durationMs": 262,
+              "log": {
+                "path": "evals-greet-eval-dart-greet-library-greets-ada-a10b99/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "0d43898585634e0f89673d88566cddea45cc01be5bc3470eb63cf431052d210a",
+                "bytes": 66
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "bin/main.dart",
+              "status": "added"
+            },
+            {
+              "path": "lib/greet.dart",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-dart-greet-library-greets-ada-a10b99/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "a2c2ab599d0295aca1421af01956274a93f2036dd8734ee721ae16acead23541",
+              "bytes": 1279
+            },
+            "diff": {
+              "path": "evals-greet-eval-dart-greet-library-greets-ada-a10b99/fake-fake-70e87d/1/diff.patch",
+              "sha256": "bd9006afcf6c4722aff2edd37a641335047fba7a409d3d03bebfb93130d27947",
+              "bytes": 428
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet_eval.dart › greet library › greets Grace",
+      "key": "evals/greet_eval.dart › greet library › greets Grace",
+      "slug": "evals-greet-eval-dart-greet-library-greets-grace-1447d4",
+      "file": "evals/greet_eval.dart",
+      "group": [
+        "greet library"
+      ],
+      "name": "greets Grace",
+      "tags": [
+        "smoke"
+      ],
+      "fingerprint": "b1fe5a805f6d2ec9f19f54128f23bc8b8a9c6269da8b11729ee7924ca8a783c8",
+      "sources": [
+        {
+          "path": "evals/greet_eval.dart",
+          "sha256": "d43e05efb748972633bd2a98507a4d9bd4c1b227269286f71a1d0f2d7621101e"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "fake/-/fake",
+          "harness": "fake",
+          "environment": "-",
+          "sandbox": "fake",
+          "role": "control",
+          "fingerprint": "dc59f869da1efbb1c0b609919af27f9f0cafd4eb0716c60970ca14b9e8ad22ce",
+          "fingerprintParts": {
+            "sources": "84f891a6b863f582d9de5c99cdd63ea52d6a4accef82ce2e492f8f246e33aacf",
+            "harness": "bfa974bdcc3fa89a728defdda5c83baa1e9ee5478044a17937e4fcca5b1ce1ae",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": null,
+            "agentCli": null,
+            "judge": "bc161c64b483bdf715289dd074ffec47a255381bbe9ea0cd03bd887028e0589f",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "fake",
+          "model": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet_eval.dart › greet library › greets Grace # fake/-/fake#1",
+          "id": "fake/-/fake#1",
+          "cell": "fake/-/fake",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-09-29T21:56:41.922Z",
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": false,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 279,
+          "turns": [
+            {
+              "prompt": "Create lib/greet.dart exporting String greet(String name) that returns \"Hello, <name>!\", and bin/main.dart that prints greet() of its first argument, or of \"Dart\" without one. Import lib/greet.dart with a relative import. No dependencies.",
+              "status": "completed",
+              "startedAt": "2026-09-29T21:56:41.939Z",
+              "durationMs": 2,
+              "usage": null,
+              "model": null,
+              "unreported": [],
+              "error": null,
+              "text": "I created lib/greet.dart with greet(name), and bin/main.dart, which prints it."
+            }
+          ],
+          "usage": null,
+          "timings": {
+            "setupMs": 13,
+            "agentMs": 2,
+            "diffMs": 9,
+            "checksMs": 244,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 2,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "dart bin/main.dart Grace",
+              "exitCode": 0,
+              "durationMs": 244,
+              "log": {
+                "path": "evals-greet-eval-dart-greet-library-greets-grace-1447d4/fake-fake-70e87d/1/checks/1.log",
+                "sha256": "603b11670088af84f4110bd3f577090e93a72a4c34259f92485ad3e4d50ffd29",
+                "bytes": 70
+              }
+            }
+          ],
+          "changedFiles": [
+            {
+              "path": "bin/main.dart",
+              "status": "added"
+            },
+            {
+              "path": "lib/greet.dart",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-greet-eval-dart-greet-library-greets-grace-1447d4/fake-fake-70e87d/1/transcript.jsonl",
+              "sha256": "3f30f404df6a999d85d7de79d006ce6602b1354a4b2a9d5161babaa21471adf8",
+              "bytes": 1279
+            },
+            "diff": {
+              "path": "evals-greet-eval-dart-greet-library-greets-grace-1447d4/fake-fake-70e87d/1/diff.patch",
+              "sha256": "bd9006afcf6c4722aff2edd37a641335047fba7a409d3d03bebfb93130d27947",
+              "bytes": 428
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/greet_eval.dart › handles names with emoji",
+      "key": "evals/greet_eval.dart › handles names with emoji",
+      "slug": "evals-greet-eval-dart-handles-names-with-emoji-4f44b0",
+      "file": "evals/greet_eval.dart",
+      "group": [],
+      "name": "handles names with emoji",
+      "tags": [],
+      "fingerprint": "379e1863ccb135e6a217d110021c65d0a274f0b6bb97e54809ee6e22d210e23e",
+      "sources": [
+        {
+          "path": "evals/greet_eval.dart",
+          "sha256": "d43e05efb748972633bd2a98507a4d9bd4c1b227269286f71a1d0f2d7621101e"
+        }
+      ],
+      "outcome": "skipped",
+      "todo": true,
+      "passRate": null,
+      "cells": [
+        {
+          "key": "unknown",
+          "harness": "unknown",
+          "environment": "unknown",
+          "sandbox": "unknown",
+          "role": "control",
+          "fingerprint": "457ff82dc5ed76c9ec732a16c7cbc16fe614a4250bd6caca2cb2bd2e45b83194",
+          "fingerprintParts": {
+            "sources": "84f891a6b863f582d9de5c99cdd63ea52d6a4accef82ce2e492f8f246e33aacf",
+            "harness": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b",
+            "environment": null,
+            "image": null,
+            "agentCli": null,
+            "judge": "bc161c64b483bdf715289dd074ffec47a255381bbe9ea0cd03bd887028e0589f",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": null,
+          "harnessKind": "unknown",
+          "model": null,
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 1,
+          "passRate": null,
+          "outcome": "skipped"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/greet_eval.dart › handles names with emoji # unknown#1",
+          "id": "unknown#1",
+          "cell": "unknown",
+          "n": 1,
+          "seq": null,
+          "startedAt": null,
+          "imageId": null,
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": null,
+          "servedModels": null,
+          "outcome": "skipped",
+          "error": null,
+          "durationMs": 0,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 0,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}

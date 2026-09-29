@@ -1,0 +1,18 @@
+[
+  {
+    "question": "Does the final message describe the files it created?",
+    "model": "fake",
+    "state": {
+      "task": "Create lib/greet.dart exporting String greet(String name) that returns \"Hello, <name>!\", and bin/main.dart that prints greet() of its first argument, or of \"Dart\" without one. Import lib/greet.dart with a relative import. No dependencies.",
+      "output": "I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.",
+      "files": [
+        "added bin/main.dart",
+        "added lib/greet.dart"
+      ],
+      "diff": {
+        "$ref": "diff.patch",
+        "sha256": "bd9006afcf6c4722aff2edd37a641335047fba7a409d3d03bebfb93130d27947"
+      }
+    }
+  }
+]

@@ -83,10 +83,7 @@ void _check(Object? actual, Object? expected, String? reason) {
   // Plain values get the binary's diff, so the message stays one line, as `expect(a).toBe(b)` does.
   if (expected is! Matcher && _plain(expected) && _plain(actual)) {
     throw ReevalAssertion(
-      [
-        'expected ${_oneLine(actual)} to equal ${_oneLine(expected)}',
-        ?reason,
-      ].join('\n'),
+      ['expected ${_oneLine(actual)} to equal ${_oneLine(expected)}', ?reason].join('\n'),
       expected: expected,
       actual: actual,
       diffable: true,
@@ -94,9 +91,7 @@ void _check(Object? actual, Object? expected, String? reason) {
   }
   final which = StringDescription();
   matcher.describeMismatch(actual, which, state, false);
-  throw ReevalAssertion(
-    _format(description.toString(), _show(actual), which.toString(), reason),
-  );
+  throw ReevalAssertion(_format(description.toString(), _show(actual), which.toString(), reason));
 }
 
 final class _ExitsWith extends Matcher {

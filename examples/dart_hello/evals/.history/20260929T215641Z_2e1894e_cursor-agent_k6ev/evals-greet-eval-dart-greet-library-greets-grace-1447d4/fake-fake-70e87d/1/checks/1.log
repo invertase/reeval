@@ -1,0 +1,5 @@
+$ dart bin/main.dart Grace
+exit 0
+--- stdout
+Hello, Grace!
+--- stderr
