@@ -16,6 +16,10 @@ updates:
       # Pinned to exactly the same version (AGENTS.md, Project rules).
       vitest:
         patterns: ['@vitest/expect', '@vitest/utils']
+      # Released together and sharing @ai-sdk/provider-utils. Before dev-minor: a dependency
+      # joins the first group it matches.
+      ai-sdk:
+        patterns: [ai, '@ai-sdk/*']
       dev-minor:
         dependency-type: development
         update-types: [minor, patch]
