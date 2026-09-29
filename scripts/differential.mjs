@@ -27,7 +27,7 @@ const SUITES = readdirSync(join(pkg, 'test'))
   .filter((f) => f.endsWith('.test.ts'))
   .filter(
     (f) =>
-      !/^(docker|docker-antigravity|studio|pack|contract|e2e-real|real-tier|doctor)\.test\.ts$/.test(
+      !/^(docker|docker-antigravity|studio|pack|contract|e2e-real|real-tier|questions-real|doctor)\.test\.ts$/.test(
         f,
       ),
   )
@@ -68,6 +68,12 @@ const INTENDED = [
     key: /^analyze-errors analyze$/,
     fields: ['stderr'],
     why: 'An unknown key in config.analysis lists agent among the keys it takes (#149).',
+  },
+  {
+    file: 'example.test.ts.jsonl',
+    key: /^hello-copy run --config reeval\.fake\.config\.ts( --dry-run --json)?$/,
+    fields: ['summary', 'live', 'record'],
+    why: "compare question answers (#152): skill.eval.ts's compare asks a question, so the plan lists it and the run records and prints its answer.",
   },
 ]
 

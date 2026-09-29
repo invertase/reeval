@@ -75,7 +75,7 @@ const config = ({
   extra = '',
 }) => `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { fakeJudge } from 'reeval/judge'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
@@ -83,6 +83,13 @@ export default defineConfig({
   harness: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: ${judge} }) },
+  // Answers skill.eval.ts's compare question: the attempt whose diff says Ahoy wins.
+  analysis: {
+    model: fakeAnalysis({
+      vote: (p) =>
+        p.a.includes('Ahoy') === p.b.includes('Ahoy') ? 'tie' : p.a.includes('Ahoy') ? 'A' : 'B',
+    }),
+  },
   timeout: '2m',
   ${extra}
 })

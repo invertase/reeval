@@ -23,7 +23,7 @@ case $part in
   unit)
     cd packages/reeval
     node_test ${2:+--test-shard=$2} \
-      test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real).test.ts
+      test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real).test.ts
     ;;
 
   tiers)

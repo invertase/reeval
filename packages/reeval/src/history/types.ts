@@ -3,6 +3,7 @@ import type {
   AttemptImage,
   Cell,
   CellGate,
+  CompareAnswer,
   EgressRecord,
   EnvironmentRecord,
   EvalCompareMeta,
@@ -186,6 +187,11 @@ export type EvalEntry = {
   passRate: number | null
   cells: CellRecord[]
   attempts: AttemptRecord[]
+  /**
+   * The compare's questions, answered after its attempts by pairwise votes, one per question;
+   * unset without any. They annotate: `outcome` and `passRate` never depend on them.
+   */
+  answers?: CompareAnswer[]
 }
 
 /** A variant cell's pass rate against the control's, on the same harness and sandbox. */

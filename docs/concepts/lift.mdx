@@ -66,6 +66,8 @@ flowchart LR
 
 When the interval spans 0, the summary adds `within noise`: at this many attempts, the variant and the control can't be told apart. The Wilson interval stays sensible at 0/n and n/n, which is where small evals usually land.
 
+Lift gates; the win rates of a [compare question](/guide/compare#ask-questions) only annotate. They judge the attempts that passed their checks against each other, and never change a cell's outcome.
+
 ## Why two runs is usually noise
 
 The interval is wide when attempts are few. These are reeval's own intervals for common results:

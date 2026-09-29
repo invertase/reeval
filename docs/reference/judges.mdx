@@ -101,6 +101,16 @@ analysis: {
 
 With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
 
+```ts
+analysis: {
+  model: fakeAnalysis({
+    vote: (pair) => (pair.a.includes('Ahoy') ? 'A' : 'tie'),
+  }),
+}
+```
+
+`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake.
+
 ## Errors
 
 | Mistake | Message |

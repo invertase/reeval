@@ -118,20 +118,27 @@ describe('the matrix check (twins: it can fail)', () => {
       testSource: (path: string) =>
         path === 'reeval/test/e2e-real.test.ts'
           ? "test('reeval query: every view answers', () => {})"
-          : sources.testSource(path),
+          : path === 'reeval/test/questions-real.test.ts'
+            ? "test('a real model votes in both orders', () => {})"
+            : sources.testSource(path),
     }
     const m = buildMatrix(
       [
         everything,
         feature({
           id: 'y',
-          real: ['contract › rules read', 'contract › clean teardown', 'e2e › reeval query'],
+          real: [
+            'contract › rules read',
+            'contract › clean teardown',
+            'e2e › reeval query',
+            'questions › a real model votes',
+          ],
         }),
       ],
       real,
     )
     assert.deepEqual(m.problems, [])
-    assert.deepEqual(m.rows[1]?.cells.real, { count: 3, canaries: 1 })
+    assert.deepEqual(m.rows[1]?.cells.real, { count: 4, canaries: 1 })
     const unclaimed = buildMatrix(
       [
         everything,
@@ -145,7 +152,7 @@ describe('the matrix check (twins: it can fail)', () => {
     assert.deepEqual(unclaimed.problems, [
       'inventory y: contract.test.ts has no behaviour "nope"',
       'inventory y: e2e-real.test.ts has no test "nope"',
-      'inventory y: "rules read" isn\'t "contract › <behaviour>" or "e2e › <title>"',
+      'inventory y: "rules read" isn\'t "contract › <behaviour>", "e2e › <title>" or "questions › <title>"',
       'contract behaviour "clean teardown" covers no feature: add it to an entry in inventory.ts',
     ])
   })

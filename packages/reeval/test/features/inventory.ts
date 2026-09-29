@@ -20,8 +20,9 @@ export type InventoryFeature = {
    */
   tests?: string[]
   /**
-   * Checks in the real-agent suites, on every real harness: `contract › <behaviour>` (a behaviour
-   * in contract.test.ts) or `e2e › <the test's title, or a part of it>` (e2e-real.test.ts).
+   * Checks in the real-agent suites: `contract › <behaviour>` (a behaviour in contract.test.ts,
+   * on every real harness), `e2e › <the test's title, or a part of it>` (e2e-real.test.ts) or
+   * `questions › <title>` (questions-real.test.ts, a real model answering compare questions).
    */
   real?: string[]
   /** Why nothing covers it yet. Only for features with no fixture, plan case or test. */
@@ -134,15 +135,21 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'compare.question',
     area: 'Config and selection',
-    name: '`compare.question`: questions in the plan, their model, and a profile dropping them',
+    name: '`compare.question`: questions in the plan, answered after the run with pairwise win rates',
     plan: ['compare/questions', 'compare/questions-dropped', 'compare/questions-group'],
     tests: [
       options('--dry-run names the questions with no language model'),
       options('an evaluation model as the judge or the analysis model exits 2'),
       options("a question's own model needs its key"),
       options('with a language model the run plans its questions'),
+      options('votes are recorded after the attempts'),
+      options('a model error is kept on its answer'),
       options('common mistakes'),
+      'reeval/test/results.test.ts › compare question pairs',
+      'reeval/test/results.test.ts › compare questions over real-harness runs (real-e2e-pairs)',
+      'reeval/test/ui.test.ts › compare answers in the summary',
     ],
+    real: ['questions › examples/hello --profile questions'],
   },
   {
     id: 'gate',

@@ -25,6 +25,9 @@ export default defineConfig({
       tags: ['smoke'],
       budget: { attempts: 5, duration: '15m' },
     },
+    // The nightly compare-question check: evals/questions.eval.ts on Cursor and pi, 4 attempts,
+    // its question answered by the judge's model (test/questions-real.test.ts).
+    questions: { tags: ['questions'], budget: { attempts: 4 } },
     // Thorough: three runs per cell for evals that don't choose, recorded every time.
     nightly: {
       defaults: { runs: 3 },

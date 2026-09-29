@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import type { EvalEntry, RunRecord } from '../src/history/types.ts'
-import type { AttemptMeta } from '../src/types.ts'
+import type { AttemptMeta, CompareAnswer } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EsEvent, EvalResult, Progress } from '../src/ui/events.ts'
@@ -400,6 +400,92 @@ describe('plain renderer', () => {
   test('the heartbeat stays quiet while other lines are printing, and when it is off', () => {
     const out = render(interleaved, options({ heartbeatMs: 0 }))
     assert.doesNotMatch(out, /running after/)
+  })
+})
+
+/** The same run with the first eval's compare questions answered, one of them failed. */
+const answered: EsEvent[] = interleaved.map((e) => {
+  if (e.type !== 'run-end') return e
+  const [first, ...rest] = e.record.evals
+  const answers: CompareAnswer[] = [
+    {
+      question: 'Which is cleaner?',
+      model: 'google/gemini-3.8-flash',
+      votes: [
+        {
+          question: 'Which is cleaner?',
+          cut: 'across',
+          arm: '-',
+          run: 1,
+          a: 'cursor',
+          b: 'codex',
+          winner: 'codex',
+          swapped: false,
+        },
+        {
+          question: 'Which is cleaner?',
+          cut: 'across',
+          arm: '-',
+          run: 1,
+          a: 'cursor',
+          b: 'codex',
+          winner: 'tie',
+          swapped: true,
+        },
+      ],
+      rates: [
+        { cut: 'across', name: 'cursor', wins: 0, n: 1 },
+        { cut: 'across', name: 'codex', wins: 1, n: 1 },
+      ],
+    },
+    {
+      question: 'Which is shorter?',
+      model: 'google/gemini-3.8-flash',
+      votes: [],
+      rates: [],
+      error: 'quota exceeded',
+    },
+  ]
+  return { ...e, record: { ...e.record, evals: [{ ...first, answers } as EvalEntry, ...rest] } }
+})
+
+const ANSWER_LINES = [
+  '"Which is cleaner?" across: cursor 0/1 (0%), codex 1/1 (100%) · 2 votes, 1 tie · google/gemini-3.8-flash',
+  '"Which is shorter?" 0 votes, 0 ties · google/gemini-3.8-flash · failed: quota exceeded',
+]
+
+describe('compare answers in the summary', () => {
+  test('plain: one line per question under its eval', () => {
+    const out = render(answered, options())
+    assert.ok(
+      out.includes(
+        lines(
+          '     ✓ creates a tested greet module             3m 12s  judge 0.92  1 turn',
+          ...ANSWER_LINES.map((l) => `         question  ${l}`),
+          '     ✗ adds a default name in a follow-up turn   6m 03s  2 turns',
+        ),
+      ),
+      out,
+    )
+  })
+
+  test('agent: one line per question before the totals', () => {
+    let text = ''
+    const renderer = new AgentRenderer({
+      out: { write: (chunk: string) => (text += chunk) },
+      attemptDir: () => '.reeval/runs/run-1/adds/1',
+    })
+    for (const e of answered) renderer.onEvent(e)
+    assert.ok(
+      text.endsWith(
+        lines(
+          ...ANSWER_LINES.map((l) => `question ${GREET}: ${l}`),
+          '1 passed, 1 failed',
+          'summary: .reeval/runs/run-1/summary.md',
+        ),
+      ),
+      text,
+    )
   })
 })
 
