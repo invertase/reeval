@@ -13,6 +13,6 @@ for name in "${missing[@]}"; do echo "real smoke failed: $name isn't set" >&2; d
 [ ${#missing[@]} -eq 0 ] || exit 1
 pnpm build
 pnpm --filter reeval test:real
-# The built CLI, not the es bin: pnpm links a bin only if it existed at install time.
+# The built CLI, not the reeval bin: pnpm links a bin only if it existed at install time.
 cd examples/hello
 node ../../packages/reeval/dist/cli.js run --profile smoke

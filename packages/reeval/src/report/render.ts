@@ -228,7 +228,7 @@ export function renderIssueBody(b: ReportBundle, reportDir: string | null): stri
 
 /** The issue's title, from the error. */
 export function issueTitle(b: ReportBundle): string {
-  const command = b.invocation?.command ? `reeval ${b.invocation.command}` : 'es'
+  const command = b.invocation?.command ? `reeval ${b.invocation.command}` : 'reeval'
   const what = headline(b) ?? (b.run ? `run ended ${b.run.outcome}` : 'bug report')
   const title = `${command}: ${what}`
   return title.length > 100 ? `${title.slice(0, 99)}…` : title

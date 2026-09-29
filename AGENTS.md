@@ -97,11 +97,11 @@ pnpm coverage    # the same tests with code coverage from every process they sta
 pnpm typecheck
 pnpm lint        # Biome; `pnpm format` applies fixes
 pnpm example     # reeval run in examples/hello (pnpm --filter hello-example reeval run)
-node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone es
+node scripts/bun-compile.mjs # optional, local: bun build --compile still makes a standalone reeval
 ```
 
 reeval runs on Node only. `scripts/bun-compile.mjs` (it needs `bun` on your PATH, and `pnpm build`)
-compiles `dist/` into `packages/reeval/es` with reeval's own files embedded (`--asset`:
+compiles `dist/` into `packages/reeval/reeval` with reeval's own files embedded (`--asset`:
 `package.json`, `docker/`, `assets/`, the studio app, the Claude Code bridge, jiti's Babel build
 and a `versions.json` of the bundled dependencies). It copies the binary into an empty directory
 and checks it plans and runs a copy of `examples/hello` with no `node_modules` as Node does,
@@ -121,7 +121,7 @@ files (`dist/studio-app`, `dist/bridge`, `docker/`, `package.json`) from `src/ro
 the module's `import.meta.url`. `src/root.ts` is reeval's one resource locator (`ownFile`,
 `ownFileURL`, `ownDir`, `ownRequire`, `ownVersion`, the package's name, version and build id): the build rewrites an
 inlined package's `new URL('<path>', import.meta.url)` to its `ownFileURL` and fails on any other
-`import.meta.url`. `dist/cli.js` (`src/bin.ts`) is the only entry besides the exports: `es
+`import.meta.url`. `dist/cli.js` (`src/bin.ts`) is the only entry besides the exports: `reeval
 __worker` is how the engine starts a worker for each eval file, so a compiled `reeval` can start its
 own.
 An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, `harness-pi`'s
@@ -173,8 +173,8 @@ read, a stdio MCP server is called, a file edit and a command are in the transcr
 served model are recorded, the real key is nowhere in the container, `deny-all` with the automatic
 hosts works and a blocked host is refused and recorded, the native stream format is known, and
 nothing is left behind. Each behaviour is an eval, a canary that must fail and a check of the
-record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness and checks `es
-compare` says "same", every `reeval query` view answers, `-v` and `.reeval/debug` have the trace, and `es
+record. `test/e2e-real.test.ts` records two runs of one tiny eval per harness and checks `reeval
+compare` says "same", every `reeval query` view answers, `-v` and `.reeval/debug` have the trace, and `reeval
 studio build` builds the history. Both need `REEVAL_TEST_REAL=1` (which `pnpm test:contract` sets) and
 each harness's key; asked for, a row without its key fails (it never skips), naming the variable,
 so narrow a local run with `REEVAL_CONTRACT_HARNESSES`. Their

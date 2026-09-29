@@ -10,7 +10,7 @@ import { join } from 'node:path'
 
 const B = 257
 const targets = JSON.parse(process.argv[2] ?? '[]')
-const ROOTS = ['/root', '/es', '/tmp', '/etc', '/home', '/var/tmp', '/run', '/opt', '/srv']
+const ROOTS = ['/root', '/reeval', '/tmp', '/etc', '/home', '/var/tmp', '/run', '/opt', '/srv']
 const MAX = 8 * 1024 * 1024
 const hits = []
 let files = 0

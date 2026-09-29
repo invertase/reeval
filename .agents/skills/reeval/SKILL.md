@@ -252,7 +252,7 @@ docker({ install: ['npm i -g firebase-tools@14'] })  // baked once as a cached l
 docker({ from: 'python:3.12-slim' })                 // Debian/Ubuntu base; reeval adds Node + agent
 docker({ dockerfile: './sandbox/Dockerfile' })       // ARG REEVAL_BASE / FROM ${REEVAL_BASE} to layer on reeval's
 docker({ memory: '8g', cpus: 4, pids: 4096 })        // limits; defaults 4g (no swap), 2, 1024
-docker({ root: true })                               // opt in: apt-get at run time (default: user es)
+docker({ root: true })                               // opt in: apt-get at run time (default: user reeval)
 ```
 
 The agent, setup and `t.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.

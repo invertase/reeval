@@ -77,7 +77,7 @@ process.on('message', (m) => {
       assert.match(
         e.message,
         new RegExp(
-          `engine protocol ${PROTOCOL + 1}, but this reeval speaks ${PROTOCOL}\\. Run the project's own es`,
+          `engine protocol ${PROTOCOL + 1}, but this reeval speaks ${PROTOCOL}\\. Run the project's own reeval, e\\.g\\. npx reeval\\.`,
         ),
       )
       return true
