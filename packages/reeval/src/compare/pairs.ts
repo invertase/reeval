@@ -15,6 +15,8 @@ export type PairAttempt = {
   diff: string
   /** Passed, or failed only on a judge: its deterministic checks held. */
   checksPassed: boolean
+  /** The compare's baseline arm, which goes first within a harness. */
+  control?: boolean
   /** The prompts it was sent, for the task both sides were given. */
   prompts?: string[]
   /** The attempt's id, e.g. `cursor/-/docker#1`; never shown to the model. */
@@ -51,15 +53,18 @@ const distinct = (values: string[]) => [...new Set(values)]
 /**
  * The pairs to judge. Within a harness, for each run, every two arms; across harnesses, for each
  * arm and run, every two harnesses. Attempts that failed their deterministic checks are left out
- * (they still count in the pass rate), so a pair missing a side isn't judged. Sides are ordered as
- * they first appear, so the baseline (planned first) is `a` within a harness.
+ * (they still count in the pass rate), so a pair missing a side isn't judged. The control arm
+ * comes first, then arms and harnesses in the order they first appear.
  */
 export function pairsOf(attempts: PairAttempt[]): Pair[] {
   const eligible = attempts.filter((a) => a.checksPassed)
   const find = (harness: string, arm: string, run: number) =>
     eligible.find((a) => a.harness === harness && a.arm === arm && a.run === run)
   const harnesses = distinct(attempts.map((a) => a.harness))
-  const arms = distinct(attempts.map((a) => a.arm))
+  const arms = distinct([
+    ...attempts.filter((a) => a.control).map((a) => a.arm),
+    ...attempts.map((a) => a.arm),
+  ])
   const runs = [...new Set(attempts.map((a) => a.run))].sort((x, y) => x - y)
   const pairs: Pair[] = []
   for (const harness of harnesses) {

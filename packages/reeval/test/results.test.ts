@@ -237,6 +237,14 @@ describe('compare question pairs', () => {
     }
   })
 
+  test('the control arm is a within a harness, whichever attempt came first', () => {
+    const [pair] = pairsOf([
+      side('h', 'variant', 1),
+      { ...side('h', 'baseline', 1), control: true },
+    ])
+    assert.deepEqual([pair?.a.arm, pair?.b.arm], ['baseline', 'variant'])
+  })
+
   test('an attempt that failed its checks is in no pair', () => {
     const attempts = matrix(['h1', 'h2'], ['sdk', 'ui'], 2)
     const failed = attempts.find((a) => a.harness === 'h2' && a.arm === 'ui' && a.run === 2)
@@ -352,6 +360,7 @@ describe('compare question pairs', () => {
       run: 2,
       diff: '+x\n',
       checksPassed: true,
+      control: false,
       prompts: ['go'],
       id: 'h/sdk/fake#2',
     })

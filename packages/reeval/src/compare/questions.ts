@@ -185,6 +185,7 @@ export function stagedAttempt(e: EngineEval, record: EvalRecord | null): PairAtt
     run: e.attempt?.n ?? 1,
     diff: record?.diff?.patch ?? '',
     checksPassed,
+    control: cell.role === 'control',
     prompts: record?.turns.map((t) => t.prompt) ?? [],
     id: `${cell.key}#${e.attempt?.n ?? 1}`,
   }
@@ -228,7 +229,9 @@ export function questionRunner(options: QuestionRunnerOptions) {
       const sides = await Promise.all(
         attempts.map(async (a) => stagedAttempt(a, await readStaged(options.stagingDir, a.key))),
       )
-      const pairs = pairsOf(sides.filter((s): s is PairAttempt => s !== null))
+      // By cell key, not the order attempts happened to end in, so a run's pairs are its own.
+      const staged = sides.filter((s): s is PairAttempt => s !== null)
+      const pairs = pairsOf(staged.sort((x, y) => ((x.id ?? '') < (y.id ?? '') ? -1 : 1)))
       return Promise.all(
         e.questions.map(async (q) => {
           const answer = await answerQuestion({
