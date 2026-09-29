@@ -220,10 +220,10 @@ group(
 - `parent.extendEnvironment(name, spec)` appends the child's spec as a new layer. The child wins
   on shared keys; `setup` concatenates. Call it before `compare`. Two stacks that should not
   share are two `defineEnvironment` calls, then `{ baseline, variants }`.
-- `environment` and a compare object are mutually exclusive on the same options object
-  (`evaluate` or `group`). `compare: false`, or omitting `compare`, still takes `environment`.
-  A parent `environment` plus an eval that only sets `compare` is allowed. Compare names every
-  arm, and the inherited environment is not applied. Setting both keys is exit 2.
+- `environment` and `compare` are mutually exclusive on the same options object (`evaluate`
+  or `group`). Omit `compare` to run `environment`. A parent `environment` plus an eval that
+  only sets `compare` is allowed. Compare names every arm, and the inherited environment is
+  not applied. Setting both keys is exit 2. `compare: false` is not an eval or group option.
 - Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
   prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
   `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
@@ -234,7 +234,8 @@ group(
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
 - With `runs > 1`, a cell passes only if every attempt passes, unless `gate: { passRate: 0.8 }`.
-- There is no `strategy` field. `compare: false` still opts out (a profile's `limit.compare`).
+- There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
+  the baseline. `compare: false` on `evaluate` or `group` is an error.
 
 ## Sandboxes
 
@@ -298,7 +299,8 @@ them to `evals/.history/` to commit.
 | `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { baseline: a, variants: [b] }` |
 | `compare: [b]` | `compare must be an object` | `compare: { baseline, variants: [b] }` |
 | `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
-| `environment` and `compare: { … }` together | `environment and compare can't both be set` | Drop `environment`, or set `compare: false` |
+| `environment` and `compare: { … }` together | `environment and compare can't both be set` | Drop `environment` |
+| `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |
 | `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |

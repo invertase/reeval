@@ -592,7 +592,12 @@ describe('common mistakes', () => {
     [
       'environment and compare on the same eval',
       `evaluate('e', { environment: a, compare: { baseline: a, variants: [b] } }, async () => {})`,
-      /environment and compare can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment\. compare: false still runs with environment\./,
+      /environment and compare can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment\./,
+    ],
+    [
+      'compare: false on an eval',
+      `evaluate('e', { compare: false }, async () => {})`,
+      /compare: false can't be set in evaluate\("e"\)\. A profile turns compare off with limit\.compare: false/,
     ],
     [
       'pinning something that cannot be pinned',

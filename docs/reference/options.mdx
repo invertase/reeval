@@ -65,11 +65,11 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="environment" type="Environment">
-  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. Not on the same object as a compare object: `compare: { baseline, variants }` names every arm. `compare: false`, or omitting `compare`, still takes `environment`. A parent `environment` plus a child that only sets `compare` is allowed, and that inherited environment is not applied. Default none.
+  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. Not on the same object as `compare`. A parent `environment` plus a child that only sets `compare` is allowed, and that inherited environment is not applied. Default none.
 </Property>
 
-<Property name="compare" type="{ baseline, variants, gate?, minLift?, harness? } | false">
-  A baseline and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `false` opts out and can sit beside `environment`. A compare object cannot: drop `environment` on that same object. `compare` does not layer, and it does not apply an environment inherited from a parent.
+<Property name="compare" type="{ baseline, variants, gate?, minLift?, harness? }">
+  A baseline and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`, and it cannot sit beside `environment` on the same object. `compare: false` is not a value here. A profile turns compare off with `limit.compare: false`. `compare` does not layer, and it does not apply an environment inherited from a parent.
 
   - `baseline`: the control, an environment from `defineEnvironment`.
   - `variants`: the other environments. Each cell runs that environment alone.

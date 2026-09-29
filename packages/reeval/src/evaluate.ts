@@ -229,9 +229,18 @@ export function declareTree(nodes: readonly DeclaredNode[], bodyFor: (id: string
 }
 
 /** Options from their data forms: environments become `Environment`s again. */
-function optionsFrom({ environment, compare, ...rest }: EvalOptionsData): EvalOptions {
-  const asEnv = (data: EnvironmentData) => environmentFrom(data)
-  if (compare !== undefined && compare !== false) {
+function optionsFrom(data: EvalOptionsData): EvalOptions {
+  const { environment, compare, ...rest } = data
+  const asEnv = (env: EnvironmentData) => environmentFrom(env)
+  // A declaration may still carry `compare: false`. Keep it so checkOptions rejects it.
+  if ((compare as unknown) === false) {
+    return {
+      ...rest,
+      ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
+      compare: false,
+    } as unknown as EvalOptions
+  }
+  if (compare !== undefined) {
     const revived = {
       ...rest,
       compare: {
@@ -248,6 +257,5 @@ function optionsFrom({ environment, compare, ...rest }: EvalOptionsData): EvalOp
   return {
     ...rest,
     ...(environment !== undefined ? { environment: asEnv(environment) } : {}),
-    ...(compare === false ? { compare: false } : {}),
   }
 }

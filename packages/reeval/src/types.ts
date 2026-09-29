@@ -638,21 +638,20 @@ export type CompareGate = 'variants' | 'all' | 'none'
 /**
  * The baseline and each variant run as their own environments, with the same prompt and checks.
  * `compare` does not layer them. Share setup first with `environment.extendEnvironment`.
+ * `false` is not a value here: a profile turns compare off with `limit.compare`.
  */
-export type CompareOptions<E = Environment> =
-  | {
-      /** The control. Not layered under the variants, and not the eval's `environment`. */
-      baseline: E
-      /** Other environments, each planned and run as itself. */
-      variants: E[]
-      /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
-      gate?: CompareGate
-      /** Lift in points from -1 to 1; a variant cell below it fails. */
-      minLift?: number
-      /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
-      harness?: Array<string | HarnessDescriptor>
-    }
-  | false
+export type CompareOptions<E = Environment> = {
+  /** The control. Not layered under the variants, and not the eval's `environment`. */
+  baseline: E
+  /** Other environments, each planned and run as itself. */
+  variants: E[]
+  /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
+  gate?: CompareGate
+  /** Lift in points from -1 to 1; a variant cell below it fails. */
+  minLift?: number
+  /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
+  harness?: Array<string | HarnessDescriptor>
+}
 
 export type PinnableKey = 'harness' | 'runs' | 'compare'
 
@@ -665,8 +664,8 @@ export type GatePolicy = 'all' | { passRate: number }
 /** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
 export type CellGate = GatePolicy | 'none'
 
-/** A compare object: `baseline` and `variants`, not `false`. */
-export type CompareSpec<E = Environment> = Exclude<CompareOptions<E>, false>
+/** A compare object: `baseline` and `variants`. Same as `CompareOptions`. */
+export type CompareSpec<E = Environment> = CompareOptions<E>
 
 /** Options other than `environment` and `compare`, which are exclusive of each other. */
 type EvalOptionFields = {
@@ -693,20 +692,18 @@ type EvalOptionFields = {
 }
 
 /**
- * `environment` or a compare object, never both on the same options object. `compare: false`
- * (or omitting `compare`) still takes `environment`. A parent `environment` and a child that
- * only sets `compare` is a different object each, so it is allowed; the inherited environment
- * is not applied.
+ * One or the other. `compare: false` is not an option here: a profile's `limit.compare: false`
+ * strips variants. A parent `environment` and a child that only sets `compare` are two objects,
+ * so that cascade is allowed; the inherited environment is not applied.
  */
 type EnvironmentOrCompare<E> =
   | {
-      /** What this group or eval runs in. Not together with a compare object. */
+      /** What this group or eval runs in. Not together with `compare`. */
       environment?: E
-      /** `false` opts out of compare. Omit it to inherit a parent's compare. */
-      compare?: false
+      compare?: never
     }
   | {
-      /** Forbidden beside a compare object. Set the arms on `compare` instead. */
+      /** Forbidden beside `compare`. The compare object names every arm. */
       environment?: never
       compare: CompareSpec<E>
     }

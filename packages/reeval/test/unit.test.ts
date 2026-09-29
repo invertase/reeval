@@ -781,8 +781,16 @@ test('environment and a compare object on the same options are an error', () => 
       ),
     /environment and compare can't both be set in evaluate\("e"\)/,
   )
-  checkOptions({ environment: plain, compare: false }, 'evaluate("e")')
+  assert.throws(
+    () => checkOptions({ environment: plain, compare: false }, 'evaluate("e")'),
+    /compare: false can't be set in evaluate\("e"\)/,
+  )
+  assert.throws(
+    () => checkOptions({ compare: false }, 'group("g")'),
+    /compare: false can't be set in group\("g"\)/,
+  )
   checkOptions({ compare: { baseline: plain, variants: [skill] } }, 'evaluate("e")')
+  checkOptions({ environment: plain }, 'evaluate("e")')
 })
 
 test('cascade: profile defaults sit under evals, limits narrow unless pinned, --runs wins', () => {

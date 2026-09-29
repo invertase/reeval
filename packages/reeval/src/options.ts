@@ -134,7 +134,6 @@ const describe = (value: unknown) => {
 }
 
 function checkCompare(value: unknown, where: string): void {
-  if (value === false) return
   if (Array.isArray(value)) {
     throw new UsageError(
       `compare must be an object in ${where}. Use compare: { baseline, variants: [...] }.`,
@@ -237,10 +236,16 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     }
     checkMaxConcurrent(o.sandbox.maxConcurrent, `sandbox in ${where}`)
   }
-  if (o.compare !== undefined) checkCompare(o.compare, where)
-  if (o.environment !== undefined && o.compare !== undefined && o.compare !== false) {
+  const raw = options as { environment?: unknown; compare?: unknown }
+  if (raw.compare === false) {
     throw new UsageError(
-      `environment and compare can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment. compare: false still runs with environment.`,
+      `compare: false can't be set in ${where}. A profile turns compare off with limit.compare: false, which runs the baseline and strips the variants. On a group or eval, omit compare or pass compare: { baseline, variants }.`,
+    )
+  }
+  if (o.compare !== undefined) checkCompare(o.compare, where)
+  if (raw.environment !== undefined && raw.compare !== undefined) {
+    throw new UsageError(
+      `environment and compare can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment.`,
     )
   }
   if (o.pin !== undefined) {
@@ -378,7 +383,7 @@ export type Resolved = {
 }
 
 function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
-  if (value === undefined || value === false) return undefined
+  if (value === undefined) return undefined
   return {
     baseline: value.baseline,
     variants: value.variants,
