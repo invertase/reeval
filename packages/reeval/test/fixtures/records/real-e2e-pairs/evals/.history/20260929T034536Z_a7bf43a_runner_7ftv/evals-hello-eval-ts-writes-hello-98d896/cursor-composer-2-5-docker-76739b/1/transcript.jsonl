@@ -1,0 +1,6 @@
+{"ts":"2026-09-29T03:45:40.290Z","atMs":0,"turn":0,"type":"prompt","text":"Create a file named hello.txt whose only content is `hello from es`, then stop."}
+{"turn":0,"ts":"2026-09-29T03:45:45.064Z","atMs":4774,"type":"reasoning","text":"Creating hello.txt with the content \"hello from es\" and stopping.","durationMs":40}
+{"turn":0,"ts":"2026-09-29T03:45:45.113Z","atMs":4823,"durationMs":444,"type":"file-edit","toolCallId":"tool_c5484bec-8d94-4759-9094-0ed32430c89","path":"hello.txt","kind":"create","added":1,"removed":0}
+{"turn":0,"ts":"2026-09-29T03:45:46.659Z","atMs":6369,"type":"reasoning","text":"Created hello.txt with the content \"hello from es\".","durationMs":39}
+{"turn":0,"ts":"2026-09-29T03:45:46.701Z","atMs":6411,"type":"text","text":"Created `hello.txt` with the content `hello from es`.","durationMs":40}
+{"ts":"2026-09-29T03:45:46.903Z","atMs":6613,"turn":0,"type":"turn-end","status":"completed","durationMs":6613}

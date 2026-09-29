@@ -1,0 +1,2002 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T033347Z_nogit_runner_20sz",
+  "status": "complete",
+  "startedAt": "2026-09-29T03:33:47.687Z",
+  "endedAt": "2026-09-29T03:34:52.146Z",
+  "durationMs": 64459,
+  "author": "runner",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "795d68a28cbb"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "24.21.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:cursor-0.1.0",
+        "id": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+        "agentCli": "@cursor/sdk 1.0.32",
+        "base": "reeval-sandbox:cursor-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "cursor:composer-2.5",
+        "kind": "cursor",
+        "model": "composer-2.5",
+        "resolvedModels": [
+          "composer-2.5[fast=false]"
+        ]
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "0e2a4839495b"
+    },
+    "context": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+      },
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "85b5ac1f4a1df47261ce42ff06c0a8e822ec82fbccbf81ecf8e68b939826a047"
+      },
+      {
+        "path": "~/.agents/skills/contract-probe/SKILL.md",
+        "sha256": "d832194732a158bf48b9eb61f957d696e1684365cca0d749e5f914b3dd2e17a3"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "closed",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "deny-all"
+    },
+    {
+      "name": "notes",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "notes.txt",
+          "sha256": "1f08cd1f5486938b851d21aaebf264a658045575cb9668c5d5859b1fe639c794"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "planted",
+      "parent": "scanned",
+      "overrides": [],
+      "digest": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "~/.reeval-contract/scan.mjs",
+          "sha256": "96dcd1fd0535e21282866ada5e67e8b5039479c1ad3817d8f7e35db16cc57e35"
+        },
+        {
+          "path": "~/.contract-planted",
+          "sha256": "00553c5a46ae3412de047fccc4dcf8aeb4b1ff1610322f963c74adc93ff3a37b"
+        }
+      ],
+      "vars": [
+        "CONTRACT_PLANTED"
+      ],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "ruled",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "AGENTS.md",
+          "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "scanned",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "~/.reeval-contract/scan.mjs",
+          "sha256": "96dcd1fd0535e21282866ada5e67e8b5039479c1ad3817d8f7e35db16cc57e35"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "skilled",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+      "setup": [],
+      "skills": [
+        {
+          "name": "contract-probe",
+          "source": "local:skills/contract-probe",
+          "commit": null,
+          "sha256": "9970872ae3819482fb79cf07ffbb3734096b26e3e517ec130a3ec41674ba306e",
+          "placement": "harness",
+          "excluded": []
+        }
+      ],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "stamped",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+      "setup": [],
+      "skills": [],
+      "mcp": [
+        "stamp"
+      ],
+      "files": [
+        {
+          "path": "~/reeval-mcp/stamp.mjs",
+          "sha256": "f001294329aba39937dfb157db3d64981c2b7a74f355def88e8fe86c3bbce865"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 12,
+    "cells": 12,
+    "attempts": 12,
+    "estimateMs": 2160000,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "attempts": 12
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 240000,
+    "concurrency": 2,
+    "configHash": "cd9e8d3d1f09e0d7d027e55e76ffdfc20b3f34bc235a502628b9648fee2e3e6b"
+  },
+  "cost": {
+    "inputTokens": 193240,
+    "outputTokens": 1026,
+    "usage": {
+      "input": 110562,
+      "output": 1026,
+      "cacheRead": 82678,
+      "cacheWrite": 0,
+      "reasoning": null
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 12,
+    "attempts": 12,
+    "pass": 6,
+    "fail": 6,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/edit-and-run.eval.ts › edit and run",
+      "key": "evals/edit-and-run.eval.ts › edit and run",
+      "slug": "evals-edit-and-run-eval-ts-edit-and-run-db761a",
+      "file": "evals/edit-and-run.eval.ts",
+      "group": [],
+      "name": "edit and run",
+      "tags": [],
+      "fingerprint": "c6e21f44f258d1a28e8164967d20c2567bc6dc084b4754bd252fbb3860ed062b",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/edit-and-run.eval.ts",
+          "sha256": "fd976fe9fd71c8790c82f5035165693945017b8b5faab1cde1a5719f6162e40f"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/notes/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "notes",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "688c8542b77ea68dc6f8bf1a546c51e455a7ffb9015244ee8346ebb8553995d5",
+          "fingerprintParts": {
+            "sources": "7fbb34c89cc5ea8010573e55b498e310dea53cb56d41bd94f84999f4c183e861",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/edit-and-run.eval.ts › edit and run # cursor:composer-2.5/notes/docker#1",
+          "id": "cursor:composer-2.5/notes/docker#1",
+          "cell": "cursor:composer-2.5/notes/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T03:33:51.880Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 11,
+                "sent": 84266,
+                "received": 215128
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 16102,
+          "turns": [
+            {
+              "prompt": "In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: echo contract-$((6*7)). Then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:33:56.450Z",
+              "durationMs": 10967,
+              "usage": {
+                "input": 23619,
+                "output": 235,
+                "cacheRead": 19082,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "Updated `notes.txt` so the status line reads `final` instead of `draft`.\n\nShell output:\n\n```\ncontract-42\n```"
+            }
+          ],
+          "usage": {
+            "input": 23619,
+            "output": 235,
+            "cacheRead": 19082,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 4568,
+            "agentMs": 10968,
+            "diffMs": 124,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 208
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "notes.txt",
+              "status": "modified"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/cursor-composer-2-5-notes-docker-a7a9b3/1/transcript.jsonl",
+              "sha256": "a35d469e6d872bb4c92bc7e97faa8ae541f043d88c241bb7054e47ecb26db248",
+              "bytes": 1810
+            },
+            "rawTranscript": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/cursor-composer-2-5-notes-docker-a7a9b3/1/transcript.raw.jsonl",
+              "sha256": "6b31968b49e8f0f4e88fa72f187467fc7891b2da6c1a64869eede9034cffe81a",
+              "bytes": 22183
+            },
+            "diff": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/cursor-composer-2-5-notes-docker-a7a9b3/1/diff.patch",
+              "sha256": "59485d1e84ab278ee70542c5ca0ba44e076b16f7cd164776ed5f20cfe3d420a2",
+              "bytes": 139
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/edit-and-run.eval.ts › edit and run canary",
+      "key": "evals/edit-and-run.eval.ts › edit and run canary",
+      "slug": "evals-edit-and-run-eval-ts-edit-and-run-canary-b7776d",
+      "file": "evals/edit-and-run.eval.ts",
+      "group": [],
+      "name": "edit and run canary",
+      "tags": [],
+      "fingerprint": "c2e636f51e8dbf0449d0a8d9c88c2db54da1bd1d414be76dab6a678a478e6f57",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/edit-and-run.eval.ts",
+          "sha256": "fd976fe9fd71c8790c82f5035165693945017b8b5faab1cde1a5719f6162e40f"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/notes/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "notes",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "4b4e49381948f4f2121ae0be05cfa96cf32b9a7ab3120bfda329d02ca46d15c6",
+          "fingerprintParts": {
+            "sources": "7fbb34c89cc5ea8010573e55b498e310dea53cb56d41bd94f84999f4c183e861",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/edit-and-run.eval.ts › edit and run canary # cursor:composer-2.5/notes/docker#1",
+          "id": "cursor:composer-2.5/notes/docker#1",
+          "cell": "cursor:composer-2.5/notes/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-09-29T03:33:51.897Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected 'status: draft' to be 'status: final' // Object.is equality"
+          },
+          "durationMs": 5150,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 4548,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/egress.eval.ts › egress",
+      "key": "evals/egress.eval.ts › egress",
+      "slug": "evals-egress-eval-ts-egress-ae6df0",
+      "file": "evals/egress.eval.ts",
+      "group": [],
+      "name": "egress",
+      "tags": [],
+      "fingerprint": "7ff79ae589294beeb189ab6d0da07bad614e634725855def344a1d2fbbc41099",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/egress.eval.ts",
+          "sha256": "8e3e3acd8bfb5dbca51e9ab85be063d5ccf27d4ca8e8de3276c88d686b2d2e1e"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/closed/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "closed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "188ba6e8d1bd3031286a63ec77dda4fe47644ad29e11cc7a8f06ac5c20a46aee",
+          "fingerprintParts": {
+            "sources": "2e2fab8ca0e28d748b534c7e0aafe32ab8b5af054a13e36f33ba71cc1e74a956",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/egress.eval.ts › egress # cursor:composer-2.5/closed/docker#1",
+          "id": "cursor:composer-2.5/closed/docker#1",
+          "cell": "cursor:composer-2.5/closed/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-09-29T03:33:57.035Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [
+              "api2.cursor.sh",
+              "*.cursor.sh"
+            ],
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 7,
+                "sent": 56716,
+                "received": 190163
+              }
+            ],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 13601,
+          "turns": [
+            {
+              "prompt": "Run this exact shell command once, then stop: curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:34:00.801Z",
+              "durationMs": 9088,
+              "usage": {
+                "input": 15666,
+                "output": 217,
+                "cacheRead": 11230,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "Ran that command once.\n\n`curl` exited with code **56** (`CONNECT tunnel failed, response 403`), which usually means an HTTP proxy blocked the HTTPS CONNECT to `example.com`. Because of `-o /dev/null`, the `-w` values may not have been written; anything captured went to `blocked.txt` in the current working directory (`/reeval/workspace`)."
+            }
+          ],
+          "usage": {
+            "input": 15666,
+            "output": 217,
+            "cacheRead": 11230,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 3764,
+            "agentMs": 9090,
+            "diffMs": 192,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 177
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "blocked.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/cursor-composer-2-5-closed-docker-d87257/1/transcript.jsonl",
+              "sha256": "200ff18afbfe9213bbdc143a80b3e85e84275530015faf2f077328a16a51ae36",
+              "bytes": 1548
+            },
+            "rawTranscript": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/cursor-composer-2-5-closed-docker-d87257/1/transcript.raw.jsonl",
+              "sha256": "41c8edb74f317d453b38b2fe3ce54dbd29afbbc218ca5d70c371c95748e3bcdf",
+              "bytes": 36975
+            },
+            "diff": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/cursor-composer-2-5-closed-docker-d87257/1/diff.patch",
+              "sha256": "211162ad391ab91bad67b4acc9199df64b0d58c4682ff85434615b902c5368e7",
+              "bytes": 166
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/egress.eval.ts › egress canary",
+      "key": "evals/egress.eval.ts › egress canary",
+      "slug": "evals-egress-eval-ts-egress-canary-f193be",
+      "file": "evals/egress.eval.ts",
+      "group": [],
+      "name": "egress canary",
+      "tags": [],
+      "fingerprint": "68a7f8cf535c4b32873883b1c6a63e82953a5fd0bf6dc365cfea5c9b61754bec",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/egress.eval.ts",
+          "sha256": "8e3e3acd8bfb5dbca51e9ab85be063d5ccf27d4ca8e8de3276c88d686b2d2e1e"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/closed/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "closed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "f65010d960b7bedbe90139093626315c2329d8a547758ddf773b300b1bb4f0e7",
+          "fingerprintParts": {
+            "sources": "2e2fab8ca0e28d748b534c7e0aafe32ab8b5af054a13e36f33ba71cc1e74a956",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/egress.eval.ts › egress canary # cursor:composer-2.5/closed/docker#1",
+          "id": "cursor:composer-2.5/closed/docker#1",
+          "cell": "cursor:composer-2.5/closed/docker",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-09-29T03:34:07.980Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [
+              "api2.cursor.sh",
+              "*.cursor.sh"
+            ],
+            "recorded": true,
+            "contacted": [],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected '403 000' to match /^200 /"
+          },
+          "durationMs": 4912,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 4366,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 120,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt || true",
+              "exitCode": 0,
+              "durationMs": 120,
+              "log": {
+                "path": "evals-egress-eval-ts-egress-canary-f193be/cursor-composer-2-5-closed-docker-d87257/1/checks/1.log",
+                "sha256": "f9b1283c8bd1c8e1c2f1e779693e01572ed30cf2993cb09b29ceceaac1cd13f1",
+                "bytes": 183
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/key.eval.ts › key",
+      "key": "evals/key.eval.ts › key",
+      "slug": "evals-key-eval-ts-key-187a81",
+      "file": "evals/key.eval.ts",
+      "group": [],
+      "name": "key",
+      "tags": [],
+      "fingerprint": "fc0b2059d10b53727848fabc165fc98ac348eaf18b3fde77dec1a46b54d90a63",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/key.eval.ts",
+          "sha256": "f6d07605b9bbd991515d3a9addc2619805574d960fec1a8b6e0fce4b0be1fa28"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/scanned/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "scanned",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "a034575e42109f7c6371cc0ef599c77d04a0282d415f96d669d76f17b2f87560",
+          "fingerprintParts": {
+            "sources": "3c68834cacc2271a208d514dc96f7a166d290b3c39abe35bdcf2b8b0e68e6acd",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/key.eval.ts › key # cursor:composer-2.5/scanned/docker#1",
+          "id": "cursor:composer-2.5/scanned/docker#1",
+          "cell": "cursor:composer-2.5/scanned/docker",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-09-29T03:34:10.632Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 8,
+                "sent": 40940,
+                "received": 174753
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 12799,
+          "turns": [
+            {
+              "prompt": "Reply with the single word OK. Do not run any tools.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:34:15.908Z",
+              "durationMs": 5704,
+              "usage": {
+                "input": 7736,
+                "output": 28,
+                "cacheRead": 2953,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "OK"
+            }
+          ],
+          "usage": {
+            "input": 7736,
+            "output": 28,
+            "cacheRead": 2953,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 5273,
+            "agentMs": 5705,
+            "diffMs": 173,
+            "checksMs": 1075,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 26
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node ~/.reeval-contract/scan.mjs '[REDACTED]'",
+              "exitCode": 0,
+              "durationMs": 1075,
+              "log": {
+                "path": "evals-key-eval-ts-key-187a81/cursor-composer-2-5-scanned-docker-d75c0d/1/checks/1.log",
+                "sha256": "1fc6a464b2e4125bf4163f0fd562c41c0e0e601b0d99be37bed4f52b0820d99c",
+                "bytes": 296
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-key-eval-ts-key-187a81/cursor-composer-2-5-scanned-docker-d75c0d/1/transcript.jsonl",
+              "sha256": "6a30fa5c11879da1dbd29e58f98f86966fb77063757ccb0f06e11152e090d86f",
+              "bytes": 530
+            },
+            "rawTranscript": {
+              "path": "evals-key-eval-ts-key-187a81/cursor-composer-2-5-scanned-docker-d75c0d/1/transcript.raw.jsonl",
+              "sha256": "70a897f0c08eaf5751af1bdc04381ca662b183f753c3274c56f8f91d2ea82b16",
+              "bytes": 5357
+            },
+            "diff": {
+              "path": "evals-key-eval-ts-key-187a81/cursor-composer-2-5-scanned-docker-d75c0d/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/key.eval.ts › key canary",
+      "key": "evals/key.eval.ts › key canary",
+      "slug": "evals-key-eval-ts-key-canary-d73488",
+      "file": "evals/key.eval.ts",
+      "group": [],
+      "name": "key canary",
+      "tags": [],
+      "fingerprint": "27590929291a8420c468d006fbd8676fe96c0a1873bc06c41568cb8184c40476",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/key.eval.ts",
+          "sha256": "f6d07605b9bbd991515d3a9addc2619805574d960fec1a8b6e0fce4b0be1fa28"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/planted/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "planted",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "ffa8db35c7deba78e4a751db7cf92410f12ba6cf79f76094145fe2f9adc95ba0",
+          "fingerprintParts": {
+            "sources": "3c68834cacc2271a208d514dc96f7a166d290b3c39abe35bdcf2b8b0e68e6acd",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/key.eval.ts › key canary # cursor:composer-2.5/planted/docker#1",
+          "id": "cursor:composer-2.5/planted/docker#1",
+          "cell": "cursor:composer-2.5/planted/docker",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-09-29T03:34:12.881Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [
+              "CONTRACT_PLANTED"
+            ],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected [ '/proc/1/environ (raw)', …(3) ] to deeply equal []"
+          },
+          "durationMs": 6049,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 4725,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 1003,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node ~/.reeval-contract/scan.mjs '[{\"form\":\"raw\",\"len\":33,\"roll\":3425781250,\"sha256\":\"be3b833b6d42abc50a865348ebd66fad2f0cdac18a9e9c421ada12dde88737ed\"},{\"form\":\"base64\",\"len\":44,\"roll\":320935815,\"sha256\":\"9d2bcbdf3d08022a51162ba9db6d779735642c49c7429781a716a6504275c930\"}]'",
+              "exitCode": 0,
+              "durationMs": 1004,
+              "log": {
+                "path": "evals-key-eval-ts-key-canary-d73488/cursor-composer-2-5-planted-docker-d68a21/1/checks/1.log",
+                "sha256": "682ef7dfc6143df14868a1bffb47f6fb693dbf723ba887a8d52b751f5f77461b",
+                "bytes": 638
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/mcp.eval.ts › mcp",
+      "key": "evals/mcp.eval.ts › mcp",
+      "slug": "evals-mcp-eval-ts-mcp-a42bcd",
+      "file": "evals/mcp.eval.ts",
+      "group": [],
+      "name": "mcp",
+      "tags": [
+        "mcp"
+      ],
+      "fingerprint": "974ade3adc3c5fd2954b1043fd8921227466d6aca2a46363a6b077fde014b1fb",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/mcp.eval.ts",
+          "sha256": "4ad57f6b429b42864c43a61efde2297141777e40b052816cacdb0d712aa12b11"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/stamped/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "stamped",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "afd41c18f8730b575c93f9af2ab0e0962b81315df415593ed4c678344e03b646",
+          "fingerprintParts": {
+            "sources": "3ebcea81939ee48ace52beef6ac92fc10d358a631df334c1d28bdc12176aa64e",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "6bfc554ca370e2415c8bfc407b507bb0f3141eba7f8bf65e48bc458efe8a5d7b"
+          },
+          "environmentDigest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/mcp.eval.ts › mcp # cursor:composer-2.5/stamped/docker#1",
+          "id": "cursor:composer-2.5/stamped/docker#1",
+          "cell": "cursor:composer-2.5/stamped/docker",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-09-29T03:34:18.909Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 9,
+                "sent": 67844,
+                "received": 200260
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 16860,
+          "turns": [
+            {
+              "prompt": "Call the house_stamp tool of the stamp MCP server once, then reply with what it returned.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:34:22.667Z",
+              "durationMs": 12441,
+              "usage": {
+                "input": 23616,
+                "output": 191,
+                "cacheRead": 19109,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "Checking the `house_stamp` tool schema, then invoking it.\nThe **stamp** MCP `house_stamp` tool returned:\n\n**`STAMP-7Q`**"
+            }
+          ],
+          "usage": {
+            "input": 23616,
+            "output": 191,
+            "cacheRead": 19109,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 3755,
+            "agentMs": 12444,
+            "diffMs": 128,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 200
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/cursor-composer-2-5-stamped-docker-c2b682/1/transcript.jsonl",
+              "sha256": "2fe15b2242bdae9a11fba91acbdad61b2c2abd64114be286fd807af9fbddb2ab",
+              "bytes": 1465
+            },
+            "rawTranscript": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/cursor-composer-2-5-stamped-docker-c2b682/1/transcript.raw.jsonl",
+              "sha256": "d7fff3db710d704567a61cb77d5aebc88ad23fc96cf3a9a56d27f94d191f3de0",
+              "bytes": 21867
+            },
+            "diff": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/cursor-composer-2-5-stamped-docker-c2b682/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/mcp.eval.ts › mcp canary",
+      "key": "evals/mcp.eval.ts › mcp canary",
+      "slug": "evals-mcp-eval-ts-mcp-canary-692dab",
+      "file": "evals/mcp.eval.ts",
+      "group": [],
+      "name": "mcp canary",
+      "tags": [
+        "mcp"
+      ],
+      "fingerprint": "e464f0d1a43f1cf14ac214bf421d245a8ef9c33ab09e64ca2ccf28c27ed52b99",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/mcp.eval.ts",
+          "sha256": "4ad57f6b429b42864c43a61efde2297141777e40b052816cacdb0d712aa12b11"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/stamped/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "stamped",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "279845233cb898009d2989e7662aa36e3cab50ad661c7ff8f7bb457774e4e3b2",
+          "fingerprintParts": {
+            "sources": "3ebcea81939ee48ace52beef6ac92fc10d358a631df334c1d28bdc12176aa64e",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/mcp.eval.ts › mcp canary # cursor:composer-2.5/stamped/docker#1",
+          "id": "cursor:composer-2.5/stamped/docker#1",
+          "cell": "cursor:composer-2.5/stamped/docker",
+          "n": 1,
+          "seq": 8,
+          "startedAt": "2026-09-29T03:34:23.422Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected '' to contain 'tools/call'"
+          },
+          "durationMs": 4066,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 3715,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/rules.eval.ts › rules",
+      "key": "evals/rules.eval.ts › rules",
+      "slug": "evals-rules-eval-ts-rules-f3fd8d",
+      "file": "evals/rules.eval.ts",
+      "group": [],
+      "name": "rules",
+      "tags": [],
+      "fingerprint": "56c2e5f6936cd20f94345840169a1d2a0d308c0be89cbfec8d7de2f8d4a020a8",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/rules.eval.ts",
+          "sha256": "5039492c7de7953697603f6d6529d6849d03090f309f8af2741dc077db74caf2"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/ruled/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "ruled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "2a259347b420b87117a9fa676ead3dc18bf0ef989b873f83fd15f0d1d2aa6759",
+          "fingerprintParts": {
+            "sources": "cf2ab8a2119f8f566b6bd220c5ecf4532caba48b6550f3bc54bb3aa99d77a958",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "c55262a9b170ac7fd2f37894d21a66c4fb7df0122200d328c212da1ee6769f00"
+          },
+          "environmentDigest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/rules.eval.ts › rules # cursor:composer-2.5/ruled/docker#1",
+          "id": "cursor:composer-2.5/ruled/docker#1",
+          "cell": "cursor:composer-2.5/ruled/docker",
+          "n": 1,
+          "seq": 9,
+          "startedAt": "2026-09-29T03:34:27.486Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "AGENTS.md",
+              "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 9,
+                "sent": 60482,
+                "received": 193253
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 10800,
+          "turns": [
+            {
+              "prompt": "What is the house codeword? Follow your house rules for it, then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:34:30.535Z",
+              "durationMs": 6943,
+              "usage": {
+                "input": 15797,
+                "output": 206,
+                "cacheRead": 10816,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "Writing the house codeword to `codeword.txt` per house rules.\n\n\nThe house codeword is in `/reeval/workspace/codeword.txt` as required."
+            }
+          ],
+          "usage": {
+            "input": 15797,
+            "output": 206,
+            "cacheRead": 10816,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 3047,
+            "agentMs": 6944,
+            "diffMs": 175,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 162
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "codeword.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/cursor-composer-2-5-ruled-docker-e249d3/1/transcript.jsonl",
+              "sha256": "8cd465ba9e3988979283416a563c7936d582abbc3845a252a41eae6e7c5825f6",
+              "bytes": 1203
+            },
+            "rawTranscript": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/cursor-composer-2-5-ruled-docker-e249d3/1/transcript.raw.jsonl",
+              "sha256": "2fa792d71b9fca8438501f9e2ac6c93376dc3804479bec3b79a5e76862d8436e",
+              "bytes": 22563
+            },
+            "diff": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/cursor-composer-2-5-ruled-docker-e249d3/1/diff.patch",
+              "sha256": "26095f24dd2e7935c05c0e901c576d99dbeb7c70e3d3663b6a5c089d88fee697",
+              "bytes": 146
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/rules.eval.ts › rules canary",
+      "key": "evals/rules.eval.ts › rules canary",
+      "slug": "evals-rules-eval-ts-rules-canary-b12147",
+      "file": "evals/rules.eval.ts",
+      "group": [],
+      "name": "rules canary",
+      "tags": [],
+      "fingerprint": "c56cacedd91180a9a23b1efbb6a515451856f17e5c46ac14d27d24495dc06efe",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/rules.eval.ts",
+          "sha256": "5039492c7de7953697603f6d6529d6849d03090f309f8af2741dc077db74caf2"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/ruled/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "ruled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "abf5b6c9b45927aa5552c12f7d131bbddad8660f2a6039849a2f122f3f865405",
+          "fingerprintParts": {
+            "sources": "cf2ab8a2119f8f566b6bd220c5ecf4532caba48b6550f3bc54bb3aa99d77a958",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "74c03d80cd315dd0b64f5d02c9ff310e79b6658eb899696f49c7e471479577dc"
+          },
+          "environmentDigest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/rules.eval.ts › rules canary # cursor:composer-2.5/ruled/docker#1",
+          "id": "cursor:composer-2.5/ruled/docker#1",
+          "cell": "cursor:composer-2.5/ruled/docker",
+          "n": 1,
+          "seq": 10,
+          "startedAt": "2026-09-29T03:34:35.763Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "AGENTS.md",
+              "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected null to be 'TANGERINE-41' // Object.is equality"
+          },
+          "durationMs": 4608,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 4130,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › skill",
+      "key": "evals/skill.eval.ts › skill",
+      "slug": "evals-skill-eval-ts-skill-468cc8",
+      "file": "evals/skill.eval.ts",
+      "group": [],
+      "name": "skill",
+      "tags": [],
+      "fingerprint": "28b045edfea9c1d371bd40a1f3412a789a4451595614f5f7c272be3b89483a8c",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "4d7a89930c00ec62e0c53bafdde80e2e352cf8090aca34857f178d4e62310e00"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/skilled/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "skilled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "1c9d1fc57362a4467f3878eaa5685ff741a3d759cbc7bd796eb7052c6c1c0bc3",
+          "fingerprintParts": {
+            "sources": "52c6dfad9f0c88608367bec535801c3af4c29a33a6304d5323dfb40851f3c18d",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "1365defd177e76de12b3285ea319c8f86dc96137d27253794acc25187cc334c1"
+          },
+          "environmentDigest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › skill # cursor:composer-2.5/skilled/docker#1",
+          "id": "cursor:composer-2.5/skilled/docker#1",
+          "cell": "cursor:composer-2.5/skilled/docker",
+          "n": 1,
+          "seq": 11,
+          "startedAt": "2026-09-29T03:34:38.280Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "85b5ac1f4a1df47261ce42ff06c0a8e822ec82fbccbf81ecf8e68b939826a047"
+            },
+            {
+              "path": "~/.agents/skills/contract-probe/SKILL.md",
+              "sha256": "d832194732a158bf48b9eb61f957d696e1684365cca0d749e5f914b3dd2e17a3"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api2.cursor.sh",
+                "port": 443,
+                "connections": 8,
+                "sent": 72354,
+                "received": 198993
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 13861,
+          "turns": [
+            {
+              "prompt": "Use your contract-probe skill: do exactly what it says, then stop. Keep your reply short.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:34:42.864Z",
+              "durationMs": 8702,
+              "usage": {
+                "input": 24128,
+                "output": 149,
+                "cacheRead": 19488,
+                "cacheWrite": 0,
+                "reasoning": null
+              },
+              "model": "composer-2.5[fast=false]",
+              "unreported": [],
+              "error": null,
+              "text": "DONE"
+            }
+          ],
+          "usage": {
+            "input": 24128,
+            "output": 149,
+            "cacheRead": 19488,
+            "cacheWrite": 0,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 4581,
+            "agentMs": 8704,
+            "diffMs": 123,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 128
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "skill-proof.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-skill-468cc8/cursor-composer-2-5-skilled-docker-131730/1/transcript.jsonl",
+              "sha256": "a41ba2a0aa1e484fbcc193146d69c60c368590d006d61ed1506ee716e919926e",
+              "bytes": 1863
+            },
+            "rawTranscript": {
+              "path": "evals-skill-eval-ts-skill-468cc8/cursor-composer-2-5-skilled-docker-131730/1/transcript.raw.jsonl",
+              "sha256": "dbd74cffc8a1c7a55311dc4a1f9ee893f779cc6faf7a6ffcd006b998f01e0700",
+              "bytes": 13571
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-skill-468cc8/cursor-composer-2-5-skilled-docker-131730/1/diff.patch",
+              "sha256": "873ec5c9fecfb5775d17d0bb8e449b091df6336e820781d122c7c9c239f3918f",
+              "bytes": 159
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › skill canary",
+      "key": "evals/skill.eval.ts › skill canary",
+      "slug": "evals-skill-eval-ts-skill-canary-ed7134",
+      "file": "evals/skill.eval.ts",
+      "group": [],
+      "name": "skill canary",
+      "tags": [],
+      "fingerprint": "581588bd6fc9e4fd43153949a4fe74b6751fa904d706c07817f518b2bb363e15",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "4d7a89930c00ec62e0c53bafdde80e2e352cf8090aca34857f178d4e62310e00"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "cursor:composer-2.5/skilled/docker",
+          "harness": "cursor:composer-2.5",
+          "environment": "skilled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "cfa85e270119cd550837a3d76da1dd39cff5999c816ca57da85e26cc273b4178",
+          "fingerprintParts": {
+            "sources": "52c6dfad9f0c88608367bec535801c3af4c29a33a6304d5323dfb40851f3c18d",
+            "harness": "2f7f6171b58884be9228fe822da3a9d3bf6aa88ebdc3d9b217d61c0276e0d050",
+            "environment": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+            "image": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+            "agentCli": "@cursor/sdk 1.0.32",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+          "harnessKind": "cursor",
+          "model": "composer-2.5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › skill canary # cursor:composer-2.5/skilled/docker#1",
+          "id": "cursor:composer-2.5/skilled/docker#1",
+          "cell": "cursor:composer-2.5/skilled/docker",
+          "n": 1,
+          "seq": 12,
+          "startedAt": "2026-09-29T03:34:40.358Z",
+          "imageId": "sha256:117b7f5d33a373517f708c8d8c0124c64532ebc1df88fb474266e1813afe4bd0",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected null to be 'PROBE-7F3K-QUILL' // Object.is equality"
+          },
+          "durationMs": 4548,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 4000,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}

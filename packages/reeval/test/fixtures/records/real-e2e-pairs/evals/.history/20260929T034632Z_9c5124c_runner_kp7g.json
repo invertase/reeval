@@ -1,0 +1,292 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T034632Z_9c5124c_runner_kp7g",
+  "status": "complete",
+  "startedAt": "2026-09-29T03:46:32.420Z",
+  "endedAt": "2026-09-29T03:46:47.775Z",
+  "durationMs": 15355,
+  "author": "runner",
+  "git": {
+    "sha": "9c5124c46c0dba03552a49879480f106a1492fa4",
+    "branch": "main",
+    "dirty": false,
+    "diffHash": null,
+    "worktreePatch": null,
+    "worktreePatchNote": null,
+    "commitTime": "2026-09-29T03:46:15Z",
+    "shallow": false,
+    "remote": null
+  },
+  "runner": {
+    "kind": "local",
+    "hostHash": "795d68a28cbb"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "24.21.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:claude-code-1.0.128-patch.5d1c985c",
+        "id": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+        "agentCli": "2.1.276 (Claude Code)",
+        "base": "reeval-sandbox:claude-code-1.0.128-patch.5d1c985c",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "claude-code:claude-haiku-4-5",
+        "kind": "claude-code",
+        "model": "claude-haiku-4-5",
+        "resolvedModels": [
+          "claude-haiku-4-5"
+        ]
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "0e2a4839495b"
+    },
+    "context": [
+      {
+        "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [],
+  "profile": null,
+  "plan": {
+    "evals": 1,
+    "cells": 1,
+    "attempts": 1,
+    "estimateMs": 15026,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "attempts": 1
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 240000,
+    "concurrency": 2,
+    "configHash": "cabe1e8d1968156dd3cc49d94f3ca15549cb97d579a23b636bdb2a05d36b4f72"
+  },
+  "cost": {
+    "inputTokens": 42955,
+    "outputTokens": 220,
+    "usage": {
+      "input": 18,
+      "output": 220,
+      "cacheRead": 42702,
+      "cacheWrite": 235,
+      "reasoning": null
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 1,
+    "attempts": 1,
+    "pass": 1,
+    "fail": 0,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/hello.eval.ts › writes hello",
+      "key": "evals/hello.eval.ts › writes hello",
+      "slug": "evals-hello-eval-ts-writes-hello-98d896",
+      "file": "evals/hello.eval.ts",
+      "group": [],
+      "name": "writes hello",
+      "tags": [],
+      "fingerprint": "313b4713e13ee69d8a776b65f1fbec14e41a46b172396b34973fdda6f71e0353",
+      "sources": [
+        {
+          "path": "evals/hello.eval.ts",
+          "sha256": "2c0e6fe80b403ab5368edadcb32a8dfc85f8cd31b6ed2c8be5c8590b915b9c71"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/-/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "-",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "5fa7585ce6f1df6579f697cd40e3508357f5373241d65d6dc69c751c59e88606",
+          "fingerprintParts": {
+            "sources": "797ec956ab47fcddabad7e496619cf9e5c11b16fad93adf4a3f138894b2cc90f",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:eca09e8f139fb2456ce711a4f177ce81d9a5fdef6f8cdc80e9746ba8c5a9aae9",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "d680a9af604b702351f33a2ce31b15296969758add41c64fb0a6166601be0556"
+          },
+          "environmentDigest": null,
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/hello.eval.ts › writes hello # claude-code:claude-haiku-4-5/-/docker#1",
+          "id": "claude-code:claude-haiku-4-5/-/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/-/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T03:46:33.524Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 179198,
+                "received": 19301
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 14242,
+          "turns": [
+            {
+              "prompt": "Create a file named hello.txt whose only content is `hello from es`, then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:46:41.766Z",
+              "durationMs": 5449,
+              "usage": {
+                "input": 18,
+                "output": 220,
+                "cacheRead": 42702,
+                "cacheWrite": 235,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "Done. File created at `/reeval/workspace/hello.txt` with content `hello from es`."
+            }
+          ],
+          "usage": {
+            "input": 18,
+            "output": 220,
+            "cacheRead": 42702,
+            "cacheWrite": 235,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 8240,
+            "agentMs": 5451,
+            "diffMs": 119,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 1258
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "hello.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-hello-eval-ts-writes-hello-98d896/claude-code-claude-haiku-4-5-docker-cd4e2d/1/transcript.jsonl",
+              "sha256": "1594d5ca39630b714794bfeea72b883fd3d73688c515f851dbf590bdd105071e",
+              "bytes": 1230
+            },
+            "diff": {
+              "path": "evals-hello-eval-ts-writes-hello-98d896/claude-code-claude-haiku-4-5-docker-cd4e2d/1/diff.patch",
+              "sha256": "02a002c67644b6a80471d56aaec5c66494a68a1615bfa30e49920c66a5318439",
+              "bytes": 166
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{"ts":"2026-09-29T03:34:22.667Z","atMs":0,"turn":0,"type":"prompt","text":"Call the house_stamp tool of the stamp MCP server once, then reply with what it returned."}
+{"turn":0,"ts":"2026-09-29T03:34:31.002Z","atMs":8335,"type":"reasoning","text":"Calling the house_stamp tool on the stamp MCP server once and reporting its return value.\n\nFirst fetching the tool schema via GetDynamls, then calling it with CallDynamicTool.","durationMs":159}
+{"turn":0,"ts":"2026-09-29T03:34:31.167Z","atMs":8500,"type":"text","text":"Checking the `house_stamp` tool schema, then invoking it.\n","durationMs":1606}
+{"turn":0,"ts":"2026-09-29T03:34:32.773Z","atMs":10106,"type":"reasoning","text":"The house_stamp tool requires no parameters.","durationMs":25}
+{"turn":0,"ts":"2026-09-29T03:34:32.804Z","atMs":10137,"durationMs":369,"type":"tool","toolCallId":"tool_53ddf791-30a9-4970-8758-736c54b445a","tool":"mcp__stamp__house_stamp","input":{"providerIdentifier":"stamp","toolName":"house_stamp","args":{}},"output":[{"type":"text","text":"STAMP-7Q"}],"ok":true}
+{"turn":0,"ts":"2026-09-29T03:34:34.497Z","atMs":11830,"type":"reasoning","text":"The house_stamp tool returned STAMP-7Q.","durationMs":16}
+{"turn":0,"ts":"2026-09-29T03:34:34.528Z","atMs":11861,"type":"text","text":"The **stamp** MCP `house_stamp` tool returned:\n\n**`STAMP-7Q`**","durationMs":86}
+{"ts":"2026-09-29T03:34:35.108Z","atMs":12441,"turn":0,"type":"turn-end","status":"completed","durationMs":12441}

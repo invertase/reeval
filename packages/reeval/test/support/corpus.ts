@@ -1,4 +1,5 @@
 export {
+  CORPUS_DIR,
   type CorpusEntry,
   type CorpusRun,
   corpus,

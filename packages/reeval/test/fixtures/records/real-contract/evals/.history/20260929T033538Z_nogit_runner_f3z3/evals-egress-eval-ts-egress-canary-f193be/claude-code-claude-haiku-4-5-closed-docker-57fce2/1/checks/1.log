@@ -1,0 +1,5 @@
+$ curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt || true
+exit 0
+--- stdout
+--- stderr
+curl: (56) CONNECT tunnel failed, response 403

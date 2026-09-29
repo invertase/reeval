@@ -1,0 +1,2002 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T033538Z_nogit_runner_f3z3",
+  "status": "complete",
+  "startedAt": "2026-09-29T03:35:38.563Z",
+  "endedAt": "2026-09-29T03:37:23.965Z",
+  "durationMs": 105402,
+  "author": "runner",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "795d68a28cbb"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "24.21.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:claude-code-1.0.128-patch.5d1c985c",
+        "id": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+        "agentCli": "2.1.276 (Claude Code)",
+        "base": "reeval-sandbox:claude-code-1.0.128-patch.5d1c985c",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "claude-code:claude-haiku-4-5",
+        "kind": "claude-code",
+        "model": "claude-haiku-4-5",
+        "resolvedModels": [
+          "claude-haiku-4-5"
+        ]
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "0e2a4839495b"
+    },
+    "context": [
+      {
+        "path": "CLAUDE.md",
+        "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+      },
+      {
+        "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+        "sha256": "dcc327bce3fa8feee9c79f7f9a11dfe56295d4b627efc172f61456f92fda0861"
+      },
+      {
+        "path": "~/.claude/skills/contract-probe/SKILL.md",
+        "sha256": "7e4705bd98e7efdf20be5f3e939258daadd6f52b8dc8347a5f463ac363ae6b6d"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "closed",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "deny-all"
+    },
+    {
+      "name": "notes",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "notes.txt",
+          "sha256": "1f08cd1f5486938b851d21aaebf264a658045575cb9668c5d5859b1fe639c794"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "planted",
+      "parent": "scanned",
+      "overrides": [],
+      "digest": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "~/.reeval-contract/scan.mjs",
+          "sha256": "96dcd1fd0535e21282866ada5e67e8b5039479c1ad3817d8f7e35db16cc57e35"
+        },
+        {
+          "path": "~/.contract-planted",
+          "sha256": "00553c5a46ae3412de047fccc4dcf8aeb4b1ff1610322f963c74adc93ff3a37b"
+        }
+      ],
+      "vars": [
+        "CONTRACT_PLANTED"
+      ],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "ruled",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "CLAUDE.md",
+          "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "scanned",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "~/.reeval-contract/scan.mjs",
+          "sha256": "96dcd1fd0535e21282866ada5e67e8b5039479c1ad3817d8f7e35db16cc57e35"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "skilled",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+      "setup": [],
+      "skills": [
+        {
+          "name": "contract-probe",
+          "source": "local:skills/contract-probe",
+          "commit": null,
+          "sha256": "9970872ae3819482fb79cf07ffbb3734096b26e3e517ec130a3ec41674ba306e",
+          "placement": "harness",
+          "excluded": []
+        }
+      ],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "stamped",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+      "setup": [],
+      "skills": [],
+      "mcp": [
+        "stamp"
+      ],
+      "files": [
+        {
+          "path": "~/reeval-mcp/stamp.mjs",
+          "sha256": "f001294329aba39937dfb157db3d64981c2b7a74f355def88e8fe86c3bbce865"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 12,
+    "cells": 12,
+    "attempts": 12,
+    "estimateMs": 2160000,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "attempts": 12
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 240000,
+    "concurrency": 2,
+    "configHash": "cabe1e8d1968156dd3cc49d94f3ca15549cb97d579a23b636bdb2a05d36b4f72"
+  },
+  "cost": {
+    "inputTokens": 324426,
+    "outputTokens": 2055,
+    "usage": {
+      "input": 135,
+      "output": 2055,
+      "cacheRead": 286156,
+      "cacheWrite": 38135,
+      "reasoning": null
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 12,
+    "attempts": 12,
+    "pass": 6,
+    "fail": 6,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/edit-and-run.eval.ts › edit and run",
+      "key": "evals/edit-and-run.eval.ts › edit and run",
+      "slug": "evals-edit-and-run-eval-ts-edit-and-run-db761a",
+      "file": "evals/edit-and-run.eval.ts",
+      "group": [],
+      "name": "edit and run",
+      "tags": [],
+      "fingerprint": "08b4caea8e98a0788faa3e9c418ffc93e493766e6fc0e7bded22647d36df7a19",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/edit-and-run.eval.ts",
+          "sha256": "fd976fe9fd71c8790c82f5035165693945017b8b5faab1cde1a5719f6162e40f"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/notes/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "notes",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "7b7375a2defa89961006b180703da6fd4f74fcc13f0ba84e91075a2cf972c78f",
+          "fingerprintParts": {
+            "sources": "7fbb34c89cc5ea8010573e55b498e310dea53cb56d41bd94f84999f4c183e861",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "d680a9af604b702351f33a2ce31b15296969758add41c64fb0a6166601be0556"
+          },
+          "environmentDigest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/edit-and-run.eval.ts › edit and run # claude-code:claude-haiku-4-5/notes/docker#1",
+          "id": "claude-code:claude-haiku-4-5/notes/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/notes/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T03:35:42.471Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 358646,
+                "received": 27281
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 24016,
+          "turns": [
+            {
+              "prompt": "In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: echo contract-$((6*7)). Then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:35:57.420Z",
+              "durationMs": 8273,
+              "usage": {
+                "input": 34,
+                "output": 548,
+                "cacheRead": 64810,
+                "cacheWrite": 22028,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "Done. I've changed \"draft\" to \"final\" in notes.txt and ran the command, which output `contract-42`."
+            }
+          ],
+          "usage": {
+            "input": 34,
+            "output": 548,
+            "cacheRead": 64810,
+            "cacheWrite": 22028,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 14946,
+            "agentMs": 8274,
+            "diffMs": 178,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 1632
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "notes.txt",
+              "status": "modified"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/claude-code-claude-haiku-4-5-notes-docker-13c892/1/transcript.jsonl",
+              "sha256": "d90b9d14626b699d810f10319dcb217bd984defe9479976bcf9b57be67210777",
+              "bytes": 2951
+            },
+            "rawTranscript": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/claude-code-claude-haiku-4-5-notes-docker-13c892/1/transcript.raw.jsonl",
+              "sha256": "146a3ea4e24b25c436aedc13aa1a0a721dd62dc53df5e22e80a3041471e78d48",
+              "bytes": 20721
+            },
+            "diff": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/claude-code-claude-haiku-4-5-notes-docker-13c892/1/diff.patch",
+              "sha256": "59485d1e84ab278ee70542c5ca0ba44e076b16f7cd164776ed5f20cfe3d420a2",
+              "bytes": 139
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/edit-and-run.eval.ts › edit and run canary",
+      "key": "evals/edit-and-run.eval.ts › edit and run canary",
+      "slug": "evals-edit-and-run-eval-ts-edit-and-run-canary-b7776d",
+      "file": "evals/edit-and-run.eval.ts",
+      "group": [],
+      "name": "edit and run canary",
+      "tags": [],
+      "fingerprint": "df8c5f036a5ab83c35f0930b0b61b36d7e582b3da6621f10d160dc279835ce2a",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/edit-and-run.eval.ts",
+          "sha256": "fd976fe9fd71c8790c82f5035165693945017b8b5faab1cde1a5719f6162e40f"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/notes/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "notes",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "a451486de8a1fc10df6007a7a341646454479d56c93c9fa3b4674bad1d69c0bc",
+          "fingerprintParts": {
+            "sources": "7fbb34c89cc5ea8010573e55b498e310dea53cb56d41bd94f84999f4c183e861",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/edit-and-run.eval.ts › edit and run canary # claude-code:claude-haiku-4-5/notes/docker#1",
+          "id": "claude-code:claude-haiku-4-5/notes/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/notes/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-09-29T03:35:42.488Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected 'status: draft' to be 'status: final' // Object.is equality"
+          },
+          "durationMs": 15639,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 14899,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/egress.eval.ts › egress",
+      "key": "evals/egress.eval.ts › egress",
+      "slug": "evals-egress-eval-ts-egress-ae6df0",
+      "file": "evals/egress.eval.ts",
+      "group": [],
+      "name": "egress",
+      "tags": [],
+      "fingerprint": "9bbf388716cc81478875e56ecc42dd48d50be0d585daa7b245074c90c76406e9",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/egress.eval.ts",
+          "sha256": "8e3e3acd8bfb5dbca51e9ab85be063d5ccf27d4ca8e8de3276c88d686b2d2e1e"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/closed/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "closed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "7234d680e73d7daab31ccd2e0a31bdd77f629ee045ca292a94d996b864a48709",
+          "fingerprintParts": {
+            "sources": "2e2fab8ca0e28d748b534c7e0aafe32ab8b5af054a13e36f33ba71cc1e74a956",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "d680a9af604b702351f33a2ce31b15296969758add41c64fb0a6166601be0556"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/egress.eval.ts › egress # claude-code:claude-haiku-4-5/closed/docker#1",
+          "id": "claude-code:claude-haiku-4-5/closed/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/closed/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-09-29T03:35:58.142Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [
+              "api.anthropic.com",
+              "*.anthropic.com"
+            ],
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 180882,
+                "received": 25526
+              }
+            ],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 20279,
+          "turns": [
+            {
+              "prompt": "Run this exact shell command once, then stop: curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:36:09.254Z",
+              "durationMs": 8324,
+              "usage": {
+                "input": 18,
+                "output": 525,
+                "cacheRead": 39883,
+                "cacheWrite": 3321,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "Done. The command ran and encountered a connectivity error: HTTPS connections to external URLs appear to be blocked by the network (curl error 56: CONNECT tunnel failed with a 403 response from the proxy/firewall)."
+            }
+          ],
+          "usage": {
+            "input": 18,
+            "output": 525,
+            "cacheRead": 39883,
+            "cacheWrite": 3321,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 11108,
+            "agentMs": 8326,
+            "diffMs": 196,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 3704
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "blocked.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/claude-code-claude-haiku-4-5-closed-docker-57fce2/1/transcript.jsonl",
+              "sha256": "53d054f3d45bc62e41770b0c5657f8fb2954497527f3423d14272f51f434e325",
+              "bytes": 2623
+            },
+            "rawTranscript": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/claude-code-claude-haiku-4-5-closed-docker-57fce2/1/transcript.raw.jsonl",
+              "sha256": "8c61ff6ab428d792e29b7b9ff7316f7641c169dec5913d04eb562c562c712864",
+              "bytes": 24538
+            },
+            "diff": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/claude-code-claude-haiku-4-5-closed-docker-57fce2/1/diff.patch",
+              "sha256": "211162ad391ab91bad67b4acc9199df64b0d58c4682ff85434615b902c5368e7",
+              "bytes": 166
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/egress.eval.ts › egress canary",
+      "key": "evals/egress.eval.ts › egress canary",
+      "slug": "evals-egress-eval-ts-egress-canary-f193be",
+      "file": "evals/egress.eval.ts",
+      "group": [],
+      "name": "egress canary",
+      "tags": [],
+      "fingerprint": "5014bb4e09875431a4c617a6e816840275ddbd2e323cccf97066f61662feedcd",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/egress.eval.ts",
+          "sha256": "8e3e3acd8bfb5dbca51e9ab85be063d5ccf27d4ca8e8de3276c88d686b2d2e1e"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/closed/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "closed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "f2748fa0bd84696a062117e9f632c5b81f759e0a1e639a5b33679e6283d4a123",
+          "fingerprintParts": {
+            "sources": "2e2fab8ca0e28d748b534c7e0aafe32ab8b5af054a13e36f33ba71cc1e74a956",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/egress.eval.ts › egress canary # claude-code:claude-haiku-4-5/closed/docker#1",
+          "id": "claude-code:claude-haiku-4-5/closed/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/closed/docker",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-09-29T03:36:06.486Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [
+              "api.anthropic.com",
+              "*.anthropic.com"
+            ],
+            "recorded": true,
+            "contacted": [],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected '403 000' to match /^200 /"
+          },
+          "durationMs": 11429,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 10789,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 103,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt || true",
+              "exitCode": 0,
+              "durationMs": 103,
+              "log": {
+                "path": "evals-egress-eval-ts-egress-canary-f193be/claude-code-claude-haiku-4-5-closed-docker-57fce2/1/checks/1.log",
+                "sha256": "f9b1283c8bd1c8e1c2f1e779693e01572ed30cf2993cb09b29ceceaac1cd13f1",
+                "bytes": 183
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/key.eval.ts › key",
+      "key": "evals/key.eval.ts › key",
+      "slug": "evals-key-eval-ts-key-187a81",
+      "file": "evals/key.eval.ts",
+      "group": [],
+      "name": "key",
+      "tags": [],
+      "fingerprint": "b4227166ca6d71eef3479f679b56297763196a5f472dc1fefac19d061f6dabed",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/key.eval.ts",
+          "sha256": "f6d07605b9bbd991515d3a9addc2619805574d960fec1a8b6e0fce4b0be1fa28"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/scanned/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "scanned",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "34a4f4e8a2c1507898d4d7d921b0b3a8629ae2703fdd6a695d40b4739e74d8a8",
+          "fingerprintParts": {
+            "sources": "3c68834cacc2271a208d514dc96f7a166d290b3c39abe35bdcf2b8b0e68e6acd",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "d680a9af604b702351f33a2ce31b15296969758add41c64fb0a6166601be0556"
+          },
+          "environmentDigest": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/key.eval.ts › key # claude-code:claude-haiku-4-5/scanned/docker#1",
+          "id": "claude-code:claude-haiku-4-5/scanned/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/scanned/docker",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-09-29T03:36:17.926Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 91599,
+                "received": 15280
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 20008,
+          "turns": [
+            {
+              "prompt": "Reply with the single word OK. Do not run any tools.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:36:32.317Z",
+              "durationMs": 3156,
+              "usage": {
+                "input": 10,
+                "output": 62,
+                "cacheRead": 18501,
+                "cacheWrite": 2844,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "OK"
+            }
+          ],
+          "usage": {
+            "input": 10,
+            "output": 62,
+            "cacheRead": 18501,
+            "cacheWrite": 2844,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 14388,
+            "agentMs": 3157,
+            "diffMs": 182,
+            "checksMs": 1677,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 582
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node ~/.reeval-contract/scan.mjs '[REDACTED]'",
+              "exitCode": 0,
+              "durationMs": 1677,
+              "log": {
+                "path": "evals-key-eval-ts-key-187a81/claude-code-claude-haiku-4-5-scanned-docker-eb062a/1/checks/1.log",
+                "sha256": "23726b302ac302de52caebe9e0419b324365be34d44f2a47f3000c772a7411af",
+                "bytes": 297
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-key-eval-ts-key-187a81/claude-code-claude-haiku-4-5-scanned-docker-eb062a/1/transcript.jsonl",
+              "sha256": "558b9532714d23cff7fe03510c166bf0dc7186d8d09e3bf39ce609fbfb27a42d",
+              "bytes": 679
+            },
+            "rawTranscript": {
+              "path": "evals-key-eval-ts-key-187a81/claude-code-claude-haiku-4-5-scanned-docker-eb062a/1/transcript.raw.jsonl",
+              "sha256": "c110dc9a561b24a80495422d5ba324cc310e3b741fcd2af28b97cd7569162b94",
+              "bytes": 4094
+            },
+            "diff": {
+              "path": "evals-key-eval-ts-key-187a81/claude-code-claude-haiku-4-5-scanned-docker-eb062a/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/key.eval.ts › key canary",
+      "key": "evals/key.eval.ts › key canary",
+      "slug": "evals-key-eval-ts-key-canary-d73488",
+      "file": "evals/key.eval.ts",
+      "group": [],
+      "name": "key canary",
+      "tags": [],
+      "fingerprint": "538ac8bb8cef89adb558fcbe70aa052dadf6e62e418e7629f0b48f07c116c20f",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/key.eval.ts",
+          "sha256": "f6d07605b9bbd991515d3a9addc2619805574d960fec1a8b6e0fce4b0be1fa28"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/planted/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "planted",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "ff659c22a56edbe9291e7d7415c34bb2e52f6222a84be84a817b6789ccc69a26",
+          "fingerprintParts": {
+            "sources": "3c68834cacc2271a208d514dc96f7a166d290b3c39abe35bdcf2b8b0e68e6acd",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/key.eval.ts › key canary # claude-code:claude-haiku-4-5/planted/docker#1",
+          "id": "claude-code:claude-haiku-4-5/planted/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/planted/docker",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-09-29T03:36:18.400Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [
+              "CONTRACT_PLANTED"
+            ],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected [ '/proc/1/environ (raw)', …(4) ] to deeply equal []"
+          },
+          "durationMs": 15964,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 13939,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 1623,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node ~/.reeval-contract/scan.mjs '[{\"form\":\"raw\",\"len\":33,\"roll\":3425781250,\"sha256\":\"be3b833b6d42abc50a865348ebd66fad2f0cdac18a9e9c421ada12dde88737ed\"},{\"form\":\"base64\",\"len\":44,\"roll\":320935815,\"sha256\":\"9d2bcbdf3d08022a51162ba9db6d779735642c49c7429781a716a6504275c930\"}]'",
+              "exitCode": 0,
+              "durationMs": 1623,
+              "log": {
+                "path": "evals-key-eval-ts-key-canary-d73488/claude-code-claude-haiku-4-5-planted-docker-21030a/1/checks/1.log",
+                "sha256": "19404789975a0ebcc6816d4f80b9cd1cdca2faaa9dda4bdce1956d0e7a9e9d44",
+                "bytes": 666
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/mcp.eval.ts › mcp",
+      "key": "evals/mcp.eval.ts › mcp",
+      "slug": "evals-mcp-eval-ts-mcp-a42bcd",
+      "file": "evals/mcp.eval.ts",
+      "group": [],
+      "name": "mcp",
+      "tags": [
+        "mcp"
+      ],
+      "fingerprint": "e1abc4c5148fef4ca9f55fc758e6fbe6b4c020c316219ab4995019a933a5c490",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/mcp.eval.ts",
+          "sha256": "4ad57f6b429b42864c43a61efde2297141777e40b052816cacdb0d712aa12b11"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/stamped/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "stamped",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "fb4cd07f22fcee48372ed143f40771eb50f52fa6075ae1c9fc084b874381b9ab",
+          "fingerprintParts": {
+            "sources": "3ebcea81939ee48ace52beef6ac92fc10d358a631df334c1d28bdc12176aa64e",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "d680a9af604b702351f33a2ce31b15296969758add41c64fb0a6166601be0556"
+          },
+          "environmentDigest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/mcp.eval.ts › mcp # claude-code:claude-haiku-4-5/stamped/docker#1",
+          "id": "claude-code:claude-haiku-4-5/stamped/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/stamped/docker",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-09-29T03:36:34.362Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 268452,
+                "received": 22103
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 19996,
+          "turns": [
+            {
+              "prompt": "Call the house_stamp tool of the stamp MCP server once, then reply with what it returned.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:36:46.390Z",
+              "durationMs": 7258,
+              "usage": {
+                "input": 28,
+                "output": 264,
+                "cacheRead": 61477,
+                "cacheWrite": 3239,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "The house_stamp tool returned: **STAMP-7Q**"
+            }
+          ],
+          "usage": {
+            "input": 28,
+            "output": 264,
+            "cacheRead": 61477,
+            "cacheWrite": 3239,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 12023,
+            "agentMs": 7260,
+            "diffMs": 155,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 2526
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/claude-code-claude-haiku-4-5-stamped-docker-7e166c/1/transcript.jsonl",
+              "sha256": "f5a60b94c8956b7da40815fbb3ef922db915d4f755aa8e7496c71a0dc1064124",
+              "bytes": 1748
+            },
+            "rawTranscript": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/claude-code-claude-haiku-4-5-stamped-docker-7e166c/1/transcript.raw.jsonl",
+              "sha256": "d7581d4e5733b31d7892a631bd3f74cf6d59010260d8176a408a09b9dd4d551c",
+              "bytes": 12017
+            },
+            "diff": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/claude-code-claude-haiku-4-5-stamped-docker-7e166c/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/mcp.eval.ts › mcp canary",
+      "key": "evals/mcp.eval.ts › mcp canary",
+      "slug": "evals-mcp-eval-ts-mcp-canary-692dab",
+      "file": "evals/mcp.eval.ts",
+      "group": [],
+      "name": "mcp canary",
+      "tags": [
+        "mcp"
+      ],
+      "fingerprint": "43a6213e00a14e210ddfdf9826e9eb91ae30a9f0194fc4e6586116c73c3f1cec",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/mcp.eval.ts",
+          "sha256": "4ad57f6b429b42864c43a61efde2297141777e40b052816cacdb0d712aa12b11"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/stamped/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "stamped",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "bb3ce8946efa08983fd719c79b13108e5fc632db7cdf5c67b05e7270ff0c4baf",
+          "fingerprintParts": {
+            "sources": "3ebcea81939ee48ace52beef6ac92fc10d358a631df334c1d28bdc12176aa64e",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/mcp.eval.ts › mcp canary # claude-code:claude-haiku-4-5/stamped/docker#1",
+          "id": "claude-code:claude-haiku-4-5/stamped/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/stamped/docker",
+          "n": 1,
+          "seq": 8,
+          "startedAt": "2026-09-29T03:36:37.915Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected '' to contain 'tools/call'"
+          },
+          "durationMs": 12189,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 11704,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/rules.eval.ts › rules",
+      "key": "evals/rules.eval.ts › rules",
+      "slug": "evals-rules-eval-ts-rules-f3fd8d",
+      "file": "evals/rules.eval.ts",
+      "group": [],
+      "name": "rules",
+      "tags": [],
+      "fingerprint": "4ef7c70af7360f599b17c4f0a0301d8defdeae3a3a6e25b3a739871ef279acfa",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/rules.eval.ts",
+          "sha256": "5039492c7de7953697603f6d6529d6849d03090f309f8af2741dc077db74caf2"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/ruled/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "ruled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "9c1f2d76b0a02a83b7cab4f3aae967812dc1de7051caee955a553086a34bf85c",
+          "fingerprintParts": {
+            "sources": "cf2ab8a2119f8f566b6bd220c5ecf4532caba48b6550f3bc54bb3aa99d77a958",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "dd234610aa1bce02cc4aa77f975354600af9cc2de0b5dcd4901b012fe90a1d1e"
+          },
+          "environmentDigest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/rules.eval.ts › rules # claude-code:claude-haiku-4-5/ruled/docker#1",
+          "id": "claude-code:claude-haiku-4-5/ruled/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/ruled/docker",
+          "n": 1,
+          "seq": 9,
+          "startedAt": "2026-09-29T03:36:50.102Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "CLAUDE.md",
+              "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 180749,
+                "received": 19806
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 18266,
+          "turns": [
+            {
+              "prompt": "What is the house codeword? Follow your house rules for it, then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:37:01.434Z",
+              "durationMs": 6103,
+              "usage": {
+                "input": 18,
+                "output": 292,
+                "cacheRead": 39977,
+                "cacheWrite": 3283,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "Done."
+            }
+          ],
+          "usage": {
+            "input": 18,
+            "output": 292,
+            "cacheRead": 39977,
+            "cacheWrite": 3283,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 11329,
+            "agentMs": 6104,
+            "diffMs": 187,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 1790
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "codeword.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/claude-code-claude-haiku-4-5-ruled-docker-a010bf/1/transcript.jsonl",
+              "sha256": "2586baf79cf79bf36d30c8015127c5d234fc4402614aba0d86f988ea55f06f0b",
+              "bytes": 1422
+            },
+            "rawTranscript": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/claude-code-claude-haiku-4-5-ruled-docker-a010bf/1/transcript.raw.jsonl",
+              "sha256": "6f17fa2b1f44c97c0d98e62c72ec649a0d6f091a9df5e74c15396b06929b4c1e",
+              "bytes": 11614
+            },
+            "diff": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/claude-code-claude-haiku-4-5-ruled-docker-a010bf/1/diff.patch",
+              "sha256": "a25bf19e9ec5cfea76942ed537afee0cd0e49d578fd08cc234e2808d4d3cb12c",
+              "bytes": 174
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/rules.eval.ts › rules canary",
+      "key": "evals/rules.eval.ts › rules canary",
+      "slug": "evals-rules-eval-ts-rules-canary-b12147",
+      "file": "evals/rules.eval.ts",
+      "group": [],
+      "name": "rules canary",
+      "tags": [],
+      "fingerprint": "f29c32901a720cd82056d76dc737300bfb059a1bef20f6f3f6426b4d41af20a0",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/rules.eval.ts",
+          "sha256": "5039492c7de7953697603f6d6529d6849d03090f309f8af2741dc077db74caf2"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/ruled/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "ruled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "fc0ff34a33297469d7af046ced071cf5104a3c1f657edfc8e0d01412d1118e64",
+          "fingerprintParts": {
+            "sources": "cf2ab8a2119f8f566b6bd220c5ecf4532caba48b6550f3bc54bb3aa99d77a958",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "145b5078126a16c5588bc297f32d2890f857ad2d73f8e3cc01398e92823a429b"
+          },
+          "environmentDigest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/rules.eval.ts › rules canary # claude-code:claude-haiku-4-5/ruled/docker#1",
+          "id": "claude-code:claude-haiku-4-5/ruled/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/ruled/docker",
+          "n": 1,
+          "seq": 10,
+          "startedAt": "2026-09-29T03:36:54.352Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "CLAUDE.md",
+              "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected null to be 'TANGERINE-41' // Object.is equality"
+          },
+          "durationMs": 11947,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 11423,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › skill",
+      "key": "evals/skill.eval.ts › skill",
+      "slug": "evals-skill-eval-ts-skill-468cc8",
+      "file": "evals/skill.eval.ts",
+      "group": [],
+      "name": "skill",
+      "tags": [],
+      "fingerprint": "cadec56ea1b16e7d38077f629e98e4ef00ce174950117a825b0a55aa1030f5a3",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "4d7a89930c00ec62e0c53bafdde80e2e352cf8090aca34857f178d4e62310e00"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/skilled/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "skilled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "b34b1818c95a3a3a5b562c09b817eca7c52c96de217f080be67b625acd2a3303",
+          "fingerprintParts": {
+            "sources": "52c6dfad9f0c88608367bec535801c3af4c29a33a6304d5323dfb40851f3c18d",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "f7cf7a87343b0cf444d331e1e81ed134862cc3928cd0e21e8b14fb9aeaaee72d"
+          },
+          "environmentDigest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › skill # claude-code:claude-haiku-4-5/skilled/docker#1",
+          "id": "claude-code:claude-haiku-4-5/skilled/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/skilled/docker",
+          "n": 1,
+          "seq": 11,
+          "startedAt": "2026-09-29T03:37:06.300Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.claude/skills/.ai-sdk-harness-skills.json",
+              "sha256": "dcc327bce3fa8feee9c79f7f9a11dfe56295d4b627efc172f61456f92fda0861"
+            },
+            {
+              "path": "~/.claude/skills/contract-probe/SKILL.md",
+              "sha256": "7e4705bd98e7efdf20be5f3e939258daadd6f52b8dc8347a5f463ac363ae6b6d"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.anthropic.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 269398,
+                "received": 23135
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 17662,
+          "turns": [
+            {
+              "prompt": "Use your contract-probe skill: do exactly what it says, then stop. Keep your reply short.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:37:17.579Z",
+              "durationMs": 5833,
+              "usage": {
+                "input": 27,
+                "output": 364,
+                "cacheRead": 61508,
+                "cacheWrite": 3420,
+                "reasoning": null
+              },
+              "model": "claude-haiku-4-5",
+              "unreported": [],
+              "error": null,
+              "text": "DONE"
+            }
+          ],
+          "usage": {
+            "input": 27,
+            "output": 364,
+            "cacheRead": 61508,
+            "cacheWrite": 3420,
+            "reasoning": null
+          },
+          "timings": {
+            "setupMs": 11276,
+            "agentMs": 5835,
+            "diffMs": 121,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 1719
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "skill-proof.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-skill-468cc8/claude-code-claude-haiku-4-5-skilled-docker-7add5d/1/transcript.jsonl",
+              "sha256": "36887fab73bc1ad0348a13612458fdf3fc3909cd334d8a5b8015d2d6c0f2d72d",
+              "bytes": 1915
+            },
+            "rawTranscript": {
+              "path": "evals-skill-eval-ts-skill-468cc8/claude-code-claude-haiku-4-5-skilled-docker-7add5d/1/transcript.raw.jsonl",
+              "sha256": "5cbcbe88c8a52a2d539eb7a396eaad4429726eda223b2c32018f600a01698948",
+              "bytes": 13064
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-skill-468cc8/claude-code-claude-haiku-4-5-skilled-docker-7add5d/1/diff.patch",
+              "sha256": "65c2ae42e91ca7650e2699d89cd34519b100d2dba98544fee4aba0c7e0ac6afc",
+              "bytes": 187
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › skill canary",
+      "key": "evals/skill.eval.ts › skill canary",
+      "slug": "evals-skill-eval-ts-skill-canary-ed7134",
+      "file": "evals/skill.eval.ts",
+      "group": [],
+      "name": "skill canary",
+      "tags": [],
+      "fingerprint": "c0255d7b462df6f916a81fc5e7bfbc0c5b5c28e2269060784b272b1623e93738",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "4d7a89930c00ec62e0c53bafdde80e2e352cf8090aca34857f178d4e62310e00"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "claude-code:claude-haiku-4-5/skilled/docker",
+          "harness": "claude-code:claude-haiku-4-5",
+          "environment": "skilled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "88adc86c74d20794d80d114aa4ef68f2d6a175c2154ef6cc3a18b04c41974802",
+          "fingerprintParts": {
+            "sources": "52c6dfad9f0c88608367bec535801c3af4c29a33a6304d5323dfb40851f3c18d",
+            "harness": "b17b59bf1e1d0158fb2d1af5a6413135a5dc9d41025be4fb79dc3b19018feaef",
+            "environment": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+            "image": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+            "agentCli": "2.1.276 (Claude Code)",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+          },
+          "environmentDigest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+          "harnessKind": "claude-code",
+          "model": "claude-haiku-4-5",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › skill canary # claude-code:claude-haiku-4-5/skilled/docker#1",
+          "id": "claude-code:claude-haiku-4-5/skilled/docker#1",
+          "cell": "claude-code:claude-haiku-4-5/skilled/docker",
+          "n": 1,
+          "seq": 12,
+          "startedAt": "2026-09-29T03:37:08.364Z",
+          "imageId": "sha256:13db7c0f24b7233bcaa118478d1d83b7c6b468233f70a959c6ab959894db70d6",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": null,
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected null to be 'PROBE-7F3K-QUILL' // Object.is equality"
+          },
+          "durationMs": 11677,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 11197,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}
