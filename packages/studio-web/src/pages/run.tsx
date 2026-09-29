@@ -375,11 +375,13 @@ function Questions({ rows }: { rows: AnswerRow[] }) {
             {q.error !== null ? (
               <p className="font-mono text-xs break-words text-infra">failed: {q.error}</p>
             ) : null}
-            <p className="text-[11px] text-muted-foreground">
-              {q.noPairs
-                ? 'No pairs to judge: attempts that failed their checks are left out'
-                : `${plural(q.votes, 'vote')}, ${plural(q.ties, 'tie')}`}
-            </p>
+            {q.noPairs || q.votes ? (
+              <p className="text-[11px] text-muted-foreground">
+                {q.noPairs
+                  ? 'No pairs to judge: attempts that failed their checks are left out'
+                  : `${plural(q.votes, 'vote')}, ${plural(q.ties, 'tie')}`}
+              </p>
+            ) : null}
           </div>
         ))}
       </div>
