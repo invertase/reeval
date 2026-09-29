@@ -1248,6 +1248,21 @@ export const inventory: InventoryFeature[] = [
       analysis('agent without a language model exits 2 at plan time'),
       options('common mistakes'),
     ],
+    real: ['questions › examples/hello --profile questions'],
+  },
+  {
+    id: 'analysis.agent.summary',
+    area: 'Records and studio',
+    name: "`analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error",
+    tests: [
+      analysis('on a real Cursor history, the tools read back dropped evidence'),
+      analysis('on each real harness'),
+      analysis('a fake run caches one run-scoped summary'),
+      analysis('a summary that fails is cached with its error and a warning'),
+      studio("analysis.agent's notes are in the build as the server serves them"),
+      "studio-web/test/e2e.test.ts › reeval studio shows analysis.agent's notes and summary",
+    ],
+    real: ['questions › examples/hello --profile questions'],
   },
   {
     id: 'studio',
