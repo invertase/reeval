@@ -63,6 +63,12 @@ const INTENDED = [
     fields: ['live'],
     why: 'The fake config turns on analysis.agent, so the run prints where it wrote its notes (#149).',
   },
+  {
+    file: 'analysis.test.ts.jsonl',
+    key: /^analyze-errors analyze$/,
+    fields: ['stderr'],
+    why: 'An unknown key in config.analysis lists agent among the keys it takes (#149).',
+  },
 ]
 
 /** An attempt's progress line, which the Vitest engine could drop (see `onlyProgressMissing`). */
