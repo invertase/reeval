@@ -81,7 +81,7 @@ export function ownDir(path: string): string {
   return to
 }
 
-/** Where a compiled es keeps what it copies out of itself. */
+/** Where a compiled reeval keeps what it copies out of itself. */
 function cacheDir(): string {
   const base =
     process.env.XDG_CACHE_HOME ||

@@ -15,7 +15,7 @@ description: Point Cursor or Claude Code at reeval mcp, so your coding agent can
     "reeval": {
       "command": "npx",
       "args": [
-        "es",
+        "reeval",
         "mcp",
         "--config",
         "${workspaceFolder}/reeval.config.ts"
@@ -25,7 +25,7 @@ description: Point Cursor or Claude Code at reeval mcp, so your coding agent can
 }
 ```
 
-`${workspaceFolder}` is the folder holding `.cursor/mcp.json`, so `reeval mcp` reads that project whatever directory Cursor starts it in. Enable the server under Customize; its tools then show as `es` tools in chat.
+`${workspaceFolder}` is the folder holding `.cursor/mcp.json`, so `reeval mcp` reads that project whatever directory Cursor starts it in. Enable the server under Customize; its tools then show as `reeval` tools in chat.
 
 ## Claude Code
 
@@ -57,7 +57,7 @@ reeval mcp · acme · evals/.history/
 Ctrl-C to stop.
 ```
 
-Give the client the URL: `"url"` in `.cursor/mcp.json`, or `claude mcp add --transport http es http://127.0.0.1:4986/mcp`. It answers only on `127.0.0.1`, to local names and origins, with no token.
+Give the client the URL: `"url"` in `.cursor/mcp.json`, or `claude mcp add --transport http reeval http://127.0.0.1:4986/mcp`. It answers only on `127.0.0.1`, to local names and origins, with no token.
 
 On a shared machine, or with the port reachable beyond it, set a token and send it as a header:
 

@@ -124,7 +124,7 @@ function checkInstall(install: unknown): InstallStep[] {
  * them in it). They run as root from `/`, in order, and never see secrets or the workspace; what
  * needs either belongs in the environment's `setup`.
  *
- * At run time the agent, setup steps and checks run as the unprivileged `es` user with every
+ * At run time the agent, setup steps and checks run as the unprivileged `reeval` user with every
  * capability dropped, `no-new-privileges`, and `memory`, `cpus` and `pids` limits. `root: true`
  * opts an eval into root; `capabilities` adds specific ones back.
  */

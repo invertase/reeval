@@ -396,7 +396,7 @@ export type DockerSandboxDescriptor = {
   maxConcurrent?: number
   /**
    * Run the agent, setup steps and checks as root, with the capabilities `apt-get` needs, instead
-   * of the unprivileged `es` user. For evals that install system packages at run time.
+   * of the unprivileged `reeval` user. For evals that install system packages at run time.
    */
   root?: boolean
   /** Linux capabilities to add back, e.g. `['NET_RAW']`; every other one is dropped. */
@@ -1116,7 +1116,7 @@ export type EvalPlan = {
 }
 
 /**
- * A sandbox with more privilege than the default `es` user: `docker({ root: true })`, or
+ * A sandbox with more privilege than the default `reeval` user: `docker({ root: true })`, or
  * `docker({ capabilities })`. One per level that set such a sandbox, however many evals inherit it.
  */
 export type SandboxWarning = {

@@ -10,7 +10,7 @@ type Transform = NonNullable<JitiOptions['transform']>
 let babel: Transform | undefined
 
 /**
- * jiti's own Babel transform. jiti requires it lazily from beside its code, which a compiled es
+ * jiti's own Babel transform. jiti requires it lazily from beside its code, which a compiled reeval
  * doesn't have, so reeval requires the same file: from the jiti package on disk, or, compiled, from
  * the copy embedded in it (`vendor/jiti/babel.cjs`), copied out to disk.
  */
@@ -25,7 +25,7 @@ export const jitiTransform: Transform = (options) => {
 }
 
 /**
- * A jiti that imports from `id`. Compiled, a file's imports of reeval itself get this es's own
+ * A jiti that imports from `id`. Compiled, a file's imports of reeval itself get this reeval's own
  * modules: a copy on disk would register evals, and hold state, the executable can't see.
  */
 export async function esJiti(id: string, options: JitiOptions = {}): Promise<Jiti> {

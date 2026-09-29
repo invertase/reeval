@@ -4,7 +4,7 @@
   "description": "Evals for coding agents: does an agent use your SDK, skills and docs correctly?",
   "variables": {
     "pkg": "reeval",
-    "cli": "es",
+    "cli": "reeval",
     "node": "22.13"
   },
   "content": {

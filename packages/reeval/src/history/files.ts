@@ -179,7 +179,7 @@ export async function listRuns(
 }
 
 /**
- * Best-effort: another reader (a studio serving parallel requests, a second `es`) may be
+ * Best-effort: another reader (a studio serving parallel requests, a second `reeval`) may be
  * replacing the same file, which Windows refuses. The cache is only a speed-up.
  */
 async function writeCache(root: string, cache: Cache): Promise<void> {

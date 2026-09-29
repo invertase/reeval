@@ -1,9 +1,9 @@
-// Checks that `bun build --compile` still makes a working, standalone es from dist/. Local and
+// Checks that `bun build --compile` still makes a working, standalone reeval from dist/. Local and
 // optional: reeval runs on Node, and nothing ships a binary. Needs bun on PATH and `pnpm build` first.
 //
 //   node scripts/bun-compile.mjs
 //
-// It writes packages/reeval/es (gitignored) with reeval's own files embedded (package.json,
+// It writes packages/reeval/reeval (gitignored) with reeval's own files embedded (package.json,
 // docker/, assets/, dist/studio-app, dist/bridge, jiti's Babel build and the bundled
 // dependencies' versions), copies it into an empty directory, and runs examples/hello's fake
 // config with it, in a copy with no node_modules, and with Node, and compares them. With Docker
@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url'
 const root = fileURLToPath(new URL('..', import.meta.url))
 const pkg = join(root, 'packages/reeval')
 const cli = join(pkg, 'dist/cli.js')
-const exe = process.platform === 'win32' ? 'es.exe' : 'es'
+const exe = process.platform === 'win32' ? 'reeval.exe' : 'reeval'
 const binary = join(pkg, exe)
 
 const fail = (message) => {
@@ -169,5 +169,5 @@ const copied = existsSync(cache) ? readdirSync(join(cache, 'reeval')).sort() : [
 check('what it copied out of itself', copied.length > 0, copied.join(', '))
 
 for (const dir of [withNode, hello, alone]) rmSync(dir, { recursive: true, force: true })
-if (checks.includes(false)) fail('the compiled es differs from Node')
+if (checks.includes(false)) fail('the compiled reeval differs from Node')
 console.log(`bun-compile: ${binary} works on its own`)

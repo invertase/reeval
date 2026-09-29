@@ -91,7 +91,7 @@ export function handshake(worker: WorkerProcess, entry: string): Promise<void> {
         worker.kill()
         reject(
           new UsageError(
-            `The reeval at ${dirname(dirname(entry))} runs eval files with engine protocol ${message.protocol}, but this reeval speaks ${PROTOCOL}. Run the project's own es, e.g. npx es.`,
+            `The reeval at ${dirname(dirname(entry))} runs eval files with engine protocol ${message.protocol}, but this reeval speaks ${PROTOCOL}. Run the project's own reeval, e.g. npx reeval.`,
           ),
         )
       }
