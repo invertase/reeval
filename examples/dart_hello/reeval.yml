@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=../../packages/reeval/schema/plan/config.schema.json
+#
+# With no profile: a fake agent writes canned Dart files into a temp directory, the checks run
+# there on the host, and the judge returns a canned verdict. No credentials or Docker.
+#   --profile docker   the same fake agent in a sandbox built from the official Dart image
+#   --profile cursor   Cursor's agent in that sandbox, judged by Gemini (CURSOR_API_KEY and
+#                      GOOGLE_GENERATIVE_AI_API_KEY); build the image with reeval image build
+harness:
+  kind: fake
+  files:
+    lib/greet.dart: |
+      String greet(String name) => 'Hello, $name!';
+    bin/main.dart: |
+      import '../lib/greet.dart';
+
+      void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
+  text: I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.
+sandbox: { kind: fake }
+judge:
+  model: { kind: fake-judge, score: 0.92 }
+timeout: 2m
+profiles:
+  nightly:
+    defaults: { runs: 3 }
+  docker:
+    defaults:
+      sandbox: &dart-image { kind: docker, from: "dart:stable" }
+      timeout: 5m
+  cursor:
+    defaults:
+      harness: { kind: cursor, model: composer-2.5 }
+      sandbox: *dart-image
+      timeout: 10m
+    judge: { model: google/gemini-3.8-flash, threshold: 0.8 }

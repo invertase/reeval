@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { loadDartConfig } from './dart/config.ts'
-import { DART_CONFIG, DART_INCLUDE, detectLanguage, isDartConfig } from './dart/project.ts'
+import { DATA_CONFIG_FILES, isDataConfig, loadDataConfig } from './config-file.ts'
+import { DART_INCLUDE, detectLanguage } from './dart/project.ts'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
@@ -79,9 +79,10 @@ export const defineConfig = <T extends ConfigInput>(config: T): T => config
 export { parseDuration }
 
 /** The file names `reeval` looks for in each directory, first match first, as Vitest orders its own. */
-export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs', 'dart'].map(
-  (ext) => `reeval.config.${ext}`,
-)
+export const CONFIG_FILES = [
+  ...['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((ext) => `reeval.config.${ext}`),
+  ...DATA_CONFIG_FILES,
+]
 
 const DEFAULT_CONFIG_FILE = 'reeval.config.ts'
 
@@ -116,20 +117,19 @@ export async function loadConfig(
   command = 'run',
   profile: string | undefined = undefined,
 ): Promise<ResolvedConfig> {
-  const dartContext = { ci: inCI(process.env), command, ...(profile ? { profile } : {}) }
   if (path === undefined) {
-    if (detectLanguage(process.cwd()) === 'dart') {
-      const user = await loadDartConfig(process.cwd(), undefined, dartContext)
-      return resolveConfig(user, process.cwd(), DART_CONFIG)
-    }
-    return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
+    const dart = detectLanguage(process.cwd()) === 'dart'
+    return resolveConfig(
+      dart ? { include: DART_INCLUDE } : {},
+      process.cwd(),
+      dart ? 'reeval.yml' : DEFAULT_CONFIG_FILE,
+    )
   }
   const root = dirname(path)
   const configPath = configLabel(path)
   let user: EsConfig = {}
-  if (isDartConfig(path) && existsSync(path)) {
-    user = await loadDartConfig(root, path, dartContext)
-    return resolveConfig({ include: DART_INCLUDE, ...user }, root, configPath)
+  if (isDataConfig(path) && existsSync(path)) {
+    return resolveConfig(loadDataConfig(path, root, configPath), root, configPath)
   }
   if (existsSync(path)) {
     const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })

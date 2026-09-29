@@ -48,6 +48,7 @@
     "dist",
     "docker",
     "assets",
+    "schema/plan/config.schema.json",
     "THIRD_PARTY_NOTICES.md"
   ],
   "preferUnplugged": true,

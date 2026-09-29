@@ -1,0 +1,31 @@
+diff --git a/bin/main.dart b/bin/main.dart
+new file mode 100644
+index 0000000..81188ea
+--- /dev/null
++++ b/bin/main.dart
+@@ -0,0 +1,6 @@
++import '../lib/greet.dart';
++
++void main(List<String> arguments) {
++  final name = arguments.isEmpty ? 'Dart' : arguments.first;
++  print(greet(name));
++}
+diff --git a/lib/greet.dart b/lib/greet.dart
+new file mode 100644
+index 0000000..000d6e1
+--- /dev/null
++++ b/lib/greet.dart
+@@ -0,0 +1 @@
++String greet(String name) => 'Hello, $name!';
+diff --git a/pubspec.yaml b/pubspec.yaml
+new file mode 100644
+index 0000000..0c3cb31
+--- /dev/null
++++ b/pubspec.yaml
+@@ -0,0 +1,6 @@
++name: greet_app
++description: A minimal greet CLI.
++version: 1.0.0
++
++environment:
++  sdk: ^3.0.0

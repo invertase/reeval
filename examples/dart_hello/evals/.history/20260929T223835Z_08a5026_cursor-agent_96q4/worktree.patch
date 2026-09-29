@@ -1,0 +1,2848 @@
+diff --git a/examples/dart_hello/evals/fake_agent.dart b/examples/dart_hello/evals/fake_agent.dart
+deleted file mode 100644
+index 339b34a..0000000
+--- a/examples/dart_hello/evals/fake_agent.dart
++++ /dev/null
+@@ -1,17 +0,0 @@
+-import 'package:reeval/reeval.dart';
+-
+-const _greet = '''
+-String greet(String name) => 'Hello, \$name!';
+-''';
+-
+-const _main = '''
+-import '../lib/greet.dart';
+-
+-void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
+-''';
+-
+-/// A fake agent that writes the files the evals ask for, for runs without credentials.
+-final fakeAgent = fakeHarness(
+-  files: {'lib/greet.dart': _greet, 'bin/main.dart': _main},
+-  text: 'I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.',
+-);
+diff --git a/examples/dart_hello/reeval.config.dart b/examples/dart_hello/reeval.config.dart
+deleted file mode 100644
+index 1f75772..0000000
+--- a/examples/dart_hello/reeval.config.dart
++++ /dev/null
+@@ -1,13 +0,0 @@
+-// Runs with no credentials or Docker: a fake agent writes canned Dart files into a temp directory,
+-// the checks run there on the host, and the judge returns a canned verdict.
+-import 'package:reeval/reeval.dart';
+-
+-import 'evals/fake_agent.dart';
+-
+-ReevalConfig main() => defineConfig(
+-  harness: fakeAgent,
+-  sandbox: fakeSandbox(),
+-  judge: Judge.fake(score: 0.92),
+-  timeout: const Duration(minutes: 2),
+-  profiles: {'nightly': const Profile(runs: 3)},
+-);
+diff --git a/examples/dart_hello/reeval.cursor.config.dart b/examples/dart_hello/reeval.cursor.config.dart
+deleted file mode 100644
+index 96086c5..0000000
+--- a/examples/dart_hello/reeval.cursor.config.dart
++++ /dev/null
+@@ -1,11 +0,0 @@
+-// Cursor's agent in a Docker sandbox built from the official Dart image, judged by Gemini. Needs
+-// CURSOR_API_KEY and GOOGLE_GENERATIVE_AI_API_KEY, and the image:
+-// reeval image build --config reeval.cursor.config.dart
+-import 'package:reeval/reeval.dart';
+-
+-ReevalConfig main() => defineConfig(
+-  harness: cursor(model: 'composer-2.5'),
+-  sandbox: docker(from: 'dart:stable'),
+-  judge: Judge.model('google/gemini-3.8-flash', threshold: 0.8),
+-  timeout: const Duration(minutes: 10),
+-);
+diff --git a/examples/dart_hello/reeval.docker.config.dart b/examples/dart_hello/reeval.docker.config.dart
+deleted file mode 100644
+index 99a87a2..0000000
+--- a/examples/dart_hello/reeval.docker.config.dart
++++ /dev/null
+@@ -1,12 +0,0 @@
+-// The fake agent in a Docker sandbox built from the official Dart image, so `t.exec('dart ...')`
+-// runs in the container. Build it once: reeval image build --config reeval.docker.config.dart
+-import 'package:reeval/reeval.dart';
+-
+-import 'evals/fake_agent.dart';
+-
+-ReevalConfig main() => defineConfig(
+-  harness: fakeAgent,
+-  sandbox: docker(from: 'dart:stable'),
+-  judge: Judge.fake(score: 0.92),
+-  timeout: const Duration(minutes: 5),
+-);
+diff --git a/examples/dart_hello/reeval.yml b/examples/dart_hello/reeval.yml
+new file mode 100644
+index 0000000..1a4deeb
+--- /dev/null
++++ b/examples/dart_hello/reeval.yml
+@@ -0,0 +1,34 @@
++# yaml-language-server: $schema=../../packages/reeval/schema/plan/config.schema.json
++#
++# With no profile: a fake agent writes canned Dart files into a temp directory, the checks run
++# there on the host, and the judge returns a canned verdict. No credentials or Docker.
++#   --profile docker   the same fake agent in a sandbox built from the official Dart image
++#   --profile cursor   Cursor's agent in that sandbox, judged by Gemini (CURSOR_API_KEY and
++#                      GOOGLE_GENERATIVE_AI_API_KEY); build the image with reeval image build
++harness:
++  kind: fake
++  files:
++    lib/greet.dart: |
++      String greet(String name) => 'Hello, $name!';
++    bin/main.dart: |
++      import '../lib/greet.dart';
++
++      void main(List<String> args) => print(greet(args.firstOrNull ?? 'Dart'));
++  text: I created lib/greet.dart with greet(name), and bin/main.dart, which prints it.
++sandbox: { kind: fake }
++judge:
++  model: { kind: fake-judge, score: 0.92 }
++timeout: 2m
++profiles:
++  nightly:
++    defaults: { runs: 3 }
++  docker:
++    defaults:
++      sandbox: &dart-image { kind: docker, from: "dart:stable" }
++      timeout: 5m
++  cursor:
++    defaults:
++      harness: { kind: cursor, model: composer-2.5 }
++      sandbox: *dart-image
++      timeout: 10m
++    judge: { model: google/gemini-3.8-flash, threshold: 0.8 }
+diff --git a/packages/reeval/package.json b/packages/reeval/package.json
+index f018e21..94ba4a9 100644
+--- a/packages/reeval/package.json
++++ b/packages/reeval/package.json
+@@ -48,6 +48,7 @@
+     "dist",
+     "docker",
+     "assets",
++    "schema/plan/config.schema.json",
+     "THIRD_PARTY_NOTICES.md"
+   ],
+   "preferUnplugged": true,
+diff --git a/packages/reeval/schema/plan/config.schema.json b/packages/reeval/schema/plan/config.schema.json
+new file mode 100644
+index 0000000..3c137b4
+--- /dev/null
++++ b/packages/reeval/schema/plan/config.schema.json
+@@ -0,0 +1,1507 @@
++{
++  "$schema": "https://json-schema.org/draft/2020-12/schema",
++  "$comment": "Generated from ConfigData in src/types.ts by `pnpm schema:update`; don't edit. A config file as data: reeval.yml, for projects not written in TypeScript.",
++  "title": "ConfigData",
++  "$ref": "#/$defs/ConfigData",
++  "$defs": {
++    "AntigravityHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "antigravity"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "Budget": {
++      "type": "object",
++      "properties": {
++        "attempts": {
++          "type": "number"
++        },
++        "duration": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": []
++    },
++    "ClaudeCodeHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "claude-code"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "CodexHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "codex"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "ConfigData": {
++      "type": "object",
++      "properties": {
++        "analysis": {
++          "type": "object",
++          "properties": {
++            "agent": {
++              "type": "boolean"
++            },
++            "instructions": {
++              "type": "string"
++            },
++            "maxInputTokens": {
++              "type": "number"
++            },
++            "maxOutputTokens": {
++              "type": "number"
++            },
++            "model": {
++              "type": "string"
++            }
++          },
++          "required": []
++        },
++        "budget": {
++          "$ref": "#/$defs/Budget"
++        },
++        "concurrency": {
++          "type": "number"
++        },
++        "debug": {
++          "type": "object",
++          "properties": {
++            "keep": {
++              "type": "number"
++            },
++            "traceBufferMb": {
++              "type": "number"
++            }
++          },
++          "required": []
++        },
++        "defaultProfile": {
++          "type": "object",
++          "properties": {
++            "ci": {
++              "type": "string"
++            },
++            "local": {
++              "type": "string"
++            }
++          },
++          "required": []
++        },
++        "egress": {
++          "anyOf": [
++            {
++              "enum": ["allow-all", "deny-all"]
++            },
++            {
++              "type": "object",
++              "properties": {
++                "allow": {
++                  "type": "array",
++                  "items": {
++                    "type": "string"
++                  }
++                }
++              },
++              "required": ["allow"]
++            }
++          ]
++        },
++        "env": {
++          "$ref": "#/$defs/EnvVars"
++        },
++        "environment": {
++          "$ref": "#/$defs/EnvironmentFile"
++        },
++        "gate": {
++          "anyOf": [
++            {
++              "const": "all"
++            },
++            {
++              "type": "object",
++              "properties": {
++                "passRate": {
++                  "type": "number"
++                }
++              },
++              "required": ["passRate"]
++            }
++          ]
++        },
++        "harness": {
++          "anyOf": [
++            {
++              "$ref": "#/$defs/AntigravityHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/CodexHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/CursorHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/FakeHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/GooseHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/OpenCodeHarnessDescriptor"
++            },
++            {
++              "$ref": "#/$defs/PiHarnessDescriptor"
++            },
++            {
++              "type": "array",
++              "items": {
++                "$ref": "#/$defs/HarnessDescriptor"
++              }
++            }
++          ]
++        },
++        "history": {
++          "$ref": "#/$defs/HistoryConfig"
++        },
++        "include": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        },
++        "judge": {
++          "$ref": "#/$defs/ConfigJudgeOptions"
++        },
++        "profiles": {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "$ref": "#/$defs/ProfileData"
++          }
++        },
++        "record": {
++          "enum": ["always", "ci", "manual"]
++        },
++        "runs": {
++          "type": "number"
++        },
++        "sandbox": {
++          "anyOf": [
++            {
++              "$ref": "#/$defs/DockerSandboxDescriptor"
++            },
++            {
++              "$ref": "#/$defs/FakeSandboxDescriptor"
++            }
++          ]
++        },
++        "secrets": {
++          "type": "object",
++          "properties": {
++            "unbrokered": {
++              "enum": ["error", "warn"]
++            }
++          },
++          "required": []
++        },
++        "timeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": []
++    },
++    "ConfigJudgeOptions": {
++      "type": "object",
++      "properties": {
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "anyOf": [
++            {
++              "$ref": "#/$defs/FakeJudgeModel"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        },
++        "providerOptions": {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "type": "object",
++            "properties": {},
++            "required": [],
++            "additionalProperties": {
++              "$ref": "#/$defs/JSONValue"
++            }
++          }
++        },
++        "threshold": {
++          "type": "number"
++        }
++      },
++      "required": []
++    },
++    "CursorHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "cursor"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "params": {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "type": "string"
++          }
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "DockerSandboxDescriptor": {
++      "type": "object",
++      "properties": {
++        "capabilities": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        },
++        "cpus": {
++          "type": "number"
++        },
++        "dockerfile": {
++          "type": "string"
++        },
++        "from": {
++          "type": "string"
++        },
++        "id": {
++          "type": "string"
++        },
++        "image": {
++          "type": "string"
++        },
++        "install": {
++          "type": "array",
++          "items": {
++            "$ref": "#/$defs/InstallStep"
++          }
++        },
++        "kind": {
++          "const": "docker"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "memory": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        },
++        "pids": {
++          "type": "number"
++        },
++        "root": {
++          "type": "boolean"
++        }
++      },
++      "required": ["kind"]
++    },
++    "EnvironmentFile": {
++      "type": "object",
++      "properties": {
++        "egress": {
++          "anyOf": [
++            {
++              "enum": ["allow-all", "deny-all"]
++            },
++            {
++              "type": "object",
++              "properties": {
++                "allow": {
++                  "type": "array",
++                  "items": {
++                    "type": "string"
++                  }
++                }
++              },
++              "required": ["allow"]
++            }
++          ]
++        },
++        "env": {
++          "$ref": "#/$defs/EnvVars"
++        },
++        "files": {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "anyOf": [
++              {
++                "$ref": "#/$defs/HostFile"
++              },
++              {
++                "type": "string"
++              }
++            ]
++          }
++        },
++        "mcp": {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "$ref": "#/$defs/McpServer"
++          }
++        },
++        "name": {
++          "type": "string"
++        },
++        "rules": {
++          "anyOf": [
++            {
++              "$ref": "#/$defs/HostFile"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        },
++        "setup": {
++          "type": "array",
++          "items": {
++            "$ref": "#/$defs/SetupStep"
++          }
++        },
++        "skills": {
++          "type": "array",
++          "items": {
++            "$ref": "#/$defs/SkillSource"
++          }
++        },
++        "workspace": {
++          "$ref": "#/$defs/GitWorkspace"
++        }
++      },
++      "required": ["name"]
++    },
++    "EnvValue": {
++      "anyOf": [
++        {
++          "$ref": "#/$defs/Secret"
++        },
++        {
++          "type": "string"
++        }
++      ]
++    },
++    "EnvVars": {
++      "type": "object",
++      "properties": {},
++      "required": [],
++      "additionalProperties": {
++        "$ref": "#/$defs/EnvValue"
++      }
++    },
++    "FakeHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "delayMs": {
++          "type": "number"
++        },
++        "failWith": {
++          "type": "string"
++        },
++        "files": {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "type": "string"
++          }
++        },
++        "flakeRate": {
++          "type": "number"
++        },
++        "id": {
++          "type": "string"
++        },
++        "ignoreAbort": {
++          "type": "boolean"
++        },
++        "kind": {
++          "const": "fake"
++        },
++        "layout": {
++          "enum": ["antigravity", "claude-code", "codex", "cursor", "goose", "opencode", "pi"]
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "reasoning": {
++          "type": "string"
++        },
++        "script": {
++          "type": "array",
++          "items": {
++            "type": "array",
++            "items": {
++              "$ref": "#/$defs/FakeScriptStep"
++            }
++          }
++        },
++        "servedModel": {
++          "type": "string"
++        },
++        "startHangs": {
++          "anyOf": [
++            {
++              "const": false
++            },
++            {
++              "type": "number"
++            }
++          ]
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        },
++        "text": {
++          "type": "string"
++        },
++        "tools": {
++          "type": "array",
++          "items": {
++            "type": "object",
++            "properties": {
++              "input": {},
++              "ok": {
++                "type": "boolean"
++              },
++              "output": {},
++              "tool": {
++                "type": "string"
++              }
++            },
++            "required": ["input", "output", "tool"]
++          }
++        },
++        "withSkill": {
++          "type": "object",
++          "properties": {
++            "files": {
++              "type": "object",
++              "properties": {},
++              "required": [],
++              "additionalProperties": {
++                "type": "string"
++              }
++            },
++            "text": {
++              "type": "string"
++            }
++          },
++          "required": []
++        }
++      },
++      "required": ["kind"]
++    },
++    "FakeJudgeModel": {
++      "type": "object",
++      "properties": {
++        "kind": {
++          "const": "fake-judge"
++        },
++        "score": {
++          "type": "number"
++        }
++      },
++      "required": ["kind", "score"]
++    },
++    "FakeSandboxDescriptor": {
++      "type": "object",
++      "properties": {
++        "dir": {
++          "type": "string"
++        },
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "fake"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        }
++      },
++      "required": ["kind"]
++    },
++    "FakeScriptStep": {
++      "anyOf": [
++        {
++          "type": "object",
++          "properties": {
++            "error": {
++              "type": "string"
++            }
++          },
++          "required": ["error"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "exec": {
++              "type": "string"
++            }
++          },
++          "required": ["exec"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "mcp": {
++              "type": "string"
++            }
++          },
++          "required": ["mcp"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "reply": {
++              "type": "string"
++            }
++          },
++          "required": ["reply"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "write": {
++              "type": "object",
++              "properties": {},
++              "required": [],
++              "additionalProperties": {
++                "type": "string"
++              }
++            }
++          },
++          "required": ["write"]
++        }
++      ]
++    },
++    "GitWorkspace": {
++      "type": "object",
++      "properties": {
++        "init": {
++          "type": "boolean"
++        },
++        "kind": {
++          "const": "git"
++        },
++        "path": {
++          "type": "string"
++        },
++        "ref": {
++          "type": "string"
++        },
++        "repo": {
++          "type": "string"
++        },
++        "token": {
++          "type": "string"
++        },
++        "url": {
++          "type": "string"
++        }
++      },
++      "required": ["kind", "repo", "url"]
++    },
++    "GooseHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "goose"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "HarnessDescriptor": {
++      "anyOf": [
++        {
++          "$ref": "#/$defs/AntigravityHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/CodexHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/CursorHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/FakeHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/GooseHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/OpenCodeHarnessDescriptor"
++        },
++        {
++          "$ref": "#/$defs/PiHarnessDescriptor"
++        }
++      ]
++    },
++    "HistoryConfig": {
++      "type": "object",
++      "properties": {
++        "artifacts": {
++          "enum": ["all", "failures", "none"]
++        },
++        "dir": {
++          "type": "string"
++        }
++      },
++      "required": []
++    },
++    "HostFile": {
++      "type": "object",
++      "properties": {
++        "kind": {
++          "const": "file"
++        },
++        "path": {
++          "type": "string"
++        }
++      },
++      "required": ["kind", "path"]
++    },
++    "InstallStep": {
++      "anyOf": [
++        {
++          "type": "object",
++          "properties": {
++            "run": {
++              "type": "string"
++            },
++            "timeout": {
++              "anyOf": [
++                {
++                  "type": "number"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                }
++              ]
++            }
++          },
++          "required": ["run"]
++        },
++        {
++          "type": "string"
++        }
++      ]
++    },
++    "JSONValue": {
++      "anyOf": [
++        {
++          "type": "array",
++          "items": {
++            "$ref": "#/$defs/JSONValue"
++          }
++        },
++        {
++          "type": "boolean"
++        },
++        {
++          "type": "null"
++        },
++        {
++          "type": "number"
++        },
++        {
++          "type": "object",
++          "properties": {},
++          "required": [],
++          "additionalProperties": {
++            "$ref": "#/$defs/JSONValue"
++          }
++        },
++        {
++          "type": "string"
++        }
++      ]
++    },
++    "McpServer": {
++      "anyOf": [
++        {
++          "type": "object",
++          "properties": {
++            "args": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "command": {
++              "type": "string"
++            },
++            "env": {
++              "$ref": "#/$defs/EnvVars"
++            },
++            "kind": {
++              "const": "mcp"
++            },
++            "transport": {
++              "const": "stdio"
++            }
++          },
++          "required": ["args", "command", "env", "kind", "transport"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "headers": {
++              "type": "object",
++              "properties": {},
++              "required": [],
++              "additionalProperties": {
++                "anyOf": [
++                  {
++                    "$ref": "#/$defs/Secret"
++                  },
++                  {
++                    "$ref": "#/$defs/SecretTemplate"
++                  },
++                  {
++                    "type": "string"
++                  }
++                ]
++              }
++            },
++            "kind": {
++              "const": "mcp"
++            },
++            "transport": {
++              "enum": ["http", "sse"]
++            },
++            "url": {
++              "type": "string"
++            }
++          },
++          "required": ["headers", "kind", "transport", "url"]
++        }
++      ]
++    },
++    "OpenCodeHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "opencode"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "PiHarnessDescriptor": {
++      "type": "object",
++      "properties": {
++        "id": {
++          "type": "string"
++        },
++        "kind": {
++          "const": "pi"
++        },
++        "maxConcurrent": {
++          "type": "number"
++        },
++        "model": {
++          "type": "string"
++        },
++        "startTimeout": {
++          "anyOf": [
++            {
++              "type": "number"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            },
++            {
++              "type": "string"
++            }
++          ]
++        }
++      },
++      "required": ["kind", "model"]
++    },
++    "ProfileData": {
++      "type": "object",
++      "properties": {
++        "budget": {
++          "$ref": "#/$defs/Budget"
++        },
++        "defaults": {
++          "type": "object",
++          "properties": {
++            "egress": {
++              "anyOf": [
++                {
++                  "enum": ["allow-all", "deny-all"]
++                },
++                {
++                  "type": "object",
++                  "properties": {
++                    "allow": {
++                      "type": "array",
++                      "items": {
++                        "type": "string"
++                      }
++                    }
++                  },
++                  "required": ["allow"]
++                }
++              ]
++            },
++            "env": {
++              "$ref": "#/$defs/EnvVars"
++            },
++            "environment": {
++              "$ref": "#/$defs/EnvironmentFile"
++            },
++            "gate": {
++              "anyOf": [
++                {
++                  "const": "all"
++                },
++                {
++                  "type": "object",
++                  "properties": {
++                    "passRate": {
++                      "type": "number"
++                    }
++                  },
++                  "required": ["passRate"]
++                }
++              ]
++            },
++            "harness": {
++              "anyOf": [
++                {
++                  "$ref": "#/$defs/AntigravityHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/CodexHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/CursorHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/FakeHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/GooseHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/OpenCodeHarnessDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/PiHarnessDescriptor"
++                },
++                {
++                  "type": "array",
++                  "items": {
++                    "$ref": "#/$defs/HarnessDescriptor"
++                  }
++                }
++              ]
++            },
++            "judge": {
++              "$ref": "#/$defs/ConfigJudgeOptions"
++            },
++            "runs": {
++              "type": "number"
++            },
++            "sandbox": {
++              "anyOf": [
++                {
++                  "$ref": "#/$defs/DockerSandboxDescriptor"
++                },
++                {
++                  "$ref": "#/$defs/FakeSandboxDescriptor"
++                }
++              ]
++            },
++            "timeout": {
++              "anyOf": [
++                {
++                  "type": "number"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                }
++              ]
++            }
++          },
++          "required": []
++        },
++        "judge": {
++          "$ref": "#/$defs/ConfigJudgeOptions"
++        },
++        "limit": {
++          "$ref": "#/$defs/ProfileLimit"
++        },
++        "record": {
++          "enum": ["always", "ci", "manual"]
++        },
++        "tags": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        }
++      },
++      "required": []
++    },
++    "ProfileLimit": {
++      "type": "object",
++      "properties": {
++        "compare": {
++          "anyOf": [
++            {
++              "const": false
++            },
++            {
++              "type": "object",
++              "properties": {
++                "maxVariants": {
++                  "type": "number"
++                }
++              },
++              "required": ["maxVariants"]
++            }
++          ]
++        },
++        "harness": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        },
++        "runs": {
++          "type": "number"
++        }
++      },
++      "required": []
++    },
++    "Secret": {
++      "type": "object",
++      "properties": {
++        "from": {
++          "type": "string"
++        },
++        "hosts": {
++          "type": "array",
++          "items": {
++            "type": "string"
++          }
++        },
++        "in": {
++          "type": "array",
++          "items": {
++            "$ref": "#/$defs/SubstituteIn"
++          }
++        },
++        "kind": {
++          "const": "secret"
++        },
++        "optional": {
++          "type": "boolean"
++        },
++        "to": {
++          "enum": ["agent", "checks"]
++        }
++      },
++      "required": ["kind"]
++    },
++    "SecretTemplate": {
++      "type": "object",
++      "properties": {
++        "kind": {
++          "const": "secret-template"
++        },
++        "template": {
++          "type": "string"
++        }
++      },
++      "required": ["kind", "template"]
++    },
++    "SetupStep": {
++      "anyOf": [
++        {
++          "type": "object",
++          "properties": {
++            "cwd": {
++              "type": "string"
++            },
++            "run": {
++              "type": "string"
++            },
++            "timeout": {
++              "anyOf": [
++                {
++                  "type": "number"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                },
++                {
++                  "type": "string"
++                }
++              ]
++            }
++          },
++          "required": ["run"]
++        },
++        {
++          "type": "string"
++        }
++      ]
++    },
++    "SkillPlacement": {
++      "enum": ["harness", "workspace"]
++    },
++    "SkillSource": {
++      "anyOf": [
++        {
++          "type": "object",
++          "properties": {
++            "content": {
++              "type": "string"
++            },
++            "description": {
++              "type": "string"
++            },
++            "files": {
++              "type": "object",
++              "properties": {},
++              "required": [],
++              "additionalProperties": {
++                "type": "string"
++              }
++            },
++            "kind": {
++              "const": "skill"
++            },
++            "name": {
++              "type": "string"
++            },
++            "placement": {
++              "$ref": "#/$defs/SkillPlacement"
++            },
++            "source": {
++              "const": "inline"
++            }
++          },
++          "required": ["content", "description", "files", "kind", "name", "placement", "source"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "exclude": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "kind": {
++              "const": "skill"
++            },
++            "only": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "path": {
++              "type": "string"
++            },
++            "placement": {
++              "$ref": "#/$defs/SkillPlacement"
++            },
++            "ref": {
++              "type": "string"
++            },
++            "repo": {
++              "type": "string"
++            },
++            "source": {
++              "const": "git"
++            }
++          },
++          "required": ["kind", "placement", "repo", "source"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "exclude": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "kind": {
++              "const": "skill"
++            },
++            "only": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "path": {
++              "type": "string"
++            },
++            "placement": {
++              "$ref": "#/$defs/SkillPlacement"
++            },
++            "source": {
++              "const": "local"
++            }
++          },
++          "required": ["kind", "path", "placement", "source"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "exclude": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "kind": {
++              "const": "skill"
++            },
++            "only": {
++              "type": "array",
++              "items": {
++                "type": "string"
++              }
++            },
++            "path": {
++              "type": "string"
++            },
++            "placement": {
++              "$ref": "#/$defs/SkillPlacement"
++            },
++            "source": {
++              "const": "npm"
++            },
++            "spec": {
++              "type": "string"
++            }
++          },
++          "required": ["kind", "path", "placement", "source", "spec"]
++        },
++        {
++          "type": "object",
++          "properties": {
++            "id": {
++              "type": "string"
++            },
++            "kind": {
++              "const": "skill"
++            },
++            "placement": {
++              "$ref": "#/$defs/SkillPlacement"
++            },
++            "source": {
++              "const": "registry"
++            },
++            "version": {
++              "type": "string"
++            }
++          },
++          "required": ["id", "kind", "placement", "source"]
++        }
++      ]
++    },
++    "SubstituteIn": {
++      "enum": ["body", "header", "query"]
++    }
++  }
++}
+diff --git a/packages/reeval/scripts/schema/shapes.ts b/packages/reeval/scripts/schema/shapes.ts
+index e4038dd..e795241 100644
+--- a/packages/reeval/scripts/schema/shapes.ts
++++ b/packages/reeval/scripts/schema/shapes.ts
+@@ -99,6 +99,12 @@ export const PLAN_SHAPES: PlanShape[] = [
+     type: 'ToWorker',
+     where: 'A message from the main process to a worker (src/engine/PROTOCOL.md)',
+   },
++  {
++    name: 'config',
++    file: 'src/types.ts',
++    type: 'ConfigData',
++    where: 'A config file as data: reeval.yml, for projects not written in TypeScript',
++  },
+   {
+     name: 'from-worker',
+     file: 'src/engine/protocol.ts',
+diff --git a/packages/reeval/src/config-file.ts b/packages/reeval/src/config-file.ts
+new file mode 100644
+index 0000000..c3e9dcc
+--- /dev/null
++++ b/packages/reeval/src/config-file.ts
+@@ -0,0 +1,161 @@
++// `reeval.yml`: the config as data, for projects not written in TypeScript. It's checked against
++// schema/plan/config.schema.json (generated from `ConfigData`), so a Dart or Python project gets
++// the same keys and descriptors as `reeval.config.ts`, and reading it never runs the project's
++// language. Two tags stand in for the TypeScript helpers: `!secret` and `!file`.
++import { readFileSync } from 'node:fs'
++import { isAbsolute, resolve } from 'node:path'
++import { parseDocument, type Tags } from 'yaml'
++import { detectLanguage, DART_INCLUDE } from './dart/project.ts'
++import { environmentFrom } from './environment.ts'
++import { UsageError } from './errors.ts'
++import { ownFile } from './root.ts'
++import type { ConfigData, EnvironmentFile, EsConfig } from './types.ts'
++
++export const DATA_CONFIG_FILES = ['reeval.yml', 'reeval.yaml']
++
++export const isDataConfig = (path: string | undefined): path is string =>
++  !!path && /\.ya?ml$/.test(path)
++
++type Schema = {
++  $ref?: string
++  type?: string
++  const?: unknown
++  enum?: unknown[]
++  anyOf?: Schema[]
++  items?: Schema
++  properties?: Record<string, Schema>
++  required?: string[]
++  additionalProperties?: Schema
++}
++type SchemaDoc = { $ref: string; $defs: Record<string, Schema> }
++
++let schema: SchemaDoc | undefined
++const configSchema = (): SchemaDoc =>
++  (schema ??= JSON.parse(readFileSync(ownFile('schema/plan/config.schema.json'), 'utf8')))
++
++const deref = (doc: SchemaDoc, s: Schema): Schema => {
++  let out = s
++  while (out.$ref) out = doc.$defs[out.$ref.replace('#/$defs/', '')] ?? {}
++  return out
++}
++
++const typeOf = (v: unknown) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)
++
++/** Where `value` doesn't fit, as `path: problem`; unknown keys are problems too. */
++function check(doc: SchemaDoc, s: Schema, value: unknown, path: string, out: string[]): void {
++  const at = path || '(root)'
++  const r = deref(doc, s)
++  if (r.anyOf) {
++    const tries = r.anyOf.map((a) => {
++      const problems: string[] = []
++      check(doc, a, value, path, problems)
++      return problems
++    })
++    if (tries.some((p) => p.length === 0)) return
++    // The variant it was meant to be: the one whose `kind` (or other const) matches, else the closest.
++    const meant = r.anyOf.findIndex((a) =>
++      Object.entries(deref(doc, a).properties ?? {}).some(
++        ([k, p]) =>
++          deref(doc, p).const !== undefined &&
++          (value as Record<string, unknown> | null)?.[k] === deref(doc, p).const,
++      ),
++    )
++    if (meant >= 0) return void out.push(...(tries[meant] ?? []))
++    const kinds = r.anyOf
++      .map((a) => deref(doc, a).properties?.kind?.const)
++      .filter((k) => k !== undefined)
++    out.push(
++      kinds.length && typeof value === 'object'
++        ? `${at}: kind must be one of ${kinds.join(', ')}`
++        : `${at}: ${[...tries].sort((a, b) => a.length - b.length)[0]?.[0] ?? 'no variant fits'}`,
++    )
++    return
++  }
++  if (r.const !== undefined && value !== r.const)
++    return void out.push(`${at}: must be ${JSON.stringify(r.const)}`)
++  if (r.enum && !r.enum.includes(value as never))
++    return void out.push(`${at}: must be one of ${r.enum.map((e) => JSON.stringify(e)).join(', ')}`)
++  const t = typeOf(value)
++  if (r.type && r.type !== t && !(r.type === 'number' && t === 'number'))
++    return void out.push(`${at}: must be ${r.type === 'object' ? 'a mapping' : `a ${r.type}`} (got ${t})`)
++  if (r.type === 'array' && r.items)
++    (value as unknown[]).forEach((item, i) => check(doc, r.items as Schema, item, `${path}[${i}]`, out))
++  if (r.type === 'object') {
++    const obj = value as Record<string, unknown>
++    for (const key of r.required ?? [])
++      if (!(key in obj)) out.push(`${path ? `${path}.` : ''}${key}: is required`)
++    for (const [key, v] of Object.entries(obj)) {
++      const sub = r.properties?.[key] ?? r.additionalProperties
++      if (!sub) {
++        const known = Object.keys(r.properties ?? {})
++        out.push(`${path ? `${path}.` : ''}${key}: unknown key${known.length ? ` (known: ${known.join(', ')})` : ''}`)
++      } else check(doc, sub, v, path ? `${path}.${key}` : key, out)
++    }
++  }
++}
++
++/** `!secret` (the variable is the key it's under), `!secret NAME`, or `!secret { from, hosts, … }`. */
++const tags = (root: string): Tags => [
++  {
++    tag: '!secret',
++    resolve: (from: string) => ({ kind: 'secret', ...(from ? { from } : {}) }),
++  },
++  {
++    tag: '!secret',
++    collection: 'map',
++    resolve: (map) => ({ kind: 'secret', ...(map.toJSON() as object) }),
++  } as Tags[number],
++  { tag: '!file', resolve: (path: string) => ({ kind: 'file', path: resolve(root, path) }) },
++]
++
++/** Paths a TypeScript helper would resolve against the calling file, resolved against the config. */
++function resolvePaths(value: unknown, root: string, key = ''): unknown {
++  if (Array.isArray(value)) return value.map((v) => resolvePaths(v, root))
++  if (!value || typeof value !== 'object') {
++    return key === 'dockerfile' && typeof value === 'string' && !isAbsolute(value)
++      ? resolve(root, value)
++      : value
++  }
++  const obj = value as Record<string, unknown>
++  const out = Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, resolvePaths(v, root, k)]))
++  if (obj.kind === 'skill' && obj.source === 'local' && typeof obj.path === 'string')
++    out.path = resolve(root, obj.path)
++  return out
++}
++
++/** Reads `reeval.yml` as `EsConfig`: parsed, checked against the schema, paths and environments revived. */
++export function loadDataConfig(path: string, root: string, label: string): EsConfig {
++  const doc = parseDocument(readFileSync(path, 'utf8'), { customTags: tags(root), prettyErrors: true })
++  if (doc.errors.length) throw new UsageError(`${label}: ${doc.errors[0]?.message}`)
++  const data = (doc.toJS() ?? {}) as unknown
++  const problems: string[] = []
++  const s = configSchema()
++  check(s, { $ref: s.$ref }, data, '', problems)
++  if (problems.length) {
++    throw new UsageError(
++      `${label} doesn't fit the config schema:\n${problems.map((p) => `  ${p}`).join('\n')}`,
++    )
++  }
++  const config = resolvePaths(data, root) as ConfigData
++  const revive = (env: EnvironmentFile | undefined) => {
++    if (!env) return undefined
++    const { name, ...spec } = env
++    return environmentFrom({ kind: 'environment', name, layers: [{ name, spec }] })
++  }
++  const profiles = config.profiles
++    ? Object.fromEntries(
++        Object.entries(config.profiles).map(([name, p]) => [
++          name,
++          p.defaults?.environment
++            ? { ...p, defaults: { ...p.defaults, environment: revive(p.defaults.environment) } }
++            : p,
++        ]),
++      )
++    : undefined
++  return {
++    ...config,
++    ...(config.include ? {} : detectLanguage(root) === 'dart' ? { include: DART_INCLUDE } : {}),
++    ...(config.environment ? { environment: revive(config.environment) } : {}),
++    ...(profiles ? { profiles } : {}),
++  } as EsConfig
++}
+diff --git a/packages/reeval/src/config.ts b/packages/reeval/src/config.ts
+index 2b2e734..d095bfa 100644
+--- a/packages/reeval/src/config.ts
++++ b/packages/reeval/src/config.ts
+@@ -1,8 +1,8 @@
+ import { existsSync } from 'node:fs'
+ import { availableParallelism, totalmem } from 'node:os'
+ import { dirname, join, resolve } from 'node:path'
+-import { loadDartConfig } from './dart/config.ts'
+-import { DART_CONFIG, DART_INCLUDE, detectLanguage, isDartConfig } from './dart/project.ts'
++import { DATA_CONFIG_FILES, isDataConfig, loadDataConfig } from './config-file.ts'
++import { DART_INCLUDE, detectLanguage } from './dart/project.ts'
+ import { parseDuration } from './duration.ts'
+ import { inCI } from './env.ts'
+ import { helpersFor, isSecret } from './environment.ts'
+@@ -79,9 +79,10 @@ export const defineConfig = <T extends ConfigInput>(config: T): T => config
+ export { parseDuration }
+ 
+ /** The file names `reeval` looks for in each directory, first match first, as Vitest orders its own. */
+-export const CONFIG_FILES = ['ts', 'mts', 'cts', 'js', 'mjs', 'cjs', 'dart'].map(
+-  (ext) => `reeval.config.${ext}`,
+-)
++export const CONFIG_FILES = [
++  ...['ts', 'mts', 'cts', 'js', 'mjs', 'cjs'].map((ext) => `reeval.config.${ext}`),
++  ...DATA_CONFIG_FILES,
++]
+ 
+ const DEFAULT_CONFIG_FILE = 'reeval.config.ts'
+ 
+@@ -116,20 +117,19 @@ export async function loadConfig(
+   command = 'run',
+   profile: string | undefined = undefined,
+ ): Promise<ResolvedConfig> {
+-  const dartContext = { ci: inCI(process.env), command, ...(profile ? { profile } : {}) }
+   if (path === undefined) {
+-    if (detectLanguage(process.cwd()) === 'dart') {
+-      const user = await loadDartConfig(process.cwd(), undefined, dartContext)
+-      return resolveConfig(user, process.cwd(), DART_CONFIG)
+-    }
+-    return resolveConfig({}, process.cwd(), DEFAULT_CONFIG_FILE)
++    const dart = detectLanguage(process.cwd()) === 'dart'
++    return resolveConfig(
++      dart ? { include: DART_INCLUDE } : {},
++      process.cwd(),
++      dart ? 'reeval.yml' : DEFAULT_CONFIG_FILE,
++    )
+   }
+   const root = dirname(path)
+   const configPath = configLabel(path)
+   let user: EsConfig = {}
+-  if (isDartConfig(path) && existsSync(path)) {
+-    user = await loadDartConfig(root, path, dartContext)
+-    return resolveConfig({ include: DART_INCLUDE, ...user }, root, configPath)
++  if (isDataConfig(path) && existsSync(path)) {
++    return resolveConfig(loadDataConfig(path, root, configPath), root, configPath)
+   }
+   if (existsSync(path)) {
+     const jiti = await esJiti(ownFileURL('dist/cli.js').href, { moduleCache: false })
+diff --git a/packages/reeval/src/dart/config.ts b/packages/reeval/src/dart/config.ts
+deleted file mode 100644
+index bef843c..0000000
+--- a/packages/reeval/src/dart/config.ts
++++ /dev/null
+@@ -1,27 +0,0 @@
+-// `reeval.config.dart`: its `main` returns `defineConfig(...)`, which the runner sends as the same
+-// data a TypeScript config default-exports.
+-import { environmentFrom } from '../environment.ts'
+-import type { EnvironmentData, EsConfig } from '../types.ts'
+-import { prepareDartRunner } from './project.ts'
+-import { startDartRunner } from './runner.ts'
+-
+-export async function loadDartConfig(
+-  root: string,
+-  configPath: string | undefined,
+-  context: { ci: boolean; command: string; profile?: string },
+-): Promise<EsConfig> {
+-  const command = await prepareDartRunner(root, configPath, (line) =>
+-    process.stderr.write(`${line}\n`),
+-  )
+-  // Every worker this process starts runs the same compiled runner.
+-  process.env.REEVAL_DART_RUNNER = JSON.stringify(command)
+-  const runner = await startDartRunner(command, root)
+-  try {
+-    runner.send({ t: 'config', context })
+-    const { config } = await runner.next('config')
+-    const environment = config.environment as unknown as EnvironmentData | undefined
+-    return environment ? { ...config, environment: environmentFrom(environment) } : config
+-  } finally {
+-    runner.close()
+-  }
+-}
+diff --git a/packages/reeval/src/dart/loader.ts b/packages/reeval/src/dart/loader.ts
+index dcca930..0b05a5b 100644
+--- a/packages/reeval/src/dart/loader.ts
++++ b/packages/reeval/src/dart/loader.ts
+@@ -7,7 +7,7 @@ import { relative } from 'node:path'
+ import { declareTree } from '../evaluate.ts'
+ import { InfraError } from '../sandbox/types.ts'
+ import type { EvalContext, EvalFn, JudgeCallOptions, Turn } from '../types.ts'
+-import { prepareDartRunner, type RunnerCommand } from './project.ts'
++import { prepareDartHost, type RunnerCommand } from './project.ts'
+ import type { FromRunner } from './protocol.ts'
+ import { type DartRunner, errorFrom, startDartRunner } from './runner.ts'
+ 
+@@ -21,7 +21,7 @@ type Live = {
+ export async function loadDartFile(file: string, root: string): Promise<void> {
+   const command: RunnerCommand = process.env.REEVAL_DART_RUNNER
+     ? JSON.parse(process.env.REEVAL_DART_RUNNER)
+-    : await prepareDartRunner(root, undefined)
++    : await prepareDartHost(root, [file])
+   const runner = await startDartRunner(command, root)
+   const rel = relative(root, file).replaceAll('\\', '/')
+   runner.send({ t: 'collect', file: rel })
+diff --git a/packages/reeval/src/dart/project.ts b/packages/reeval/src/dart/project.ts
+index ec3e4f1..1ceaeab 100644
+--- a/packages/reeval/src/dart/project.ts
++++ b/packages/reeval/src/dart/project.ts
+@@ -1,153 +1,73 @@
+-// A Dart project: found by its `reeval.config.dart` or `pubspec.yaml`. reeval writes a bootstrap
+-// that imports the config and every `*_eval.dart` file and calls package:reeval's `runReeval`,
+-// compiles it once (cached by the content of every Dart file it can reach), and starts the result
+-// for the config and for each eval file's worker.
+-import { createHash } from 'node:crypto'
+-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+-import { basename, dirname, join, relative, resolve } from 'node:path'
+-import { fileURLToPath } from 'node:url'
++// A Dart project: found by its `pubspec.yaml`. Before workers start, reeval writes one bootstrap,
++// `.dart_tool/reeval/runner.dart`, naming the eval files it found, and each worker runs it with
++// `dart run`. The bootstrap is package:reeval's host: it spawns the worker's eval file in an
++// isolate of its own (`Isolate.spawnUri`), so a file that doesn't compile fails as that file's
++// load error while the rest run, as package:test isolates test files.
++import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs'
++import { delimiter, join } from 'node:path'
+ import { run } from '@reeval/sandbox-docker/process'
+-import { glob } from 'tinyglobby'
+ import { UsageError } from '../errors.ts'
+-
+-export const DART_CONFIG = 'reeval.config.dart'
++import { relativeFile } from '../ids.ts'
+ 
+ /** Eval files in a Dart project, as package:test names test files `*_test.dart`. */
+ export const DART_INCLUDE = ['evals/**/*_eval.dart']
+ 
+-const IGNORED = [
+-  '**/.dart_tool/**',
+-  '**/build/**',
+-  '**/.reeval/**',
+-  '**/node_modules/**',
+-  '**/.git/**',
+-]
+-
+-export const isDartConfig = (path: string | undefined): path is string => !!path?.endsWith('.dart')
+-
+-/** The language `dir` is written in, from its clues: a Dart config, or a pubspec without a TS config. */
++/** The language `dir` is written in, from its clues: a TypeScript config wins, then a pubspec. */
+ export function detectLanguage(dir: string): 'dart' | 'typescript' {
+-  if (existsSync(join(dir, DART_CONFIG))) return 'dart'
+   if (existsSync(join(dir, 'reeval.config.ts'))) return 'typescript'
+   return existsSync(join(dir, 'pubspec.yaml')) ? 'dart' : 'typescript'
+ }
+ 
+-/** How the runner starts: `[exe]` (AOT, the default) or `[dart, runner.dill]` (kernel). */
++/** How a worker starts the runner, in the project root. */
+ export type RunnerCommand = string[]
+ 
+-const posix = (path: string) => path.replaceAll('\\', '/')
++export const BOOTSTRAP = '.dart_tool/reeval/runner.dart'
+ 
+-/** Runs `dart`, failing with an install hint when there's none. */
+-async function dart(args: string[], cwd: string) {
+-  try {
+-    return await run('dart', args, { cwd })
+-  } catch (error) {
+-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+-      throw new UsageError(
+-        'This is a Dart project (reeval.config.dart or pubspec.yaml), but dart is not on PATH. Install the Dart SDK: https://dart.dev/get-dart',
+-      )
+-    }
+-    throw error
+-  }
+-}
+-
+-/** Every package root a path dependency resolves to, from `.dart_tool/package_config.json`. */
+-function pathPackages(root: string): string[] {
+-  const config = join(root, '.dart_tool/package_config.json')
+-  const { packages } = JSON.parse(readFileSync(config, 'utf8')) as {
+-    packages: { rootUri: string }[]
+-  }
+-  return packages
+-    .map(({ rootUri }) =>
+-      rootUri.startsWith('file:')
+-        ? fileURLToPath(rootUri)
+-        : resolve(dirname(config), decodeURIComponent(rootUri)),
++const onPath = (name: string) =>
++  (process.env.PATH ?? '')
++    .split(delimiter)
++    .some((dir) =>
++      ['', '.exe', '.bat'].some((ext) => dir && existsSync(join(dir, `${name}${ext}`))),
+     )
+-    .filter((dir) => !dir.includes(`${join('.pub-cache')}`) && resolve(dir) !== resolve(root))
+-}
+-
+-function dartFilesUnder(dir: string): string[] {
+-  if (!existsSync(dir)) return []
+-  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
+-    .filter((f) => f.endsWith('.dart') && !f.includes('.dart_tool'))
+-    .map((f) => join(dir, f))
+-    .filter((f) => statSync(f).isFile())
+-}
+ 
+-/**
+- * Resolves packages if needed, writes the bootstrap for `configPath` (none: package:reeval's
+- * defaults), and compiles it unless a runner for the same sources is already built.
+- */
+-export async function prepareDartRunner(
+-  root: string,
+-  configPath: string | undefined,
+-  log: (line: string) => void = () => {},
+-): Promise<RunnerCommand> {
+-  if (!existsSync(join(root, 'pubspec.yaml'))) {
++/** Resolves packages when the lockfile is stale and writes the bootstrap for `files`. */
++export async function prepareDartHost(root: string, files: string[]): Promise<RunnerCommand> {
++  if (!onPath('dart')) {
+     throw new UsageError(
+-      `${DART_CONFIG} needs a pubspec.yaml beside it, with reeval in dev_dependencies.`,
++      'This is a Dart project (it has a pubspec.yaml and *_eval.dart files), but dart is not on PATH. Install the Dart SDK: https://dart.dev/get-dart',
+     )
+   }
++  const pubspec = join(root, 'pubspec.yaml')
++  if (!existsSync(pubspec)) {
++    throw new UsageError('Dart eval files need a pubspec.yaml with reeval in dev_dependencies.')
++  }
+   const lock = join(root, 'pubspec.lock')
+-  const packageConfig = join(root, '.dart_tool/package_config.json')
+   if (
+-    !existsSync(packageConfig) ||
++    !existsSync(join(root, '.dart_tool/package_config.json')) ||
+     !existsSync(lock) ||
+-    statSync(join(root, 'pubspec.yaml')).mtimeMs > statSync(lock).mtimeMs
++    statSync(pubspec).mtimeMs > statSync(lock).mtimeMs
+   ) {
+-    log('Resolving Dart packages (dart pub get)')
+-    const got = await dart(['pub', 'get'], root)
+-    if (got.exitCode !== 0)
+-      throw new UsageError(`dart pub get failed:\n${got.stderr || got.stdout}`)
++    process.stderr.write('Resolving Dart packages (dart pub get)\n')
++    const got = await run('dart', ['pub', 'get'], { cwd: root })
++    if (got.exitCode !== 0) throw new UsageError(`dart pub get failed:\n${got.stderr || got.stdout}`)
+   }
+-  const evals = (await glob(['**/*_eval.dart'], { cwd: root, ignore: IGNORED })).sort()
+-  const dir = join(root, '.reeval/dart')
+-  mkdirSync(dir, { recursive: true })
+-  const name = configPath ? basename(configPath, '.dart').replaceAll('.', '_') : 'defaults'
+-  const bootstrap = join(dir, `${name}.bootstrap.dart`)
+-  const from = (path: string) => posix(relative(dir, path))
+   const source = [
+-    '// Generated by reeval: imports the config and every eval file for the Dart runner.',
+-    "import 'package:reeval/runner.dart';",
+-    ...(configPath ? [`import '${from(configPath)}' as config;`] : []),
+-    ...evals.map((file, i) => `import '${from(join(root, file))}' as e${i};`),
++    '// Generated by reeval for each run: the eval files it found. Each worker runs this with',
++    '// `dart run`, and it spawns the worker\'s file in an isolate of its own.',
++    "import 'package:reeval/host.dart';",
+     '',
+-    'Future<void> main(List<String> args) => runReeval(',
+-    '  args,',
+-    ...(configPath ? ['  config: config.main,'] : []),
+-    '  files: {',
+-    ...evals.map((file, i) => `    '${posix(file)}': e${i}.main,`),
+-    '  },',
+-    ');',
++    'Future<void> main(List<String> args) => runHost(args, files: const [',
++    ...files
++      .filter((file) => file.endsWith('.dart'))
++      .map((file) => `  '${relativeFile(root, file)}',`),
++    ']);',
+     '',
+   ].join('\n')
++  const bootstrap = join(root, BOOTSTRAP)
+   if (!existsSync(bootstrap) || readFileSync(bootstrap, 'utf8') !== source) {
+-    writeFileSync(bootstrap, source)
+-  }
+-
+-  const kernel = process.env.REEVAL_DART_COMPILE === 'kernel'
+-  const hash = createHash('sha256')
+-    .update(source)
+-    .update(kernel ? 'kernel' : 'exe')
+-  const sources = [
+-    ...(await glob(['**/*.dart'], { cwd: root, ignore: IGNORED, absolute: true })),
+-    ...pathPackages(root).flatMap((pkg) => dartFilesUnder(join(pkg, 'lib'))),
+-  ].sort()
+-  for (const file of [...sources, lock]) hash.update(file).update(readFileSync(file))
+-  const id = hash.digest('hex').slice(0, 16)
+-  const output = join(dir, `${name}-${id}.${kernel ? 'dill' : 'exe'}`)
+-  if (!existsSync(output)) {
+-    const started = performance.now()
+-    const compiled = await dart(
+-      ['compile', kernel ? 'kernel' : 'exe', bootstrap, '-o', output],
+-      root,
+-    )
+-    if (compiled.exitCode !== 0) {
+-      throw new UsageError(
+-        `The Dart evals don't compile (dart compile ${kernel ? 'kernel' : 'exe'}):\n${(compiled.stdout + compiled.stderr).trim()}`,
+-      )
+-    }
+-    log(`Compiled the Dart evals in ${((performance.now() - started) / 1000).toFixed(1)}s`)
++    mkdirSync(join(root, '.dart_tool/reeval'), { recursive: true })
++    writeFileSync(`${bootstrap}.tmp`, source)
++    renameSync(`${bootstrap}.tmp`, bootstrap)
+   }
+-  return kernel ? ['dart', output] : [output]
++  return process.env.REEVAL_DART_RUN === 'direct' ? ['dart', BOOTSTRAP] : ['dart', 'run', BOOTSTRAP]
+ }
+diff --git a/packages/reeval/src/dart/protocol.ts b/packages/reeval/src/dart/protocol.ts
+index 007e0b7..38729de 100644
+--- a/packages/reeval/src/dart/protocol.ts
++++ b/packages/reeval/src/dart/protocol.ts
+@@ -3,9 +3,9 @@
+ // REEVAL_RUNNER_TOKEN. Not the runner's stdio, which eval code prints to, and not Node's IPC
+ // channel, which Dart can't open.
+ import type { DeclarationTree } from '../declaration.ts'
+-import type { EsConfig } from '../types.ts'
+ 
+-export const RUNNER_PROTOCOL = 1
++/** 2: the host spawns each eval file in an isolate; the config is reeval.yml, not Dart. */
++export const RUNNER_PROTOCOL = 2
+ 
+ export type WireError = {
+   name: string
+@@ -18,7 +18,6 @@ export type WireError = {
+ }
+ 
+ export type ToRunner =
+-  | { t: 'config'; context: { ci: boolean; command: string; profile?: string } }
+   | { t: 'collect'; file: string }
+   | { t: 'run'; attempt: string; body: string; info: unknown }
+   | { t: 'reply'; id: number; result?: unknown; error?: { name: string; message: string } }
+@@ -26,7 +25,6 @@ export type ToRunner =
+ 
+ export type FromRunner =
+   | { t: 'hello'; protocol: number; token: string; sdk: string; version: string; runtime: string }
+-  | { t: 'config'; config: EsConfig }
+   | { t: 'declared'; file: string; tree: DeclarationTree }
+   | { t: 'load-error'; error: WireError }
+   | { t: 'call'; id: number; attempt: string; method: string; params: Record<string, unknown> }
+diff --git a/packages/reeval/src/engine/node.ts b/packages/reeval/src/engine/node.ts
+index 079385a..08b899b 100644
+--- a/packages/reeval/src/engine/node.ts
++++ b/packages/reeval/src/engine/node.ts
+@@ -10,6 +10,7 @@ import { ownVersion, PACKAGE_DIR, PACKAGE_NAMES } from '../root.ts'
+ import { Scheduler } from '../scheduler/core.ts'
+ import { capMiddle } from '../text.ts'
+ import { esFrames, formatError, type SerializedError } from './errors.ts'
++import { prepareDartHost } from '../dart/project.ts'
+ import { DEFAULT_EXCLUDE, filterFiles, findEvalFiles, matchesFilter } from './files.ts'
+ import {
+   describeExit,
+@@ -68,6 +69,10 @@ export async function runEngine(
+   const specs = filterFiles(files, pathFilters, root)
+   if (specs.length === 0)
+     return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
++  // Every worker for a Dart file runs the same bootstrap, written (and packages resolved) once.
++  if (specs.some((file) => file.endsWith('.dart'))) {
++    process.env.REEVAL_DART_RUNNER = JSON.stringify(await prepareDartHost(root, specs))
++  }
+ 
+   // Attempts wait on the network, not the CPU, so a few workers run many attempts each.
+   const workers = Math.max(1, Math.min(concurrency, availableParallelism()))
+@@ -105,6 +110,17 @@ export async function runEngine(
+     }
+   })
+   if (usage) throw new UsageError(usage)
++  // A Dart file that fails to load (it doesn't compile, in an isolate of its own) fails the run as
++  // an unhandled error, and the other files run, as a load error while running does.
++  const loadErrors: string[] = []
++  for (const [message, rels] of failed) {
++    const dart = rels.filter((rel) => rel.endsWith('.dart'))
++    for (const rel of dart) loadErrors.push(`${rel} failed to load, so its evals didn't run: ${message}`)
++    const rest = rels.filter((rel) => !rel.endsWith('.dart'))
++    if (rest.length) failed.set(message, rest)
++    else failed.delete(message)
++  }
++  for (const error of loadErrors) process.stderr.write(`reeval: ${error}\n`)
+   // A file that fails to load registers none of its evals: running the rest would drop them.
+   if (failed.size) {
+     const lines = [...failed]
+@@ -130,8 +146,23 @@ export async function runEngine(
+     ? collected.filter(({ rel, tests }) => tests.some((t) => matchesName(identify(rel, t))))
+     : collected
+   if (picked.length === 0)
+-    return { evals: [], unhandledErrors: [], cancelled: false, noFiles: true, stopped: false }
+-  return runFiles({ ...options, spawn, entry, hide, workers, collected: picked, matchesName })
++    return {
++      evals: [],
++      unhandledErrors: loadErrors,
++      cancelled: false,
++      noFiles: loadErrors.length === 0,
++      stopped: false,
++    }
++  return runFiles({
++    ...options,
++    spawn,
++    entry,
++    hide,
++    workers,
++    collected: picked,
++    matchesName,
++    loadErrors,
++  })
+ }
+ 
+ /** Who a collected test is: its eval id, attempt key, groups and name. */
+@@ -183,6 +214,8 @@ type RunInput = EngineOptions & {
+   workers: number
+   collected: Collected[]
+   matchesName: (e: ReturnType<typeof identify>) => boolean
++  /** Dart files that failed to load, reported as unhandled errors. */
++  loadErrors: string[]
+ }
+ 
+ type FileRun = {
+@@ -197,7 +230,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
+   const specs = collected.map((c) => c.file)
+   const root = run.config.root
+   const emit = input.onEvent ?? (() => {})
+-  const unhandledErrors: string[] = []
++  const unhandledErrors: string[] = [...input.loadErrors]
+   const live = new Set<WorkerProcess>()
+   const byFile = new Map<string, FileRun>()
+   // Every file in the first round asks for its leases before any is granted, so the first
+diff --git a/packages/reeval/src/types.ts b/packages/reeval/src/types.ts
+index e641ff5..358ad43 100644
+--- a/packages/reeval/src/types.ts
++++ b/packages/reeval/src/types.ts
+@@ -820,6 +820,25 @@ export type AnalysisConfig = {
+   maxOutputTokens?: number
+ }
+ 
++/** A profile as data: its defaults' environment without `extendEnvironment`. */
++export type ProfileData = Omit<Profile, 'defaults'> & {
++  defaults?: Omit<ProfileDefaults, 'environment'> & { environment?: EnvironmentFile }
++}
++
++/** An environment in a data config: its name and spec, as `defineEnvironment` takes them. */
++export type EnvironmentFile = EnvironmentSpec & { name: string }
++
++/**
++ * The config as a data file (`reeval.yml`), for projects not written in TypeScript: `EsConfig`
++ * with environments as data, model ids as strings and no callbacks.
++ * schema/plan/config.schema.json is its JSON Schema.
++ */
++export type ConfigData = Omit<EsConfig, 'environment' | 'profiles' | 'analysis'> & {
++  environment?: EnvironmentFile
++  profiles?: Record<string, ProfileData>
++  analysis?: Omit<AnalysisConfig, 'model'> & { model?: string }
++}
++
+ export type EsConfig = {
+   include?: string[]
+   harness?: HarnessDescriptor | HarnessDescriptor[]
+diff --git a/scripts/bun-compile.mjs b/scripts/bun-compile.mjs
+index e9fbbe7..d0101df 100644
+--- a/scripts/bun-compile.mjs
++++ b/scripts/bun-compile.mjs
+@@ -44,7 +44,14 @@ if (!existsSync(cli)) fail('no dist/cli.js: run pnpm build first')
+ 
+ // What the binary embeds, laid out as in the package; src/root.ts finds it there when compiled.
+ const stage = mkdtempSync(join(tmpdir(), 'reeval-bun-stage-'))
+-const own = ['package.json', 'docker', 'assets', 'dist/studio-app', 'dist/bridge']
++const own = [
++  'package.json',
++  'docker',
++  'assets',
++  'dist/studio-app',
++  'dist/bridge',
++  'schema/plan/config.schema.json',
++]
+ for (const path of own) cpSync(join(pkg, path), join(stage, path), { recursive: true })
+ const require = createRequire(join(pkg, 'package.json'))
+ const jiti = dirname(require.resolve('jiti/package.json'))
+@@ -61,9 +68,15 @@ writeFileSync(join(stage, 'versions.json'), `${JSON.stringify(versions, null, 2)
+ 
+ // An --asset directory keeps its path from its parent, so dist/ goes in whole (it's staged with
+ // only the studio app and the bridge).
+-const assets = ['package.json', 'docker', 'assets', 'dist', 'vendor', 'versions.json'].flatMap(
+-  (path) => ['--asset', path],
+-)
++const assets = [
++  'package.json',
++  'docker',
++  'assets',
++  'dist',
++  'schema',
++  'vendor',
++  'versions.json',
++].flatMap((path) => ['--asset', path])
+ const built = sh(
+   'bun',
+   [
+diff --git a/sdks/dart/lib/host.dart b/sdks/dart/lib/host.dart
+new file mode 100644
+index 0000000..241f660
+--- /dev/null
++++ b/sdks/dart/lib/host.dart
+@@ -0,0 +1,4 @@
++/// The entry point of the bootstrap reeval generates under `.dart_tool/reeval/`. Not for eval files.
++library;
++
++export 'src/host.dart' show runHost;
+diff --git a/sdks/dart/lib/reeval.dart b/sdks/dart/lib/reeval.dart
+index df147ff..7836dbe 100644
+--- a/sdks/dart/lib/reeval.dart
++++ b/sdks/dart/lib/reeval.dart
+@@ -3,7 +3,6 @@ library;
+ 
+ export 'package:matcher/matcher.dart';
+ 
+-export 'src/config.dart' show ConfigContext, Profile, ReevalConfig, configContext, defineConfig;
+ export 'src/context.dart'
+     show
+         AbortedError,
+diff --git a/sdks/dart/lib/runner.dart b/sdks/dart/lib/runner.dart
+deleted file mode 100644
+index 344ea67..0000000
+--- a/sdks/dart/lib/runner.dart
++++ /dev/null
+@@ -1,4 +0,0 @@
+-/// The entry point the reeval binary's generated bootstrap calls. Not for eval files.
+-library;
+-
+-export 'src/runner.dart' show ConfigMain, runReeval;
+diff --git a/sdks/dart/lib/src/config.dart b/sdks/dart/lib/src/config.dart
+deleted file mode 100644
+index d3b2615..0000000
+--- a/sdks/dart/lib/src/config.dart
++++ /dev/null
+@@ -1,74 +0,0 @@
+-import 'options.dart';
+-
+-/// What the binary tells the config about this invocation, before it calls `main`.
+-typedef ConfigContext = ({bool ci, String command, String? profile, Map<String, String> hostEnv});
+-
+-ConfigContext _context = (ci: false, command: 'run', profile: null, hostEnv: const {});
+-
+-/// The command, profile and CI flag the config is loaded for; set by the runner.
+-ConfigContext get configContext => _context;
+-
+-set configContext(ConfigContext value) => _context = value;
+-
+-/// A profile: `defaults` apply under every group and eval, `limit` caps them.
+-final class Profile implements Jsonable {
+-  const Profile({this.runs, this.harness, this.sandbox, this.limitRuns, this.budgetAttempts});
+-
+-  final int? runs;
+-  final Harness? harness;
+-  final Sandbox? sandbox;
+-  final int? limitRuns;
+-  final int? budgetAttempts;
+-
+-  @override
+-  Object? toJson() => {
+-    'defaults': {'runs': ?runs, 'harness': ?harness, 'sandbox': ?sandbox},
+-    if (limitRuns != null) 'limit': {'runs': limitRuns},
+-    if (budgetAttempts != null) 'budget': {'attempts': budgetAttempts},
+-  };
+-}
+-
+-/// `reeval.config.dart`'s `main` returns one of these.
+-final class ReevalConfig implements Jsonable {
+-  const ReevalConfig._(this._data);
+-
+-  final Map<String, Object?> _data;
+-
+-  @override
+-  Object? toJson() => _data;
+-}
+-
+-/// The eval files reeval looks for when the config doesn't say.
+-const defaultInclude = ['evals/**/*_eval.dart'];
+-
+-ReevalConfig defineConfig({
+-  List<String> include = defaultInclude,
+-  Harness? harness,
+-  List<Harness>? harnesses,
+-  Sandbox? sandbox,
+-  Environment? environment,
+-  Judge? judge,
+-  int? runs,
+-  int? concurrency,
+-  Duration? timeout,
+-  Map<String, Object>? env,
+-  Map<String, Profile>? profiles,
+-}) {
+-  if (harness != null && harnesses != null) {
+-    throw ArgumentError('Pass harness or harnesses, not both.');
+-  }
+-  return ReevalConfig._(
+-    toData({
+-      'include': include,
+-      'harness': harness ?? harnesses,
+-      'sandbox': sandbox,
+-      'environment': environment,
+-      'judge': judge,
+-      'runs': runs,
+-      'concurrency': concurrency,
+-      'timeout': timeout,
+-      'env': env,
+-      'profiles': profiles,
+-    }) as Map<String, Object?>,
+-  );
+-}
+diff --git a/sdks/dart/lib/src/host.dart b/sdks/dart/lib/src/host.dart
+new file mode 100644
+index 0000000..24020e9
+--- /dev/null
++++ b/sdks/dart/lib/src/host.dart
+@@ -0,0 +1,111 @@
++// The process a reeval worker starts with `dart run .dart_tool/reeval/runner.dart`. It connects
++// to the worker's socket and spawns the worker's eval file in an isolate of its own, then relays
++// lines both ways. It imports only `dart:` libraries, so it starts before the eval file compiles,
++// and a file that doesn't compile becomes that file's load error, not a dead runner.
++import 'dart:async';
++import 'dart:convert';
++import 'dart:io';
++import 'dart:isolate';
++
++import 'version.dart';
++
++Future<void> runHost(List<String> args, {required List<String> files}) async {
++  final (host, port, token) = switch ((
++    Platform.environment['REEVAL_RUNNER']?.split(':'),
++    Platform.environment['REEVAL_RUNNER_TOKEN'],
++  )) {
++    ([final host, final port], final String token) => (host, int.parse(port), token),
++    _ => throw StateError(
++      "This is reeval's Dart runner, which reeval starts for each eval file. Run your evals with reeval run.",
++    ),
++  };
++  final socket = await Socket.connect(host, port);
++  socket.setOption(SocketOption.tcpNoDelay, true);
++  void send(Object message) =>
++      socket.write('${message is String ? message : jsonEncode(message)}\n');
++  send({
++    't': 'hello',
++    'protocol': runnerProtocol,
++    'token': token,
++    'sdk': 'dart',
++    'version': sdkVersion,
++    'runtime': Platform.version.split(' ').first,
++  });
++
++  SendPort? isolate;
++  var spawned = false;
++  final early = <String>[];
++  final fromIsolate = ReceivePort()
++    ..listen((message) {
++      if (message is SendPort) {
++        isolate = message;
++        early.forEach(message.send);
++        early.clear();
++      } else if (message is String) {
++        send(message);
++      }
++    });
++  final exits = ReceivePort()
++    ..listen((_) {
++      stderr.writeln('The eval file\'s isolate exited.');
++      exit(1);
++    });
++
++  await for (final line
++      in socket.cast<List<int>>().transform(utf8.decoder).transform(const LineSplitter())) {
++    if (!spawned) {
++      if (jsonDecode(line) case {'t': 'collect', 'file': final String file}) {
++        final error = await _spawn(file, files, fromIsolate.sendPort, exits.sendPort);
++        if (error != null) {
++          send({'t': 'load-error', 'error': error});
++          continue;
++        }
++        spawned = true;
++      }
++    }
++    if (isolate case final port?) {
++      port.send(line);
++    } else {
++      early.add(line);
++    }
++  }
++  exit(0);
++}
++
++/// Spawns `file` in an isolate; the error it becomes when it can't, or null.
++Future<Map<String, Object?>?> _spawn(
++  String file,
++  List<String> files,
++  SendPort replies,
++  SendPort onExit,
++) async {
++  if (!files.contains(file)) {
++    return {
++      'name': 'UsageError',
++      'message': "$file isn't one of the project's eval files. Dart eval files end in _eval.dart.",
++    };
++  }
++  final entry = Uri.dataFromString('''
++import 'dart:isolate';
++import 'package:reeval/src/isolate.dart';
++import '${Directory.current.uri.resolve(file)}' as eval;
++
++void main(List<String> args, SendPort host) => serveIsolate(host, eval.main);
++''', mimeType: 'application/dart');
++  try {
++    await Isolate.spawnUri(
++      entry,
++      const [],
++      replies,
++      packageConfig: await Isolate.packageConfig,
++      onExit: onExit,
++      debugName: file,
++    );
++    return null;
++  } on IsolateSpawnException catch (e) {
++    return {
++      'name': 'CompileError',
++      'message': e.message.replaceFirst('Unable to spawn isolate: ', '').trim(),
++    };
++  }
++}
+diff --git a/sdks/dart/lib/src/runner.dart b/sdks/dart/lib/src/isolate.dart
+similarity index 56%
+rename from sdks/dart/lib/src/runner.dart
+rename to sdks/dart/lib/src/isolate.dart
+index b502a07..24437ae 100644
+--- a/sdks/dart/lib/src/runner.dart
++++ b/sdks/dart/lib/src/isolate.dart
+@@ -1,69 +1,37 @@
+-// The Dart side of a reeval run. The binary generates a bootstrap that imports the config and
+-// every eval file and calls `runReeval`; it starts the compiled bootstrap for the config and for
+-// each eval file's worker, and this answers over the socket: the config, a file's declaration
+-// tree, and each attempt's body, whose `t.*` calls go back to the binary.
++// An eval file's isolate, spawned by the host (host.dart) with the file's `main`. It answers the
++// binary's lines, which the host relays: the file's declaration tree, and each attempt's body,
++// whose `t.*` calls go back to the binary.
+ import 'dart:async';
+-import 'dart:io';
++import 'dart:convert';
++import 'dart:isolate';
+ 
+ import 'package:stack_trace/stack_trace.dart';
+ 
+-import 'config.dart';
+ import 'context.dart';
+ import 'declare.dart';
+ import 'expect.dart';
+-import 'options.dart';
+ import 'protocol.dart';
+ 
+-const sdkVersion = '0.1.0';
+-
+-typedef ConfigMain = FutureOr<ReevalConfig> Function();
+-
+-/// Serves the binary until it closes the connection. `files` maps each eval file's path, relative
+-/// to the project root with `/`, to its `main`.
+-Future<void> runReeval(
+-  List<String> args, {
+-  ConfigMain? config,
+-  required Map<String, void Function()> files,
+-}) async {
+-  final (host, port, token) = switch ((
+-    Platform.environment['REEVAL_RUNNER']?.split(':'),
+-    Platform.environment['REEVAL_RUNNER_TOKEN'],
+-  )) {
+-    ([final host, final port], final String token) => (host, int.parse(port), token),
+-    _ => throw StateError(
+-      "This is reeval's Dart runner, which the reeval binary starts. Run your evals with reeval run.",
+-    ),
+-  };
+-  final socket = await Socket.connect(host, port);
+-  socket.setOption(SocketOption.tcpNoDelay, true);
+-  await _Runner(Connection(socket), config, files).serve(token);
+-  exit(0);
++/// Serves the binary, through the host, until the host process exits.
++Future<void> serveIsolate(SendPort host, void Function() main) async {
++  final inbox = ReceivePort();
++  host.send(inbox.sendPort);
++  await _Runner((message) => host.send(jsonEncode(message)), main).serve(inbox);
+ }
+ 
+ final class _Runner implements Calls {
+-  _Runner(this._conn, this._config, this._files);
++  _Runner(this._send, this._main);
+ 
+-  final Connection _conn;
+-  final ConfigMain? _config;
+-  final Map<String, void Function()> _files;
++  final void Function(Map<String, Object?> message) _send;
++  final void Function() _main;
+   Declarer? _declarer;
+   final Map<int, Completer<Object?>> _pending = {};
+   final Map<String, EvalContext> _attempts = {};
+   int _calls = 0;
+ 
+-  Future<void> serve(String token) async {
+-    _conn.send({
+-      't': 'hello',
+-      'protocol': runnerProtocol,
+-      'token': token,
+-      'sdk': 'dart',
+-      'version': sdkVersion,
+-      'runtime': Platform.version.split(' ').first,
+-    });
+-    await for (final message in _conn.messages) {
+-      switch (message) {
+-        case LoadConfig(:final context):
+-          await _loadConfig(context);
++  Future<void> serve(ReceivePort inbox) async {
++    await for (final line in inbox.cast<String>()) {
++      switch (ToRunner.decode(jsonDecode(line))) {
+         case Collect(:final file):
+           _collect(file);
+         case Run(:final attempt, :final body, :final info):
+@@ -78,34 +46,12 @@ final class _Runner implements Calls {
+     }
+   }
+ 
+-  Future<void> _loadConfig(ConfigContext context) async {
+-    configContext = context;
+-    try {
+-      final config = _config == null ? defineConfig() : await _config();
+-      _conn.send({'t': 'config', 'config': toData(config)});
+-    } catch (error, stack) {
+-      _conn.send({'t': 'load-error', 'error': _serialize(error, stack)});
+-    }
+-  }
+-
+   void _collect(String file) {
+-    final main = _files[file];
+-    if (main == null) {
+-      _conn.send({
+-        't': 'load-error',
+-        'error': {
+-          'name': 'UsageError',
+-          'message':
+-              "$file isn't one of the project's eval files. Dart eval files end in _eval.dart.",
+-        },
+-      });
+-      return;
+-    }
+     try {
+-      final declarer = _declarer = declare(main);
+-      _conn.send({'t': 'declared', 'file': file, 'tree': declarer.tree});
++      final declarer = _declarer = declare(_main);
++      _send({'t': 'declared', 'file': file, 'tree': declarer.tree});
+     } catch (error, stack) {
+-      _conn.send({'t': 'load-error', 'error': _serialize(error, stack)});
++      _send({'t': 'load-error', 'error': _serialize(error, stack)});
+     }
+   }
+ 
+@@ -114,7 +60,7 @@ final class _Runner implements Calls {
+   Future<Object?> call(String method, Map<String, Object?> params) {
+     final id = ++_calls;
+     final reply = _pending[id] = Completer<Object?>();
+-    _conn.send({
++    _send({
+       't': 'call',
+       'id': id,
+       'attempt': Zone.current[#reeval.attempt],
+@@ -129,7 +75,7 @@ final class _Runner implements Calls {
+     final t = _attempts[attempt] = EvalContext(this, info);
+     final outcome = Completer<Map<String, Object?>?>();
+     void log(String stream, String text) =>
+-        _conn.send({'t': 'log', 'attempt': attempt, 'stream': stream, 'text': text});
++        _send({'t': 'log', 'attempt': attempt, 'stream': stream, 'text': text});
+     Future<void> start() async {
+       if (body == null) throw StateError('No eval body $bodyId: was the file changed mid-run?');
+       await body(t);
+@@ -149,7 +95,7 @@ final class _Runner implements Calls {
+     );
+     final error = await outcome.future;
+     _attempts.remove(attempt);
+-    _conn.send({
++    _send({
+       't': 'done',
+       'attempt': attempt,
+       'state': error == null ? 'passed' : 'failed',
+diff --git a/sdks/dart/lib/src/protocol.dart b/sdks/dart/lib/src/protocol.dart
+index d155721..90af636 100644
+--- a/sdks/dart/lib/src/protocol.dart
++++ b/sdks/dart/lib/src/protocol.dart
+@@ -1,28 +1,16 @@
+-// The runner protocol: NDJSON over a loopback TCP socket the reeval binary opens and names in
+-// REEVAL_RUNNER. Not stdio, which the eval's own prints and tools write to. Keep in step with
+-// packages/reeval/src/dart/protocol.ts.
+-import 'dart:async';
+-import 'dart:convert';
+-import 'dart:io';
+-
+-import 'config.dart';
++// The runner protocol: NDJSON lines between the reeval binary and the host process, over a
++// loopback TCP socket the binary opens and names in REEVAL_RUNNER. Not stdio, which the eval's
++// own prints and tools write to. The host relays each line to and from the eval file's isolate.
++// Keep in step with packages/reeval/src/dart/protocol.ts.
+ import 'context.dart';
+ 
+-/// Bumped whenever a message changes shape or meaning, in step with the binary.
+-const runnerProtocol = 1;
++export 'version.dart' show runnerProtocol;
+ 
+ /// A message from the binary.
+ sealed class ToRunner {
+   const ToRunner();
+ 
+   static ToRunner decode(Object? json) => switch (json) {
+-    {'t': 'config', 'context': {'ci': bool ci, 'command': String command} && final context} =>
+-      LoadConfig((
+-        ci: ci,
+-        command: command,
+-        profile: context['profile'] as String?,
+-        hostEnv: Platform.environment,
+-      )),
+     {'t': 'collect', 'file': String file} => Collect(file),
+     {
+       't': 'run',
+@@ -39,8 +27,6 @@ sealed class ToRunner {
+   };
+ }
+ 
+-final class LoadConfig(final ConfigContext context) extends ToRunner;
+-
+ final class Collect(final String file) extends ToRunner;
+ 
+ final class Run(final String attempt, final String body, final AttemptInfo info) extends ToRunner;
+@@ -49,24 +35,3 @@ final class Reply(final int id, {final Object? result, final ReevalCallError? er
+     extends ToRunner;
+ 
+ final class Abort(final String attempt, final String reason) extends ToRunner;
+-
+-/// One NDJSON connection to the binary.
+-final class Connection {
+-  Connection(this._socket);
+-
+-  final Socket _socket;
+-
+-  Stream<ToRunner> get messages => _socket
+-      .cast<List<int>>()
+-      .transform(utf8.decoder)
+-      .transform(const LineSplitter())
+-      .where((line) => line.isNotEmpty)
+-      .map((line) => ToRunner.decode(jsonDecode(line)));
+-
+-  void send(Map<String, Object?> message) => _socket.write('${jsonEncode(message)}\n');
+-
+-  Future<void> close() async {
+-    await _socket.flush();
+-    await _socket.close();
+-  }
+-}
+diff --git a/sdks/dart/lib/src/version.dart b/sdks/dart/lib/src/version.dart
+new file mode 100644
+index 0000000..de512c2
+--- /dev/null
++++ b/sdks/dart/lib/src/version.dart
+@@ -0,0 +1,5 @@
++/// Bumped whenever a runner message changes shape or meaning, in step with the binary's
++/// `RUNNER_PROTOCOL` (packages/reeval/src/dart/protocol.ts).
++const runnerProtocol = 2;
++
++const sdkVersion = '0.2.0';
+diff --git a/sdks/dart/test/declare_test.dart b/sdks/dart/test/declare_test.dart
+index 4e67912..db76a34 100644
+--- a/sdks/dart/test/declare_test.dart
++++ b/sdks/dart/test/declare_test.dart
+@@ -45,25 +45,31 @@ void main() {
+     expect(() => reeval.evaluate('x', (t) async {}), throwsStateError);
+   });
+ 
+-  test('defineConfig emits the binary option keys, without nulls', () {
+-    final config = reeval.defineConfig(
+-      sandbox: reeval.docker(from: 'dart:stable'),
+-      judge: reeval.Judge.model('google/gemini-3.8-flash', threshold: 0.8),
+-      env: {
+-        'KEY': reeval.secret(hosts: ['api.example.com']),
+-      },
+-    );
+-    expect(config.toJson(), {
+-      'include': ['evals/**/*_eval.dart'],
+-      'sandbox': {'kind': 'docker', 'from': 'dart:stable'},
+-      'judge': {'model': 'google/gemini-3.8-flash', 'threshold': 0.8},
+-      'env': {
+-        'KEY': {
+-          'kind': 'secret',
+-          'hosts': ['api.example.com'],
++  test('per-eval overrides emit the binary option keys, without nulls', () {
++    final declared = declare(() {
++      reeval.evaluate(
++        'in docker',
++        (t) async {},
++        sandbox: reeval.docker(from: 'dart:stable'),
++        judge: reeval.Judge.model('google/gemini-3.8-flash', threshold: 0.8),
++        env: {
++          'KEY': reeval.secret(hosts: ['api.example.com']),
+         },
+-      },
++      );
+     });
++    expect(
++      (declared.tree['children'] as List).single,
++      containsPair('options', {
++        'sandbox': {'kind': 'docker', 'from': 'dart:stable'},
++        'judge': {'model': 'google/gemini-3.8-flash', 'threshold': 0.8},
++        'env': {
++          'KEY': {
++            'kind': 'secret',
++            'hosts': ['api.example.com'],
++          },
++        },
++      }),
++    );
+   });
+ 
+   test('a failed plain-value expectation carries both values for the diff', () {

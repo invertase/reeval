@@ -44,7 +44,14 @@ if (!existsSync(cli)) fail('no dist/cli.js: run pnpm build first')
 
 // What the binary embeds, laid out as in the package; src/root.ts finds it there when compiled.
 const stage = mkdtempSync(join(tmpdir(), 'reeval-bun-stage-'))
-const own = ['package.json', 'docker', 'assets', 'dist/studio-app', 'dist/bridge']
+const own = [
+  'package.json',
+  'docker',
+  'assets',
+  'dist/studio-app',
+  'dist/bridge',
+  'schema/plan/config.schema.json',
+]
 for (const path of own) cpSync(join(pkg, path), join(stage, path), { recursive: true })
 const require = createRequire(join(pkg, 'package.json'))
 const jiti = dirname(require.resolve('jiti/package.json'))
@@ -61,9 +68,15 @@ writeFileSync(join(stage, 'versions.json'), `${JSON.stringify(versions, null, 2)
 
 // An --asset directory keeps its path from its parent, so dist/ goes in whole (it's staged with
 // only the studio app and the bridge).
-const assets = ['package.json', 'docker', 'assets', 'dist', 'vendor', 'versions.json'].flatMap(
-  (path) => ['--asset', path],
-)
+const assets = [
+  'package.json',
+  'docker',
+  'assets',
+  'dist',
+  'schema',
+  'vendor',
+  'versions.json',
+].flatMap((path) => ['--asset', path])
 const built = sh(
   'bun',
   [

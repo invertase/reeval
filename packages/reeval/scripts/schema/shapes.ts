@@ -100,6 +100,12 @@ export const PLAN_SHAPES: PlanShape[] = [
     where: 'A message from the main process to a worker (src/engine/PROTOCOL.md)',
   },
   {
+    name: 'config',
+    file: 'src/types.ts',
+    type: 'ConfigData',
+    where: 'A config file as data: reeval.yml, for projects not written in TypeScript',
+  },
+  {
     name: 'from-worker',
     file: 'src/engine/protocol.ts',
     type: 'FromWorker',

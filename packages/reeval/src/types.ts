@@ -820,6 +820,25 @@ export type AnalysisConfig = {
   maxOutputTokens?: number
 }
 
+/** A profile as data: its defaults' environment without `extendEnvironment`. */
+export type ProfileData = Omit<Profile, 'defaults'> & {
+  defaults?: Omit<ProfileDefaults, 'environment'> & { environment?: EnvironmentFile }
+}
+
+/** An environment in a data config: its name and spec, as `defineEnvironment` takes them. */
+export type EnvironmentFile = EnvironmentSpec & { name: string }
+
+/**
+ * The config as a data file (`reeval.yml`), for projects not written in TypeScript: `EsConfig`
+ * with environments as data, model ids as strings and no callbacks.
+ * schema/plan/config.schema.json is its JSON Schema.
+ */
+export type ConfigData = Omit<EsConfig, 'environment' | 'profiles' | 'analysis'> & {
+  environment?: EnvironmentFile
+  profiles?: Record<string, ProfileData>
+  analysis?: Omit<AnalysisConfig, 'model'> & { model?: string }
+}
+
 export type EsConfig = {
   include?: string[]
   harness?: HarnessDescriptor | HarnessDescriptor[]
