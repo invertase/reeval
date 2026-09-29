@@ -4,7 +4,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { mergeOutcome } from '../../history/assemble.ts'
-import type { AttemptRecord, EvalEntry } from '../../history/types.ts'
+import type { AttemptRecord } from '../../history/types.ts'
 import { recordFileName } from '../../ids.ts'
 import { clip } from '../../text.ts'
 import type { EvalRecord, Outcome, TranscriptEvent } from '../../types.ts'
@@ -24,6 +24,8 @@ export type AttemptView = {
   turns: Array<{ prompt: string; text: string; status: string; steps: string[] }>
   /** Changed files, from the diff. */
   files: string[]
+  /** The workspace diff (`diff.patch`); empty when nothing changed. */
+  patch: string
 }
 
 const INPUT_KEYS = [
@@ -77,6 +79,8 @@ export function stepOf(event: TranscriptEvent): string | null {
 const steps = (events: TranscriptEvent[]) => events.flatMap((e) => stepOf(e) ?? [])
 
 const tail = (text: string, max: number) => (text.length <= max ? text : `…${text.slice(-max)}`)
+const head = (text: string, max: number) =>
+  text.length <= max ? text : `${text.slice(0, max)}\n… ${text.length - max} more characters`
 
 /** A worker's staged record, read the way the run will assemble it. */
 export function fromStaged(result: EvalResult, record: EvalRecord | null): AttemptView | null {
@@ -106,6 +110,7 @@ export function fromStaged(result: EvalResult, record: EvalRecord | null): Attem
       steps: steps(t.transcript),
     })),
     files: (record?.diff?.files ?? []).map((f) => f.path),
+    patch: record?.diff?.patch ?? '',
   }
 }
 
@@ -164,21 +169,8 @@ export async function fromRecorded(runDir: string, attempt: AttemptRecord): Prom
       ),
     })),
     files: attempt.changedFiles.map((f) => f.path),
+    patch: await read(attempt.files.diff?.path),
   }
-}
-
-/** A recorded eval's attempts on one harness (every harness when it's left out). */
-export async function recordedAttempts(
-  runDir: string,
-  entry: EvalEntry,
-  harness?: string,
-): Promise<AttemptView[]> {
-  const cells = new Set(
-    entry.cells.filter((c) => harness === undefined || c.harness === harness).map((c) => c.key),
-  )
-  return Promise.all(
-    entry.attempts.filter((a) => cells.has(a.cell)).map((a) => fromRecorded(runDir, a)),
-  )
 }
 
 /** A failed attempt and a passing one to read beside it: same cell when there is one, else the harness's other cell. */
@@ -228,7 +220,7 @@ export function listOutcomes(attempts: AttemptView[]) {
   }
 }
 
-/** `open_attempt`: one attempt's turns, steps (the first 40 and last 20), checks and verdicts. */
+/** `open_attempt`: one attempt's turns, steps (the first 40 and last 20), checks, verdicts and diff. */
 export function attemptSummary(a: AttemptView) {
   return {
     id: a.id,
@@ -251,12 +243,13 @@ export function attemptSummary(a: AttemptView) {
     })),
     judgements: a.judgements,
     files: a.files.slice(0, 50),
+    diff: head(a.patch, 3000),
   }
 }
 
 /**
  * `compare_attempts`: where a failed attempt's steps first differ from a passing one's, a few
- * steps either side, and the checks, verdicts and files that differ.
+ * steps either side, the checks, verdicts and files that differ, and the start of each diff.
  */
 export function divergence(failed: AttemptView, passed: AttemptView, window = 6) {
   const a = failed.turns.flatMap((t) => t.steps)
@@ -304,5 +297,6 @@ export function divergence(failed: AttemptView, passed: AttemptView, window = 6)
       onlyPassed: passed.files.filter((f) => !failed.files.includes(f)).slice(0, 30),
     },
     finalText: { failed: last(failed), passed: last(passed) },
+    diff: { failed: head(failed.patch, 1500), passed: head(passed.patch, 1500) },
   }
 }

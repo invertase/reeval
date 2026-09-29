@@ -66,7 +66,7 @@ export function noteTools(attempts: AttemptView[], maxChars: number) {
     }),
     open_attempt: tool({
       description:
-        "One attempt: each turn's prompt, steps (tool calls, edits, errors) and final message, its checks and verdicts.",
+        "One attempt: each turn's prompt, steps (tool calls, edits, errors) and final message, its checks, verdicts and diff.",
       inputSchema: z.object({ id: z.string().describe('An attempt id from list_attempts') }),
       execute: async ({ id }) => {
         const a = byId(id)
@@ -75,7 +75,7 @@ export function noteTools(attempts: AttemptView[], maxChars: number) {
     }),
     compare_attempts: tool({
       description:
-        "Where a failed attempt's steps first differ from a passing one's, and the checks, verdicts and files that differ.",
+        "Where a failed attempt's steps first differ from a passing one's, the checks, verdicts and files that differ, and each diff's start.",
       inputSchema: z.object({
         failed: z.string().describe('The failed attempt id'),
         passed: z.string().describe('The passing attempt id'),

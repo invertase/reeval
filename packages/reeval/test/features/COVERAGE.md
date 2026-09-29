@@ -138,7 +138,7 @@
 | Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio | ✓ 3 | — | — | — | — |
 | `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 6 | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
-| `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 7 | — | — | — | — |
+| `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | — |
 | `reeval studio` and `reeval studio build` | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 4 | — | — | — | — |
 | Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 9 | — | — | — | — |

@@ -2,7 +2,8 @@
 // lift, and `reeval analyze`. The facts come out exactly on two real dogfood histories (trimmed by
 // fixtures/analysis/trim.mjs), each verdict rule has a canary where the opposite data must flip it,
 // and the model step runs on a fake model that returns canned (and deliberately wrong) answers.
-// `analysis.agent`'s notes run on a fake model that calls the real tools through the AI SDK's loop.
+// `analysis.agent`'s notes run on a fake model that calls the real tools through the AI SDK's loop,
+// over real harness transcripts and diffs from the record corpus (test/support/real-runs.ts).
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import {
@@ -18,25 +19,28 @@ import { join, relative, sep } from 'node:path'
 import { describe, test } from 'node:test'
 import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { validate } from '../scripts/schema/validate.ts'
-import { noteTools } from '../src/analysis/agent/note.ts'
+import { noteTools, writeAgentNote } from '../src/analysis/agent/note.ts'
 import {
   type AttemptView,
+  attemptSummary,
   divergence,
-  failedVsPassed,
+  fromRecorded,
   listOutcomes,
-  recordedAttempts,
   stagedAttempts,
 } from '../src/analysis/agent/tools.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { recordFileName } from '../src/ids.ts'
+import { fakeAnalysis } from '../src/judge.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
 import { type AnalysisNote, analysisDataPath } from '../src/view/analysis.ts'
 import { contrastEffort, effortLabel } from '../src/view/effort.ts'
+import { parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
+import { REAL_HARNESSES, type RealAttempt, realAttempts } from './support/real-runs.ts'
 
 type Row = Record<string, unknown>
 const FIXTURES = join(pkgRoot, 'test/fixtures/analysis')
@@ -786,6 +790,64 @@ function staged(
   }
 }
 
+const realRunDir = (r: RealAttempt) =>
+  join(pkgRoot, 'test/fixtures/records', r.entry, 'evals/.history', r.runId)
+
+/** A real recorded attempt as its worker staged it: turns from transcript.jsonl, and diff.patch. */
+function stageReal(dir: string, r: RealAttempt, as: { cell: string; n: number }): EvalResult {
+  const lines = parseTranscript(r.transcript ? readFileSync(r.transcript, 'utf8') : '')
+  const run = realRunDir(r)
+  const record = {
+    outcome: r.attempt.outcome,
+    error: r.attempt.error,
+    turns: r.attempt.turns.map((t, i) => ({
+      ...t,
+      transcript: lines.filter((l) => l.turn === i && l.type !== 'prompt' && l.type !== 'turn-end'),
+    })),
+    diff: r.diff ? { patch: readFileSync(r.diff, 'utf8'), files: r.attempt.changedFiles } : null,
+    checks: r.attempt.checks.map((c) => ({
+      command: c.command,
+      exitCode: c.exitCode,
+      durationMs: c.durationMs,
+      stdout: c.log ? readFileSync(join(run, c.log.path), 'utf8') : '',
+      stderr: '',
+    })),
+    judgements: r.attempt.judgements,
+  }
+  const key = `${r.eval.id} # ${as.cell}#${as.n}`
+  mkdirSync(join(dir, 'evals'), { recursive: true })
+  writeFileSync(join(dir, 'evals', recordFileName(key)), JSON.stringify(record))
+  const cell = r.eval.cells.find((c) => c.key === r.attempt.cell)
+  return {
+    id: r.eval.id,
+    key,
+    file: r.eval.file,
+    group: r.eval.group,
+    name: r.eval.name,
+    attempt: { cell: { ...cell, key: as.cell }, n: as.n } as EvalResult['attempt'],
+    state: r.attempt.outcome === 'pass' ? 'passed' : 'failed',
+    durationMs: r.attempt.durationMs,
+    errors: r.attempt.error ? [r.attempt.error.message] : [],
+    formattedErrors: [],
+    meta: undefined,
+  }
+}
+
+/**
+ * One real harness's contract run as a note's attempts: each eval is a cell, and its canary (which
+ * fails before the agent runs) that cell's second run.
+ */
+async function contractGroup(harness: string): Promise<AttemptView[]> {
+  const rows = realAttempts('real-contract').filter((r) => r.harness === harness)
+  return Promise.all(
+    rows.map(async (r) => {
+      const cell = `${harness}/${r.eval.name.replace(/ canary$/, '')}`
+      const n = r.eval.name.endsWith(' canary') ? 2 : 1
+      return { ...(await fromRecorded(realRunDir(r), r.attempt)), id: `${cell}#${n}`, cell, n }
+    }),
+  )
+}
+
 const AGENT_CONFIG = (analysis: string) => `import { appendFileSync } from 'node:fs'
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -828,7 +890,7 @@ const notesOf = (dir: string) => {
 }
 
 describe('analysis.agent: a note per eval and harness during reeval run', () => {
-  test('the tools pair each failed attempt with a passing one and find where their steps diverge', async () => {
+  test('on made-up staged records, missing and cut-short ones too, the tools pair failures and find where steps diverge', async () => {
     const dir = join(tempDir('notes-staging'), 'staging')
     const results = [
       staged(dir, 'fake/-/fake', 1, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
@@ -907,23 +969,143 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     )
   })
 
-  test('recorded runs read as the same attempts, so the analyst can replay a corpus run', async () => {
-    const root = join(pkgRoot, 'test/fixtures/records/fake-matrix/evals/.history')
-    const runId = '20260927T160436Z_82137cd_cursor-agent_j7cm'
-    const record = JSON.parse(readFileSync(join(root, `${runId}.json`), 'utf8'))
-    const entry = record.evals.find((e: { name: string }) => e.name === 'greets in the house style')
-    const attempts = await recordedAttempts(join(root, runId), entry, 'fake')
-    assert.deepEqual(
-      attempts.map((a) => [a.id, a.outcome]),
-      [
-        ['fake/-/fake#1', 'fail'],
-        ['fake/with-house-greeting/fake#1', 'pass'],
-      ],
+  test('real harness transcripts and diffs read the same from a staged record and a recorded run', async () => {
+    const dir = join(tempDir('notes-real-staging'), 'staging')
+    const reached = realAttempts().filter((r) => r.transcript)
+    assert.deepEqual([...new Set(reached.map((r) => r.harness))].sort(), [...REAL_HARNESSES].sort())
+    for (const r of reached) {
+      const recorded = await fromRecorded(realRunDir(r), r.attempt)
+      const [staged] = await stagedAttempts(dir, [
+        stageReal(dir, r, { cell: r.attempt.cell, n: r.attempt.n }),
+      ])
+      const what = `${r.entry} ${r.harness} ${r.eval.name}`
+      assert.deepEqual(staged, recorded, what)
+      assert.deepEqual(
+        recorded.files,
+        r.attempt.changedFiles.map((f) => f.path),
+        what,
+      )
+      assert.equal(recorded.patch, r.diff ? readFileSync(r.diff, 'utf8') : '', what)
+    }
+    for (const harness of REAL_HARNESSES) {
+      const steps = await Promise.all(
+        reached
+          .filter((r) => r.harness === harness)
+          .map(async (r) =>
+            (await fromRecorded(realRunDir(r), r.attempt)).turns.flatMap((t) => t.steps),
+          ),
+      )
+      assert.ok(
+        steps.filter((s) => s.length > 0).length >= 6,
+        `${harness}: most attempts used tools`,
+      )
+    }
+    const edits = reached.filter(
+      (r) => r.entry === 'real-contract' && r.eval.name === 'edit and run',
     )
-    assert.ok(attempts.every((a) => a.turns.length > 0 && a.turns[0]?.steps.length))
-    assert.deepEqual(failedVsPassed(attempts), [
-      { failed: 'fake/-/fake#1', passed: 'fake/with-house-greeting/fake#1', match: 'harness' },
-    ])
+    for (const r of edits) {
+      const view = await fromRecorded(realRunDir(r), r.attempt)
+      const steps = view.turns.flatMap((t) => t.steps)
+      assert.ok(steps.includes('edit (modify): notes.txt'), `${r.harness}: ${steps.join(' | ')}`)
+      assert.ok(
+        steps.some((s) => s.includes('echo contract-$((6*7))')),
+        r.harness,
+      )
+      assert.match(attemptSummary(view).diff, /^\+\+\+ b\/notes\.txt$/m, r.harness)
+    }
+  })
+
+  test('on real traces, a failed canary pairs with its passing eval and diverges at its first step', async () => {
+    for (const harness of REAL_HARNESSES) {
+      const attempts = await contractGroup(harness)
+      const listed = listOutcomes(attempts)
+      assert.equal(listed.attempts.length, 12, harness)
+      assert.deepEqual(
+        listed.pairs.map((p) => [p.failed, p.passed, p.match]),
+        [...new Set(attempts.map((a) => a.cell))].map((cell) => [`${cell}#2`, `${cell}#1`, 'cell']),
+        harness,
+      )
+      const failed = attempts.find((a) => a.id === `${harness}/edit and run#2`) as AttemptView
+      const passed = attempts.find((a) => a.id === `${harness}/edit and run#1`) as AttemptView
+      const d = divergence(failed, passed)
+      assert.deepEqual(
+        [d.stepsInCommon, d.divergedAt, d.failedSteps],
+        [0, 1, []],
+        `${harness}: the canary never reached the agent`,
+      )
+      assert.deepEqual(d.passedSteps, passed.turns[0]?.steps.slice(0, 6), harness)
+      assert.deepEqual(d.files, { onlyFailed: [], onlyPassed: ['notes.txt'] }, harness)
+      assert.match(d.diff.passed, /^\+\+\+ b\/notes\.txt$/m, harness)
+    }
+    // Two passing runs of one eval on a real harness: equal up to the first differing step.
+    for (const harness of REAL_HARNESSES) {
+      const [a, b] = await Promise.all(
+        realAttempts('real-e2e-pairs')
+          .filter((r) => r.harness === harness)
+          .map((r) => fromRecorded(realRunDir(r), r.attempt)),
+      )
+      const x = (a as AttemptView).turns.flatMap((t) => t.steps)
+      const y = (b as AttemptView).turns.flatMap((t) => t.steps)
+      const d = divergence(a as AttemptView, b as AttemptView)
+      assert.deepEqual(x.slice(0, d.stepsInCommon), y.slice(0, d.stepsInCommon), harness)
+      if (d.divergedAt === null) assert.deepEqual(x, y, harness)
+      else assert.notEqual(x[d.stepsInCommon], y[d.stepsInCommon], harness)
+    }
+  })
+
+  test('the analyst replays each real harness\u2019s contract run on the fake model, within its input budget', async () => {
+    for (const harness of REAL_HARNESSES) {
+      const attempts = await contractGroup(harness)
+      const note = (maxInputTokens: number) =>
+        writeAgentNote({
+          model: {
+            name: 'fake',
+            route: 'fake',
+            fake: fakeAnalysis({ note: (input) => JSON.stringify(input) }),
+          },
+          runId: 'replay',
+          evalId: 'the harness contract',
+          harness,
+          attempts,
+          maxInputTokens,
+          maxOutputTokens: 8000,
+        })
+      const full = await note(20_000)
+      assert.equal(full.error, undefined, harness)
+      assert.deepEqual(
+        full.attempts,
+        attempts.map((a) => a.id),
+        harness,
+      )
+      const input = JSON.parse(full.text)
+      assert.deepEqual(
+        input.attempts.map((a: { outcome: string }) => a.outcome),
+        attempts.map((a) => a.outcome),
+        harness,
+      )
+      assert.deepEqual(
+        input.compared,
+        listOutcomes(attempts)
+          .pairs.slice(0, 3)
+          .map((p) => ({
+            failed: p.failed,
+            passed: p.passed,
+            // The canary has no steps, so they part at the passing run's first one, if it has any.
+            divergedAt: attempts.find((a) => a.id === p.passed)?.turns.some((t) => t.steps.length)
+              ? 1
+              : null,
+          })),
+        `${harness}: three failed-vs-passing pairs, compared on real traces`,
+      )
+      // At the smallest budget the listing fits, then the comparisons run out; the note is still written.
+      const tight = await note(1000)
+      const compared = JSON.parse(tight.text).compared
+      assert.equal(tight.error, undefined, harness)
+      assert.ok(
+        compared.length > 0 && compared.length < 3,
+        `${harness}: ${compared.length} compared`,
+      )
+    }
   })
 
   test('a fake run writes one note per eval and harness, with its attempt ids; outcomes stand', async () => {
