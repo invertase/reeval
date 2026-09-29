@@ -57,6 +57,12 @@ const INTENDED = [
     fields: ['stderr'],
     why: "A broken tsconfig is reported without Vite's `Transform failed with 1 error: [TSCONFIG_ERROR]` prefix, and invalid JSON in Node's words.",
   },
+  {
+    file: 'example.test.ts.jsonl',
+    key: /^hello-copy run --config reeval\.fake\.config\.ts$/,
+    fields: ['live'],
+    why: 'The fake config turns on analysis.agent, so the run prints where it wrote its notes (#149).',
+  },
 ]
 
 /** An attempt's progress line, which the Vitest engine could drop (see `onlyProgressMissing`). */
