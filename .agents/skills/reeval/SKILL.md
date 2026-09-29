@@ -243,6 +243,14 @@ group(
   none, `reeval run` exits 2 at plan time while `--dry-run` still lists them. A profile that
   leaves only the baseline drops them (`questions off (profile …)`). Keep deterministic checks
   for pass or fail, and ask questions only about quality between arms.
+- Questions are answered on the host once all of an eval's attempts end, from their diffs.
+  Attempts that failed their checks (a judge failure doesn't count) are left out of the pairs:
+  a question on a compare whose baseline is expected to fail gets no pairs, so ask it where
+  both arms can pass. Each pair goes to the model twice, order swapped, labelled A and B; the
+  record's `evals[].answers` has every vote and each side's `wins`/`n` over decided votes, per
+  cut (`within` a harness, arm vs arm; `across` harnesses, agent vs agent). A model error is
+  stored on the answer as `error` and warned about; it never changes an outcome. Test with
+  `fakeAnalysis({ vote: 'A' | 'B' | 'tie' | (pair) => … | { error } })`.
 
 ## Sandboxes
 

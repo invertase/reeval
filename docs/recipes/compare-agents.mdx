@@ -160,6 +160,7 @@ There's no Claude Code run on this page: the Anthropic account behind these capt
 - **Two settings of one model:** `cursor({ model: 'composer-2.5', params: { fast: 'false' }, id: 'cursor:composer-2.5-slow' })` next to the fast one. Give same-kind harnesses distinct ids.
 - **Add an agent to one group:** `{ harness: (inherited) => [...inherited, claude] }` extends the list instead of replacing it.
 - **Keep PRs cheap:** a `pr` profile with `limit: { harness: ['cursor:composer-2.5'] }` runs one agent on PRs and all of them nightly (see [Nightly matrix and Pages](/recipes/nightly-pages)).
+- **Ask which agent did better:** a `question` on the compare judges the agents' diffs against each other after the run, per arm and run, as `examples/hello`'s `questions.eval.ts` does on Cursor and pi (`--profile questions`). Its win rates annotate; see [Ask questions](/guide/compare#ask-questions).
 - **Rate limits:** `antigravity({ model, maxConcurrent: 2 })` caps that agent's attempts at once.
 - **A bigger suite:** the [dogfood case study](/recipes/case-study-dogfood) ran two skills on three harder evals.
 

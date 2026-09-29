@@ -35,7 +35,7 @@ jobs:
           shopt -s extglob
           node --test --test-timeout=600000 --experimental-strip-types --no-warnings \
             --test-shard=${{ matrix.shard }} \
-            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real).test.ts
+            test/!(features|docker|docker-antigravity|studio|pack|contract|e2e-real|questions-real).test.ts
       - name: sandbox-docker (without containers) and the harness packages
         if: matrix.shard == '1/4'
         run: |

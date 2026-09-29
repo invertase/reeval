@@ -13,7 +13,7 @@ export type ResolvedAnalysisModel = {
   fake?: FakeAnalysisModel
 }
 
-const isFake = (m: unknown): m is FakeAnalysisModel =>
+export const isFake = (m: unknown): m is FakeAnalysisModel =>
   typeof m === 'object' && m !== null && (m as FakeAnalysisModel).kind === 'fake-analysis'
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
@@ -103,32 +103,39 @@ export function resolveAnalysisModel(
   }
 }
 
-/** A language model that answers with the fake's output, through the AI SDK's own parsing. */
-function fakeModel(fake: FakeAnalysisModel, digest: Digest): LanguageModel {
-  if (fake.output === undefined) {
-    throw new Error('fakeAnalysis() has no output, so reeval analyze has no answer to return')
-  }
-  const output = typeof fake.output === 'function' ? fake.output(digest) : fake.output
-  const text = typeof output === 'string' ? output : JSON.stringify(output)
+/** A language model that answers `text`, through the AI SDK's own parsing, or throws `error`. */
+export function cannedModel(answer: { text: string } | { error: string }): LanguageModel {
   return {
     specificationVersion: 'v4',
     provider: 'fake',
     modelId: 'fake-analysis',
     supportedUrls: {},
-    doGenerate: async () => ({
-      content: [{ type: 'text', text }],
-      finishReason: { unified: 'stop', raw: 'stop' },
-      usage: {
-        inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
-        outputTokens: { total: 0, text: 0, reasoning: 0 },
-      },
-      warnings: [],
-      response: { modelId: 'fake-analysis' },
-    }),
+    doGenerate: async () => {
+      if ('error' in answer) throw new Error(answer.error)
+      return {
+        content: [{ type: 'text', text: answer.text }],
+        finishReason: { unified: 'stop', raw: 'stop' },
+        usage: {
+          inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 0, text: 0, reasoning: 0 },
+        },
+        warnings: [],
+        response: { modelId: 'fake-analysis' },
+      }
+    },
     doStream: async () => {
       throw new Error('the fake analysis model does not stream')
     },
   } as unknown as LanguageModel
+}
+
+/** A language model that answers with the fake's output. */
+function fakeModel(fake: FakeAnalysisModel, digest: Digest): LanguageModel {
+  if (fake.output === undefined) {
+    throw new Error('fakeAnalysis() has no output, so reeval analyze has no answer to return')
+  }
+  const output = typeof fake.output === 'function' ? fake.output(digest) : fake.output
+  return cannedModel({ text: typeof output === 'string' ? output : JSON.stringify(output) })
 }
 
 async function languageModel(model: ResolvedAnalysisModel, digest: Digest): Promise<LanguageModel> {

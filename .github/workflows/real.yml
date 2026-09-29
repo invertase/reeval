@@ -6,7 +6,8 @@
 #                        and the CLI end to end, on the pinned agent versions
 #   contract (latest)    the version-drift leg: the same but the e2e, on the newest agy, @cursor/sdk,
 #                        OpenCode, Goose and pi, and the newest OpenCode's providers re-probed
-#   real agents (Cursor) examples/hello's smoke profile
+#   real agents (Cursor) examples/hello's smoke profile, then its compare questions on a real
+#                        model (test/questions-real.test.ts)
 # PRs get the pinned contract only. Budgets: each reeval run's budget.attempts, a ledger per job
 # (contract.yml) and the timeouts below.
 name: real
@@ -80,10 +81,14 @@ jobs:
     if: >-
       !cancelled() && needs.gate.result == 'success' && github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+      # The questions test's 4 attempts (2 on Cursor, 2 on pi), reserved before it starts; the
+      # smoke's own budget.attempts caps it.
+      REEVAL_REAL_ATTEMPT_BUDGET: '4'
+      REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
     steps:
       # Eval code runs on the host with the keys, so the job keeps no git token.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -96,6 +101,16 @@ jobs:
       - name: examples/hello smoke
         working-directory: examples/hello
         run: node ../../packages/reeval/dist/cli.js run --profile smoke
+      # examples/hello's questions profile: its compare question answered by a real model. Checks
+      # the record's structure only (both orders of every pair, rates, no position bias), no retries.
+      - name: compare questions (real model)
+        if: ${{ !cancelled() }}
+        working-directory: packages/reeval
+        env: { REEVAL_TEST_REAL: '1' }
+        run: node --test --test-timeout=1800000 --experimental-strip-types --no-warnings test/questions-real.test.ts
+      - if: always()
+        run: |
+          [ -f "$REEVAL_REAL_LEDGER" ] && { echo '### Real attempts reserved'; echo; echo '```'; cat "$REEVAL_REAL_LEDGER"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
       - if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

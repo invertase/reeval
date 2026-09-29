@@ -668,6 +668,42 @@ export type CompareQuestion = string | { question: string; model?: string }
 /** A compare question as planned: its text, and the model it names itself, if any. */
 export type PlannedQuestion = { question: string; model?: string }
 
+/** Which pairs a vote is over: two arms on one harness, or two harnesses on one arm. */
+export type CompareCut = 'within' | 'across'
+
+/** One judgement of one pair of attempts, in one order. */
+export type PairVote = {
+  question: string
+  cut: CompareCut
+  /** Set on a within-harness pair: the harness both arms ran on. */
+  harness?: string
+  /** Set on a cross-harness pair: the arm (environment) both harnesses ran. */
+  arm?: string
+  /** The run number both attempts share, from 1. */
+  run: number
+  /** The two sides by name: arms within a harness, harness ids across. */
+  a: string
+  b: string
+  /** `a`, `b` or `'tie'`, mapped back from the blinded labels. */
+  winner: string | 'tie'
+  /** True for the repeat that showed `b` first. */
+  swapped: boolean
+}
+
+/** A compare question's answer: every vote, and each side's wins over decided votes per cut. */
+export type CompareAnswer = {
+  question: string
+  /** `'provider/model'`, or `fake` for `fakeAnalysis()`. */
+  model: string
+  /** The model id the provider says served the calls, when it reports one. */
+  resolvedModel?: string
+  votes: PairVote[]
+  /** Wins over decided pairs, per named side, per cut. */
+  rates: Array<{ cut: CompareCut; name: string; wins: number; n: number }>
+  /** Why some or all of its votes are missing: the model call failed. Outcomes never change. */
+  error?: string
+}
+
 export type PinnableKey = 'harness' | 'runs' | 'compare'
 
 /**
@@ -802,7 +838,18 @@ export type FakeAnalysisModel = {
   output?: unknown | ((digest: unknown) => unknown)
   /** `analysis.agent`'s note on each eval and harness: text, a function of its tools' results, or an error to throw. */
   note?: string | ((input: FakeNoteInput) => string) | { error: string }
+  /**
+   * How it answers compare questions: a fixed pick, a function of the blinded pair, or
+   * `{ error }` to fail every call. Default `'tie'`.
+   */
+  vote?: FakeVote | ((pair: BlindPair) => FakeVote) | { error: string }
 }
+
+/** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
+export type FakeVote = 'A' | 'B' | 'tie'
+
+/** What a compare question's model is shown: the prompt, and the two diffs in slot order. */
+export type BlindPair = { question: string; prompt: string; a: string; b: string }
 
 /** `reeval analyze`: a language model (not an evaluation model) and what matters in this project. */
 export type AnalysisConfig = {
