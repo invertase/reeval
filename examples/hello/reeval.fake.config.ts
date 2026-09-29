@@ -43,6 +43,9 @@ export default defineConfig({
     model: fakeAnalysis({
       note: ({ harness, attempts }) =>
         `${attempts.filter((a) => a.outcome === 'pass').length} of ${attempts.length} attempts passed on ${harness}.`,
+      // skill.eval.ts's compare question: the attempt whose greet.js says Ahoy wins.
+      vote: (p) =>
+        p.a.includes('Ahoy') === p.b.includes('Ahoy') ? 'tie' : p.a.includes('Ahoy') ? 'A' : 'B',
     }),
   },
   timeout: '2m',
