@@ -10,6 +10,7 @@ import { test } from 'node:test'
 import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { fits, validate } from '../scripts/schema/validate.ts'
 import { ratesOf } from '../src/compare/pairs.ts'
+import { answersLabel } from '../src/history/summary.ts'
 import type { PairVote } from '../src/types.ts'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 import { harnesses, reserveAttempts } from './support/harnesses.ts'
@@ -27,7 +28,7 @@ const pairKey = (v: PairVote) => [v.cut, v.harness ?? v.arm, v.run, v.a, v.b].jo
 test('examples/hello --profile questions: every pair is voted in both orders', {
   skip,
   timeout: 1_800_000,
-}, async () => {
+}, async (t) => {
   for (const id of ['cursor', 'pi'] as const) {
     const row = harnesses.find((r) => r.id === id)
     assert.ok(row)
@@ -56,6 +57,8 @@ test('examples/hello --profile questions: every pair is voted in both orders', {
   assert.equal(e.answers?.length, 1, 'one answer for the one question')
   const [answer] = e.answers ?? []
   assert.ok(answer)
+  t.diagnostic(`${e.attempts.map((a) => `${a.id} ${a.outcome}`).join(', ')}`)
+  t.diagnostic(answersLabel(answer))
   const doc = schema('run-record')
   assert.ok(fits(doc, { $ref: '#/$defs/CompareAnswer' }, answer), 'the answer fits CompareAnswer')
   assert.equal(answer.error, undefined, `the model call failed: ${answer.error}`)

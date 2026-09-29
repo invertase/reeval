@@ -4,7 +4,8 @@ import { composer, pim } from './harnesses.ts'
 
 // A compare question over two agents and two arms. Any greeting that names the person passes, so
 // every attempt can be in a pair: within each harness the question compares the arms, and across
-// harnesses it compares Cursor and pi on the same arm. Its win rates annotate; the check gates.
+// harnesses it compares Cursor and pi on the same arm. The model sees only the diffs (not the
+// skill), so the question asks about what they show. Its win rates annotate; the check gates.
 // The nightly runs it with --profile questions (test/questions-real.test.ts).
 const namesAda = `node -e "import('./greet.js').then((m) => {
   const greet = m.greet ?? m.default?.greet ?? m.default
@@ -22,7 +23,7 @@ evaluate(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: 'Which greeting follows our house greeting style more closely?',
+      question: 'Which greet.js handles a missing or empty name better?',
     },
   },
   async (t) => {
