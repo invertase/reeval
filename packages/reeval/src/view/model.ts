@@ -336,6 +336,44 @@ export function cellRows(e: EvalEntry): CellRow[] {
   }))
 }
 
+/** One side's wins over the decided votes it was in; `rate` is null when none decided. */
+export type AnswerRate = { name: string; wins: number; n: number; rate: number | null }
+
+export type AnswerRow = {
+  question: string
+  /** The model that answered: as served, when the provider said, else as configured. */
+  model: string
+  votes: number
+  ties: number
+  /** Arms against each other on one harness, then harnesses against each other on one arm. */
+  within: AnswerRate[]
+  across: AnswerRate[]
+  /** Why some or all of its votes are missing: the model call failed. */
+  error: string | null
+  /** No votes and no error: no pair had both sides pass their checks. */
+  noPairs: boolean
+}
+
+/** One row per compare question, with each cut's win rates in the record's order. */
+export function answerRows(e: Pick<EvalEntry, 'answers'>): AnswerRow[] {
+  return (e.answers ?? []).map((a) => {
+    const rates = (cut: string): AnswerRate[] =>
+      a.rates
+        .filter((r) => r.cut === cut)
+        .map((r) => ({ name: r.name, wins: r.wins, n: r.n, rate: r.n ? r.wins / r.n : null }))
+    return {
+      question: a.question,
+      model: a.resolvedModel ?? a.model,
+      votes: a.votes.length,
+      ties: a.votes.filter((v) => v.winner === 'tie').length,
+      within: rates('within'),
+      across: rates('across'),
+      error: a.error ?? null,
+      noPairs: a.votes.length === 0 && a.error === undefined,
+    }
+  })
+}
+
 /** Whether an eval needs the cells table: several cells, or several runs of one. */
 export const isMatrix = (e: Pick<EvalEntry, 'cells'>) =>
   e.cells.length > 1 || e.cells.some((c) => c.runs > 1)

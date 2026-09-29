@@ -16,13 +16,17 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import {
+  type AnswerRate,
+  type AnswerRow,
   activityLabel,
+  answerRows,
   type CellRow,
   cellRows,
   type EvalEntry,
   effortSummary,
   evalTree,
   formatDuration,
+  formatPercent,
   formatRatio,
   formatUsage,
   isMatrix,
@@ -324,9 +328,69 @@ function Effort({ row }: { row: CellRow }) {
   )
 }
 
+function RateRows({ label, rates }: { label: string; rates: AnswerRate[] }) {
+  if (rates.length === 0) return null
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      {rates.map((r) => (
+        <div
+          key={r.name}
+          className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto] items-center gap-3 text-xs"
+        >
+          <span className="truncate font-mono" title={r.name}>
+            {r.name}
+          </span>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            {r.rate !== null ? (
+              <div className="h-full bg-pass" style={{ width: `${r.rate * 100}%` }} />
+            ) : null}
+          </div>
+          <span className="tabular text-right">
+            <span className="font-medium">{formatPercent(r.rate)}</span>
+            <span className="ml-1.5 text-muted-foreground">
+              {r.wins}/{r.n}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** The compare's questions: each side's win rate over decided votes, per cut. They never gate. */
+function Questions({ rows }: { rows: AnswerRow[] }) {
+  return (
+    <section className="space-y-2" data-questions>
+      <h3 className="text-sm font-medium">Questions</h3>
+      <div className="divide-y overflow-hidden rounded-lg border">
+        {rows.map((q) => (
+          <div key={q.question} className="space-y-2.5 px-3.5 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+              <p className="min-w-0 text-sm">{q.question}</p>
+              <span className="font-mono text-[11px] text-muted-foreground">{q.model}</span>
+            </div>
+            <RateRows label="Within a harness" rates={q.within} />
+            <RateRows label="Across harnesses" rates={q.across} />
+            {q.error !== null ? (
+              <p className="font-mono text-xs break-words text-infra">failed: {q.error}</p>
+            ) : null}
+            <p className="text-[11px] text-muted-foreground">
+              {q.noPairs
+                ? 'No pairs to judge: attempts that failed their checks are left out'
+                : `${plural(q.votes, 'vote')}, ${plural(q.ties, 'tie')}`}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const rows = cellRows(entry)
   const matrix = isMatrix(entry)
+  const answers = answerRows(entry)
   return (
     <div className="space-y-5">
       <div>
@@ -362,6 +426,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
           <CellsTable rows={rows} runId={record.runId} slug={entry.slug} />
         </section>
       ) : null}
+
+      {answers.length ? <Questions rows={answers} /> : null}
 
       <section className="space-y-2">
         <h3 className="text-sm font-medium">{plural(entry.attempts.length, 'attempt')}</h3>
