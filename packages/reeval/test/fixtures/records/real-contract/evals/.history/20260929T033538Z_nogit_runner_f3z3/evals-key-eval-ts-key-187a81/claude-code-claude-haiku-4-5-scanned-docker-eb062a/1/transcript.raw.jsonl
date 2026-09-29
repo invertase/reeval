@@ -1,0 +1,30 @@
+{"turn":0,"ms":531,"part":{"type":"start"}}
+{"turn":0,"ms":2457,"part":{"type":"start-step","request":{},"warnings":[]}}
+{"turn":0,"ms":2458,"part":{"type":"reasoning-start","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2"}}
+{"turn":0,"ms":2458,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":"The"}}
+{"turn":0,"ms":2493,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" user is asking me to reply"}}
+{"turn":0,"ms":2514,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" with the"}}
+{"turn":0,"ms":2543,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" single word \"OK\" and"}}
+{"turn":0,"ms":2568,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" explicitly"}}
+{"turn":0,"ms":2607,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" instruct"}}
+{"turn":0,"ms":2620,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":"ing"}}
+{"turn":0,"ms":2646,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" me not to run any tools"}}
+{"turn":0,"ms":2688,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":". This is"}}
+{"turn":0,"ms":2699,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" straight"}}
+{"turn":0,"ms":2725,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":"forward - they just"}}
+{"turn":0,"ms":2752,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" want me to acknowledge that I"}}
+{"turn":0,"ms":2780,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":"'ve"}}
+{"turn":0,"ms":2805,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" read"}}
+{"turn":0,"ms":2829,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" and"}}
+{"turn":0,"ms":2864,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" understood the system"}}
+{"turn":0,"ms":2887,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" rem"}}
+{"turn":0,"ms":2933,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":"inders and"}}
+{"turn":0,"ms":2935,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" context"}}
+{"turn":0,"ms":2970,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":" setup"}}
+{"turn":0,"ms":2987,"part":{"type":"reasoning-delta","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2","text":"."}}
+{"turn":0,"ms":3040,"part":{"type":"reasoning-end","id":"ec3ec736-c5e4-4c0b-a7c8-d9f0cfd6e6f2"}}
+{"turn":0,"ms":3040,"part":{"type":"text-start","id":"57221062-b5cd-436c-be74-cfd5393a6ea9"}}
+{"turn":0,"ms":3043,"part":{"type":"text-delta","id":"57221062-b5cd-436c-be74-cfd5393a6ea9","text":"OK"}}
+{"turn":0,"ms":3089,"part":{"type":"text-end","id":"57221062-b5cd-436c-be74-cfd5393a6ea9"}}
+{"turn":0,"ms":3109,"part":{"type":"finish-step","finishReason":"stop","rawFinishReason":"stop","usage":{"inputTokens":21355,"inputTokenDetails":{"noCacheTokens":10,"cacheReadTokens":18501,"cacheWriteTokens":2844},"outputTokens":62,"outputTokenDetails":{"textTokens":62},"totalTokens":21417},"response":{"id":"hCD4DuPow9TJKioV-0","timestamp":"2026-09-29T03:36:35.425Z","modelId":"claude-haiku-4-5","messages":[]},"performance":{"effectiveOutputTokensPerSecond":0,"effectiveTotalTokensPerSecond":0,"stepTimeMs":0,"responseTimeMs":0,"toolExecutionMs":{}}}}
+{"turn":0,"ms":3155,"part":{"type":"finish","finishReason":"stop","rawFinishReason":"stop","totalUsage":{"inputTokens":21355,"inputTokenDetails":{"noCacheTokens":10,"cacheReadTokens":18501,"cacheWriteTokens":2844},"outputTokens":62,"outputTokenDetails":{"textTokens":62},"totalTokens":21417},"providerMetadata":{"claude-code":{"costUsd":0.0057251,"sessionId":"e3229f8f-e2b7-47ef-aa6e-422dccaa92c5"}}}}

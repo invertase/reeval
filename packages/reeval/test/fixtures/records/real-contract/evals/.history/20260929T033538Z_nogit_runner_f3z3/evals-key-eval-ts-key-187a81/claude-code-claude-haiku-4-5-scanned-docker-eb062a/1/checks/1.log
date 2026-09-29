@@ -1,0 +1,7 @@
+$ node ~/.reeval-contract/scan.mjs '[REDACTED]'
+exit 0
+--- stdout
+{"files":10590,"bytes":62268319,"hits":[]}
+--- stderr
+(node:1404) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)

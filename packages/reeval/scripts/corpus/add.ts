@@ -6,9 +6,10 @@
 //     records scripts/corpus/project (the fake harness: a compare, judges, a failure, an infra
 //     error, todo and skipped evals, a budget-stopped run and a saved analysis) with this build
 //
-//   pnpm --filter reeval corpus:add <name> --from <project> [<runId>…] [--note "why"]
-//     copies recorded runs (every one, or those named), their artifacts and the evals they ran
-//     from another project's history folder, e.g. runs on real harnesses
+//   pnpm --filter reeval corpus:add <name> --from <project> [--from <project>…] [<runId>…] [--note "why"]
+//     copies runs (every one, or those named), their artifacts and the evals they ran from other
+//     projects, e.g. runs on real harnesses: recorded runs from evals/.history, and runs never
+//     recorded (the harness contract's) from .reeval/runs
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   cpSync,
@@ -30,15 +31,16 @@ const PACKAGE_DIR = fileURLToPath(new URL('../../', import.meta.url))
 const RECIPE = join(PACKAGE_DIR, 'scripts/corpus/project')
 const CORPUS = join(PACKAGE_DIR, 'test/fixtures/records')
 const HISTORY = 'evals/.history'
+const SCRATCH = '.reeval/runs'
 const RUN_FILE = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}\.json$/
 
 /** The corpus's own config: enough for every reader, and nothing that needs a key or Docker. */
-const config = (note: string, es: string, commit: string) => `import { defineConfig } from 'reeval'
+const config = (note: string, recordedBy: string) => `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
-// A record corpus entry (${note}), recorded by reeval ${es} at ${commit}.
+// A record corpus entry (${note}), recorded by ${recordedBy}.
 // Don't re-record it: test/corpus.test.ts reads it to prove this shape still loads.
 export default defineConfig({
   harness: fakeHarness(),
@@ -90,20 +92,35 @@ function recordRecipe(): string {
   return dir
 }
 
+const runFiles = (dir: string) =>
+  existsSync(dir) ? readdirSync(dir).filter((n) => RUN_FILE.test(n)) : []
+
 const runsIn = (project: string) =>
-  readdirSync(join(project, HISTORY))
-    .filter((n) => RUN_FILE.test(n))
+  runFiles(join(project, HISTORY))
     .map((n) => n.slice(0, -5))
     .sort()
+
+type Source = { project: string; dir: string; runId: string }
+
+/** Each run in a project: recorded ones from its history, the rest from its scratch runs. */
+function sourcesIn(project: string): Source[] {
+  const found = new Map<string, Source>()
+  for (const folder of [SCRATCH, HISTORY]) {
+    const dir = join(project, folder)
+    for (const n of runFiles(dir))
+      found.set(n.slice(0, -5), { project, dir, runId: n.slice(0, -5) })
+  }
+  return [...found.values()]
+}
 
 function main(): number {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
-    options: { from: { type: 'string' }, note: { type: 'string' } },
+    options: { from: { type: 'string', multiple: true }, note: { type: 'string' } },
   })
   const [name, ...only] = positionals
   if (!name || !/^[a-z0-9][a-z0-9-]*$/.test(name)) {
-    process.stderr.write('usage: corpus:add <name> [--from <project> [<runId>…]] [--note "why"]\n')
+    process.stderr.write('usage: corpus:add <name> [--from <project>… [<runId>…]] [--note "why"]\n')
     return 2
   }
   const target = join(CORPUS, name)
@@ -117,38 +134,52 @@ function main(): number {
     process.stderr.write('Build reeval first: pnpm build\n')
     return 2
   }
-  const project = values.from ? resolve(values.from) : recordRecipe()
-  const history = join(project, HISTORY)
-  const runs = runsIn(project).filter((r) => !only.length || only.includes(r))
-  if (!runs.length) {
+  const from = (values.from ?? []).map((p) => resolve(p))
+  const projects = from.length ? from : [recordRecipe()]
+  const sources = projects
+    .flatMap(sourcesIn)
+    .filter((s) => !only.length || only.includes(s.runId))
+    .sort((a, b) => a.runId.localeCompare(b.runId))
+  if (!sources.length) {
     process.stderr.write(
-      `No recorded runs${only.length ? ` named ${only.join(', ')}` : ''} in ${history}\n`,
+      `No runs${only.length ? ` named ${only.join(', ')}` : ''} in ${projects.map((p) => join(p, HISTORY)).join(', ')} or their ${SCRATCH}\n`,
     )
     return 2
   }
-  const version = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')).version
-  const commit = git(PACKAGE_DIR, 'rev-parse', '--short', 'HEAD')
+  const twice = sources.find((s, i) => sources[i - 1]?.runId === s.runId)
+  if (twice) {
+    process.stderr.write(`${twice.runId} is in more than one project\n`)
+    return 2
+  }
+  const records = sources.map((s) =>
+    JSON.parse(readFileSync(join(s.dir, `${s.runId}.json`), 'utf8')),
+  )
+  // A copied run names the reeval that wrote it but not its commit, so the note carries that.
+  const recordedBy = from.length
+    ? `reeval ${[...new Set(records.map((r) => r.stack?.es ?? 'unknown'))].join(', ')}`
+    : `reeval ${JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')).version} at ${git(PACKAGE_DIR, 'rev-parse', '--short', 'HEAD')}`
   const note =
-    values.note ?? (values.from ? `runs copied from ${values.from}` : 'the corpus recipe')
+    values.note ??
+    (from.length ? `runs copied from ${values.from?.join(', ')}` : 'the corpus recipe')
   mkdirSync(join(target, HISTORY), { recursive: true })
-  writeFileSync(join(target, 'reeval.config.ts'), config(note, version, commit))
-  const files = new Set<string>()
-  for (const runId of runs) {
-    cpSync(join(history, `${runId}.json`), join(target, HISTORY, `${runId}.json`))
-    if (existsSync(join(history, runId))) {
-      cpSync(join(history, runId), join(target, HISTORY, runId), { recursive: true })
+  writeFileSync(join(target, 'reeval.config.ts'), config(note, recordedBy))
+  const files = new Map<string, string>()
+  for (const [i, { project, dir, runId }] of sources.entries()) {
+    cpSync(join(dir, `${runId}.json`), join(target, HISTORY, `${runId}.json`))
+    if (existsSync(join(dir, runId))) {
+      cpSync(join(dir, runId), join(target, HISTORY, runId), { recursive: true })
     }
-    const record = JSON.parse(readFileSync(join(history, `${runId}.json`), 'utf8'))
-    for (const e of record.evals ?? []) files.add(e.file)
+    for (const e of records[i].evals ?? []) files.set(e.file, join(project, e.file))
   }
-  for (const file of files) {
-    if (!existsSync(join(project, file))) continue
+  for (const [file, path] of files) {
+    if (!existsSync(path)) continue
     mkdirSync(dirname(join(target, file)), { recursive: true })
-    cpSync(join(project, file), join(target, file))
+    cpSync(path, join(target, file))
   }
-  if (!values.from) rmSync(project, { recursive: true, force: true })
+  if (!from.length) rmSync(projects[0] as string, { recursive: true, force: true })
+  const ids = sources.map((s) => s.runId)
   process.stdout.write(
-    `added ${relative(PACKAGE_DIR, target)}: ${runs.length} run${runs.length === 1 ? '' : 's'} (${runs.join(', ')})\nRun test/corpus.test.ts, then commit it.\n`,
+    `added ${relative(PACKAGE_DIR, target)}: ${ids.length} run${ids.length === 1 ? '' : 's'} (${ids.join(', ')})\nRun test/corpus.test.ts, then commit it.\n`,
   )
   return 0
 }

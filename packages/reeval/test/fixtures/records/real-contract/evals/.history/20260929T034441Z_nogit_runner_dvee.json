@@ -1,0 +1,3753 @@
+{
+  "kind": "es-run",
+  "schemaVersion": 1,
+  "runId": "20260929T034441Z_nogit_runner_dvee",
+  "status": "complete",
+  "startedAt": "2026-09-29T03:44:41.986Z",
+  "endedAt": "2026-09-29T03:45:24.512Z",
+  "durationMs": 42526,
+  "author": "runner",
+  "git": null,
+  "runner": {
+    "kind": "local",
+    "hostHash": "795d68a28cbb"
+  },
+  "dependencies": {
+    "lockfiles": []
+  },
+  "stack": {
+    "es": "0.0.1",
+    "node": "24.21.0",
+    "os": "linux",
+    "arch": "x64",
+    "images": [
+      {
+        "ref": "reeval-sandbox:codex-0.1.0",
+        "id": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+        "agentCli": "codex-cli 0.157.1",
+        "base": "reeval-sandbox:codex-0.1.0",
+        "install": [],
+        "dockerfile": null,
+        "repoDigests": []
+      }
+    ],
+    "packages": {
+      "@vitest/expect": "5.0.2",
+      "jiti": "2.7.0",
+      "@reeval/harness-antigravity": "0.1.0",
+      "@reeval/harness-opencode": "0.2.0",
+      "@reeval/harness-goose": "0.1.0",
+      "@reeval/harness-pi": "0.1.0",
+      "@reeval/harness-cursor-sdk": "0.1.0",
+      "@ai-sdk/harness-claude-code": "1.0.128-patch.5d1c985c",
+      "@reeval/harness-codex": "0.1.0",
+      "ai": "7.0.114",
+      "@ai-sdk/harness": "1.0.124",
+      "@ai-sdk/google": "4.0.79",
+      "@ai-sdk/typesafe-ai": "3.0.6"
+    },
+    "harnesses": [
+      {
+        "id": "codex:gpt-5.4-mini",
+        "kind": "codex",
+        "model": "gpt-5.4-mini",
+        "resolvedModels": [
+          "gpt-5.4-mini-2026-03-17[effort=medium]"
+        ]
+      }
+    ],
+    "judge": {
+      "model": null,
+      "resolvedModels": [],
+      "threshold": 0.8,
+      "version": "0e2a4839495b"
+    },
+    "context": [
+      {
+        "path": "AGENTS.md",
+        "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+      },
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+      },
+      {
+        "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+        "sha256": "85b5ac1f4a1df47261ce42ff06c0a8e822ec82fbccbf81ecf8e68b939826a047"
+      },
+      {
+        "path": "~/.agents/skills/contract-probe/SKILL.md",
+        "sha256": "d832194732a158bf48b9eb61f957d696e1684365cca0d749e5f914b3dd2e17a3"
+      },
+      {
+        "path": "~/.codex/config.toml",
+        "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+      },
+      {
+        "path": "~/.codex/config.toml",
+        "sha256": "73b14ddf7af1bb3323ed95cbc0b8d4bc66043f2c74fc95bcfc9dfe9432a70c3b"
+      },
+      {
+        "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+        "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+        "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+        "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+        "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+        "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+        "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+        "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+        "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+        "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+        "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+        "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+        "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+      },
+      {
+        "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+        "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+        "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+        "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+        "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+        "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+        "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+        "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+        "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+        "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+        "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+        "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+        "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+        "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+        "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+        "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+        "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+        "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+      },
+      {
+        "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+        "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+        "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+        "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+        "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+        "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+        "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+        "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+        "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+        "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+        "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+        "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+      },
+      {
+        "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+        "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+      },
+      {
+        "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+        "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+      },
+      {
+        "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+        "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+        "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+        "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+        "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+        "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/license.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+        "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+        "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+        "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+        "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+        "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+        "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+        "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+        "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+        "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+        "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+        "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+      },
+      {
+        "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+        "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+      }
+    ],
+    "fingerprintScope": [
+      "eval-source",
+      "harness",
+      "environment",
+      "agent-cli",
+      "image-id",
+      "judge",
+      "context"
+    ]
+  },
+  "environments": [
+    {
+      "name": "closed",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "deny-all"
+    },
+    {
+      "name": "notes",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "notes.txt",
+          "sha256": "1f08cd1f5486938b851d21aaebf264a658045575cb9668c5d5859b1fe639c794"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "planted",
+      "parent": "scanned",
+      "overrides": [],
+      "digest": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "~/.reeval-contract/scan.mjs",
+          "sha256": "96dcd1fd0535e21282866ada5e67e8b5039479c1ad3817d8f7e35db16cc57e35"
+        },
+        {
+          "path": "~/.contract-planted",
+          "sha256": "00553c5a46ae3412de047fccc4dcf8aeb4b1ff1610322f963c74adc93ff3a37b"
+        }
+      ],
+      "vars": [
+        "CONTRACT_PLANTED"
+      ],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "ruled",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "AGENTS.md",
+          "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "scanned",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+      "setup": [],
+      "skills": [],
+      "mcp": [],
+      "files": [
+        {
+          "path": "~/.reeval-contract/scan.mjs",
+          "sha256": "96dcd1fd0535e21282866ada5e67e8b5039479c1ad3817d8f7e35db16cc57e35"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "skilled",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+      "setup": [],
+      "skills": [
+        {
+          "name": "contract-probe",
+          "source": "local:skills/contract-probe",
+          "commit": null,
+          "sha256": "9970872ae3819482fb79cf07ffbb3734096b26e3e517ec130a3ec41674ba306e",
+          "placement": "harness",
+          "excluded": []
+        }
+      ],
+      "mcp": [],
+      "files": [],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    },
+    {
+      "name": "stamped",
+      "parent": null,
+      "overrides": [],
+      "digest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+      "setup": [],
+      "skills": [],
+      "mcp": [
+        "stamp"
+      ],
+      "files": [
+        {
+          "path": "~/reeval-mcp/stamp.mjs",
+          "sha256": "f001294329aba39937dfb157db3d64981c2b7a74f355def88e8fe86c3bbce865"
+        }
+      ],
+      "vars": [],
+      "secrets": [],
+      "brokered": [],
+      "unset": [],
+      "egress": "allow-all"
+    }
+  ],
+  "profile": null,
+  "plan": {
+    "evals": 12,
+    "cells": 12,
+    "attempts": 12,
+    "estimateMs": 2160000,
+    "sandboxWarnings": []
+  },
+  "budget": {
+    "attempts": 12
+  },
+  "config": {
+    "sandbox": "docker",
+    "environment": null,
+    "runs": 1,
+    "judgeModel": null,
+    "threshold": 0.8,
+    "timeoutMs": 240000,
+    "concurrency": 2,
+    "configHash": "e65d538596ca1ee7e53a8d4879c3c7889b1c2cc71ce3a53cb2bd4f5028d0fab3"
+  },
+  "cost": {
+    "inputTokens": 172551,
+    "outputTokens": 1356,
+    "usage": {
+      "input": 65799,
+      "output": 1356,
+      "cacheRead": 106752,
+      "cacheWrite": 0,
+      "reasoning": 524
+    },
+    "source": "reported"
+  },
+  "artifacts": "all",
+  "redaction": {
+    "version": 1
+  },
+  "summary": {
+    "evals": 12,
+    "attempts": 12,
+    "pass": 6,
+    "fail": 6,
+    "notGated": 0,
+    "infraError": 0,
+    "skipped": 0
+  },
+  "evals": [
+    {
+      "id": "evals/edit-and-run.eval.ts › edit and run",
+      "key": "evals/edit-and-run.eval.ts › edit and run",
+      "slug": "evals-edit-and-run-eval-ts-edit-and-run-db761a",
+      "file": "evals/edit-and-run.eval.ts",
+      "group": [],
+      "name": "edit and run",
+      "tags": [],
+      "fingerprint": "ea5408268d2a6f7803e0c439b8958818b37bb4ea2fff4efef4a657b25b488d15",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/edit-and-run.eval.ts",
+          "sha256": "fd976fe9fd71c8790c82f5035165693945017b8b5faab1cde1a5719f6162e40f"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/notes/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "notes",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "e52c15d3afe9dc04afb07debefd6f7bf48d29e21f0d6ed573575ad9bac163e24",
+          "fingerprintParts": {
+            "sources": "7fbb34c89cc5ea8010573e55b498e310dea53cb56d41bd94f84999f4c183e861",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "aa33eb928491655bdce1214c76dd75cb6f117d634b26b2e937ef7b9de5b5bac1"
+          },
+          "environmentDigest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/edit-and-run.eval.ts › edit and run # codex:gpt-5.4-mini/notes/docker#1",
+          "id": "codex:gpt-5.4-mini/notes/docker#1",
+          "cell": "codex:gpt-5.4-mini/notes/docker",
+          "n": 1,
+          "seq": 1,
+          "startedAt": "2026-09-29T03:44:45.989Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 4,
+                "sent": 161101,
+                "received": 399402
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 11455,
+          "turns": [
+            {
+              "prompt": "In notes.txt, change the word draft to final with your file editing tool. Then run this exact shell command once: echo contract-$((6*7)). Then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:44:48.561Z",
+              "durationMs": 8289,
+              "usage": {
+                "input": 11231,
+                "output": 343,
+                "cacheRead": 31872,
+                "cacheWrite": 0,
+                "reasoning": 136
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "I’m going to replace `draft` with `final` in `notes.txt`, then I’ll run the exact shell command once and stop.I found the target line in `notes.txt`; I’m patching that single word now, then I’ll run the command you specified exactly once.Done."
+            }
+          ],
+          "usage": {
+            "input": 11231,
+            "output": 343,
+            "cacheRead": 31872,
+            "cacheWrite": 0,
+            "reasoning": 136
+          },
+          "timings": {
+            "setupMs": 2568,
+            "agentMs": 8290,
+            "diffMs": 126,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "notes.txt",
+              "status": "modified"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/codex-gpt-5-4-mini-notes-docker-75bf81/1/transcript.jsonl",
+              "sha256": "66e9b0c03ec4f513e63ecd9370aed34a84cc7428a0bb6d512ed61567d83b04db",
+              "bytes": 1514
+            },
+            "rawTranscript": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/codex-gpt-5-4-mini-notes-docker-75bf81/1/transcript.raw.jsonl",
+              "sha256": "fe0af35dc20cc6b868c38d05015ee2cd37af5d2e78c6a1b7e102cb273624c8e5",
+              "bytes": 5421
+            },
+            "diff": {
+              "path": "evals-edit-and-run-eval-ts-edit-and-run-db761a/codex-gpt-5-4-mini-notes-docker-75bf81/1/diff.patch",
+              "sha256": "59485d1e84ab278ee70542c5ca0ba44e076b16f7cd164776ed5f20cfe3d420a2",
+              "bytes": 139
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/edit-and-run.eval.ts › edit and run canary",
+      "key": "evals/edit-and-run.eval.ts › edit and run canary",
+      "slug": "evals-edit-and-run-eval-ts-edit-and-run-canary-b7776d",
+      "file": "evals/edit-and-run.eval.ts",
+      "group": [],
+      "name": "edit and run canary",
+      "tags": [],
+      "fingerprint": "69bc6a3fd92a033da5ed79887559c43b77e3180062040052107f9dd41ab6fcbd",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/edit-and-run.eval.ts",
+          "sha256": "fd976fe9fd71c8790c82f5035165693945017b8b5faab1cde1a5719f6162e40f"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/notes/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "notes",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "f0da85977a8c8671460b981b733c323825b6a4357bd91b2a2d436793345afdb3",
+          "fingerprintParts": {
+            "sources": "7fbb34c89cc5ea8010573e55b498e310dea53cb56d41bd94f84999f4c183e861",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "1b67b4d002b53e13fd1d157d0b000b88e8d956eb90498c289bef26eeeba1f5da"
+          },
+          "environmentDigest": "sha256:a9fe919c0f6d13e656980696eb83c0ca3373fcd7ec384608d0231cf326d36178",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/edit-and-run.eval.ts › edit and run canary # codex:gpt-5.4-mini/notes/docker#1",
+          "id": "codex:gpt-5.4-mini/notes/docker#1",
+          "cell": "codex:gpt-5.4-mini/notes/docker",
+          "n": 1,
+          "seq": 2,
+          "startedAt": "2026-09-29T03:44:46.007Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [],
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected 'status: draft' to be 'status: final' // Object.is equality"
+          },
+          "durationMs": 3073,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 2523,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/egress.eval.ts › egress",
+      "key": "evals/egress.eval.ts › egress",
+      "slug": "evals-egress-eval-ts-egress-ae6df0",
+      "file": "evals/egress.eval.ts",
+      "group": [],
+      "name": "egress",
+      "tags": [],
+      "fingerprint": "2d9b057d6b0af2fcf95c94036310984f678bde06a29ee0c23d182a13631684c2",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/egress.eval.ts",
+          "sha256": "8e3e3acd8bfb5dbca51e9ab85be063d5ccf27d4ca8e8de3276c88d686b2d2e1e"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/closed/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "closed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "d4d370bb1f70fd16a3864e1ec8e5cfe7504a25b2d02e125631a00dbe365d69e9",
+          "fingerprintParts": {
+            "sources": "2e2fab8ca0e28d748b534c7e0aafe32ab8b5af054a13e36f33ba71cc1e74a956",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "aa33eb928491655bdce1214c76dd75cb6f117d634b26b2e937ef7b9de5b5bac1"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/egress.eval.ts › egress # codex:gpt-5.4-mini/closed/docker#1",
+          "id": "codex:gpt-5.4-mini/closed/docker#1",
+          "cell": "codex:gpt-5.4-mini/closed/docker",
+          "n": 1,
+          "seq": 3,
+          "startedAt": "2026-09-29T03:44:49.039Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            }
+          ],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [
+              "api.openai.com"
+            ],
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 2,
+                "sent": 75566,
+                "received": 209283
+              }
+            ],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 13464,
+          "turns": [
+            {
+              "prompt": "Run this exact shell command once, then stop: curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:44:51.262Z",
+              "durationMs": 10401,
+              "usage": {
+                "input": 10649,
+                "output": 233,
+                "cacheRead": 10624,
+                "cacheWrite": 0,
+                "reasoning": 103
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "I’m going to run the exact command once, capture the result into `blocked.txt`, and then stop there.Ran it once. It failed with `curl: (56) CONNECT tunnel failed, response 403`."
+            }
+          ],
+          "usage": {
+            "input": 10649,
+            "output": 233,
+            "cacheRead": 10624,
+            "cacheWrite": 0,
+            "reasoning": 103
+          },
+          "timings": {
+            "setupMs": 2219,
+            "agentMs": 10403,
+            "diffMs": 188,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "blocked.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/codex-gpt-5-4-mini-closed-docker-60dd41/1/transcript.jsonl",
+              "sha256": "aca9bf99c9774dd66663f2bf25170b32ba8f004dbb4ec5cab80049fe992782a3",
+              "bytes": 1033
+            },
+            "rawTranscript": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/codex-gpt-5-4-mini-closed-docker-60dd41/1/transcript.raw.jsonl",
+              "sha256": "226f30ed34130e8fff35ffbaf1b4fe9376073debd65bdb94f70e2cb8ce3b64b2",
+              "bytes": 3672
+            },
+            "diff": {
+              "path": "evals-egress-eval-ts-egress-ae6df0/codex-gpt-5-4-mini-closed-docker-60dd41/1/diff.patch",
+              "sha256": "211162ad391ab91bad67b4acc9199df64b0d58c4682ff85434615b902c5368e7",
+              "bytes": 166
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/egress.eval.ts › egress canary",
+      "key": "evals/egress.eval.ts › egress canary",
+      "slug": "evals-egress-eval-ts-egress-canary-f193be",
+      "file": "evals/egress.eval.ts",
+      "group": [],
+      "name": "egress canary",
+      "tags": [],
+      "fingerprint": "b5601607f86f02f698194b030423c98988311474e09da70ce30d2ae2b86746cf",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/egress.eval.ts",
+          "sha256": "8e3e3acd8bfb5dbca51e9ab85be063d5ccf27d4ca8e8de3276c88d686b2d2e1e"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/closed/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "closed",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "0abfb38596a10f3c8854e16020d2ba91d1fe04ed088b5efead7f8ce0c8447906",
+          "fingerprintParts": {
+            "sources": "2e2fab8ca0e28d748b534c7e0aafe32ab8b5af054a13e36f33ba71cc1e74a956",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "1b67b4d002b53e13fd1d157d0b000b88e8d956eb90498c289bef26eeeba1f5da"
+          },
+          "environmentDigest": "sha256:62b9fdc9346919331faca0dd16f119aa3e4cda9ba74a79e44495378142a1bc57",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/egress.eval.ts › egress canary # codex:gpt-5.4-mini/closed/docker#1",
+          "id": "codex:gpt-5.4-mini/closed/docker#1",
+          "cell": "codex:gpt-5.4-mini/closed/docker",
+          "n": 1,
+          "seq": 4,
+          "startedAt": "2026-09-29T03:44:57.442Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            }
+          ],
+          "egress": {
+            "policy": "deny-all",
+            "allowed": [
+              "api.openai.com"
+            ],
+            "recorded": true,
+            "contacted": [],
+            "blocked": [
+              {
+                "host": "example.com",
+                "port": 443,
+                "connections": 1,
+                "reason": "example.com isn't in the allowlist"
+              }
+            ],
+            "expectedBlocked": []
+          },
+          "servedModels": [],
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected '403 000' to match /^200 /"
+          },
+          "durationMs": 2329,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1970,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 79,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "curl -sS -m 20 -o /dev/null -w '%{http_connect} %{http_code}' https://example.com/ > blocked.txt || true",
+              "exitCode": 0,
+              "durationMs": 79,
+              "log": {
+                "path": "evals-egress-eval-ts-egress-canary-f193be/codex-gpt-5-4-mini-closed-docker-60dd41/1/checks/1.log",
+                "sha256": "f9b1283c8bd1c8e1c2f1e779693e01572ed30cf2993cb09b29ceceaac1cd13f1",
+                "bytes": 183
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/key.eval.ts › key",
+      "key": "evals/key.eval.ts › key",
+      "slug": "evals-key-eval-ts-key-187a81",
+      "file": "evals/key.eval.ts",
+      "group": [],
+      "name": "key",
+      "tags": [],
+      "fingerprint": "21a5c8c73a83421969b4ab2ae1c288ab855ff43049d14506e994aeb705533c82",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/key.eval.ts",
+          "sha256": "f6d07605b9bbd991515d3a9addc2619805574d960fec1a8b6e0fce4b0be1fa28"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/scanned/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "scanned",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "31696fea6a3c2ec871ec94640c0916da22cc3911b60a90ff234cb3b05ea258e8",
+          "fingerprintParts": {
+            "sources": "3c68834cacc2271a208d514dc96f7a166d290b3c39abe35bdcf2b8b0e68e6acd",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "aa33eb928491655bdce1214c76dd75cb6f117d634b26b2e937ef7b9de5b5bac1"
+          },
+          "environmentDigest": "sha256:5c768772c7e866eea13680d6e73efd795707b1c69114c96c65a5efc1ab236e71",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/key.eval.ts › key # codex:gpt-5.4-mini/scanned/docker#1",
+          "id": "codex:gpt-5.4-mini/scanned/docker#1",
+          "cell": "codex:gpt-5.4-mini/scanned/docker",
+          "n": 1,
+          "seq": 5,
+          "startedAt": "2026-09-29T03:44:59.761Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 1,
+                "sent": 36034,
+                "received": 90484
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 7679,
+          "turns": [
+            {
+              "prompt": "Reply with the single word OK. Do not run any tools.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:45:01.699Z",
+              "durationMs": 4365,
+              "usage": {
+                "input": 10474,
+                "output": 23,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "reasoning": 16
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "OK"
+            }
+          ],
+          "usage": {
+            "input": 10474,
+            "output": 23,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "reasoning": 16
+          },
+          "timings": {
+            "setupMs": 1936,
+            "agentMs": 4367,
+            "diffMs": 169,
+            "checksMs": 584,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node ~/.reeval-contract/scan.mjs '[REDACTED]'",
+              "exitCode": 0,
+              "durationMs": 584,
+              "log": {
+                "path": "evals-key-eval-ts-key-187a81/codex-gpt-5-4-mini-scanned-docker-19a58e/1/checks/1.log",
+                "sha256": "b64ab59f7067ceb30b83835c26900f7d58cb9079781d9076b122815c8e59cc29",
+                "bytes": 295
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-key-eval-ts-key-187a81/codex-gpt-5-4-mini-scanned-docker-19a58e/1/transcript.jsonl",
+              "sha256": "efd552dae3b11df11ec32e90b0fc49e3c191d3a9c3c3f81ebe590d481ddaf296",
+              "bytes": 338
+            },
+            "rawTranscript": {
+              "path": "evals-key-eval-ts-key-187a81/codex-gpt-5-4-mini-scanned-docker-19a58e/1/transcript.raw.jsonl",
+              "sha256": "2f74c6ec1a1cc7bad899a4e21f413acbe63e6a3f47eceb1ea11dea2253f3264b",
+              "bytes": 1836
+            },
+            "diff": {
+              "path": "evals-key-eval-ts-key-187a81/codex-gpt-5-4-mini-scanned-docker-19a58e/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/key.eval.ts › key canary",
+      "key": "evals/key.eval.ts › key canary",
+      "slug": "evals-key-eval-ts-key-canary-d73488",
+      "file": "evals/key.eval.ts",
+      "group": [],
+      "name": "key canary",
+      "tags": [],
+      "fingerprint": "21dbe8e1d5c63ea317263d209351ec5f1109c0a8b5dd1b549f10115d4bac4f90",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/key.eval.ts",
+          "sha256": "f6d07605b9bbd991515d3a9addc2619805574d960fec1a8b6e0fce4b0be1fa28"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/planted/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "planted",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "a60ca15907cd2266cc0927c3633085c8f2d7b3748157298bc39c8256a6b7322f",
+          "fingerprintParts": {
+            "sources": "3c68834cacc2271a208d514dc96f7a166d290b3c39abe35bdcf2b8b0e68e6acd",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "1b67b4d002b53e13fd1d157d0b000b88e8d956eb90498c289bef26eeeba1f5da"
+          },
+          "environmentDigest": "sha256:76aaffdb150ef17e5ce49d9831ef61535ad0fdf2de9ab77d8189a7f718641619",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/key.eval.ts › key canary # codex:gpt-5.4-mini/planted/docker#1",
+          "id": "codex:gpt-5.4-mini/planted/docker#1",
+          "cell": "codex:gpt-5.4-mini/planted/docker",
+          "n": 1,
+          "seq": 6,
+          "startedAt": "2026-09-29T03:45:02.497Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [
+              "CONTRACT_PLANTED"
+            ],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [],
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected [ '/proc/1/environ (raw)', …(3) ] to deeply equal []"
+          },
+          "durationMs": 2899,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 2258,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 345,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [
+            {
+              "command": "node ~/.reeval-contract/scan.mjs '[{\"form\":\"raw\",\"len\":33,\"roll\":3425781250,\"sha256\":\"be3b833b6d42abc50a865348ebd66fad2f0cdac18a9e9c421ada12dde88737ed\"},{\"form\":\"base64\",\"len\":44,\"roll\":320935815,\"sha256\":\"9d2bcbdf3d08022a51162ba9db6d779735642c49c7429781a716a6504275c930\"}]'",
+              "exitCode": 0,
+              "durationMs": 345,
+              "log": {
+                "path": "evals-key-eval-ts-key-canary-d73488/codex-gpt-5-4-mini-planted-docker-e90a65/1/checks/1.log",
+                "sha256": "fba7978e82b39ed32e152695043b65de3db41579ebf631c9bb587a5a0ee06645",
+                "bytes": 637
+              }
+            }
+          ],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/mcp.eval.ts › mcp",
+      "key": "evals/mcp.eval.ts › mcp",
+      "slug": "evals-mcp-eval-ts-mcp-a42bcd",
+      "file": "evals/mcp.eval.ts",
+      "group": [],
+      "name": "mcp",
+      "tags": [
+        "mcp"
+      ],
+      "fingerprint": "ca1023363e169466cd2cf24a5a4f9e28e45bf7a955c201af81da64cf54e290bc",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/mcp.eval.ts",
+          "sha256": "4ad57f6b429b42864c43a61efde2297141777e40b052816cacdb0d712aa12b11"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/stamped/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "stamped",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "2e49344e88bf09f1235061358267c5b82e8586bdade7f6e92e9ae3d0570068c0",
+          "fingerprintParts": {
+            "sources": "3ebcea81939ee48ace52beef6ac92fc10d358a631df334c1d28bdc12176aa64e",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "d0c8cbaaf3104fad7cdb0b0485b6cb2e2fc3c5c83903c3a111d92773353d8071"
+          },
+          "environmentDigest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/mcp.eval.ts › mcp # codex:gpt-5.4-mini/stamped/docker#1",
+          "id": "codex:gpt-5.4-mini/stamped/docker#1",
+          "cell": "codex:gpt-5.4-mini/stamped/docker",
+          "n": 1,
+          "seq": 7,
+          "startedAt": "2026-09-29T03:45:05.371Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "73b14ddf7af1bb3323ed95cbc0b8d4bc66043f2c74fc95bcfc9dfe9432a70c3b"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 3,
+                "sent": 122720,
+                "received": 308928
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 8389,
+          "turns": [
+            {
+              "prompt": "Call the house_stamp tool of the stamp MCP server once, then reply with what it returned.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:45:07.952Z",
+              "durationMs": 5196,
+              "usage": {
+                "input": 11658,
+                "output": 190,
+                "cacheRead": 21248,
+                "cacheWrite": 0,
+                "reasoning": 55
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "I’m going to look up the `stamp` MCP tool and call `house_stamp` once, then I’ll relay its raw return so we stay faithful to the tool output.I found the `stamp` server tool, so I’m calling `house_stamp` now and will pass back exactly what it returns.STAMP-7Q"
+            }
+          ],
+          "usage": {
+            "input": 11658,
+            "output": 190,
+            "cacheRead": 21248,
+            "cacheWrite": 0,
+            "reasoning": 55
+          },
+          "timings": {
+            "setupMs": 2578,
+            "agentMs": 5197,
+            "diffMs": 120,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 1,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {
+            "transcript": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/codex-gpt-5-4-mini-stamped-docker-da5e7c/1/transcript.jsonl",
+              "sha256": "805a79e8089988c273780d4c125f672d152f134529e624fd1dad5fff5b813ff5",
+              "bytes": 1033
+            },
+            "rawTranscript": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/codex-gpt-5-4-mini-stamped-docker-da5e7c/1/transcript.raw.jsonl",
+              "sha256": "629596d26708456a542063518df7c729f12f741ba202b80988644213b83a3d8b",
+              "bytes": 4051
+            },
+            "diff": {
+              "path": "evals-mcp-eval-ts-mcp-a42bcd/codex-gpt-5-4-mini-stamped-docker-da5e7c/1/diff.patch",
+              "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "bytes": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/mcp.eval.ts › mcp canary",
+      "key": "evals/mcp.eval.ts › mcp canary",
+      "slug": "evals-mcp-eval-ts-mcp-canary-692dab",
+      "file": "evals/mcp.eval.ts",
+      "group": [],
+      "name": "mcp canary",
+      "tags": [
+        "mcp"
+      ],
+      "fingerprint": "80be4cce07a2b6dca0ed053a97a78e520d24bd1af3174be331f336097844fe0f",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/mcp.eval.ts",
+          "sha256": "4ad57f6b429b42864c43a61efde2297141777e40b052816cacdb0d712aa12b11"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/stamped/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "stamped",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "91ef7f5282c1ab2ccac7e1bcda99ebe5aabebefc1e4f86ae5fa7aacf13a9beef",
+          "fingerprintParts": {
+            "sources": "3ebcea81939ee48ace52beef6ac92fc10d358a631df334c1d28bdc12176aa64e",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "2b15cb3fbb510838d607b88e8cff5b9391e75df9c55d85c1d5bbee09c84d3c06"
+          },
+          "environmentDigest": "sha256:a7c2720c31fc4bd4e04d6bbb050add78a6277669afdf64ae287a35e28f7192e4",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/mcp.eval.ts › mcp canary # codex:gpt-5.4-mini/stamped/docker#1",
+          "id": "codex:gpt-5.4-mini/stamped/docker#1",
+          "cell": "codex:gpt-5.4-mini/stamped/docker",
+          "n": 1,
+          "seq": 8,
+          "startedAt": "2026-09-29T03:45:07.431Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "73b14ddf7af1bb3323ed95cbc0b8d4bc66043f2c74fc95bcfc9dfe9432a70c3b"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [],
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected '' to contain 'tools/call'"
+          },
+          "durationMs": 3033,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 2673,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/rules.eval.ts › rules",
+      "key": "evals/rules.eval.ts › rules",
+      "slug": "evals-rules-eval-ts-rules-f3fd8d",
+      "file": "evals/rules.eval.ts",
+      "group": [],
+      "name": "rules",
+      "tags": [],
+      "fingerprint": "91fc2814834230b114e67413c4cea913d2eb5abc921b506c5ae6bf8e05a12592",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/rules.eval.ts",
+          "sha256": "5039492c7de7953697603f6d6529d6849d03090f309f8af2741dc077db74caf2"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/ruled/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "ruled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "7bc10cf6eb7c6e7480abbc1a4116c5129b788486e12a21c21dfe7f1958fa8ae9",
+          "fingerprintParts": {
+            "sources": "cf2ab8a2119f8f566b6bd220c5ecf4532caba48b6550f3bc54bb3aa99d77a958",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "9d16f219727c4c693e0d07a058f88d38ea866256e47715a93ac3c80cdbccd146"
+          },
+          "environmentDigest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/rules.eval.ts › rules # codex:gpt-5.4-mini/ruled/docker#1",
+          "id": "codex:gpt-5.4-mini/ruled/docker#1",
+          "cell": "codex:gpt-5.4-mini/ruled/docker",
+          "n": 1,
+          "seq": 9,
+          "startedAt": "2026-09-29T03:45:10.455Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "5ddf48ce4d7015c17873d3c8b1c02e421c433763e17d96c4ef377bbddabb44fe"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            },
+            {
+              "path": "AGENTS.md",
+              "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 2,
+                "sent": 75931,
+                "received": 192116
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 11518,
+          "turns": [
+            {
+              "prompt": "What is the house codeword? Follow your house rules for it, then stop.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:45:12.329Z",
+              "durationMs": 8977,
+              "usage": {
+                "input": 10660,
+                "output": 168,
+                "cacheRead": 10624,
+                "cacheWrite": 0,
+                "reasoning": 98
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "I’m writing the requested codeword into `codeword.txt` at the workspace root, then I’ll stop."
+            }
+          ],
+          "usage": {
+            "input": 10660,
+            "output": 168,
+            "cacheRead": 10624,
+            "cacheWrite": 0,
+            "reasoning": 98
+          },
+          "timings": {
+            "setupMs": 1869,
+            "agentMs": 8978,
+            "diffMs": 129,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "codeword.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/codex-gpt-5-4-mini-ruled-docker-6000df/1/transcript.jsonl",
+              "sha256": "54d391c3aef143b3fbd4a439cf1491ce6ba844512527d104e76388e8d85cfe94",
+              "bytes": 632
+            },
+            "rawTranscript": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/codex-gpt-5-4-mini-ruled-docker-6000df/1/transcript.raw.jsonl",
+              "sha256": "b3824a442534e277e28655c87c56842455e0d6df2a0d29eff3cb37dbab38eb33",
+              "bytes": 2894
+            },
+            "diff": {
+              "path": "evals-rules-eval-ts-rules-f3fd8d/codex-gpt-5-4-mini-ruled-docker-6000df/1/diff.patch",
+              "sha256": "26095f24dd2e7935c05c0e901c576d99dbeb7c70e3d3663b6a5c089d88fee697",
+              "bytes": 146
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/rules.eval.ts › rules canary",
+      "key": "evals/rules.eval.ts › rules canary",
+      "slug": "evals-rules-eval-ts-rules-canary-b12147",
+      "file": "evals/rules.eval.ts",
+      "group": [],
+      "name": "rules canary",
+      "tags": [],
+      "fingerprint": "b22951f0f12689a078e11cb7adb6e5d2f43bc77c6e082822fd1390fb09171a61",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/rules.eval.ts",
+          "sha256": "5039492c7de7953697603f6d6529d6849d03090f309f8af2741dc077db74caf2"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/ruled/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "ruled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "977dd4979d5d12c4ef68dd29e005d205a4a57bbf61330971e42685ba8b33c20f",
+          "fingerprintParts": {
+            "sources": "cf2ab8a2119f8f566b6bd220c5ecf4532caba48b6550f3bc54bb3aa99d77a958",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "6348eca95c27f68842881149f9ba33b49bd88ea5c506e1c797ee94784dcc5091"
+          },
+          "environmentDigest": "sha256:3b6bc71a36c7058921ce25b3cd09b11dc1153a2a75bde5680560db5efaa078ed",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/rules.eval.ts › rules canary # codex:gpt-5.4-mini/ruled/docker#1",
+          "id": "codex:gpt-5.4-mini/ruled/docker#1",
+          "cell": "codex:gpt-5.4-mini/ruled/docker",
+          "n": 1,
+          "seq": 10,
+          "startedAt": "2026-09-29T03:45:13.754Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "AGENTS.md",
+              "sha256": "9130f4f9f3904ffc7bc52c800287aeec97af414a260cd3674bd75335f88edfd4"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [],
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected null to be 'TANGERINE-41' // Object.is equality"
+          },
+          "durationMs": 2307,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1934,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › skill",
+      "key": "evals/skill.eval.ts › skill",
+      "slug": "evals-skill-eval-ts-skill-468cc8",
+      "file": "evals/skill.eval.ts",
+      "group": [],
+      "name": "skill",
+      "tags": [],
+      "fingerprint": "00f7131206e4b54e1ad4f731b0cfd9313ebb2ee59c2122fd322c045498733989",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "4d7a89930c00ec62e0c53bafdde80e2e352cf8090aca34857f178d4e62310e00"
+        }
+      ],
+      "outcome": "pass",
+      "todo": false,
+      "passRate": 1,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/skilled/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "skilled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "ffb186bdda3dc632a076e7be68d44579abf14fa342baecc1f40629a1f2bf588c",
+          "fingerprintParts": {
+            "sources": "52c6dfad9f0c88608367bec535801c3af4c29a33a6304d5323dfb40851f3c18d",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "fffa18a8a725ecda42fbfdceb715de1e608e0e2a99eb365e1318012e34bbd5e6"
+          },
+          "environmentDigest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 1,
+          "fail": 0,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 1,
+          "outcome": "pass"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › skill # codex:gpt-5.4-mini/skilled/docker#1",
+          "id": "codex:gpt-5.4-mini/skilled/docker#1",
+          "cell": "codex:gpt-5.4-mini/skilled/docker",
+          "n": 1,
+          "seq": 11,
+          "startedAt": "2026-09-29T03:45:16.052Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.agents/skills/.ai-sdk-harness-skills.json",
+              "sha256": "85b5ac1f4a1df47261ce42ff06c0a8e822ec82fbccbf81ecf8e68b939826a047"
+            },
+            {
+              "path": "~/.agents/skills/contract-probe/SKILL.md",
+              "sha256": "d832194732a158bf48b9eb61f957d696e1684365cca0d749e5f914b3dd2e17a3"
+            },
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            },
+            {
+              "path": "~/.codex/skills/.system/.codex-system-skills.marker",
+              "sha256": "0364a0277a83943bb7c0c457ad8097e97ef8b6720d895cea15024d92fc426285"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/SKILL.md",
+              "sha256": "681ddb4ad6d06a2acc78a3535b583f8d0c1ea800ecda3d56370d3310fd2cd4ba"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/agents/openai.yaml",
+              "sha256": "9ca574af14580dc7a2a3dc37a1796d17f93cb8850be66501f0799ef8603e9dc0"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen-small.svg",
+              "sha256": "cff5f34f57ff60b3ee92eaedd17b15e96dd4b9e776df3e78936c9e00d42be294"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/assets/imagegen.png",
+              "sha256": "95952f644064eb9e890f98d8db07216347186526e4c41ad66d3420629eb86e20"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/cli.md",
+              "sha256": "ecfc2e09261a0feb3482517a5fa0ff410cb7d1958e3cbd2ac6b61586f5b81405"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/codex-network.md",
+              "sha256": "c88298ca4481f6116a16fa7987434fc977f8b311c1bbc0c3d862ffd0c5981148"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/image-api.md",
+              "sha256": "dc975d7af8a4888967251a0276014b4a71ea30455294944b762256373ce3e569"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/prompting.md",
+              "sha256": "b210b051c775860267080941eba968212bf0ac7fce581d75c5dcc217d8293f8b"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/references/sample-prompts.md",
+              "sha256": "70474177d151855b175c6133de2aae1d90b7f146b0dab50ec830972c47d72183"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/image_gen.py",
+              "sha256": "b4345cf835e5b593b97df6bb2b70bda493b8a97eee4cabbc99b2fa57dba9b448"
+            },
+            {
+              "path": "~/.codex/skills/.system/imagegen/scripts/remove_chroma_key.py",
+              "sha256": "a5893c4bd04b21abced33731ea89d2ac428e81d92a0368eb18ffbe4fda5253e2"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/LICENSE.txt",
+              "sha256": "4dd13869245e356246a5b770723247bbb80a8f07a181d1d3d873a1734297cdb9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/SKILL.md",
+              "sha256": "aa6829e21df2223167c85d2e49b6337a7345c84c1033f1ec10182c7882b36d45"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/agents/openai.yaml",
+              "sha256": "44b9efac6be1bae32d869aa2942fecbe4dcae82682ee03e4120f2f9b7d4658ec"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai-small.svg",
+              "sha256": "45be1f0757eb18889eefb1e7db79668ef46a275dc4e0e78e8df5ebd7f6cdeadc"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/assets/openai.png",
+              "sha256": "156cc84d7332bfe95b310350bd470b690d22aa33d65340cc6c2e06022946194c"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/codex-self-knowledge.md",
+              "sha256": "8c8fb00e6e5cb1977924f5164684a6095427fa828bbc765225f17d9aeb79a912"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/latest-model.md",
+              "sha256": "bdf241d505eb071b1c7b0b732f842b701348cf6eab95d1c36fd97edac64dd158"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/mcp-diagnostics.md",
+              "sha256": "49bbd2f73df7bbd7f86c80425dea4da2d301c22046080399a36bfc0ca49509e9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-migration.md",
+              "sha256": "bef46671036c8e483b7f65df931171217d55a8d26098851c2f89784db8edca2f"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/model-selection.md",
+              "sha256": "ba2d164abbca30435a460a0bc3a7d82398dce2bdf092705c98ba55b3f3af38a8"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/official-docs.md",
+              "sha256": "7962f2dce55089b93bde4115bb89fd42f20993c1597a2b13edd4956f463875b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/prompting-guide.md",
+              "sha256": "548d4ca73a34cd4b0041ef05a899592e8c50772b8f3a76c579ec941e403e19f6"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrade-guide.md",
+              "sha256": "ecac89155f910f064fd306e89c74585cabdb2142aba4f2acc0cead092ae1d1a5"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/references/upgrading-to-gpt-6-astra.md",
+              "sha256": "62ef6d22684662a019d203834fe1205a07e4ca4c65dddcbabe1bb51efe1aa840"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/fetch-codex-manual.mjs",
+              "sha256": "f53eb6d2f286e9efcc397e8bee93a938e37296c90953e4e06e94899ef1b6c363"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info",
+              "sha256": "7354dbb030ca0736dd633a7ca1b930cf640abd40370725dea3a458cb51d49523"
+            },
+            {
+              "path": "~/.codex/skills/.system/openai-docs/scripts/resolve-latest-model-info.cjs",
+              "sha256": "eeb1bb486018e16b37edfc06b1a37179dbc672982d501040d4f7142f29dd2e64"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/SKILL.md",
+              "sha256": "71b95b8219644f95d633721e7f7cd3c469edfc8fe50f8415d400dfb2d74bc7b9"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/agents/openai.yaml",
+              "sha256": "fecaf35d692bd3d33d1a065648258d12e393afa9055d78adf6e57b42f4142f6d"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/assets/plugin-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/installing-and-updating.md",
+              "sha256": "91c4781d48568fcc708b45566b08fb610ad1c88672720ae512f9525a1cf9cb20"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/references/plugin-json-spec.md",
+              "sha256": "eeb640130f69636affaa299d4170d5a7ae6a0ff978296ddf75c409ce6dd87b91"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/create_basic_plugin.py",
+              "sha256": "272cb14e02ad7c76ac40777443c49cfecfa333ee28ab7f6214210b72c8fd02ae"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/identifier_validation.py",
+              "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/read_marketplace_name.py",
+              "sha256": "ba24e6d91eed6f778bde022a967be335c6253983b5ecd1c5e30c8483385887fd"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py",
+              "sha256": "6a630dfbdc2bca6952580da9c2c7ece08030926819ccd81d9deb518c24c1b0ed"
+            },
+            {
+              "path": "~/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py",
+              "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/SKILL.md",
+              "sha256": "07079efd0dc76f05fade424e5dfb048dce1de2df7626e1a4f56292a4f3f92228"
+            },
+            {
+              "path": "~/.codex/skills/.system/review-agent/agents/openai.yaml",
+              "sha256": "4d867a46d15e36ac880176484aae160f59855340c6059b2ea6ab9fbc9af084de"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/SKILL.md",
+              "sha256": "6656e54755638e8efcf275a472b9672eaa8a9a1b9e59dc210e275b03b59e1e66"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/agents/openai.yaml",
+              "sha256": "d07d21b93fcf3d4dc8d9a3399c05fc226a49a333a96d3e1c68b451b8dd9eade6"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator-small.svg",
+              "sha256": "6591bf8ea9bb9435890dbdea299e0d2bd05f3aa893a335d26e4c535e93c8e7fb"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/assets/skill-creator.png",
+              "sha256": "a4024b0306ddb05847e1012879d37aaf1e658205199da596f5145ed7a88d9162"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/license.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/references/openai_yaml.md",
+              "sha256": "ffac39318e408108141d40f820968e59f70434a891694f9bf1d25be8237b150c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/generate_openai_yaml.py",
+              "sha256": "816df12072d74faf924d802a6599a139997e1441e90bfe4869ec304f2e5e2851"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/init_skill.py",
+              "sha256": "bf0656a5f9d8d8cdecf0245eaf27e1df8e0e9b6d40ccdda814eb8e3d5f6992c8"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+              "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/LICENSE.txt",
+              "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/SKILL.md",
+              "sha256": "d68b77e5bbb34dedab89d134da52855f140fc4b4299b80104f534e3b9e98f8ee"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/agents/openai.yaml",
+              "sha256": "5ce223d8b1070b82c42298538f1b8d376f788eb9e7a42a987e8c094070d73f0e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer-small.svg",
+              "sha256": "3928703ff00dc1a681e7a22401843b7edcbd4b2051651ce4c43b75f7e140504e"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/assets/skill-installer.png",
+              "sha256": "d0a230b1a79b71b858b7c215a0fbb0768d6459c14ea4ef80c61592629bf0e605"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/github_utils.py",
+              "sha256": "61c1bbe2ae217433b4b6f9f09f21aca4df52c12598068343ade719f706e4859b"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py",
+              "sha256": "38f311b75664bb063808f982c600271ebc4b560830f491705190f88a94e3e781"
+            },
+            {
+              "path": "~/.codex/skills/.system/skill-installer/scripts/list-skills.py",
+              "sha256": "9d6dfb2abf3afeee7f027a89fb1626b918a973da18f4eb6c25681286301beb41"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [
+              {
+                "host": "api.openai.com",
+                "port": 443,
+                "connections": 4,
+                "sent": 163470,
+                "received": 426276
+              }
+            ],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [
+            "gpt-5.4-mini-2026-03-17[effort=medium]"
+          ],
+          "outcome": "pass",
+          "error": null,
+          "durationMs": 8460,
+          "turns": [
+            {
+              "prompt": "Use your contract-probe skill: do exactly what it says, then stop. Keep your reply short.",
+              "status": "completed",
+              "startedAt": "2026-09-29T03:45:17.749Z",
+              "durationMs": 5961,
+              "usage": {
+                "input": 11127,
+                "output": 399,
+                "cacheRead": 32384,
+                "cacheWrite": 0,
+                "reasoning": 116
+              },
+              "model": "gpt-5.4-mini-2026-03-17[effort=medium]",
+              "unreported": [],
+              "error": null,
+              "text": "I’m using the contract-probe skill now and will follow it exactly, then stop. First I’m opening its instructions so I can run the required probe without adding extra work.The first path was off; I’m switching to the actual skill location and reading the probe steps directly from there.I’ve got the required payload. I’m creating the probe file in the workspace root now, with exactly the one line the skill specifies.DONE"
+            }
+          ],
+          "usage": {
+            "input": 11127,
+            "output": 399,
+            "cacheRead": 32384,
+            "cacheWrite": 0,
+            "reasoning": 116
+          },
+          "timings": {
+            "setupMs": 1695,
+            "agentMs": 5962,
+            "diffMs": 193,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 2,
+            "fileEdits": 1,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [
+            {
+              "path": "skill-proof.txt",
+              "status": "added"
+            }
+          ],
+          "files": {
+            "transcript": {
+              "path": "evals-skill-eval-ts-skill-468cc8/codex-gpt-5-4-mini-skilled-docker-52ee27/1/transcript.jsonl",
+              "sha256": "0de4dda299ca4e9f7a8edf23cd48a335e4f1afd9e6d258fa9a5d3ffb7f4b7579",
+              "bytes": 2251
+            },
+            "rawTranscript": {
+              "path": "evals-skill-eval-ts-skill-468cc8/codex-gpt-5-4-mini-skilled-docker-52ee27/1/transcript.raw.jsonl",
+              "sha256": "85a9f5fa8ac0acf0d7c0cbaccf803380fea000591d44b4a7e92d10bd460a8201",
+              "bytes": 7254
+            },
+            "diff": {
+              "path": "evals-skill-eval-ts-skill-468cc8/codex-gpt-5-4-mini-skilled-docker-52ee27/1/diff.patch",
+              "sha256": "873ec5c9fecfb5775d17d0bb8e449b091df6336e820781d122c7c9c239f3918f",
+              "bytes": 159
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "evals/skill.eval.ts › skill canary",
+      "key": "evals/skill.eval.ts › skill canary",
+      "slug": "evals-skill-eval-ts-skill-canary-ed7134",
+      "file": "evals/skill.eval.ts",
+      "group": [],
+      "name": "skill canary",
+      "tags": [],
+      "fingerprint": "85378484ebfaa57e3c589062f9ff3d7b4025177ee6dbdf7cf325320ffa305fb6",
+      "sources": [
+        {
+          "path": "evals/constants.ts",
+          "sha256": "642ad713673f6901d3b917f6276bb3ea9eb7a49e8f66a1e417920dbcb0628bb1"
+        },
+        {
+          "path": "evals/probes.ts",
+          "sha256": "b2b6b5fbd4760049468a8467f246069f8dc17a6403364af03272ca2548e07581"
+        },
+        {
+          "path": "evals/skill.eval.ts",
+          "sha256": "4d7a89930c00ec62e0c53bafdde80e2e352cf8090aca34857f178d4e62310e00"
+        }
+      ],
+      "outcome": "fail",
+      "todo": false,
+      "passRate": 0,
+      "cells": [
+        {
+          "key": "codex:gpt-5.4-mini/skilled/docker",
+          "harness": "codex:gpt-5.4-mini",
+          "environment": "skilled",
+          "sandbox": "docker",
+          "role": "control",
+          "fingerprint": "e3d6d982e487c2858a2030582d9c8578ad8daa6012c490015125d0cb41f7c836",
+          "fingerprintParts": {
+            "sources": "52c6dfad9f0c88608367bec535801c3af4c29a33a6304d5323dfb40851f3c18d",
+            "harness": "52c6b15f3b7ca3c32fb9ea4ceb0a627ad36be4df3e3d4aa9c43d68eac07b1dc9",
+            "environment": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+            "image": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+            "agentCli": "codex-cli 0.157.1",
+            "judge": "29d8080764d6a006e5014ccd64537fd4f8f3bc3ff6696cbbd78729ab6f67f090",
+            "context": "1b67b4d002b53e13fd1d157d0b000b88e8d956eb90498c289bef26eeeba1f5da"
+          },
+          "environmentDigest": "sha256:31d96fe996770811891421b06d257d4f712af2bcedf046e66c4da679da186e8a",
+          "harnessKind": "codex",
+          "model": "gpt-5.4-mini",
+          "gate": "all",
+          "overrides": [],
+          "runs": 1,
+          "pass": 0,
+          "fail": 1,
+          "infraError": 0,
+          "skipped": 0,
+          "passRate": 0,
+          "outcome": "fail"
+        }
+      ],
+      "attempts": [
+        {
+          "key": "evals/skill.eval.ts › skill canary # codex:gpt-5.4-mini/skilled/docker#1",
+          "id": "codex:gpt-5.4-mini/skilled/docker#1",
+          "cell": "codex:gpt-5.4-mini/skilled/docker",
+          "n": 1,
+          "seq": 12,
+          "startedAt": "2026-09-29T03:45:21.955Z",
+          "imageId": "sha256:1b03c464ad8c04759910b06c23a217c61868029285ec959a1180fe7241239766",
+          "env": {
+            "vars": [],
+            "secrets": [],
+            "brokered": []
+          },
+          "context": [
+            {
+              "path": "~/.codex/config.toml",
+              "sha256": "930b22b2050404dc1ebd61b1c5df0cb85ea8379224d478ad5382017a6e7fb3b8"
+            }
+          ],
+          "egress": {
+            "policy": "allow-all",
+            "allowed": null,
+            "recorded": true,
+            "contacted": [],
+            "blocked": [],
+            "expectedBlocked": []
+          },
+          "servedModels": [],
+          "outcome": "fail",
+          "error": {
+            "kind": "assertion",
+            "message": "expected null to be 'PROBE-7F3K-QUILL' // Object.is equality"
+          },
+          "durationMs": 2324,
+          "turns": [],
+          "usage": null,
+          "timings": {
+            "setupMs": 1761,
+            "agentMs": 0,
+            "diffMs": 0,
+            "checksMs": 0,
+            "judgeMs": 0
+          },
+          "activity": {
+            "tools": 0,
+            "fileEdits": 0,
+            "webSearches": 0,
+            "webFetches": 0,
+            "reasoningMs": 0
+          },
+          "judgements": [],
+          "checks": [],
+          "changedFiles": [],
+          "files": {}
+        }
+      ]
+    }
+  ]
+}
