@@ -31,6 +31,9 @@ type Options = {
   warn(text: string): void
 }
 
+/** Notes in flight at once: a run with many evals and harnesses doesn't burst the provider. */
+const MAX_NOTES = 4
+
 const groupKey = (evalId: string, harness: string) => `${evalId}\0${harness}`
 
 export function startNotes({ config, model, runId, stagingDir, planned, warn }: Options): NoteRun {
@@ -45,6 +48,18 @@ export function startNotes({ config, model, runId, stagingDir, planned, warn }: 
   const started = new Set<string>()
   const pending: Array<Promise<AnalysisNote | null>> = []
   const abort = new AbortController()
+  // A slot is handed straight to the next note waiting, so no more than MAX_NOTES run at once.
+  let running = 0
+  const waiting: Array<() => void> = []
+  const slot = async () => {
+    if (running < MAX_NOTES) running++
+    else await new Promise<void>((resolve) => waiting.push(resolve))
+  }
+  const release = () => {
+    const next = waiting.shift()
+    if (next) next()
+    else running--
+  }
 
   const start = (key: string) => {
     // In plan order, not the order they happened to finish in.
@@ -56,30 +71,33 @@ export function startNotes({ config, model, runId, stagingDir, planned, warn }: 
     // Nothing ran (all skipped by a budget or a cancel): nothing to write about.
     if (!first?.attempt || results.every((r) => r.state === 'skipped')) return
     const harness = first.attempt.cell.harness
+    const about = `analysis note on ${first.id} (${harness})`
     pending.push(
       (async () => {
-        const note = await writeAgentNote({
-          model,
-          runId,
-          evalId: first.id,
-          harness,
-          attempts: await stagedAttempts(stagingDir, results),
-          maxInputTokens: config.analysis.maxInputTokens,
-          maxOutputTokens: config.analysis.maxOutputTokens,
-          ...(config.analysis.instructions ? { instructions: config.analysis.instructions } : {}),
-          signal: abort.signal,
-        })
-        if (abort.signal.aborted) return null
-        if (note.error) warn(`analysis note on ${first.id} (${harness}) failed: ${note.error}`)
+        await slot()
         try {
+          if (abort.signal.aborted) return null
+          const note = await writeAgentNote({
+            model,
+            runId,
+            evalId: first.id,
+            harness,
+            attempts: await stagedAttempts(stagingDir, results),
+            maxInputTokens: config.analysis.maxInputTokens,
+            maxOutputTokens: config.analysis.maxOutputTokens,
+            ...(config.analysis.instructions ? { instructions: config.analysis.instructions } : {}),
+            signal: abort.signal,
+          })
+          if (abort.signal.aborted) return null
+          if (note.error) warn(`${about} failed: ${note.error}`)
           await writeNote(config.root, note)
+          return note
         } catch (error) {
-          warn(
-            `analysis note on ${first.id} (${harness}) wasn't written: ${(error as Error).message}`,
-          )
+          if (!abort.signal.aborted) warn(`${about} wasn't written: ${(error as Error).message}`)
           return null
+        } finally {
+          release()
         }
-        return note
       })(),
     )
   }

@@ -845,9 +845,11 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
       }),
       staged(dir, 'fake/skilled/fake', 1, 'fail', ['ls'], { exit: 1 }),
     ]
-    // An attempt whose worker died before writing its record: the engine's result is all there is.
+    // Attempts whose record is missing (a worker died) or cut short: the engine's result is all there is.
     const lost = { ...staged(dir, 'fake/skilled/fake', 2, 'fail', []), key: 'no record' }
-    const attempts = await stagedAttempts(dir, [...results, lost])
+    const cut = staged(dir, 'fake/skilled/fake', 3, 'fail', [])
+    writeFileSync(join(dir, 'evals', recordFileName(cut.key)), '{"outcome": "fa')
+    const attempts = await stagedAttempts(dir, [...results, lost, cut])
     assert.deepEqual(
       attempts.map((a) => [a.id, a.outcome, a.error?.kind ?? null]),
       [
@@ -856,6 +858,7 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
         ['fake/-/fake#3', 'pass', null],
         ['fake/skilled/fake#1', 'fail', 'assertion'],
         ['fake/skilled/fake#2', 'fail', 'assertion'],
+        ['fake/skilled/fake#3', 'fail', 'assertion'],
       ],
     )
     const listed = listOutcomes(attempts)
@@ -863,6 +866,7 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
       { failed: 'fake/-/fake#2', passed: 'fake/-/fake#1', match: 'cell' },
       { failed: 'fake/skilled/fake#1', passed: 'fake/-/fake#1', match: 'harness' },
       { failed: 'fake/skilled/fake#2', passed: 'fake/-/fake#1', match: 'harness' },
+      { failed: 'fake/skilled/fake#3', passed: 'fake/-/fake#3', match: 'harness' },
     ])
     assert.deepEqual(listed.attempts[1]?.failedChecks, ['test -f ok.txt'])
     assert.equal(listed.attempts[0]?.steps, 3)

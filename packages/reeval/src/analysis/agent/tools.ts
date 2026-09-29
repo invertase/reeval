@@ -117,7 +117,12 @@ export async function stagedAttempts(
   const views: AttemptView[] = []
   for (const result of results) {
     const path = join(stagingDir, 'evals', recordFileName(result.key))
-    const record = JSON.parse(await readFile(path, 'utf8').catch(() => 'null')) as EvalRecord | null
+    let record: EvalRecord | null = null
+    try {
+      record = JSON.parse(await readFile(path, 'utf8'))
+    } catch {
+      // Missing or cut short: the engine's result still says how the attempt ended.
+    }
     const view = fromStaged(result, record)
     if (view) views.push(view)
   }
