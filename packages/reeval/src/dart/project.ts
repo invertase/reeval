@@ -15,7 +15,13 @@ export const DART_CONFIG = 'reeval.config.dart'
 /** Eval files in a Dart project, as package:test names test files `*_test.dart`. */
 export const DART_INCLUDE = ['evals/**/*_eval.dart']
 
-const IGNORED = ['**/.dart_tool/**', '**/build/**', '**/.reeval/**', '**/node_modules/**', '**/.git/**']
+const IGNORED = [
+  '**/.dart_tool/**',
+  '**/build/**',
+  '**/.reeval/**',
+  '**/node_modules/**',
+  '**/.git/**',
+]
 
 export const isDartConfig = (path: string | undefined): path is string => !!path?.endsWith('.dart')
 
@@ -78,7 +84,9 @@ export async function prepareDartRunner(
   log: (line: string) => void = () => {},
 ): Promise<RunnerCommand> {
   if (!existsSync(join(root, 'pubspec.yaml'))) {
-    throw new UsageError(`${DART_CONFIG} needs a pubspec.yaml beside it, with reeval in dev_dependencies.`)
+    throw new UsageError(
+      `${DART_CONFIG} needs a pubspec.yaml beside it, with reeval in dev_dependencies.`,
+    )
   }
   const lock = join(root, 'pubspec.lock')
   const packageConfig = join(root, '.dart_tool/package_config.json')
@@ -89,7 +97,8 @@ export async function prepareDartRunner(
   ) {
     log('Resolving Dart packages (dart pub get)')
     const got = await dart(['pub', 'get'], root)
-    if (got.exitCode !== 0) throw new UsageError(`dart pub get failed:\n${got.stderr || got.stdout}`)
+    if (got.exitCode !== 0)
+      throw new UsageError(`dart pub get failed:\n${got.stderr || got.stdout}`)
   }
   const evals = (await glob(['**/*_eval.dart'], { cwd: root, ignore: IGNORED })).sort()
   const dir = join(root, '.reeval/dart')
@@ -117,7 +126,9 @@ export async function prepareDartRunner(
   }
 
   const kernel = process.env.REEVAL_DART_COMPILE === 'kernel'
-  const hash = createHash('sha256').update(source).update(kernel ? 'kernel' : 'exe')
+  const hash = createHash('sha256')
+    .update(source)
+    .update(kernel ? 'kernel' : 'exe')
   const sources = [
     ...(await glob(['**/*.dart'], { cwd: root, ignore: IGNORED, absolute: true })),
     ...pathPackages(root).flatMap((pkg) => dartFilesUnder(join(pkg, 'lib'))),
@@ -127,7 +138,10 @@ export async function prepareDartRunner(
   const output = join(dir, `${name}-${id}.${kernel ? 'dill' : 'exe'}`)
   if (!existsSync(output)) {
     const started = performance.now()
-    const compiled = await dart(['compile', kernel ? 'kernel' : 'exe', bootstrap, '-o', output], root)
+    const compiled = await dart(
+      ['compile', kernel ? 'kernel' : 'exe', bootstrap, '-o', output],
+      root,
+    )
     if (compiled.exitCode !== 0) {
       throw new UsageError(
         `The Dart evals don't compile (dart compile ${kernel ? 'kernel' : 'exe'}):\n${(compiled.stdout + compiled.stderr).trim()}`,

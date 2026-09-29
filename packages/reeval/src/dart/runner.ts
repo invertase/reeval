@@ -5,8 +5,8 @@ import { randomBytes } from 'node:crypto'
 import { createServer, type Socket } from 'node:net'
 import { createInterface } from 'node:readline'
 import { UsageError } from '../errors.ts'
-import { type FromRunner, RUNNER_PROTOCOL, type ToRunner } from './protocol.ts'
 import type { RunnerCommand } from './project.ts'
+import { type FromRunner, RUNNER_PROTOCOL, type ToRunner } from './protocol.ts'
 
 export type DartRunner = {
   send(message: ToRunner): void
@@ -47,7 +47,9 @@ export async function startDartRunner(command: RunnerCommand, cwd: string): Prom
   const exited = new Promise<string>((resolve) => {
     child.once('error', (error) => resolve(`it didn't start: ${error.message}`))
     child.once('exit', (code, signal) =>
-      resolve(`it exited (${signal ?? `code ${code}`})${stderr.trim() ? `:\n${stderr.trim()}` : ''}`),
+      resolve(
+        `it exited (${signal ?? `code ${code}`})${stderr.trim() ? `:\n${stderr.trim()}` : ''}`,
+      ),
     )
   })
 

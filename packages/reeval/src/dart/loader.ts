@@ -7,8 +7,8 @@ import { relative } from 'node:path'
 import { declareTree } from '../evaluate.ts'
 import { InfraError } from '../sandbox/types.ts'
 import type { EvalContext, EvalFn, JudgeCallOptions, Turn } from '../types.ts'
-import type { FromRunner } from './protocol.ts'
 import { prepareDartRunner, type RunnerCommand } from './project.ts'
+import type { FromRunner } from './protocol.ts'
 import { type DartRunner, errorFrom, startDartRunner } from './runner.ts'
 
 type Live = {

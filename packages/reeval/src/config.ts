@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import { availableParallelism, totalmem } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { loadDartConfig } from './dart/config.ts'
+import { DART_CONFIG, DART_INCLUDE, detectLanguage, isDartConfig } from './dart/project.ts'
 import { parseDuration } from './duration.ts'
 import { inCI } from './env.ts'
 import { helpersFor, isSecret } from './environment.ts'
@@ -13,8 +15,6 @@ import {
   isAgentKind,
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
-import { loadDartConfig } from './dart/config.ts'
-import { DART_CONFIG, DART_INCLUDE, detectLanguage, isDartConfig } from './dart/project.ts'
 import { esJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
 import { checkHarnesses, checkOptions } from './options.ts'
