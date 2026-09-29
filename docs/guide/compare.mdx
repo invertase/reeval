@@ -234,17 +234,17 @@ evals/questions.eval.ts › greets by name  2          1         1     4
 ```text
 Summary
  evals/questions.eval.ts
-   ✓ greets by name      3/4 · 100% gated  4 attempts
+   ✓ greets by name      4/4 · 100% gated  4 attempts
        cursor:composer-2.5/plain/docker                control    1/1  100%
        cursor:composer-2.5/with-house-greeting/docker  variant    1/1  100%   lift +0 pts (95% −79…+79, 1/1 vs 1/1), within noise
        …
-       pi:gemini-3.8-flash/plain/docker                control    0/1    0%   not gated
-       pi:gemini-3.8-flash/with-house-greeting/docker  variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+       pi:gemini-3.8-flash/plain/docker                control    1/1  100%
+       pi:gemini-3.8-flash/with-house-greeting/docker  variant    1/1  100%   lift +0 pts (95% −79…+79, 1/1 vs 1/1), within noise
        …
-       question  "Which greet.js handles a missing or empty name better?" within: with-house-greeting 2/2 (100%), plain 0/2 (0%) · 4 votes, 2 ties · gemini-3.8-flash
+       question  "Which greet.js handles a missing or empty name better?" within: plain 0/4 (0%), with-house-greeting 4/4 (100%) · across: cursor:composer-2.5 0/2 (0%), pi:gemini-3.8-flash 2/2 (100%) · 8 votes, 2 ties · gemini-3.8-flash
 ```
 
-A real run on Cursor and pi: with the skill, both agents' `greet.js` answered a missing name with `Ahoy, crew!`, and neither control did. pi's control failed its check, so it's in no pair: Cursor's two arms made one within pair, and the variants one across pair, which tied both times.
+A real run on Cursor and pi. Lift can't separate the arms, since all four attempts passed, but the question can: with the skill, both agents' `greet.js` answered a missing name with `Ahoy, crew!`, and the model picked that arm in both orders on both harnesses.
 
 reeval pairs the attempts from their diffs in two cuts. `within` a harness, arm against arm on the same run; `across` harnesses, agent against agent on the same arm and run. Each pair goes to the model twice, the order swapped, labelled only A and B, so neither position nor a name can win it.
 
