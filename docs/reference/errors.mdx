@@ -50,6 +50,8 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `Unknown compare option "strategy" in evaluate("e")` | Drop `strategy`. Share setup with `extendEnvironment` before `compare`. |
 | `environment and compare can't both be set in evaluate("e")` | Drop `environment`. A parent `environment` can stay when only the child sets `compare`. |
 | `compare: false can't be set in evaluate("e")` | Omit `compare`, or pass `{ baseline, variants }`. A profile uses `limit.compare: false`. |
+| `compare.question in evaluate("e") is an empty list. …` | Ask at least one question, or leave `question` out. An empty string, an entry without its `question` and the same question twice are refused too. |
+| `compare.question "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |
 | `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (t) => { … })`. |
 | `evaluate.only isn't allowed in CI` | Remove the `.only` before pushing. |
@@ -92,6 +94,7 @@ See [Profiles and budgets](/reference/profiles).
 | `warning: the egress gateway refused POST https://…: it carries CURSOR_API_KEY's placeholder and isn't one of the endpoints reeval brokers it for` | The harness CLI called an endpoint reeval doesn't broker. Check for a CLI update and report it. |
 | `The API rejected CURSOR_API_KEY: set a valid key in the environment or .env.local. …` | The harness's API refused its key (an HTTP 401, or Google's "API key not valid"). The named variable is the one to fix; the provider's own message follows. |
 | `No credentials for judge model "…". …` | Set the provider's key or `AI_GATEWAY_API_KEY`. See [Judges](/reference/judges). |
+| `compare.question "Which is cleaner?" (evals/q.eval.ts › asks) needs a language model to answer it. …` | Set `analysis.model`, or give the question its own `model`. A judge that's an evaluation model can't answer it; `--dry-run` still plans. |
 
 ## Docker and images
 

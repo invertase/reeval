@@ -204,6 +204,35 @@ Under each variant, the effort line compares the median attempt with the control
 
 The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`. The studio's cells table shows effort next to lift, as in the screenshot above.
 
+## Ask questions
+
+```ts
+{
+  compare: {
+    baseline: plain,
+    variants: [withHouseGreeting],
+    question: 'Which greet.js is easier to read?',
+  },
+  pin: ['compare'],
+}
+```
+
+Lift says which arm passes more often. A `question` asks which arm did the better job, pair by pair, after every attempt has finished. Questions annotate the compare: they never change pass, fail or the exit code.
+
+```text
+plan  1 eval · 2 cells · 2 attempts · ~6m 00s serial (~3m 00s at concurrency 4)
+eval                                                              harnesses  variants  runs  attempts  notes
+evals/skill.eval.ts › house greeting › greets in the house style  1          1         1     2
+  question 1/1  Which greet.js is easier to read? · after the run · google/gemini-3.8-flash
+…
+```
+
+`reeval run --dry-run` lists each question with the model that will answer it. Pass a list for several, and `{ question, model }` to give one its own model. Without one, `analysis.model` answers, else the judge's model when it's a language model.
+
+<Info>
+  Questions are planned and checked but not answered yet. `reeval run` exits 2 at plan time when a question has no language model, and a profile that leaves only the baseline drops them.
+</Info>
+
 ## Next
 
 <CardGroup cols={2}>
