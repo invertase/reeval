@@ -345,6 +345,50 @@ describe('recording runs into evals/.history', () => {
     sh(p.dir, 'worktree', 'remove', '--force', target)
   })
 
+  test("a profile's judge is the judge the record names and fingerprints", async () => {
+    const withProfile = await project('record-profile-judge', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({
+        harness: harness(),
+        judge: `{ model: 'google/gemini-2.5-flash', threshold: 0.5 }`,
+        extra: `profiles: {
+    ci: { judge: { model: fakeJudge({ score: 0.9 }) }, defaults: { judge: { threshold: 0.8 } } },
+  },`,
+      }),
+    })
+    // The credential check still asks for the config judge's key; the fake judge never uses it.
+    const r = await runCli(withProfile.dir, ['run', '--profile', 'ci'], {
+      env: { GOOGLE_GENERATIVE_AI_API_KEY: 'unused' },
+    })
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(withProfile.dir)
+    assert.equal(run.evals[0]?.attempts[0]?.judgements[0]?.threshold, 0.8, 'the profile judged')
+    assert.deepEqual(
+      { model: run.stack.judge.model, threshold: run.stack.judge.threshold },
+      { model: 'fake', threshold: 0.8 },
+    )
+    assert.deepEqual(
+      { model: run.config.judgeModel, threshold: run.config.threshold },
+      { model: 'fake', threshold: 0.8 },
+    )
+
+    const direct = await project('record-config-judge', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({
+        harness: harness(),
+        judge: '{ model: fakeJudge({ score: 0.9 }), threshold: 0.8 }',
+      }),
+    })
+    assert.equal((await runCli(direct.dir)).code, 0)
+    const same = readRun(direct.dir).run
+    assert.equal(run.stack.judge.version, same.stack.judge.version)
+    assert.equal(
+      run.evals[0]?.cells[0]?.fingerprintParts.judge,
+      same.evals[0]?.cells[0]?.fingerprintParts.judge,
+      'the same judge is the same measurement, however it was chosen',
+    )
+  })
+
   test('a project reached through another spelling of its path records like any other', async () => {
     // A symlink here; on Windows an 8.3 short name (C:\\Users\\RUNNER~1). git reports its top
     // level canonically, so paths reeval works out against it must be spelled from the project's root.

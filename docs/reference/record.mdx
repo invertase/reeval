@@ -185,7 +185,9 @@ What ran and graded the agents: the machine, images, harnesses and judge.
   Each harness: its configured `model`, and `resolvedModels`, what it reported serving across the run's turns with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5` without `params`); empty when it reports none.
 </Property>
 
-<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}"></Property>
+<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}">
+  The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it. `config.judgeModel` and `config.threshold` name the same one.
+</Property>
 
 <Property name="context" type="ContextFile[]">
   Union of every attempt's context files.

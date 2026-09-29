@@ -364,8 +364,12 @@ export type Stack = {
      */
     resolvedModels: string[]
   }>
+  /**
+   * The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it.
+   * `config.judgeModel` and `config.threshold` name the same one.
+   */
   judge: {
-    /** The config's default model; groups, evals and calls may use others (see each verdict). */
+    /** Its model; groups, evals and calls may use others (see each verdict). */
     model: string | null
     /** Model ids the provider reported serving, across every judge call in the run. */
     resolvedModels: string[]
