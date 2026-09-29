@@ -78,7 +78,7 @@ A profile takes `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. Any
 </Property>
 
 <Property name="compare" type="false | { maxVariants: number }" optional>
-  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants.
+  `false` turns `compare` off, so only the control runs. `{ maxVariants: n }` keeps the first `n` variants. A limit that leaves only the control, `false` or `{ maxVariants: 0 }`, also drops the compare's `question`s, and the plan notes `questions off (profile pr)`.
 </Property>
 
 <Property name="harness" type="string[]" optional>
@@ -94,6 +94,16 @@ pf/sized.eval.ts › sized › narrowed       1          0 of 1    1     1      
 pf/sized.eval.ts › sized › pinned         1          1         1     2         runs 3 → 1 (profile pr) · pinned: compare
 pf/sized.eval.ts › sized › two harnesses  1          0 of 1    1     1         runs 3 → 1 (profile pr) · harnesses 2 → 1 (profile pr) · compare off (profile pr)
 pf/sized.eval.ts › sized › other only     0          0 of 1    1     0         skipped: no harness left: profile pr allows fake · …
+```
+
+With `compare: false`, an eval with compare questions drops them too. A pinned one keeps them:
+
+```text
+plan  profile off (--profile) · 3 evals · 8 cells · 8 attempts · …
+eval                                    harnesses  variants  runs  attempts  notes
+evals/questions.eval.ts › one question  2          0 of 1    1     2         compare off (profile off) · questions off (profile off)
+evals/questions.eval.ts › pinned        2          1         1     4         pinned: compare
+  question 1/1  Which is shorter? · after the run · needs a language model: set analysis.model
 ```
 
 ## pin

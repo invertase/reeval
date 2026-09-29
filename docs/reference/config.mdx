@@ -168,7 +168,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="analysis" type="{ model?, instructions?, maxInputTokens?, maxOutputTokens? }">
-  Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). See [reeval analyze](/reference/cli/analyze).
+  Settings for `reeval analyze`. `model` is a `provider/model` language model (default: the judge's, when it's a language model); `instructions` add your own guidance; `maxInputTokens` caps the digest (default `20000`, at least 1000) and `maxOutputTokens` the answer (default `8000`, at least 500). `model` also answers a [compare `question`](/reference/options#compare) that names no model of its own. See [reeval analyze](/reference/cli/analyze).
 </Property>
 
 `compare`, `tags` and `pin` belong on groups and evals, not in the config.

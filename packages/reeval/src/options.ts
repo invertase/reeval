@@ -18,10 +18,12 @@ import {
 import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { opencodeModelError } from './harness.ts'
+import { checkModelString } from './judge/index.ts'
 import type {
   Cell,
   CellGate,
   CompareGate,
+  CompareOptions,
   Duration,
   EgressPolicy,
   Environment,
@@ -34,6 +36,7 @@ import type {
   JudgeOptions,
   PinnableKey,
   PlannedEgress,
+  PlannedQuestion,
   ResolvedProfile,
   SandboxDescriptor,
   SandboxWarning,
@@ -85,7 +88,9 @@ export function checkGate(value: unknown, where: string): void {
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 const GATES: CompareGate[] = ['variants', 'all', 'none']
-const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness']
+const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'question']
+const QUESTION_KEYS = ['question', 'model']
+const QUESTION_EXAMPLE = `question: 'Which handles state more cleanly?'`
 
 const ID = /^[A-Za-z0-9._:@+-]+$/
 
@@ -133,6 +138,60 @@ const describe = (value: unknown) => {
   return JSON.stringify(value) ?? String(value)
 }
 
+/** A question's model is a language model: evaluation models score yes/no questions only. */
+const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
+
+function checkQuestion(item: unknown, where: string): string {
+  if (typeof item === 'string') {
+    if (item.trim()) return item
+    throw new UsageError(
+      `compare.question in ${where} is an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`,
+    )
+  }
+  if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+    throw new UsageError(
+      `compare.question in ${where} takes strings or { question, model? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
+    )
+  }
+  const unknown = Object.keys(item).filter((k) => !QUESTION_KEYS.includes(k))
+  if (unknown.length) {
+    throw new UsageError(
+      `compare.question in ${where} takes { question, model? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).`,
+    )
+  }
+  const { question, model } = item as { question?: unknown; model?: unknown }
+  if (typeof question !== 'string' || !question.trim()) {
+    throw new UsageError(
+      `compare.question in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
+    )
+  }
+  if (model !== undefined) {
+    if (typeof model !== 'string' || checkModelString(model)) {
+      throw new UsageError(
+        `compare.question "${question}" in ${where}: model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`,
+      )
+    }
+    if (isEvaluationModel(model)) {
+      throw new UsageError(
+        `compare.question "${question}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
+      )
+    }
+  }
+  return question
+}
+
+function checkQuestions(value: unknown, where: string): void {
+  const list = Array.isArray(value) ? value : [value]
+  if (list.length === 0) {
+    throw new UsageError(
+      `compare.question in ${where} is an empty list. Ask at least one, e.g. ${QUESTION_EXAMPLE}, or leave question out.`,
+    )
+  }
+  const texts = list.map((item) => checkQuestion(item, where))
+  const dupe = texts.find((t, i) => texts.indexOf(t) !== i)
+  if (dupe) throw new UsageError(`compare.question in ${where} asks "${dupe}" twice`)
+}
+
 function checkCompare(value: unknown, where: string): void {
   if (Array.isArray(value)) {
     throw new UsageError(
@@ -147,16 +206,19 @@ function checkCompare(value: unknown, where: string): void {
   }
   for (const key of Object.keys(value)) {
     if (!COMPARE_KEYS.includes(key)) {
-      throw new UsageError(`Unknown compare option "${key}" in ${where}`)
+      const hint = key === 'questions' ? '. Did you mean "question"?' : ''
+      throw new UsageError(`Unknown compare option "${key}" in ${where}${hint}`)
     }
   }
-  const { baseline, variants, gate, minLift, harness } = spec as {
+  const { baseline, variants, gate, minLift, harness, question } = spec as {
     baseline?: unknown
     variants: unknown[]
     gate?: unknown
     minLift?: unknown
     harness?: unknown
+    question?: unknown
   }
+  if (question !== undefined) checkQuestions(question, where)
   if (!isEnvironment(baseline)) {
     throw new UsageError(
       `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment.`,
@@ -361,7 +423,16 @@ export type NormalizedCompare = {
   harness?: string[]
   /** How many variants the eval asked for, before a profile's limit. */
   of: number
+  /** Asked after the run; empty without any, or once a limit leaves one arm. */
+  questions: PlannedQuestion[]
 }
+
+const plannedQuestions = (value: CompareOptions['question']): PlannedQuestion[] =>
+  (value === undefined ? [] : Array.isArray(value) ? value : [value]).map((q) =>
+    typeof q === 'string'
+      ? { question: q }
+      : { question: q.question, ...(q.model !== undefined ? { model: q.model } : {}) },
+  )
 
 export type Resolved = {
   harness: HarnessDescriptor[]
@@ -393,6 +464,7 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
       ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
       : {}),
     of: value.variants.length,
+    questions: plannedQuestions(value.question),
   }
 }
 
@@ -516,6 +588,11 @@ export function cascade(
           ...out.compare,
           variants: out.compare.variants.slice(0, limit.compare.maxVariants),
         }
+      }
+      // A question compares arms, so with the baseline alone there is nothing to ask it of.
+      if (out.compare.variants.length === 0 && out.compare.questions.length) {
+        notes.push(`questions off (${tag})`)
+        out.compare = { ...out.compare, questions: [] }
       }
     }
     const pins = out.pin.filter((k) =>
@@ -736,6 +813,9 @@ export function evalPlan(
       ? { run: resolved.compare.variants.length, of: resolved.compare.of }
       : null,
     ...(resolved.compare ? { compare: { baseline: resolved.compare.baseline.name } } : {}),
+    ...(!skip && resolved.compare?.questions.length
+      ? { questions: resolved.compare.questions }
+      : {}),
     runs: resolved.runs,
     ...(resolved.gate !== undefined ? { gate: resolved.gate } : {}),
     attempts: skip ? 0 : attempts.length,

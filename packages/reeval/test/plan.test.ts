@@ -17,6 +17,13 @@ export const cases: PlanCase[] = [
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
+  { dir: 'compare', name: 'questions', args: ['evals/questions.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'questions-dropped',
+    args: ['--profile', 'off', 'evals/questions.eval.ts'],
+  },
+  { dir: 'compare', name: 'questions-group', args: ['evals/questions-group.eval.ts'] },
   { dir: 'profiles', name: 'local-none', args: [] },
   { dir: 'profiles', name: 'pr-in-ci', args: [], env: { CI: 'true' } },
   { dir: 'profiles', name: 'nightly', args: ['--profile', 'nightly'] },

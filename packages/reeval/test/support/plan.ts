@@ -94,6 +94,9 @@ export function renderPlan(plan: PlanDocument): string {
           .join(' · '),
       ])
     })
+    for (const q of e.questions ?? []) {
+      rows.push(['', `question: ${q.question} · ${q.model ?? 'no language model'}`])
+    }
   }
   const excluded = plan.excluded.map((x) => `${x.id} (${x.mode})`)
   const images = plan.images.flatMap((image) => [

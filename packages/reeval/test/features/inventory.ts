@@ -132,6 +132,19 @@ export const inventory: InventoryFeature[] = [
     tests: [options('compare.harness scopes variants')],
   },
   {
+    id: 'compare.question',
+    area: 'Config and selection',
+    name: '`compare.question`: questions in the plan, their model, and a profile dropping them',
+    plan: ['compare/questions', 'compare/questions-dropped', 'compare/questions-group'],
+    tests: [
+      options('--dry-run names the questions with no language model'),
+      options('an evaluation model as the judge or the analysis model exits 2'),
+      options("a question's own model needs its key"),
+      options('with a language model the run plans its questions'),
+      options('common mistakes'),
+    ],
+  },
+  {
     id: 'gate',
     area: 'Config and selection',
     name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",

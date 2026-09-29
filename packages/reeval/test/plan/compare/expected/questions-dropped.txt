@@ -1,0 +1,11 @@
+profile off (--profile) · 3 evals · 8 cells · 8 attempts
+evals/questions.eval.ts › one question                           a/base/fake     control          ungated  ×1  compare off (profile off) · questions off (profile off)
+                                                                 b/base/fake     control          ungated  ×1
+evals/questions.eval.ts › two questions, one with its own model  a/base/fake     control          ungated  ×1  compare off (profile off) · questions off (profile off)
+                                                                 b/base/fake     control          ungated  ×1
+evals/questions.eval.ts › pinned                                 a/base/fake     control          ungated  ×1  pinned: compare
+                                                                 a/skilled/fake  variant skilled  gated    ×1
+                                                                 b/base/fake     control          ungated  ×1
+                                                                 b/skilled/fake  variant skilled  gated    ×1
+                                                                 question: Which is shorter? · no language model
+excluded: —

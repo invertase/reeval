@@ -1,0 +1,16 @@
+no profile · 3 evals · 12 cells · 16 attempts
+evals/questions-group.eval.ts › asked by the group › inherits the question  a/base/fake     control          ungated             ×1
+                                                                            a/skilled/fake  variant skilled  gated               ×1
+                                                                            b/base/fake     control          ungated             ×1
+                                                                            b/skilled/fake  variant skilled  gated               ×1
+                                                                            question: Which handles state more cleanly? · no language model
+evals/questions-group.eval.ts › asked by the group › also inherits it       a/base/fake     control          ungated             ×2
+                                                                            a/skilled/fake  variant skilled  gated passRate 0.5  ×2
+                                                                            b/base/fake     control          ungated             ×2
+                                                                            b/skilled/fake  variant skilled  gated passRate 0.5  ×2
+                                                                            question: Which handles state more cleanly? · no language model
+evals/questions-group.eval.ts › asked by the group › replaces the compare   a/base/fake     control          ungated             ×1
+                                                                            a/terse/fake    variant terse    gated               ×1
+                                                                            b/base/fake     control          ungated             ×1
+                                                                            b/terse/fake    variant terse    gated               ×1
+excluded: —
