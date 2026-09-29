@@ -3,7 +3,7 @@
 // history.test.ts.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
@@ -16,7 +16,7 @@ import type { FingerprintParts } from '../src/history/types.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
 import { liftInterval, wilson } from '../src/stats.ts'
-import type { BlindPair, EvalRecord, FakeAnalysisModel, FakeVote, Outcome } from '../src/types.ts'
+import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 import {
   E2E_ARMS,
