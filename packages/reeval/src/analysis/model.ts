@@ -16,6 +16,24 @@ export type ResolvedAnalysisModel = {
 const isFake = (m: unknown): m is FakeAnalysisModel =>
   typeof m === 'object' && m !== null && (m as FakeAnalysisModel).kind === 'fake-analysis'
 
+const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
+
+/** `analysis.model`, else the judge's when it's a language model; undefined when neither is. */
+function defaultModel(config: ResolvedConfig): string | FakeAnalysisModel | undefined {
+  const model = config.analysis.model
+  if (model !== undefined) return model
+  const judge = config.judge.model
+  if (typeof judge === 'string' && !isEvaluationModel(judge)) return judge
+  return undefined
+}
+
+/** ` (the judge, typesafe-ai/jev-1.13.0, is an evaluation model: it scores yes/no questions and can't <task>)`, when it is one. */
+function judgeAside(config: ResolvedConfig, task: string): string {
+  const judge = config.judge.model
+  if (typeof judge !== 'string' && !isFakeJudge(judge)) return ''
+  return ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't ${task})`
+}
+
 /** Who needs the analysis model: `reeval analyze`, or `analysis.agent` during `reeval run`. */
 export type AnalysisUse = 'analyze' | 'agent'
 
@@ -24,17 +42,43 @@ export function analysisModelName(
   config: ResolvedConfig,
   use: AnalysisUse = 'analyze',
 ): string | FakeAnalysisModel {
-  const model = config.analysis.model
+  const model = defaultModel(config)
   if (model !== undefined) return model
-  const judge = config.judge.model
-  if (typeof judge === 'string' && !judge.startsWith('typesafe-ai/')) return judge
   throw new UsageError(
-    `${use === 'agent' ? 'config.analysis.agent' : 'reeval analyze'} needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${
-      typeof judge === 'string' || isFakeJudge(judge)
-        ? ` (the judge, ${isFakeJudge(judge) ? 'a fake judge' : judge}, is an evaluation model: it scores yes/no questions and can't write an analysis)`
-        : ''
-    }${use === 'agent' ? ', or turn agent off' : ', or run reeval analyze --context to hand the digest to your own coding agent'}.`,
+    `${use === 'agent' ? 'config.analysis.agent' : 'reeval analyze'} needs a language model. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'write an analysis')}${use === 'agent' ? ', or turn agent off' : ', or run reeval analyze --context to hand the digest to your own coding agent'}.`,
   )
+}
+
+/** The plan's name for the model a compare question without its own is answered by; null when none. */
+export function questionModelLabel(config: ResolvedConfig): string | null {
+  const model = defaultModel(config)
+  if (model === undefined) return null
+  return isFake(model) ? 'fake' : model
+}
+
+/**
+ * The model that answers a compare question: its own, else the analysis model. Throws a
+ * UsageError (exit 2) when that's missing or an evaluation model.
+ */
+export function questionModel(
+  config: ResolvedConfig,
+  question: { question: string; model?: string },
+  where: string,
+): string | FakeAnalysisModel {
+  if (question.model !== undefined) return question.model
+  const model = defaultModel(config)
+  const fix = `give the question its own, { question: '…', model: 'google/gemini-3.8-flash' }`
+  if (model === undefined) {
+    throw new UsageError(
+      `compare.question "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'pick between two attempts')}, or ${fix}.`,
+    )
+  }
+  if (typeof model === 'string' && isEvaluationModel(model)) {
+    throw new UsageError(
+      `compare.question "${question.question}" (${where}) would be answered by config.analysis.model "${model}", an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
+    )
+  }
+  return model
 }
 
 /** Checks the model and its credentials before any work; throws a UsageError (exit 2). */
@@ -44,7 +88,7 @@ export function resolveAnalysisModel(
 ): ResolvedAnalysisModel {
   const model = analysisModelName(config, use)
   if (isFake(model)) return { name: 'fake', route: 'fake', fake: model }
-  if (model.startsWith('typesafe-ai/')) {
+  if (isEvaluationModel(model)) {
     throw new UsageError(
       `config.analysis.model "${model}" is an evaluation model: it scores yes/no questions and can't write an analysis. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
     )

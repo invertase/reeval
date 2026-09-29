@@ -388,6 +388,134 @@ evaluate('scoped', { compare: { baseline: base, variants: [skilled], harness: ['
   })
 })
 
+describe('compare questions', () => {
+  const asks = (question: string) => ({
+    'evals/envs.ts': `import { defineEnvironment } from 'reeval'
+export const base = defineEnvironment('base', {})
+export const skilled = defineEnvironment('skilled', {})
+`,
+    'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate('asks', { compare: { baseline: base, variants: [skilled], question: ${question} } }, async (t) => {
+  await t.send('go')
+  await expect(t).toHaveFile('ok.txt')
+})
+`,
+  })
+  const OK = `fakeHarness({ files: { 'ok.txt': 'yes' } })`
+  const noKeys = { GOOGLE_GENERATIVE_AI_API_KEY: '', AI_GATEWAY_API_KEY: '', VERCEL_OIDC_TOKEN: '' }
+
+  test('--dry-run names the questions with no language model; reeval run exits 2 before any attempt', async () => {
+    const p = await project('questions-no-model', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
+      ...asks(`'Which is cleaner?'`),
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(
+      dry.stdout,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · needs a language model: set analysis\.model$/m,
+    )
+    const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
+    assert.equal(json.code, 0, json.stdout + json.stderr)
+    assert.deepEqual(JSON.parse(json.stdout).evals[0].questions, [
+      { question: 'Which is cleaner?', model: null },
+    ])
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(
+      r.stderr,
+      /compare\.question "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}\./,
+    )
+    assert.doesNotMatch(r.stdout, /✓|✗/, 'no attempt ran')
+    assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
+  })
+
+  test('an evaluation model as the judge or the analysis model exits 2 at plan time', async () => {
+    for (const [name, extra, judge, message] of [
+      [
+        'judge',
+        '',
+        `{ model: 'typesafe-ai/jev-1.13.0' }`,
+        /needs a language model to answer it\. .* \(the judge, typesafe-ai\/jev-1\.13\.0, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\)/,
+      ],
+      [
+        'analysis',
+        `analysis: { model: 'typesafe-ai/jev-1.13.0' },`,
+        undefined,
+        /compare\.question "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by config\.analysis\.model "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+      ],
+    ] as const) {
+      const p = await project(`questions-eval-model-${name}`, {
+        'reeval.config.ts': fakeConfig({ extra, ...(judge ? { judge } : {}) }),
+        ...asks(`'Which is cleaner?'`),
+      })
+      const r = await runCli(p.dir, ['run'], { env: { TYPESAFE_AI_API_KEY: 'x' } })
+      assert.equal(r.code, 2, r.stdout + r.stderr)
+      assert.match(r.stderr, message)
+      assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
+    }
+  })
+
+  test("a question's own model needs its key, and a malformed one exits 2", async () => {
+    const p = await project('questions-own-model', {
+      'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
+      ...asks(`[{ question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }]`),
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.deepEqual(JSON.parse(dry.stdout).evals[0].questions, [
+      { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' },
+    ])
+    const missing = await runCli(p.dir, ['run'], { env: noKeys })
+    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+    assert.match(
+      missing.stderr,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+    )
+    const malformed = await runCli(p.dir, ['run'], {
+      env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
+    })
+    assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+    assert.match(
+      malformed.stderr,
+      /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
+    )
+  })
+
+  test('with a language model the run plans its questions and the outcome is the checks', async () => {
+    const p = await project('questions-fake-model', {
+      'reeval.config.ts': `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: ${OK},
+  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: { model: fakeAnalysis({ output: {} }) },
+})
+`,
+      ...asks(`['Which is cleaner?', 'Which is shorter?']`),
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(dry.stdout, /^ {2}question 1\/2 {2}Which is cleaner\? · after the run · fake$/m)
+    assert.match(dry.stdout, /^ {2}question 2\/2 {2}Which is shorter\? · after the run · fake$/m)
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.outcome, 'pass')
+    assert.deepEqual(
+      e?.cells.map((c) => [c.role, c.outcome, c.pass, c.fail]),
+      [
+        ['control', 'pass', 1, 0],
+        ['variant', 'pass', 1, 0],
+      ],
+    )
+  })
+})
+
 // Which evals, cells and attempts a profile plans is pinned by the plan snapshots in
 // plan.test.ts (test/plan/profiles); these check what a run does with that plan.
 describe('gate policies', () => {
@@ -588,6 +716,51 @@ describe('common mistakes', () => {
       'a compare strategy',
       `evaluate('e', { compare: { baseline: a, variants: [b], strategy: 'peer' } }, async () => {})`,
       /Unknown compare option "strategy" in evaluate\("e"\)/,
+    ],
+    [
+      'compare questions in the plural',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: ['Which?'] } as never }, async () => {})`,
+      /Unknown compare option "questions" in evaluate\("e"\)\. Did you mean "question"\?/,
+    ],
+    [
+      'an empty compare question',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: ' ' } }, async () => {})`,
+      /compare\.question in evaluate\("e"\) is an empty string\. Ask something, e\.g\. question: 'Which handles state more cleanly\?'\./,
+    ],
+    [
+      'an empty list of compare questions',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: [] } }, async () => {})`,
+      /compare\.question in evaluate\("e"\) is an empty list\. Ask at least one, e\.g\. question: 'Which handles state more cleanly\?', or leave question out\./,
+    ],
+    [
+      'a compare question that is not a string or an entry',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: [42] as never } }, async () => {})`,
+      /compare\.question in evaluate\("e"\) takes strings or \{ question, model\? \} \(got 42\)/,
+    ],
+    [
+      'a compare question entry with an unknown key',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: { question: 'Which?', judge: 'x' } as never } }, async () => {})`,
+      /compare\.question in evaluate\("e"\) takes \{ question, model\? \} \(got "judge"\)\./,
+    ],
+    [
+      'a compare question entry without its question',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: [{ model: 'google/gemini-3.8-flash' } as never] } }, async () => {})`,
+      /compare\.question in evaluate\("e"\) has an entry without its question \(got undefined\)/,
+    ],
+    [
+      'a compare question model without a provider',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: { question: 'Which?', model: 'gemini-3.8-flash' } } }, async () => {})`,
+      /compare\.question "Which\?" in evaluate\("e"\): model is a 'provider\/model' string, e\.g\. 'google\/gemini-3\.8-flash' \(got "gemini-3\.8-flash"\)/,
+    ],
+    [
+      'an evaluation model for a compare question',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: { question: 'Which?', model: 'typesafe-ai/jev-1.13.0' } } }, async () => {})`,
+      /compare\.question "Which\?" in evaluate\("e"\) names typesafe-ai\/jev-1\.13\.0, an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+    ],
+    [
+      'the same compare question twice',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: ['Which?', { question: 'Which?' }] } }, async () => {})`,
+      /compare\.question in evaluate\("e"\) asks "Which\?" twice/,
     ],
     [
       'environment and compare on the same eval',

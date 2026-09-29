@@ -568,6 +568,8 @@ async function executeRun(
     toRun = planned
     for (const p of planned)
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
+    const asks = planned.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
+    const models = asks ? await import('./analysis/model.ts') : undefined
     plan = await buildPlan({
       planned,
       profile,
@@ -575,6 +577,7 @@ async function executeRun(
       concurrency,
       root: config.root,
       historyDir: config.history.dir,
+      questionModel: models?.questionModelLabel(config) ?? null,
     })
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
     const targets = imageTargets(
@@ -619,9 +622,18 @@ async function executeRun(
     checkAttemptBudget(plan, setup.force, config.file)
     const analysis = config.analysis.agent ? await import('./analysis/model.ts') : null
     analysis?.analysisModelName(config, 'agent')
+    const questionModels = new Set<string>()
+    for (const row of plan.rows) {
+      if (row.plan.skip || !models) continue
+      for (const q of row.plan.questions ?? []) {
+        const model = models.questionModel(config, q, row.id)
+        if (typeof model === 'string') questionModels.add(model)
+      }
+    }
     const missing = missingCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
       profile,
+      questionModels: [...questionModels],
     })
     if (missing.length) {
       throw new UsageError(
@@ -630,6 +642,7 @@ async function executeRun(
     }
     const malformed = malformedCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
+      questionModels: [...questionModels],
     })
     if (malformed.length) {
       throw new UsageError(

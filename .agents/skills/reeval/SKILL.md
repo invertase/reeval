@@ -236,6 +236,13 @@ group(
 - With `runs > 1`, a cell passes only if every attempt passes, unless `gate: { passRate: 0.8 }`.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.
+- `compare.question` (a string, or a list of strings and `{ question, model? }`) asks which arm
+  did better, pair by pair, after the run. Questions annotate the compare and never gate:
+  pass, fail and the exit code stay the checks'. Their model is the entry's `model`, else
+  `analysis.model`, else the judge's when it's a language model (not `typesafe-ai/*`); with
+  none, `reeval run` exits 2 at plan time while `--dry-run` still lists them. A profile that
+  leaves only the baseline drops them (`questions off (profile …)`). Keep deterministic checks
+  for pass or fail, and ask questions only about quality between arms.
 
 ## Sandboxes
 
@@ -303,6 +310,8 @@ them to `evals/.history/` to commit.
 | `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
 | `environment` and `compare: { … }` together | `environment and compare can't both be set` | Drop `environment` |
 | `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |
+| `compare: { questions: [...] }` | `Unknown compare option "questions" … Did you mean "question"?` | `question: [...]` |
+| A compare question and no language model | `compare.question "…" (…) needs a language model` (exit 2) | Set `analysis.model`, or give the question its own `model` |
 | `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |

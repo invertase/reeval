@@ -527,26 +527,33 @@ function agentModel(config: ResolvedConfig): string | null {
 
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
- * plans (default: the config's), the config's judge and, with `analysis.agent`, the analysis
- * model, and required config and profile secrets.
+ * plans (default: the config's), the config's judge, the models that answer compare questions,
+ * the analysis model with `analysis.agent`, and required config and profile secrets.
  */
 export function missingCredentials(
   config: ResolvedConfig,
   env = process.env,
-  options: { harnesses?: HarnessDescriptor[]; profile?: ResolvedProfile | null } = {},
+  options: {
+    harnesses?: HarnessDescriptor[]
+    profile?: ResolvedProfile | null
+    /** The `'provider/model'`s that answer compare questions. */
+    questionModels?: string[]
+  } = {},
 ): string[] {
   const missing: string[] = []
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
-  if (config.judge.model !== undefined) {
-    const judgeKeys = judgeCredentials(config.judge.model)
-    if (judgeKeys.length && !judgeKeys.some((k) => env[k])) missing.push(judgeKeys.join(' or '))
-  }
-  const analyst = agentModel(config)
-  if (analyst) {
-    const keys = judgeCredentials(analyst)
-    const named = keys.join(' or ')
-    if (keys.length && !keys.some((k) => env[k]) && !missing.includes(named)) missing.push(named)
+  const models = [
+    ...(config.judge.model !== undefined ? [config.judge.model] : []),
+    ...(options.questionModels ?? []),
+    ...(agentModel(config) ? [agentModel(config) as string] : []),
+  ]
+  for (const model of models) {
+    const modelKeys = judgeCredentials(model)
+    const alternatives = modelKeys.join(' or ')
+    if (modelKeys.length && !modelKeys.some((k) => env[k]) && !missing.includes(alternatives)) {
+      missing.push(alternatives)
+    }
   }
   const vars = { ...config.env, ...options.profile?.defaults.env }
   for (const [name, from] of secretSources(vars)) {
@@ -560,7 +567,8 @@ export const badCharacterAt = (value: string) =>
   [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
 
 /**
- * Keys the run sends in request headers (the agents' credentials and the judge's) whose value has
+ * Keys the run sends in request headers (the agents' credentials, the judge's and the compare
+ * questions' models') whose value has
  * whitespace or a control character in it, with where the first one is: a key pasted from a
  * wrapped terminal line picks up a line break, and the agent then hangs on a request it can't send
  * rather than failing to authenticate.
@@ -568,10 +576,11 @@ export const badCharacterAt = (value: string) =>
 export function malformedCredentials(
   config: ResolvedConfig,
   env = process.env,
-  options: { harnesses?: HarnessDescriptor[] } = {},
+  options: { harnesses?: HarnessDescriptor[]; questionModels?: string[] } = {},
 ): string[] {
   const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
   if (config.judge.model !== undefined) names.push(...judgeCredentials(config.judge.model))
+  for (const model of options.questionModels ?? []) names.push(...judgeCredentials(model))
   const analyst = agentModel(config)
   if (analyst) names.push(...judgeCredentials(analyst))
   return [...new Set(names)].flatMap((name) => {

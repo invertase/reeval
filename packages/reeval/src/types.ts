@@ -651,7 +651,21 @@ export type CompareOptions<E = Environment> = {
   minLift?: number
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
   harness?: Array<string | HarnessDescriptor>
+  /**
+   * Asked of pairs of attempts after the run, one question or several. They annotate the
+   * compare with win rates and never change pass, fail or the exit code.
+   */
+  question?: CompareQuestion | CompareQuestion[]
 }
+
+/**
+ * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
+ * answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model.
+ */
+export type CompareQuestion = string | { question: string; model?: string }
+
+/** A compare question as planned: its text, and the model it names itself, if any. */
+export type PlannedQuestion = { question: string; model?: string }
 
 export type PinnableKey = 'harness' | 'runs' | 'compare'
 
@@ -1096,6 +1110,8 @@ export type EvalPlan = {
   variants: { run: number; of: number } | null
   /** Set when the eval compares variant cells. */
   compare?: EvalCompareMeta
+  /** The compare's questions, answered after the run; unset without any, or when a profile dropped them. */
+  questions?: PlannedQuestion[]
   runs: number
   /** The eval's gate policy, or undefined when it was left at the default (`'all'`). */
   gate?: GatePolicy

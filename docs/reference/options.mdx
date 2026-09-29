@@ -68,7 +68,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. Not on the same object as `compare`. A parent `environment` plus a child that only sets `compare` is allowed, and that inherited environment is not applied. Default none.
 </Property>
 
-<Property name="compare" type="{ baseline, variants, gate?, minLift?, harness? }">
+<Property name="compare" type="{ baseline, variants, gate?, minLift?, harness?, question? }">
   A baseline and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`, and it cannot sit beside `environment` on the same object. `compare: false` is not a value here. A profile turns compare off with `limit.compare: false`. `compare` does not layer, and it does not apply an environment inherited from a parent.
 
   - `baseline`: the control, an environment from `defineEnvironment`.
@@ -76,6 +76,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it.
   - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.
+  - `question`: a string, or a list of strings and `{ question, model? }` entries, asked of pairs of attempts after the run. Questions annotate the compare and never change pass, fail or the exit code. An entry's `model` is a `'provider/model'` language model; without one, `analysis.model` answers, else the judge's model when it's a language model. `reeval run` exits 2 at plan time when a question has no language model or would get an evaluation model; `--dry-run` only names them. An empty string or list, an unknown entry key and the same question twice are errors. A profile's limit that leaves the baseline alone drops the questions.
 </Property>
 
 <Property name="sandbox" type="Sandbox">
