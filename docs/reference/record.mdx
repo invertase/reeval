@@ -167,7 +167,17 @@ What ran and graded the agents: the machine, images, harnesses and judge.
 
 <Property name="es" type="string"></Property>
 
-<Property name="node" type="string"></Property>
+<Property name="node" type="string">
+  `process.versions.node`: under Bun or Deno, the Node version they're compatible with.
+</Property>
+
+<Property name="runtime" type="{name: string; version: string}" optional>
+  The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in runs recorded before it, which ran on Node.
+</Property>
+
+<Property name="language" type="{name: string; version?: string}" optional>
+  The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its toolchain when the runner reports one. Absent in runs recorded before it.
+</Property>
 
 <Property name="os" type="string"></Property>
 

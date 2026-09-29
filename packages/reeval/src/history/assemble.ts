@@ -86,6 +86,9 @@ export type AssembleInput = {
   plan: RunPlan
   author: string
   es: string
+  runtime: NonNullable<Stack['runtime']>
+  /** What the evals are written in; a runner for another language gives its own. */
+  language: NonNullable<Stack['language']>
   /** Name and version of the embedded test engine. */
   enginePackages: Record<string, string>
   sandbox: SandboxVersions
@@ -649,6 +652,8 @@ function stackOf(input: AssembleInput, seen: Seen, judgeModel: string | null): S
   return {
     es: input.es,
     node: process.versions.node,
+    runtime: input.runtime,
+    language: input.language,
     os: process.platform,
     arch: process.arch,
     images: [...seen.images.values()].sort(byName((i) => i.ref)),

@@ -13,10 +13,11 @@ import {
   checkImages,
   checkJudge,
   checkKeys,
-  checkNode,
+  checkRuntime,
   type DoctorDeps,
   probeKey,
 } from '../src/doctor.ts'
+import { runtimeInfo } from '../src/history/provenance.ts'
 import { dockerProblem } from '../src/sandbox/providers.ts'
 import { fakeConfig, project, runCli } from './helpers.ts'
 
@@ -24,6 +25,7 @@ const SECRET = 'sk-live-doctor-9f8e7d6c5b4a'
 
 const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   env: {},
+  runtime: { name: 'node', version: '22.13.0' },
   nodeVersion: '22.13.0',
   platform: 'linux',
   dockerState: async () => 'running',
@@ -69,13 +71,43 @@ describe('reeval doctor checks', () => {
     )
   })
 
-  test('node against engines', () => {
-    assert.equal(checkNode('22.13.0').status, 'ok')
-    assert.equal(checkNode('24.1.0').status, 'ok')
-    const old = checkNode('22.12.9')
+  test('the runtime, held to engines by its Node version', () => {
+    const node = (version: string) => checkRuntime({ name: 'node', version }, version)
+    assert.deepEqual(node('22.13.0'), {
+      id: 'runtime',
+      status: 'ok',
+      summary: 'node 22.13.0 (reeval needs Node >=22.13)',
+    })
+    assert.equal(node('24.1.0').status, 'ok')
+    const old = node('22.12.9')
     assert.equal(old.status, 'fail')
-    assert.match(old.summary, /22\.12\.9, but reeval needs >=22\.13/)
-    assert.equal(checkNode('20.19.0').status, 'fail')
+    assert.equal(old.summary, 'node 22.12.9, but reeval needs Node >=22.13')
+    assert.equal(old.fix, 'install Node 22.13 or later (https://nodejs.org)')
+    assert.equal(node('20.19.0').status, 'fail')
+
+    const bun = checkRuntime({ name: 'bun', version: '1.4.2' }, '26.3.0')
+    assert.equal(bun.status, 'ok')
+    assert.equal(bun.summary, 'bun 1.4.2, compatible with node 26.3.0 (reeval needs Node >=22.13)')
+    const oldBun = checkRuntime({ name: 'bun', version: '1.0.0' }, '20.8.0')
+    assert.equal(oldBun.status, 'fail')
+    assert.equal(
+      oldBun.summary,
+      'bun 1.0.0, compatible with node 20.8.0, but reeval needs Node >=22.13',
+    )
+    assert.equal(oldBun.fix, 'upgrade bun, or install Node 22.13 or later (https://nodejs.org)')
+  })
+
+  test('the runtime is told apart from the Node version Bun and Deno report', () => {
+    assert.deepEqual(runtimeInfo({ node: '22.14.0' }), { name: 'node', version: '22.14.0' })
+    assert.deepEqual(runtimeInfo({ node: '26.3.0', bun: '1.4.2' }), {
+      name: 'bun',
+      version: '1.4.2',
+    })
+    assert.deepEqual(runtimeInfo({ node: '22.0.0', deno: '2.5.0' }), {
+      name: 'deno',
+      version: '2.5.0',
+    })
+    assert.deepEqual(runtimeInfo(), { name: 'node', version: process.versions.node })
   })
 
   test('docker: skipped without a Docker sandbox, fails when down, warns on little memory', async () => {
@@ -334,7 +366,12 @@ describe('reeval doctor', () => {
     })
     const r = await runCli(p.dir, ['doctor'])
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^reeval doctor · reeval\.config\.ts\n✓ node/)
+    assert.match(
+      r.stdout,
+      new RegExp(
+        `^reeval doctor · reeval\\.config\\.ts\\n✓ runtime +node ${process.versions.node.replace(/\./g, '\\.')} \\(`,
+      ),
+    )
     assert.match(r.stdout, /No problems/)
     const json = await runCli(p.dir, ['doctor', '--json'])
     assert.equal(json.code, 0)
@@ -342,7 +379,7 @@ describe('reeval doctor', () => {
     assert.equal(report.healthy, true)
     assert.deepEqual(
       [...new Set(report.checks.map((c: Check) => c.id))],
-      ['node', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
+      ['runtime', 'config', 'docker', 'key', 'judge', 'egress', 'gitignore'],
     )
   })
 

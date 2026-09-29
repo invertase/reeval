@@ -1,7 +1,7 @@
 import { clip, formatDuration } from '../text.ts'
 import type { Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
-import { harnessLabel, isUngatedMiss } from '../view/model.ts'
+import { harnessLabel, isUngatedMiss, languageLabel, runtimeLabel } from '../view/model.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
 
@@ -138,7 +138,11 @@ export function stateRows(run: RunRecord): Array<[string, string]> {
       .map(([name, v]) => `${name} ${v}`)
       .join(' · '),
   ])
-  rows.push(['reeval', `${env.es} · node ${env.node} · ${env.os}/${env.arch}`])
+  const language = languageLabel(env)
+  rows.push([
+    'reeval',
+    `${env.es} · ${runtimeLabel(env)}${language ? ` · ${language}` : ''} · ${env.os}/${env.arch}`,
+  ])
   rows.push([
     'Runner',
     run.runner.kind === 'ci'
