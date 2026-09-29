@@ -377,6 +377,14 @@ async function runCommand(
     () => live?.stop(),
   )
   const { record } = run
+  // After the record is written: the summary reads it as reeval analyze would.
+  if (notes && !stopped) {
+    const { summarizeRun } = await import('./analysis/agent/index.ts')
+    const { resolveAnalysisModel } = await import('./analysis/model.ts')
+    const model = resolveAnalysisModel(ctx.config, 'agent')
+    const { level, text } = await summarizeRun(ctx.config, record.runId, model)
+    renderer.onEvent({ type: 'notice', at: Date.now(), level, text })
+  }
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
