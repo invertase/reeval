@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.0](https://github.com/invertase/reeval/compare/v0.1.0...v0.2.0) (2026-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **compare:** run baseline and variants as independent environments ([#142](https://github.com/invertase/reeval/issues/142))
+
+### Features
+
+* **compare:** run baseline and variants as independent environments ([#142](https://github.com/invertase/reeval/issues/142)) ([2a8c1cf](https://github.com/invertase/reeval/commit/2a8c1cfc40dea73d324a2ceb9ca1fcf7232b8d4a))
+
 ## [0.1.0](https://github.com/invertase/reeval/compare/v0.0.1...v0.1.0) (2026-09-29)
 
 
