@@ -66,7 +66,7 @@ export function answersLabel(answer: CompareAnswer): string {
   const by = answer.resolvedModel ?? answer.model
   const failed = answer.error !== undefined ? ` · failed: ${clip(answer.error, 200)}` : ''
   if (votes === 0 && answer.error === undefined) {
-    return `${q} no pairs to judge: a pair needs both attempts to pass their checks`
+    return `${q} no pairs to judge: attempts that failed their checks are left out`
   }
   return `${q} ${[...cuts, tally, by].join(' · ')}${failed}`
 }
