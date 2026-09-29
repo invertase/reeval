@@ -393,14 +393,6 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'mcp.refused',
-    area: 'Environments',
-    name: 'MCP servers on a harness with no MCP client (pi) refused at plan time',
-    tests: [
-      'reeval/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
-    ],
-  },
-  {
     id: 'secret.template',
     area: 'Environments',
     name: '`secret.template` in MCP headers',
@@ -914,7 +906,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.pi',
     area: 'Harnesses',
-    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens; MCP refused',
+    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers',
     fixtures: [
       'harness/pi-rules',
       'harness/pi-workspace-skills',
@@ -926,7 +918,15 @@ export const inventory: InventoryFeature[] = [
       harness(
         'pi reads rules from AGENTS.md, repo skills from .pi/skills and home skills from ~/.pi/agent/skills',
       ),
-      harness('pi has no MCP client, so MCP servers are refused, naming them'),
+      harness(
+        "MCP servers go in pi's mcp.json shape; it has no SSE transport and refuses odd names",
+      ),
+      'reeval/test/plan.test.ts › pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip',
+      piAdapter(
+        'unit',
+        'a session with MCP servers writes mcp.json under the home and loads the mcp extension',
+      ),
+      piAdapter('unit', 'env and header values are escaped so pi reads them literally'),
       harness("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API"),
       piAdapter(
         'stream',

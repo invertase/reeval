@@ -7,6 +7,7 @@ import {
   providerServedModel,
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
+import type { PiMcpServer } from '@reeval/harness-pi'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -282,6 +283,32 @@ export function gooseMcpServers(
   )
 }
 
+/**
+ * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. 0.99.1
+ * skips a server whose name isn't letters, digits, `_` and `-`, so the plan refuses it instead.
+ */
+export function piMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, PiMcpServer> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]): [string, PiMcpServer] => {
+      if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+        throw new InfraError(
+          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${name} server: rename it`,
+        )
+      }
+      if (s.transport === 'sse') {
+        throw new InfraError(
+          `pi has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      return s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: s.env ?? {} }]
+        : [name, { url: s.url, headers: s.headers ?? {} }]
+    }),
+  )
+}
+
 /** The Cursor SDK's `McpServerConfig` shape. */
 export function cursorMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -331,7 +358,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     harnessSkillDir:
       '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
   },
-  // 0.87.1 reads workspace skills only in a trusted project, which the adapter's --approve makes
+  // 0.99.1 reads workspace skills only in a trusted project, which the adapter's --approve makes
   // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
   pi: {
     rulesFile: 'AGENTS.md',
@@ -480,19 +507,15 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'pi',
     factory: 'pi',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 0.87.1 sends the key on; --offline stops its startup network operations.
+    // The only request 0.99.1 sends the key on; --offline stops its startup network operations.
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    mcpServers: (servers) => {
-      const names = Object.keys(servers)
-      throw new InfraError(
-        `pi has no MCP client, so it can't use the ${names.join(', ')} MCP server${names.length === 1 ? '' : 's'}`,
-      )
-    },
-    adapter: async ({ auth }) =>
+    mcpServers: piMcpServers,
+    adapter: async ({ auth, mcpServers }) =>
       (await import('@reeval/harness-pi')).createPi({
         // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
         auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
   },
@@ -527,8 +550,8 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
- * Why a harness's agent can't take the environment's MCP servers (pi takes none; Goose, OpenCode
- * and Codex no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
+ * Why a harness's agent can't take the environment's MCP servers (Goose, OpenCode, pi and Codex
+ * take no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
  * starts; undefined when it can.
  */
 export function refusedMcp(
