@@ -525,7 +525,7 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
     const files = (record: string) => ({
       'reeval.config.ts': config(
         `concurrency: 1, budget: { duration: '1s' },${record}`,
-        'fakeHarness({ delayMs: 700 })',
+        'fakeHarness({ delayMs: 1500 })',
       ),
       'evals/b.eval.ts': `import { evaluate } from 'reeval'
 evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
