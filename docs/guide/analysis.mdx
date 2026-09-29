@@ -209,6 +209,36 @@ export default defineConfig({
 })
 ```
 
+## Notes during a run
+
+```ts title="reeval.config.ts"
+export default defineConfig({
+  analysis: { agent: true, model: 'google/gemini-3.8-flash' },
+  // …
+})
+```
+
+```text
+analysis: 1 note in .reeval/analysis/20260929T201657Z_33d6cda_cursor-agent_dr8k/notes
+```
+
+With `agent: true`, `reeval run` writes a note on each eval and harness as soon as that harness's attempts of the eval have all finished. The model doesn't read whole transcripts. It gets tools: list the attempts, open one, and compare a failed attempt with a passing one to see where their steps diverged.
+
+```json title=".reeval/analysis/<runId>/notes/<eval>__<harness>.json"
+{
+  "kind": "es-analysis-note",
+  "evalId": "evals/skill.eval.ts › house greeting › greets in the house style",
+  "harness": "fake",
+  "model": "google/gemini-3.8-flash",
+  "attempts": ["fake/plain/fake#1", "fake/with-house-greeting/fake#1"],
+  "text": "In fake/plain/fake#1, the agent failed the assertion check because `greet('Ada')` returned \"Hello, Ada!\" rather than the expected \"Ahoy, Ada!\". In contrast, fake/with-house-greeting/fake#1 passed with the expected greeting. …",
+  "usage": { "inputTokens": 5768, "outputTokens": 549 },
+  …
+}
+```
+
+A note never changes an outcome or the exit code. If the call fails, the note keeps its `error` and the run prints a warning. `agent` is off by default because it's one more model call per eval and harness on every run; `maxInputTokens` and `maxOutputTokens` cap each one.
+
 ## Next
 
 <CardGroup cols={2}>

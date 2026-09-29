@@ -73,7 +73,7 @@ flowchart LR
 1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, the judge's scores, failures, flaky cells, drift, the compare), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and check tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>`. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them.
 2. **Call.** One `generateText` call with a schema: TL;DR, what happened, results, why, anomalies, at most five actions (target, change, expected effect, verify command, impact, effort) and a confidence.
 3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged. Each verify command must parse as reeval's own CLI, with only that command's flags, and an `reeval run` or `reeval image build` must select an eval of the run: a `--tag` no eval has, or a filter that matches no eval file, name or cell, is rejected. The counts are in the footer.
-4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into.
+4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. With `analysis.agent`, `reeval run` also caches a note on each eval and harness in `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.
 
 ## Configuration
 
@@ -91,6 +91,10 @@ export default defineConfig({
 
 <Property name="analysis.model" type="string" optional>
   A `provider/model` language model. `google/*` goes direct with `GOOGLE_GENERATIVE_AI_API_KEY`; anything else through the Vercel AI Gateway (`AI_GATEWAY_API_KEY` or `VERCEL_OIDC_TOKEN`). Defaults to the judge's model when that's a language model. Evaluation models such as `typesafe-ai/*` only score yes/no questions, so they exit 2 and point at `--context`.
+</Property>
+
+<Property name="analysis.agent" type="boolean" optional>
+  Also write a note on each eval and harness during `reeval run`, with this model and these caps. Default false. See [Notes during a run](/guide/analysis#notes-during-a-run).
 </Property>
 
 <Property name="analysis.instructions" type="string" optional>
