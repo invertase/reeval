@@ -8,7 +8,7 @@ export const variant = defineEnvironment('variant', {
   files: { 'from-variant.txt': 'variant-only' },
 })
 
-/** Set on the eval as `environment`. Compare must not apply it. */
+/** Set on the parent group. Compare must not apply it. */
 export const ignored = defineEnvironment('ignored', {
   files: { 'from-ignored.txt': 'no' },
 })

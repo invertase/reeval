@@ -238,6 +238,11 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     checkMaxConcurrent(o.sandbox.maxConcurrent, `sandbox in ${where}`)
   }
   if (o.compare !== undefined) checkCompare(o.compare, where)
+  if (o.environment !== undefined && o.compare !== undefined && o.compare !== false) {
+    throw new UsageError(
+      `environment and compare can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment. compare: false still runs with environment.`,
+    )
+  }
   if (o.pin !== undefined) {
     const bad = Array.isArray(o.pin) ? o.pin.filter((k) => !PINNABLE.includes(k)) : [o.pin]
     if (bad.length) {
@@ -533,8 +538,8 @@ export type PlannedAttempt = {
 export function expand(resolved: Resolved): PlannedAttempt[] {
   const { compare } = resolved
   const sandbox = sandboxId(resolved.sandbox)
-  // `compare` ignores the eval's own environment: baseline is the control, and each
-  // variant is applied on its own. Share layers with `extendEnvironment` before compare.
+  // A compare names every arm. An environment from another level is not applied.
+  // The same options object cannot set both; checkOptions refuses that.
   const control = applied(compare ? compare.baseline : resolved.environment)
   const policy = resolved.gate ?? 'all'
   const gateIf = (gated: boolean): CellGate => (gated ? policy : 'none')

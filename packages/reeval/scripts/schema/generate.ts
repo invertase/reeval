@@ -126,7 +126,12 @@ class Generator {
       a.name.localeCompare(b.name),
     )
     for (const p of props) {
-      properties[p.name] = this.schema(this.checker.getTypeOfSymbol(p))
+      const prop = this.checker.getTypeOfSymbol(p)
+      // `environment?: never` forbids that key beside a compare object. It is not a JSON value.
+      if ((prop.flags as number) & (TypeFlags.Undefined | TypeFlags.Never | TypeFlags.Void)) {
+        continue
+      }
+      properties[p.name] = this.schema(prop)
       if (!(p.flags & SymbolFlags.Optional)) required.push(p.name)
     }
     const schema: Schema = { type: 'object', properties, required }

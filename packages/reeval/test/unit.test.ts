@@ -45,7 +45,7 @@ import { newRunId, RUN_ID } from '../src/ids.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
-import { cascade, expand, type Resolved } from '../src/options.ts'
+import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
 import { clip } from '../src/text.ts'
@@ -741,13 +741,15 @@ test('expand: per harness, the control then each variant; labels name the role',
   const { resolved } = cascade(
     base,
     [
+      { options: { environment: extra }, where: 'group("parent")' },
       {
-        options: { environment: extra, compare: { baseline: plain, variants: [skill] }, runs: 1 },
+        options: { compare: { baseline: plain, variants: [skill] }, runs: 1 },
         where: 'e',
       },
     ],
     'e',
   )
+  assert.equal(resolved.environment?.name, 'extra', 'the parent environment is still resolved')
   const attempts = expand(resolved)
   assert.deepEqual(
     attempts.map((a) => [a.cell.key, a.cell.role, a.gate !== 'none', a.label]),
@@ -765,6 +767,22 @@ test('expand: per harness, the control then each variant; labels name the role',
     'a variant is not layered on the baseline or the eval environment',
   )
   assert.equal(attempts[0]?.environment.layers[0]?.name, 'plain')
+  assert.notEqual(attempts[0]?.environment.name, 'extra')
+})
+
+test('environment and a compare object on the same options are an error', () => {
+  const plain = defineEnvironment('plain', {})
+  const skill = defineEnvironment('skill', {})
+  assert.throws(
+    () =>
+      checkOptions(
+        { environment: plain, compare: { baseline: plain, variants: [skill] } },
+        'evaluate("e")',
+      ),
+    /environment and compare can't both be set in evaluate\("e"\)/,
+  )
+  checkOptions({ environment: plain, compare: false }, 'evaluate("e")')
+  checkOptions({ compare: { baseline: plain, variants: [skill] } }, 'evaluate("e")')
 })
 
 test('cascade: profile defaults sit under evals, limits narrow unless pinned, --runs wins', () => {

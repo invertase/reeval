@@ -590,6 +590,11 @@ describe('common mistakes', () => {
       /Unknown compare option "strategy" in evaluate\("e"\)/,
     ],
     [
+      'environment and compare on the same eval',
+      `evaluate('e', { environment: a, compare: { baseline: a, variants: [b] } }, async () => {})`,
+      /environment and compare can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment\. compare: false still runs with environment\./,
+    ],
+    [
       'pinning something that cannot be pinned',
       `evaluate('e', { pin: ['timeout'] }, async () => {})`,
       /pin accepts harness, runs and compare \(got timeout\)/,

@@ -665,13 +665,14 @@ export type GatePolicy = 'all' | { passRate: number }
 /** A cell's gate: its policy, or `'none'` when its failures don't fail the eval (a control's). */
 export type CellGate = GatePolicy | 'none'
 
-export type EvalOptions = {
+/** A compare object: `baseline` and `variants`, not `false`. */
+export type CompareSpec<E = Environment> = Exclude<CompareOptions<E>, false>
+
+/** Options other than `environment` and `compare`, which are exclusive of each other. */
+type EvalOptionFields = {
   /** The only list: each harness is its own cell. */
   harness?: HarnessOption
   sandbox?: SandboxDescriptor
-  /** What the eval runs in when it has no `compare`. With `compare`, `baseline` is the control. */
-  environment?: Environment
-  compare?: CompareOptions
   /** Attempts per cell. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -690,18 +691,38 @@ export type EvalOptions = {
   /** Keys a profile's `limit` may not narrow for this group or eval. */
   pin?: PinnableKey[]
 }
+
+/**
+ * `environment` or a compare object, never both on the same options object. `compare: false`
+ * (or omitting `compare`) still takes `environment`. A parent `environment` and a child that
+ * only sets `compare` is a different object each, so it is allowed; the inherited environment
+ * is not applied.
+ */
+type EnvironmentOrCompare<E> =
+  | {
+      /** What this group or eval runs in. Not together with a compare object. */
+      environment?: E
+      /** `false` opts out of compare. Omit it to inherit a parent's compare. */
+      compare?: false
+    }
+  | {
+      /** Forbidden beside a compare object. Set the arms on `compare` instead. */
+      environment?: never
+      compare: CompareSpec<E>
+    }
+
+export type EvalOptions = EvalOptionFields & EnvironmentOrCompare<Environment>
 export type GroupOptions = EvalOptions
 
 /**
  * `EvalOptions` in their data forms, as JSON carries them: the harness as data, the judge's model
- * by name or a fake judge, and environments without `extend`.
+ * by name or a fake judge, and environments without `extend`. The same `environment` / compare
+ * object split as `EvalOptions`.
  */
-export type EvalOptionsData = Omit<EvalOptions, 'harness' | 'judge' | 'environment' | 'compare'> & {
+export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
   harness?: HarnessData
   judge?: ConfigJudgeOptions
-  environment?: EnvironmentData
-  compare?: CompareOptions<EnvironmentData>
-}
+} & EnvironmentOrCompare<EnvironmentData>
 
 /** An `Environment` as data, as JSON carries it: without `extendEnvironment`. */
 export type EnvironmentData = Omit<Environment, 'extendEnvironment'>

@@ -1,6 +1,6 @@
 no profile · 1 evals · 4 cells · 4 attempts
-evals/independent.eval.ts › baseline, not the eval environment  a/base/fake  control       ungated  ×1
-                                                                a/peer/fake  variant peer  gated    ×1
-                                                                b/base/fake  control       ungated  ×1
-                                                                b/peer/fake  variant peer  gated    ×1
+evals/independent.eval.ts › parent › baseline, not the inherited environment  a/base/fake  control       ungated  ×1
+                                                                              a/peer/fake  variant peer  gated    ×1
+                                                                              b/base/fake  control       ungated  ×1
+                                                                              b/peer/fake  variant peer  gated    ×1
 excluded: —

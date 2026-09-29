@@ -107,7 +107,7 @@ flowchart LR
 
 `baseline` is the control. Each variant runs as that environment on its own, with the same prompt and checks. `compare` does not layer, inherit or extend. Each is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
 
-Share setup before compare, with `extendEnvironment`. The child keeps the parent's layers and wins on shared keys. The house-greeting variant above is `plain` plus the skill. An eval or group `environment` is not the control, and it is not layered under the variants.
+Share setup before compare, with `extendEnvironment`. The child keeps the parent's layers and wins on shared keys. The house-greeting variant above is `plain` plus the skill. Do not set `environment` on the same object as a compare object. A parent `environment` is allowed when the eval only sets `compare`, and reeval does not apply that inherited environment.
 
 ## Two stacks, not a layer
 
