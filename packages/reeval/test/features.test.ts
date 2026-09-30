@@ -792,6 +792,24 @@ export const features: Feature[] = [
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
   },
   {
+    dir: 'sandbox/login-shell-path',
+    tiers: ['docker'],
+    env: 'plain',
+    canary: /expected '' to be '\/opt\/reeval-fixture\/bin\/reeval-fixtur…'/,
+    prepare: (dir) =>
+      execFileSync(
+        'docker',
+        ['build', '--quiet', '--tag', 'reeval-fixture-login-path:latest', join(dir, 'image')],
+        { stdio: 'ignore' },
+      ),
+  },
+  {
+    dir: 'sandbox/login-shell-path-dockerfile',
+    tiers: ['docker'],
+    env: 'plain',
+    canary: /expected '' to be '\/opt\/reeval-fixture\/bin\/reeval-fixtur…'/,
+  },
+  {
     dir: 'sandbox/limits',
     tiers: ['docker'],
     env: 'plain',
