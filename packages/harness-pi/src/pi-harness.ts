@@ -46,10 +46,12 @@ export const PI_HOME_SKILLS_DIR = `${PI_AGENT_DIR}/skills`
 export const PI_INSTRUCTIONS_FILE = `${PI_AGENT_DIR}/AGENTS.md`
 /** The repo skill directory pi reads when the project is trusted (`--approve`). */
 export const PI_WORKSPACE_SKILLS_DIR = '.pi/skills'
+/** pi's global MCP config, which its built-in `mcp` extension reads. */
+export const PI_MCP_FILE = `${PI_AGENT_DIR}/mcp.json`
 
 /**
  * The model-request endpoint pi sends the key on, `POST /v1beta/models/<model>:
- * streamGenerateContent` (checked with 0.87.1). A gateway that enforces it refuses the key
+ * streamGenerateContent` (checked with 0.99.1). A gateway that enforces it refuses the key
  * anywhere else.
  */
 export const PI_ENDPOINTS = [
@@ -60,11 +62,52 @@ export const PI_ENDPOINTS = [
   },
 ] as const
 
+/** An `mcp.json` server: stdio (`command`) or streamable HTTP (`url`); pi has no SSE transport. */
+export type PiMcpServer =
+  | { command: string; args?: string[]; env?: Record<string, string> }
+  | { url: string; headers?: Record<string, string> }
+
 export type PiHarnessSettings = {
   /** `{ GEMINI_API_KEY }`, the only key used. The host environment is never read. */
   readonly auth: HarnessV1AuthenticationEnvironment
+  /** MCP servers by name, written to pi's `mcp.json` with their tools declared to the model. */
+  readonly mcpServers?: Record<string, PiMcpServer>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */
   readonly requireCredentialBrokering?: boolean
+}
+
+/**
+ * A literal `env` or header value for `mcp.json`, where pi expands `$NAME` and `${NAME}` and runs
+ * a value starting with `!` as a shell command: `$$` is a `$` and a leading `$!` is a `!`.
+ */
+export function escapePiConfigValue(value: string): string {
+  const escaped = value.replaceAll('$', () => '$$')
+  return escaped.startsWith('!') ? `$${escaped}` : escaped
+}
+
+const escapeValues = (values: Record<string, string>) =>
+  Object.fromEntries(Object.entries(values).map(([k, v]) => [k, escapePiConfigValue(v)]))
+
+/**
+ * pi's `mcp.json`. Each server has `direct` exposure, so its tools are declared to the model as
+ * `mcp__<server>__<tool>`: the default, `codemode`, reaches them only from the `codemode` tool,
+ * which `--no-extensions` leaves out.
+ */
+export function buildPiMcpConfig(servers: Record<string, PiMcpServer>): string {
+  const mcpServers = Object.fromEntries(
+    Object.entries(servers).map(([name, s]) => [
+      name,
+      'url' in s
+        ? { url: s.url, headers: escapeValues(s.headers ?? {}), exposure: 'direct' }
+        : {
+            command: s.command,
+            args: s.args ?? [],
+            env: escapeValues(s.env ?? {}),
+            exposure: 'direct',
+          },
+    ]),
+  )
+  return `${JSON.stringify({ mcpServers, autoEnableCodemode: false }, null, 2)}\n`
 }
 
 const lifecycleData = z.object({ sessionId: z.string() })
@@ -109,8 +152,9 @@ const canBroker = (
 
 /**
  * The pi turn command: print mode with JSON events, the project trusted (so its `.pi/skills`
- * load), no extensions or startup network operations, one session id for every turn. The
- * prompt is an argument, so it must stay under the shell's 128 KiB.
+ * load), no extensions (but the built-in `mcp` one, when there are MCP servers) or startup
+ * network operations, one session id for every turn. The prompt is an argument, so it must stay
+ * under the shell's 128 KiB.
  */
 export function buildPiCommand(options: {
   cli: string
@@ -119,10 +163,12 @@ export function buildPiCommand(options: {
   model: string | undefined
   sessionId: string
   sessionDir: string
+  mcp?: boolean
 }): string {
   return [
     `cd ${shellQuote(options.workDir)} &&`,
     `exec ${shellQuote(options.cli)} --mode json -p --offline --approve --no-extensions`,
+    ...(options.mcp ? ['-e builtin:mcp'] : []),
     '--provider google',
     ...(options.model ? [`--model ${shellQuote(options.model)}`] : []),
     `--session-id ${shellQuote(options.sessionId)} --session-dir ${shellQuote(options.sessionDir)}`,
@@ -134,7 +180,7 @@ export function buildPiCommand(options: {
  * pi (`pi --mode json`) as an AI SDK harness, in the sandbox: one process per turn, resumed by
  * session id, its NDJSON translated into harness stream parts with each model call's tokens.
  * Unlike `@ai-sdk/harness-pi`, nothing runs on the host: pi, its model calls and its tools are
- * all in the sandbox. pi has no MCP client, so MCP servers are refused.
+ * all in the sandbox, MCP servers included.
  */
 export function createPi(settings: PiHarnessSettings): HarnessV1<PiBuiltinTools> {
   const key = isHarnessAuthenticationEnvironment(settings.auth)
@@ -187,6 +233,14 @@ async function startSession(
   const resumed = lifecycleData.safeParse(options.resumeFrom?.data)
   const piSession = resumed.success ? resumed.data.sessionId : randomUUID()
   const env = { [PI_CREDENTIAL_ENV]: sandboxKey, PI_OFFLINE: '1' }
+  const mcp = Object.keys(settings.mcpServers ?? {}).length > 0
+  if (mcp) {
+    await sandbox.writeTextFile({
+      path: posix.join(home, PI_MCP_FILE),
+      content: buildPiMcpConfig(settings.mcpServers ?? {}),
+      abortSignal,
+    })
+  }
   let turns = 0
   let running: { kill(): PromiseLike<void> } | undefined
   let ended = false
@@ -237,6 +291,7 @@ async function startSession(
         model: turn.model,
         sessionId: piSession,
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
+        mcp,
       })
       const translator = new PiStreamTranslator()
       const emit = (parts: HarnessV1StreamPart[]) => {

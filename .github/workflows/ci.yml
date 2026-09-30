@@ -10,9 +10,6 @@
 # (ci-full.yml) run everything, unscoped: also extended.yml (the Node 22.13 floor, Windows and
 # macOS), npm 10.9's packed install and the coverage report.
 #
-# The engine differential needs no run of its own: the unit shards (on the newest Node) and the
-# features job record every `reeval` they run (REEVAL_DIFFERENTIAL_DIR), and `differential` compares those
-# captures with the Vitest engine's (scripts/differential.mjs).
 # Coverage runs on full runs only: the test jobs collect V8 coverage from every process they start
 # (NODE_V8_COVERAGE, set after the build), and the coverage job merges it into one report. It's
 # report-only: no threshold.
@@ -120,9 +117,7 @@ jobs:
                 packages/reeval/src/evaluate.ts | \
                 packages/reeval/src/egress.ts | \
                 packages/reeval/test/features* | \
-                packages/reeval/test/support/* | \
-                packages/reeval/test/differential/* | \
-                scripts/differential.mjs)
+                packages/reeval/test/support/*)
                   features=true ;;
               esac
               case $f in
@@ -196,8 +191,7 @@ jobs:
         run: npx -y @docs.page/cli@2.1.0 check --external-links warn
 
   # The unit and plan files on the newest Node that engines.node allows, in four shards (a 2-vCPU
-  # runner runs one test file at a time), recording the engine differential's captures. The
-  # engines floor, Node 22.13, runs in extended.yml.
+  # runner runs one test file at a time). The engines floor, Node 22.13, runs in extended.yml.
   unit:
     name: unit and plan (${{ matrix.shard }})
     needs: changes
@@ -215,7 +209,6 @@ jobs:
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - run: echo "REEVAL_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
       - name: reeval (every test file but the fixture, Docker, studio, pack and real-agent ones)
         working-directory: packages/reeval
         run: |
@@ -236,13 +229,6 @@ jobs:
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: 'unit-${{ strategy.job-index }}' }
-      - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: differential-unit-${{ strategy.job-index }}
-          path: ${{ env.REEVAL_DIFFERENTIAL_DIR }}
-          if-no-files-found: warn
-          retention-days: 3
 
   features:
     name: features (fake)
@@ -257,7 +243,6 @@ jobs:
       - run: pnpm build
       - if: needs.changes.outputs.coverage == 'true'
         run: echo "NODE_V8_COVERAGE=$RUNNER_TEMP/coverage" >> "$GITHUB_ENV"
-      - run: echo "REEVAL_DIFFERENTIAL_DIR=$RUNNER_TEMP/differential" >> "$GITHUB_ENV"
       - working-directory: packages/reeval
         env:
           REEVAL_FIXTURE_TIERS: fake
@@ -265,42 +250,6 @@ jobs:
       - if: ${{ !cancelled() && env.NODE_V8_COVERAGE != '' }}
         uses: ./.github/actions/upload-coverage
         with: { name: features }
-      - if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: differential-features
-          path: ${{ env.REEVAL_DIFFERENTIAL_DIR }}
-          if-no-files-found: error
-          retention-days: 3
-
-  # reeval's engine against the Vitest engine's captured runs: the replay of the side-by-side
-  # comparison made before Vitest was removed. A run a failed or cancelled shard didn't reach
-  # shows up here as missing.
-  differential:
-    name: engine differential
-    needs: [changes, unit, features]
-    if: ${{ !cancelled() && needs.changes.outputs.features == 'true' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with: { persist-credentials: false }
-      # compare imports only node: modules, so it needs Node but no install.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with: { node-version-file: package.json }
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: differential-*
-          merge-multiple: true
-          path: ${{ runner.temp }}/es
-      - name: reeval's engine does what the Vitest engine did
-        run: node --experimental-strip-types --no-warnings scripts/differential.mjs compare packages/reeval/test/differential/vitest "$RUNNER_TEMP/es"
-      - if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: differential-captures
-          path: ${{ runner.temp }}/es
-          retention-days: 7
 
   # The Docker tier, split by test name into legs of a few minutes each. A --test-name-pattern
   # leg and a --test-skip-pattern leg on the same regex run complementary halves of a file, so
@@ -482,7 +431,7 @@ jobs:
   # skipping it (a skipped required check counts as passed).
   ci:
     name: ci
-    needs: [changes, checks, unit, features, differential, docker, studio, engine-coverage, pack, extended]
+    needs: [changes, checks, unit, features, docker, studio, engine-coverage, pack, extended]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

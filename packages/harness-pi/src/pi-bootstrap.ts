@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 
 /** The pi release the bootstrap installs, pinned with its whole dependency tree in `assets/`. */
-export const PI_CLI_VERSION = '0.87.1'
+export const PI_CLI_VERSION = '0.99.1'
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const PI_BOOTSTRAP_DIR = '.harness-bootstrap/pi'
 /** The CLI's path relative to the bootstrap directory. */
