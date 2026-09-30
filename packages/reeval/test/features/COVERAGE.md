@@ -67,7 +67,7 @@
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — |
 | `extendEnvironment`, overrides and the environment digest | ✓ 2 | — | ● 1 | ● 1 | — |
-| `t.sandbox()`: checks without a turn | — | — | ● 2 | ● 2 | — |
+| `c.sandbox()`: checks without a turn | — | — | ● 2 | ● 2 | — |
 
 ## Sandbox
 

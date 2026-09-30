@@ -7,8 +7,8 @@ import { UsageError } from './errors.ts'
 import { checkOptions, matchesTags } from './options.ts'
 import { planEval } from './plan-eval.ts'
 import type {
+  AttemptContext,
   EnvironmentData,
-  EvalContext,
   EvalFn,
   EvalOptions,
   EvalOptionsData,
@@ -64,7 +64,7 @@ function splitArgs<F extends (...args: never[]) => unknown>(
   throw new UsageError(
     what === 'group'
       ? `group("${name}") has no function. Pass the group's body, e.g. group("${name}", () => { … }).`
-      : `${what}("${name}") has no function. Pass the eval's body, e.g. ${what}("${name}", async (t) => { … }).`,
+      : `${what}("${name}") has no function. Pass the eval's body, e.g. ${what}("${name}", async (c) => { … }).`,
   )
 }
 
@@ -184,11 +184,11 @@ function formatName(template: string, item: unknown, index: number): string {
     )
 }
 
-/** One eval per case: `evaluate.for(cases)('adds $a and $b', async (t, c) => …)`. */
+/** One eval per case: `evaluate.for(cases)('adds $a and $b', async (c, { a, b }) => …)`. */
 const evalFor =
-  <T>(cases: readonly T[]): EvaluateFn<(t: EvalContext, item: T) => Promise<void>> =>
+  <T>(cases: readonly T[]): EvaluateFn<(c: AttemptContext, item: T) => Promise<void>> =>
   (name: string, a?: unknown, b?: unknown) => {
-    const [own, fn] = splitArgs<(t: EvalContext, item: T) => Promise<void>>(
+    const [own, fn] = splitArgs<(c: AttemptContext, item: T) => Promise<void>>(
       'evaluate.for',
       name,
       a as EvalOptions,
@@ -196,7 +196,7 @@ const evalFor =
     )
     const hint = ` For evaluate.for, put $key, %s or %# in the name ("${name}") so each case's name differs.`
     cases.forEach((item, i) => {
-      register('run', formatName(name, item, i), own, (t) => fn(t, item), hint)
+      register('run', formatName(name, item, i), own, (c) => fn(c, item), hint)
     })
   }
 

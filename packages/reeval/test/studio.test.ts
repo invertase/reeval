@@ -80,10 +80,10 @@ const evalFile = `import { defineEnvironment, evaluate, expect, group } from 're
 const plain = defineEnvironment('plain', {})
 const other = defineEnvironment('other', {})
 group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], question: 'Which wrote hello.txt?' }, runs: 2 } : {}, () => {
-  evaluate('writes hello', async (t) => {
-    await t.send('write hello.txt')
-    await expect(t.exec('test -f hello.txt')).toSucceed()
-    expect(await t.judge('Did it write hello.txt?')).toPass()
+  evaluate('writes hello', async (c) => {
+    await c.send('write hello.txt')
+    await expect(c.exec('test -f hello.txt')).toSucceed()
+    expect(await c.judge('Did it write hello.txt?')).toPass()
   })
 })
 `
@@ -135,9 +135,9 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
 const compare = process.env.REEVAL_TEST_GATE_ALL
   ? { baseline: plain, variants: [skilled], gate: 'all' as const }
   : { baseline: plain, variants: [skilled] }
-evaluate('writes ok', { compare }, async (t) => {
-  await t.send('write ok.txt')
-  await expect(t.exec('test -f ok.txt')).toSucceed()
+evaluate('writes ok', { compare }, async (c) => {
+  await c.send('write ok.txt')
+  await expect(c.exec('test -f ok.txt')).toSucceed()
 })
 `
 
@@ -750,8 +750,8 @@ describe('reeval studio build', () => {
         "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
       ),
       'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('writes', async (t) => {
-  await t.send('Write it')
+evaluate('writes', async (c) => {
+  await c.send('Write it')
   expect(1).toBe(1)
 })
 `,

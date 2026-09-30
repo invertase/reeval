@@ -42,34 +42,34 @@ const callGreetWithNoArgs = `node -e "import('./greet.js').then((m) => {
 })"`
 
 group('greet module', () => {
-  evaluate('creates a tested greet module', async (t) => {
-    const turn = await t.send(
+  evaluate('creates a tested greet module', async (c) => {
+    const turn = await c.send(
       'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
         'and greet.test.js that tests it with node:test. No dependencies.',
     )
 
     await expect(turn).toHaveFile('greet.js')
-    await expect(t.exec('node --test')).toSucceed()
+    await expect(c.exec('node --test')).toSucceed()
     expect(
-      await t.judge(
+      await c.judge(
         "Does the agent's final message accurately describe what it changed?",
       ),
     ).toPass()
   })
 
-  evaluate('adds a default name in a follow-up turn', async (t) => {
-    await t.send(
+  evaluate('adds a default name in a follow-up turn', async (c) => {
+    await c.send(
       'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
         'No dependencies.',
     )
-    await t.send(
+    await c.send(
       'Make name default to "world" ' +
         'when greet() is called without arguments.',
     )
 
-    await expect(t.exec(callGreetWithNoArgs)).toSucceed()
+    await expect(c.exec(callGreetWithNoArgs)).toSucceed()
     expect(
-      await t.judge(
+      await c.judge(
         'Did the agent add the default without breaking greet(name)?',
       ),
     ).toPass()

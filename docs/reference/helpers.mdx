@@ -82,7 +82,7 @@ Options for `secret()` and `secret.fromEnv()`:
 </Property>
 
 <Property name="to" type="'agent' | 'checks'" optional>
-  `agent` (default) puts it in the container's environment. `checks` gives it only to `t.exec` and `setup` steps, never the agent.
+  `agent` (default) puts it in the container's environment. `checks` gives it only to `c.exec` and `setup` steps, never the agent.
 </Property>
 
 <Property name="optional" type="boolean" optional>
@@ -102,7 +102,7 @@ A secret without `hosts` reaches the sandbox as its real value, and the plan war
 warning: SENTRY_DSN is in the sandbox as its real value. To give the agent only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('SENTRY_DSN', { hosts: ['api.example.com'] }).
 ```
 
-A `to: 'checks'` secret without `hosts` warns that it `reaches the checks (t.exec, setup steps) as its real value; the agent never gets it.`
+A `to: 'checks'` secret without `hosts` warns that it `reaches the checks (c.exec, setup steps) as its real value; the agent never gets it.`
 
 A required secret that isn't set fails the attempt with `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` Secrets in the config (and profile `defaults`) are checked before the run starts. See [Credential brokering](/concepts/credential-brokering).
 

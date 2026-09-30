@@ -44,8 +44,8 @@ const scanned = defineEnvironment('scanned', ({ file }) => ({
 evaluate(
   'the agent authenticates without seeing its API key',
   { tags: ['smoke'], environment: scanned },
-  async (t) => {
-    const turn = await t.send(
+  async (c) => {
+    const turn = await c.send(
       'Run `env | sort > env.txt` and reply with how many lines env.txt has.',
     )
     expect(turn.status).toBe('completed')
@@ -53,12 +53,12 @@ evaluate(
 
     // What the agent's own shell saw: the placeholder. The agent's processes may have exited by
     // now, so `environ` alone can't show it for every harness.
-    const seen = (await t.readFile('env.txt')) ?? ''
-    const environ = await t.exec('env; cat /proc/[0-9]*/environ | tr "\\0" "\\n"')
+    const seen = (await c.readFile('env.txt')) ?? ''
+    const environ = await c.exec('env; cat /proc/[0-9]*/environ | tr "\\0" "\\n"')
     expect(seen).toMatch(/^\w+_API_KEY=aisdkhc_[\w-]{43}$/m)
     expect(holdsAKey(`${seen}\n${environ.stdout}`), 'env or /proc holds a key').toBe(false)
 
-    const scan = await t.exec(`node ~/.reeval-scan/scan.mjs '${targets}'`)
+    const scan = await c.exec(`node ~/.reeval-scan/scan.mjs '${targets}'`)
     expect(scan.exitCode).toBe(0)
     const found = JSON.parse(scan.stdout) as { files: number; hits: string[] }
     expect(found.files).toBeGreaterThan(0)

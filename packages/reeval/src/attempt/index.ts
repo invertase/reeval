@@ -8,7 +8,7 @@ import type { HarnessSession } from '../harness/types.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { formatDuration } from '../text.ts'
-import type { EvalContext, EvalFn } from '../types.ts'
+import type { AttemptContext, EvalFn } from '../types.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
@@ -56,7 +56,7 @@ async function attemptBody(
   const destroy = () => void a.sandbox?.destroy()
   testSignal.addEventListener('abort', destroy, { once: true })
 
-  // One start, whether t.sandbox() or the first t.send() asks first, or both at once.
+  // One start, whether c.sandbox() or the first c.send() asks first, or both at once.
   let starting: Promise<[Sandbox, HarnessSession]> | undefined
   const start = () => {
     starting ??= (async () => {
@@ -72,7 +72,7 @@ async function attemptBody(
   const takeContext = contextTaker(a)
   const { exec, readFile } = createChecks(a)
 
-  const t: EvalContext = {
+  const c: AttemptContext = {
     get signal() {
       return a.signal
     },
@@ -97,7 +97,7 @@ async function attemptBody(
     timer = clock.signal
     a.signal = AbortSignal.any([testSignal, timer])
     timer.addEventListener('abort', destroy, { once: true })
-    await fn(t)
+    await fn(c)
     // A body that ignores the signal can still return normally after a timeout or cancel.
     a.signal.throwIfAborted()
     const missed = await unawaited()

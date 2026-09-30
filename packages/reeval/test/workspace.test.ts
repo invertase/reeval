@@ -30,12 +30,12 @@ function makeRepo(dir: string) {
   return repo
 }
 
-async function withEval(env: string, body = 'await t.sandbox()', harness?: string) {
+async function withEval(env: string, body = 'await c.sandbox()', harness?: string) {
   const p = await project('workspace', {
     'reeval.config.ts': fakeConfig(harness ? { harness } : {}),
     'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const env = defineEnvironment('app', ({ git }) => ({ ${env} }))
-evaluate('works on the repo', { environment: env }, async (t) => {
+evaluate('works on the repo', { environment: env }, async (c) => {
   ${body}
 })
 evaluate('needs no workspace', async () => {})
@@ -127,7 +127,7 @@ describe('git workspaces', { concurrency: true }, () => {
     try {
       const p = await withEval(
         "workspace: git(process.env.REEVAL_TEST_GIT_URL as string, { ref: 'v1', path: 'app', token: 'REEVAL_TEST_GIT_TOKEN' })",
-        "await t.sandbox()\n  expect(await t.readFile('greet.js')).toContain('Hello')",
+        "await c.sandbox()\n  expect(await c.readFile('greet.js')).toContain('Hello')",
       )
       const url = `${server.serve(p.dir)}/repo`
       const good = await runCli(p.dir, ['run'], {
@@ -176,11 +176,11 @@ const env = defineEnvironment('app', ({ git }) => ({
   workspace: git('../repo', { ref: 'v1', init: true }),
   files: { 'app/extra.js': 'x' },
 }))
-evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
-  const box = await t.sandbox()
+evaluate('commits in the repo', { environment: env, runs: 2 }, async (c) => {
+  const box = await c.sandbox()
   expect((await box.exec('git status --porcelain')).stdout).toBe('?? app/extra.js\\n')
   expect((await box.exec('git rev-parse HEAD')).stdout.trim()).toBe(process.env.EXPECTED_HEAD)
-  const turn = await t.send('x')
+  const turn = await c.send('x')
   expect(turn.diff.files).toEqual([{ path: 'NOTES.md', status: 'added' }])
 })
 `,
@@ -223,7 +223,7 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
   test('a pinned SHA reruns offline from the cache, with the same commit and tree', async () => {
     const p = await withEval(
       "workspace: git('../repo', { ref: process.env.PIN, path: 'app' })",
-      "await t.sandbox()\n  expect(await t.readFile('greet.js')).toContain('Hello')",
+      "await c.sandbox()\n  expect(await c.readFile('greet.js')).toContain('Hello')",
     )
     const sha = git(p.repo, 'rev-parse', 'v1')
     const env = { PIN: sha }
@@ -259,16 +259,16 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (t) => {
       'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const base = defineEnvironment('base', ({ git }) => ({ workspace: git('../repo', { ref: 'v1' }) }))
 const sub = base.extendEnvironment('sub', ({ git }) => ({ workspace: git('../repo', { ref: 'v1', path: 'app' }) }))
-evaluate('edits the repo', { environment: base }, async (t) => {
-  const turn = await t.send('x')
+evaluate('edits the repo', { environment: base }, async (c) => {
+  const turn = await c.send('x')
   expect(turn.diff.files).toEqual([
     { path: 'NOTES.md', status: 'added' },
     { path: 'app/greet.js', status: 'modified' },
   ])
 })
-evaluate('in the subdirectory', { environment: sub }, async (t) => {
-  await t.sandbox()
-  expect(await t.readFile('greet.js')).toContain('Hello')
+evaluate('in the subdirectory', { environment: sub }, async (c) => {
+  await c.sandbox()
+  expect(await c.readFile('greet.js')).toContain('Hello')
 })
 `,
     })

@@ -25,15 +25,15 @@ const sh = (cwd: string, ...args: string[]) =>
 
 const HISTORY = 'evals/.history'
 const agent = (name = 'agent') => `import { evaluate, expect } from 'reeval'
-evaluate('${name}', async (t) => {
-  await t.send('write hello.txt')
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+evaluate('${name}', async (c) => {
+  await c.send('write hello.txt')
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 })
 `
 const failing = `import { evaluate, expect } from 'reeval'
-evaluate('broken', async (t) => {
-  await t.send('write hello.txt')
-  await expect(t.exec('exit 4')).toSucceed()
+evaluate('broken', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('exit 4')).toSucceed()
 })
 `
 const harness = (text = 'Wrote it') => `{ files: { 'hello.txt': 'hi\\n' }, text: '${text}' }`
@@ -448,9 +448,9 @@ describe('recording runs into evals/.history', () => {
 describe('what a record says about comparability', () => {
   const importing = `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
-evaluate('agent', async (t) => {
-  await t.send(prompt)
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+evaluate('agent', async (c) => {
+  await c.send(prompt)
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 })
 `
   const compareJson = async (dir: string) => {
@@ -507,8 +507,8 @@ evaluate('agent', async (t) => {
 
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
     const flip = `import { evaluate, expect } from 'reeval'
-evaluate('flips', async (t) => {
-  await t.send('write hello.txt')
+evaluate('flips', async (c) => {
+  await c.send('write hello.txt')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
@@ -553,8 +553,8 @@ evaluate('flips', async (t) => {
 
   test('reeval compare --fail-on-regression fails on a failing eval that changed (not comparable); a passing one is fine', async () => {
     const edited = (prompt: string) => `import { evaluate, expect } from 'reeval'
-evaluate('edited', async (t) => {
-  await t.send('${prompt}')
+evaluate('edited', async (c) => {
+  await c.send('${prompt}')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
@@ -583,7 +583,7 @@ evaluate('edited', async (t) => {
     const long = 'x'.repeat(20_000)
     const p = await project('turn-cap', {
       'reeval.config.ts': fakeConfig({ harness: `{ text: '${long}' }` }),
-      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (t) => { await t.send('x') })\n`,
+      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (c) => { await c.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const [e] = readRun(p.dir).evals
@@ -599,12 +599,12 @@ evaluate('edited', async (t) => {
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const one = defineEnvironment('tools', { env: { FLAVOUR: 'one' } })
 const two = defineEnvironment('tools', { env: { FLAVOUR: 'two' } })
-evaluate('uses one', { environment: one, runs: 3 }, async (t) => {
-  await t.send('x')
-  expect(await t.judge('Is it fine?')).toPass()
+evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
+  await c.send('x')
+  expect(await c.judge('Is it fine?')).toPass()
 })
-evaluate('uses two', { environment: two }, async (t) => { await t.send('x') })
-evaluate('uses none', async (t) => { await t.send('x') })
+evaluate('uses two', { environment: two }, async (c) => { await c.send('x') })
+evaluate('uses none', async (c) => { await c.send('x') })
 `,
     })
     assert.equal((await runCli(p.dir)).code, 0)

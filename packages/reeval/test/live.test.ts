@@ -556,9 +556,9 @@ async function watchRun(
 
 describe('reeval run keeps its progress file', () => {
   const evalFile = `import { evaluate, expect } from 'reeval'
-evaluate('writes hello', { runs: 3 }, async (t) => {
-  await t.send('write hello.txt')
-  await expect(t.exec('test -f hello.txt')).toSucceed()
+evaluate('writes hello', { runs: 3 }, async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('test -f hello.txt')).toSucceed()
 })
 `
   const agent = (delayMs: number) => `{ files: { 'hello.txt': 'hi\\n' }, delayMs: ${delayMs} }`
@@ -569,10 +569,10 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
       'evals/hello.eval.ts': `import { existsSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { evaluate, expect } from 'reeval'
-evaluate('writes hello', { runs: 3 }, async (t) => {
-  while (!existsSync(new URL(\`../gate-\${t.attempt.n}\`, import.meta.url))) await sleep(20)
-  await t.send('write hello.txt')
-  await expect(t.exec('test -f hello.txt')).toSucceed()
+evaluate('writes hello', { runs: 3 }, async (c) => {
+  while (!existsSync(new URL(\`../gate-\${c.attempt.n}\`, import.meta.url))) await sleep(20)
+  await c.send('write hello.txt')
+  await expect(c.exec('test -f hello.txt')).toSucceed()
 })
 `,
     })
@@ -608,12 +608,12 @@ evaluate('writes hello', { runs: 3 }, async (t) => {
       'evals/hello.eval.ts': `import { writeFileSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { evaluate } from 'reeval'
-evaluate('writes hello', { runs: 20 }, async (t) => {
+evaluate('writes hello', { runs: 20 }, async (c) => {
   writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
-  await t.send('write hello.txt')
-  if (t.attempt.n === 1) return
+  await c.send('write hello.txt')
+  if (c.attempt.n === 1) return
   writeFileSync(new URL('../parked', import.meta.url), '')
-  await sleep(600_000, undefined, { signal: t.signal }).catch(() => {})
+  await sleep(600_000, undefined, { signal: c.signal }).catch(() => {})
 })
 `,
     })

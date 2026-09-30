@@ -235,7 +235,7 @@ export type PlannedSecret = {
   label: string
   from: string
   hosts?: readonly string[]
-  /** `to: 'checks'`: only `t.exec` and setup steps get it, never the agent. */
+  /** `to: 'checks'`: only `c.exec` and setup steps get it, never the agent. */
   checksOnly?: boolean
   /** `optional: true`: left out of the sandbox when the host variable isn't set. */
   optional?: boolean

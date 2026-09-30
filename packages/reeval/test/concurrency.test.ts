@@ -124,8 +124,8 @@ export const traced = async (name: string, fn: () => Promise<unknown>) => {
 /** Each attempt sends one turn to the fake agent, which takes `delayMs`. */
 const tracedEval = (name: string, options = '{}') => `import { evaluate } from 'reeval'
 import { traced } from './trace.ts'
-evaluate('${name}', ${options}, async (t) => {
-  await traced(\`${name} \${t.attempt.cell.harness}#\${t.attempt.n}\`, () => t.send('go'))
+evaluate('${name}', ${options}, async (c) => {
+  await traced(\`${name} \${c.attempt.cell.harness}#\${c.attempt.n}\`, () => c.send('go'))
 })
 `
 
@@ -219,7 +219,7 @@ describe('concurrency', () => {
         "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),",
         "sandbox: (await import('reeval/sandbox')).docker(),",
       ),
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('go') })\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('go') })\n`,
       // A docker CLI whose VM has 3 CPUs and 16 GB, whatever the host has: Node, behind an sh
       // and a .cmd wrapper, so it runs on every OS.
       'bin/docker.js': `const a = process.argv.slice(2).join(' ')\nif (a.startsWith('info') && a.includes('NCPU')) console.log('3 16000000000')\nelse process.exit(1)\n`,
@@ -248,9 +248,9 @@ export default defineConfig({
       'evals/trace.ts': TRACE,
       'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
 import { traced } from './trace.ts'
-evaluate('a', { runs: 5 }, async (t) => {
-  await traced(\`a#\${t.attempt.n}\`, () => t.send('go'))
-  expect(await t.judge('ok?')).toPass()
+evaluate('a', { runs: 5 }, async (c) => {
+  await traced(\`a#\${c.attempt.n}\`, () => c.send('go'))
+  expect(await c.judge('ok?')).toPass()
 })
 `,
     })
@@ -275,8 +275,8 @@ import { fakeHarness } from 'reeval/harness'
 import { traced } from './trace.ts'
 const harness = [fakeHarness({ id: 'x' }), fakeHarness({ id: 'y' })]
 for (const name of ['a', 'b']) {
-  evaluate(name, { harness }, async (t) => {
-    await traced(\`\${name} \${t.attempt.cell.harness}#\${t.attempt.n}\`, () => t.send('go'))
+  evaluate(name, { harness }, async (c) => {
+    await traced(\`\${name} \${c.attempt.cell.harness}#\${c.attempt.n}\`, () => c.send('go'))
   })
 }
 `,

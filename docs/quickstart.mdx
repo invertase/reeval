@@ -41,18 +41,18 @@ description: Write and run your first eval in two minutes, with no API keys or D
     const greetsAda = `node -e "import('./greet.js').then((m) =>
       process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"`
 
-    evaluate('creates greet.js', async (t) => {
-      const turn = await t.send(
+    evaluate('creates greet.js', async (c) => {
+      const turn = await c.send(
         'Create greet.js, an ES module exporting greet(name) that returns ' +
           '"Hello, <name>!". No dependencies.',
       )
 
       await expect(turn).toHaveFile('greet.js', /greet/)
-      await expect(t.exec(greetsAda)).toSucceed()
+      await expect(c.exec(greetsAda)).toSucceed()
     })
     ```
 
-    `t.send` runs an agent turn. `t.exec` runs a command in the sandbox, and `toSucceed` checks its exit code.
+    `c.send` runs an agent turn. `c.exec` runs a command in the sandbox, and `toSucceed` checks its exit code.
   </Step>
   <Step title="Run it on the fake agent">
     The `fake` profile in `reeval.config.ts` swaps in a fake agent that writes `greet.js`, and a fake sandbox:

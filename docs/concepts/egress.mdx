@@ -9,14 +9,14 @@ description: Where the sandbox may connect, which hosts are always allowed, and 
 evaluate('installs from npm only', {
   harness: (inherited) => inherited.slice(0, 1),
   egress: { allow: [...DEFAULT_EGRESS_ALLOW] },
-}, async (t) => {
-  await t.send('Add left-pad to package.json and install it.')
-  await expect(t.exec('npm ls left-pad')).toSucceed()
+}, async (c) => {
+  await c.send('Add left-pad to package.json and install it.')
+  await expect(c.exec('npm ls left-pad')).toSucceed()
 })
 
-evaluate('works offline', { egress: 'deny-all' }, async (t) => {
-  await t.send('Create add.js exporting add(a, b).')
-  await expect(t.exec('node -e "import(\'./add.js\')"')).toSucceed()
+evaluate('works offline', { egress: 'deny-all' }, async (c) => {
+  await c.send('Create add.js exporting add(a, b).')
+  await expect(c.exec('node -e "import(\'./add.js\')"')).toSucceed()
 })
 ```
 

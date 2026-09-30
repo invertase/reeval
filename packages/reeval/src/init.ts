@@ -85,7 +85,7 @@ const fakeAgent = fakeHarness({
     ? `  harness: ${real.factory}({ model: '${real.model}' }), // needs ${keyOf(real)}
   sandbox: docker(),
   timeout: '15m',
-  // For t.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
+  // For c.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
   // with GOOGLE_GENERATIVE_AI_API_KEY.
   defaultProfile: { ci: 'pr' },
   profiles: {
@@ -117,14 +117,14 @@ export function evalSource(pkg: string): string {
 const greetsAda = \`node -e "import('./greet.js').then((m) =>
   process.exit(m.greet('Ada') === 'Hello, Ada!' ? 0 : 1))"\`
 
-evaluate('creates greet.js', async (t) => {
-  const turn = await t.send(
+evaluate('creates greet.js', async (c) => {
+  const turn = await c.send(
     'Create greet.js, an ES module exporting greet(name) that returns ' +
       '"Hello, <name>!". No dependencies.',
   )
 
   await expect(turn).toHaveFile('greet.js', /greet/)
-  await expect(t.exec(greetsAda)).toSucceed()
+  await expect(c.exec(greetsAda)).toSucceed()
 })
 `
 }

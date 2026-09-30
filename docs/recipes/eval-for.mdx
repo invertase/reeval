@@ -18,17 +18,17 @@ const cases = [
   { fn: 'titleCase', input: 'hello world', want: 'Hello World' },
 ]
 
-evaluate.for(cases)('writes $fn', async (t, c) => {
-  await t.send(
-    `Create ${c.fn}.js exporting ${c.fn}(text) as an ES module. ` +
+evaluate.for(cases)('writes $fn', async (c, item) => {
+  await c.send(
+    `Create ${item.fn}.js exporting ${item.fn}(text) as an ES module. ` +
       'Add a package.json with "type": "module". No dependencies.',
   )
-  const run = await t.exec(
-    `node -e "import('./${c.fn}.js')` +
-      `.then((m) => console.log(m.${c.fn}('${c.input}')))"`,
+  const run = await c.exec(
+    `node -e "import('./${item.fn}.js')` +
+      `.then((m) => console.log(m.${item.fn}('${item.input}')))"`,
   )
   await expect(run).toSucceed()
-  expect(run.stdout.trim()).toBe(c.want)
+  expect(run.stdout.trim()).toBe(item.want)
 })
 ```
 
@@ -82,8 +82,8 @@ import { evaluate, expect } from '{{ pkg }}'
 evaluate.for(['npm', 'pnpm', 'yarn'])(
   'documents install with %s',
   { tags: ['docs'] },
-  async (t, pm) => {
-    const turn = await t.send(
+  async (c, pm) => {
+    const turn = await c.send(
       `Write INSTALL.md explaining how to install lodash with ${pm}.`,
     )
     await expect(turn).toHaveFile('INSTALL.md', new RegExp(`${pm} (add|i)`))
@@ -115,10 +115,10 @@ const cases: Case[] = [
   },
 ]
 
-evaluate.for(cases)('exports $fn', async (t, c) => {
-  await t.send(`Create ${c.fn}.js exporting ${c.fn}(text).`)
-  await expect(t.exec(c.check)).toSucceed()
-  if (c.question) expect(await t.judge(c.question)).toPass()
+evaluate.for(cases)('exports $fn', async (c, item) => {
+  await c.send(`Create ${item.fn}.js exporting ${item.fn}(text).`)
+  await expect(c.exec(item.check)).toSucceed()
+  if (item.question) expect(await c.judge(item.question)).toPass()
 })
 ```
 
@@ -135,8 +135,8 @@ evaluate.for(cases)('exports $fn', async (t, c) => {
 
 ```ts title="evals/percase.eval.ts"
 for (const pm of ['npm', 'pnpm']) {
-  evaluate(`adds lodash with ${pm}`, { tags: [pm] }, async (t) => {
-    await t.send(`Add lodash to this project with ${pm}.`)
+  evaluate(`adds lodash with ${pm}`, { tags: [pm] }, async (c) => {
+    await c.send(`Add lodash to this project with ${pm}.`)
   })
 }
 ```

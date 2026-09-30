@@ -15,12 +15,12 @@ import { evaluate, expect } from '{{ pkg }}'
 evaluate(
   'writes a CSV parser offline',
   { egress: 'deny-all' },
-  async (t) => {
-    await t.send(
+  async (c) => {
+    await c.send(
       'Create csv.js exporting parse(text) that handles quoted fields, ' +
         'and csv.test.js using node:test. No dependencies.',
     )
-    await expect(t.exec('node --test')).toSucceed()
+    await expect(c.exec('node --test')).toSucceed()
   },
 )
 ```
@@ -36,9 +36,9 @@ const registriesOnly = defineEnvironment('registries-only', {
 evaluate(
   'adds zod validation',
   { environment: registriesOnly },
-  async (t) => {
-    await t.send('Install zod and add a validated parseUser(input) to user.js.')
-    await expect(t.exec('npm ls zod')).toSucceed()
+  async (c) => {
+    await c.send('Install zod and add a validated parseUser(input) to user.js.')
+    await expect(c.exec('npm ls zod')).toSucceed()
   },
 )
 ```

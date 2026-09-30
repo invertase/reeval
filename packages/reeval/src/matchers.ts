@@ -25,7 +25,7 @@ function webEvent(
   field: (e: TranscriptEvent) => string,
   pattern: RegExp | string | undefined,
 ): Result {
-  if (!isTurn(actual)) throw new TypeError(`${matcher}() expects a turn from t.send()`)
+  if (!isTurn(actual)) throw new TypeError(`${matcher}() expects a turn from c.send()`)
   const what = type === 'web-search' ? 'web searches' : 'web fetches'
   if (actual.unreported.includes(type)) {
     throw new HarnessCapabilityError(
@@ -59,7 +59,7 @@ const hasFiles = (value: unknown): value is HasFiles =>
 
 export const matchers = {
   async toHaveFile(actual: unknown, path: string, pattern?: RegExp | string): Promise<Result> {
-    if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from t.send(), or t')
+    if (!hasFiles(actual)) throw new TypeError('toHaveFile() expects a turn from c.send(), or c')
     const content = await actual.readFile(path)
     if (content === null) return { pass: false, message: () => `expected file ${path} to exist` }
     if (pattern === undefined) return { pass: true, message: () => `expected no file at ${path}` }
@@ -100,7 +100,7 @@ export const matchers = {
 
   toPass(actual: unknown): Result {
     const v = actual as Verdict
-    if (typeof v?.score !== 'number') throw new TypeError('toPass() expects a t.judge() verdict')
+    if (typeof v?.score !== 'number') throw new TypeError('toPass() expects a c.judge() verdict')
     const score = v.score.toFixed(2)
     return {
       pass: v.verdict === 'pass',
