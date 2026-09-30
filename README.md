@@ -1,11 +1,101 @@
 # reeval
 
-Does a coding agent actually use your SDK, your skills and your docs correctly? reeval answers
-that with evals. You write the task, a real agent (Cursor, Claude Code, Antigravity, OpenCode,
-Goose, pi or Codex) does it in a fresh local Docker sandbox, and reeval grades the result with deterministic checks and an LLM judge.
-`compare` runs the same task with and without a skill, MCP server or docs, and reports the lift.
-Every run is saved as a result file you can commit, diff against earlier runs and browse in a
-web studio.
+**Find out whether your skill, docs or MCP server makes coding agents better, on real agents.**
+
+```ts
+// evals/api.eval.ts, from examples/hello
+import { defineEnvironment, evaluate, expect } from 'reeval'
+import { claudeCode, codex, cursor } from 'reeval/harness'
+import { appFiles, probeUsers } from './api/app.ts'
+
+// create-next-app's API template at a release tag. No baseline, so it's the control.
+const nextApi = defineEnvironment('nextjs-api', ({ git }) => ({
+  workspace: git('github:vercel/next.js', {
+    ref: 'v16.3.7',
+    path: 'packages/create-next-app/templates/app-api/ts',
+  }),
+  files: appFiles, // package.json, and lib/users.ts to list
+  setup: ['mv gitignore .gitignore', 'npm install --no-audit --no-fund'],
+}))
+
+const withSkill = nextApi.extendEnvironment('with-api-conventions', ({ skill }) => ({
+  skills: [
+    skill.git('github:invertase/reeval', {
+      ref: '1bdbe83f74cdb51b5857529c9134b36c62be7684',
+      path: 'examples/hello/skills',
+      only: ['api-conventions'],
+    }),
+  ],
+}))
+
+evaluate(
+  'how well the api-conventions skill influences the output',
+  {
+    environment: nextApi,
+    harness: [
+      cursor({ model: 'composer-2.5' }),
+      claudeCode({ model: 'claude-sonnet-5' }),
+      codex({ model: 'gpt-5.6-luna' }),
+    ],
+    runs: 3,
+    timeout: '20m',
+    compare: {
+      variants: [withSkill],
+      questions: ['Which endpoint follows our API conventions?'],
+    },
+  },
+  async (c) => {
+    await c.send(
+      'Add a paginated GET /api/users endpoint (app/api/users/route.ts) ' +
+        'over lib/users.ts, with tests that npm test runs.',
+    )
+    // The route exists and pages by cursor.
+    await expect(c).toHaveFile('app/api/users/route.ts', /cursor/i)
+    // It builds, types included.
+    await expect(c.exec('npm run build')).toSucceed()
+    // The agent's own tests pass.
+    await expect(c.exec('npm test')).toSucceed()
+    // The built route pages as { data, nextCursor } and rejects a bad cursor.
+    await expect(c.exec(probeUsers)).toSucceed()
+    // A judge for what the checks can't read: do the tests cover it?
+    const covered = 'Do the tests follow nextCursor to the end and check invalid_cursor?'
+    expect(await c.judge(covered)).toPass()
+  },
+)
+```
+
+- **Real agents in sandboxes.** Cursor, Claude Code, Codex, Antigravity, OpenCode, Goose and pi
+  each work in a fresh local Docker container. Their API keys stay on the host: the sandbox gets
+  a placeholder, and reeval's egress gateway swaps in the key only on requests to that provider.
+- **Any environment.** Start from a git repository at a pinned ref, then add files, setup steps,
+  rules, skills, MCP servers and secrets, on reeval's image or your own `from` or Dockerfile.
+- **The whole matrix.** Each harness × environment is a cell with its own runs, all planned
+  before anything starts (`reeval run --dry-run`), with profiles that size a run for a PR or a
+  nightly.
+- **Checks and judges.** Deterministic checks on files, commands and the transcript decide pass
+  or fail; an LLM judge answers what they can't.
+- **Compare, questions and analysis.** `compare` reports each variant's lift over the control,
+  with a 95% interval and its effort; `questions` asks a model which attempt did better, pair by
+  pair and blind; `reeval analyze` writes a checked reading of a run.
+- **Results in your repo.** Every run is a JSON record you can commit, diff with `reeval compare`,
+  query with SQL (`reeval query`) and browse in `reeval studio`.
+
+A real run of the eval, one attempt per cell: no control paged by cursor, and with the skill
+all three agents passed every check.
+
+```text
+$ reeval run evals/api.eval.ts --runs 1
+…
+   ✓ how well the api-conventions skill influences the output      3/6 · 100% gated  6 attempts
+       cursor:composer-2.5/nextjs-api/docker                    control    0/1    0%   not gated
+       cursor:composer-2.5/with-api-conventions/docker          variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+       claude-code:claude-sonnet-5/nextjs-api/docker            control    0/1    0%   not gated
+       claude-code:claude-sonnet-5/with-api-conventions/docker  variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+       codex:gpt-5.6-luna/nextjs-api/docker                     control    0/1    0%   not gated
+       codex:gpt-5.6-luna/with-api-conventions/docker           variant    1/1  100%   lift +100 pts (95% −12…+100, 1/1 vs 0/1), within noise
+       question  "Which endpoint follows our API conventions?" across: claude-code:claude-sonnet-5 2/4 (50%), codex:gpt-5.6-luna 0/4 (0%), cursor:composer-2.5 4/4 (100%) · 6 votes, 0 ties · gemini-3.8-flash
+…
+```
 
 ```bash
 npm i -D reeval   # the CLI is `reeval`, or `re` for short
