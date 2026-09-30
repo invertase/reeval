@@ -57,7 +57,7 @@ reeval ships the adapter with one fix, which its image bakes: 1.0.138 never repo
 
 The harness authenticates only with `ANTHROPIC_API_KEY`, passed to the adapter explicitly. A host `AI_GATEWAY_API_KEY`, a Claude subscription login or a keychain entry is never used, so a run can't quietly bill a different account.
 
-The key never enters the container. The gateway swaps it in on these endpoints of `api.anthropic.com` (what CLI 2.1.276 sends it on) and nowhere else:
+The key never enters the container. The gateway swaps it in on these endpoints of `api.anthropic.com` (what CLI 2.1.281 sends it on) and nowhere else:
 
 | Method | Path |
 |---|---|

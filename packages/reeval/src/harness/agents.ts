@@ -382,7 +382,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Claude Code',
     factory: 'claudeCode',
     credential: 'ANTHROPIC_API_KEY',
-    // What CLI 2.1.276 sends the key on, with non-essential traffic off (checked in Docker).
+    // What CLI 2.1.281 sends the key on, with non-essential traffic off (checked in Docker).
     // Anything else gets a 403 from the gateway and a warning that names the request.
     endpoints: [
       { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
