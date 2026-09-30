@@ -20,6 +20,7 @@ import { describe, test } from 'node:test'
 import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { validate } from '../scripts/schema/validate.ts'
 import { noteTools, writeAgentNote } from '../src/analysis/agent/note.ts'
+import { investigate, summaryTools, toolReads } from '../src/analysis/agent/summary.ts'
 import {
   type AttemptView,
   attemptSummary,
@@ -28,8 +29,13 @@ import {
   listOutcomes,
   stagedAttempts,
 } from '../src/analysis/agent/tools.ts'
+import { analyseDigest, defaultBase, prepareAnalysis } from '../src/analysis/command.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
+import { resolveAnalysisModel } from '../src/analysis/model.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
+import { allRuns } from '../src/commands.ts'
+import { resolveConfig } from '../src/config.ts'
+import type { HistoryEntry } from '../src/history/types.ts'
 import { recordFileName } from '../src/ids.ts'
 import { fakeAnalysis } from '../src/judge.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
@@ -38,7 +44,7 @@ import type { EvalResult } from '../src/ui/events.ts'
 import { type AnalysisNote, analysisDataPath } from '../src/view/analysis.ts'
 import { contrastEffort, effortLabel } from '../src/view/effort.ts'
 import { parseTranscript } from '../src/view/model.ts'
-import { NewerSchemaError, readableAnalysisNote } from '../src/view/record.ts'
+import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
 import { fakeConfig, pkgRoot, project, readRun, runCli, tempDir } from './helpers.ts'
 import { REAL_HARNESSES, type RealAttempt, realAttempts } from './support/real-runs.ts'
 
@@ -878,7 +884,7 @@ evaluate('reads ok.txt', async (t) => {
 
 const notesOf = (dir: string) => {
   const runs = join(dir, '.reeval/analysis')
-  const [runId] = readdirSync(runs)
+  const [runId] = readdirSync(runs).filter((n) => !n.endsWith('.json'))
   const folder = join(runs, runId as string, 'notes')
   return {
     runId: runId as string,
@@ -1182,9 +1188,11 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
       NewerSchemaError,
     )
     assert.deepEqual(
-      await listAnalyses(p.dir, [join(p.dir, 'evals/.history')], runId, true),
-      [],
-      "the notes' folder in the cache isn't an analysis",
+      (await listAnalyses(p.dir, [join(p.dir, 'evals/.history')], runId, true)).map((e) =>
+        /^\.reeval\/analysis\/[0-9a-f]{64}\.json$/.test(e.file),
+      ),
+      [true],
+      "the notes' folder in the cache isn't an analysis: the run's summary is the only one",
     )
   })
 
@@ -1252,5 +1260,275 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
       const dry = await runCli(p.dir, ['run', '--dry-run'])
       assert.equal(dry.code, 0, dry.stderr)
     }
+  })
+})
+
+/** A project whose history is a copy of `history`, and its config resolved in-process. */
+async function summaryInputs(history: string, maxInputTokens = 20_000, output: unknown = {}) {
+  const dir = tempDir('summary-replay')
+  cpSync(history, join(dir, 'evals/.history'), { recursive: true })
+  const config = resolveConfig(
+    { analysis: { model: fakeAnalysis({ output }), maxInputTokens } } as never,
+    dir,
+  )
+  const entries = await allRuns(config)
+  /** The run's digest, against the base `reeval analyze` picks, or (`alone`) none. */
+  const prepare = async (runId: string, alone = false) => {
+    const head = entries.find((e) => e.runId === runId) as HistoryEntry
+    const base = alone ? null : await defaultBase(config, entries, head)
+    return prepareAnalysis(config, head, base, null)
+  }
+  return { config, entries, prepare, model: resolveAnalysisModel(config) }
+}
+
+const callTool = (
+  tools: ReturnType<typeof summaryTools>,
+  name: keyof ReturnType<typeof summaryTools>,
+  input: object,
+) =>
+  (tools[name].execute as (i: object, o: object) => Promise<unknown>)(input, {
+    toolCallId: 't',
+    messages: [],
+  })
+
+/** A canned summary whose claims cite `good` and a made-up attempt, one claim each. */
+const citing = (good: string[]) => ({
+  tldr: 'A summary.',
+  whatHappened: [
+    { text: 'What the cited items show.', cites: good, confidence: 'high' },
+    { text: 'An attempt that never ran.', cites: ['r9/nope/control#1'], confidence: 'high' },
+  ],
+  results: [],
+  why: [],
+  anomalies: [],
+  actions: [],
+  confidence: { overall: 'medium', why: 'A replay.' },
+})
+
+const summaryDocs = (dir: string) =>
+  readdirSync(join(dir, '.reeval/analysis'))
+    .filter((n) => n.endsWith('.json'))
+    .map((n) => ({
+      key: n.slice(0, -5),
+      doc: JSON.parse(readFileSync(join(dir, '.reeval/analysis', n), 'utf8')),
+    }))
+
+describe("analysis.agent: the run's summary after reeval run", () => {
+  test('on a real Cursor history, the tools read back dropped evidence and a failing attempt, and citations to what they read are valid', async () => {
+    const { config, prepare, model } = await summaryInputs(join(FIXTURES, 'dogfood'), 8000)
+    const p = await prepare(HEAD)
+    assert.equal(p.base?.runId, BASE)
+    assert.deepEqual(
+      p.dropped.map((e) => e.id),
+      p.digest.dropped,
+      'every dropped item is kept whole',
+    )
+    assert.ok(p.dropped.length >= 3, `${p.dropped.length} dropped at the cap`)
+
+    const { reads } = await investigate(p, model, config)
+    assert.deepEqual(
+      reads.map((r) => [r.tool, r.input]),
+      [
+        ...p.digest.dropped.slice(0, 3).map((id) => ['read_evidence', { id }]),
+        ['open_attempt', { id: 'r2/fix-config/control#1' }],
+      ],
+      'the fake reads what the prompt asks for: dropped evidence and the failing attempt',
+    )
+    const failed = reads.at(-1)?.output as ReturnType<typeof attemptSummary>
+    assert.equal(failed.outcome, 'fail')
+    assert.ok(failed.turns.flatMap((t) => t.steps).length > 3, 'the real transcript as steps')
+    const read = toolReads(reads)
+    assert.deepEqual(
+      read.evidence.map((e) => e.id),
+      p.digest.dropped.slice(0, 3),
+    )
+    const [first] = read.evidence
+    const line = first?.lines.find((l) => /^L\d+ /.test(l))?.split(' ')[0]
+    assert.ok(line, 'a dropped tool strip keeps its transcript lines')
+    const size = reads.reduce((n, r) => n + JSON.stringify(r.output).length, 0)
+    assert.ok(size <= config.analysis.maxInputTokens * 4, `${size} characters read`)
+
+    const fake = (cites: string[]) => ({
+      name: 'fake',
+      route: 'fake' as const,
+      fake: fakeAnalysis({ output: citing(cites) }),
+    })
+    const cite = `${first?.id}:${line}`
+    const doc = await analyseDigest(config, p, fake([cite, 'r2/fix-config/control#1']), read)
+    assert.deepEqual(
+      doc.analysis.whatHappened.map((c) => c.text),
+      ['What the cited items show.'],
+      'the made-up attempt is dropped; the dropped evidence, once read, is citable',
+    )
+    assert.deepEqual(doc.validation.invalid, ['whatHappened[1]: r9/nope/control#1'])
+    assert.match(doc.cited[cite] ?? '', new RegExp(`^${line} `))
+    assert.equal(
+      (await analyseDigest(config, p, fake([cite]))).validation.invalid[0],
+      `whatHappened[0]: ${cite}`,
+      'unread, a dropped item is not citable',
+    )
+  })
+
+  test('on each real harness\u2019s contract run, the tools open real attempts and diffs, and a made-up citation is rejected', async () => {
+    const history = join(pkgRoot, 'test/fixtures/records/real-contract/evals/.history')
+    const { config, entries, prepare, model } = await summaryInputs(history)
+    const byHarness = new Map(
+      realAttempts('real-contract').map((r) => [r.harness, r.runId] as const),
+    )
+    assert.deepEqual([...byHarness.keys()].sort(), [...REAL_HARNESSES].sort())
+    assert.equal(entries.length, 3)
+    // Each run is a different harness, so each is analysed alone.
+    for (const [harness, runId] of byHarness) {
+      const p = await prepare(runId, true)
+      const attempts = Object.entries(p.digest.attempts)
+      assert.equal(attempts.length, 12, harness)
+      const { reads } = await investigate(p, model, config)
+      const failing = attempts.filter(([, a]) => a.outcome === 'fail').map(([id]) => id)
+      assert.deepEqual(
+        reads.map((r) => (r.input as { id: string }).id),
+        failing.slice(0, 3),
+        `${harness}: the fake opens three of the failing canaries`,
+      )
+      for (const r of reads) {
+        const opened = r.output as ReturnType<typeof attemptSummary>
+        assert.equal(opened.outcome, 'fail', harness)
+      }
+      const tools = summaryTools(p, config.analysis.maxInputTokens * 4)
+      const [edit] =
+        attempts.find(([, a]) => /edit-and-run/.test(a.evalSlug) && a.outcome === 'pass') ?? []
+      assert.ok(edit, `${harness}: the passing edit-and-run attempt`)
+      const opened = (await callTool(tools, 'open_attempt', { id: edit })) as ReturnType<
+        typeof attemptSummary
+      >
+      assert.match(opened.diff, /^\+\+\+ b\/notes\.txt$/m, `${harness}: its real diff`)
+      assert.ok(opened.turns.flatMap((t) => t.steps).length > 0, harness)
+      assert.match(
+        String(
+          ((await callTool(tools, 'open_attempt', { id: 'r9/nope#1' })) as { error: string }).error,
+        ),
+        /^No attempt r9\/nope#1\. The attempts are /,
+      )
+      assert.match(
+        String(((await callTool(tools, 'read_evidence', { id: 'E1' })) as { error: string }).error),
+        /^No dropped evidence E1\. Dropped: none\.$/,
+      )
+
+      const fake = fakeAnalysis({ output: citing([failing[0] as string, edit as string]) })
+      const doc = await analyseDigest(
+        config,
+        p,
+        { name: 'fake', route: 'fake', fake },
+        toolReads(reads),
+      )
+      assert.deepEqual(doc.validation.invalid, ['whatHappened[1]: r9/nope/control#1'], harness)
+      assert.deepEqual(doc.analysis.whatHappened[0]?.cites, [failing[0], edit], harness)
+      assert.equal(doc.attempts[edit as string]?.runId, runId, harness)
+    }
+  })
+
+  test('a fake run caches one run-scoped summary; reeval analyze on the run is served from it', async () => {
+    const summary = `analysis: { agent: true, model: fakeAnalysis({
+      note: 'A note.',
+      output: (d) => {
+        appendFileSync(new URL('./summary.log', import.meta.url), 'call\\n')
+        const failed = Object.keys(d.attempts).find((id) => d.attempts[id].outcome === 'fail')
+        return { tldr: 'wobbly#2 missed its file.', whatHappened: [
+          { text: 'One attempt failed.', cites: [failed], confidence: 'high' },
+          { text: 'An attempt that never ran.', cites: ['r9/nope/control#1'], confidence: 'high' },
+        ], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'A fake.' } }
+      },
+    }) },`
+    const p = await project('agent-summary', {
+      'reeval.config.ts': AGENT_CONFIG(summary),
+      ...AGENT_EVALS,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, 'wobbly#2 fails its check, as it would without a summary')
+    const [cached, ...more] = summaryDocs(p.dir)
+    assert.ok(cached)
+    assert.equal(more.length, 0, 'one summary per run')
+    const { runId } = notesOf(p.dir)
+    assert.match(
+      r.stdout,
+      new RegExp(
+        `^analysis: 4 notes in \\.reeval/analysis/${runId}/notes\\nanalysis: summary in \\.reeval/analysis/${cached.key}\\.json \\(reeval analyze shows it\\)$`,
+        'm',
+      ),
+    )
+    const summaryCalls = () =>
+      readFileSync(join(p.dir, 'summary.log'), 'utf8').split('\n').filter(Boolean).length
+    assert.equal(summaryCalls(), 1)
+    const doc = cached.doc
+    assert.deepEqual(
+      [doc.kind, doc.scope, doc.anchor, doc.error, doc.model],
+      [
+        'es-analysis',
+        { kind: 'run', head: runId, base: null, evals: null },
+        runId,
+        undefined,
+        'fake',
+      ],
+    )
+    assert.deepEqual(
+      doc.analysis.whatHappened.map((c: { cites: string[] }) => c.cites),
+      [['r1/w-1/wobbly:control#2']],
+      'validateAnalysis dropped the made-up citation',
+    )
+    assert.deepEqual(doc.validation.invalid, ['whatHappened[1]: r9/nope/control#1'])
+    const schema: ShapeSchema = JSON.parse(
+      readFileSync(join(pkgRoot, 'schema/analysis.schema.json'), 'utf8'),
+    )
+    assert.deepEqual(validate(schema, readableAnalysis(doc)), [])
+
+    const again = await runCli(p.dir, ['analyze', '--json'])
+    assert.equal(again.code, 0, again.stderr)
+    assert.match(again.stderr, /^cached analysis from /)
+    assert.equal(summaryCalls(), 1, 'reeval analyze made no call')
+    assert.deepEqual(JSON.parse(again.stdout), doc)
+    assert.match((await runCli(p.dir, ['analyze', '--dry-run'])).stdout, /cache hit/)
+  })
+
+  test('a summary that fails is cached with its error and a warning; the run passes, and reeval analyze calls again', async () => {
+    const failing = `analysis: { agent: true, model: fakeAnalysis({ note: 'A note.', output: () => { throw new Error('the model is down') } }) },`
+    const p = await project('agent-summary-error', {
+      'reeval.config.ts': AGENT_CONFIG(failing),
+      'evals/w.eval.ts': AGENT_EVALS['evals/w.eval.ts'].replace(
+        "t.attempt.cell.harness === 'wobbly' && t.attempt.n === 2",
+        'false',
+      ),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    assert.match(r.stdout, /^analysis summary failed: the model is down$/m)
+    assert.match(r.stdout, /8 passed \(8 attempts, 2 evals\)/)
+    const [cached] = summaryDocs(p.dir)
+    assert.equal(cached?.doc.error, 'the model is down')
+    assert.equal(cached?.doc.analysis.tldr, '')
+    const { runId } = notesOf(p.dir)
+    const listed = await listAnalyses(p.dir, [join(p.dir, 'evals/.history')], runId, true)
+    assert.deepEqual(
+      listed.map((e) => e.doc.error),
+      ['the model is down'],
+      'the studio lists it, error and all',
+    )
+    assert.ok(readRun(p.dir).run.evals.every((e) => e.outcome === 'pass'))
+
+    const config = join(p.dir, 'reeval.config.ts')
+    writeFileSync(
+      config,
+      readFileSync(config, 'utf8').replace(
+        "() => { throw new Error('the model is down') }",
+        "{ tldr: 'It works now.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } }",
+      ),
+    )
+    const again = await runCli(p.dir, ['analyze'])
+    assert.equal(again.code, 0, again.stderr)
+    assert.match(again.stderr, /^analysing /, 'a cached failure is a miss')
+    assert.match(again.stdout, /It works now\./)
+    assert.deepEqual(
+      summaryDocs(p.dir).map((d) => [d.key, d.doc.error]),
+      [[cached?.key, undefined]],
+      'the same key, now without the error',
+    )
   })
 })
