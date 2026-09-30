@@ -7,6 +7,7 @@ import {
   providerServedModel,
   resolveOpenCodeProvider,
 } from '@reeval/harness-opencode/providers'
+import type { PiMcpServer } from '@reeval/harness-pi'
 import type { BakedHarness, DerivedTokens, EndpointMatch } from '@reeval/sandbox-docker'
 import type { ResolvedMcpServer } from '../environment/resolve.ts'
 import { InfraError } from '../sandbox/types.ts'
@@ -159,8 +160,8 @@ const OPENAI_ENDPOINTS = [
 ] as const satisfies readonly EndpointMatch[]
 
 /**
- * The model the Responses API says served a request, from its response: the dated snapshot, and
- * the reasoning effort Codex resolved for it, e.g. `gpt-5.4-mini-2026-03-17[effort=medium]`.
+ * The model the Responses API says served a request, from its response (a dated snapshot for some
+ * models), and the reasoning effort Codex resolved for it, e.g. `gpt-5.6-luna[effort=medium]`.
  */
 const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEffort }) =>
   host === 'api.openai.com' && path === '/v1/responses' && responseModel
@@ -282,6 +283,32 @@ export function gooseMcpServers(
   )
 }
 
+/**
+ * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. 0.99.1
+ * skips a server whose name isn't letters, digits, `_` and `-`, so the plan refuses it instead.
+ */
+export function piMcpServers(
+  servers: Record<string, ResolvedMcpServer>,
+): Record<string, PiMcpServer> {
+  return Object.fromEntries(
+    Object.entries(servers).map(([name, s]): [string, PiMcpServer] => {
+      if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+        throw new InfraError(
+          `pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the ${name} server: rename it`,
+        )
+      }
+      if (s.transport === 'sse') {
+        throw new InfraError(
+          `pi has no SSE MCP transport, so it can't use the ${name} server (mcp.sse): use mcp.http or mcp.stdio`,
+        )
+      }
+      return s.transport === 'stdio'
+        ? [name, { command: s.command, args: s.args, env: s.env ?? {} }]
+        : [name, { url: s.url, headers: s.headers ?? {} }]
+    }),
+  )
+}
+
 /** The Cursor SDK's `McpServerConfig` shape. */
 export function cursorMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -309,7 +336,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
   },
-  // CLI 1.2.11 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
+  // CLI 1.2.14 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
   // path its docs give.
   antigravity: {
     rulesFile: 'AGENTS.md',
@@ -331,7 +358,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     harnessSkillDir:
       '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
   },
-  // 0.87.1 reads workspace skills only in a trusted project, which the adapter's --approve makes
+  // 0.99.1 reads workspace skills only in a trusted project, which the adapter's --approve makes
   // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
   pi: {
     rulesFile: 'AGENTS.md',
@@ -362,9 +389,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
       fields: ['accessToken', 'refreshToken'],
       hosts: ['cursor.sh', '*.cursor.sh'],
     },
-    // SDK 1.0.32 drops web search and fetch calls from its stream (they run on Cursor's backend,
-    // so the egress log doesn't see them either). The runner recovers them from the stored
-    // conversation, and names the tools it couldn't recover for a turn.
+    // SDK 1.0.32 and 1.0.34 drop web search and fetch calls from their stream (they run on
+    // Cursor's backend, so the egress log doesn't see them either). The runner recovers them from
+    // the stored conversation, and names the tools it couldn't recover for a turn.
     unreported: cursorUnreported,
     mcpServers: cursorMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
@@ -415,10 +442,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
-    // The only request CLI 1.2.11 sends the key on (its main model, and a lite one for titles).
+    // The only request CLI 1.2.14 sends the key on (its main model, and a lite one for titles).
     endpoints: GEMINI_ENDPOINTS,
-    // CLI 1.2.11 opens both in every session. Neither `enableTelemetry: false` nor any other
-    // setting or variable in the binary stops them (checked in its image behind a logging proxy).
+    // CLI 1.2.14 opens both in every session. Neither `enableTelemetry: false` nor any other
+    // setting or variable in the binary stops them (checked on 1.2.11 behind a logging proxy).
     expectedBlocked: {
       hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
       why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
@@ -442,7 +469,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    // The requests 2.0.18 sends each provider's key on (its model, and the same model for titles),
+    // The requests 2.0.20 sends each provider's key on (its model, and the same model for titles),
     // probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
@@ -480,19 +507,15 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'pi',
     factory: 'pi',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 0.87.1 sends the key on; --offline stops its startup network operations.
+    // The only request 0.99.1 sends the key on; --offline stops its startup network operations.
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    mcpServers: (servers) => {
-      const names = Object.keys(servers)
-      throw new InfraError(
-        `pi has no MCP client, so it can't use the ${names.join(', ')} MCP server${names.length === 1 ? '' : 's'}`,
-      )
-    },
-    adapter: async ({ auth }) =>
+    mcpServers: piMcpServers,
+    adapter: async ({ auth, mcpServers }) =>
       (await import('@reeval/harness-pi')).createPi({
         // pi reads the key as GEMINI_API_KEY; reeval's host variable is the one OpenCode and Goose use.
         auth: { GEMINI_API_KEY: auth.GOOGLE_GENERATIVE_AI_API_KEY ?? '' },
+        ...(mcpServers ? { mcpServers: mcpServers as Record<string, PiMcpServer> } : {}),
         requireCredentialBrokering: true,
       }),
   },
@@ -501,7 +524,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
-    // The only request 0.157.1 sends the key on, on the adapter's provider (HTTP, not WebSockets),
+    // The only request 0.159.2 sends the key on, on the adapter's provider (HTTP, not WebSockets),
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,
@@ -527,8 +550,8 @@ export const isAgentKind = (kind: unknown): kind is AgentKind =>
   typeof kind === 'string' && Object.hasOwn(AGENTS, kind)
 
 /**
- * Why a harness's agent can't take the environment's MCP servers (pi takes none; Goose, OpenCode
- * and Codex no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
+ * Why a harness's agent can't take the environment's MCP servers (Goose, OpenCode, pi and Codex
+ * take no `mcp.sse`), in the agent's own words, so the plan refuses them before any attempt
  * starts; undefined when it can.
  */
 export function refusedMcp(

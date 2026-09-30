@@ -26,6 +26,10 @@ updates:
       # so bumping any of the family without it installs two copies. They move by hand, together.
       - dependency-name: ai
       - dependency-name: '@ai-sdk/*'
+      # reeval supports Node 22.13 and later (engines), so the types stay on 22: a newer major
+      # would type-check APIs that 22.13 lacks.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
   # `/` covers .github/workflows only, so the composite actions are listed too.
   - package-ecosystem: github-actions
     directories: [/, /.github/actions/*]
@@ -36,3 +40,8 @@ updates:
     directory: /packages/sandbox-docker/docker
     schedule: { interval: weekly }
     commit-message: { prefix: build, include: scope }
+    ignore:
+      # Node majors move by hand, on the line reeval supports (engines: Node 22.13 and later), and
+      # with src/build-image.ts, which copies Node from node:22-bookworm-slim onto other bases.
+      - dependency-name: node
+        update-types: [version-update:semver-major]

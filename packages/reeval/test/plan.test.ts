@@ -14,6 +14,12 @@ export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
+  { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'baseline-omitted-off',
+    args: ['--profile', 'off', 'evals/omitted.eval.ts'],
+  },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
@@ -50,6 +56,7 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
+  { dir: 'files', name: 'directory', args: [] },
 ]
 
 // Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'
@@ -183,7 +190,7 @@ evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async 
       [
         'pi',
         'gemini-3.8-flash',
-        /evaluate\("streams"\) on pi:gemini-3\.8-flash: pi has no MCP client, so it can't use the events MCP server/,
+        /evaluate\("streams"\) on pi:gemini-3\.8-flash: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\): use mcp\.http or mcp\.stdio/,
       ],
       [
         'codex',
@@ -217,35 +224,37 @@ evaluate('streams', { environment: events }, async () => {})
     }
   })
 
-  test('any MCP server on pi exits 2 at plan time; Goose takes stdio and http', async () => {
+  test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {
     const config = (factory: string) => `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }), sandbox: docker() })
 `
-    const evals = `import { defineEnvironment, evaluate } from 'reeval'
+    const evals = (local: string) => `import { defineEnvironment, evaluate } from 'reeval'
 const tools = defineEnvironment('tools', ({ mcp }) => ({
-  mcp: { local: mcp.stdio('node', ['server.mjs']), remote: mcp.http('https://mcp.example.com/mcp') },
+  mcp: { '${local}': mcp.stdio('node', ['server.mjs']), remote: mcp.http('https://mcp.example.com/mcp') },
 }))
 evaluate('uses tools', { environment: tools }, async () => {})
 `
-    const pi = await project('mcp-pi', {
+    for (const factory of ['pi', 'goose']) {
+      const p = await project(`mcp-${factory}`, {
+        'reeval.config.ts': config(factory),
+        'evals/m.eval.ts': evals('local'),
+      })
+      const planned = await runCli(p.dir, ['run', '--dry-run'])
+      assert.equal(planned.code, 0, `${factory}: ${planned.stdout}${planned.stderr}`)
+    }
+    // The twin: the same servers, one named with a dot, which pi 0.99.1 would skip.
+    const dotted = await project('mcp-pi-dotted', {
       'reeval.config.ts': config('pi'),
-      'evals/m.eval.ts': evals,
+      'evals/m.eval.ts': evals('my.local'),
     })
-    const refused = await runCli(pi.dir, ['run', '--dry-run'])
+    const refused = await runCli(dotted.dir, ['run', '--dry-run'])
     assert.equal(refused.code, 2, refused.stdout + refused.stderr)
     assert.match(
       refused.stderr,
-      /evaluate\("uses tools"\) on pi:gemini-3\.8-flash: pi has no MCP client, so it can't use the local, remote MCP servers/,
+      /evaluate\("uses tools"\) on pi:gemini-3\.8-flash: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the my\.local server: rename it/,
     )
-    // The twin: the same servers plan on a harness that has an MCP client.
-    const goose = await project('mcp-goose', {
-      'reeval.config.ts': config('goose'),
-      'evals/m.eval.ts': evals,
-    })
-    const planned = await runCli(goose.dir, ['run', '--dry-run'])
-    assert.equal(planned.code, 0, planned.stdout + planned.stderr)
   })
 
   test('the text plan names each restricted policy and its automatic hosts', async () => {

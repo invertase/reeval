@@ -3,21 +3,21 @@ title: Judges
 description: How a judge scores a yes/no question, which model it calls, and how to write questions it can grade.
 ---
 
-`t.judge(question)` asks an evaluation model a yes/no question about the agent's latest turn. The model returns the probability of "yes", and the verdict passes when that score is at or above the threshold.
+`c.judge(question)` asks an evaluation model a yes/no question about the agent's latest turn. The model returns the probability of "yes", and the verdict passes when that score is at or above the threshold.
 
 ```ts title="evals/hello.eval.ts"
-evaluate('adds a default name in a follow-up turn', async (t) => {
-  await t.send(
+evaluate('adds a default name in a follow-up turn', async (c) => {
+  await c.send(
     'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
       'No dependencies.',
   )
-  await t.send(
+  await c.send(
     'Make name default to "world" when greet() is called without arguments.',
   )
 
-  await expect(t.exec(callGreetWithNoArgs)).toSucceed()
+  await expect(c.exec(callGreetWithNoArgs)).toSucceed()
   expect(
-    await t.judge(
+    await c.judge(
       'Did the agent add the default without breaking greet(name)?',
     ),
   ).toPass()
@@ -39,16 +39,16 @@ The score is P(yes), from 0 to 1. The threshold defaults to 0.8, and a verdict i
 `judge` merges field by field, innermost first: the call, then the eval, then each group, then the config. So an eval or a single call can change the threshold and keep the config's model:
 
 ```ts title="evals/strict.eval.ts"
-evaluate('strict', { judge: { threshold: 0.9 } }, async (t) => {
-  await t.send('Rename add.js to sum.js and update its imports.')
-  const minimal = await t.judge('Is the change minimal?', { threshold: 0.7 })
+evaluate('strict', { judge: { threshold: 0.9 } }, async (c) => {
+  await c.send('Rename add.js to sum.js and update its imports.')
+  const minimal = await c.judge('Is the change minimal?', { threshold: 0.7 })
   expect(minimal).toPass()
 })
 ```
 
 ## Which model it calls
 
-There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `t.judge()` fails with `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.`
+There's no default model. Set `judge.model` in the config, a group, an eval or the call, or `c.judge()` fails with `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.`
 
 ```mermaid
 flowchart LR
@@ -78,7 +78,7 @@ A judge call that hits a transient error (a 429, a 5xx, "high demand", a dropped
 | Where | What's recorded |
 |---|---|
 | The verdict | `retries`: each error and the delay before the next try |
-| The attempt | A judge call that fails for good makes the attempt a `judge` failure |
+| The attempt | A judge call that fails for good returns `verdict: 'error'`; the judges and checks after it still run, then the attempt is a `judge` failure |
 | The timeout | Retries count toward the eval's `timeout` |
 
 `judge: { maxConcurrent: 2 }` caps calls at once per provider, for rate limits. See [Concurrency](/concepts/concurrency).
@@ -111,22 +111,40 @@ The judge sees four things: the latest turn's prompt as `task`, the agent's fina
 |---|---|
 | The latest turn's prompt | Earlier prompts |
 | The agent's final message | Its reasoning and intermediate messages |
-| Changed files, dependency folders collapsed | The transcript: commands it ran, tool calls, web fetches |
-| The diff since the eval started | Your checks and their output |
+| Changed files, dependency and build folders collapsed | The transcript: commands it ran, tool calls, web fetches |
+| The diff since the eval started, without build output, lockfiles, source maps and minified files | Your checks and their output |
 
-So the judge can't tell whether the agent ran the tests; check that with `t.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message.
+So the judge can't tell whether the agent ran the tests; check that with `c.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message.
+
+## Narrow what the judge sees
+
+```ts title="evals/sign-in.eval.ts"
+const flow = await c.judge('Does this change implement email sign-in?', {
+  include: ['src/', '!**/*.test.ts'],
+  files: ['src/firebase.ts'],
+})
+expect.soft(flow, 'Email sign-in').toPass()
+```
+
+`include` keeps the diff to the files a question is about, and `files` shows files whole, changed or not. Set either on `judge` in the config, a group or an eval as a default; a call's own replaces it. A smaller state fits the model's context, and the judge grades better without the noise.
+
+<Warning>
+  The diff is what changed in the workspace, so give the workspace its own `.gitignore`: an agent that runs `npm run build` leaves its output there. A Vite bundle once filled 97% of a 310k-token state and failed every call on Jev's 32k limit.
+</Warning>
+
+A provider error on a judge call says how big the input was and names its biggest files. See [Provider errors](/reference/judges#provider-errors).
 
 ## Write questions the judge can grade
 
-Ask one thing, about what the judge sees, in words that don't assume one solution. The reeval dogfood run found the failure mode: a question that named specific matchers failed a correct scaffold at 0.05, because the agent used `t.readFile` and `toEqual` instead.
+Ask one thing, about what the judge sees, in words that don't assume one solution. The reeval dogfood run found the failure mode: a question that named specific matchers failed a correct scaffold at 0.05, because the agent used `c.readFile` and `toEqual` instead.
 
 | Brittle | Better |
 |---|---|
-| Pass only if the eval uses `toHaveFile` or `t.exec` to check the file. | Does the eval check that the file was created with the right content? |
+| Pass only if the eval uses `toHaveFile` or `c.exec` to check the file. | Does the eval check that the file was created with the right content? |
 | Pass only if the final message names all three mistakes correctly: … | Does the final message explain why `compare` can't go in `reeval.config.ts`? |
-| Did the agent run the tests? | Use `t.exec('npm test')` and `toSucceed()` instead |
+| Did the agent run the tests? | Use `c.exec('npm test')` and `toSucceed()` instead |
 
-"Pass only if …" questions with several conditions are the most brittle: every extra clause is another way to score near 0. Split them into several `t.judge` calls, and move anything a command can check into a check.
+"Pass only if …" questions with several conditions are the most brittle: every extra clause is another way to score near 0. Split them into several `c.judge` calls, and move anything a command can check into a check.
 
 <Image src="/assets/studio/attempt-judge.png" alt="reeval studio attempt page, Judge tab: the question, the score against the threshold and the judge input" width={800} />
 

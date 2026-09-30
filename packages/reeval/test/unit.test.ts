@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { test } from 'node:test'
@@ -23,8 +32,10 @@ import type { ResolvedEnvironment } from '../src/environment/resolve.ts'
 import { excludeMatcher, parseSkillMd, resolveEnvironment } from '../src/environment/resolve.ts'
 import {
   applied,
+  DEFAULT_DIRECTORY_IGNORES,
   DEFAULT_SKILL_EXCLUDE,
   defineEnvironment,
+  globFilter,
   helpersFor,
   isMovingRef,
   parseGitRepo,
@@ -44,8 +55,9 @@ import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
-import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
-import { backoffMs, isTransient } from '../src/judge/retry.ts'
+import { changedFilesForJudge, judgeDiff, patchForJudge } from '../src/judge/patch.ts'
+import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
+import { withInputSize } from '../src/judge/size.ts'
 import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
@@ -562,6 +574,111 @@ test('an npm install in the sandbox collapses to one line for the judge', () => 
   assert.deepEqual(files, ['added src/app.js', 'changed node_modules/ (10000 files)'])
 })
 
+const added = (path: string, ...lines: string[]) =>
+  `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n${lines.map((l) => `+${l}\n`).join('')}`
+
+test('the judge drops build output, source maps, build info and minified files, and says so', () => {
+  const bundle = `var e=${'x'.repeat(2000)};`
+  const paths = [
+    'dist/assets/index-D1Ii1dIv.js',
+    'dist/index.html',
+    'packages/web/.next/server/page.js',
+    'build/main.js',
+    'out/index.html',
+    'src/build/index.ts',
+    'src/app.ts.map',
+    'tsconfig.tsbuildinfo',
+    'public/vendor.js',
+    'src/app.ts',
+  ]
+  const patch = paths
+    .map((p) => (p === 'public/vendor.js' ? added(p, bundle) : added(p, `// ${p}`)))
+    .join('')
+  const shown = judgeDiff({ patch, files: paths.map((path) => ({ path, status: 'added' })) })
+  assert.deepEqual(shown.dropped, [
+    'dist/ (2 files): build output',
+    'packages/web/.next/ (1 file): build output',
+    'build/ (1 file): build output',
+    'out/ (1 file): build output',
+    'src/app.ts.map: generated',
+    'tsconfig.tsbuildinfo: generated',
+    'public/vendor.js: minified, a line of 2007 characters',
+  ])
+  for (const what of shown.dropped) assert.ok(shown.patch.includes(`[reeval: dropped ${what}]`))
+  assert.match(shown.patch, /\+\/\/ src\/app\.ts\n/)
+  assert.match(shown.patch, /\+\/\/ src\/build\/index\.ts/, 'a nested build/ can be source')
+  assert.doesNotMatch(shown.patch, /x{1000}/)
+  assert.deepEqual(shown.files, [
+    'added src/build/index.ts',
+    'added src/app.ts.map',
+    'added tsconfig.tsbuildinfo',
+    'added public/vendor.js',
+    'added src/app.ts',
+    'changed dist/ (2 files)',
+    'changed packages/web/.next/ (1 file)',
+    'changed build/ (1 file)',
+    'changed out/ (1 file)',
+  ])
+})
+
+test("the judge's include filters its diff and files, the last match winning; files leave the diff", () => {
+  const paths = ['src/app.ts', 'src/app.test.ts', 'src/secret/key.ts', 'README.md', 'dist/a.js']
+  const diff = {
+    patch: paths.map((p) => added(p, `// ${p}`)).join(''),
+    files: paths.map((path) => ({ path, status: 'added' })),
+  }
+  const only = judgeDiff(diff, { include: ['src/', '!*.test.ts', '!src/secret/', 'src/secret/'] })
+  assert.deepEqual(only.files, ['added src/app.ts', 'added src/secret/key.ts'])
+  assert.match(only.patch, /src\/app\.ts/)
+  assert.match(only.patch, /src\/secret\/key\.ts/, 'a later pattern includes it again')
+  assert.doesNotMatch(
+    only.patch,
+    /README|app\.test|dist\//,
+    'nothing outside include, not even a marker',
+  )
+  assert.deepEqual(only.dropped, [
+    'src/app.test.ts: not in include',
+    'README.md: not in include',
+    'dist/a.js: not in include',
+  ])
+  const without = judgeDiff(diff, { include: ['!README.md'] })
+  assert.deepEqual(without.files, [
+    'added src/app.ts',
+    'added src/app.test.ts',
+    'added src/secret/key.ts',
+    'changed dist/ (1 file)',
+  ])
+  const inFull = judgeDiff(diff, { inFull: new Set(['src/app.ts']) })
+  assert.doesNotMatch(inFull.patch, /\/\/ src\/app\.ts\n/, 'shown in full, so not in the diff')
+  assert.match(inFull.patch, /\/\/ src\/app\.test\.ts/)
+  assert.ok(inFull.files.includes('added src/app.ts'), 'still listed as changed')
+})
+
+test("a provider's error keeps its wording and adds what fills the judge's input", () => {
+  const state = {
+    task: 'Build a sign-in',
+    output: 'Done.',
+    files: ['added src/app.ts'],
+    diff: added('src/huge.ts', 'x'.repeat(1_200_000)) + added('src/app.ts', 'y'.repeat(8_000)),
+    contents: { 'README.md': 'z'.repeat(40_000) },
+  }
+  const message = withInputSize('{"error_type":"max_tokens_exceeded"}', state, 'Is it done?')
+  assert.match(
+    message,
+    /^\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~312k tokens \(estimated\): diff 302k, of which src\/huge\.ts is 300k, src\/app\.ts is 2k; contents 10k, of which README\.md is 10k\. Narrow /,
+  )
+  assert.match(message, /include: \['src\/'\]/)
+  const small = withInputSize('Bad request', { task: 't', diff: '' }, 'q?')
+  assert.match(
+    small,
+    /^Bad request\nThe judge's input was ~\d+ tokens \(estimated\): \w+ \d+\. Narrow /,
+  )
+  const apiError = Object.assign(new Error('Unprocessable'), { statusCode: 422 })
+  assert.ok(isApiError(apiError))
+  assert.ok(isApiError({ name: 'AI_RetryError', lastError: apiError }), 'through the SDK wrapper')
+  assert.ok(!isApiError(new Error('Judge model "x" needs a provider prefix')))
+})
+
 const entry = (
   outcome: 'pass' | 'fail',
   stack: Partial<HistoryEntry['stack']> = {},
@@ -822,7 +939,7 @@ test('expand: per harness, the control then each variant; labels name the role',
   assert.notEqual(attempts[0]?.environment.name, 'extra')
 })
 
-test('environment and a compare object on the same options are an error', () => {
+test('environment beside a compare with a baseline is an error; without one it is the control', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
   assert.throws(
@@ -831,8 +948,9 @@ test('environment and a compare object on the same options are an error', () => 
         { environment: plain, compare: { baseline: plain, variants: [skill] } },
         'evaluate("e")',
       ),
-    /environment and compare can't both be set in evaluate\("e"\)/,
+    /environment and compare\.baseline can't both be set in evaluate\("e"\)/,
   )
+  checkOptions({ environment: plain, compare: { variants: [skill] } }, 'evaluate("e")')
   assert.throws(
     () => checkOptions({ environment: plain, compare: false }, 'evaluate("e")'),
     /compare: false can't be set in evaluate\("e"\)/,
@@ -1004,6 +1122,104 @@ test('excludeMatcher is gitignore-style', () => {
   assert.equal(custom('x/drafts/a.md', false), false, 'an inner / anchors too')
   assert.equal(custom('drafts/sub/a.md', false), false, '* stays within a name')
   assert.equal(custom('deep/secret.txt', false), true)
+})
+
+test('directory() globs are ordered gitignore-style patterns: includes, excludes and re-includes', () => {
+  const keep = (patterns: string[], path: string) => globFilter(patterns)(path)
+  assert.equal(keep([], 'any/file.ts'), true, 'no pattern keeps everything')
+  assert.equal(keep(['!*.md'], 'src/a.ts'), true, 'only excludes: everything else stays in')
+  assert.equal(keep(['!*.md'], 'docs/a.md'), false, 'an unanchored name matches at any depth')
+  const app = ['src/**', 'package.json', '!**/*.test.ts', '!src/gen/', 'src/gen/keep.ts']
+  assert.equal(keep(app, 'src/deep/a.ts'), true, '** spans directories')
+  assert.equal(keep(app, 'README.md'), false, 'with an include, what none matches is out')
+  assert.equal(keep(app, 'package.json'), true)
+  assert.equal(keep(app, 'lib/package.json'), true, 'package.json matches at any depth')
+  assert.equal(keep(app, 'src/a.test.ts'), false, 'a later ! excludes')
+  assert.equal(keep(app, 'src/gen/out.ts'), false, 'a trailing / excludes the directory')
+  assert.equal(keep(app, 'src/gen/keep.ts'), true, 'a later include re-includes')
+  assert.equal(keep(['src/*.ts'], 'src/a/b.ts'), false, '* stays within a name')
+  assert.equal(keep(['/a.ts'], 'x/a.ts'), false, 'a leading / anchors')
+  assert.equal(keep(['a?.[jt]s'], 'ab.ts'), true, '? and [ ] match one character')
+  assert.equal(keep(['a.[!j]s'], 'a.js'), false, '[! ] negates a set')
+  assert.equal(keep(['a.[^j]s'], 'a.ts'), true, 'so does [^ ]')
+  assert.equal(keep(['a.ts'], 'aXts'), false, 'dots are literal')
+  assert.equal(keep(['*.{md,txt}'], 'docs/a.txt'), true, 'braces list alternatives')
+  assert.equal(keep(['*'], '.env'), true, 'wildcards match dotfiles')
+  assert.equal(
+    keep(['src/', '!src/x.ts'], 'src/x.ts'),
+    false,
+    'unlike gitignore, a ! still excludes a file in a directory a plain pattern named',
+  )
+  assert.equal(keep(['logs/'], 'logs'), false, 'a trailing / never matches a file')
+  const ignored = globFilter(DEFAULT_DIRECTORY_IGNORES)
+  assert.equal(ignored('build', true), true, 'build/ at the top is output')
+  assert.equal(ignored('lib/build', true), false, 'a nested build/ can be source')
+  assert.equal(ignored('packages/app/node_modules', true), true)
+  assert.equal(
+    ignored('vendor', true),
+    false,
+    'a committed vendor/ is source an offline build needs',
+  )
+  assert.equal(ignored('py/notes.pyc'), true)
+})
+
+test('directory() walks a host directory into files entries', (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'reeval-directory-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  const write = (path: string, content = path) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  for (const p of ['app/a.ts', 'app/.git/HEAD', 'app/.DS_Store', 'app/node_modules/x/i.js']) {
+    write(p)
+  }
+  write('one.txt')
+  mkdirSync(join(root, 'app/empty'))
+  const { directory } = helpersFor(root)
+  assert.deepEqual(directory('app'), { 'a.ts': { kind: 'file', path: join(root, 'app/a.ts') } })
+  assert.deepEqual(
+    Object.keys(directory('app', { defaultIgnores: false })),
+    ['.DS_Store', 'a.ts', 'node_modules/x/i.js'],
+    '.git is always left out, and an empty directory has no entry',
+  )
+  assert.deepEqual(Object.keys(directory('./app/', { into: 'web/' })), ['web/a.ts'])
+  assert.deepEqual(Object.keys({ ...directory('app'), 'a.ts': 'x' }), ['a.ts'])
+  assert.throws(() => directory('nope'), /directory\("nope"\): .*nope doesn't exist/)
+  assert.throws(
+    () => directory('one.txt'),
+    /directory\("one\.txt"\): .*one\.txt is a file, not a directory\. Use file\("one\.txt"\) for one file\./,
+  )
+  assert.throws(() => directory('app', { glob: ['*.md'] }), /no files in .* match/)
+  assert.throws(() => directory('app', { ignore: ['x'] } as never), /Exclude with a '!' pattern/)
+  assert.throws(() => directory('app', { into: '../up' }), /into is a directory relative/)
+  assert.throws(() => directory('app', { glob: 'src/**' } as never), /glob is a list of patterns/)
+  if (process.platform === 'win32') return
+  symlinkSync(join(root, 'one.txt'), join(root, 'app/linked.txt'))
+  symlinkSync(join(root, 'app'), join(root, 'app/loop'))
+  assert.throws(() => directory('app'), /loop is a symlink to a directory that contains it/)
+  rmSync(join(root, 'app/loop'))
+  assert.deepEqual(directory('app')['linked.txt'], {
+    kind: 'file',
+    path: join(root, 'app/linked.txt'),
+  })
+  symlinkSync(join(root, 'gone'), join(root, 'app/dangling'))
+  assert.throws(() => directory('app'), /dangling is a symlink to something that doesn't exist/)
+})
+
+test("a host file's executable bit is kept and feeds the digest", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'reeval-directory-'))
+  t.after(() => rmSync(root, { recursive: true, force: true }))
+  writeFileSync(join(root, 'run.sh'), 'echo ran')
+  const env = defineEnvironment('modes', ({ directory }) => ({ files: directory(root) }))
+  const resolve = () => resolveEnvironment(applied(env), {}, root, 'e', 'AGENTS.md')
+  chmodSync(join(root, 'run.sh'), 0o644)
+  const plain = await resolve()
+  assert.deepEqual(plain.files[0], { path: 'run.sh', content: Buffer.from('echo ran') })
+  if (process.platform === 'win32') return
+  chmodSync(join(root, 'run.sh'), 0o755)
+  const executable = await resolve()
+  assert.equal(executable.files[0]?.executable, true)
+  assert.notEqual(executable.record.digest, plain.record.digest)
 })
 
 test('skill directories leave out eval material, recorded as excluded', async () => {

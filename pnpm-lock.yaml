@@ -186,6 +186,9 @@ importers:
       jiti:
         specifier: 2.7.0
         version: 2.7.0
+      picomatch:
+        specifier: 4.0.7
+        version: 4.0.7
       std-env:
         specifier: 4.2.0
         version: 4.2.0
@@ -209,26 +212,29 @@ importers:
         specifier: 2.1.0
         version: 2.1.0
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-cursor-sdk
       '@reeval/harness-goose':
         specifier: workspace:0.1.0
         version: link:../harness-goose
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.0
+        specifier: workspace:0.2.1
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.2.0
         version: link:../harness-pi
       '@reeval/sandbox-docker':
         specifier: workspace:*
         version: link:../sandbox-docker
+      '@types/picomatch':
+        specifier: 4.0.3
+        version: 4.0.3
       studio-web:
         specifier: workspace:*
         version: link:../studio-web
@@ -245,22 +251,22 @@ importers:
         specifier: 1.0.138
         version: 1.0.138(patch_hash=8edc594fd5014010df069f0a2e9bd9904b71fb2336676c2197c4e57d2ca9724c)(zod@4.6.5)
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-antigravity
       '@reeval/harness-codex':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-cursor-sdk
       '@reeval/harness-goose':
         specifier: workspace:0.1.0
         version: link:../harness-goose
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.0
+        specifier: workspace:0.2.1
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.2.0
         version: link:../harness-pi
       ws:
         specifier: 8.21.0
@@ -275,8 +281,8 @@ importers:
         specifier: 4.3.3
         version: 4.3.3(vite@8.3.1(@types/node@22.20.4)(jiti@2.7.0)(yaml@2.9.1))
       '@tanstack/react-query':
-        specifier: 5.103.2
-        version: 5.103.2(react@19.3.0)
+        specifier: 5.104.0
+        version: 5.104.0(react@19.3.0)
       '@tanstack/react-router':
         specifier: 1.170.39
         version: 1.170.39(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1533,11 +1539,11 @@ packages:
     resolution: {integrity: sha512-utTS5L2OkeYUzXGohL1Z8sefu1GLNOJcxe8Hd6iIdc/Xo1K1nDB2JEp4iSFhvYh33xKC9V91TxrS8qfrpoKobQ==}
     engines: {node: '>=20.19'}
 
-  '@tanstack/query-core@5.103.2':
-    resolution: {integrity: sha512-I8DkFXls5jXLqtm8+QpOhEmG07hIblhSZFzafg9wHsMSEvMzULy9hK17wU1T/ahfhMbtITJhbxutwwCoihkR7A==}
+  '@tanstack/query-core@5.104.0':
+    resolution: {integrity: sha512-JrC2r/JQlXt7khBSdUpsgxNvybzOg+aITa+ARRMlP2AFo93Y8vIqz077rp+e61mJetSZ0T6AJbwW1JHer1vrPQ==}
 
-  '@tanstack/react-query@5.103.2':
-    resolution: {integrity: sha512-B+fWiYZBc+0uUD5zDZAeLw9dKj7XEsdnuu6zRZ+no6LNKpeE3P3bJ+N6HINjcIlWR6fW3vUoTneEaGa2V6ehqw==}
+  '@tanstack/react-query@5.104.0':
+    resolution: {integrity: sha512-e1TZmDCQnWIfiDVryIHeA6Idj+Lfx1hORLOhXS/l5wcgvtVD4yYqbTDl378sGQKIi2cSgb0TEMC9cKK8GGoJEw==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -1584,6 +1590,9 @@ packages:
 
   '@types/node@22.20.4':
     resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
+
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -3846,11 +3855,11 @@ snapshots:
 
   '@tanstack/history@1.162.4': {}
 
-  '@tanstack/query-core@5.103.2': {}
+  '@tanstack/query-core@5.104.0': {}
 
-  '@tanstack/react-query@5.103.2(react@19.3.0)':
+  '@tanstack/react-query@5.104.0(react@19.3.0)':
     dependencies:
-      '@tanstack/query-core': 5.103.2
+      '@tanstack/query-core': 5.104.0
       react: 19.3.0
 
   '@tanstack/react-router@1.170.39(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
@@ -3900,6 +3909,8 @@ snapshots:
   '@types/node@22.20.4':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/picomatch@4.0.3': {}
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:

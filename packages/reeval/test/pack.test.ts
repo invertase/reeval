@@ -51,9 +51,9 @@ async function makeApp(dir: string, pkg: string) {
   await writeFile(
     join(app, 'evals/hello.eval.ts'),
     `import { evaluate, expect } from '${pkg}'
-evaluate('hello', async (t) => {
-  await t.send('say hi')
-  expect(await t.judge('Did it say hi?')).toPass()
+evaluate('hello', async (c) => {
+  await c.send('say hi')
+  expect(await c.judge('Did it say hi?')).toPass()
 })
 `,
   )

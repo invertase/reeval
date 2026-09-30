@@ -15,7 +15,7 @@ description: A real suite that asked whether a skill helps a coding agent use re
 |---|---|
 | Harness | `cursor({ model: 'composer-2.5' })` in Docker, concurrency 4 |
 | Judge | `google/gemini-3.8-flash`, threshold 0.8 |
-| Cells per eval | control `broken-project`, plus `reeval-weak` and `reeval-good`, via `compare: { baseline: brokenProject, variants: [esWeak, esGood] }` |
+| Cells per eval | control `broken-project`, plus `reeval-weak` and `reeval-good`, via `compare: { baseline: brokenProject, variants: [reevalWeak, reevalGood] }` |
 | Runs | `runs: 2`, `gate: { passRate: 0.5 }`, budget 20 attempts and 1 hour |
 | Sandbox | reeval's image plus npm 11 and the packed reeval tarball, from a `FROM ${REEVAL_BASE}` Dockerfile |
 | Egress | `DEFAULT_EGRESS_ALLOW`: npm, PyPI and GitHub, plus Cursor's own hosts |
@@ -49,7 +49,7 @@ export const brokenProject = defineEnvironment(
 )
 
 /** A hastily written skill on that project: shallow, vague and partly out of date. */
-export const esWeak = brokenProject.extendEnvironment(
+export const reevalWeak = brokenProject.extendEnvironment(
   'reeval-weak',
   ({ skill }) => ({
     skills: [skill.local('../skills/reeval-weak')],
@@ -57,7 +57,7 @@ export const esWeak = brokenProject.extendEnvironment(
 )
 
 /** An in-depth, accurate skill for writing and running reeval evals. */
-export const esGood = brokenProject.extendEnvironment(
+export const reevalGood = brokenProject.extendEnvironment(
   'reeval-good',
   ({ skill }) => ({
     skills: [skill.local('../skills/reeval-good')],
@@ -70,7 +70,7 @@ The hardest of the three evals. `dryRun` runs `npx --no-install reeval run --dry
 ```ts title="evals/fix-config.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
 import { dryRun } from './checks.ts'
-import { brokenProject, esGood, esWeak } from './envs.ts'
+import { brokenProject, reevalGood, reevalWeak } from './envs.ts'
 
 const task =
   'This is a reeval project (reeval is an eval runner for coding agents; npm ' +
@@ -89,16 +89,16 @@ const question =
 
 group(
   'broken project',
-  { compare: { baseline: brokenProject, variants: [esWeak, esGood] } },
+  { compare: { baseline: brokenProject, variants: [reevalWeak, reevalGood] } },
   () => {
-    evaluate('fixes a broken config and explains it', async (t) => {
-      await t.send(task)
-      const verdict = await t.judge(question)
+    evaluate('fixes a broken config and explains it', async (c) => {
+      await c.send(task)
+      const verdict = await c.judge(question)
 
-      const { exitCode, plan } = await dryRun(t)
+      const { exitCode, plan } = await dryRun(c)
       expect(exitCode, 'reeval run --dry-run --json exits 0').toBe(0)
       expect(plan?.totals).toMatchObject({ evals: 1, cells: 2, attempts: 6 })
-      await expect(t.exec('npx --no-install reeval run --ui plain')).toSucceed()
+      await expect(c.exec('npx --no-install reeval run --ui plain')).toSucceed()
       expect(verdict).toPass()
     })
   },

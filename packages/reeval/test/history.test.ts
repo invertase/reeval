@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
-import { appendFile, writeFile } from 'node:fs/promises'
+import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { withUnknownFields } from '../scripts/schema/validate.ts'
@@ -25,15 +25,15 @@ const sh = (cwd: string, ...args: string[]) =>
 
 const HISTORY = 'evals/.history'
 const agent = (name = 'agent') => `import { evaluate, expect } from 'reeval'
-evaluate('${name}', async (t) => {
-  await t.send('write hello.txt')
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+evaluate('${name}', async (c) => {
+  await c.send('write hello.txt')
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 })
 `
 const failing = `import { evaluate, expect } from 'reeval'
-evaluate('broken', async (t) => {
-  await t.send('write hello.txt')
-  await expect(t.exec('exit 4')).toSucceed()
+evaluate('broken', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('exit 4')).toSucceed()
 })
 `
 const harness = (text = 'Wrote it') => `{ files: { 'hello.txt': 'hi\\n' }, text: '${text}' }`
@@ -68,9 +68,26 @@ describe('recording runs into evals/.history', () => {
     const p = await gitProject('record-basic', { 'evals/agent.eval.ts': agent() })
     assert.equal((await runCli(p.dir)).code, 0)
     assert.deepEqual(recordedRuns(p.dir), [], 'nothing recorded without --record')
-    const { run } = readRun(p.dir)
+    const { run, evals } = readRun(p.dir)
     assert.match(run.runId, /^\d{8}T\d{6}Z_[0-9a-f]{7}_test-author_[0-9a-z]{4}$/)
     assert.equal(run.git?.sha.slice(0, 7), run.runId.split('_')[1])
+    assert.deepEqual(
+      evals[0]?.trial.egress,
+      {
+        policy: 'allow-all',
+        allowed: null,
+        recorded: false,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      },
+      'the fake sandbox records no traffic, and the record says so',
+    )
+    const state = (await runCli(p.dir, ['show', run.runId])).stdout
+    assert.match(state, /\n {2}Lockfiles +none found\n/)
+    assert.match(state, /\n {2}Images +none \(fake sandbox\)\n/)
+    assert.match(state, /\n {2}Judge +fake · threshold 0\.8 · version [0-9a-f]{12}\n/)
+    assert.match(state, /\n {2}Context +no skills, rules or MCP config found in the sandbox\n/)
 
     const r = await runCli(p.dir, ['record'])
     assert.equal(r.code, 0, r.stderr)
@@ -276,8 +293,9 @@ describe('recording runs into evals/.history', () => {
     const r = await runCli(p.dir, ['record'], { env: { DEPLOY_TOKEN: leaked } })
     assert.equal(r.code, 2)
     assert.match(r.stderr, /Refusing to record .*look like they contain a secret/s)
-    assert.match(r.stderr, /\/transcript\.jsonl/)
+    assert.match(r.stderr, /\/transcript\.jsonl line \d+: the value of DEPLOY_TOKEN$/m)
     assert.doesNotMatch(r.stderr, new RegExp(leaked), 'names files, not the secret')
+    assert.doesNotMatch(r.stderr, new RegExp(leaked.slice(0, 4)), 'no part of a known value')
     assert.deepEqual(recordedRuns(p.dir), [])
 
     const { dir, evals } = readRun(p.dir)
@@ -434,23 +452,100 @@ describe('recording runs into evals/.history', () => {
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
 
-  test('a secret in the uncommitted changes stops the record', async () => {
+  test('a secret in the uncommitted changes records the run without worktree.patch, and says where', async () => {
+    const key = `AIza${'Q'.repeat(31)}WXYZ`
     const p = await gitProject('record-patch-secret', { 'evals/agent.eval.ts': agent() })
-    await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)
+    await writeFile(join(p.dir, '.env.example'), `# keys\nCURSOR_API_KEY=\nGEMINI_API_KEY=${key}\n`)
     assert.equal((await runCli(p.dir)).code, 0)
     const r = await runCli(p.dir, ['record'])
-    assert.equal(r.code, 2)
-    assert.match(r.stderr, /\/worktree\.patch/)
-    assert.deepEqual(recordedRuns(p.dir), [])
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(
+      r.stdout,
+      /^warning: left worktree\.patch out of \S+: it looks like it holds a secret\.$/m,
+    )
+    assert.match(
+      r.stdout,
+      /^ {2}worktree\.patch: \.env\.example line 3: Google API key \(AIza…WXYZ\)$/m,
+    )
+    assert.match(
+      r.stdout,
+      /uncommitted changes when the run started \(git status\), not the agents' work/,
+    )
+    assert.match(r.stdout, /--skip-secret-scan\.$/m)
+    assert.match(
+      r.stdout,
+      /Nothing was committed\. Take the key out of those files, or add them to \.gitignore/,
+    )
+    assert.match(r.stdout, /rotate the key only if it's already been committed or pushed/)
+    assert.doesNotMatch(r.stdout, /rotate it/)
+    assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    assert.doesNotMatch(r.stdout, new RegExp(key))
+
+    const [runId] = recordedRuns(p.dir)
+    const historyDir = join(p.dir, 'evals/.history')
+    const record = JSON.parse(readFileSync(join(historyDir, `${runId}.json`), 'utf8'))
+    assert.equal(record.git.dirty, true)
+    assert.equal(record.git.worktreePatch, null)
+    assert.equal(
+      record.git.worktreePatchNote,
+      'not kept: it looked like it held a secret (.env.example line 3: Google API key)',
+    )
+    assert.ok(record.git.diffHash, 'the hash of the changes is still recorded')
+    const runDir = join(historyDir, runId as string)
+    assert.ok(!existsSync(join(runDir, 'worktree.patch')))
+    assert.match(readFileSync(join(runDir, 'summary.md'), 'utf8'), /not saved: not kept: it looked/)
+
+    const show = await runCli(p.dir, ['show'])
+    assert.match(
+      show.stdout,
+      /Uncommitted changes weren't saved \(not kept: it looked like it held a secret/,
+    )
+    const target = join(tempDir('record-patch-secret-checkout'), 'tree')
+    const co = await runCli(p.dir, ['checkout', 'latest', target])
+    assert.equal(co.code, 0, co.stderr)
+    assert.match(
+      co.stdout,
+      /^checked out \w{12} into \S+, without the run's uncommitted changes: they weren't saved \(not kept: it looked like it held a secret \(\.env\.example line 3: Google API key\)\)\.$/m,
+    )
+    assert.ok(!existsSync(join(target, '.env.example')))
+  })
+
+  test('--skip-secret-scan keeps a worktree.patch that looks like it holds a secret', async () => {
+    const p = await gitProject('record-patch-skip', { 'evals/agent.eval.ts': agent() })
+    await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)
+    assert.equal((await runCli(p.dir)).code, 0)
+    const r = await runCli(p.dir, ['record', '--skip-secret-scan'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.doesNotMatch(r.stdout, /warning/)
+    const [runId] = recordedRuns(p.dir)
+    const runDir = join(p.dir, 'evals/.history', runId as string)
+    assert.ok(existsSync(join(runDir, 'worktree.patch')))
+  })
+
+  test('reeval checkout stops before making a worktree when the recorded worktree.patch is gone', async () => {
+    const p = await gitProject('record-patch-missing', { 'evals/agent.eval.ts': agent() })
+    await writeFile(join(p.dir, 'notes.txt'), 'uncommitted\n')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const [runId] = recordedRuns(p.dir)
+    const runDir = join(p.dir, 'evals/.history', runId as string)
+    await rm(join(runDir, 'worktree.patch'))
+    const target = join(tempDir('record-patch-missing-checkout'), 'tree')
+    const co = await runCli(p.dir, ['checkout', 'latest', target])
+    assert.equal(co.code, 2)
+    assert.match(
+      co.stderr,
+      /worktree\.patch is missing, but the record says the run's uncommitted changes are in it\. Restore it from git/,
+    )
+    assert.ok(!existsSync(target), 'no worktree is left behind')
   })
 })
 
 describe('what a record says about comparability', () => {
   const importing = `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
-evaluate('agent', async (t) => {
-  await t.send(prompt)
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+evaluate('agent', async (c) => {
+  await c.send(prompt)
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 })
 `
   const compareJson = async (dir: string) => {
@@ -507,8 +602,8 @@ evaluate('agent', async (t) => {
 
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
     const flip = `import { evaluate, expect } from 'reeval'
-evaluate('flips', async (t) => {
-  await t.send('write hello.txt')
+evaluate('flips', async (c) => {
+  await c.send('write hello.txt')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
@@ -553,8 +648,8 @@ evaluate('flips', async (t) => {
 
   test('reeval compare --fail-on-regression fails on a failing eval that changed (not comparable); a passing one is fine', async () => {
     const edited = (prompt: string) => `import { evaluate, expect } from 'reeval'
-evaluate('edited', async (t) => {
-  await t.send('${prompt}')
+evaluate('edited', async (c) => {
+  await c.send('${prompt}')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
@@ -583,7 +678,7 @@ evaluate('edited', async (t) => {
     const long = 'x'.repeat(20_000)
     const p = await project('turn-cap', {
       'reeval.config.ts': fakeConfig({ harness: `{ text: '${long}' }` }),
-      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (t) => { await t.send('x') })\n`,
+      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (c) => { await c.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const [e] = readRun(p.dir).evals
@@ -599,12 +694,12 @@ evaluate('edited', async (t) => {
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const one = defineEnvironment('tools', { env: { FLAVOUR: 'one' } })
 const two = defineEnvironment('tools', { env: { FLAVOUR: 'two' } })
-evaluate('uses one', { environment: one, runs: 3 }, async (t) => {
-  await t.send('x')
-  expect(await t.judge('Is it fine?')).toPass()
+evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
+  await c.send('x')
+  expect(await c.judge('Is it fine?')).toPass()
 })
-evaluate('uses two', { environment: two }, async (t) => { await t.send('x') })
-evaluate('uses none', async (t) => { await t.send('x') })
+evaluate('uses two', { environment: two }, async (c) => { await c.send('x') })
+evaluate('uses none', async (c) => { await c.send('x') })
 `,
     })
     assert.equal((await runCli(p.dir)).code, 0)

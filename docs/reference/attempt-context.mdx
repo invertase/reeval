@@ -1,0 +1,150 @@
+---
+title: The attempt context
+description: The context every eval body gets, the Turn that c.send returns, and the shapes they use.
+---
+
+Every eval body gets `c`, an `AttemptContext`: it sends turns to the agent, runs commands in the sandbox, reads files and asks the judge.
+
+```ts title="evals/greet.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('creates a tested greet module', async (c) => {
+  const turn = await c.send('Create greet.js exporting greet(name).')
+  await expect(turn).toHaveFile('greet.js', /export/)
+  await expect(c.exec('node --check greet.js')).toSucceed()
+  expect(await c.judge('Is greet.js small and readable?')).toPass()
+})
+```
+
+Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
+
+## Methods
+
+<Property name="send" type="(prompt: string) => Promise<Turn>">
+  Sends the next turn of the agent session and waits for it to finish. The first call starts the sandbox, applies the environment and starts the agent. Later calls continue the same session, so the agent keeps its context. It resolves even when the turn ends in `error`; check `turn.status` when that matters.
+</Property>
+
+<Property name="exec" type="(command: string) => Promise<ExecResult>">
+  Runs a shell command in the sandbox's workspace and resolves with `{ exitCode, stdout, stderr }`. It doesn't throw on a non-zero exit: use `toSucceed()`. It sees secrets sent `to: 'checks'`, which the agent never does. Calling it before the sandbox starts throws `No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()`.
+</Property>
+
+<Property name="readFile" type="(path: string) => Promise<string | null>">
+  Reads a file from the sandbox: a workspace-relative path, or `~/` for the home directory. Resolves with `null` when the file doesn't exist.
+</Property>
+
+<Property name="judge" type="(question: string, options?: JudgeCallOptions) => Promise<Verdict>">
+  Asks the judge a yes/no question about the latest turn: its task, final message, changed files and diff. `options` takes `model`, `threshold`, `providerOptions` and `maxConcurrent` for this call, and `on`: a `Turn` or any JSON value to grade instead. Without a turn it throws `c.judge() has no turn to grade: call c.send() first`. See [Judges](/reference/judges).
+</Property>
+
+<Property name="sandbox" type="() => Promise<{ exec, readFile }>">
+  Starts the sandbox and agent session without sending a turn, for checks on what the environment set up. `c.send()` starts them too; calling both starts them once.
+</Property>
+
+## Properties
+
+<Property name="turns" type="readonly Turn[]">
+  Every turn so far, oldest first.
+</Property>
+
+<Property name="signal" type="AbortSignal">
+  Aborted when the eval times out or you press Ctrl-C. Pass it to long-running work so it stops with the attempt.
+</Property>
+
+<Property name="attempt" type="{ id: string, cell: Cell, n: number }">
+  Which attempt this is. `id` is `<cell key>#<n>`; `n` counts from 1. `cell` has `key` (`harness/environment/sandbox`), `harness`, `environment` (`-` for none), `sandbox`, `role` (`control` or `variant`) and, for a variant, `variant`.
+</Property>
+
+A fake run printing `c.attempt` shows:
+
+```text
+{"id":"fake/-/fake#1","n":1,"cell":{"key":"fake/-/fake","harness":"fake","environment":"-","sandbox":"fake","role":"control"},…}
+```
+
+## Turn
+
+`c.send()` resolves with a frozen `Turn`.
+
+<Property name="prompt" type="string">
+  The prompt you sent.
+</Property>
+
+<Property name="text" type="string">
+  The agent's final message for this turn.
+</Property>
+
+<Property name="status" type="'completed' | 'aborted' | 'error'">
+  How the turn ended. `aborted` means the attempt timed out or was interrupted; `error` means the harness reported an error, which is also in the transcript.
+</Property>
+
+<Property name="startedAt" type="string">
+  When the turn started, as an ISO timestamp.
+</Property>
+
+<Property name="durationMs" type="number">
+  How long the turn took.
+</Property>
+
+<Property name="transcript" type="TranscriptEvent[]">
+  What the agent did this turn: text, reasoning, file edits, tool calls, web searches and fetches, and errors. See [Transcripts](/reference/transcript).
+</Property>
+
+<Property name="usage" type="{ input, output, cacheRead, cacheWrite, reasoning } | null">
+  Tokens the turn used, when the harness reports them (`cursor()`, `claudeCode()`, `antigravity()`, `pi()` and `codex()` do; `opencode()` and `goose()` don't); otherwise `null`. See [Transcripts](/reference/transcript#tokens-and-the-served-model).
+</Property>
+
+<Property name="model" type="string | null">
+  The model the harness says served the turn, such as `composer-2.5[fast=true]`, or `null`.
+</Property>
+
+<Property name="unreported" type="Array<'web-search' | 'web-fetch'>">
+  Web event types the harness couldn't report for this turn, so the transcript may be missing them. Usually empty. `toHaveSearched` and `toHaveFetched` throw `HarnessCapabilityError` on a turn that lists theirs. See [Matchers](/reference/matchers#tohavesearched-and-tohavefetched).
+</Property>
+
+<Property name="diff" type="{ patch: string, files: { path, status }[] }">
+  Workspace changes since the eval started, as of the end of this turn. `status` is `added`, `modified` or `deleted`. Files, rules and setup from the environment aren't part of it.
+</Property>
+
+<Property name="exec" type="(command: string) => Promise<ExecResult>">
+  The same as `c.exec`.
+</Property>
+
+<Property name="readFile" type="(path: string) => Promise<string | null>">
+  The same as `c.readFile`.
+</Property>
+
+## Verdict
+
+`c.judge()` resolves with a `Verdict`:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `verdict` | `'pass' \| 'fail'` | `pass` when `score` is at least `threshold` |
+| `score` | `number` | The judge's score, from 0 to 1 |
+| `threshold` | `number` | The threshold used, default 0.8 |
+| `question` | `string` | The question asked |
+| `model` | `string` | The model setting, as written |
+| `resolvedModel` | `string` | The model that answered, when the provider says |
+
+A `Verdict` doesn't fail the eval on its own: pass it to `expect(…).toPass()`.
+
+A call that fails resolves with a `JudgeFailure` instead: `verdict: 'error'`, `score: null` and `error`, the call's message. It fails the attempt as a judge error once the eval's body is done; see [Failed calls](/reference/judges#failed-calls).
+
+## Multi-turn
+
+Each `c.send()` continues the same session. Checks between turns see the workspace as the agent left it:
+
+```ts title="evals/refactor.eval.ts"
+evaluate('adds then renames', async (c) => {
+  await c.send('Create greet.js exporting greet(name).')
+  const second = await c.send('Rename greet to welcome.')
+  await expect(second).toHaveFile('greet.js', 'welcome')
+  expect(c.turns).toHaveLength(2)
+})
+```
+
+## Related
+
+- [Writing evals](/guide/writing-evals)
+- [Multi-turn evals](/guide/multi-turn)
+- [Matchers](/reference/matchers)
+- [Judges](/reference/judges)

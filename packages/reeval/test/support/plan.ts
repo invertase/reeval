@@ -86,6 +86,7 @@ export function renderPlan(plan: PlanDocument): string {
           c.workspace
             ? `workspace ${c.workspace.repo}${c.workspace.ref ? `#${c.workspace.ref}` : ''}${c.workspace.path ? `:${c.workspace.path}` : ''}`
             : '',
+          c.files ? `files ${c.files.join(', ')}` : '',
           c.egress.policy === 'allow-all'
             ? ''
             : `egress ${JSON.stringify(c.egress.policy)}${c.egress.auto.length ? ` + ${c.egress.auto.join(', ')}` : ''}`,

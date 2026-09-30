@@ -68,7 +68,7 @@ export type TokenUsage = {
   reasoning: number | null
 }
 
-/** One agent turn. Immutable once `t.send()` resolves. */
+/** One agent turn. Immutable once `c.send()` resolves. */
 /** A turn as data, as a record or another language's runner carries it: `Turn` without its methods. */
 export type TurnData = {
   prompt: string
@@ -97,7 +97,7 @@ export type TurnData = {
 }
 
 export type Turn = TurnData & {
-  /** Runs in the eval's sandbox. Same as `t.exec`. */
+  /** Runs in the eval's sandbox. Same as `c.exec`. */
   exec(command: string): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
 }
@@ -110,8 +110,14 @@ export type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue }
 
-/** A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. */
-export type FakeJudgeModel = { kind: 'fake-judge'; score: number }
+/**
+ * A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a
+ * function of the state the judge would see works per group, eval or call, not in the config.
+ */
+export type FakeJudgeModel = {
+  kind: 'fake-judge'
+  score: number | ((state: { [key: string]: JSONValue }) => number)
+}
 
 /**
  * `'provider/model'` (e.g. `'typesafe-ai/jev-1.13.0'`, `'google/gemini-3.8-flash'`), an AI SDK
@@ -127,6 +133,13 @@ export type JudgeOptions = {
   providerOptions?: Record<string, Record<string, JSONValue>>
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
+  /**
+   * Which changed files the judge's diff shows: gitignore-style patterns over workspace paths,
+   * where the last matching pattern wins and a `!` pattern excludes. Default: every changed file.
+   */
+  include?: string[]
+  /** Workspace files the judge sees whole, as they are now, whether or not the agent changed them. */
+  files?: string[]
 }
 
 export type JudgeCallOptions = JudgeOptions & {
@@ -145,19 +158,29 @@ export type Verdict = {
   resolvedModel?: string
 }
 
-export type EvalContext = {
+/**
+ * What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished,
+ * so the judges and checks after it still run.
+ */
+export type JudgeFailure = Omit<Verdict, 'verdict' | 'score' | 'resolvedModel'> & {
+  verdict: 'error'
+  score: null
+  error: string
+}
+
+export type AttemptContext = {
   /** Sends the next turn of this eval's agent session, starting the sandbox on first use. */
   send(prompt: string): Promise<Turn>
   /** Asks the judge a yes/no question about the latest turn (or `options.on`). */
-  judge(question: string, options?: JudgeCallOptions): Promise<Verdict>
+  judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   exec(command: string): Promise<ExecResult>
   /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
   readFile(path: string): Promise<string | null>
   /**
    * Starts the sandbox and the agent session without a turn, for checks on what the environment
-   * set up. `t.send()` starts them too; calling both starts them once.
+   * set up. `c.send()` starts them too; calling both starts them once.
    */
-  sandbox(): Promise<Pick<EvalContext, 'exec' | 'readFile'>>
+  sandbox(): Promise<Pick<AttemptContext, 'exec' | 'readFile'>>
   /** Every turn so far, oldest first. */
   readonly turns: readonly Turn[]
   /** Aborted on timeout or Ctrl-C. */
@@ -165,7 +188,7 @@ export type EvalContext = {
   /** Which cell of the matrix this attempt is, and its run number (from 1). */
   readonly attempt: { id: string; cell: Cell; n: number }
 }
-export type EvalFn = (t: EvalContext) => Promise<void>
+export type EvalFn = (c: AttemptContext) => Promise<void>
 
 export type FakeHarnessDescriptor = {
   kind: 'fake'
@@ -196,7 +219,7 @@ export type FakeHarnessDescriptor = {
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
   /**
-   * Real sandbox actions, one list per `t.send` (the last list repeats), run in order before
+   * Real sandbox actions, one list per `c.send` (the last list repeats), run in order before
    * `files`. `exec` runs as the agent: with the sandbox's own variables, none of the checks'.
    */
   script?: FakeScriptStep[][]
@@ -324,7 +347,8 @@ export type GooseHarnessDescriptor = {
 }
 /**
  * pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
- * Google models on a Gemini API key and reports each model call's tokens. It has no MCP client.
+ * Google models on a Gemini API key and reports each model call's tokens. It takes stdio and
+ * HTTP MCP servers, not SSE ones.
  */
 export type PiHarnessDescriptor = {
   kind: 'pi'
@@ -346,7 +370,7 @@ export type PiHarnessDescriptor = {
  */
 export type CodexHarnessDescriptor = {
   kind: 'codex'
-  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.4-mini`. */
+  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`. */
   model: string
   /** Cell id; defaults to `codex:<model>`. */
   id?: string
@@ -420,7 +444,7 @@ export type Secret = {
   from?: string
   /** When the host variable is unset, skip it (the record says so) instead of failing. */
   optional?: boolean
-  /** `agent` (default): the container's environment. `checks`: only `t.exec` and `setup` steps. */
+  /** `agent` (default): the container's environment. `checks`: only `c.exec` and `setup` steps. */
   to?: 'agent' | 'checks'
   /**
    * Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway
@@ -445,6 +469,22 @@ export type EnvVars = Record<string, EnvValue>
 
 /** A file on the host, read when an attempt starts. Made by the `file` helper. */
 export type HostFile = { kind: 'file'; path: string }
+
+/** Options for the `directory` helper. */
+export type DirectoryOptions = {
+  /** A workspace-relative directory (or `~/…`) to place the files under, e.g. `'app'`. */
+  into?: string
+  /**
+   * Ordered gitignore-style patterns over paths relative to the directory. A plain pattern
+   * includes and a `!pattern` excludes; the last one that matches a file decides. With no plain
+   * pattern, every file starts included. Matched with picomatch (`*`, `?`, `**`, `[…]`, `{a,b}`):
+   * a pattern with a `/` in it (other than at the end) is anchored to the directory, one without
+   * matches a name at any depth, and a trailing `/` matches a directory and everything in it.
+   */
+  glob?: string[]
+  /** `false` walks into `DEFAULT_DIRECTORY_IGNORES` too. `.git` is always skipped. */
+  defaultIgnores?: boolean
+}
 
 export type McpServer =
   | { kind: 'mcp'; transport: 'stdio'; command: string; args: string[]; env: EnvVars }
@@ -558,6 +598,11 @@ export type EnvironmentHelpers = {
   mcp: McpHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
+  /**
+   * Every file in a host directory, as `files` entries: workspace-relative paths mapped to the
+   * same sources `file()` returns, so spreading and overriding work. Walked when it's called.
+   */
+  directory: (path: string | URL, options?: DirectoryOptions) => Record<string, HostFile>
   /** A git repository for `workspace`: a URL, `github:owner/repo`, or a local path. */
   git: GitHelper
 }
@@ -641,8 +686,11 @@ export type CompareGate = 'variants' | 'all' | 'none'
  * `false` is not a value here: a profile turns compare off with `limit.compare`.
  */
 export type CompareOptions<E = Environment> = {
-  /** The control. Not layered under the variants, and not the eval's `environment`. */
-  baseline: E
+  /**
+   * The control. Not layered under the variants. Without it, the control is the environment the
+   * eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.
+   */
+  baseline?: E
   /** Other environments, each planned and run as itself. */
   variants: E[]
   /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
@@ -652,10 +700,10 @@ export type CompareOptions<E = Environment> = {
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
   harness?: Array<string | HarnessDescriptor>
   /**
-   * Asked of pairs of attempts after the run, one question or several. They annotate the
-   * compare with win rates and never change pass, fail or the exit code.
+   * Asked of pairs of attempts after the run, always a list. They annotate the compare with
+   * win rates and never change pass, fail or the exit code.
    */
-  question?: CompareQuestion | CompareQuestion[]
+  questions?: CompareQuestion[]
 }
 
 /**
@@ -742,20 +790,26 @@ type EvalOptionFields = {
 }
 
 /**
- * One or the other. `compare: false` is not an option here: a profile's `limit.compare: false`
- * strips variants. A parent `environment` and a child that only sets `compare` are two objects,
- * so that cascade is allowed; the inherited environment is not applied.
+ * `compare: false` is not an option here: a profile's `limit.compare: false` strips variants.
+ * A compare with a `baseline` names every arm, so the cascaded `environment` is not applied, and
+ * the same object can't set both. Without a `baseline`, the cascaded `environment` (this object's
+ * own, or an inherited one) is the control.
  */
 type EnvironmentOrCompare<E> =
   | {
-      /** What this group or eval runs in. Not together with `compare`. */
+      /** What this group or eval runs in, and the control of a compare without a `baseline`. */
       environment?: E
       compare?: never
     }
   | {
-      /** Forbidden beside `compare`. The compare object names every arm. */
+      /** Forbidden beside `compare.baseline`, which names the control. */
       environment?: never
-      compare: CompareSpec<E>
+      compare: CompareSpec<E> & { baseline: E }
+    }
+  | {
+      /** The control: the compare has no `baseline`. */
+      environment?: E
+      compare: CompareSpec<E> & { baseline?: undefined }
     }
 
 export type EvalOptions = EvalOptionFields & EnvironmentOrCompare<Environment>
@@ -1000,7 +1054,8 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With
- * `compare`, the control is `baseline` and each variant is that environment on its own.
+ * `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and
+ * each variant is that environment on its own.
  */
 export type Cell = {
   key: string
@@ -1103,6 +1158,8 @@ export type JudgeInput = {
   question: string
   model: string
   state: { [key: string]: JSONValue }
+  /** What the state leaves out and why, e.g. `dist/ (3 files): build output`. */
+  dropped?: string[]
   error?: string
   retries?: JudgeRetry[]
 }
@@ -1148,6 +1205,11 @@ export type EvalRecord = {
 /** Which environment ran as the control, so the studio can show it. */
 export type EvalCompareMeta = {
   baseline: string
+  /**
+   * Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or
+   * an empty environment named `baseline` when there was none.
+   */
+  from?: 'environment' | 'empty'
 }
 
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */
@@ -1226,6 +1288,8 @@ export type AttemptMeta = {
   egress: PlannedEgress
   /** The git repository its workspace starts as, which the CLI fetches before any attempt. */
   workspace?: GitWorkspace
+  /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
+  files?: string[]
   plan: EvalPlan
 }
 

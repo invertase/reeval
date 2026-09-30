@@ -60,11 +60,14 @@ export type ResolvedEnvironment = {
   /** Written into the harness's repo skill directory. */
   workspaceSkills: HarnessSkill[]
   mcp: Record<string, ResolvedMcpServer>
-  /** Workspace-relative, or `~/` for the home directory. A host `file()` is its bytes. */
-  files: Array<{ path: string; content: string | Uint8Array }>
+  /**
+   * Workspace-relative, or `~/` for the home directory. A host `file()` is its bytes, and
+   * `executable` when its owner may execute it on the host.
+   */
+  files: Array<{ path: string; content: string | Uint8Array; executable?: true }>
   /** The container's variables, secret values included. Never write this anywhere. */
   vars: Record<string, string>
-  /** `to: 'checks'` secrets: only for `t.exec` and setup steps. */
+  /** `to: 'checks'` secrets: only for `c.exec` and setup steps. */
   checkVars: Record<string, string>
   /**
    * Brokered secrets: the sandbox has the placeholders, and these real values stay in the worker
@@ -519,6 +522,7 @@ export async function resolveEnvironment(
   const fileList: ResolvedEnvironment['files'] = [...files].map(([path, v]) => ({
     path,
     content: isHostFile(v) ? readHostFile(v, envWhere) : v,
+    ...(isHostFile(v) && statSync(v.path).mode & 0o100 ? { executable: true as const } : {}),
   }))
   const rulesContent =
     rules === undefined
@@ -536,6 +540,7 @@ export async function resolveEnvironment(
     excluded,
   }))
   const fileRecords = fileList.map((f) => ({ path: f.path, sha256: sha256(f.content) }))
+  const executable = fileList.flatMap((f) => (f.executable ? [f.path] : []))
   // Hashed apart from the files, so one environment has one digest whichever file its rules go to.
   const rulesRecord =
     rulesContent === undefined ? undefined : { path: rulesFile, sha256: sha256(rulesContent) }
@@ -581,6 +586,7 @@ export async function resolveEnvironment(
       skills: skillRecords.map((s) => [s.name, s.sha256, s.placement]),
       mcp: mcpShape,
       files: fileRecords,
+      ...(executable.length ? { executable } : {}),
       rules: rulesRecord?.sha256,
       vars: literalVars,
       secrets: secretNames,

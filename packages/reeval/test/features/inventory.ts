@@ -133,9 +133,17 @@ export const inventory: InventoryFeature[] = [
     tests: [options('compare.harness scopes variants')],
   },
   {
-    id: 'compare.question',
+    id: 'compare.baseline',
     area: 'Config and selection',
-    name: '`compare.question`: questions in the plan, answered after the run with pairwise win rates',
+    name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
+    plan: ['compare/baseline-omitted', 'compare/baseline-omitted-off'],
+    fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
+    tests: [options('common mistakes')],
+  },
+  {
+    id: 'compare.questions',
+    area: 'Config and selection',
+    name: '`compare.questions`: questions in the plan, answered after the run with pairwise win rates',
     plan: ['compare/questions', 'compare/questions-dropped', 'compare/questions-group'],
     tests: [
       options('--dry-run names the questions with no language model'),
@@ -400,14 +408,6 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'mcp.refused',
-    area: 'Environments',
-    name: 'MCP servers on a harness with no MCP client (pi) refused at plan time',
-    tests: [
-      'reeval/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
-    ],
-  },
-  {
     id: 'secret.template',
     area: 'Environments',
     name: '`secret.template` in MCP headers',
@@ -455,6 +455,21 @@ export const inventory: InventoryFeature[] = [
     area: 'Environments',
     name: '`files` from `file()` are copied as bytes',
     fixtures: ['env/files-binary'],
+  },
+  {
+    id: 'files.directory',
+    area: 'Environments',
+    name: '`directory()`: a host directory as `files`, with `into`, ordered `glob` patterns, `DEFAULT_DIRECTORY_IGNORES` and the executable bit',
+    fixtures: ['env/files-directory', 'env/files-directory-executable'],
+    plan: ['files/directory'],
+    tests: [
+      unit(
+        'directory() globs are ordered gitignore-style patterns: includes, excludes and re-includes',
+      ),
+      unit('directory() walks a host directory into files entries'),
+      unit("a host file's executable bit is kept and feeds the digest"),
+      options('common mistakes'),
+    ],
   },
   {
     id: 'env.vars',
@@ -537,9 +552,9 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 't.sandbox',
+    id: 'c.sandbox',
     area: 'Environments',
-    name: '`t.sandbox()`: checks without a turn',
+    name: '`c.sandbox()`: checks without a turn',
     fixtures: ['env/files-home', 'skills/workspace-placement'],
   },
 
@@ -927,7 +942,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.pi',
     area: 'Harnesses',
-    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens; MCP refused',
+    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers',
     fixtures: [
       'harness/pi-rules',
       'harness/pi-workspace-skills',
@@ -939,7 +954,15 @@ export const inventory: InventoryFeature[] = [
       harness(
         'pi reads rules from AGENTS.md, repo skills from .pi/skills and home skills from ~/.pi/agent/skills',
       ),
-      harness('pi has no MCP client, so MCP servers are refused, naming them'),
+      harness(
+        "MCP servers go in pi's mcp.json shape; it has no SSE transport and refuses odd names",
+      ),
+      'reeval/test/plan.test.ts › pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip',
+      piAdapter(
+        'unit',
+        'a session with MCP servers writes mcp.json under the home and loads the mcp extension',
+      ),
+      piAdapter('unit', 'env and header values are escaped so pi reads them literally'),
       harness("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API"),
       piAdapter(
         'stream',
@@ -1097,9 +1120,38 @@ export const inventory: InventoryFeature[] = [
       engine('judge options cascade from config to group, eval and call'),
       engine('a failing judge fails the eval as a judge error'),
       engine(
-        't.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
+        'c.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
       ),
       unit('judge calls retry transient provider errors'),
+    ],
+  },
+  {
+    id: 'judge.scope',
+    area: 'Judges and matchers',
+    name: 'What the judge sees: build output, source maps, build info and minified files dropped from its diff, `judge.include` and `judge.files` from the config to the call',
+    fixtures: ['judge/build-output', 'judge/include', 'judge/files'],
+    tests: [
+      unit('the judge drops build output, source maps, build info and minified files'),
+      unit("the judge's include filters its diff and files"),
+      engine('judge include and files cascade from the config to the call'),
+    ],
+  },
+  {
+    id: 'judge.input-size',
+    area: 'Judges and matchers',
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint",
+    tests: [
+      unit("a provider's error keeps its wording and adds what fills the judge's input"),
+      engine("a provider's error keeps its wording and names what filled the judge's input"),
+    ],
+  },
+  {
+    id: 'judge.soft-failure',
+    area: 'Judges and matchers',
+    name: 'A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run',
+    tests: [
+      engine('a judge call that fails is recorded, and the judges and checks after it still run'),
+      engine('a judge failure the eval never asserts on still fails the attempt'),
     ],
   },
   {
@@ -1254,6 +1306,21 @@ export const inventory: InventoryFeature[] = [
       analysis('agent without a language model exits 2 at plan time'),
       options('common mistakes'),
     ],
+    real: ['questions › examples/hello --profile questions'],
+  },
+  {
+    id: 'analysis.agent.summary',
+    area: 'Records and studio',
+    name: "`analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error",
+    tests: [
+      analysis('on a real Cursor history, the tools read back dropped evidence'),
+      analysis('on each real harness'),
+      analysis('a fake run caches one run-scoped summary'),
+      analysis('a summary that fails is cached with its error and a warning'),
+      studio("analysis.agent's notes are in the build as the server serves them"),
+      "studio-web/test/e2e.test.ts › reeval studio shows analysis.agent's notes and summary",
+    ],
+    real: ['questions › examples/hello --profile questions'],
   },
   {
     id: 'studio',

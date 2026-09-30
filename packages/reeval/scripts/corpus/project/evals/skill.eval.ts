@@ -14,20 +14,20 @@ group(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: [
+      questions: [
         'Which greeting reads more like our house style?',
         'Which greeting handles a missing name?',
       ],
     },
   },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send('Write greet.js that greets in our house style.')
-      await expect(t.exec('grep -q Ahoy greet.js')).toSucceed()
+    evaluate('greets in the house style', async (c) => {
+      await c.send('Write greet.js that greets in our house style.')
+      await expect(c.exec('grep -q Ahoy greet.js')).toSucceed()
     })
-    evaluate('writes a greeting', async (t) => {
-      await t.send('Write greet.js that greets in our house style.')
-      await expect(t).toHaveFile('greet.js')
+    evaluate('writes a greeting', async (c) => {
+      await c.send('Write greet.js that greets in our house style.')
+      await expect(c).toHaveFile('greet.js')
     })
   },
 )

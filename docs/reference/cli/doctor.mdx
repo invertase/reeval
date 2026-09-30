@@ -16,8 +16,9 @@ npx reeval doctor --online --json
 
 ```text
 reeval doctor                 Check Node and npm, the config, Docker and its memory, the sandbox
-                              images, each harness's and the judge's key, egress and .gitignore;
-                              exit 1 on a problem, each with its fix. Never prints a key
+                              images, each harness's and the judge's key, egress, .gitignore and
+                              keys in .env files git sees; exit 1 on a problem, each with its
+                              fix. Never prints a key
   --online                    Also try each key with one tiny authenticated request
   --json                      The checks as JSON
 ```
@@ -37,7 +38,7 @@ reeval doctor · reeval.config.ts
 - image      Docker isn't running
 ✗ key        CURSOR_API_KEY for cursor:composer-2.5: not set
              fix: add CURSOR_API_KEY=... to .env.local
-- judge      no judge model (t.judge needs one)
+- judge      no judge model (c.judge needs one)
 ✓ egress     allow-all: the agents reach any host (the default); evals and environments may set their own
 ✓ gitignore  .env* and .reeval/ are ignored
 
@@ -58,6 +59,7 @@ reeval doctor · reeval.config.ts
 | `judge` | The judge model's key isn't set | The same, for a profile's judge |
 | `egress` | A sandbox can't enforce its policy, such as a restricted policy on `fakeSandbox()` | |
 | `gitignore` | `.env*` isn't ignored | `.reeval/` isn't ignored |
+| `env-files` | | A `.env` or `.env.*` file git doesn't ignore, such as `.env.example`, sets a `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable to a value that isn't empty or a placeholder (`<key>`, `your-key-here`, `${KEY}`, `xxx`). Shown only when git sees such a file |
 
 ## Docker on each platform
 

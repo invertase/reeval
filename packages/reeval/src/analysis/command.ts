@@ -13,17 +13,23 @@ import { pickBaseline, RefError, resolveRun } from '../history/views.ts'
 import { fromCwd, sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
 import type { ResolvedConfig } from '../types.ts'
-import { ANALYSIS_PROMPT_VERSION, type AnalysisDoc } from '../view/analysis.ts'
+import { ANALYSIS_PROMPT_VERSION, type AnalysisDoc, type AnalysisScope } from '../view/analysis.ts'
 import {
-  buildDigest,
+  buildDigestKeepingDropped,
   type Digest,
+  type DigestEvidence,
   digestChars,
   digestHash,
   RULES,
   type RunInput,
 } from './digest.ts'
 import { readCached, saveAnalysis, writeCached } from './files.ts'
-import { analysisModelName, callAnalysisModel, resolveAnalysisModel } from './model.ts'
+import {
+  analysisModelName,
+  callAnalysisModel,
+  type ResolvedAnalysisModel,
+  resolveAnalysisModel,
+} from './model.ts'
 import { renderMarkdown, renderText } from './render.ts'
 import { SYSTEM_PROMPT } from './schema.ts'
 import { validateAnalysis } from './validate.ts'
@@ -112,6 +118,198 @@ function citedSummary(d: Digest, cites: string[]): Record<string, string> {
   return out
 }
 
+/** A run's digest, ready for the model: what `reeval analyze` and `analysis.agent`'s summary share. */
+export type PreparedAnalysis = {
+  head: HistoryEntry
+  base: HistoryEntry | null
+  headRun: RunInput
+  baseRun: RunInput | null
+  digest: Digest
+  /** Evidence dropped from the digest to fit its cap, whole. */
+  dropped: DigestEvidence[]
+  tables: string[]
+  scope: AnalysisScope
+  /** The analysis model's name as the cache key has it: `fake`, or `none` when there's none. */
+  modelName: string
+  /** The cache key: `.reeval/analysis/<key>.json`. */
+  key: string
+}
+
+/** The run `reeval analyze` compares `head` with when `--vs` names none: its nearest recorded ancestor. */
+export async function defaultBase(
+  config: ResolvedConfig,
+  entries: HistoryEntry[],
+  head: HistoryEntry,
+): Promise<HistoryEntry | null> {
+  const reach = await reachability(config.root)
+  const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
+  const ancestry = await lines(config.root, ['rev-list', '--max-count=5000', from])
+  return pickBaseline(
+    entries.filter((e) => e.recorded && e.runId !== head.runId),
+    head,
+    ancestry,
+  )
+}
+
+/** Reads the runs and builds the digest and its cache key; no model call. */
+export async function prepareAnalysis(
+  config: ResolvedConfig,
+  head: HistoryEntry,
+  base: HistoryEntry | null,
+  evalFilter: string | null,
+): Promise<PreparedAnalysis> {
+  const headRun = await load(config, head)
+  const baseRun = base ? await load(config, base) : null
+  const db = await openHistoryDb(config.root, config.history.dir)
+  let built: { digest: Digest; dropped: DigestEvidence[] }
+  let tables: string[]
+  try {
+    built = await buildDigestKeepingDropped({
+      head: headRun,
+      base: baseRun,
+      evalFilter,
+      db,
+      maxChars: config.analysis.maxInputTokens * 4,
+      ...(config.analysis.instructions ? { instructions: config.analysis.instructions } : {}),
+    })
+    tables = db.schema().map((o) => o.name)
+  } finally {
+    db.close()
+  }
+  const modelName = (() => {
+    try {
+      const m = analysisModelName(config)
+      return typeof m === 'string' ? m : 'fake'
+    } catch {
+      return 'none'
+    }
+  })()
+  const scope = {
+    kind: 'run' as const,
+    head: head.runId,
+    base: base?.runId ?? null,
+    evals: evalFilter,
+  }
+  const key = sha256(
+    JSON.stringify({
+      scope,
+      hash: digestHash(built.digest),
+      prompt: ANALYSIS_PROMPT_VERSION,
+      model: modelName,
+    }),
+  ).replace(/^sha256:/, '')
+  return { head, base, headRun, baseRun, ...built, tables, scope, modelName, key }
+}
+
+/** What a model read with tools beyond the digest: evidence it may cite, and the reads as prompt text. */
+export type ToolReads = { evidence: DigestEvidence[]; text: string }
+
+const docBase = async (config: ResolvedConfig, p: PreparedAnalysis) => ({
+  kind: 'es-analysis' as const,
+  schemaVersion: 1 as const,
+  scope: p.scope,
+  anchor: p.head.runId,
+  inputs: {
+    records: [p.baseRun, p.headRun].flatMap((r) =>
+      r ? [{ runId: r.record.runId, sha256: sha256(r.bytes) }] : [],
+    ),
+    digestVersion: p.digest.digestVersion,
+    digestHash: digestHash(p.digest),
+  },
+  promptVersion: ANALYSIS_PROMPT_VERSION,
+  author: await author(config.root),
+})
+
+/** One structured call on the prepared digest (and what tools read), validated: the document the cache holds. */
+export async function analyseDigest(
+  config: ResolvedConfig,
+  p: PreparedAnalysis,
+  model: ResolvedAnalysisModel,
+  reads?: ToolReads,
+): Promise<AnalysisDoc> {
+  // Evidence the tools read is cited and quoted like the digest's own.
+  const seen = reads?.evidence.length
+    ? { ...p.digest, evidence: [...p.digest.evidence, ...reads.evidence] }
+    : p.digest
+  const answer = await callAnalysisModel(
+    model,
+    seen,
+    `${promptOf(p.digest)}${reads?.text ?? ''}`,
+    config.analysis.maxOutputTokens,
+  )
+  const evals = p.headRun.record.evals.map((e) => ({
+    file: e.file,
+    name: [...e.group, e.name].join(' '),
+    tags: e.tags,
+    cells: e.cells.map((c) => c.key),
+  }))
+  const { body, validation } = validateAnalysis(answer.output, seen, p.tables, evals)
+  const cites = [
+    ...body.whatHappened,
+    ...body.results,
+    ...body.why,
+    ...body.anomalies,
+    ...body.actions,
+  ].flatMap((x) => x.cites)
+  return {
+    ...(await docBase(config, p)),
+    model: model.name,
+    resolvedModel: answer.resolvedModel,
+    route: model.route,
+    usage: answer.usage,
+    latencyMs: answer.latencyMs,
+    createdAt: new Date().toISOString(),
+    validation,
+    analysis: body,
+    attempts: Object.fromEntries(
+      Object.entries(p.digest.attempts).map(([id, a]) => [
+        id,
+        { runId: a.runId, evalSlug: a.evalSlug, attempt: a.attempt },
+      ]),
+    ),
+    cited: citedSummary(seen, [...new Set(cites)]),
+  }
+}
+
+/** A failed analysis as the cache keeps it: an empty body and the `error`. */
+export async function failedAnalysis(
+  config: ResolvedConfig,
+  p: PreparedAnalysis,
+  model: ResolvedAnalysisModel,
+  error: string,
+  latencyMs: number,
+): Promise<AnalysisDoc> {
+  return {
+    ...(await docBase(config, p)),
+    model: model.name,
+    resolvedModel: null,
+    route: model.route,
+    usage: { inputTokens: null, outputTokens: null },
+    latencyMs,
+    createdAt: new Date().toISOString(),
+    validation: {
+      citations: 0,
+      invalid: [],
+      dropped: 0,
+      commands: 0,
+      invalidCommands: [],
+      unverifiedNumbers: 0,
+    },
+    analysis: {
+      tldr: '',
+      whatHappened: [],
+      results: [],
+      why: [],
+      anomalies: [],
+      actions: [],
+      confidence: { overall: 'low', why: '' },
+    },
+    attempts: {},
+    cited: {},
+    error,
+  }
+}
+
 export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> {
   const { config, flags } = ctx
   if (flags.json && flags.md) throw new UsageError('reeval analyze takes --json or --md, not both')
@@ -136,18 +334,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     evalFilter ??= args[0] as string
     head = latest
   }
-  let base: HistoryEntry | null
-  if (flags.vs) base = resolveRun(entries, flags.vs)
-  else {
-    const reach = await reachability(config.root)
-    const from = head.git && (!reach || reach.has(head.git.sha)) ? head.git.sha : 'HEAD'
-    const ancestry = await lines(config.root, ['rev-list', '--max-count=5000', from])
-    base = pickBaseline(
-      entries.filter((e) => e.recorded && e.runId !== head.runId),
-      head,
-      ancestry,
-    )
-  }
+  const base = flags.vs ? resolveRun(entries, flags.vs) : await defaultBase(config, entries, head)
   if (base?.runId === head.runId) throw new UsageError('reeval analyze --vs names the run itself')
   if (flags.save && !head.recorded) {
     throw new CommandError(
@@ -157,24 +344,8 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   // Fail on a missing model or key before any work, unless no call is coming.
   const model = flags.context || flags['dry-run'] ? null : resolveAnalysisModel(config)
 
-  const headRun = await load(config, head)
-  const baseRun = base ? await load(config, base) : null
-  const db = await openHistoryDb(config.root, config.history.dir)
-  let digest: Digest
-  let tables: string[]
-  try {
-    digest = await buildDigest({
-      head: headRun,
-      base: baseRun,
-      evalFilter,
-      db,
-      maxChars: config.analysis.maxInputTokens * 4,
-      ...(config.analysis.instructions ? { instructions: config.analysis.instructions } : {}),
-    })
-    tables = db.schema().map((o) => o.name)
-  } finally {
-    db.close()
-  }
+  const prepared = await prepareAnalysis(config, head, base, evalFilter)
+  const { digest, key, modelName } = prepared
   if (evalFilter && digest.setup.evals.length === 0) {
     throw new UsageError(`No eval in ${head.runId} matches "${evalFilter}"`)
   }
@@ -183,24 +354,6 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     return 0
   }
 
-  const modelName = (() => {
-    try {
-      const m = analysisModelName(config)
-      return typeof m === 'string' ? m : 'fake'
-    } catch {
-      return 'none'
-    }
-  })()
-  const hash = digestHash(digest)
-  const scope = {
-    kind: 'run' as const,
-    head: head.runId,
-    base: base?.runId ?? null,
-    evals: evalFilter,
-  }
-  const key = sha256(
-    JSON.stringify({ scope, hash, prompt: ANALYSIS_PROMPT_VERSION, model: modelName }),
-  ).replace(/^sha256:/, '')
   const cached = flags['no-cache'] ? null : await readCached(config.root, key)
   if (flags['dry-run']) {
     const chars = digestChars(digest)
@@ -223,56 +376,7 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
   } else {
     const resolved = model ?? resolveAnalysisModel(config)
     ctx.err(`analysing ${head.runId}${base ? ` vs ${base.runId}` : ''} with ${resolved.name}…`)
-    const answer = await callAnalysisModel(
-      resolved,
-      digest,
-      promptOf(digest),
-      config.analysis.maxOutputTokens,
-    )
-    const evals = headRun.record.evals.map((e) => ({
-      file: e.file,
-      name: [...e.group, e.name].join(' '),
-      tags: e.tags,
-      cells: e.cells.map((c) => c.key),
-    }))
-    const { body, validation } = validateAnalysis(answer.output, digest, tables, evals)
-    const cites = [
-      ...body.whatHappened,
-      ...body.results,
-      ...body.why,
-      ...body.anomalies,
-      ...body.actions,
-    ].flatMap((x) => x.cites)
-    doc = {
-      kind: 'es-analysis',
-      schemaVersion: 1,
-      scope,
-      anchor: head.runId,
-      inputs: {
-        records: [baseRun, headRun].flatMap((r) =>
-          r ? [{ runId: r.record.runId, sha256: sha256(r.bytes) }] : [],
-        ),
-        digestVersion: digest.digestVersion,
-        digestHash: hash,
-      },
-      promptVersion: ANALYSIS_PROMPT_VERSION,
-      model: resolved.name,
-      resolvedModel: answer.resolvedModel,
-      route: resolved.route,
-      usage: answer.usage,
-      latencyMs: answer.latencyMs,
-      createdAt: new Date().toISOString(),
-      author: await author(config.root),
-      validation,
-      analysis: body,
-      attempts: Object.fromEntries(
-        Object.entries(digest.attempts).map(([id, a]) => [
-          id,
-          { runId: a.runId, evalSlug: a.evalSlug, attempt: a.attempt },
-        ]),
-      ),
-      cited: citedSummary(digest, [...new Set(cites)]),
-    }
+    doc = await analyseDigest(config, prepared, resolved)
     await writeCached(config.root, key, doc)
   }
   if (flags.save) {

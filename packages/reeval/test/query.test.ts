@@ -32,9 +32,9 @@ describe('reeval query', () => {
       'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 }, async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
 `,
     })
@@ -97,7 +97,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
   test('it syncs incrementally; a recorded run wins over its scratch copy; deleted runs drop', async () => {
     const p = await project('query-sync', {
       'reeval.config.ts': fakeConfig(),
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('x') })\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
     })
     const git = (...args: string[]) =>
       execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], {
@@ -131,7 +131,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
   test('a database from another version, or --rebuild, is rebuilt from the records', async () => {
     const p = await project('query-rebuild', {
       'reeval.config.ts': fakeConfig(),
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('x') })\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     await query(p.dir, 'SELECT 1')
@@ -148,7 +148,7 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
   test('it is read-only and runs one statement; mistakes exit 2 with a fix', async () => {
     const p = await project('query-readonly', {
       'reeval.config.ts': fakeConfig(),
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (t) => { await t.send('x') })\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const cases: Array<[string, RegExp]> = [
@@ -179,8 +179,8 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       'evals/j.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const a = defineEnvironment('tools', ({ skill }) => ({ skills: [skill.local('../skills/alpha')] }))
 const b = defineEnvironment('tools', ({ skill }) => ({ skills: [skill.local('../skills/beta')] }))
-evaluate('with alpha', { environment: a }, async (t) => { await t.send('x'); throw new Error('no') })
-evaluate('with beta', { environment: b }, async (t) => { await t.send('x'); throw new Error('no') })
+evaluate('with alpha', { environment: a }, async (c) => { await c.send('x'); throw new Error('no') })
+evaluate('with beta', { environment: b }, async (c) => { await c.send('x'); throw new Error('no') })
 `,
     })
     assert.equal((await runCli(p.dir)).code, 1)
@@ -212,13 +212,13 @@ evaluate('with beta', { environment: b }, async (t) => { await t.send('x'); thro
       'evals/unrelated.ts': 'export const x = 1\n',
       'evals/d.eval.ts': `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
-evaluate('flaky', { runs: 3, gate: { passRate: 0.5 } }, async (t) => {
-  await t.send(prompt)
-  if (t.attempt.n === 2) throw new Error('the second attempt fails')
+evaluate('flaky', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
+  await c.send(prompt)
+  if (c.attempt.n === 2) throw new Error('the second attempt fails')
 })
-evaluate('judged', async (t) => {
-  await t.send(prompt)
-  expect(await t.judge('Is it fine?')).toPass()
+evaluate('judged', async (c) => {
+  await c.send(prompt)
+  expect(await c.judge('Is it fine?')).toPass()
 })
 `,
     })

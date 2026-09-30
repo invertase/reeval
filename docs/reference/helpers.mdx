@@ -1,16 +1,16 @@
 ---
 title: Helpers
-description: The secret, skill, mcp, file and git helpers that defineConfig and defineEnvironment callbacks receive.
+description: The secret, skill, mcp, file, directory and git helpers that defineConfig and defineEnvironment callbacks receive.
 ---
 
-`defineConfig` and `defineEnvironment` callbacks receive five helpers: `secret`, `skill`, `mcp`, `file` and `git`.
+`defineConfig` and `defineEnvironment` callbacks receive six helpers: `secret`, `skill`, `mcp`, `file`, `directory` and `git`.
 
 ```ts title="evals/environments.ts"
 import { DEFAULT_SKILL_EXCLUDE, defineEnvironment } from '{{ pkg }}'
 
 export const tools = defineEnvironment(
   'tools',
-  ({ file, mcp, secret, skill }) => ({
+  ({ directory, file, mcp, secret, skill }) => ({
     env: {
       GEMINI_API_KEY: secret({ hosts: secret.hosts.gemini }),
       DB_URL: secret.fromEnv('TEST_DB_URL', { to: 'checks' }),
@@ -35,7 +35,10 @@ export const tools = defineEnvironment(
         headers: { Authorization: secret.template('Bearer ${ACME_TOKEN}') },
       }),
     },
-    files: { 'fixtures/data.json': file('./fixtures/data.json') },
+    files: {
+      ...directory('./fixtures/app', { into: 'app' }),
+      'fixtures/data.json': file('./fixtures/data.json'),
+    },
   }),
 )
 ```
@@ -82,7 +85,7 @@ Options for `secret()` and `secret.fromEnv()`:
 </Property>
 
 <Property name="to" type="'agent' | 'checks'" optional>
-  `agent` (default) puts it in the container's environment. `checks` gives it only to `t.exec` and `setup` steps, never the agent.
+  `agent` (default) puts it in the container's environment. `checks` gives it only to `c.exec` and `setup` steps, never the agent.
 </Property>
 
 <Property name="optional" type="boolean" optional>
@@ -102,7 +105,7 @@ A secret without `hosts` reaches the sandbox as its real value, and the plan war
 warning: SENTRY_DSN is in the sandbox as its real value. To give the agent only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('SENTRY_DSN', { hosts: ['api.example.com'] }).
 ```
 
-A `to: 'checks'` secret without `hosts` warns that it `reaches the checks (t.exec, setup steps) as its real value; the agent never gets it.`
+A `to: 'checks'` secret without `hosts` warns that it `reaches the checks (c.exec, setup steps) as its real value; the agent never gets it.`
 
 A required secret that isn't set fails the attempt with `Secret NAME for <where> isn't set. Set it in the environment or .env.local.` Secrets in the config (and profile `defaults`) are checked before the run starts. See [Credential brokering](/concepts/credential-brokering).
 
@@ -159,7 +162,7 @@ warning: skill.git(github:acme/skills) uses moving ref "main": results aren't co
 </Property>
 
 <Property name="mcp.sse(url, options?)" type="McpServer">
-  A server-sent events server, with the same options as `mcp.http`. Cursor, Claude Code and Antigravity get it as an SSE server; OpenCode, Goose and Codex have no SSE transport, so a plan that gives any of them an `mcp.sse` server exits 2 before any attempt starts (`--dry-run` shows it). pi has no MCP client, so a plan that gives it any MCP server exits 2 the same way.
+  A server-sent events server, with the same options as `mcp.http`. Cursor, Claude Code and Antigravity get it as an SSE server; OpenCode, Goose, pi and Codex have no SSE transport, so a plan that gives any of them an `mcp.sse` server exits 2 before any attempt starts (`--dry-run` shows it).
 </Property>
 
 A secret in an HTTPS server's headers is brokered to that server's host unless it sets its own `hosts`, and the host is allowed through a restricted egress policy. The plan shows it:
@@ -171,8 +174,65 @@ brokered: GEMINI_API_KEY → generativelanguage.googleapis.com; mcp.search.heade
 ## file
 
 <Property name="file(path)" type="HostFile">
-  A file on the host, relative to the calling file (or an absolute path or `URL`), read when an attempt starts and copied byte for byte. Use it for `files` values and `rules`.
+  A file on the host, relative to the calling file (or an absolute path or `URL`), read when an attempt starts and copied byte for byte. Use it for `files` values and `rules`. A file its owner may execute on the host is made executable in the sandbox.
 </Property>
+
+## directory
+
+```ts title="evals/env.ts"
+export const notes = defineEnvironment('acme-notes', ({ directory }) => ({
+  files: {
+    ...directory('../fixture', {
+      glob: ['src/**', 'package.json', '!**/*.test.ts'],
+    }),
+    'README.md': 'something',
+  },
+  setup: [{ run: 'npm ci --no-audit --no-fund', timeout: '5m' }],
+}))
+```
+
+<Property name="directory(path, options?)" type="Record<string, HostFile>">
+  Every file in a host directory, as `files` entries: each path relative to the directory maps to the same `file()` source. `path` is relative to the calling file, or an absolute path or `URL`. It's a plain object, so spread it next to other entries; a later key overrides an earlier one.
+</Property>
+
+<Property name="into" type="string" optional>
+  A directory to place the files under, relative to the workspace or starting with `~/`: `into: 'app'` seeds `app/package.json`.
+</Property>
+
+<Property name="glob" type="string[]" optional>
+  Ordered gitignore-style patterns over paths relative to the directory. A plain pattern includes and a `!pattern` excludes.
+</Property>
+
+<Property name="defaultIgnores" type="boolean" optional>
+  `false` walks into the `DEFAULT_DIRECTORY_IGNORES` too. Default `true`. `.git` is always skipped.
+</Property>
+
+`glob` is evaluated per file, in order, and the last pattern that matches decides:
+
+1. A file starts included when `glob` has no plain pattern, and excluded when it has one.
+2. Each pattern that matches the file's path sets it: a plain one includes it, a `!` one excludes it. A later `src/gen/keep.ts` re-includes a file an earlier `!src/gen/` excluded.
+3. The default ignores apply on top, whatever `glob` says. To seed an ignored directory, set `defaultIgnores: false` and exclude what you don't want with `!` patterns.
+
+Patterns are matched with [picomatch](https://github.com/micromatch/picomatch), with gitignore's anchoring on top. `*` and `?` stay within a name, `**` spans directories, `[abc]` matches one character (`[!abc]` or `[^abc]` any other), `{md,txt}` lists alternatives, and wildcards match dotfiles. A pattern with a `/` in it, other than at the end, is anchored to the directory; otherwise it matches a name at any depth. A trailing `/` matches a directory and everything in it. Unlike gitignore, a `!` pattern still excludes a file whose directory an earlier plain pattern named: the last match always wins. A fixture's `.gitignore` isn't read, and it's seeded like any other file.
+
+`DEFAULT_DIRECTORY_IGNORES`, exported from `{{ pkg }}`:
+
+| For | Patterns |
+|---|---|
+| Any | `node_modules/`, `.DS_Store` |
+| JavaScript | `dist/`, `.next/`, `.turbo/`, `coverage/`, `.cache/` |
+| Python | `__pycache__/`, `.venv/`, `venv/`, `.pytest_cache/`, `.mypy_cache/`, `*.pyc` |
+| Dart, Flutter, Gradle and Rust | `.dart_tool/`, `/build/`, `/target/`, `.gradle/` |
+| Editors | `.idea/`, `.vscode/` |
+
+`build/` and `target/` are skipped only at the top of the directory, where Flutter, Dart, Gradle and Cargo put their output, so a nested `src/build/` module still lands. `vendor/` isn't in the list: a committed Go or PHP `vendor/` is what an offline build needs.
+
+The directory is walked when the callback runs, so the plan (`reeval run --dry-run --json`) lists each cell's `files`. Each file's content is read when an attempt starts and feeds the environment's digest, as with `file()`. Other details:
+
+- **Symlinks** are followed, to a file or a directory. A dangling symlink, or one to a directory that contains it, fails with its path.
+- **Empty directories** aren't seeded. Create one in a `setup` step, or add a placeholder file.
+- **File modes:** only the executable bit is kept, as for `file()`; it's part of the digest. Windows hosts have no executable bit, so nothing is made executable from there.
+- **No files** after the patterns and ignores is an error, not an empty `files`.
 
 ## git
 
@@ -232,6 +292,12 @@ warning: workspace git(github:acme/template) uses no ref (the default branch): r
 | The token itself as `token` | `git("github:acme/app"): token names the host variable that holds the token, e.g. token: 'GITHUB_TOKEN'. Don't put the token itself in the eval.` (the value isn't echoed) |
 | `token` on an SSH or local repository | `git("git@github.com:acme/app.git"): token only works with an https:// URL; for SSH or a local repository, git uses this machine's own credentials` |
 | An unknown option | `git("github:acme/app"): unknown option "branch"; it takes ref, path, init and token. Use ref for a branch, tag or commit.` |
+| A missing directory | `directory("../fixture"): /path/to/fixture doesn't exist` |
+| A file for `directory()` | `directory("./notes.md"): /path/to/notes.md is a file, not a directory. Use file("./notes.md") for one file.` |
+| No files left | `directory("../fixture"): no files in /path/to/fixture match (glob ["*.md"], after DEFAULT_DIRECTORY_IGNORES). Empty directories aren't seeded; create one with a setup step.` |
+| `ignore` for `directory()` | `directory("../fixture"): unknown option "ignore"; it takes into, glob and defaultIgnores. Exclude with a '!' pattern in glob, e.g. glob: ['!dist/'].` |
+| A bad `into` | `directory("../fixture"): into is a directory relative to the workspace (or ~/…), with forward slashes and no .. (got "../app")` |
+| A broken symlink | `directory("../fixture"): bin/tool is a symlink to something that doesn't exist. Remove it, or leave it out with glob: ['!bin/tool'].` |
 
 ## Related
 

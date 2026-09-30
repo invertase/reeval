@@ -44,15 +44,15 @@ export default defineConfig({
 
 const evals = {
   'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('writes ok', async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('writes ok', async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
 `,
   'evals/b.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('also writes ok ${PLANTED}', async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('also writes ok ${PLANTED}', async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
 `,
 }

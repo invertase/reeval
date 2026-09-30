@@ -1,6 +1,8 @@
+import { readdirSync, realpathSync, statSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import picomatch from 'picomatch'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -235,7 +237,7 @@ export type PlannedSecret = {
   label: string
   from: string
   hosts?: readonly string[]
-  /** `to: 'checks'`: only `t.exec` and setup steps get it, never the agent. */
+  /** `to: 'checks'`: only `c.exec` and setup steps get it, never the agent. */
   checksOnly?: boolean
   /** `optional: true`: left out of the sandbox when the host variable isn't set. */
   optional?: boolean
@@ -350,6 +352,10 @@ export const workspaceLabel = (w: Pick<GitWorkspace, 'repo' | 'ref' | 'path'>) =
 /** The workspace an attempt starts as: the last layer that sets one. */
 export const workspaceOf = (layers: readonly EnvironmentLayer[]): GitWorkspace | undefined =>
   layers.findLast((l) => l.spec.workspace)?.spec.workspace
+
+/** The paths the layers' `files` write, sorted. */
+export const filesOf = (layers: readonly EnvironmentLayer[]): string[] =>
+  [...new Set(layers.flatMap((l) => Object.keys(l.spec.files ?? {})))].sort()
 
 /** A URL with its password (or an https username, which is where tokens go) masked. */
 function credentialsIn(repo: string): string | undefined {
@@ -531,6 +537,160 @@ function skillHelper(base: string): SkillHelper {
   }
 }
 
+/**
+ * What `directory()` leaves out unless `defaultIgnores: false`: dependency, build-output, cache
+ * and editor directories, in its `glob` syntax. `build/` and `target/` are anchored to the top of
+ * the directory, where Flutter, Dart, Gradle and Cargo put their output, since a nested one can be
+ * source. `vendor/` isn't here: a committed Go or PHP vendor directory is what an offline build needs.
+ */
+export const DEFAULT_DIRECTORY_IGNORES: readonly string[] = Object.freeze([
+  'node_modules/',
+  '.DS_Store',
+  'dist/',
+  '.next/',
+  '.turbo/',
+  'coverage/',
+  '.cache/',
+  '__pycache__/',
+  '.venv/',
+  'venv/',
+  '.pytest_cache/',
+  '.mypy_cache/',
+  '*.pyc',
+  '.dart_tool/',
+  '/build/',
+  '/target/',
+  '.gradle/',
+  '.idea/',
+  '.vscode/',
+])
+
+/**
+ * A gitignore-style pattern as a test of a file's path, matched by picomatch: a pattern without an
+ * inner `/` matches a name at any depth, a leading `/` anchors, a trailing `/` names a directory,
+ * and a pattern also matches every file in a directory it names.
+ */
+function globTest(pattern: string): (path: string, isDir?: boolean) => boolean {
+  const dirOnly = pattern.endsWith('/')
+  // gitignore negates a set with [!…]; picomatch reads that as a literal !, and negates with [^…].
+  const body = pattern.replace(/\/+$/, '').replaceAll('[!', '[^')
+  const glob = body.includes('/') ? body.replace(/^\/+/, '') : `**/${body}`
+  const self = picomatch(glob, { dot: true })
+  const inside = picomatch(`${glob}/**/*`, { dot: true })
+  return (path, isDir = false) => inside(path) || ((isDir || !dirOnly) && self(path))
+}
+
+/**
+ * `glob` as a test of a directory-relative file path: the last pattern that matches decides, a
+ * `!` one excluding; a file no pattern matches is in unless some pattern includes.
+ */
+export function globFilter(
+  patterns: readonly string[],
+): (path: string, isDir?: boolean) => boolean {
+  const rules = patterns.map((p) => ({
+    include: !p.startsWith('!'),
+    test: globTest(p.replace(/^!/, '')),
+  }))
+  const start = !rules.some((r) => r.include)
+  return (path, isDir) => rules.reduce((keep, r) => (r.test(path, isDir) ? r.include : keep), start)
+}
+
+const DIRECTORY_OPTIONS = ['into', 'glob', 'defaultIgnores']
+
+function directoryHelper(base: string): EnvironmentHelpers['directory'] {
+  return (path, options = {}) => {
+    const written = path instanceof URL ? path.href : path
+    const what = `directory(${JSON.stringify(written)})`
+    if (typeof written !== 'string' || !written) {
+      throw new DefinitionError(
+        `directory() needs a path to a directory, relative to this file (got ${JSON.stringify(path)})`,
+      )
+    }
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new DefinitionError(`${what}: options are { into?, glob?, defaultIgnores? }`)
+    }
+    const extra = Object.keys(options).filter((k) => !DIRECTORY_OPTIONS.includes(k))
+    if (extra.length) {
+      const hint =
+        extra.includes('ignore') || extra.includes('exclude')
+          ? " Exclude with a '!' pattern in glob, e.g. glob: ['!dist/']."
+          : ''
+      throw new DefinitionError(
+        `${what}: unknown option "${extra.join('", "')}"; it takes into, glob and defaultIgnores.${hint}`,
+      )
+    }
+    const { into, glob = [], defaultIgnores = true } = options
+    if (
+      into !== undefined &&
+      (typeof into !== 'string' ||
+        into.includes('\\') ||
+        isAbsolute(into) ||
+        into.split('/').some((p) => p === '..'))
+    ) {
+      throw new DefinitionError(
+        `${what}: into is a directory relative to the workspace (or ~/…), with forward slashes and no .. (got ${JSON.stringify(into)})`,
+      )
+    }
+    if (
+      !Array.isArray(glob) ||
+      glob.some((p) => typeof p !== 'string' || !p.replace(/^!/, '').replace(/\//g, ''))
+    ) {
+      throw new DefinitionError(
+        `${what}: glob is a list of patterns, e.g. ['src/**', 'package.json', '!**/*.test.ts'] (got ${JSON.stringify(glob)})`,
+      )
+    }
+    if (typeof defaultIgnores !== 'boolean') {
+      throw new DefinitionError(
+        `${what}: defaultIgnores is true or false (got ${JSON.stringify(defaultIgnores)})`,
+      )
+    }
+    const root = toPath(path, base)
+    const stat = statSync(root, { throwIfNoEntry: false })
+    if (!stat) throw new DefinitionError(`${what}: ${root} doesn't exist`)
+    if (!stat.isDirectory()) {
+      throw new DefinitionError(
+        `${what}: ${root} is a file, not a directory. Use file(${JSON.stringify(written)}) for one file.`,
+      )
+    }
+    const skip = defaultIgnores ? globFilter(DEFAULT_DIRECTORY_IGNORES) : () => false
+    const keep = globFilter(glob)
+    const prefix = into?.replace(/\/+$/, '').replace(/^\.\/?/, '')
+    const files: Record<string, HostFile> = {}
+    const walk = (dir: string, rel: string, seen: readonly string[]) => {
+      for (const name of readdirSync(dir).sort()) {
+        if (name === '.git') continue
+        const full = join(dir, name)
+        const relPath = rel ? `${rel}/${name}` : name
+        const target = statSync(full, { throwIfNoEntry: false })
+        if (!target) {
+          throw new DefinitionError(
+            `${what}: ${relPath} is a symlink to something that doesn't exist. Remove it, or leave it out with glob: ['!${relPath}'].`,
+          )
+        }
+        if (target.isDirectory()) {
+          if (skip(relPath, true)) continue
+          const real = realpathSync(full)
+          if (seen.includes(real)) {
+            throw new DefinitionError(
+              `${what}: ${relPath} is a symlink to a directory that contains it. Leave it out with glob: ['!${relPath}/'].`,
+            )
+          }
+          walk(full, relPath, [...seen, real])
+        } else if (target.isFile() && !skip(relPath) && keep(relPath)) {
+          files[prefix ? `${prefix}/${relPath}` : relPath] = { kind: 'file', path: full }
+        }
+      }
+    }
+    walk(root, '', [realpathSync(root)])
+    if (Object.keys(files).length === 0) {
+      throw new DefinitionError(
+        `${what}: no files in ${root}${glob.length || defaultIgnores ? ` match (glob ${JSON.stringify(glob)}${defaultIgnores ? ', after DEFAULT_DIRECTORY_IGNORES' : ''})` : ''}. Empty directories aren't seeded; create one with a setup step.`,
+      )
+    }
+    return files
+  }
+}
+
 const mcpHelper: McpHelper = {
   stdio: (command, args = [], o = {}) => {
     if (typeof command !== 'string' || !command) {
@@ -549,6 +709,7 @@ export function helpersFor(base: string): EnvironmentHelpers {
     skill: skillHelper(base),
     mcp: mcpHelper,
     file: (path) => ({ kind: 'file', path: toPath(path, base) }),
+    directory: directoryHelper(base),
     git: gitHelper(base),
   }
 }
@@ -730,6 +891,12 @@ export type AppliedEnvironment = {
 }
 
 export const NO_ENVIRONMENT = '-'
+
+/** The control of a compare without a `baseline` when nothing in the cascade sets an environment. */
+export const EMPTY_BASELINE = 'baseline'
+
+/** An environment with no layers: the sandbox and harness as they are. */
+export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
 
 export function applied(env: Pick<Environment, 'name' | 'layers'> | undefined): AppliedEnvironment {
   if (!env) return { name: NO_ENVIRONMENT, parent: null, layers: [] }

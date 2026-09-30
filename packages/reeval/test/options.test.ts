@@ -44,10 +44,10 @@ describe('harness matrix, cascade and runs', () => {
       ),
       'evals/m.eval.ts': `import { evaluate, expect, group } from 'reeval'
 group('g', { runs: 2 }, () => {
-  evaluate('writes ok.txt', async (t) => {
-    await t.send('go')
-    expect(t.attempt.n).toBeGreaterThan(0)
-    await expect(t).toHaveFile('ok.txt')
+  evaluate('writes ok.txt', async (c) => {
+    await c.send('go')
+    expect(c.attempt.n).toBeGreaterThan(0)
+    await expect(c).toHaveFile('ok.txt')
   })
 })
 `,
@@ -60,6 +60,22 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/-\/fake +2\/2 +100%/)
     assert.match(r.stdout, /bad\/-\/fake +0\/2 +0%/)
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
+    const thirds = await project('matrix-thirds', {
+      'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
+      'evals/t.eval.ts': `import { evaluate } from 'reeval'
+evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n === 2) throw new Error('the second attempt fails')
+})
+`,
+    })
+    const rounded = await runCli(thirds.dir)
+    assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
+    assert.match(
+      rounded.stdout,
+      /✓ two of three +2\/3 +67% +3 attempts\n +one\/-\/fake +2\/3 +67% /,
+      'pass rates round to the nearest percent',
+    )
     const { run, evals } = readRun(p.dir)
     assert.equal(run.summary.attempts, 4)
     assert.deepEqual(
@@ -103,10 +119,10 @@ group('g', { runs: 2 }, () => {
       'evals/c.eval.ts': `import { evaluate, group } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 group('only c', () => {
-  evaluate('replaced', async (t) => { await t.send('x') })
-  evaluate('added', { harness: (h) => [...h, fakeHarness({ id: 'd' })] }, async (t) => { await t.send('x') })
+  evaluate('replaced', async (c) => { await c.send('x') })
+  evaluate('added', { harness: (h) => [...h, fakeHarness({ id: 'd' })] }, async (c) => { await c.send('x') })
 }, { harness: fakeHarness({ id: 'c' }) })
-evaluate('inherits', async (t) => { await t.send('x') })
+evaluate('inherits', async (c) => { await c.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -123,10 +139,10 @@ evaluate('inherits', async (t) => { await t.send('x') })
       'evals/e.eval.ts': `import { evaluate, group } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 group('only a', { harness: { only: 'a' } }, () => {
-  evaluate('kept', async (t) => { await t.send('x') })
-  evaluate('added', { harness: { add: [fakeHarness({ id: 'd' })] } }, async (t) => { await t.send('x') })
+  evaluate('kept', async (c) => { await c.send('x') })
+  evaluate('added', { harness: { add: [fakeHarness({ id: 'd' })] } }, async (c) => { await c.send('x') })
 })
-evaluate('kept both', { harness: { only: ['b', 'a'] } }, async (t) => { await t.send('x') })
+evaluate('kept both', { harness: { only: ['b', 'a'] } }, async (c) => { await c.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -147,7 +163,7 @@ group('slow things', { tags: ['slow'] }, () => {
 })
 evaluate('quick', async () => {})
 evaluate.todo('later')
-evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (t, { a, b }) => {
+evaluate.for([{ a: 1, b: 2 }, { a: 3, b: 4 }])('adds $a and $b (%#)', async (c, { a, b }) => {
   if (a + b !== (a === 1 ? 3 : 7)) throw new Error('bad sum')
 })
 `,
@@ -213,13 +229,13 @@ evaluate('other', async () => {})
     assert.equal(optOut.code, 0, 'CI=false, as the message suggests, allows .only')
   })
 
-  test('t.judge without a model names where to set one', async () => {
+  test('c.judge without a model names where to set one', async () => {
     const p = await project('no-judge', {
       'reeval.config.ts': config('').replace('judge: { model: fakeJudge({ score: 0.9 }) },', ''),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('judged', async (t) => {
-  await t.send('x')
-  expect(await t.judge('ok?')).toPass()
+evaluate('judged', async (c) => {
+  await c.send('x')
+  expect(await c.judge('ok?')).toPass()
 })
 `,
     })
@@ -227,7 +243,7 @@ evaluate('judged', async (t) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /t\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.config\.ts/,
+      /c\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.config\.ts/,
     )
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
@@ -250,11 +266,11 @@ export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
       'evals/c.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { base, skilled } from './envs.ts'
 group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => {
-  evaluate('writes ok.txt', async (t) => {
-    await t.send('go')
-    const mode = (await t.exec('printf %s "$MODE"')).stdout
-    expect(mode).toBe(t.attempt.cell.role === 'control' ? 'base' : 'skilled')
-    await expect(t).toHaveFile('ok.txt')
+  evaluate('writes ok.txt', async (c) => {
+    await c.send('go')
+    const mode = (await c.exec('printf %s "$MODE"')).stdout
+    expect(mode).toBe(c.attempt.cell.role === 'control' ? 'base' : 'skilled')
+    await expect(c).toHaveFile('ok.txt')
   })
 })
 `,
@@ -340,13 +356,13 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('all gated', { compare: { baseline: base, variants: [skilled], gate: 'all' } }, async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('all gated', { compare: { baseline: base, variants: [skilled], gate: 'all' } }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
-evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (t) => {
-  await t.send('go')
-  if (t.attempt.cell.role === 'variant') throw new Error('the variant is worse')
+evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 0.5, gate: 'none' } }, async (c) => {
+  await c.send('go')
+  if (c.attempt.cell.role === 'variant') throw new Error('the variant is worse')
 })
 `,
     })
@@ -376,7 +392,7 @@ evaluate('no worse', { compare: { baseline: base, variants: [skilled], minLift: 
       'evals/envs.ts': envs,
       'evals/c.eval.ts': `import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('scoped', { compare: { baseline: base, variants: [skilled], harness: ['b'] } }, async (t) => { await t.send('x') })
+evaluate('scoped', { compare: { baseline: base, variants: [skilled], harness: ['b'] } }, async (c) => { await c.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -396,9 +412,9 @@ export const skilled = defineEnvironment('skilled', {})
 `,
     'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
-evaluate('asks', { compare: { baseline: base, variants: [skilled], question: ${question} } }, async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${question} } }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
 `,
   })
@@ -408,7 +424,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], question: ${q
   test('--dry-run names the questions with no language model; reeval run exits 2 before any attempt', async () => {
     const p = await project('questions-no-model', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'ok.txt': 'yes' } }` }),
-      ...asks(`'Which is cleaner?'`),
+      ...asks(`['Which is cleaner?']`),
     })
     const dry = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
@@ -425,7 +441,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], question: ${q
     assert.equal(r.code, 2, r.stdout + r.stderr)
     assert.match(
       r.stderr,
-      /compare\.question "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}\./,
+      /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) needs a language model to answer it\. Set analysis: \{ model: 'google\/gemini-3\.8-flash' \} in reeval\.config\.ts \(the judge, a fake judge, is an evaluation model: it scores yes\/no questions and can't pick between two attempts\), or give the question its own, \{ question: '…', model: 'google\/gemini-3\.8-flash' \}\./,
     )
     assert.doesNotMatch(r.stdout, /✓|✗/, 'no attempt ran')
     assert.equal(existsSync(join(p.dir, '.reeval/runs')), false)
@@ -443,12 +459,12 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], question: ${q
         'analysis',
         `analysis: { model: 'typesafe-ai/jev-1.13.0' },`,
         undefined,
-        /compare\.question "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by config\.analysis\.model "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+        /compare\.questions "Which is cleaner\?" \(evals\/q\.eval\.ts › asks\) would be answered by config\.analysis\.model "typesafe-ai\/jev-1\.13\.0", an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
       ],
     ] as const) {
       const p = await project(`questions-eval-model-${name}`, {
         'reeval.config.ts': fakeConfig({ extra, ...(judge ? { judge } : {}) }),
-        ...asks(`'Which is cleaner?'`),
+        ...asks(`['Which is cleaner?']`),
       })
       const r = await runCli(p.dir, ['run'], { env: { TYPESAFE_AI_API_KEY: 'x' } })
       assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -546,7 +562,7 @@ export default defineConfig({
   test('votes are recorded after the attempts, and the outcome and exit code are the checks', async () => {
     const asked = await project('questions-votes', {
       'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`'Which is cleaner?'`),
+      ...asks(`['Which is cleaner?']`),
     })
     const plain = await project('questions-votes-none', {
       'reeval.config.ts': threeHarnesses(extra),
@@ -621,7 +637,7 @@ export default defineConfig({
   analysis: { model: fakeAnalysis({ vote: { error: 'the model is over quota' } }) },
 })
 `,
-      ...asks(`'Which is cleaner?'`),
+      ...asks(`['Which is cleaner?']`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -652,8 +668,8 @@ export default defineConfig({
 describe('gate policies', () => {
   // One attempt in five fails, always the third: a steady 80% agent.
   const flaky = (name: string, options: string) =>
-    `evaluate('${name}', { runs: 5${options} }, async (t) => {
-  if (t.attempt.n === 3) throw new Error('the third attempt fails')
+    `evaluate('${name}', { runs: 5${options} }, async (c) => {
+  if (c.attempt.n === 3) throw new Error('the third attempt fails')
 })`
 
   test("'all' by default, { passRate } per eval or group, with a hint when runs > 1 and no gate", async () => {
@@ -749,9 +765,9 @@ describe('profiles', () => {
         extra: `profiles: { real: { judge: { model: 'google/gemini-3.8-flash' } } },`,
       }),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('judged', async (t) => {
-  await t.send('x')
-  expect(await t.judge('Did it?')).toPass()
+evaluate('judged', async (c) => {
+  await c.send('x')
+  expect(await c.judge('Did it?')).toPass()
 })
 `,
     })
@@ -795,7 +811,7 @@ evaluate('judged', async (t) => {
         'fakeHarness({ delayMs: 700 })',
       ),
       'evals/b.eval.ts': `import { evaluate } from 'reeval'
-evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
+evaluate('slow', { runs: 4 }, async (c) => { await c.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -823,7 +839,7 @@ evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
         'fakeHarness({ delayMs: 1500 })',
       ),
       'evals/b.eval.ts': `import { evaluate } from 'reeval'
-evaluate('slow', { runs: 4 }, async (t) => { await t.send('x') })
+evaluate('slow', { runs: 4 }, async (c) => { await c.send('x') })
 `,
     })
     const ci = await project('budget-record-ci', files(''))
@@ -869,9 +885,19 @@ describe('common mistakes', () => {
       /compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
     ],
     [
-      'compare without a baseline',
-      `evaluate('e', { compare: { variants: [a] } }, async () => {})`,
-      /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got undefined\)/,
+      'a compare baseline that is not an environment',
+      `evaluate('e', { compare: { baseline: 'a' as never, variants: [a] } }, async () => {})`,
+      /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got "a"\)\. .* Leave it out to use the eval's environment as the control\./,
+    ],
+    [
+      'a variant that is the environment a compare without a baseline runs as its control',
+      `group('g', { environment: a }, () => { evaluate('e', { compare: { variants: [a, b] } }, async () => {}) })`,
+      /compare in evaluate\("g › e"\) lists a, which is the control: compare has no baseline, so the eval's environment is\./,
+    ],
+    [
+      'a variant named baseline in a compare without a baseline or environment',
+      `evaluate('e', { compare: { variants: [defineEnvironment('baseline', {})] } }, async () => {})`,
+      /compare in evaluate\("e"\) lists a variant named baseline, the name of the empty control a compare without a baseline or environment runs\. Rename the variant, or set compare\.baseline\./,
     ],
     [
       'compare as an array',
@@ -884,54 +910,59 @@ describe('common mistakes', () => {
       /Unknown compare option "strategy" in evaluate\("e"\)/,
     ],
     [
-      'compare questions in the plural',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: ['Which?'] } as never }, async () => {})`,
-      /Unknown compare option "questions" in evaluate\("e"\)\. Did you mean "question"\?/,
+      'the singular compare question',
+      `evaluate('e', { compare: { baseline: a, variants: [b], question: 'Which?' } as never }, async () => {})`,
+      /Unknown compare option "question" in evaluate\("e"\)\. Did you mean "questions"\? It's a list: questions: \['Which handles state more cleanly\?'\]\./,
+    ],
+    [
+      'compare questions as a single string',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: 'Which?' as never } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) is a list \(got "Which\?"\), e\.g\. questions: \['Which handles state more cleanly\?'\]\./,
     ],
     [
       'an empty compare question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: ' ' } }, async () => {})`,
-      /compare\.question in evaluate\("e"\) is an empty string\. Ask something, e\.g\. question: 'Which handles state more cleanly\?'\./,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [' '] } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) is an empty string\. Ask something, e\.g\. questions: \['Which handles state more cleanly\?'\]\./,
     ],
     [
       'an empty list of compare questions',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: [] } }, async () => {})`,
-      /compare\.question in evaluate\("e"\) is an empty list\. Ask at least one, e\.g\. question: 'Which handles state more cleanly\?', or leave question out\./,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [] } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) is an empty list\. Ask at least one, e\.g\. questions: \['Which handles state more cleanly\?'\], or leave questions out\./,
     ],
     [
       'a compare question that is not a string or an entry',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: [42] as never } }, async () => {})`,
-      /compare\.question in evaluate\("e"\) takes strings or \{ question, model\? \} \(got 42\)/,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [42] as never } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\? \} \(got 42\)/,
     ],
     [
       'a compare question entry with an unknown key',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: { question: 'Which?', judge: 'x' } as never } }, async () => {})`,
-      /compare\.question in evaluate\("e"\) takes \{ question, model\? \} \(got "judge"\)\./,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', judge: 'x' }] as never } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\? \} \(got "judge"\)\./,
     ],
     [
       'a compare question entry without its question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: [{ model: 'google/gemini-3.8-flash' } as never] } }, async () => {})`,
-      /compare\.question in evaluate\("e"\) has an entry without its question \(got undefined\)/,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ model: 'google/gemini-3.8-flash' } as never] } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) has an entry without its question \(got undefined\)/,
     ],
     [
       'a compare question model without a provider',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: { question: 'Which?', model: 'gemini-3.8-flash' } } }, async () => {})`,
-      /compare\.question "Which\?" in evaluate\("e"\): model is a 'provider\/model' string, e\.g\. 'google\/gemini-3\.8-flash' \(got "gemini-3\.8-flash"\)/,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', model: 'gemini-3.8-flash' }] } }, async () => {})`,
+      /compare\.questions "Which\?" in evaluate\("e"\): model is a 'provider\/model' string, e\.g\. 'google\/gemini-3\.8-flash' \(got "gemini-3\.8-flash"\)/,
     ],
     [
       'an evaluation model for a compare question',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: { question: 'Which?', model: 'typesafe-ai/jev-1.13.0' } } }, async () => {})`,
-      /compare\.question "Which\?" in evaluate\("e"\) names typesafe-ai\/jev-1\.13\.0, an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', model: 'typesafe-ai/jev-1.13.0' }] } }, async () => {})`,
+      /compare\.questions "Which\?" in evaluate\("e"\) names typesafe-ai\/jev-1\.13\.0, an evaluation model: it scores yes\/no questions and can't pick between two attempts\. Use a language model/,
     ],
     [
       'the same compare question twice',
-      `evaluate('e', { compare: { baseline: a, variants: [b], question: ['Which?', { question: 'Which?' }] } }, async () => {})`,
-      /compare\.question in evaluate\("e"\) asks "Which\?" twice/,
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: ['Which?', { question: 'Which?' }] } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) asks "Which\?" twice/,
     ],
     [
-      'environment and compare on the same eval',
+      'environment and compare.baseline on the same eval',
       `evaluate('e', { environment: a, compare: { baseline: a, variants: [b] } }, async () => {})`,
-      /environment and compare can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment\./,
+      /environment and compare\.baseline can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment, or drop baseline to make environment the control\./,
     ],
     [
       'compare: false on an eval',
@@ -991,7 +1022,7 @@ describe('common mistakes', () => {
     [
       'an eval with no function',
       `evaluate('x', {})`,
-      /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(t\) => \{ … \}\)\./,
+      /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(c\) => \{ … \}\)\./,
     ],
     [
       'a base image on an environment',
@@ -1034,6 +1065,11 @@ describe('common mistakes', () => {
       /judge\.threshold must be between 0 and 1 \(got 2\) in group\("g"\)/,
     ],
     [
+      'a judge include as one string on a group',
+      `group('g', { judge: { include: 'src/' as never } }, () => { evaluate('e', async () => {}) })`,
+      /judge\.include must be a list of non-empty strings \(got "src\/"\) in group\("g"\)/,
+    ],
+    [
       'a file path that climbs out of the workspace',
       `defineEnvironment('e', { files: { '../../escape.txt': 'x' } })`,
       /files\["\.\.\/\.\.\/escape\.txt"\] in defineEnvironment\("e"\): paths are relative to the workspace, or start with ~\/ for the home directory, and never use \.\./,
@@ -1052,6 +1088,21 @@ describe('common mistakes', () => {
       'a Windows-style file path',
       `defineEnvironment('e', { files: { 'docs\\\\api.md': 'x' } })`,
       /files\["docs\\\\api\.md"\] in defineEnvironment\("e"\): use forward slashes \(docs\/api\.md\)/,
+    ],
+    [
+      'a directory that does not exist',
+      `defineEnvironment('e', ({ directory }) => ({ files: directory('../fixture') }))`,
+      /directory\("\.\.\/fixture"\): \S*fixture doesn't exist/,
+    ],
+    [
+      'a file passed to directory()',
+      `defineEnvironment('e', ({ directory }) => ({ files: directory('./o.eval.ts') }))`,
+      /directory\("\.\/o\.eval\.ts"\): \S*o\.eval\.ts is a file, not a directory\. Use file\("\.\/o\.eval\.ts"\) for one file\./,
+    ],
+    [
+      'directory() with ignore instead of glob',
+      `defineEnvironment('e', ({ directory }) => ({ files: directory('.', { ignore: ['dist'] } as never) }))`,
+      /directory\("\."\): unknown option "ignore"; it takes into, glob and defaultIgnores\. Exclude with a '!' pattern in glob, e\.g\. glob: \['!dist\/'\]\./,
     ],
     [
       'a zero install step timeout',
@@ -1269,6 +1320,16 @@ ${body}
       /judge\.threshold must be between 0 and 1 \(got 0\.8\) in reeval\.config\.ts/,
     ],
     [
+      'an empty path in the judge files in the config',
+      `judge: { model: fakeJudge({ score: 0.9 }), files: ['README.md', ''] },`,
+      /judge\.files must be a list of non-empty strings \(got \["README\.md",""\]\)/,
+    ],
+    [
+      'a fake judge scoring with a function in the config',
+      `judge: { model: fakeJudge({ score: () => 1 }) },`,
+      /fakeJudge\(\{ score \}\) in the config takes a number\. Pass a score function per group, eval or call instead\./,
+    ],
+    [
       'keeping no debug runs',
       `debug: { keep: 0 },`,
       /config\.debug\.keep must be a whole number of at least 1 \(got 0\)/,
@@ -1331,7 +1392,7 @@ ${body}
       'reeval.unbrokered.config.ts': bad(`secrets: { unbrokered: 'error' },`),
       'evals/o.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', { runs: 2 }, async () => {})\n`,
       'evals/j.eval.ts': `import { evaluate } from 'reeval'
-evaluate('judged', async (t) => { await t.send('x'); await t.judge('ok?') })
+evaluate('judged', async (c) => { await c.send('x'); await c.judge('ok?') })
 `,
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
@@ -1563,24 +1624,24 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
 `,
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 import { withSkill } from './envs.ts'
-evaluate('greets', { compare: { baseline: defineEnvironment('plain', {}), variants: [withSkill] } }, async (t) => {
-  const turn = await t.send('greet')
+evaluate('greets', { compare: { baseline: defineEnvironment('plain', {}), variants: [withSkill] } }, async (c) => {
+  const turn = await c.send('greet')
   const loaded = turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting; mcp: docs')
-  const token = (await t.exec('printf %s "$APP_TOKEN"')).stdout
+  const token = (await c.exec('printf %s "$APP_TOKEN"')).stdout
   expect(token).toBe('s3cret-value-123')
-  expect((await t.exec('printf %s "$MODE"')).stdout).toBe('test')
-  if (t.attempt.cell.role === 'control') {
+  expect((await c.exec('printf %s "$MODE"')).stdout).toBe('test')
+  if (c.attempt.cell.role === 'control') {
     expect(loaded).toBe(false)
-    expect(await t.readFile('AGENTS.md')).toBeNull()
+    expect(await c.readFile('AGENTS.md')).toBeNull()
     throw new Error('the control never knows the house style')
   }
   expect(loaded).toBe(true)
-  expect(await t.readFile('AGENTS.md')).toBe('Always write tests.')
-  expect(await t.readFile('notes/readme.txt')).toBe('hello')
-  expect(await t.readFile('docs/api.md')).toBe('# API\\n')
-  expect((await t.readFile('secret-length.txt'))?.trim()).toBe('32')
-  expect((await t.exec('printf %s "$FLAVOUR"')).stdout).toBe('mint')
-  expect((await t.exec('printf %s "$CHECK_TOKEN"')).stdout).toBe('s3cret-value-123')
+  expect(await c.readFile('AGENTS.md')).toBe('Always write tests.')
+  expect(await c.readFile('notes/readme.txt')).toBe('hello')
+  expect(await c.readFile('docs/api.md')).toBe('# API\\n')
+  expect((await c.readFile('secret-length.txt'))?.trim()).toBe('32')
+  expect((await c.exec('printf %s "$FLAVOUR"')).stdout).toBe('mint')
+  expect((await c.exec('printf %s "$CHECK_TOKEN"')).stdout).toBe('s3cret-value-123')
   expect(turn.diff.files.map((f) => f.path)).not.toContain('AGENTS.md')
 })
 `,
@@ -1625,7 +1686,7 @@ evaluate('greets', { compare: { baseline: defineEnvironment('plain', {}), varian
       'reeval.config.ts': fakeConfig(),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const needs = defineEnvironment('needs', ({ secret }) => ({ env: { NEEDED: secret.fromEnv('REEVAL_TEST_NOT_SET') } }))
-evaluate('needs it', { environment: needs }, async (t) => { await t.send('x') })
+evaluate('needs it', { environment: needs }, async (c) => { await c.send('x') })
 `,
     })
     const r = await runCli(p.dir)
@@ -1639,7 +1700,7 @@ evaluate('needs it', { environment: needs }, async (t) => { await t.send('x') })
       'reeval.config.ts': fakeConfig(),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 const broken = defineEnvironment('broken', { setup: [{ run: 'true' }, { run: 'echo nope >&2; exit 4' }] })
-evaluate('x', { environment: broken, timeout: '1s' }, async (t) => { await t.send('x') })
+evaluate('x', { environment: broken, timeout: '1s' }, async (c) => { await c.send('x') })
 `,
     })
     const f = await runCli(failing.dir)
@@ -1675,10 +1736,10 @@ const env = defineEnvironment('remote', ({ skill }) => ({
     skill.inline({ name: 'house-rules', description: 'Rules.', content: 'Be nice.' }, { placement: 'workspace' }),
   ],
 }))
-evaluate('loads it', { environment: env }, async (t) => {
-  const turn = await t.send('x')
+evaluate('loads it', { environment: env }, async (c) => {
+  const turn = await c.send('x')
   expect(turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting, house-rules')).toBe(true)
-  expect(await t.readFile('.agents/skills/house-rules/SKILL.md')).toContain('Be nice.')
+  expect(await c.readFile('.agents/skills/house-rules/SKILL.md')).toContain('Be nice.')
   expect(turn.diff.files).toEqual([])
 })
 `,
@@ -1704,13 +1765,13 @@ evaluate('loads it', { environment: env }, async (t) => {
 const env = defineEnvironment('reviewer', ({ skill }) => ({
   skills: [skill.local('../skills/skill-reviewer', { placement: 'workspace' })],
 }))
-evaluate('staged', { environment: env }, async (t) => {
-  await t.send('x')
-  const md = await t.readFile('.agents/skills/skill-reviewer/SKILL.md')
+evaluate('staged', { environment: env }, async (c) => {
+  await c.send('x')
+  const md = await c.readFile('.agents/skills/skill-reviewer/SKILL.md')
   expect(md).toContain(${JSON.stringify(`description: ${JSON.stringify(REVIEWER_DESCRIPTION)}`)})
   expect(md).toContain('# Skill reviewer')
-  expect(await t.readFile('.agents/skills/skill-reviewer/docs/checklist.md')).toContain('# Checklist')
-  const listed = (await t.exec('cd .agents/skills/skill-reviewer && find . -type f | LC_ALL=C sort')).stdout
+  expect(await c.readFile('.agents/skills/skill-reviewer/docs/checklist.md')).toContain('# Checklist')
+  const listed = (await c.exec('cd .agents/skills/skill-reviewer && find . -type f | LC_ALL=C sort')).stdout
   expect(listed.trim().split('\\n')).toEqual(['./SKILL.md', './docs/checklist.md'])
 })
 `,

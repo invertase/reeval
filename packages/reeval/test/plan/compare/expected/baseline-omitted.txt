@@ -1,0 +1,14 @@
+no profile · 3 evals · 12 cells · 12 attempts
+evals/omitted.eval.ts › no environment                    a/baseline/fake  control          ungated  ×1
+                                                          a/skilled/fake   variant skilled  gated    ×1
+                                                          b/baseline/fake  control          ungated  ×1
+                                                          b/skilled/fake   variant skilled  gated    ×1
+evals/omitted.eval.ts › inherits › the group environment  a/base/fake      control          ungated  ×1
+                                                          a/skilled/fake   variant skilled  gated    ×1
+                                                          b/base/fake      control          ungated  ×1
+                                                          b/skilled/fake   variant skilled  gated    ×1
+evals/omitted.eval.ts › its own environment               a/base/fake      control          ungated  ×1
+                                                          a/skilled/fake   variant skilled  gated    ×1
+                                                          b/base/fake      control          ungated  ×1
+                                                          b/skilled/fake   variant skilled  gated    ×1
+excluded: —

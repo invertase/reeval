@@ -56,13 +56,13 @@ export default defineConfig({
 })
 `
       const eval_ = `import { evaluate, expect } from 'reeval'
-evaluate('hi', async (t) => {
-  const turn = await t.send('Reply with the word hi.')
+evaluate('hi', async (c) => {
+  const turn = await c.send('Reply with the word hi.')
   // Gemini saw the swapped-in (made-up) key: the gateway brokered it.
   expect(turn.transcript.some((e) => e.type === 'error' && /API_KEY_INVALID/.test(e.message ?? ''))).toBe(true)
   expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
   // Nothing in the sandbox holds the key: the CLI's own env had only the placeholder.
-  const search = (needle: string) => t.exec(\`grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev \${needle} / || true\`)
+  const search = (needle: string) => c.exec(\`grep -rlsF --exclude-dir=proc --exclude-dir=sys --exclude-dir=dev \${needle} / || true\`)
   expect((await search('not_a_real_key')).stdout.trim()).toBe('')
   // Twin: the same search finds the settings the adapter wrote.
   expect((await search('modelProvider')).stdout).toContain('/.gemini/antigravity-cli/settings.json')
@@ -153,20 +153,20 @@ const house = defineEnvironment('house', ({ skill }) => ({
   files: { 'probe.sh': 'printf %s "$GEMINI_API_KEY" | cut -c1-8 > /tmp/probe.txt\\necho probed\\n' },
   skills: [skill.local('../skills/owl-facts')],
 }))
-evaluate('real', { environment: house }, async (t) => {
-  const edit = await t.send('Create hello.js that prints "hi from agy" with console.log, then run it with node and tell me what it printed.')
+evaluate('real', { environment: house }, async (c) => {
+  const edit = await c.send('Create hello.js that prints "hi from agy" with console.log, then run it with node and tell me what it printed.')
   expect(edit.status).toBe('completed')
   await expect(edit).toHaveFile('hello.js', /hi from agy/)
-  expect((await t.exec('node hello.js')).stdout).toContain('hi from agy')
+  expect((await c.exec('node hello.js')).stdout).toContain('hi from agy')
   expect(edit.transcript.some((e) => e.type === 'tool' && e.tool === 'bash')).toBe(true)
   expect(edit.transcript.some((e) => e.type === 'file-edit' && /hello\\.js$/.test(e.path))).toBe(true)
-  const ask = await t.send('Reply on one line with the house word and the owl code.')
+  const ask = await c.send('Reply on one line with the house word and the owl code.')
   expect(ask.text).toContain('PERIWINKLE-42')
   expect(ask.text).toContain('OWL-5521')
   // As the agent: a script it runs sees only the placeholder in the CLI's environment.
-  const probe = await t.send('Run the shell command: sh probe.sh')
+  const probe = await c.send('Run the shell command: sh probe.sh')
   expect(probe.transcript.some((e) => e.type === 'tool' && e.tool === 'bash')).toBe(true)
-  expect((await t.exec('cat /tmp/probe.txt')).stdout.trim()).toBe('aisdkhc_')
+  expect((await c.exec('cat /tmp/probe.txt')).stdout.trim()).toBe('aisdkhc_')
 })
 `,
       })

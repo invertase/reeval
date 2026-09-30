@@ -23,7 +23,7 @@ evals/.history/                            commit this
     diff.patch                             the agent's changes, dependency noise dropped
     judge-input.json                       what each judge call saw
     setup.log                              each environment setup step's output
-    checks/<n>.log                         each t.exec: command, exit code, stdout, stderr
+    checks/<n>.log                         each c.exec: command, exit code, stdout, stderr
 .reeval/                                       scratch: gitignore it
   runs/<runId>.json + <runId>/             every reeval run, same shape
   debug/<runId>/…                          local debug data, never recorded
@@ -150,7 +150,7 @@ An attempt's `error` is `{ kind, message, prepare? }`. `prepare` is set when its
 </Property>
 
 <Property name="worktreePatchNote" type="string | null">
-  Why a dirty run has no `worktree.patch`, e.g. too large or artifacts: 'none'.
+  Why a dirty run has no `worktree.patch`: too large, artifacts: 'none', or it looked like it held a secret (then where, and which rule, never the value).
 </Property>
 
 <Property name="commitTime" type="string"></Property>
@@ -470,7 +470,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="servedModels" type="string[] | null">
-  The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.4-mini-2026-03-17[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
+  The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
 </Property>
 
 <Property name="outcome" type="Outcome"></Property>
@@ -573,7 +573,7 @@ One failed judge try that was retried, and the backoff before the next.
 
 ### Cell
 
-One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With `compare`, the control is `baseline` and each variant is that environment on its own.
+One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own.
 
 <Property name="key" type="string"></Property>
 

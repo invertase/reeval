@@ -9,16 +9,16 @@ description: The signatures of group and evaluate, their skip, only, todo and fo
 import { evaluate, expect, group } from '{{ pkg }}'
 
 group('math', { tags: ['smoke'] }, () => {
-  evaluate('writes add.js', { timeout: '5m' }, async (t) => {
-    const turn = await t.send('Create add.js exporting add(a, b).')
+  evaluate('writes add.js', { timeout: '5m' }, async (c) => {
+    const turn = await c.send('Create add.js exporting add(a, b).')
     await expect(turn).toHaveFile('add.js')
   })
 
   evaluate.for([
     { a: 2, b: 3 },
     { a: 10, b: -4 },
-  ])('adds $a and $b', async (t, { a, b }) => {
-    await t.send(`Create sum.txt containing ${a} + ${b}.`)
+  ])('adds $a and $b', async (c, { a, b }) => {
+    await c.send(`Create sum.txt containing ${a} + ${b}.`)
   })
 
   evaluate.skip('subtracts', async () => {})
@@ -52,8 +52,8 @@ evaluate(name, fn, options)
   A plain object of options: `harness`, `environment`, `compare`, `sandbox`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`, `tags`, `pin`. See [Options](/reference/options).
 </Property>
 
-<Property name="fn" type="(t: EvalContext) => Promise<void>">
-  The eval body. It runs once per attempt with a fresh `t`. It passes when it returns without throwing. See [The t API](/reference/t).
+<Property name="fn" type="(c: AttemptContext) => Promise<void>">
+  The eval body. It runs once per attempt with a fresh `c`. It passes when it returns without throwing. See [The attempt context](/reference/attempt-context).
 </Property>
 
 Every cell of the eval (harness × environment × sandbox, plus `compare` variants) runs `runs` attempts of `fn`.
@@ -85,7 +85,7 @@ group(name, fn, options)
 | `evaluate.skip(name, …)` | Declares the eval but doesn't run it; it counts as skipped. |
 | `evaluate.only(name, …)` | Runs only the `.only` evals and groups of its file. |
 | `evaluate.todo(name)` | A placeholder with no body. It's one entry marked todo: a `todo` row in `--dry-run` (and `mode: 'todo'` under `excluded` in `--json`), `todo` in the summary and `summary.md`, `todo: true` with outcome `skipped` in the record, and Todo in the studio. It counts as skipped. |
-| `evaluate.for(cases)(name, …)` | One eval per case. The body gets `(t, item)`. |
+| `evaluate.for(cases)(name, …)` | One eval per case. The body gets `(c, item)`. |
 | `group.skip(name, …)` | Skips every eval in the group, nested groups included; each counts as skipped. |
 | `group.only(name, …)` | Runs only this group's evals within its file. |
 | `group.todo(name)` | A placeholder group, shown exactly as `evaluate.todo(name)` is: one todo entry, with the id `file › …groups › name`. |
@@ -133,7 +133,7 @@ The nearest `tsconfig.json` must load: one that isn't valid JSON (comments and t
 
 ## Timeouts
 
-`timeout` covers one attempt's body. Starting the sandbox, running setup steps and starting the harness pause the clock; the harness's start has its own `startTimeout` (default 90s, retried once). An attempt that runs out fails with `Eval timed out after 300s`, and `t.signal` aborts so you can stop work early.
+`timeout` covers one attempt's body. Starting the sandbox, running setup steps and starting the harness pause the clock; the harness's start has its own `startTimeout` (default 90s, retried once). An attempt that runs out fails with `Eval timed out after 300s`, and `c.signal` aborts so you can stop work early.
 
 ## Errors
 
@@ -149,5 +149,5 @@ Errors in an eval file stop the run with exit 2 and name the file. More on [Erro
 
 - [Writing evals](/guide/writing-evals)
 - [Options](/reference/options)
-- [The t API](/reference/t)
+- [The attempt context](/reference/attempt-context)
 - [Matchers](/reference/matchers)

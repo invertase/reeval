@@ -1,0 +1,8 @@
+profile off (--profile) · 3 evals · 6 cells · 6 attempts
+evals/omitted.eval.ts › no environment                    a/baseline/fake  control  ungated  ×1  compare off (profile off)
+                                                          b/baseline/fake  control  ungated  ×1
+evals/omitted.eval.ts › inherits › the group environment  a/base/fake      control  ungated  ×1  compare off (profile off)
+                                                          b/base/fake      control  ungated  ×1
+evals/omitted.eval.ts › its own environment               a/base/fake      control  ungated  ×1  compare off (profile off)
+                                                          b/base/fake      control  ungated  ×1
+excluded: —

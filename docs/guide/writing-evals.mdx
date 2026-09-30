@@ -9,16 +9,16 @@ An eval gives the agent a task, then checks what it did. Here's the first `greet
 import { evaluate, expect, group } from '{{ pkg }}'
 
 group('greet module', () => {
-  evaluate('creates a tested greet module', async (t) => {
-    const turn = await t.send(
+  evaluate('creates a tested greet module', async (c) => {
+    const turn = await c.send(
       'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
         'and greet.test.js that tests it with node:test. No dependencies.',
     )
 
     await expect(turn).toHaveFile('greet.js')
-    await expect(t.exec('node --test')).toSucceed()
+    await expect(c.exec('node --test')).toSucceed()
     expect(
-      await t.judge(
+      await c.judge(
         "Does the agent's final message accurately describe what it changed?",
       ),
     ).toPass()
@@ -32,8 +32,8 @@ It has three parts: a prompt, deterministic checks, and a question for the judge
 
 ```ts title="evals/hello.eval.ts"
 group('greet module', () => {
-  evaluate('creates a tested greet module', async (t) => { /* … */ })
-  evaluate('adds a default name in a follow-up turn', async (t) => { /* … */ })
+  evaluate('creates a tested greet module', async (c) => { /* … */ })
+  evaluate('adds a default name in a follow-up turn', async (c) => { /* … */ })
 })
 ```
 
@@ -46,41 +46,41 @@ group('greet module', () => {
 ## Send a prompt
 
 ```ts
-const turn = await t.send('Create greet.js exporting greet(name).')
+const turn = await c.send('Create greet.js exporting greet(name).')
 turn.text        // the agent's final message
 turn.status      // 'completed', 'aborted' or 'error'
 turn.diff.files  // [{ path: 'greet.js', status: 'added' }]
 ```
 
-`t.send` runs one agent turn and resolves when it ends. The first call starts the sandbox and the agent session. The `Turn` it returns doesn't change afterwards, so you can check it later.
+`c.send` runs one agent turn and resolves when it ends. The first call starts the sandbox and the agent session. The `Turn` it returns doesn't change afterwards, so you can check it later.
 
 ## Run commands in the sandbox
 
 ```ts title="evals/guide.eval.ts"
-evaluate('passes its own tests', async (t) => {
-  await t.send('Create greet.js and greet.test.js. No dependencies.')
+evaluate('passes its own tests', async (c) => {
+  await c.send('Create greet.js and greet.test.js. No dependencies.')
 
-  const result = await t.exec('node --test')
+  const result = await c.exec('node --test')
   expect(result.exitCode).toBe(0)
   expect(result.stdout).toContain('pass 1')
 })
 ```
 
-`t.exec` runs a shell command in the eval's workspace, in the same container as the agent. It returns `{ exitCode, stdout, stderr }`. `await expect(t.exec(cmd)).toSucceed()` is the short form: it fails on a non-zero exit and prints the command's stderr and stdout.
+`c.exec` runs a shell command in the eval's workspace, in the same container as the agent. It returns `{ exitCode, stdout, stderr }`. `await expect(c.exec(cmd)).toSucceed()` is the short form: it fails on a non-zero exit and prints the command's stderr and stdout.
 
 ## Check files
 
 ```ts title="evals/guide.eval.ts"
-evaluate('writes a module', async (t) => {
-  const turn = await t.send('Create greet.js exporting greet(name).')
+evaluate('writes a module', async (c) => {
+  const turn = await c.send('Create greet.js exporting greet(name).')
 
   await expect(turn).toHaveFile('greet.js', /export function greet/)
-  const source = await t.readFile('greet.js')
+  const source = await c.readFile('greet.js')
   expect(source).not.toContain('require(')
 })
 ```
 
-`toHaveFile(path, pattern?)` checks a file exists and, optionally, matches a string or regular expression. `t.readFile` returns the contents, or `null` when there's no such file. Paths are relative to the workspace, or start with `~/` for the home directory.
+`toHaveFile(path, pattern?)` checks a file exists and, optionally, matches a string or regular expression. `c.readFile` returns the contents, or `null` when there's no such file. Paths are relative to the workspace, or start with `~/` for the home directory.
 
 ## Await the matchers
 
@@ -106,24 +106,24 @@ Summary
   An unawaited matcher fails its eval even when its check passes, so a missing `await` shows up as a failure that tells you to add it.
 </Warning>
 
-`toPass()` is synchronous: await `t.judge`, not the `expect`. So are `toHaveSearched(query?)` and `toHaveFetched(url?)`, which check a turn's web calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`, `toMatch`…) work too.
+`toPass()` is synchronous: await `c.judge`, not the `expect`. So are `toHaveSearched(query?)` and `toHaveFetched(url?)`, which check a turn's web calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`, `toMatch`…) work too.
 
 ## Ask the judge
 
 ```ts
-const verdict = await t.judge('Is the change minimal?', { threshold: 0.9 })
+const verdict = await c.judge('Is the change minimal?', { threshold: 0.9 })
 expect(verdict).toPass()
 ```
 
-The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions.
+The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff, without build output or minified files; `include` and `files` narrow it further. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions and [what the judge sees](/concepts/judges#narrow-what-the-judge-sees).
 
 ## Choose checks or the judge
 
 | Use | When the answer is | Example |
 |---|---|---|
-| `t.exec`, `toSucceed` | Something a command can decide | `node --test`, a build, a script's output |
-| `toHaveFile`, `t.readFile` | In the files | A config key, an import, no `require(` |
-| `t.judge` | A matter of judgement | "Does the message describe the change?" |
+| `c.exec`, `toSucceed` | Something a command can decide | `node --test`, a build, a script's output |
+| `toHaveFile`, `c.readFile` | In the files | A config key, an import, no `require(` |
+| `c.judge` | A matter of judgement | "Does the message describe the change?" |
 
 Prefer checks: they're exact, free and never change their mind. Use the judge for what no command can decide, and keep each question to one thing.
 
@@ -145,8 +145,8 @@ Tags add up from groups to evals. Repeat `--tag` to combine filters; each one mu
 ## Skip, focus and plan evals
 
 ```ts title="evals/guide.eval.ts"
-evaluate.skip('greets in French', async (t) => {
-  await t.send('Add greetFr(name).')
+evaluate.skip('greets in French', async (c) => {
+  await c.send('Add greetFr(name).')
 })
 evaluate.todo('greets a list of names')
 ```
@@ -169,7 +169,7 @@ Summary
   <Card title="Multi-turn evals" icon="layer-group" href="/guide/multi-turn">
     Follow-up turns, and checks on each turn.
   </Card>
-  <Card title="The t API" icon="book" href="/reference/t">
-    Every method and field on `t` and `Turn`.
+  <Card title="The attempt context" icon="book" href="/reference/attempt-context">
+    Every method and field on `c` and `Turn`.
   </Card>
 </CardGroup>

@@ -49,13 +49,13 @@ group(
     pin: ['compare', 'runs'],
   },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send(
+    evaluate('greets in the house style', async (c) => {
+      await c.send(
         'Create greet.js exporting greet(name) that greets the person ' +
           'in our house greeting style. Add a package.json with ' +
           '"type": "module". No dependencies.',
       )
-      await expect(t.exec(greetAda)).toSucceed()
+      await expect(c.exec(greetAda)).toSucceed()
     })
   },
 )
@@ -169,7 +169,7 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 - **Skill from git or npm:** `skill.git('github:org/skills', { ref: 'v2.4.0', path: 'skills' })` or `skill.npm('pkg@1.2.3')`. Pin the ref: a moving one warns in the plan.
 - **A shared starting point:** `const withSkill = base.extendEnvironment('with-skill', …)` then `compare: { baseline: base, variants: [withSkill] }`. `compare` does not layer them.
 - **Report only:** drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything.
-- **Ask which arm did better:** `compare: { baseline, variants, question: 'Which greet.js reads more like our house style?' }` judges the two arms' diffs pair by pair after the run, as `examples/hello`'s `skill.eval.ts` does. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Ask questions](/guide/compare#ask-questions).
+- **Ask which arm did better:** `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run, as `examples/hello`'s `skill.eval.ts` does. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Ask questions](/guide/compare#ask-questions).
 - **Across runs:** `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
 
 ## Next

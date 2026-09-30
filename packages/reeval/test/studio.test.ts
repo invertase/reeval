@@ -11,6 +11,7 @@ import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
   activityLabel,
+  analysisDataPath,
   answerRows,
   artifactPath,
   buildIndex,
@@ -78,11 +79,11 @@ describe('studio data paths', () => {
 const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const other = defineEnvironment('other', {})
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], question: 'Which wrote hello.txt?' }, runs: 2 } : {}, () => {
-  evaluate('writes hello', async (t) => {
-    await t.send('write hello.txt')
-    await expect(t.exec('test -f hello.txt')).toSucceed()
-    expect(await t.judge('Did it write hello.txt?')).toPass()
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], questions: ['Which wrote hello.txt?'] }, runs: 2 } : {}, () => {
+  evaluate('writes hello', async (c) => {
+    await c.send('write hello.txt')
+    await expect(c.exec('test -f hello.txt')).toSucceed()
+    expect(await c.judge('Did it write hello.txt?')).toPass()
   })
 })
 `
@@ -134,9 +135,9 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
 const compare = process.env.REEVAL_TEST_GATE_ALL
   ? { baseline: plain, variants: [skilled], gate: 'all' as const }
   : { baseline: plain, variants: [skilled] }
-evaluate('writes ok', { compare }, async (t) => {
-  await t.send('write ok.txt')
-  await expect(t.exec('test -f ok.txt')).toSucceed()
+evaluate('writes ok', { compare }, async (c) => {
+  await c.send('write ok.txt')
+  await expect(c.exec('test -f ok.txt')).toSucceed()
 })
 `
 
@@ -738,6 +739,50 @@ describe('reeval studio build', () => {
         assert.equal(built, served, url)
       }
     }
+  })
+
+  test("analysis.agent's notes are in the build as the server serves them; a cached summary only live", async () => {
+    const p = await project('studio-notes', {
+      'reeval.config.ts': fakeConfig({
+        extra: `analysis: { agent: true, model: fakeAnalysis({ note: 'A note.', output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
+      }).replace(
+        "import { fakeJudge } from 'reeval/judge'",
+        "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
+      ),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes', async (c) => {
+  await c.send('Write it')
+  expect(1).toBe(1)
+})
+`,
+    })
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const [runId] = readdirSync(join(p.dir, '.reeval/runs')).filter((n) => !n.endsWith('.json'))
+    const out = join(p.dir, 'site')
+    assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out, '--scratch'])).code, 0)
+    const built = JSON.parse(readFileSync(join(out, analysisDataPath(runId as string)), 'utf8'))
+    assert.deepEqual(
+      [built.entries, built.notes.map((n: { text: string }) => n.text)],
+      [[], ['A note.']],
+    )
+    const app = createStudioApp({
+      source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
+      appDir: join(pkgRoot, 'dist/studio-app'),
+      es: 'test',
+      project: 'studio',
+      token: null,
+      hosts: [],
+    })
+    const served = await (await app.request(`http://x/${analysisDataPath(runId as string)}`)).json()
+    assert.deepEqual(served.notes, built.notes)
+    assert.deepEqual(
+      served.entries.map((e: { source: string; doc: { analysis: { tldr: string } } }) => [
+        e.source,
+        e.doc.analysis.tldr,
+      ]),
+      [['cached', 'A summary.']],
+    )
   })
 
   test('--no-artifacts writes records and the index only; a non-studio folder is refused', async () => {

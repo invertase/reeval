@@ -59,7 +59,7 @@ export function Checks({ record, attempt }: { record: RunRecord; attempt: Attemp
   if (attempt.checks.length === 0) {
     return (
       <EmptyState icon={ListChecks} title="No checks">
-        This eval ran no <code className="font-mono">t.exec()</code> commands.
+        This eval ran no <code className="font-mono">c.exec()</code> commands.
       </EmptyState>
     )
   }

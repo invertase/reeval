@@ -26,14 +26,14 @@ export const reactTs = defineEnvironment('react-ts', ({ git }) => ({
 import { evaluate, expect } from '{{ pkg }}'
 import { reactTs } from './env.ts'
 
-evaluate('adds a reset button', { environment: reactTs }, async (t) => {
-  const turn = await t.send(
+evaluate('adds a reset button', { environment: reactTs }, async (c) => {
+  const turn = await c.send(
     'Add a Reset button to src/App.tsx that sets the count back to 0.',
   )
   expect(turn.diff.files).toEqual([
     { path: 'src/App.tsx', status: 'modified' },
   ])
-  await expect(t.exec('npm run build')).toSucceed()
+  await expect(c.exec('npm run build')).toSucceed()
 })
 ```
 
@@ -142,6 +142,7 @@ Those attempts are infra errors, so the run exits 3. [Errors](/reference/errors#
 - **Patch the starting code:** `files` are written over the repository, so `files: { 'src/config.ts': … }` swaps one file.
 - **Compare two versions:** `const v5 = reactTs.extendEnvironment('v5', ({ git }) => ({ workspace: git(…, { ref: 'v5.4.0', path: … }) }))`, then `compare: { baseline: reactTs, variants: [v5] }`. The child's `workspace` replaces its parent's. `compare` runs the two apart.
 - **A repository next to your evals:** `git('../fixtures/app', { ref: 'v1' })` resolves against the calling file, as `file()` does.
+- **A fixture directory that isn't a repository:** `files: directory('../fixtures/app')` copies its files, without `node_modules/`, `dist/` and the other [default ignores](/reference/helpers#directory). Unlike `workspace`, it isn't pinned to a commit: the files' contents are in the environment's digest instead.
 
 ## Next
 

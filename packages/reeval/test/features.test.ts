@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
@@ -73,6 +74,8 @@ type Feature = {
   cwd?: string
   /** Runs on the copied project before `reeval run`. */
   prepare?: (dir: string) => void
+  /** Needs POSIX file modes on the host, so the fake tier skips on Windows. */
+  posixModes?: true
   /** A host-side cross-check of the record, independent of the in-sandbox check. */
   record?: (view: {
     run: RunRecord
@@ -254,6 +257,14 @@ const versionedRepo = (dir: string) => {
 }
 
 const workspaceOf = (run: RunRecord) => run.environments.find((e) => e.workspace)?.workspace
+
+/** The first judge call's recorded input, of the eval `name`'s first attempt. */
+const judgeInputOf = (run: RunRecord, runDir: string, name = 'lands') => {
+  const path = run.evals.find((e) => e.name === name)?.attempts[0]?.files.judgeInput?.path
+  assert.ok(path, `${name} recorded its judge input`)
+  const [input] = JSON.parse(readFileSync(join(runDir, path), 'utf8'))
+  return input as { state: Record<string, unknown>; dropped?: string[] }
+}
 
 export const features: Feature[] = [
   {
@@ -844,6 +855,39 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'compare/baseline-omitted',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['inherited', 'variant'],
+    canaryPass: ['variant'],
+    canary: /expected null to be 'variant-only'/,
+    record: ({ run }) => {
+      assert.deepEqual(run.environments.map((e) => e.name).sort(), ['inherited', 'variant'])
+      for (const e of run.evals) {
+        assert.deepEqual(e.compare, { baseline: 'inherited', from: 'environment' })
+        const control = e.cells.find((c) => c.role === 'control')
+        assert.equal(control?.environment, 'inherited')
+        assert.ok(e.cells.find((c) => c.role === 'variant')?.lift, JSON.stringify(e.cells))
+      }
+    },
+  },
+  {
+    dir: 'compare/baseline-empty',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canaryPass: ['variant'],
+    canary: /expected null to be 'variant-only'/,
+    record: ({ run }) => {
+      const empty = run.environments.find((e) => e.name === 'baseline')
+      assert.deepEqual(empty?.files, [])
+      for (const e of run.evals) {
+        assert.deepEqual(e.compare, { baseline: 'baseline', from: 'empty' })
+        assert.ok(e.cells.find((c) => c.role === 'variant')?.lift, JSON.stringify(e.cells))
+      }
+    },
+  },
+  {
     dir: 'env/files-binary',
     tiers: ['fake', 'docker'],
     env: 'binary-file',
@@ -860,6 +904,39 @@ export const features: Feature[] = [
         .digest('hex')
       const env = run.environments.find((e) => e.name === 'binary-file')
       assert.deepEqual(env?.files, [{ path: 'blob.tgz', sha256: sha }])
+    },
+  },
+  {
+    dir: 'env/files-directory',
+    tiers: ['fake', 'docker'],
+    env: 'fixture-dir',
+    canary:
+      /expected '\.\/README\.md\\n\.\/lib\/build\/tool\.js\\n\.\/p…' to be '\.\/README\.md\\n\.\/dist\/app\.js\\n\.\/lib\/bui…'/,
+    prepare: (dir) => {
+      for (const path of ['node_modules/dep/index.js', 'dist/app.js']) {
+        mkdirSync(dirname(join(dir, 'fixture', path)), { recursive: true })
+        writeFileSync(join(dir, 'fixture', path), 'ignored by default')
+      }
+    },
+    record: ({ run }) => {
+      const env = run.environments.find((e) => e.name === 'fixture-dir')
+      assert.deepEqual(
+        env?.files.map((f) => f.path),
+        ['README.md', 'lib/build/tool.js', 'package.json', 'src/index.js'],
+      )
+      const readme = env?.files.find((f) => f.path === 'README.md')
+      assert.equal(readme?.sha256, createHash('sha256').update('overridden').digest('hex'))
+    },
+  },
+  {
+    dir: 'env/files-directory-executable',
+    tiers: ['fake', 'docker'],
+    env: 'executables',
+    posixModes: true,
+    canary: /expected 'bin\/run\.sh x\\nnotes\.txt -\\n' to be 'bin\/run\.sh x\\nnotes\.txt x\\n'/,
+    prepare: (dir) => {
+      chmodSync(join(dir, 'fixture/bin/run.sh'), 0o755)
+      chmodSync(join(dir, 'fixture/notes.txt'), 0o644)
     },
   },
   {
@@ -1245,6 +1322,39 @@ export const features: Feature[] = [
     },
     canary: /expected '' to be null/,
   },
+  {
+    dir: 'judge/build-output',
+    tiers: ['fake'],
+    env: 'built-app',
+    canary: /expected '.*' to contain 'var bundle'/s,
+    record: ({ run, runDir }) =>
+      assert.deepEqual(judgeInputOf(run, runDir).dropped, [
+        'dist/ (1 file): build output',
+        'public/vendor.js: minified, a line of 1616 characters',
+      ]),
+  },
+  {
+    dir: 'judge/include',
+    tiers: ['fake'],
+    env: 'scoped-app',
+    canary: /expected \[ 'added src\/app\.ts' \] to deeply equal/,
+    record: ({ run, runDir }) =>
+      assert.deepEqual(judgeInputOf(run, runDir).dropped, [
+        'notes.md: not in include',
+        'src/app.test.ts: not in include',
+      ]),
+  },
+  {
+    dir: 'judge/files',
+    tiers: ['fake'],
+    env: 'readme-app',
+    canary: /to deeply equal \{ 'README\.md': 'Run npm test\\n'/,
+    record: ({ run, runDir }) => {
+      const { state } = judgeInputOf(run, runDir)
+      assert.deepEqual(Object.keys(state.contents as object), ['README.md', 'src/app.ts'])
+      assert.doesNotMatch(String(state.diff), /export const app/, 'shown in full, not in the diff')
+    },
+  },
 ]
 
 /** Paths under `dir` whose content includes `needle`, one per line; '' when none do. */
@@ -1300,8 +1410,10 @@ async function containersGone(runId: string, deadlineMs = 20_000): Promise<void>
   assert.equal(left, '', `containers of run ${runId} still exist after ${deadlineMs / 1000}s`)
 }
 
-function skipTier(tier: Tier, image?: BakedHarness): string | false {
+function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string | false {
   if (only && !only.includes(tier)) return `REEVAL_FIXTURE_TIERS=${only.join(',')}`
+  if (tier === 'fake' && posixModes && process.platform === 'win32')
+    return 'Windows has no executable bit'
   if (tier === 'real')
     return real ? false : 'set REEVAL_TEST_REAL=1 (and CURSOR_API_KEY) for real Cursor'
   if (tier === 'docker' && !requireDocker) {
@@ -1315,7 +1427,10 @@ function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
       const timeout = { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
-      test(`${f.dir} [${tier}]`, { skip: skipTier(tier, f.image), timeout }, async () => {
+      test(`${f.dir} [${tier}]`, {
+        skip: skipTier(tier, f.image, f.posixModes),
+        timeout,
+      }, async () => {
         const row = realRowOf(f)
         if (tier === 'real') {
           reserveAttempts(row, 2, `fixture ${f.dir}`)

@@ -12,10 +12,10 @@ import {
 } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
-import { countSecrets } from '../redact.ts'
 import { BUILD_ID } from '../root.ts'
 import { runHeader } from '../view/header.ts'
 import { NewerSchemaError, readableRecord } from '../view/record.ts'
+import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
 import { renderSummary } from './summary.ts'
 import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
 
@@ -269,7 +269,15 @@ export type RecordOptions = {
   skipSecretScan?: boolean
 }
 
-export type RecordResult = WrittenRun & { files: number; bytes: number }
+export type RecordResult = WrittenRun & {
+  files: number
+  bytes: number
+  /** Where `worktree.patch` looked like it held a secret, so it was left out; else empty. */
+  droppedPatch: string[]
+}
+
+/** Why a patch that looked like it held a secret isn't in the record. Starts with `SECRET_NOTE`. */
+export const SECRET_NOTE = 'not kept: it looked like it held a secret'
 
 /** Promotes a scratch run into the committed history folder. reeval never commits it. */
 export async function recordRun(options: RecordOptions): Promise<RecordResult> {
@@ -307,12 +315,21 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     }
   }
   const patch = record.git?.worktreePatch
-  if (patch && level !== 'none') {
+  let droppedPatch: string[] = []
+  if (patch && record.git && level !== 'none') {
     const bytes = await readFile(join(source, runId, patch.path))
     if (sha256(bytes) !== patch.sha256) {
       throw new HistoryError(`${runId}/${patch.path} changed since the run wrote it`)
     }
-    files.set(patch.path, bytes)
+    // Kept byte-exact so it applies, so it can't be masked: a secret in it leaves it out instead.
+    const findings = options.skipSecretScan ? [] : scanText(patch.path, bytes.toString())
+    if (findings.length > 0) {
+      droppedPatch = findingLines(patch.path, findings)
+      record.git.worktreePatch = null
+      record.git.worktreePatchNote = `${SECRET_NOTE} (${findingSummary(findings)})`
+    } else {
+      files.set(patch.path, bytes)
+    }
   } else if (patch && record.git) {
     record.git.worktreePatch = null
     record.git.worktreePatchNote = "not kept: recorded with artifacts 'none'"
@@ -320,19 +337,24 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
   if (level !== 'none') files.set('summary.md', Buffer.from(renderSummary(record)))
 
   if (!options.skipSecretScan) {
-    const flagged = [...files]
-      .filter(
-        ([path, bytes]) => TEXT_FILE.test(path) && countSecrets(Buffer.from(bytes).toString()) > 0,
-      )
-      .map(([path]) => `${runId}/${path}`)
-    if (countSecrets(encodeRecord(record).toString()) > 0) flagged.unshift(`${runId}.json`)
-    if (flagged.length > 0) {
+    const scanned: Array<[string, Finding[]]> = [
+      [`${runId}.json`, scanText(`${runId}.json`, encodeRecord(record).toString())],
+      ...[...files]
+        .filter(([path]) => TEXT_FILE.test(path))
+        .map(([path, bytes]): [string, Finding[]] => [
+          `${runId}/${path}`,
+          scanText(path, Buffer.from(bytes).toString()),
+        ]),
+    ]
+    const found = scanned.filter(([, findings]) => findings.length > 0)
+    if (found.length > 0) {
+      const lines = found.flatMap(([path, findings]) => findingLines(path, findings))
       throw new HistoryError(
-        `Refusing to record ${runId}: ${flagged.length} file(s) look like they contain a secret:\n${flagged.map((p) => `  ${p}`).join('\n')}\nCheck them, then pass --skip-secret-scan if these are false positives.`,
+        `Refusing to record ${runId}: ${found.length} file(s) look like they contain a secret:\n${lines.map((l) => `  ${l}`).join('\n')}\nCheck them, then pass --skip-secret-scan if these are false positives.`,
       )
     }
   }
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
-  return { ...written, files: files.size, bytes }
+  return { ...written, files: files.size, bytes, droppedPatch }
 }

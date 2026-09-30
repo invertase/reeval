@@ -22,7 +22,7 @@ import { fromCwd } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
 import { harnessId, sandboxId } from './options.ts'
-import { redactSecrets } from './redact.ts'
+import { redactSecrets, SECRET_NAME } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { EgressPolicy, HarnessDescriptor, ResolvedConfig, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
@@ -31,7 +31,7 @@ export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
 type Runtime = NonNullable<Stack['runtime']>
 
 export type Check = {
-  /** The area: runtime, config, docker, image, key, judge, egress or gitignore. */
+  /** The area: runtime, config, docker, image, key, judge, egress, gitignore or env-files. */
   id: string
   status: CheckStatus
   summary: string
@@ -53,6 +53,8 @@ export type DoctorDeps = {
   imageTags: (repository: string) => Promise<string[]>
   /** Which of `paths` git ignores in `root`, or null outside a git repository. */
   gitIgnored: (root: string, paths: string[]) => Promise<boolean[] | null>
+  /** `.env` and `.env.*` files under `root` that git doesn't ignore, relative; null outside a repository. */
+  gitVisibleEnvFiles: (root: string) => Promise<string[] | null>
   fetch: typeof fetch
 }
 
@@ -93,6 +95,23 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
           async (p) => (await run('git', ['check-ignore', '-q', '--no-index', p], root)).code === 0,
         ),
       )
+    },
+    gitVisibleEnvFiles: async (root) => {
+      const r = await run(
+        'git',
+        [
+          'ls-files',
+          '--cached',
+          '--others',
+          '--exclude-standard',
+          '--',
+          ':(glob)**/.env',
+          ':(glob)**/.env.*',
+          ':(exclude,glob)**/node_modules/**',
+        ],
+        root,
+      )
+      return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : null
     },
     fetch: globalThis.fetch,
   }
@@ -423,7 +442,7 @@ export async function checkJudge(
     }),
   ]
   if (!models.length) {
-    return [{ id: 'judge', status: 'skip', summary: 'no judge model (t.judge needs one)' }]
+    return [{ id: 'judge', status: 'skip', summary: 'no judge model (c.judge needs one)' }]
   }
   return Promise.all(
     models.map(({ model, profile }) => {
@@ -494,6 +513,58 @@ export async function checkGitignore(root: string, deps: DoctorDeps): Promise<Ch
   }
 }
 
+const ENV_LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/
+/** Values that stand for a key rather than being one: `<key>`, `your-key-here`, `${KEY}`, `xxx`. */
+const PLACEHOLDER =
+  /^(?:<[^>]*>|\[[^\]]*\]|\$\{?[A-Za-z_]\w*\}?|\.{3}|…|[x*]{3,}|(?:your|my|replace|change|insert|put|add|enter|paste|set)\b.*|.*[-_ ]here|changeme|placeholder|todo|tbd|example|dummy|none|null|false|true|0)$/i
+
+/** The secret-named variables `text` sets to something other than empty or a placeholder. */
+export function filledSecrets(text: string): string[] {
+  const names: string[] = []
+  for (const line of text.split(/\r?\n/)) {
+    const m = ENV_LINE.exec(line)
+    if (!m || !SECRET_NAME.test(m[1] as string)) continue
+    let value = (m[2] as string).trim()
+    const quote = /^(["'`])(.*)\1/.exec(value)
+    value = quote ? (quote[2] as string) : value.replace(/(?:^|\s+)#.*$/, '')
+    if (value && !PLACEHOLDER.test(value.trim())) names.push(m[1] as string)
+  }
+  return names
+}
+
+/**
+ * `.env.example` and the like, which git sees on purpose, holding real-looking values for key
+ * variables: a commit shares them, and a dirty run's `worktree.patch` carries them.
+ */
+export async function checkEnvFiles(root: string, deps: DoctorDeps): Promise<Check | null> {
+  const files = await deps.gitVisibleEnvFiles(root)
+  if (!files?.length) return null
+  const filled = files.flatMap((file) => {
+    let text: string
+    try {
+      text = readFileSync(join(root, file), 'utf8')
+    } catch {
+      return []
+    }
+    const names = filledSecrets(text)
+    return names.length ? [{ file, names }] : []
+  })
+  if (!filled.length) {
+    return {
+      id: 'env-files',
+      status: 'ok',
+      summary: `${files.join(', ')}: no key values filled in`,
+    }
+  }
+  const listed = filled.map((f) => `${f.file} (${f.names.join(', ')})`).join(', ')
+  return {
+    id: 'env-files',
+    status: 'warn',
+    summary: `${listed} ${filled.length === 1 ? 'has' : 'have'} key values filled in, and git sees ${filled.length === 1 ? 'it' : 'them'}: a commit, or a dirty run's worktree.patch, would carry them`,
+    fix: 'put the values in .env.local (ignored), and leave them empty in the example file',
+  }
+}
+
 // ---- The command ---------------------------------------------------------------------------
 
 export type DoctorReport = {
@@ -557,6 +628,8 @@ export async function doctor(
     checks.push(...(await checkJudge(config, deps, online, envFile)))
     checks.push(...checkEgress(config))
     checks.push(await checkGitignore(config.root, deps))
+    const envFiles = await checkEnvFiles(config.root, deps)
+    if (envFiles) checks.push(envFiles)
   }
   const problems = checks.filter((c) => c.status === 'fail').length
   const warnings = checks.filter((c) => c.status === 'warn').length

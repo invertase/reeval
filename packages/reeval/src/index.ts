@@ -2,11 +2,16 @@
 export { defineConfig } from './config.ts'
 export { DEFAULT_EGRESS_ALLOW } from './egress.ts'
 export { expect } from './engine/expect.ts'
-export { DEFAULT_SKILL_EXCLUDE, defineEnvironment } from './environment.ts'
+export {
+  DEFAULT_DIRECTORY_IGNORES,
+  DEFAULT_SKILL_EXCLUDE,
+  defineEnvironment,
+} from './environment.ts'
 export { evaluate, group } from './evaluate.ts'
 export type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './history/types.ts'
 export { HarnessCapabilityError } from './matchers.ts'
 export type {
+  AttemptContext,
   Budget,
   Cell,
   CellRole,
@@ -16,6 +21,7 @@ export type {
   CompareQuestion,
   ConfigHelpers,
   Diff,
+  DirectoryOptions,
   Duration,
   EgressPolicy,
   EgressRecord,
@@ -25,7 +31,6 @@ export type {
   EnvironmentSpec,
   EnvVars,
   EsConfig,
-  EvalContext,
   EvalFn,
   EvalOptions,
   ExecResult,
@@ -36,6 +41,7 @@ export type {
   HistoryConfig,
   HostFile,
   JudgeCallOptions,
+  JudgeFailure,
   JudgeOptions,
   McpServer,
   PairVote,

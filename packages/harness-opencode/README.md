@@ -28,7 +28,7 @@ its table.
 
 ## Providers
 
-`opencode-provider-table.ts` lists every provider OpenCode 2.0.18 knows: the ones whose key it
+`opencode-provider-table.ts` lists every provider OpenCode 2.0.20 knows: the ones whose key it
 sends in a header on known hosts, each with the variable it reads, the headers and the requests it
 sends the key on, and the others with the reason a gateway can't broker them (per-account hosts,
 SigV4, service accounts, subscriptions, local servers, provider packages it installs from npm).
@@ -57,7 +57,7 @@ would generate differs from this one.
 
 ## How it works
 
-- **Bootstrap.** Installs `@opencode/cli` 2.0.18 from a pinned lockfile, letting pnpm run only its
+- **Bootstrap.** Installs `@opencode/cli` 2.0.20 from a pinned lockfile, letting pnpm run only its
   postinstall (which links the platform binary). The musl builds are left out: the package marks
   none with a libc, so pnpm would otherwise install all four Linux builds.
 - **Model.** `<provider>/<model>`, set as the ACP session's `model` config option each turn:
@@ -94,7 +94,7 @@ would generate differs from this one.
   `opencode acp` with its info logs on and holds the first `session/prompt` until each server has
   logged `mcp connected` or `mcp connect failed`, at most 30 seconds.
 - **Usage.** None. OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's
-  (still so in 2.0.18), so the `finish` part's usage is dropped rather than passed on as an
+  (still so in 2.0.20), so the `finish` part's usage is dropped rather than passed on as an
   undercount. `usage_update` doesn't help: its `used` is the last call's context and its `cost`
   the session's.
 - **Skills.** Harness-placed skills go to `~/.config/opencode/skills`; OpenCode's repo directory

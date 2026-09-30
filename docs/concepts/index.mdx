@@ -35,7 +35,7 @@ The code, the CLI and these docs use the same words.
 | harness | The agent that does the task, such as `cursor({ model: 'composer-2.5' })` |
 | sandbox | Where the agent runs and what's baked into its image, such as `docker()` |
 | environment | What the agent gets per attempt: skills, MCP servers, rules, files, setup |
-| control | The `compare` baseline, or the eval's environment when it does not compare |
+| control | The `compare` baseline, else the eval's environment (an empty `baseline` when it has none) |
 | variant | One environment in `compare.variants`, run on its own |
 | cell | One harness × environment × sandbox of an eval, e.g. `cursor:composer-2.5/-/docker` |
 | attempt | One run of a cell in a fresh sandbox, e.g. `cursor:composer-2.5/-/docker#1` |

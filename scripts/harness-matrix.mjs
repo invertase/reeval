@@ -109,7 +109,7 @@ const NOTES = [
     `MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its ${code('execute')} tool; the first prompt waits until they've connected.`,
   (h) =>
     h.agent.modelResponses &&
-    `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.4-mini-2026-03-17[effort=medium]')}): its CLI doesn't report them.`,
+    `Served model and reasoning effort from each API response, which the gateway reads (e.g. ${code('gpt-5.6-luna[effort=medium]')}): its CLI doesn't report them.`,
   (h) =>
     h.kind === 'codex' &&
     h.web.search &&
