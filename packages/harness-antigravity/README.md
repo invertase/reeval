@@ -36,7 +36,7 @@ The CLI has no ACP mode, so this isn't config over `@ai-sdk/harness-acp`.
   host of `GOOGLE_GEMINI_BASE_URL`). `antigravityEndpoints()` is the only endpoint the key is
   needed on, `POST /v1beta/models/<model>:streamGenerateContent`, as an allowlist for gateways
   that enforce one. `requireCredentialBrokering: true` refuses sandboxes that can't broker.
-- **Placement.** Skills go to `~/.gemini/config/skills/` (the path CLI 1.2.11 reads, not the
+- **Placement.** Skills go to `~/.gemini/config/skills/` (the path CLI 1.2.14 reads, not the
   documented `~/.gemini/antigravity-cli/skills/`) and instructions to `~/.gemini/GEMINI.md`.
   `mcpServers` are written to `~/.gemini/config/mcp_config.json`, in the CLI's shape (remote
   servers take `serverUrl`). Workspace rules (`AGENTS.md`) and skills (`.agents/skills/`) are
