@@ -16,17 +16,16 @@ updates:
       # Pinned to exactly the same version (AGENTS.md, Project rules).
       vitest:
         patterns: ['@vitest/expect', '@vitest/utils']
-      # Released together and sharing @ai-sdk/provider-utils. Before dev-minor: a dependency
-      # joins the first group it matches.
-      ai-sdk:
-        patterns: [ai, '@ai-sdk/*']
       dev-minor:
         dependency-type: development
         update-types: [minor, patch]
     ignore:
-      # Carries a pnpm patch that fails `pnpm install` on a bump until it's rebased or dropped;
-      # scripts/drift/claude-code-patch.mjs says when.
-      - dependency-name: '@ai-sdk/harness-claude-code'
+      # @ai-sdk/harness-claude-code carries a pnpm patch that fails `pnpm install` on a bump until
+      # it's rebased or dropped (scripts/drift/claude-code-patch.mjs says when). It pins
+      # @ai-sdk/harness and @ai-sdk/provider-utils exactly, and they pin ai and @ai-sdk/provider,
+      # so bumping any of the family without it installs two copies. They move by hand, together.
+      - dependency-name: ai
+      - dependency-name: '@ai-sdk/*'
   # `/` covers .github/workflows only, so the composite actions are listed too.
   - package-ecosystem: github-actions
     directories: [/, /.github/actions/*]

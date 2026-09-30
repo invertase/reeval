@@ -310,13 +310,16 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   by hand, and don't edit versions or `CHANGELOG.md`.
 - **Dependabot** (`.github/dependabot.yml`) opens weekly version updates, titled `build(deps): …`,
   `build(deps-dev): …` or `ci: …` so `commits.yml` passes them. It covers every workspace
-  package's npm dependencies from `/` (the `@vitest/*` pair in one PR, `ai` and `@ai-sdk/*` in
-  another, dev minors and patches in a third), the workflows and the composite actions in `.github/actions/`, and the sandbox base
+  package's npm dependencies from `/` (the `@vitest/*` pair in one PR, dev minors and patches in
+  another), the workflows and the composite actions in `.github/actions/`, and the sandbox base
   image in `packages/sandbox-docker/docker` (every other Dockerfile is `FROM ${REEVAL_BASE}`). It
-  deliberately skips `@ai-sdk/harness-claude-code`, whose pnpm patch must be moved by hand, and
-  the harness CLIs, which are pinned in each harness's source (Antigravity's and Goose's sha256,
-  Codex's sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/`
-  (pi's lockfile). The drift leg in `real.yml` tracks those instead.
+  deliberately skips `ai` and every `@ai-sdk/*` package: the patched `@ai-sdk/harness-claude-code`
+  must be moved by hand, and it pins `@ai-sdk/harness` and `@ai-sdk/provider-utils` exactly
+  (which pin `ai` and `@ai-sdk/provider`), so bumping any of them without it installs two copies.
+  Bump the family by hand, together with the adapter and its patch. It also skips the harness
+  CLIs, which are pinned in each harness's source (Antigravity's and Goose's sha256, Codex's
+  sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
+  lockfile). The drift leg in `real.yml` tracks those instead.
 
 ### Changing what reeval persists
 
