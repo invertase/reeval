@@ -95,6 +95,11 @@ export type AnalysisDoc = {
   attempts: Record<string, { runId: string; evalSlug: string; attempt: string }>
   /** Each cited fact or evidence id, summarised in one line. */
   cited: Record<string, string>
+  /**
+   * Why `analysis.agent`'s run summary failed; its `analysis` is then empty. `reeval analyze` treats
+   * a cached one as a miss and calls the model again.
+   */
+  error?: string
 }
 
 /**
@@ -122,7 +127,12 @@ export type AnalysisNote = {
 
 /** One analysis file the studio can show: saved in the run's folder, or in the local cache. */
 export type AnalysisEntry = { file: string; source: 'saved' | 'cached'; doc: AnalysisDoc }
-export type AnalysisIndex = { runId: string; entries: AnalysisEntry[] }
+export type AnalysisIndex = {
+  runId: string
+  entries: AnalysisEntry[]
+  /** `analysis.agent`'s notes on the run, by eval and harness; absent when there are none. */
+  notes?: AnalysisNote[]
+}
 
 export const analysisDataPath = (runId: string) => `data/analysis/${runId}.json`
 
