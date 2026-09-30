@@ -10,14 +10,14 @@ import { defineConfig } from '{{ pkg }}'
 import { codex } from '{{ pkg }}/harness'
 
 export default defineConfig({
-  harness: codex({ model: 'gpt-5.4-mini' }),
+  harness: codex({ model: 'gpt-5.6-luna' }),
 })
 ```
 
 ## Options
 
 <Property name="model" type="string">
-  An OpenAI model id that runs on the Responses API, such as `gpt-5.4-mini`, without a provider. Required: Codex's own default changes between releases.
+  An OpenAI model id that runs on the Responses API, such as `gpt-5.6-luna`, without a provider. Required: Codex's own default changes between releases.
 </Property>
 
 <Property name="id" type="string" optional>
@@ -50,7 +50,7 @@ export default defineConfig({
 | Served model | The dated model and reasoning effort, from each API response |
 | MCP | `mcp.stdio` and `mcp.http` (no `mcp.sse`) |
 
-Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.4-mini` is cheap, but Codex's catalog no longer lists it (see [Turns and settings](#turns-and-settings)); pin the model you mean to measure.
+Build its image once with `reeval image build` in a project whose config uses `codex()`. `gpt-5.6-luna` is in Codex's catalog and passes the harness contract; pin the model you mean to measure.
 
 ## Why not `@ai-sdk/harness-codex`
 
@@ -70,7 +70,7 @@ The adapter refuses to run in a sandbox that can't broker the key.
 
 Each turn is one step, with the tokens `turn.completed` reports: input (uncached, and cache reads and writes) and output, with its reasoning tokens. Codex reports no cost, and reeval prices no models.
 
-Codex doesn't say which model served a turn. The gateway reads it from each response instead: the Responses API names the dated model and the reasoning effort Codex asked for, so a turn on `gpt-5.4-mini` records `gpt-5.4-mini-2026-03-17[effort=none]`, and one on `gpt-5.6-luna` records `gpt-5.6-luna[effort=medium]`. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
+Codex doesn't say which model served a turn. The gateway reads it from each response instead: the Responses API names the model (a dated snapshot for some) and the reasoning effort Codex asked for, so a turn on `gpt-5.6-luna` records `gpt-5.6-luna[effort=medium]`, and one on `gpt-5.4-mini` records `gpt-5.4-mini-2026-03-17[effort=none]`. The same value is in the attempt's `servedModels` and the run's `resolvedModels`.
 
 ## Turns and settings
 
@@ -96,7 +96,7 @@ MCP servers go in `config.toml` under `mcp_servers`: `mcp.stdio` as `command`, `
 
 | Situation | Message |
 |---|---|
-| No model, or one with a provider | `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.4-mini' }) (got …)` |
+| No model, or one with a provider | `codex() needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e.g. codex({ model: 'gpt-5.6-luna' }) (got …)` |
 | No key when the attempt starts | `OPENAI_API_KEY isn't set, so the Codex harness can't authenticate. Set it in the environment or .env.local.` |
 | OpenAI refuses the key | `The API rejected OPENAI_API_KEY: set a valid key in the environment or .env.local. unexpected status 401 Unauthorized: …` |
 | `mcp.sse` (at plan time, exit 2) | `evaluate("<eval>") on codex:<model>: Codex has no SSE MCP transport, so it can't use the <name> server (mcp.sse): use mcp.http or mcp.stdio` |

@@ -159,8 +159,8 @@ const OPENAI_ENDPOINTS = [
 ] as const satisfies readonly EndpointMatch[]
 
 /**
- * The model the Responses API says served a request, from its response: the dated snapshot, and
- * the reasoning effort Codex resolved for it, e.g. `gpt-5.4-mini-2026-03-17[effort=medium]`.
+ * The model the Responses API says served a request, from its response (a dated snapshot for some
+ * models), and the reasoning effort Codex resolved for it, e.g. `gpt-5.6-luna[effort=medium]`.
  */
 const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEffort }) =>
   host === 'api.openai.com' && path === '/v1/responses' && responseModel

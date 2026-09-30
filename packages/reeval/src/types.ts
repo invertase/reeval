@@ -346,7 +346,7 @@ export type PiHarnessDescriptor = {
  */
 export type CodexHarnessDescriptor = {
   kind: 'codex'
-  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.4-mini`. */
+  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`. */
   model: string
   /** Cell id; defaults to `codex:<model>`. */
   id?: string

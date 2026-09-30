@@ -115,7 +115,7 @@ export type AttemptRecord = {
    * The models the harness's own API calls were served by, as the egress gateway saw them: named
    * in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent
    * uses on the side) or, for Codex, in the response, with its effort
-   * (`gpt-5.4-mini-2026-03-17[effort=medium]`); null when neither names one (Cursor) or nothing
+   * (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing
    * recorded them.
    */
   servedModels: string[] | null
