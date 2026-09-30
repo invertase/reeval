@@ -1,21 +1,21 @@
 diff --git a/dist/bridge/index.mjs b/dist/bridge/index.mjs
-index b12b9f9205c92157e4b078ae8e7a6b9fdcc4a07d..017dae0e5c68ca10b5043a76b075fd2fc395562f 100644
+index ab30a384ce72eb4d67fa6d2f90944f5f54b0f34f..3cf7592e059d30da134bb37adc00622588eb0aa2 100644
 --- a/dist/bridge/index.mjs
 +++ b/dist/bridge/index.mjs
-@@ -726,7 +726,7 @@ function createEmitStreamEvent({
-   let streamStarted = false;
-   return (msg) => {
-     const type = msg.type;
--    if (!streamStarted) {
-+    if (!streamStarted && type !== "command_lifecycle") {
-       const initModel = type === "system" && msg.subtype === "init" && typeof msg.model === "string" ? msg.model : void 0;
-       emit({
-         type: "stream-start",
+@@ -658,7 +658,7 @@ function createEmitStreamEvent({ state, emit, emitWarning, emitTerminalError, on
+ 	let streamStarted = false;
+ 	return (msg) => {
+ 		const type = msg.type;
+-		if (!streamStarted) {
++		if (!streamStarted && type !== "command_lifecycle") {
+ 			const initModel = type === "system" && msg.subtype === "init" && typeof msg.model === "string" ? msg.model : void 0;
+ 			emit({
+ 				type: "stream-start",
 diff --git a/src/bridge/create-emit-stream-event.ts b/src/bridge/create-emit-stream-event.ts
-index fe6bc3ce96309c096cd0067fbd29efa60d07412a..b8b0263957a71370473a0ce7c87366ab099bbf47 100644
+index f93aa6910128d5e2003eaceb818dae563a9a88da..5db58e7271d6a7e3b9f839401f7b409c8884698c 100644
 --- a/src/bridge/create-emit-stream-event.ts
 +++ b/src/bridge/create-emit-stream-event.ts
-@@ -146,8 +146,11 @@ export function createEmitStreamEvent({
+@@ -158,8 +158,11 @@ export function createEmitStreamEvent({
  
      // Emit `stream-start` once, on the first message, carrying the model the
      // CLI resolved to (the `system`/`init` message reports it — this is the

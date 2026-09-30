@@ -9,7 +9,7 @@ export const HARNESS_PACKAGES: Record<
   { readonly name: string; readonly version: string; readonly patch?: string }
 > = {
   cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.0' },
-  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.128', patch: '5d1c985c' },
+  'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.138', patch: '8edc594f' },
   antigravity: { name: '@reeval/harness-antigravity', version: '0.1.0' },
   opencode: { name: '@reeval/harness-opencode', version: '0.2.0' },
   goose: { name: '@reeval/harness-goose', version: '0.1.0' },
