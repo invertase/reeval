@@ -188,7 +188,20 @@ export async function startSession(
   for (const f of env.files) {
     await box.writeFile(f.path, f.content)
     const size = typeof f.content === 'string' ? Buffer.byteLength(f.content) : f.content.byteLength
-    debugLog('env', `file ${f.path} (${size} bytes)`)
+    debugLog('env', `file ${f.path} (${size} bytes${f.executable ? ', executable' : ''})`)
+  }
+  const executable = env.files.flatMap((f) =>
+    f.executable ? [f.path.startsWith('~/') ? `${box.home}/${f.path.slice(2)}` : f.path] : [],
+  )
+  if (executable.length) {
+    const r = await box.exec(`chmod +x -- ${executable.map(shellQuote).join(' ')}`, {
+      signal: a.signal,
+    })
+    if (r.exitCode !== 0) {
+      throw new InfraError(
+        `Couldn't make ${executable.join(', ')} executable: ${tailOf(r.stderr || r.stdout)}`,
+      )
+    }
   }
   const skillDir = workspaceSkillDir(spec.harness)
   for (const skill of env.workspaceSkills) {

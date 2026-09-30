@@ -1,3 +1,4 @@
+import { readdirSync, realpathSync, statSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -351,6 +352,10 @@ export const workspaceLabel = (w: Pick<GitWorkspace, 'repo' | 'ref' | 'path'>) =
 export const workspaceOf = (layers: readonly EnvironmentLayer[]): GitWorkspace | undefined =>
   layers.findLast((l) => l.spec.workspace)?.spec.workspace
 
+/** The paths the layers' `files` write, sorted. */
+export const filesOf = (layers: readonly EnvironmentLayer[]): string[] =>
+  [...new Set(layers.flatMap((l) => Object.keys(l.spec.files ?? {})))].sort()
+
 /** A URL with its password (or an https username, which is where tokens go) masked. */
 function credentialsIn(repo: string): string | undefined {
   if (!URL.canParse(repo)) return undefined
@@ -531,6 +536,169 @@ function skillHelper(base: string): SkillHelper {
   }
 }
 
+/**
+ * What `directory()` leaves out unless `defaultIgnores: false`: dependency, build-output, cache
+ * and editor directories, in its `glob` syntax. `build/` and `target/` are anchored to the top of
+ * the directory, where Flutter, Dart, Gradle and Cargo put their output, since a nested one can be
+ * source. `vendor/` isn't here: a committed Go or PHP vendor directory is what an offline build needs.
+ */
+export const DEFAULT_DIRECTORY_IGNORES: readonly string[] = Object.freeze([
+  'node_modules/',
+  '.DS_Store',
+  'dist/',
+  '.next/',
+  '.turbo/',
+  'coverage/',
+  '.cache/',
+  '__pycache__/',
+  '.venv/',
+  'venv/',
+  '.pytest_cache/',
+  '.mypy_cache/',
+  '*.pyc',
+  '.dart_tool/',
+  '/build/',
+  '/target/',
+  '.gradle/',
+  '.idea/',
+  '.vscode/',
+])
+
+/** A gitignore-style pattern as a test of a file's path, which also matches a file in a directory it names. */
+function globTest(pattern: string): (path: string) => boolean {
+  const dirOnly = pattern.endsWith('/')
+  const body = pattern.replace(/\/+$/, '')
+  const anchored = body.includes('/')
+  let re = ''
+  const glob = body.replace(/^\/+/, '')
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i] as string
+    if (c === '*' && glob[i + 1] === '*') {
+      const slash = glob[i + 2] === '/'
+      re += slash ? '(?:.*/)?' : '.*'
+      i += slash ? 2 : 1
+    } else if (c === '*') re += '[^/]*'
+    else if (c === '?') re += '[^/]'
+    else if (c === '[' && glob.indexOf(']', i + 2) > i) {
+      const end = glob.indexOf(']', i + 2)
+      const set = glob.slice(i + 1, end).replace(/\\/g, '\\\\')
+      re += `[${set.startsWith('!') ? `^${set.slice(1)}` : set}]`
+      i = end
+    } else re += c.replace(/[.+^${}()|[\]\\/]/g, '\\$&')
+  }
+  const regex = new RegExp(`${anchored ? '^' : '(?:^|/)'}${re}${dirOnly ? '/' : '(?:$|/)'}`)
+  return (path) => regex.test(path)
+}
+
+/**
+ * `glob` as a test of a directory-relative file path: the last pattern that matches decides, a
+ * `!` one excluding; a file no pattern matches is in unless some pattern includes.
+ */
+export function globFilter(patterns: readonly string[]): (path: string) => boolean {
+  const rules = patterns.map((p) => ({
+    include: !p.startsWith('!'),
+    test: globTest(p.replace(/^!/, '')),
+  }))
+  const start = !rules.some((r) => r.include)
+  return (path) => rules.reduce((keep, r) => (r.test(path) ? r.include : keep), start)
+}
+
+const DIRECTORY_OPTIONS = ['into', 'glob', 'defaultIgnores']
+
+function directoryHelper(base: string): EnvironmentHelpers['directory'] {
+  return (path, options = {}) => {
+    const written = path instanceof URL ? path.href : path
+    const what = `directory(${JSON.stringify(written)})`
+    if (typeof written !== 'string' || !written) {
+      throw new DefinitionError(
+        `directory() needs a path to a directory, relative to this file (got ${JSON.stringify(path)})`,
+      )
+    }
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new DefinitionError(`${what}: options are { into?, glob?, defaultIgnores? }`)
+    }
+    const extra = Object.keys(options).filter((k) => !DIRECTORY_OPTIONS.includes(k))
+    if (extra.length) {
+      const hint =
+        extra.includes('ignore') || extra.includes('exclude')
+          ? " Exclude with a '!' pattern in glob, e.g. glob: ['!dist/']."
+          : ''
+      throw new DefinitionError(
+        `${what}: unknown option "${extra.join('", "')}"; it takes into, glob and defaultIgnores.${hint}`,
+      )
+    }
+    const { into, glob = [], defaultIgnores = true } = options
+    if (
+      into !== undefined &&
+      (typeof into !== 'string' ||
+        into.includes('\\') ||
+        isAbsolute(into) ||
+        into.split('/').some((p) => p === '..'))
+    ) {
+      throw new DefinitionError(
+        `${what}: into is a directory relative to the workspace (or ~/…), with forward slashes and no .. (got ${JSON.stringify(into)})`,
+      )
+    }
+    if (
+      !Array.isArray(glob) ||
+      glob.some((p) => typeof p !== 'string' || !p.replace(/^!/, '').replace(/\//g, ''))
+    ) {
+      throw new DefinitionError(
+        `${what}: glob is a list of patterns, e.g. ['src/**', 'package.json', '!**/*.test.ts'] (got ${JSON.stringify(glob)})`,
+      )
+    }
+    if (typeof defaultIgnores !== 'boolean') {
+      throw new DefinitionError(
+        `${what}: defaultIgnores is true or false (got ${JSON.stringify(defaultIgnores)})`,
+      )
+    }
+    const root = toPath(path, base)
+    const stat = statSync(root, { throwIfNoEntry: false })
+    if (!stat) throw new DefinitionError(`${what}: ${root} doesn't exist`)
+    if (!stat.isDirectory()) {
+      throw new DefinitionError(
+        `${what}: ${root} is a file, not a directory. Use file(${JSON.stringify(written)}) for one file.`,
+      )
+    }
+    const skip = defaultIgnores ? globFilter(DEFAULT_DIRECTORY_IGNORES) : () => false
+    const keep = globFilter(glob)
+    const prefix = into?.replace(/\/+$/, '').replace(/^\.\/?/, '')
+    const files: Record<string, HostFile> = {}
+    const walk = (dir: string, rel: string, seen: readonly string[]) => {
+      for (const name of readdirSync(dir).sort()) {
+        if (name === '.git') continue
+        const full = join(dir, name)
+        const relPath = rel ? `${rel}/${name}` : name
+        const target = statSync(full, { throwIfNoEntry: false })
+        if (!target) {
+          throw new DefinitionError(
+            `${what}: ${relPath} is a symlink to something that doesn't exist. Remove it, or leave it out with glob: ['!${relPath}'].`,
+          )
+        }
+        if (target.isDirectory()) {
+          if (skip(`${relPath}/`)) continue
+          const real = realpathSync(full)
+          if (seen.includes(real)) {
+            throw new DefinitionError(
+              `${what}: ${relPath} is a symlink to a directory that contains it. Leave it out with glob: ['!${relPath}/'].`,
+            )
+          }
+          walk(full, relPath, [...seen, real])
+        } else if (target.isFile() && !skip(relPath) && keep(relPath)) {
+          files[prefix ? `${prefix}/${relPath}` : relPath] = { kind: 'file', path: full }
+        }
+      }
+    }
+    walk(root, '', [realpathSync(root)])
+    if (Object.keys(files).length === 0) {
+      throw new DefinitionError(
+        `${what}: no files in ${root}${glob.length || defaultIgnores ? ` match (glob ${JSON.stringify(glob)}${defaultIgnores ? ', after DEFAULT_DIRECTORY_IGNORES' : ''})` : ''}. Empty directories aren't seeded; create one with a setup step.`,
+      )
+    }
+    return files
+  }
+}
+
 const mcpHelper: McpHelper = {
   stdio: (command, args = [], o = {}) => {
     if (typeof command !== 'string' || !command) {
@@ -549,6 +717,7 @@ export function helpersFor(base: string): EnvironmentHelpers {
     skill: skillHelper(base),
     mcp: mcpHelper,
     file: (path) => ({ kind: 'file', path: toPath(path, base) }),
+    directory: directoryHelper(base),
     git: gitHelper(base),
   }
 }

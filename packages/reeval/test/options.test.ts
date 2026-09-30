@@ -1070,6 +1070,21 @@ describe('common mistakes', () => {
       /files\["docs\\\\api\.md"\] in defineEnvironment\("e"\): use forward slashes \(docs\/api\.md\)/,
     ],
     [
+      'a directory that does not exist',
+      `defineEnvironment('e', ({ directory }) => ({ files: directory('../fixture') }))`,
+      /directory\("\.\.\/fixture"\): \S*fixture doesn't exist/,
+    ],
+    [
+      'a file passed to directory()',
+      `defineEnvironment('e', ({ directory }) => ({ files: directory('./o.eval.ts') }))`,
+      /directory\("\.\/o\.eval\.ts"\): \S*o\.eval\.ts is a file, not a directory\. Use file\("\.\/o\.eval\.ts"\) for one file\./,
+    ],
+    [
+      'directory() with ignore instead of glob',
+      `defineEnvironment('e', ({ directory }) => ({ files: directory('.', { ignore: ['dist'] } as never) }))`,
+      /directory\("\."\): unknown option "ignore"; it takes into, glob and defaultIgnores\. Exclude with a '!' pattern in glob, e\.g\. glob: \['!dist\/'\]\./,
+    ],
+    [
       'a zero install step timeout',
       `docker({ install: [{ run: 'ls', timeout: 0 }] })`,
       /docker\(\{ install \}\) command "ls": Invalid duration 0\. A duration is more than zero/,
