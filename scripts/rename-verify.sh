@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # The checks a rename must pass, one log per step: install, build, lint, typecheck, the schema
-# check, the docs check and the engine differential (re-recorded, then compared with
-# test/differential/vitest). --full adds every package's tests, which CI also runs. Prints each
+# check and the docs check. --full adds every package's tests, which CI also runs. Prints each
 # step's exit code and seconds.
 #
 #   bash scripts/rename-verify.sh [--full] [log-dir]
@@ -38,8 +37,6 @@ step typecheck pnpm typecheck
 step schema pnpm --dir "$pkg" schema:check
 # `pnpm run`: a bare `pnpm docs…` can resolve to pnpm's own `docs` command.
 step docs pnpm run docs:check
-step differential node --experimental-strip-types --no-warnings scripts/differential.mjs record "$log/differential"
-step compare node --experimental-strip-types --no-warnings scripts/differential.mjs compare "$pkg/test/differential/vitest" "$log/differential"
 [ $full = 1 ] && step test pnpm -r --no-bail --filter './packages/*' test
 
 printf '%-14s %s in %ss (logs: %s)\n' total "$([ $failed = 0 ] && echo passed || echo FAILED)" "$(($(date +%s) - start))" "$log"

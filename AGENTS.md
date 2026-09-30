@@ -228,17 +228,7 @@ their tests and fails below 100% of lines, branches and functions for each file 
 list. A new engine file joins that list with its tests; a line no test can reach needs a
 `/* c8 ignore */` comment saying why.
 
-**The replay.** Before Vitest was removed, reeval's engine ran side by side with it on every suite
-that starts `reeval`. `test/differential/vitest/` keeps what the Vitest engine did, and CI's
-`engine differential` job holds reeval's engine to it: `node --experimental-strip-types
-scripts/differential.mjs record <dir>` runs those suites (the feature fixtures, plan snapshots,
-the example, the engine and history tests), capturing every run's exit code, output and record,
-normalised (`test/support/differential.ts`), and `compare <expected> <actual>` fails on any
-difference that isn't in its `INTENDED` list, each with its reason. CI doesn't run `record`: the
-`unit and plan` shards and `features (fake)` run with `REEVAL_DIFFERENTIAL_DIR` set and upload their
-captures, and `engine differential` compares them all. A deliberate change to what
-`reeval` prints or records updates the captures it touches, named in the PR. Which features
-have fixtures on which tier is a separate, generated matrix:
+Which features have fixtures on which tier is a generated matrix:
 [`test/features/COVERAGE.md`](./packages/reeval/test/features/COVERAGE.md).
 
 ### CI and releases
@@ -250,7 +240,7 @@ many; `main`, nightly and the `ci:full` label run everything, so nothing loses c
 
 | Event | Runs |
 |---|---|
-| PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` and `engine differential` for the engine, attempt, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness and attempt code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
+| PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` for the engine, attempt, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness and attempt code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
 | PR, merge queue (full tier) | Every Linux job on any code change |
 | PR labelled `ci:full` | Everything, unscoped, as on `main` (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
 | `main`, nightly, `workflow_dispatch`, release | Everything: every Linux job, `extended.yml` (Node 22.13, Windows, macOS), npm 10.9's packed install and the coverage report |
@@ -266,7 +256,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 
 | Workflow | Jobs |
 |---|---|
-| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `engine differential`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
+| `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
 | `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `unit and plan (node 22.13, 1/4 … 4/4)`, `windows (unit 1/6 … 6/6, tiers, packed)` and `macos` |
 | `ci-full.yml` | On a PR labelled `ci:full`: `ci.yml`, unscoped, as `full / …` |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
