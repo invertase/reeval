@@ -136,9 +136,9 @@ group('hello', () => {
   deterministic checks for what can be checked; use the judge for quality, with plain yes/no
   questions that don't name one specific way of doing it.
 - Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
-  runs a build otherwise fills the judge's diff with its output. Jev (`typesafe-ai/jev-*`) takes
-  32k tokens of state and question; a bigger input fails before the call, naming its biggest
-  files, so scope it with `include`.
+  runs a build otherwise fills the judge's diff with its output. Jev takes 32k tokens of state and
+  question. A judge call's provider error keeps the provider's wording and adds the input's
+  estimated size and biggest files; scope a big input with `include`.
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
   Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
@@ -351,7 +351,7 @@ them to `evals/.history/` to commit.
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |
-| A judge input over the model's limit | `The judge's input is ~72k tokens (estimated), over typesafe-ai/jev-1.13.0's limit of 32k …` | Add a `.gitignore` to the environment, or `include: ['src/']` |
+| The judge's provider refuses a big input | The provider's message, then `The judge's input was ~…k tokens (estimated): diff …, of which …` | Add a `.gitignore` to the environment, or `include: ['src/']` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |

@@ -126,13 +126,13 @@ const flow = await c.judge('Does this change implement email sign-in?', {
 expect.soft(flow, 'Email sign-in').toPass()
 ```
 
-`include` keeps the diff to the files a question is about, and `files` shows files whole, changed or not. Set either on `judge` in the config, a group or an eval as a default; a call's own replaces it. A smaller state fits the model's limit, and the judge grades better without the noise.
+`include` keeps the diff to the files a question is about, and `files` shows files whole, changed or not. Set either on `judge` in the config, a group or an eval as a default; a call's own replaces it. A smaller state fits the model's context, and the judge grades better without the noise.
 
 <Warning>
   The diff is what changed in the workspace, so give the workspace its own `.gitignore`: an agent that runs `npm run build` leaves its output there. A Vite bundle once filled 97% of a 310k-token state and failed every call on Jev's 32k limit.
 </Warning>
 
-An input over a model's known limit fails before the call, naming the biggest files. See [Input limits](/reference/judges#input-limits).
+A provider error on a judge call says how big the input was and names its biggest files. See [Provider errors](/reference/judges#provider-errors).
 
 ## Write questions the judge can grade
 

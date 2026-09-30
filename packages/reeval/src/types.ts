@@ -159,8 +159,7 @@ export type Verdict = {
 }
 
 /**
- * What `c.judge()` returns when the call failed (the provider's error, or an input over the
- * model's known limit): the attempt fails as a judge error once the eval's body has finished,
+ * What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished,
  * so the judges and checks after it still run.
  */
 export type JudgeFailure = Omit<Verdict, 'verdict' | 'score' | 'resolvedModel'> & {

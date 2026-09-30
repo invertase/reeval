@@ -1026,6 +1026,11 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
       ['first?', 'second?'],
     )
     assert.match(inputs[0]?.error ?? '', /needs a provider prefix/)
+    assert.doesNotMatch(
+      inputs[0]?.error ?? '',
+      /judge's input was/,
+      'reeval’s own errors say no more',
+    )
     assert.equal(inputs[1]?.error, undefined)
   })
 
@@ -1099,38 +1104,7 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.deepEqual(missing?.state.files, ['added src/app.ts'], 'the config include still applies')
   })
 
-  test("a judge input over the model's known limit fails before any call, naming what fills it", async () => {
-    const huge = 'export const line = 1\n'.repeat(12_000)
-    const p = await project('judge-overflow', {
-      'reeval.config.ts': fakeConfig({
-        harness: `{ files: { 'src/huge.ts': ${JSON.stringify(huge)}, 'src/app.ts': 'export {}\\n' } }`,
-        judge: `{ model: 'typesafe-ai/jev-1.13.0' }`,
-      }),
-      'evals/agent.eval.ts': agentEval(`
-  expect.soft(await c.judge('Is it done?')).toPass()
-  await expect.soft(c.exec('echo still checked')).toSucceed()
-`),
-    })
-    const r = await runCli(p.dir, ['run'], {
-      env: { TYPESAFE_AI_API_KEY: 'reeval-test-not-a-real-key' },
-    })
-    assert.equal(r.code, 1, r.stdout + r.stderr)
-    const [e] = readRun(p.dir).evals
-    assert.equal(e?.error?.kind, 'judge')
-    assert.match(
-      e?.error?.message ?? '',
-      /The judge's input is ~\d\dk tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff \d\dk, of which src\/huge\.ts is \d\dk\. Narrow /,
-    )
-    assert.match(e?.error?.message ?? '', /c\.judge\(question, \{ include: \['src\/'\] \}\)/)
-    assert.deepEqual(e?.trial.judgements, [])
-    assert.deepEqual(
-      e?.trial.checks.map((c) => c.command),
-      ['echo still checked'],
-    )
-    assert.match(judgeInputs(e)[0]?.error ?? '', /over typesafe-ai\/jev-1\.13\.0's limit/)
-  })
-
-  test("a provider's too-long error names what filled the judge's input", async () => {
+  test("a provider's error keeps its wording and names what filled the judge's input", async () => {
     const server = createServer((_req, res) => {
       res.statusCode = 422
       res.setHeader('content-type', 'application/json')
@@ -1159,7 +1133,7 @@ evaluate('agent eval', async (c) => {
       assert.equal(e?.error?.kind, 'judge')
       assert.match(
         e?.error?.message ?? '',
-        /\{"error_type":"max_tokens_exceeded"\}\. The judge's input is ~\d+ tokens \(estimated\): .*diff \d+.*include/,
+        /\{"error_type":"max_tokens_exceeded"\}\nThe judge's input was ~\d+ tokens \(estimated\): .*include/,
       )
       assert.equal(judgeInputs(e)[0]?.retries, undefined, 'not retried')
     } finally {

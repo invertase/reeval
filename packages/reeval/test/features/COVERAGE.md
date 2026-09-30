@@ -123,7 +123,7 @@
 |---|:-:|:-:|:-:|:-:|:-:|
 | Judge verdicts, errors, option cascade and retries | ✓ 4 | — | — | — | — |
 | What the judge sees: build output, source maps, build info and minified files dropped from its diff, `judge.include` and `judge.files` from the config to the call | ✓ 3 | — | ● 3 | — | — |
-| A judge input over the model's known limit (Jev's 32k) fails before the call, and a provider's too-long error, naming what filled it | ✓ 3 | — | — | — | — |
+| A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint | ✓ 2 | — | — | — | — |
 | A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run | ✓ 2 | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — |
 | `toHaveFile`, `toSucceed` and `toPass` | ✓ 5 | — | — | — | — |

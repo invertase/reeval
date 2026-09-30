@@ -1,15 +1,9 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import { getRunContext } from '../engine/runtime.ts'
-import {
-  inputTokens,
-  isOverflowError,
-  overflowDetail,
-  overflowMessage,
-  stateLimit,
-} from '../judge/budget.ts'
 import { badJudgeList, type JudgeState, judgeModelName, runJudge } from '../judge/index.ts'
 import { judgeDiff } from '../judge/patch.ts'
-import type { RetriedError } from '../judge/retry.ts'
+import { isApiError, type RetriedError } from '../judge/retry.ts'
+import { withInputSize } from '../judge/size.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
 import type {
@@ -58,8 +52,7 @@ async function judgeState(
 /**
  * Phase 4, the judge: grades a turn (the last by default) or a value against a question, under
  * the judge provider's concurrency lease. Every call's input is recorded, including calls that
- * fail. A call that fails (the provider's error, or an input over the model's known limit) returns
- * a `JudgeFailure` and fails the attempt as a judge error after the eval's body, so the judges and
+ * fail. A call that fails returns a `JudgeFailure` and fails the attempt as a judge error after the eval's body, so the judges and
  * checks after it still run.
  */
 export function judgeCaller(
@@ -134,10 +127,6 @@ export function judgeCaller(
       }
     }
 
-    const limit = stateLimit(name)
-    if (limit !== undefined && inputTokens(state, question) > limit) {
-      return failed(overflowMessage(name, limit, state, question))
-    }
     const provider = name.split('/')[0]
     try {
       const { verdict, retries } = await a.timed('judgeMs', () =>
@@ -170,10 +159,7 @@ export function judgeCaller(
       }
       const { retries } = error as Partial<RetriedError>
       const message = error instanceof Error ? error.message : String(error)
-      return failed(
-        isOverflowError(message) ? overflowDetail(message, state, question) : message,
-        retries,
-      )
+      return failed(isApiError(error) ? withInputSize(message, state, question) : message, retries)
     }
   }
 }

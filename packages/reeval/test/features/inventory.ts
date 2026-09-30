@@ -1137,13 +1137,12 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'judge.budget',
+    id: 'judge.input-size',
     area: 'Judges and matchers',
-    name: "A judge input over the model's known limit (Jev's 32k) fails before the call, and a provider's too-long error, naming what filled it",
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint",
     tests: [
-      unit('the judge knows Jev’s input limit'),
-      engine("a judge input over the model's known limit fails before any call"),
-      engine("a provider's too-long error names what filled the judge's input"),
+      unit("a provider's error keeps its wording and adds what fills the judge's input"),
+      engine("a provider's error keeps its wording and names what filled the judge's input"),
     ],
   },
   {

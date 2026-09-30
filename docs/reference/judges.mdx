@@ -81,19 +81,18 @@ The diff leaves out what nobody wrote by hand, each file or directory replaced b
 
 What was left out, and why, is the judge input's `dropped` in `judge-input.json`, such as `dist/ (3 files): build output` or `notes.md: not in include`. The workspace's own `.gitignore` keeps the rest of the noise out of the diff; see [Environment](/reference/environment#fields).
 
-## Input limits
+## Provider errors
 
-reeval knows `typesafe-ai/jev-*`'s limit: 32k tokens for the state and the question. It estimates the input at four characters a token before the call. When the input is over the limit, the call fails without reaching the model, and the message names the biggest parts and files:
+When a judge call fails with an error from the provider's API, the message keeps the provider's wording and adds what the input held: its estimated size, at four characters a token, and its biggest parts and files. reeval doesn't keep a table of model limits or read the provider's message, so this comes with every provider error: a refused input, a bad key or a rate limit.
 
 ```text
-judge failed for "Is it done?" (typesafe-ai/jev-1.13.0): The judge's input is ~72k tokens (estimated), over typesafe-ai/jev-1.13.0's limit of 32k for the state and question: diff 69k, of which src/huge.ts is 69k. Narrow what the judge sees with include, e.g. c.judge(question, { include: ['src/'] }), or set judge: { include } in the config; files shows chosen files in full.
+judge failed for "Is it done?" (typesafe.evaluation/jev-under-test): {"error_type":"max_tokens_exceeded"}
+The judge's input was ~29k tokens (estimated): diff 28k, of which src/pages/SignIn.tsx is 17k, src/pages/MfaEnroll.tsx is 9k, src/firebase.ts is 2k. Narrow what the judge sees with include, e.g. c.judge(question, { include: ['src/'] }), or set judge: { include } in the config; files shows chosen files in full.
 ```
-
-A provider's own too-long error, such as TypeSafe's `max_tokens_exceeded`, gets the same breakdown, for a model reeval has no limit for too.
 
 ## Failed calls
 
-A call that fails (a provider error after its retries, a missing key, an input over the limit) doesn't throw. `c.judge()` returns a `JudgeFailure`, the call's error is recorded with its input, and the judges and checks after it still run. When the eval's body is done, the attempt fails as a `judge` error with every failed call's message.
+A call that fails (a provider error after its retries, or a missing key) doesn't throw. `c.judge()` returns a `JudgeFailure`, the call's error is recorded with its input, and the judges and checks after it still run. When the eval's body is done, the attempt fails as a `judge` error with every failed call's message.
 
 ```ts
 { verdict: 'error', score: null, threshold, question, model, error }
@@ -180,7 +179,7 @@ analysis: {
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
 | A bad `include` or `files` | `judge.include must be a list of non-empty strings (got "src/") in group("g")`; on a call, `c.judge() include must be a list of non-empty strings (got "src/")` |
 | A score function in the config | `config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.` |
-| An input over the model's limit | `The judge's input is ~72k tokens (estimated), over typesafe-ai/jev-1.13.0's limit of 32k for the state and question: …`, as a failed call |
+| The provider refuses the input | The provider's message, then `The judge's input was ~29k tokens (estimated): diff 28k, of which …`, as a failed call |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |
 
 ## Related
