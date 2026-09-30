@@ -637,7 +637,7 @@ function gitState(input: AssembleInput, out: Artifacts): GitInfo | null {
   else if (patch.length > WORKTREE_PATCH_LIMIT) {
     state.worktreePatchNote = `too large to keep (${patch.length} bytes)`
   } else {
-    // Kept byte-exact so it applies; recording still refuses it if it looks like a secret.
+    // Kept byte-exact so it applies; recording leaves it out if it looks like it holds a secret.
     out.files.set('worktree.patch', patch)
     state.worktreePatch = { path: 'worktree.patch', sha256: sha256(patch), bytes: patch.length }
   }

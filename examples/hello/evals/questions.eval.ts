@@ -23,7 +23,7 @@ evaluate(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: 'Which greet.js handles a missing or empty name better?',
+      questions: ['Which greet.js handles a missing or empty name better?'],
     },
   },
   async (c) => {

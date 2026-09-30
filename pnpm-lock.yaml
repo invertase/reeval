@@ -186,6 +186,9 @@ importers:
       jiti:
         specifier: 2.7.0
         version: 2.7.0
+      picomatch:
+        specifier: 4.0.7
+        version: 4.0.7
       std-env:
         specifier: 4.3.0
         version: 4.3.0
@@ -229,6 +232,9 @@ importers:
       '@reeval/sandbox-docker':
         specifier: workspace:*
         version: link:../sandbox-docker
+      '@types/picomatch':
+        specifier: 4.0.3
+        version: 4.0.3
       studio-web:
         specifier: workspace:*
         version: link:../studio-web
@@ -1584,6 +1590,9 @@ packages:
 
   '@types/node@22.20.4':
     resolution: {integrity: sha512-zJRE40jpHtKqE/C4fgHrAKQLJuSpzEnP9ff9Y7YtoR3Wd2pwqzlekDeEuUQXjRd+QCYnVnNwuJYmhdk9XV8gvA==}
+
+  '@types/picomatch@4.0.3':
+    resolution: {integrity: sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==}
 
   '@types/react-dom@19.3.0':
     resolution: {integrity: sha512-ZI7bU42mZXXKHn/qNLEw2IrbiINU7X5+vfgdixBHkCNpYWXjKgfQ/P+uyGb5CjOLB9UcnTeg3rylQtV2hym44Q==}
@@ -3899,6 +3908,8 @@ snapshots:
   '@types/node@22.20.4':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/picomatch@4.0.3': {}
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
     dependencies:

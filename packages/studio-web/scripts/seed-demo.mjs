@@ -84,7 +84,7 @@ evaluate(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: [
+      questions: [
         'Which greet.js reads more like our house style?',
         'Which greet.js handles a missing name?',
       ],

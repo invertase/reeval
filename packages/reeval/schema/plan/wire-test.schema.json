@@ -56,6 +56,12 @@
         "egress": {
           "$ref": "#/$defs/PlannedEgress"
         },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "gate": {
           "$ref": "#/$defs/CellGate"
         },
@@ -372,6 +378,9 @@
       "properties": {
         "baseline": {
           "type": "string"
+        },
+        "from": {
+          "enum": ["empty", "environment"]
         }
       },
       "required": ["baseline"]

@@ -447,6 +447,22 @@ export type EnvVars = Record<string, EnvValue>
 /** A file on the host, read when an attempt starts. Made by the `file` helper. */
 export type HostFile = { kind: 'file'; path: string }
 
+/** Options for the `directory` helper. */
+export type DirectoryOptions = {
+  /** A workspace-relative directory (or `~/…`) to place the files under, e.g. `'app'`. */
+  into?: string
+  /**
+   * Ordered gitignore-style patterns over paths relative to the directory. A plain pattern
+   * includes and a `!pattern` excludes; the last one that matches a file decides. With no plain
+   * pattern, every file starts included. Matched with picomatch (`*`, `?`, `**`, `[…]`, `{a,b}`):
+   * a pattern with a `/` in it (other than at the end) is anchored to the directory, one without
+   * matches a name at any depth, and a trailing `/` matches a directory and everything in it.
+   */
+  glob?: string[]
+  /** `false` walks into `DEFAULT_DIRECTORY_IGNORES` too. `.git` is always skipped. */
+  defaultIgnores?: boolean
+}
+
 export type McpServer =
   | { kind: 'mcp'; transport: 'stdio'; command: string; args: string[]; env: EnvVars }
   | {
@@ -559,6 +575,11 @@ export type EnvironmentHelpers = {
   mcp: McpHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
+  /**
+   * Every file in a host directory, as `files` entries: workspace-relative paths mapped to the
+   * same sources `file()` returns, so spreading and overriding work. Walked when it's called.
+   */
+  directory: (path: string | URL, options?: DirectoryOptions) => Record<string, HostFile>
   /** A git repository for `workspace`: a URL, `github:owner/repo`, or a local path. */
   git: GitHelper
 }
@@ -642,8 +663,11 @@ export type CompareGate = 'variants' | 'all' | 'none'
  * `false` is not a value here: a profile turns compare off with `limit.compare`.
  */
 export type CompareOptions<E = Environment> = {
-  /** The control. Not layered under the variants, and not the eval's `environment`. */
-  baseline: E
+  /**
+   * The control. Not layered under the variants. Without it, the control is the environment the
+   * eval would otherwise run in (the cascaded `environment`), else an empty one named `baseline`.
+   */
+  baseline?: E
   /** Other environments, each planned and run as itself. */
   variants: E[]
   /** Which cells decide pass/fail: `variants` (default), `all`, or `none` (report only). */
@@ -653,10 +677,10 @@ export type CompareOptions<E = Environment> = {
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
   harness?: Array<string | HarnessDescriptor>
   /**
-   * Asked of pairs of attempts after the run, one question or several. They annotate the
-   * compare with win rates and never change pass, fail or the exit code.
+   * Asked of pairs of attempts after the run, always a list. They annotate the compare with
+   * win rates and never change pass, fail or the exit code.
    */
-  question?: CompareQuestion | CompareQuestion[]
+  questions?: CompareQuestion[]
 }
 
 /**
@@ -743,20 +767,26 @@ type EvalOptionFields = {
 }
 
 /**
- * One or the other. `compare: false` is not an option here: a profile's `limit.compare: false`
- * strips variants. A parent `environment` and a child that only sets `compare` are two objects,
- * so that cascade is allowed; the inherited environment is not applied.
+ * `compare: false` is not an option here: a profile's `limit.compare: false` strips variants.
+ * A compare with a `baseline` names every arm, so the cascaded `environment` is not applied, and
+ * the same object can't set both. Without a `baseline`, the cascaded `environment` (this object's
+ * own, or an inherited one) is the control.
  */
 type EnvironmentOrCompare<E> =
   | {
-      /** What this group or eval runs in. Not together with `compare`. */
+      /** What this group or eval runs in, and the control of a compare without a `baseline`. */
       environment?: E
       compare?: never
     }
   | {
-      /** Forbidden beside `compare`. The compare object names every arm. */
+      /** Forbidden beside `compare.baseline`, which names the control. */
       environment?: never
-      compare: CompareSpec<E>
+      compare: CompareSpec<E> & { baseline: E }
+    }
+  | {
+      /** The control: the compare has no `baseline`. */
+      environment?: E
+      compare: CompareSpec<E> & { baseline?: undefined }
     }
 
 export type EvalOptions = EvalOptionFields & EnvironmentOrCompare<Environment>
@@ -1001,7 +1031,8 @@ export type CellRole = 'control' | 'variant'
 
 /**
  * One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With
- * `compare`, the control is `baseline` and each variant is that environment on its own.
+ * `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and
+ * each variant is that environment on its own.
  */
 export type Cell = {
   key: string
@@ -1149,6 +1180,11 @@ export type EvalRecord = {
 /** Which environment ran as the control, so the studio can show it. */
 export type EvalCompareMeta = {
   baseline: string
+  /**
+   * Set when `compare.baseline` was omitted: the control is the eval's cascaded `environment`, or
+   * an empty environment named `baseline` when there was none.
+   */
+  from?: 'environment' | 'empty'
 }
 
 /** How an eval was sized for the plan: what it asked for, and what a profile changed. */
@@ -1227,6 +1263,8 @@ export type AttemptMeta = {
   egress: PlannedEgress
   /** The git repository its workspace starts as, which the CLI fetches before any attempt. */
   workspace?: GitWorkspace
+  /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
+  files?: string[]
   plan: EvalPlan
 }
 

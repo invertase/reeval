@@ -107,7 +107,23 @@ flowchart LR
 
 `baseline` is the control. Each variant runs as that environment on its own, with the same prompt and checks. `compare` does not layer, inherit or extend. Each is a [cell](/concepts/matrix), and `--runs 2` runs each cell twice.
 
-Share setup before compare, with `extendEnvironment`. The child keeps the parent's layers and wins on shared keys. The house-greeting variant above is `plain` plus the skill. Do not set `environment` on the same object as a compare object. A parent `environment` is allowed when the eval only sets `compare`, and reeval does not apply that inherited environment.
+Share setup before compare, with `extendEnvironment`. The child keeps the parent's layers and wins on shared keys. The house-greeting variant above is `plain` plus the skill. With a `baseline`, the compare names every arm: don't set `environment` on the same object, and reeval doesn't apply one inherited from a parent.
+
+## Leave out the baseline
+
+```ts
+group(
+  'house greeting',
+  { environment: plain, compare: { variants: [withHouseGreeting] } },
+  () => {
+    /* same prompt and checks */
+  },
+)
+```
+
+Without `baseline`, the control is the environment the eval would run in anyway: its own `environment`, or one it inherits from a group or the config. Here that's `plain`, so this plans the same cells as the eval above.
+
+With no environment anywhere in the cascade, the control is an empty environment named `baseline`: the sandbox and the agent as they are. The run record keeps the control's name in `evals[].compare.baseline`, and `from` says where it came from.
 
 ## Two stacks, not a layer
 
@@ -137,7 +153,7 @@ group(
 )
 ```
 
-Lift and effort still pair each variant with the baseline. They do not pair variants with each other.
+Lift and effort pair each variant with the control, whether you named it or not. They do not pair variants with each other.
 
 ## Choose which cells gate
 
@@ -213,12 +229,12 @@ evaluate('greets by name', {
   compare: {
     baseline: plain,
     variants: [withHouseGreeting],
-    question: 'Which greet.js handles a missing or empty name better?',
+    questions: ['Which greet.js handles a missing or empty name better?'],
   },
 }, async (c) => { … })
 ```
 
-Lift says which arm passes more often. A `question` asks which attempt did the better job, pair by pair, once every attempt of the eval has finished. Questions annotate the compare: they never change pass, fail or the exit code.
+Lift says which arm passes more often. Each of `questions` asks which attempt did the better job, pair by pair, once every attempt of the eval has finished. Questions annotate the compare: they never change pass, fail or the exit code.
 
 ```text
 plan  profile questions (--profile) · 1 eval · 4 cells · 4 attempts · …
@@ -227,7 +243,7 @@ evals/questions.eval.ts › greets by name  2          1         1     4
   question 1/1  Which greet.js handles a missing or empty name better? · after the run · google/gemini-3.8-flash
 ```
 
-`reeval run --dry-run` lists each question with the model that will answer it, and a profile that leaves only the baseline drops them. Pass a list for several, and `{ question, model }` to give one its own model. Without one, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
+`reeval run --dry-run` lists each question with the model that will answer it, and a profile that leaves only the baseline drops them. `questions` is always a list: each entry is a string, or `{ question, model }` to give that one its own model. Without one, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
 
 ## Read the answers
 

@@ -266,6 +266,8 @@ export type PlanCell = Cell & {
   egress: PlannedEgress
   /** The git repository its workspace starts as; unset for an empty workspace. */
   workspace?: { repo: string; ref: string | null; path: string | null }
+  /** The paths its environment's `files` write (`directory()`'s included), sorted. */
+  files?: string[]
 }
 
 export type PlanEval = {
@@ -349,6 +351,7 @@ export function planDocument(
             path: attempt.workspace.path ?? null,
           },
         }),
+        ...(attempt.files && { files: attempt.files }),
       })
     }
   }

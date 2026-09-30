@@ -70,12 +70,12 @@ export function questionModel(
   const fix = `give the question its own, { question: '…', model: 'google/gemini-3.8-flash' }`
   if (model === undefined) {
     throw new UsageError(
-      `compare.question "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'pick between two attempts')}, or ${fix}.`,
+      `compare.questions "${question.question}" (${where}) needs a language model to answer it. Set analysis: { model: 'google/gemini-3.8-flash' } in ${config.file}${judgeAside(config, 'pick between two attempts')}, or ${fix}.`,
     )
   }
   if (typeof model === 'string' && isEvaluationModel(model)) {
     throw new UsageError(
-      `compare.question "${question.question}" (${where}) would be answered by config.analysis.model "${model}", an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
+      `compare.questions "${question.question}" (${where}) would be answered by config.analysis.model "${model}", an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash', or ${fix}.`,
     )
   }
   return model

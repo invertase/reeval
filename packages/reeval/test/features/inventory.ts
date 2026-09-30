@@ -133,9 +133,17 @@ export const inventory: InventoryFeature[] = [
     tests: [options('compare.harness scopes variants')],
   },
   {
-    id: 'compare.question',
+    id: 'compare.baseline',
     area: 'Config and selection',
-    name: '`compare.question`: questions in the plan, answered after the run with pairwise win rates',
+    name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
+    plan: ['compare/baseline-omitted', 'compare/baseline-omitted-off'],
+    fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
+    tests: [options('common mistakes')],
+  },
+  {
+    id: 'compare.questions',
+    area: 'Config and selection',
+    name: '`compare.questions`: questions in the plan, answered after the run with pairwise win rates',
     plan: ['compare/questions', 'compare/questions-dropped', 'compare/questions-group'],
     tests: [
       options('--dry-run names the questions with no language model'),
@@ -447,6 +455,21 @@ export const inventory: InventoryFeature[] = [
     area: 'Environments',
     name: '`files` from `file()` are copied as bytes',
     fixtures: ['env/files-binary'],
+  },
+  {
+    id: 'files.directory',
+    area: 'Environments',
+    name: '`directory()`: a host directory as `files`, with `into`, ordered `glob` patterns, `DEFAULT_DIRECTORY_IGNORES` and the executable bit',
+    fixtures: ['env/files-directory', 'env/files-directory-executable'],
+    plan: ['files/directory'],
+    tests: [
+      unit(
+        'directory() globs are ordered gitignore-style patterns: includes, excludes and re-includes',
+      ),
+      unit('directory() walks a host directory into files entries'),
+      unit("a host file's executable bit is kept and feeds the digest"),
+      options('common mistakes'),
+    ],
   },
   {
     id: 'env.vars',

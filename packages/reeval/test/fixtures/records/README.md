@@ -13,6 +13,7 @@ wrote; the `reeval.config.ts` follows the config API like any other project.
 | `before-runtime` | The corpus project's fake-harness runs from before `stack.runtime` and `stack.language` (the runtime reeval ran on, and the evals' language) |
 | `with-answers` | The corpus project's fake-harness runs with `evals[].answers`: a compare question answered with win rates, one whose model call failed, and questions with no pairs to judge |
 | `before-run-summary` | The corpus project's fake-harness runs, with a saved analysis, from before an analysis document's `error` (the run summary `analysis.agent` caches after a run) |
+| `before-baseline-from` | The corpus project's fake-harness runs from before `evals[].compare.from` (a compare whose control came from the cascade because `baseline` was omitted) |
 | `fake-matrix` | The fake harness: a compare with lift, judges that pass and fail, a failed check, infra errors, todo and skipped evals, a budget-stopped run and a saved analysis |
 | `real-harnesses` | One tiny eval on each of the seven real harnesses in Docker (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi, Codex), with each one's transcript, tokens and served model |
 | `real-e2e-pairs` | The nightly `real.yml` run [36517569089](https://github.com/invertase/reeval/actions/runs/36517569089) (2026-09-29, pinned leg, at `ce1e797`): the e2e suite's two recorded runs of one eval on each of Cursor, Claude Code and Codex, with transcripts and diffs |

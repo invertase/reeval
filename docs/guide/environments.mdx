@@ -34,7 +34,7 @@ group(
 )
 ```
 
-`environment` sets what every eval in the group runs in when that eval does not compare. An eval that sets `compare: { baseline, variants }` names every arm itself. Do not put `environment` on that same object. The group's environment is not applied to that eval.
+`environment` sets what every eval in the group runs in. An eval that sets `compare: { baseline, variants }` names every arm itself: don't put `environment` on that same object, and the group's environment is not applied to it. Leave `baseline` out and the group's environment is the control.
 
 ## Add skills
 
@@ -114,6 +114,17 @@ export const base = defineEnvironment('base', ({ file }) => ({
 ```
 
 `rules` lands where the harness's agent reads project rules: `CLAUDE.md` for Claude Code, `AGENTS.md` for every other agent. `files` maps workspace paths (or `~/` paths) to a string or a host `file()`, copied byte for byte. `env` sets variables in the sandbox.
+
+## Seed a fixture directory
+
+```ts title="evals/notes-env.ts"
+export const notes = defineEnvironment('acme-notes', ({ directory }) => ({
+  files: { ...directory('../fixture'), 'README.md': 'something' },
+  setup: [{ run: 'npm ci --no-audit --no-fund', timeout: '5m' }],
+}))
+```
+
+`directory()` maps every file in a host directory to its `file()`, so a later key overrides it. It skips `.git`, dependency and build output such as `node_modules/` and `dist/`, and caches. `into` places the files under a subdirectory, and `glob` picks them with ordered patterns, `!` excluding: `glob: ['src/**', 'package.json', '!**/*.test.ts']`. [Helpers](/reference/helpers#directory) lists the default ignores and how symlinks and modes are handled.
 
 ## Run setup steps
 

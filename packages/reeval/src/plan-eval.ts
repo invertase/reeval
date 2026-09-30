@@ -5,7 +5,7 @@ import { type AttemptSpec, setupAllowance } from './attempt/index.ts'
 import { parseDuration } from './duration.ts'
 import { unenforceable } from './egress.ts'
 import type { Gate, TestMode } from './engine/runtime.ts'
-import { workspaceOf } from './environment.ts'
+import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { refusedMcp } from './harness/agents.ts'
 import { attemptId, evalId, relativeFile } from './ids.ts'
@@ -143,6 +143,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
   return plannedAttempts.map((planned) => {
     if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
     const workspace = workspaceOf(planned.environment.layers)
+    const files = filesOf(planned.environment.layers)
     const attempt: AttemptMeta = {
       name,
       groups,
@@ -159,6 +160,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       secretVars: secretVarsIn(resolved.env, planned),
       egress: planned.egress,
       ...(workspace ? { workspace } : {}),
+      ...(files.length ? { files } : {}),
       plan,
     }
     const rankFile = relativeFile(ctx.config.root, ctx.file ?? '')

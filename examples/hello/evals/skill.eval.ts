@@ -20,7 +20,7 @@ group(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: 'Which greet.js reads more like our house style?',
+      questions: ['Which greet.js reads more like our house style?'],
     },
     pin: ['compare'],
   },
