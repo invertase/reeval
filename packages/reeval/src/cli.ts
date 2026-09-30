@@ -656,6 +656,7 @@ async function executeRun(
     }
     const malformed = malformedCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
+      profile,
       questionModels: [...questionModels],
     })
     if (malformed.length) {
