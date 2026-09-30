@@ -3,7 +3,7 @@
 // history.test.ts.
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
@@ -16,9 +16,15 @@ import type { FingerprintParts } from '../src/history/types.ts'
 import { patchForJudge } from '../src/judge/patch.ts'
 import { checkGate } from '../src/options.ts'
 import { liftInterval, wilson } from '../src/stats.ts'
-import type { BlindPair, EvalRecord, FakeAnalysisModel, FakeVote, Outcome } from '../src/types.ts'
+import type { BlindPair, EvalRecord, FakeAnalysisModel, Outcome } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
-import { REAL_HARNESSES, realAttempts } from './support/real-runs.ts'
+import {
+  E2E_ARMS,
+  e2ePairSides,
+  newlineVote,
+  REAL_HARNESSES,
+  realAttempts,
+} from './support/real-runs.ts'
 
 const near = (actual: number, expected: number, what: string) =>
   assert.ok(Math.abs(actual - expected) < 5e-4, `${what}: ${actual} is not ${expected}`)
@@ -371,25 +377,9 @@ describe('compare question pairs', () => {
 // Codex. Their two runs stand in for two arms, so the real diffs give within and across pairs.
 describe('compare questions over real-harness runs (real-e2e-pairs)', () => {
   const attempts = realAttempts('real-e2e-pairs')
-  const arms = ['first-run', 'second-run']
-  const sides: PairAttempt[] = REAL_HARNESSES.flatMap((harness) => {
-    const mine = attempts.filter((a) => a.harness === harness)
-    assert.equal(mine.length, 2, `two recorded runs on ${harness}`)
-    return mine.map((a, i) => ({
-      harness,
-      arm: arms[i] as string,
-      run: 1,
-      diff: readFileSync(a.diff as string, 'utf8'),
-      checksPassed: a.attempt.outcome === 'pass',
-      prompts: a.attempt.turns.map((t) => t.prompt),
-      id: a.attempt.key,
-    }))
-  })
+  const arms = [...E2E_ARMS]
+  const sides = e2ePairSides()
   const pairs = pairsOf(sides)
-  // Codex ends hello.txt with a newline; Cursor and Claude Code don't.
-  const endsWithNewline = (diff: string) => !diff.includes('No newline at end of file')
-  const vote = (p: BlindPair): FakeVote =>
-    endsWithNewline(p.a) === endsWithNewline(p.b) ? 'tie' : endsWithNewline(p.a) ? 'A' : 'B'
 
   test('within: each harness’s two runs; across: the three harnesses per run', () => {
     assert.ok(
@@ -418,7 +408,7 @@ describe('compare questions over real-harness runs (real-e2e-pairs)', () => {
         kind: 'fake-analysis',
         vote: (p) => {
           seen.push(p)
-          return vote(p)
+          return newlineVote(p)
         },
       },
       pairs,
