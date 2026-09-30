@@ -60,6 +60,22 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/-\/fake +2\/2 +100%/)
     assert.match(r.stdout, /bad\/-\/fake +0\/2 +0%/)
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
+    const thirds = await project('matrix-thirds', {
+      'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
+      'evals/t.eval.ts': `import { evaluate } from 'reeval'
+evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (t) => {
+  await t.send('go')
+  if (t.attempt.n === 2) throw new Error('the second attempt fails')
+})
+`,
+    })
+    const rounded = await runCli(thirds.dir)
+    assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
+    assert.match(
+      rounded.stdout,
+      /✓ two of three +2\/3 +67% +3 attempts\n +one\/-\/fake +2\/3 +67% /,
+      'pass rates round to the nearest percent',
+    )
     const { run, evals } = readRun(p.dir)
     assert.equal(run.summary.attempts, 4)
     assert.deepEqual(

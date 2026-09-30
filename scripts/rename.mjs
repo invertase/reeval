@@ -4,12 +4,9 @@
 //   node scripts/rename.mjs            move and rewrite files, then regenerate what's generated
 //   node scripts/rename.mjs --no-regen move and rewrite only
 //   node scripts/rename.mjs --check    exit 1 if a rewrite would still change something
-//   node --experimental-strip-types scripts/rename.mjs --realign <dir>
-//                                      realign the differential captures with a run recorded
-//                                      into <dir> (scripts/differential.mjs record)
 //
-// Regenerating rewrites the goldens and differential captures whose columns the longer names
-// move, and fails if one changed beyond the rename. Then `bash scripts/rename-verify.sh`.
+// Regenerating rewrites the goldens whose columns the longer names move, and fails if one changed
+// beyond the rename. Then `bash scripts/rename-verify.sh`.
 // What it leaves alone, on purpose:
 // - recorded history (the corpus's `.history` and eval file names, the analysis fixtures and the
 //   names tests read from them, the old schema snapshot, captured replays and the Claude Code
@@ -20,16 +17,14 @@
 // - the sandbox's `es` user, `/home/es` and `/es/workspace`, which the captured real-agent
 //   streams in test/replay and each harness's test fixtures contain.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const args = new Set(process.argv.slice(2))
 const check = args.has('--check')
-const realignOnly = process.argv.includes('--realign')
-const regen = !args.has('--no-regen') && !check && !realignOnly
+const regen = !args.has('--no-regen') && !check
 
 const SELF = ['scripts/rename.mjs', 'scripts/rename-verify.sh']
 const SKIP = [
@@ -46,8 +41,7 @@ const SKIP = [
  */
 const KEEP_EVAL_NAMES = /\/test\/fixtures\/records\//
 /** Tests that read the analysis fixtures, where the recorded environment and eval names stay. */
-const READS_ANALYSIS =
-  /\/test\/(analysis\.test\.ts|features\/inventory\.ts|differential\/vitest\/analysis\.test\.ts\.jsonl)$/
+const READS_ANALYSIS = /\/test\/(analysis\.test\.ts|features\/inventory\.ts)$/
 const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|ttf|tgz|gz|zip|wasm)$/i
 const COMMANDS =
   'init|doctor|run|clean|record|history|show|compare|checkout|query|analyze|mcp|studio|report|image|help|eval|__worker'
@@ -345,16 +339,6 @@ function original(file) {
   return git('show', `HEAD:${file.replace(/^packages\/reeval\//, 'packages/evalsuite/')}`)
 }
 
-if (realignOnly) {
-  const dir = process.argv[process.argv.indexOf('--realign') + 1]
-  if (!dir) {
-    console.error('usage: node scripts/rename.mjs --realign <recorded differential dir>')
-    process.exit(2)
-  }
-  await realignCaptures(dir)
-  process.exit(0)
-}
-
 function rewrite(file, text) {
   let out = text
   for (const p of PATCHES.filter((p) => p.file === file)) {
@@ -469,13 +453,6 @@ if (regen) {
     if (bad.length) problems.push(`${file}:\n    ${bad.slice(0, 5).join('\n    ')}`)
   }
 
-  // The differential's captures: record them, then take each field of a recorded run where it
-  // matches the rewritten capture (or the original, where it shows recorded names) but for
-  // whitespace; every other field stays as the Vitest engine had it, for `compare` to judge.
-  const recordedDir = join(mkdtempSync(join(tmpdir(), 'reeval-rename-')), 'differential')
-  sh(`node --experimental-strip-types --no-warnings scripts/differential.mjs record ${recordedDir}`)
-  sh(`node --experimental-strip-types --no-warnings scripts/rename.mjs --realign ${recordedDir}`)
-
   // `pnpm run`: bare `pnpm docs` is pnpm's own command, which opens the homepage in a browser.
   sh('pnpm run docs')
   sh('pnpm --dir packages/reeval schema:update')
@@ -534,59 +511,4 @@ function unmatched(actual, renamed, original) {
   return actual.length === renamed.length
     ? bad
     : [...bad, `(${actual.length} lines, was ${renamed.length})`]
-}
-
-/**
- * Takes each field of the runs recorded into `recordedDir` where it matches the rewritten capture
- * (or the original, where it shows recorded names) but for what `unmatched` allows; every other
- * field stays as the Vitest engine had it, for `compare` to judge.
- */
-async function realignCaptures(recordedDir) {
-  const { renormalise } = await import(
-    pathToFileURL(join(root, 'packages/reeval/test/support/differential.ts')).href
-  )
-  let taken = 0
-  let kept = 0
-  const capturesDir = 'packages/reeval/test/differential/vitest'
-  for (const file of tracked().filter((f) => f.startsWith(`${capturesDir}/`))) {
-    const name = basename(file)
-    const actualPath = join(recordedDir, name)
-    if (!existsSync(actualPath)) continue
-    const parse = (text) =>
-      text
-        .split('\n')
-        .filter(Boolean)
-        .map((l) => JSON.parse(l))
-    const renamed = parse(readFileSync(join(root, file), 'utf8'))
-    const originals = parse(original(file))
-    const actual = new Map()
-    for (const c of parse(readFileSync(actualPath, 'utf8'))) {
-      actual.set(c.key, [...(actual.get(c.key) ?? []), c])
-    }
-    const seen = new Map()
-    const out = renamed.map((capture, i) => {
-      const n = seen.get(capture.key) ?? 0
-      seen.set(capture.key, n + 1)
-      const run = actual.get(capture.key)?.[n]
-      if (!run) return capture
-      const next = { ...capture }
-      for (const field of Object.keys(capture).filter((f) => f !== 'key')) {
-        const lines = (v) =>
-          (typeof v === 'string' ? v : JSON.stringify(v ?? null, null, 1)).split('\n')
-        const bad = unmatched(
-          lines(renormalise(run)[field]),
-          lines(renormalise(capture)[field]),
-          lines(originals[i] && renormalise(originals[i])[field]),
-        )
-        if (bad.length) kept++
-        else {
-          next[field] = run[field]
-          taken++
-        }
-      }
-      return next
-    })
-    writeFileSync(join(root, file), `${out.map((c) => JSON.stringify(c)).join('\n')}\n`)
-  }
-  console.log(`rename: differential captures: ${taken} fields realigned, ${kept} left for compare`)
 }

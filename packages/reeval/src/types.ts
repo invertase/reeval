@@ -324,7 +324,8 @@ export type GooseHarnessDescriptor = {
 }
 /**
  * pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
- * Google models on a Gemini API key and reports each model call's tokens. It has no MCP client.
+ * Google models on a Gemini API key and reports each model call's tokens. It takes stdio and
+ * HTTP MCP servers, not SSE ones.
  */
 export type PiHarnessDescriptor = {
   kind: 'pi'

@@ -67,7 +67,7 @@ export default defineConfig({
   providers are refused at plan time; no `mcp.sse`; web search via Exa,
   whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
   and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
-  `gemini-3.8-flash`; pi has no MCP),
+  `gemini-3.8-flash`; neither takes `mcp.sse`),
   `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
@@ -292,7 +292,8 @@ reeval record            reeval history      reeval show [run]      reeval compa
 reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
 reeval analyze           (one checked LLM reading of a run; --context for your own agent)
                          analysis: { agent: true } also notes each eval × harness during reeval run
-                         (.reeval/analysis/<run>/notes/; a model call each, off by default; never gates)
+                         (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
+                         (a model call each, off by default; never gates)
 reeval studio            reeval studio build --out site      reeval image build [--dry-run] [--profile <p>]      reeval clean
 reeval mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
 ```
