@@ -8,7 +8,7 @@ import { withUnknownFields } from '../scripts/schema/validate.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { harnessLabel } from '../src/view/model.ts'
+import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -317,6 +317,9 @@ describe('recording runs into evals/.history', () => {
       ['package-lock.json'],
     )
     assert.deepEqual(run.stack.images, [])
+    assert.equal(run.stack.node, process.versions.node)
+    assert.deepEqual(run.stack.runtime, { name: 'node', version: process.versions.node })
+    assert.deepEqual(run.stack.language, { name: 'typescript' })
     assert.ok(
       run.stack.packages.ai && run.stack.packages['@vitest/expect'] && run.stack.packages.jiti,
     )
@@ -333,6 +336,10 @@ describe('recording runs into evals/.history', () => {
     )
     assert.match(shown.stdout, /Uncommitted +worktree\.patch, \d+ bytes/)
     assert.match(shown.stdout, /Lockfiles +package-lock\.json [0-9a-f]{12}/)
+    assert.match(
+      shown.stdout,
+      new RegExp(`reeval +\\S+ · node ${process.versions.node} · typescript evals · `),
+    )
     assert.doesNotMatch(shown.stdout, /!|not reproducible/, 'no warning when everything is saved')
     assert.match(read('summary.md'), /## State[\s\S]*\| Uncommitted \| worktree\.patch/)
 
@@ -724,6 +731,28 @@ describe('records from before a field existed', () => {
     assert.equal(
       harnessLabel(r.stack.harnesses[0] as RunRecord['stack']['harnesses'][number]),
       'fake',
+    )
+  })
+
+  test('stack.runtime and stack.language: a record without them ran on Node, and names no language', () => {
+    const r = readableRecord(raw())
+    assert.equal('runtime' in r.stack || 'language' in r.stack, false)
+    assert.equal(runtimeLabel(r.stack), `node ${r.stack.node}`)
+    assert.equal(languageLabel(r.stack), null)
+    assert.match(renderSummary(r), new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`))
+  })
+
+  test('the runtime and language labels', () => {
+    const bun = { node: '26.3.0', runtime: { name: 'bun', version: '1.4.2' } }
+    assert.equal(runtimeLabel(bun), 'bun 1.4.2 (node 26.3.0)')
+    assert.equal(
+      runtimeLabel({ node: '22.14.0', runtime: { name: 'node', version: '22.14.0' } }),
+      'node 22.14.0',
+    )
+    assert.equal(languageLabel({ language: { name: 'typescript' } }), 'typescript evals')
+    assert.equal(
+      languageLabel({ language: { name: 'dart', version: '3.13.5' } }),
+      'dart 3.13.5 evals',
     )
   })
 

@@ -346,7 +346,18 @@ export type RunRecord = {
 /** What ran and graded the agents: the machine, images, harnesses and judge. */
 export type Stack = {
   es: string
+  /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   node: string
+  /**
+   * The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in
+   * runs recorded before it, which ran on Node.
+   */
+  runtime?: { name: string; version: string }
+  /**
+   * The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its
+   * toolchain when the runner reports one. Absent in runs recorded before it.
+   */
+  language?: { name: string; version?: string }
   os: string
   arch: string
   /** Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed. */

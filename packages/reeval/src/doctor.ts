@@ -16,6 +16,8 @@ import {
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
 import { credentialOf } from './harness/agents.ts'
+import { runtimeInfo } from './history/provenance.ts'
+import type { Stack } from './history/types.ts'
 import { fromCwd } from './ids.ts'
 import { missingGitignoreEntries } from './init.ts'
 import { judgeCredentials } from './judge/index.ts'
@@ -24,11 +26,12 @@ import { redactSecrets } from './redact.ts'
 import { PACKAGE_DIR } from './root.ts'
 import type { EgressPolicy, HarnessDescriptor, ResolvedConfig, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
-
 export type CheckStatus = 'ok' | 'warn' | 'fail' | 'skip'
 
+type Runtime = NonNullable<Stack['runtime']>
+
 export type Check = {
-  /** The area: node, config, docker, image, key, judge, egress or gitignore. */
+  /** The area: runtime, config, docker, image, key, judge, egress or gitignore. */
   id: string
   status: CheckStatus
   summary: string
@@ -38,6 +41,8 @@ export type Check = {
 /** What the checks read from the machine, replaceable in tests. */
 export type DoctorDeps = {
   env: NodeJS.ProcessEnv
+  runtime: Runtime
+  /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   nodeVersion: string
   platform: NodeJS.Platform
   dockerState: () => Promise<DockerState>
@@ -65,6 +70,7 @@ export function defaultDeps(env: NodeJS.ProcessEnv = process.env): DoctorDeps {
   const sandbox = () => import('@reeval/sandbox-docker')
   return {
     env,
+    runtime: runtimeInfo(),
     nodeVersion: process.versions.node,
     platform: process.platform,
     dockerState: async () => (await sandbox()).dockerState(),
@@ -104,16 +110,22 @@ const newer = (version: string, min: number[]) => {
   return true
 }
 
-export function checkNode(nodeVersion: string): Check {
+/** The runtime reeval runs on, held to `engines` by the Node version it is or provides. */
+export function checkRuntime(runtime: Runtime, nodeVersion: string): Check {
   const engines = JSON.parse(readFileSync(join(PACKAGE_DIR, 'package.json'), 'utf8')).engines.node
   const min = (/(\d+(?:\.\d+)*)/.exec(engines)?.[1] ?? '0').split('.').map(Number)
+  const label =
+    runtime.name === 'node'
+      ? `node ${nodeVersion}`
+      : `${runtime.name} ${runtime.version}, compatible with node ${nodeVersion}`
+  const install = `install Node ${min.join('.')} or later (https://nodejs.org)`
   return newer(nodeVersion, min)
-    ? { id: 'node', status: 'ok', summary: `${nodeVersion} (reeval needs ${engines})` }
+    ? { id: 'runtime', status: 'ok', summary: `${label} (reeval needs Node ${engines})` }
     : {
-        id: 'node',
+        id: 'runtime',
         status: 'fail',
-        summary: `${nodeVersion}, but reeval needs ${engines}`,
-        fix: `install Node ${min.join('.')} or later (https://nodejs.org)`,
+        summary: `${label}, but reeval needs Node ${engines}`,
+        fix: runtime.name === 'node' ? install : `upgrade ${runtime.name}, or ${install}`,
       }
 }
 
@@ -497,7 +509,7 @@ export async function doctor(
   flags: Flags,
   deps: DoctorDeps,
 ): Promise<{ report: DoctorReport; config?: ResolvedConfig; missingImages: string[] }> {
-  const checks: Check[] = [checkNode(deps.nodeVersion)]
+  const checks: Check[] = [checkRuntime(deps.runtime, deps.nodeVersion)]
   const configPath = configPathFor(flags.config)
   let config: ResolvedConfig | undefined
   let missingImages: string[] = []

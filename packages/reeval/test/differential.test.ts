@@ -22,6 +22,15 @@ describe('differential normalisation', () => {
     assert.deepEqual(record('0.1.0'), { stack: { os: 'linux' }, status: 'complete' })
   })
 
+  test("the runtime's version is the machine's, like Node's", () => {
+    const shown = (version: string) =>
+      `"node": "${version}",\n"runtime": {\n  "name": "node",\n  "version": "${version}"\n}`
+    assert.equal(normaliseText(shown('22.14.0'), []), normaliseText(shown('24.1.0'), []))
+    const record = (version: string) =>
+      normaliseRecord({ stack: { node: version, runtime: { name: 'node', version } } }, [])
+    assert.deepEqual(record('22.14.0'), { stack: { runtime: { name: 'node' } } })
+  })
+
   test('judge versions and fingerprints that follow the package version drop out', () => {
     const before = [
       '  ✓ → ✓  changed (not comparable)  evals/greet.es.ts › writes greet.js: evals/greet.es.ts changed, harness config changed',

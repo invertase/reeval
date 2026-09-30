@@ -24,7 +24,7 @@ import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { workspaceLabel } from './environment.ts'
-import { author, gitInfo, runnerInfo } from './history/provenance.ts'
+import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -365,6 +365,8 @@ async function runCommand(
       budgetReached: budgetReached(),
       plan,
       es: version,
+      runtime: runtimeInfo(),
+      language: { name: 'typescript' },
       enginePackages: engineVersions,
       sandbox: sandboxVersions,
       worktreePatch: ctx.worktreePatch,
