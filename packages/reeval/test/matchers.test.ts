@@ -91,7 +91,7 @@ describe('toPass', () => {
   })
 
   test('rejects something that is not a verdict', () => {
-    assert.throws(() => matchers.toPass({}), /toPass\(\) expects a t\.judge\(\) verdict/)
+    assert.throws(() => matchers.toPass({}), /toPass\(\) expects a c\.judge\(\) verdict/)
   })
 })
 

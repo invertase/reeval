@@ -1026,7 +1026,7 @@ evaluate('early', async (c) => { await c.judge('?') })
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /t\.judge\(\) has no turn to grade/)
+    assert.match(r.stdout, /c\.judge\(\) has no turn to grade/)
   })
 
   test('c.judge with an empty question or a threshold outside 0…1 fails without asking the judge', async () => {
@@ -1040,8 +1040,8 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /t\.judge\(\) needs a question: a non-empty string \(got " {2}"\)/)
-    assert.match(r.stdout, /t\.judge\(\) threshold must be between 0 and 1 \(got 2\)/)
+    assert.match(r.stdout, /c\.judge\(\) needs a question: a non-empty string \(got " {2}"\)/)
+    assert.match(r.stdout, /c\.judge\(\) threshold must be between 0 and 1 \(got 2\)/)
     const judged = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
     )

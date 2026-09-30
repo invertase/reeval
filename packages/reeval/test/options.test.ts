@@ -227,7 +227,7 @@ evaluate('judged', async (c) => {
     assert.equal(r.code, 1, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /t\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.config\.ts/,
+      /c\.judge\(\) has no model\. Set judge: \{ model: 'typesafe-ai\/jev-1\.13\.0' \} in reeval\.config\.ts/,
     )
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
@@ -991,7 +991,7 @@ describe('common mistakes', () => {
     [
       'an eval with no function',
       `evaluate('x', {})`,
-      /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(t\) => \{ … \}\)\./,
+      /evaluate\("x"\) has no function\. Pass the eval's body, e\.g\. evaluate\("x", async \(c\) => \{ … \}\)\./,
     ],
     [
       'a base image on an environment',
