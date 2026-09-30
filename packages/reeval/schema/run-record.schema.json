@@ -1946,6 +1946,18 @@
           },
           "required": ["model", "resolvedModels", "threshold", "version"]
         },
+        "language": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": ["name"]
+        },
         "node": {
           "type": "string"
         },
@@ -1959,6 +1971,18 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "runtime": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": ["name", "version"]
         }
       },
       "required": [

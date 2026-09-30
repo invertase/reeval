@@ -77,6 +77,7 @@ export function normaliseText(text: string, roots: string[]): string {
       // where the build and the package store put things.
       .replace(/\bnode (v?)\d+\.\d+\.\d+/gi, 'node $1<version>')
       .replace(/"node": ?"\d+\.\d+\.\d+"/g, '"node": "<version>"')
+      .replace(/"version": ?"\d+\.\d+\.\d+"/g, '"version": "<version>"')
       // The published version is which build ran, not what the engine did. The judge
       // version hashes it, so a release also moves judge versions, the fingerprints
       // that include them, and compare lines that name that judge change.
