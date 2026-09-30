@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, lstatSync, readdirSync, readFileSync, readlinkSync } from 'node:fs'
 import { basename, dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { type HarnessAgentAdapter, prepareSandboxForHarness } from '@ai-sdk/harness/agent'
+import { createHarnessSandboxTemplate, type HarnessAgentAdapter } from '@ai-sdk/harness/agent'
 import {
   failureCause,
   failureMessage,
@@ -389,11 +389,11 @@ async function bake(
   session: Awaited<ReturnType<typeof createDockerSession>>,
   bootstrap: (typeof BOOTSTRAPS)[BakedHarness],
 ): Promise<string> {
-  await prepareSandboxForHarness({
-    session,
+  const template = await createHarnessSandboxTemplate({
     harnesses: [await bootstrap.adapter()],
     sandboxConfig: { workDir: WORKSPACE_DIR },
   })
+  await template?.prepare({ session })
   let probe = bootstrap.version
   if (!probe) {
     const found = await session.run({
