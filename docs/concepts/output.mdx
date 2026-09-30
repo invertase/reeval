@@ -24,7 +24,7 @@ flowchart TD
 
 | Mode | Picked when | Prints |
 |---|---|---|
-| `agent` | A coding agent runs reeval (Cursor, Claude Code, Codex…, as std-env detects them) | Failures (and expected misses, as `MISS`) only, then totals and the summary path; no colour, no heartbeat |
+| `agent` | A coding agent runs reeval (Cursor, Claude Code, Codex, GitHub Copilot…, as std-env detects them) | Failures (and expected misses, as `MISS`) only, then totals and the summary path; no colour, no heartbeat |
 | `plain` | CI is detected (`CI`, `GITHUB_ACTIONS`, `BUILD_NUMBER`…), or stdout isn't a terminal | Append-only lines, never rewritten |
 | `live` | On a terminal | The same as `plain`, until the redrawn view lands |
 
