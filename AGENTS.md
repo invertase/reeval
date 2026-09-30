@@ -319,7 +319,8 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   Bump the family by hand, together with the adapter and its patch. It also skips the harness
   CLIs, which are pinned in each harness's source (Antigravity's and Goose's sha256, Codex's
   sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
-  lockfile). The drift leg in `real.yml` tracks those instead.
+  lockfile). The drift leg in `real.yml` tracks those instead. Node majors (`@types/node` and the
+  base image's `node`) are ignored too: they stay on the `engines` floor's line, Node 22.
 
 ### Changing what reeval persists
 
