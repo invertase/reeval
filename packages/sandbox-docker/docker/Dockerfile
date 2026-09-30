@@ -1,6 +1,6 @@
 # Base image for reeval sandboxes. `reeval image build` builds this, bakes the Cursor harness
 # bootstrap into it and commits the result as the image evals run in.
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates curl git procps \
