@@ -1126,6 +1126,35 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'judge.scope',
+    area: 'Judges and matchers',
+    name: 'What the judge sees: build output, source maps, build info and minified files dropped from its diff, `judge.include` and `judge.files` from the config to the call',
+    fixtures: ['judge/build-output', 'judge/include', 'judge/files'],
+    tests: [
+      unit('the judge drops build output, source maps, build info and minified files'),
+      unit("the judge's include filters its diff and files"),
+      engine('judge include and files cascade from the config to the call'),
+    ],
+  },
+  {
+    id: 'judge.input-size',
+    area: 'Judges and matchers',
+    name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint",
+    tests: [
+      unit("a provider's error keeps its wording and adds what fills the judge's input"),
+      engine("a provider's error keeps its wording and names what filled the judge's input"),
+    ],
+  },
+  {
+    id: 'judge.soft-failure',
+    area: 'Judges and matchers',
+    name: 'A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run',
+    tests: [
+      engine('a judge call that fails is recorded, and the judges and checks after it still run'),
+      engine('a judge failure the eval never asserts on still fails the attempt'),
+    ],
+  },
+  {
     id: 'judge.real',
     area: 'Judges and matchers',
     name: 'A real judge model call',

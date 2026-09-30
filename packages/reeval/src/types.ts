@@ -110,8 +110,14 @@ export type JSONValue =
   | JSONValue[]
   | { [key: string]: JSONValue }
 
-/** A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. */
-export type FakeJudgeModel = { kind: 'fake-judge'; score: number }
+/**
+ * A canned judge for tests and dry runs; see `fakeJudge()` in `reeval/judge`. `score` as a
+ * function of the state the judge would see works per group, eval or call, not in the config.
+ */
+export type FakeJudgeModel = {
+  kind: 'fake-judge'
+  score: number | ((state: { [key: string]: JSONValue }) => number)
+}
 
 /**
  * `'provider/model'` (e.g. `'typesafe-ai/jev-1.13.0'`, `'google/gemini-3.8-flash'`), an AI SDK
@@ -127,6 +133,13 @@ export type JudgeOptions = {
   providerOptions?: Record<string, Record<string, JSONValue>>
   /** The most judge calls to this model's provider at once, across the run. */
   maxConcurrent?: number
+  /**
+   * Which changed files the judge's diff shows: gitignore-style patterns over workspace paths,
+   * where the last matching pattern wins and a `!` pattern excludes. Default: every changed file.
+   */
+  include?: string[]
+  /** Workspace files the judge sees whole, as they are now, whether or not the agent changed them. */
+  files?: string[]
 }
 
 export type JudgeCallOptions = JudgeOptions & {
@@ -145,11 +158,21 @@ export type Verdict = {
   resolvedModel?: string
 }
 
+/**
+ * What `c.judge()` returns when the call failed (the provider's error, after any retries): the attempt fails as a judge error once the eval's body has finished,
+ * so the judges and checks after it still run.
+ */
+export type JudgeFailure = Omit<Verdict, 'verdict' | 'score' | 'resolvedModel'> & {
+  verdict: 'error'
+  score: null
+  error: string
+}
+
 export type AttemptContext = {
   /** Sends the next turn of this eval's agent session, starting the sandbox on first use. */
   send(prompt: string): Promise<Turn>
   /** Asks the judge a yes/no question about the latest turn (or `options.on`). */
-  judge(question: string, options?: JudgeCallOptions): Promise<Verdict>
+  judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   exec(command: string): Promise<ExecResult>
   /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
   readFile(path: string): Promise<string | null>
@@ -1135,6 +1158,8 @@ export type JudgeInput = {
   question: string
   model: string
   state: { [key: string]: JSONValue }
+  /** What the state leaves out and why, e.g. `dist/ (3 files): build output`. */
+  dropped?: string[]
   error?: string
   retries?: JudgeRetry[]
 }

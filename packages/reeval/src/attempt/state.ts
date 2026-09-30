@@ -44,8 +44,10 @@ export type Attempt = {
   sandbox?: Sandbox
   session?: HarnessSession
   phases?: BrokerPhases
-  /** A judge call threw or had no model: a failed assertion is then the judge's. */
+  /** A judge call failed or had no model: a failed assertion is then the judge's. */
   judgeErrored: boolean
+  /** Judge calls that failed without throwing, which fail the attempt once the eval's body is done. */
+  judgeErrors: string[]
 }
 
 export function createAttempt(
@@ -79,6 +81,7 @@ export function createAttempt(
     },
     signal,
     judgeErrored: false,
+    judgeErrors: [],
   }
 }
 

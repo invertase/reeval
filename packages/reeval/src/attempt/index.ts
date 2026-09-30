@@ -85,7 +85,7 @@ async function attemptBody(
       return { exec, readFile }
     },
     send: turnSender(a, start, takeContext, { exec, readFile }),
-    judge: judgeCaller(a),
+    judge: judgeCaller(a, readFile),
   }
 
   const timedOut = () => !!timer?.aborted && !testSignal.aborted
@@ -102,6 +102,12 @@ async function attemptBody(
     a.signal.throwIfAborted()
     const missed = await unawaited()
     if (missed) throw missed
+    const [only, ...more] = a.judgeErrors
+    if (only) {
+      throw new Error(
+        more.length ? `${more.length + 1} judge calls failed:\n${a.judgeErrors.join('\n')}` : only,
+      )
+    }
   } catch (error) {
     recordFailure(a, error, timedOut())
     if (timedOut()) throw new Error(`Eval timed out after ${spec.timeoutMs / 1000}s`)

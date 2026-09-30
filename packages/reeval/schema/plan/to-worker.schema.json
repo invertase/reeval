@@ -149,6 +149,18 @@
     "ConfigJudgeOptions": {
       "type": "object",
       "properties": {
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "maxConcurrent": {
           "type": "number"
         },
@@ -588,7 +600,16 @@
           "const": "fake-judge"
         },
         "score": {
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          ]
         }
       },
       "required": ["kind", "score"]
@@ -1278,6 +1299,18 @@
         "judge": {
           "type": "object",
           "properties": {
+            "files": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "include": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "maxConcurrent": {
               "type": "number"
             },

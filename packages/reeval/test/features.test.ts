@@ -258,6 +258,14 @@ const versionedRepo = (dir: string) => {
 
 const workspaceOf = (run: RunRecord) => run.environments.find((e) => e.workspace)?.workspace
 
+/** The first judge call's recorded input, of the eval `name`'s first attempt. */
+const judgeInputOf = (run: RunRecord, runDir: string, name = 'lands') => {
+  const path = run.evals.find((e) => e.name === name)?.attempts[0]?.files.judgeInput?.path
+  assert.ok(path, `${name} recorded its judge input`)
+  const [input] = JSON.parse(readFileSync(join(runDir, path), 'utf8'))
+  return input as { state: Record<string, unknown>; dropped?: string[] }
+}
+
 export const features: Feature[] = [
   {
     dir: 'config/found-from-subdirectory',
@@ -1313,6 +1321,39 @@ export const features: Feature[] = [
       },
     },
     canary: /expected '' to be null/,
+  },
+  {
+    dir: 'judge/build-output',
+    tiers: ['fake'],
+    env: 'built-app',
+    canary: /expected '.*' to contain 'var bundle'/s,
+    record: ({ run, runDir }) =>
+      assert.deepEqual(judgeInputOf(run, runDir).dropped, [
+        'dist/ (1 file): build output',
+        'public/vendor.js: minified, a line of 1616 characters',
+      ]),
+  },
+  {
+    dir: 'judge/include',
+    tiers: ['fake'],
+    env: 'scoped-app',
+    canary: /expected \[ 'added src\/app\.ts' \] to deeply equal/,
+    record: ({ run, runDir }) =>
+      assert.deepEqual(judgeInputOf(run, runDir).dropped, [
+        'notes.md: not in include',
+        'src/app.test.ts: not in include',
+      ]),
+  },
+  {
+    dir: 'judge/files',
+    tiers: ['fake'],
+    env: 'readme-app',
+    canary: /to deeply equal \{ 'README\.md': 'Run npm test\\n'/,
+    record: ({ run, runDir }) => {
+      const { state } = judgeInputOf(run, runDir)
+      assert.deepEqual(Object.keys(state.contents as object), ['README.md', 'src/app.ts'])
+      assert.doesNotMatch(String(state.diff), /export const app/, 'shown in full, not in the diff')
+    },
   },
 ]
 
