@@ -26,11 +26,11 @@ evaluate(
       question: 'Which greet.js handles a missing or empty name better?',
     },
   },
-  async (t) => {
-    await t.send(
+  async (c) => {
+    await c.send(
       'Create greet.js exporting greet(name) that greets the person in our house greeting style. ' +
         'Add a package.json with "type": "module". No dependencies.',
     )
-    await expect(t.exec(namesAda)).toSucceed()
+    await expect(c.exec(namesAda)).toSucceed()
   },
 )

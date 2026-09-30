@@ -7,6 +7,7 @@ description: Build every sandbox image a run needs, and remove local debug data.
 
 ```bash
 npx reeval image build --dry-run
+npx reeval image build --profile nightly
 npx reeval clean --keep 3
 ```
 
@@ -20,6 +21,8 @@ reeval image build [filter...]
                               image (bakes in its CLI), from and dockerfile images, install layers.
                               Builds what's missing or stale (a from tag that moved upstream), three
                               at a time, and reports every failure; exit 3 if any image failed
+  --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
+                              harness, sandbox and tags pick the images (also REEVAL_PROFILE)
   --force                     Rebuild every image, pulling each base again
   --dry-run                   List the images, how each is made and how each stands, building
                               nothing (a from tag is looked up in its registry, not pulled)
@@ -27,9 +30,9 @@ reeval image build [filter...]
 
 [//]: # (/generated:cli-help:image-build)
 
-It collects the evals like `reeval run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and prepares every image, three at a time, the way `reeval run` does before a run:
+It collects the evals like `reeval run --dry-run` (so `--config`, `--profile` or `REEVAL_PROFILE`, and filters apply) and prepares every image, three at a time, the way `reeval run` does before a run. A profile's `defaults.harness` and `defaults.sandbox` pick the images and its `tags` narrow the evals, as they would for the run; an unknown profile exits 2.
 
-1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.0`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
+1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.1`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
 2. Each `docker({ from })` image: built when missing, and rebuilt when its tag has moved upstream since.
 3. Each `docker({ dockerfile })` image and `install` layer: built when its content hash (or its base) is new.
 

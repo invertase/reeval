@@ -2,7 +2,7 @@ import { evaluate, expect } from 'reeval'
 import { houseRules } from './env.ts'
 
 // Must fail: Antigravity reads AGENTS.md, so nothing is written to Claude Code's CLAUDE.md.
-evaluate('canary', { environment: houseRules }, async (t) => {
-  const box = await t.sandbox()
+evaluate('canary', { environment: houseRules }, async (c) => {
+  const box = await c.sandbox()
   expect(await box.readFile('CLAUDE.md')).toBe('Always write tests.')
 })

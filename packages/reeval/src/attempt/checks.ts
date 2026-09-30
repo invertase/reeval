@@ -10,15 +10,15 @@ export const asCheck = <T>(a: Attempt, fn: () => Promise<T>) =>
 function requireSandbox(a: Attempt): Sandbox {
   if (!a.sandbox) {
     throw new Error(
-      'No sandbox yet: call t.send() or await t.sandbox() before t.exec() or t.readFile()',
+      'No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()',
     )
   }
   return a.sandbox
 }
 
 /**
- * Phase 4, checks: `t.exec` runs with the checks' variables and secrets, each run recorded and
- * timed; `t.readFile` reads the sandbox as is.
+ * Phase 4, checks: `c.exec` runs with the checks' variables and secrets, each run recorded and
+ * timed; `c.readFile` reads the sandbox as is.
  */
 export function createChecks(a: Attempt) {
   const checkEnv = () => (a.env?.checkVars ?? {}) as Record<string, string>

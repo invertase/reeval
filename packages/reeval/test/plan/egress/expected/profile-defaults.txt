@@ -10,6 +10,6 @@ evals/cascade.eval.ts › a variant runs under its own policy                 fa
 evals/cascade.eval.ts › a fake agent with a layout gets that agent's hosts  fake/closed/docker    control         gated    ×1  egress "deny-all" + api.anthropic.com, *.anthropic.com
 excluded: —
 image docker · 7 evals
-  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.1  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 1 evals
   base  reeval-sandbox:claude-code-1.0.128-patch.5d1c985c  (reeval's image: built when missing or when its base changed)

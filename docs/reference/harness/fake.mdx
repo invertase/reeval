@@ -45,7 +45,7 @@ npx reeval run --config reeval.fake.config.ts
 </Property>
 
 <Property name="script" type="FakeScriptStep[][]" optional>
-  Real sandbox actions, one list per `t.send()`; the last list repeats for later turns. Steps run in order, before `files`. See [Script steps](#script-steps).
+  Real sandbox actions, one list per `c.send()`; the last list repeats for later turns. Steps run in order, before `files`. See [Script steps](#script-steps).
 </Property>
 
 <Property name="withSkill" type="{ files?, text? }" optional>

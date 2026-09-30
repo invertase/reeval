@@ -571,7 +571,7 @@ describe('mcp.sse', () => {
         /^InfraError: OpenCode has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       goose:
         /^InfraError: Goose has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
-      pi: /^InfraError: pi has no MCP client, so it can't use the events MCP server$/,
+      pi: /^InfraError: pi has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
       codex:
         /^InfraError: Codex has no SSE MCP transport, so it can't use the events server \(mcp\.sse\)/,
     }
@@ -610,11 +610,27 @@ describe('the pi harness', () => {
     ])
   })
 
-  test('pi has no MCP client, so MCP servers are refused, naming them', () => {
+  test("MCP servers go in pi's mcp.json shape; it has no SSE transport and refuses odd names", () => {
+    assert.deepEqual(
+      AGENTS.pi.mcpServers({
+        stamp: { transport: 'stdio', command: 'node', args: ['s.mjs'], env: { A: '$b' } },
+        'web_2-x': { transport: 'http', url: 'https://x.test/mcp', headers: { H: '!v' } },
+      }),
+      {
+        stamp: { command: 'node', args: ['s.mjs'], env: { A: '$b' } },
+        'web_2-x': { url: 'https://x.test/mcp', headers: { H: '!v' } },
+      },
+    )
+    assert.throws(
+      () => AGENTS.pi.mcpServers({ s: { transport: 'sse', url: 'https://x.test', headers: {} } }),
+      /^InfraError: pi has no SSE MCP transport, so it can't use the s server \(mcp\.sse\)/,
+    )
     assert.throws(
       () =>
-        AGENTS.pi.mcpServers({ stamp: { transport: 'stdio', command: 'node', args: [], env: {} } }),
-      /^InfraError: pi has no MCP client, so it can't use the stamp MCP server$/,
+        AGENTS.pi.mcpServers({
+          'my.docs': { transport: 'stdio', command: 'node', args: [], env: {} },
+        }),
+      /^InfraError: pi takes MCP server names of letters, digits, "_" and "-" only, so it can't use the my\.docs server: rename it$/,
     )
   })
 
@@ -653,12 +669,12 @@ describe('the pi harness', () => {
 
 describe('the Codex harness', () => {
   test('is plain data with its own cell id, and needs an OpenAI model id', () => {
-    const h = codex({ model: 'gpt-5.4-mini' })
-    assert.deepEqual(h, { kind: 'codex', model: 'gpt-5.4-mini' })
-    assert.equal(harnessId(h), 'codex:gpt-5.4-mini')
+    const h = codex({ model: 'gpt-5.6-luna' })
+    assert.deepEqual(h, { kind: 'codex', model: 'gpt-5.6-luna' })
+    assert.equal(harnessId(h), 'codex:gpt-5.6-luna')
     assert.throws(
-      () => codex({ model: 'openai/gpt-5.4-mini' }),
-      /codex\(\) needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e\.g\. codex\(\{ model: 'gpt-5\.4-mini' \}\)/,
+      () => codex({ model: 'openai/gpt-5.6-luna' }),
+      /codex\(\) needs an OpenAI model id, without a provider, since it runs on an OpenAI API key, e\.g\. codex\(\{ model: 'gpt-5\.6-luna' \}\)/,
     )
   })
 

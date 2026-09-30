@@ -7,15 +7,15 @@ import { genkit } from './environments.ts'
 evaluate(
   'the agent calls Gemini with a brokered key',
   { environment: genkit, tags: ['smoke', 'gemini'] },
-  async (t) => {
-    const turn = await t.send(
+  async (c) => {
+    const turn = await c.send(
       'Run exactly this once, and reply with the number it prints only: ' +
         'curl -s -o /dev/null -w "%{http_code}" -H "x-goog-api-key: $GEMINI_API_KEY" ' +
         'https://generativelanguage.googleapis.com/v1beta/models',
     )
     expect(turn.status).toBe('completed')
-    expect((await t.exec('printenv GEMINI_API_KEY')).stdout).toMatch(/^reeval_secret_/)
-    const status = await t.exec(
+    expect((await c.exec('printenv GEMINI_API_KEY')).stdout).toMatch(/^reeval_secret_/)
+    const status = await c.exec(
       'curl -s -o /dev/null -w "%{http_code}" -H "x-goog-api-key: $GEMINI_API_KEY" https://generativelanguage.googleapis.com/v1beta/models',
     )
     expect(status.stdout).toBe('200')

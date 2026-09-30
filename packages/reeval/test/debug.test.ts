@@ -38,16 +38,16 @@ const env = defineEnvironment('traced', {
   files: { 'notes.md': 'notes\\n' },
   setup: ['echo set-up > setup.txt'],
 })
-evaluate('traces every phase', { environment: env }, async (t) => {
-  await t.send('write out.txt')
-  await expect(t.exec('test -f out.txt')).toSucceed()
-  expect(await t.judge('Did it write out.txt?')).toPass()
+evaluate('traces every phase', { environment: env }, async (c) => {
+  await c.send('write out.txt')
+  await expect(c.exec('test -f out.txt')).toSucceed()
+  expect(await c.judge('Did it write out.txt?')).toPass()
 })
 `
 const failing = `import { evaluate, expect } from 'reeval'
-evaluate('fails its check', async (t) => {
-  await t.send('write out.txt')
-  expect((await t.exec('test -f missing.txt')).exitCode).toBe(0)
+evaluate('fails its check', async (c) => {
+  await c.send('write out.txt')
+  expect((await c.exec('test -f missing.txt')).exitCode).toBe(0)
 })
 `
 
@@ -257,9 +257,9 @@ describe('local debug data', () => {
         .replace(/\}\)\n$/, '}))\n')
         .replace('judge:', "env: { LEAKY: secret.fromEnv('REEVAL_DEBUG_LEAKY') },\n  judge:"),
       'evals/b.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('leaks', async (t) => {
-  await t.send('print it')
-  const r = await t.exec(${JSON.stringify(leak)})
+evaluate('leaks', async (c) => {
+  await c.send('print it')
+  const r = await c.exec(${JSON.stringify(leak)})
   expect(r.exitCode).toBe(0)
 })
 `,
@@ -292,9 +292,9 @@ evaluate('leaks', async (t) => {
 const env = defineEnvironment('sentry', ({ secret }) => ({
   env: { SENTRY_DSN: secret.fromEnv('REEVAL_DEBUG_DSN') },
 }))
-evaluate('prints the dsn', { environment: env }, async (t) => {
-  await t.sandbox()
-  const dsn = (await t.exec('printenv SENTRY_DSN')).stdout.trim()
+evaluate('prints the dsn', { environment: env }, async (c) => {
+  await c.sandbox()
+  const dsn = (await c.exec('printenv SENTRY_DSN')).stdout.trim()
   console.log('logged', dsn)
   console.error('warned', dsn)
   expect(dsn).toBe('wrong')
@@ -354,10 +354,10 @@ evaluate('e', async () => {})
         harness: `{ script: [[{ exec: ${JSON.stringify(search)} }]] }`,
       }),
       'evals/b.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('searches for the tail', async (t) => {
-  await t.send('search')
+evaluate('searches for the tail', async (c) => {
+  await c.send('search')
   const tail = (process.env.REEVAL_DEBUG_PROVIDER_API_KEY ?? '').slice(-12)
-  const r = await t.exec(\`echo searching for \${tail}; grep -rlsF -e '\${tail}' . || true\`)
+  const r = await c.exec(\`echo searching for \${tail}; grep -rlsF -e '\${tail}' . || true\`)
   expect(r.exitCode).toBe(0)
 })
 `,
@@ -389,7 +389,7 @@ evaluate('searches for the tail', async (t) => {
   test('keeps the newest debug.keep runs, and reeval clean clears them', async () => {
     const p = await project('debug-keep', {
       'reeval.config.ts': fakeConfig({ extra: 'debug: { keep: 2 },' }),
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', async (t) => { await t.send('go') })\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('e', async (c) => { await c.send('go') })\n`,
     })
     const runs = () => (existsSync(debugRoot(p.dir)) ? readdirSync(debugRoot(p.dir)).sort() : [])
     const ids: string[] = []

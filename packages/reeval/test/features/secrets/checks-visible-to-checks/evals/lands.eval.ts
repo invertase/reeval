@@ -1,9 +1,9 @@
 import { evaluate, expect } from 'reeval'
 import { tokens } from './env.ts'
 
-// A `to: 'checks'` secret reaches t.exec, with the host variable's value.
-evaluate('lands', { environment: tokens }, async (t) => {
-  const box = await t.sandbox()
+// A `to: 'checks'` secret reaches c.exec, with the host variable's value.
+evaluate('lands', { environment: tokens }, async (c) => {
+  const box = await c.sandbox()
   const seen = (await box.exec('printf %s "$CHECK_TOKEN"')).stdout
   expect(seen).toBe(process.env.REEVAL_FIXTURE_TOKEN)
 })

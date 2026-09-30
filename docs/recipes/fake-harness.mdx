@@ -66,9 +66,9 @@ The evals are `examples/hello/evals/hello.eval.ts` and this one, which checks th
 ```ts title="evals/scripted.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
-evaluate('runs the tests after a follow-up', async (t) => {
-  await t.send('Create greet.js.')
-  const turn = await t.send('Now run the tests.')
+evaluate('runs the tests after a follow-up', async (c) => {
+  await c.send('Create greet.js.')
+  const turn = await c.send('Now run the tests.')
   const shell = turn.transcript.filter(
     (e) => e.type === 'tool' && e.tool === 'shell',
   )
@@ -101,7 +101,7 @@ Summary
 Duration  944ms
 ```
 
-The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`t.exec`, `toHaveFile`, `t.judge`) run for real against what it wrote.
+The fake agent writes `files` on every turn, after its `script` steps for that turn. Your checks (`c.exec`, `toHaveFile`, `c.judge`) run for real against what it wrote.
 
 When a coding agent runs reeval for you, agent output prints only the failures, and the expected misses of ungated cells as `MISS`. This is `examples/hello` under its fake config, where the skill compare's control misses on purpose:
 
@@ -130,7 +130,7 @@ summary: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
 | `files` | Writes these files on every turn |
 | `text` | Replies with this final message (default `Done.`) |
 | `withSkill` | Uses these `files` and `text` instead when the environment gives it a skill, so a `compare` shows lift |
-| `script` | One list of steps per `t.send` (the last repeats): `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: '<server>/<tool>' }` |
+| `script` | One list of steps per `c.send` (the last repeats): `{ exec }`, `{ write }`, `{ reply }`, `{ mcp: '<server>/<tool>' }` |
 | `failWith` | Throws before the first turn, as an infra error |
 | `layout` | `'claude-code'`, `'antigravity'`, `'opencode'`, `'goose'` or `'pi'`: reads rules and skills where that agent does, in its image |
 | `delayMs` | Waits this long per turn, and honours timeouts and Ctrl-C |
@@ -182,14 +182,14 @@ const houseRules = defineEnvironment('house-rules', {
 evaluate(
   'puts rules where Claude Code reads them',
   { environment: houseRules },
-  async (t) => {
-    const box = await t.sandbox()
+  async (c) => {
+    const box = await c.sandbox()
     expect(await box.readFile('CLAUDE.md')).toContain('Ahoy')
   },
 )
 ```
 
-`t.sandbox()` starts the sandbox without a turn, so the check sees only what the environment set up.
+`c.sandbox()` starts the sandbox without a turn, so the check sees only what the environment set up.
 
 ## The fake sandbox and judge
 

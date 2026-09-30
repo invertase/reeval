@@ -67,8 +67,8 @@ export default defineConfig({
   providers are refused at plan time; no `mcp.sse`; web search via Exa,
   whose host it allows; it also reads `.claude/skills` and `.agents/skills`), `goose({ model })`
   and `pi({ model })` (`GOOGLE_GENERATIVE_AI_API_KEY`; a Gemini model id, e.g.
-  `gemini-3.8-flash`; pi has no MCP),
-  `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.4-mini`; no `mcp.sse`) and
+  `gemini-3.8-flash`; neither takes `mcp.sse`),
+  `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
   harness's own endpoints. Cursor, Claude Code, Antigravity, pi and Codex report tokens, which reeval records
@@ -110,29 +110,29 @@ with `--config reeval.fake.config.ts`.
 import { evaluate, expect, group } from 'reeval'
 
 group('hello', () => {
-  evaluate('creates hello.txt', async (t) => {
-    const turn = await t.send('Create hello.txt containing "hello".')
+  evaluate('creates hello.txt', async (c) => {
+    const turn = await c.send('Create hello.txt containing "hello".')
     await expect(turn).toHaveFile('hello.txt', /hello/)   // await it: it's async
-    await expect(t.exec('grep -q hello hello.txt')).toSucceed()
-    expect(await t.judge('Did the agent create hello.txt with the right content?')).toPass()
+    await expect(c.exec('grep -q hello hello.txt')).toSucceed()
+    expect(await c.judge('Did the agent create hello.txt with the right content?')).toPass()
   })
 })
 ```
 
 - `evaluate(name, [options,] fn)` and `group(name, [options,] fn)`; also `.skip`, `.only`
-  (an error in CI), `.todo`, and `evaluate.for(cases)(name, (t, item) => …)` (`$key`, `%s`,
+  (an error in CI), `.todo`, and `evaluate.for(cases)(name, (c, item) => …)` (`$key`, `%s`,
   `%#` in the name). The eval id is `file › group › name`; renaming an eval restarts its history.
-- `await t.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
-  `transcript`). Call it again for multi-turn; `t.judge(q, { on: firstTurn })` grades an earlier one.
-- `await t.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `await t.readFile(path)` the text
-  or `null` (`~/` for home). `await t.sandbox()` starts the sandbox without a turn, to check what
-  the environment set up. `t.attempt.cell.role` is `'control'` or `'variant'`.
-- `await t.judge(question, { threshold?, model?, on? })`: the judge sees the prompt, the final
+- `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
+  `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
+- `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `await c.readFile(path)` the text
+  or `null` (`~/` for home). `await c.sandbox()` starts the sandbox without a turn, to check what
+  the environment set up. `c.attempt.cell.role` is `'control'` or `'variant'`.
+- `await c.judge(question, { threshold?, model?, on? })`: the judge sees the prompt, the final
   message, the changed files and the diff, not what the agent ran. Prefer deterministic checks
   for what can be checked; use the judge for quality, with plain yes/no questions that don't
   name one specific way of doing it.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
-  `await expect(t.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
+  `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw
   `HarnessCapabilityError` when `turn.unreported` lists web events), plus Vitest's.
 
@@ -207,9 +207,9 @@ group(
   'greetings',
   { compare: { baseline: plain, variants: [houseStyle] }, runs: 2 },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send('Create greet.js exporting greet(name) in our house greeting style.')
-      await expect(t.exec(greetsAda)).toSucceed()
+    evaluate('greets in the house style', async (c) => {
+      await c.send('Create greet.js exporting greet(name) in our house greeting style.')
+      await expect(c.exec(greetsAda)).toSucceed()
     })
   },
 )
@@ -263,7 +263,7 @@ docker({ memory: '8g', cpus: 4, pids: 4096 })        // limits; defaults 4g (no 
 docker({ root: true })                               // opt in: apt-get at run time (default: user reeval)
 ```
 
-The agent, setup and `t.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
+The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
 `root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
 
 One sandbox per eval (a list is an error). `npx reeval image build` builds every image the plan needs.
@@ -292,8 +292,9 @@ reeval record            reeval history      reeval show [run]      reeval compa
 reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
 reeval analyze           (one checked LLM reading of a run; --context for your own agent)
                          analysis: { agent: true } also notes each eval × harness during reeval run
-                         (.reeval/analysis/<run>/notes/; a model call each, off by default; never gates)
-reeval studio            reeval studio build --out site      reeval image build [--dry-run]      reeval clean
+                         (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
+                         (a model call each, off by default; never gates)
+reeval studio            reeval studio build --out site      reeval image build [--dry-run] [--profile <p>]      reeval clean
 reeval mcp               (the history as read-only MCP tools: history, show, compare, query_*, transcript)
 ```
 
@@ -324,7 +325,7 @@ them to `evals/.history/` to commit.
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
-| No `judge.model` anywhere | `t.judge() has no model` | Set one, or `fakeJudge()` |
+| No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |

@@ -29,15 +29,15 @@ everything but the Docker tier on Windows and macOS.
 import { evaluate, expect, group } from 'reeval'
 
 group('greet module', () => {
-  evaluate('creates a tested greet module', async (t) => {
-    const turn = await t.send(
+  evaluate('creates a tested greet module', async (c) => {
+    const turn = await c.send(
       'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
         'and greet.test.js that tests it with node:test. No dependencies.',
     )
 
     await expect(turn).toHaveFile('greet.js')
-    await expect(t.exec('node --test')).toSucceed()
-    expect(await t.judge("Does the agent's final message accurately describe what it changed?")).toPass()
+    await expect(c.exec('node --test')).toSucceed()
+    expect(await c.judge("Does the agent's final message accurately describe what it changed?")).toPass()
   })
 })
 ```
@@ -84,12 +84,12 @@ group(
   'house greeting',
   { compare: { baseline: plain, variants: [withHouseGreeting] } },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send(
+    evaluate('greets in the house style', async (c) => {
+      await c.send(
         'Create greet.js exporting greet(name) that greets the person ' +
           'in our house style.',
       )
-      await expect(t.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
+      await expect(c.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
     })
   },
 )
@@ -162,16 +162,16 @@ its Reference page.
 | [Antigravity](./docs/reference/harness/antigravity.mdx) | `GEMINI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 | [OpenCode](./docs/reference/harness/opencode.mdx) | The model's provider's | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✓ | ✓ | `docker()` |
 | [Goose](./docs/reference/harness/goose.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ | ✓ | ✗ | ✗ | `docker()` |
-| [pi](./docs/reference/harness/pi.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✗ | ✗ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
+| [pi](./docs/reference/harness/pi.mdx) | `GOOGLE_GENERATIVE_AI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✗ | ✗ | `docker()` |
 | [Codex](./docs/reference/harness/codex.mdx) | `OPENAI_API_KEY` | ✓ | `AGENTS.md` | ✓ | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ | ✓ | `docker()` |
 
 - **Cursor**: The gateway also swaps the session tokens the Cursor SDK exchanges its key for (`accessToken` and `refreshToken`) on `cursor.sh` and `*.cursor.sh`. Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null. Its SDK leaves web search and fetch calls out of the stream; reeval recovers them from the stored conversation, and a turn it can't recover is marked `unreported` so web matchers refuse it.
 - **Claude Code**: Served model as the harness reports it: its API requests don't name one, so the record's `servedModels` is null.
 - **Antigravity**: Its CLI always tries `play.googleapis.com` and `antigravity-unleash.goog`; a restricted egress policy refuses them and records them under the record's `egress.expectedBlocked`.
-- **OpenCode**: Its key is the model's provider's (`anthropic/claude-haiku-4-5` takes `ANTHROPIC_API_KEY`), on any of the 199 providers whose key OpenCode sends in a header on known hosts; the other 22 are refused at plan time. No `mcp.sse` transport: those servers are refused at plan time (exit 2). No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: `mcp.exa.ai` is one of its automatic hosts. MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its `execute` tool; the first prompt waits until they've connected.
+- **OpenCode**: Its key is the model's provider's (`anthropic/claude-haiku-4-5` takes `ANTHROPIC_API_KEY`), on any of the 201 providers whose key OpenCode sends in a header on known hosts; the other 22 are refused at plan time. No `mcp.sse` transport: those servers are refused at plan time (exit 2). No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount. Its web searches go to Exa's hosted MCP server, keyless, from the sandbox: `mcp.exa.ai` is one of its automatic hosts. MCP servers go in its config with Code Mode off, not over ACP, where OpenCode offers them only through its `execute` tool; the first prompt waits until they've connected.
 - **Goose**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). MCP servers go in its `config.yaml` as enabled extensions, not over ACP, where they start disabled. No tokens recorded: its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.
-- **pi**: No MCP client: an eval that gives it MCP servers is refused at plan time (exit 2).
-- **Codex**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). Served model and reasoning effort from each API response, which the gateway reads (e.g. `gpt-5.4-mini-2026-03-17[effort=medium]`): its CLI doesn't report them. Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.
+- **pi**: No `mcp.sse` transport: those servers are refused at plan time (exit 2).
+- **Codex**: No `mcp.sse` transport: those servers are refused at plan time (exit 2). Served model and reasoning effort from each API response, which the gateway reads (e.g. `gpt-5.6-luna[effort=medium]`): its CLI doesn't report them. Its web searches and the pages it opens run on OpenAI's side, so a restricted egress policy doesn't limit them; each is in the transcript.
 
 [//]: # (/generated:readme:harness-matrix)
 

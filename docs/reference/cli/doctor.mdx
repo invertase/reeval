@@ -30,14 +30,14 @@ A real run in a project from `reeval init --yes`, before Docker was started or a
 
 ```text
 reeval doctor · reeval.config.ts
-✓ node       22.14.0 (reeval needs >=22.13)
+✓ runtime    node 22.14.0 (reeval needs Node >=22.13)
 ✓ config     reeval.config.ts: harness cursor:composer-2.5, sandbox docker, profiles fake, pr, nightly
 ✗ docker     isn't running, and the config's sandboxes need it
              fix: start Docker Desktop, or the Docker service (sudo systemctl start docker)
 - image      Docker isn't running
 ✗ key        CURSOR_API_KEY for cursor:composer-2.5: not set
              fix: add CURSOR_API_KEY=... to .env.local
-- judge      no judge model (t.judge needs one)
+- judge      no judge model (c.judge needs one)
 ✓ egress     allow-all: the agents reach any host (the default); evals and environments may set their own
 ✓ gitignore  .env* and .reeval/ are ignored
 
@@ -50,7 +50,7 @@ reeval doctor · reeval.config.ts
 
 | Check | Problem (`✗`) | Warning (`!`) |
 |---|---|---|
-| `node` | Older than the package's `engines` | |
+| `runtime` | Node, or the Node version Bun or Deno provides, is older than the package's `engines` | |
 | `config` | No `reeval.config.*` here or above, or it doesn't load | |
 | `docker` | Not running, or running Windows containers, when a sandbox in the config or a profile is `docker()` | Under 4 GB of memory, one attempt's default limit |
 | `image` | reeval's sandbox image for a configured harness isn't built, or a `docker({ image })` isn't in Docker | Images for this harness from another reeval version |
@@ -91,7 +91,11 @@ With `--online`, each key goes in one request to its API, only in a header: `GET
   "warnings": 1,
   "config": "reeval.config.ts",
   "checks": [
-    { "id": "node", "status": "ok", "summary": "22.14.0 (reeval needs >=22.13)" },
+    {
+      "id": "runtime",
+      "status": "ok",
+      "summary": "node 22.14.0 (reeval needs Node >=22.13)"
+    },
     …
   ]
 }

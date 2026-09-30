@@ -1,0 +1,47 @@
+# Dependabot version updates (AGENTS.md, CI and releases). Every PR title and commit is a
+# Conventional Commit that commits.yml accepts: `build(deps): …`, `build(deps-dev): …` or `ci: …`.
+version: 2
+updates:
+  # The pnpm workspace from its root: every packages/* and examples/* package and the lockfile.
+  - package-ecosystem: npm
+    directory: /
+    schedule: { interval: weekly }
+    commit-message: { prefix: build, include: scope }
+    open-pull-requests-limit: 5
+    # The harness CLIs' own lockfiles (harness-pi's assets/), which the harness installs in the
+    # sandbox; the drift leg in real.yml tracks their newest versions.
+    exclude-paths:
+      - packages/*/assets/**
+    groups:
+      # Pinned to exactly the same version (AGENTS.md, Project rules).
+      vitest:
+        patterns: ['@vitest/expect', '@vitest/utils']
+      dev-minor:
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # @ai-sdk/harness-claude-code carries a pnpm patch that fails `pnpm install` on a bump until
+      # it's rebased or dropped (scripts/drift/claude-code-patch.mjs says when). It pins
+      # @ai-sdk/harness and @ai-sdk/provider-utils exactly, and they pin ai and @ai-sdk/provider,
+      # so bumping any of the family without it installs two copies. They move by hand, together.
+      - dependency-name: ai
+      - dependency-name: '@ai-sdk/*'
+      # reeval supports Node 22.13 and later (engines), so the types stay on 22: a newer major
+      # would type-check APIs that 22.13 lacks.
+      - dependency-name: '@types/node'
+        update-types: [version-update:semver-major]
+  # `/` covers .github/workflows only, so the composite actions are listed too.
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*]
+    schedule: { interval: weekly }
+    commit-message: { prefix: ci }
+  # The sandbox base image. Every other Dockerfile is FROM ${REEVAL_BASE}.
+  - package-ecosystem: docker
+    directory: /packages/sandbox-docker/docker
+    schedule: { interval: weekly }
+    commit-message: { prefix: build, include: scope }
+    ignore:
+      # Node majors move by hand, on the line reeval supports (engines: Node 22.13 and later), and
+      # with src/build-image.ts, which copies Node from node:22-bookworm-slim onto other bases.
+      - dependency-name: node
+        update-types: [version-update:semver-major]

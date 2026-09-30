@@ -1,6 +1,7 @@
 // `analysis.agent` during `reeval run`: a note on each eval and harness as soon as that harness's
 // attempts of the eval (every run) have finished, on the host, from the staged records. The run
-// awaits them before it's written. A note never changes an outcome or the exit code.
+// awaits them before it's written. Once it is, one summary of the whole run goes into the analysis
+// cache (`summary.ts`). Neither changes an outcome or the exit code.
 import type { PlannedItem } from '../../engine/types.ts'
 import { fromCwd } from '../../ids.ts'
 import type { ResolvedConfig } from '../../types.ts'
@@ -117,6 +118,28 @@ export function startNotes({ config, model, runId, stagingDir, planned, warn }: 
       const notes = (await Promise.all(pending)).filter((n): n is AnalysisNote => n !== null)
       return notes
     },
+  }
+}
+
+/**
+ * Writes the run's summary into the analysis cache, once the run is written; the line to print.
+ * A failure is a warning: the run's outcomes and exit code stand.
+ */
+export async function summarizeRun(
+  config: ResolvedConfig,
+  runId: string,
+  model: ResolvedAnalysisModel,
+): Promise<{ level: 'info' | 'warn'; text: string }> {
+  try {
+    const { writeRunSummary } = await import('./summary.ts')
+    const { doc, path } = await writeRunSummary({ config, runId, model })
+    if (doc.error) return { level: 'warn', text: `analysis summary failed: ${doc.error}` }
+    return {
+      level: 'info',
+      text: `analysis: summary in ${fromCwd(path)} (reeval analyze shows it)`,
+    }
+  } catch (error) {
+    return { level: 'warn', text: `analysis summary wasn't written: ${(error as Error).message}` }
   }
 }
 

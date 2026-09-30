@@ -42,7 +42,7 @@ import { ANTIGRAVITY_BUILTIN_TOOLS, type AntigravityBuiltinTools } from './antig
 
 export const ANTIGRAVITY_HARNESS_ID = 'antigravity'
 
-/** Where the CLI reads home skills (1.2.11; its docs' `~/.gemini/antigravity-cli/skills` isn't read). */
+/** Where the CLI reads home skills (1.2.14; its docs' `~/.gemini/antigravity-cli/skills` isn't read). */
 export const ANTIGRAVITY_HOME_SKILLS_DIR = '.gemini/config/skills'
 /** Always-on global rules; `instructions` are appended here. */
 export const ANTIGRAVITY_INSTRUCTIONS_FILE = '.gemini/GEMINI.md'
@@ -209,6 +209,14 @@ async function startSession(
     async doPromptTurn(turn): Promise<HarnessV1PromptControl> {
       if (ended) throw new Error('This Antigravity session has ended')
       if (turn.tools.length > 0) throw unsupported('host-executed tools')
+      const schema = turn.responseFormat?.type === 'json' ? turn.responseFormat.schema : undefined
+      // Since 1.2.14 the CLI exits 1 at startup on a schema whose root isn't an object.
+      if (schema && schema.type !== 'object') {
+        throw new HarnessCapabilityUnsupportedError({
+          message: `The Antigravity CLI's --json-schema takes only a schema whose root is "type": "object" (got ${JSON.stringify(schema.type ?? null)})`,
+          harnessId: ANTIGRAVITY_HARNESS_ID,
+        })
+      }
       const n = ++turns
       await writeSkills({
         sandbox,
@@ -231,11 +239,11 @@ async function startSession(
         abortSignal: turn.abortSignal,
       })
       let jsonSchemaFile: string | undefined
-      if (turn.responseFormat?.type === 'json' && turn.responseFormat.schema) {
+      if (schema) {
         jsonSchemaFile = posix.join(sessionDir, `schema-${n}.json`)
         await sandbox.writeTextFile({
           path: jsonSchemaFile,
-          content: JSON.stringify(turn.responseFormat.schema),
+          content: JSON.stringify(schema),
           abortSignal: turn.abortSignal,
         })
       }

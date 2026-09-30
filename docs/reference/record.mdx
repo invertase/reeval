@@ -23,7 +23,7 @@ evals/.history/                            commit this
     diff.patch                             the agent's changes, dependency noise dropped
     judge-input.json                       what each judge call saw
     setup.log                              each environment setup step's output
-    checks/<n>.log                         each t.exec: command, exit code, stdout, stderr
+    checks/<n>.log                         each c.exec: command, exit code, stdout, stderr
 .reeval/                                       scratch: gitignore it
   runs/<runId>.json + <runId>/             every reeval run, same shape
   debug/<runId>/…                          local debug data, never recorded
@@ -167,7 +167,17 @@ What ran and graded the agents: the machine, images, harnesses and judge.
 
 <Property name="es" type="string"></Property>
 
-<Property name="node" type="string"></Property>
+<Property name="node" type="string">
+  `process.versions.node`: under Bun or Deno, the Node version they're compatible with.
+</Property>
+
+<Property name="runtime" type="{name: string; version: string}" optional>
+  The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in runs recorded before it, which ran on Node.
+</Property>
+
+<Property name="language" type="{name: string; version?: string}" optional>
+  The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its toolchain when the runner reports one. Absent in runs recorded before it.
+</Property>
 
 <Property name="os" type="string"></Property>
 
@@ -185,7 +195,9 @@ What ran and graded the agents: the machine, images, harnesses and judge.
   Each harness: its configured `model`, and `resolvedModels`, what it reported serving across the run's turns with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5` without `params`); empty when it reports none.
 </Property>
 
-<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}"></Property>
+<Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}">
+  The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it. `config.judgeModel` and `config.threshold` name the same one.
+</Property>
 
 <Property name="context" type="ContextFile[]">
   Union of every attempt's context files.
@@ -458,7 +470,7 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 </Property>
 
 <Property name="servedModels" type="string[] | null">
-  The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.4-mini-2026-03-17[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
+  The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
 </Property>
 
 <Property name="outcome" type="Outcome"></Property>

@@ -40,15 +40,15 @@ group(
     gate: { passRate: 0.6 },
   },
   () => {
-    evaluate('looks up the latest SDK version', async (t) => {
-      const turn = await t.send(
+    evaluate('looks up the latest SDK version', async (c) => {
+      const turn = await c.send(
         'Which version of acme-sdk is the latest? ' +
           'Reply with the version only.',
       )
       const tools = turn.transcript.flatMap((e) =>
         e.type === 'tool' ? [e.tool] : [],
       )
-      if (t.attempt.cell.role === 'variant') {
+      if (c.attempt.cell.role === 'variant') {
         expect(tools).toContain('mcp__docs__latest_version')
       }
       expect(turn.text).toContain('4.2.0')
@@ -57,7 +57,7 @@ group(
 )
 ```
 
-- `mcp.http(url, { headers })` connects the agent to a remote server. `mcp.sse(url)` works the same way for SSE servers, except on Goose and Codex, which have no SSE transport. pi has no MCP client, so any MCP server makes its plan exit 2.
+- `mcp.http(url, { headers })` connects the agent to a remote server. `mcp.sse(url)` works the same way for SSE servers, except on OpenCode, Goose, pi and Codex, which have no SSE transport, so their plans exit 2.
 - `secret.template('Bearer ${ACME_TOKEN}')` reads `ACME_TOKEN` from the host when the attempt starts.
 - The tool-call check runs only in the variant cell: the control has no server to call.
 
@@ -183,7 +183,7 @@ Summary
 ## Variations
 
 - **A published stdio server:** `mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0'])`. Pin the version, and give its env secrets `hosts` to broker them: `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })`.
-- **Check the answer, not the call:** drop the tool check and add `t.judge('Does the reply name 4.2.0 as the latest version?')`.
+- **Check the answer, not the call:** drop the tool check and add `c.judge('Does the reply name 4.2.0 as the latest version?')`.
 - **Server plus docs skill:** `compare: { baseline: plain, variants: [withDocsMcp, withDocsSkill] }` compares both against the same control, and `withDocsMcp.extendEnvironment('mcp-and-skill', …)` adds a cell with both.
 - **Every harness:** set `harness: [cursor(…), claudeCode(…)]`. The `mcp__<server>__<tool>` name is the same on each (see [Compare agents](/recipes/compare-agents)).
 

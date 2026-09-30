@@ -24,7 +24,7 @@ import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
 import { workspaceLabel } from './environment.ts'
-import { author, gitInfo, runnerInfo } from './history/provenance.ts'
+import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
 import { type LiveProgressWriter, writeLiveProgress } from './live.ts'
@@ -219,7 +219,8 @@ function verbosityOf(flags: Flags): 0 | 1 | 2 {
 
 /**
  * `reeval image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
- * sandboxes need; with `--dry-run`, lists them instead. Without a config, just reeval's image.
+ * sandboxes need; with `--dry-run`, lists them instead. `--profile` plans as `reeval run --profile`
+ * does. Without a config, just reeval's image.
  */
 async function imageBuildCommand(
   flags: Flags,
@@ -234,6 +235,7 @@ async function imageBuildCommand(
   let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
     { id: '', harness: fakeHarness(), sandbox: docker() },
   ]
+  if (!configPath && flags.profile) selectProfile(await loadConfig(undefined), flags.profile)
   if (configPath) {
     const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
     const ctx = await startRun(setup)
@@ -365,6 +367,8 @@ async function runCommand(
       budgetReached: budgetReached(),
       plan,
       es: version,
+      runtime: runtimeInfo(),
+      language: { name: 'typescript' },
       enginePackages: engineVersions,
       sandbox: sandboxVersions,
       worktreePatch: ctx.worktreePatch,
@@ -377,6 +381,14 @@ async function runCommand(
     () => live?.stop(),
   )
   const { record } = run
+  // After the record is written: the summary reads it as reeval analyze would.
+  if (notes && !stopped) {
+    const { summarizeRun } = await import('./analysis/agent/index.ts')
+    const { resolveAnalysisModel } = await import('./analysis/model.ts')
+    const model = resolveAnalysisModel(ctx.config, 'agent')
+    const { level, text } = await summarizeRun(ctx.config, record.runId, model)
+    renderer.onEvent({ type: 'notice', at: Date.now(), level, text })
+  }
   const { pruneDebug } = await import('./debug/files.ts')
   await pruneDebug(ctx.config.root, ctx.config.debug.keep).catch(() => {})
   const summary = run.artifactDir ? join(run.artifactDir, 'summary.md') : run.recordPath
@@ -654,6 +666,7 @@ async function executeRun(
     }
     const malformed = malformedCredentials(config, process.env, {
       harnesses: plan.harnessDescriptors,
+      profile,
       questionModels: [...questionModels],
     })
     if (malformed.length) {

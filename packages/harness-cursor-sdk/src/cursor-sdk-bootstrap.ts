@@ -1,7 +1,7 @@
 import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 
 /** The SDK build the bootstrap installs. Bump it, then check the stream and endpoints still hold. */
-export const CURSOR_SDK_VERSION = '1.0.32'
+export const CURSOR_SDK_VERSION = '1.0.34'
 
 /**
  * Built-in tools whose calls never reach the stream at {@link CURSOR_SDK_VERSION}: Cursor's

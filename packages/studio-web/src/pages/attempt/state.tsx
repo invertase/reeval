@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react'
-import { type AttemptRecord, harnessLabel, type RunRecord } from 'reeval/view'
+import {
+  type AttemptRecord,
+  harnessLabel,
+  languageLabel,
+  type RunRecord,
+  runtimeLabel,
+} from 'reeval/view'
 import { Artifact } from '@/components/artifact'
 import { CopyButton } from '@/components/copy-button'
 import { PatchView } from './diff'
@@ -188,7 +194,9 @@ export function State({ record, attempt }: { record: RunRecord; attempt: Attempt
 
       <Section title="Stack">
         <Row k="reeval">
-          {stack.es} · node {stack.node} · {stack.os}/{stack.arch}
+          {[stack.es, runtimeLabel(stack), languageLabel(stack), `${stack.os}/${stack.arch}`]
+            .filter(Boolean)
+            .join(' · ')}
         </Row>
         <Row k="Harnesses">{stack.harnesses.map(harnessLabel).join(', ')}</Row>
         <Row k="Judge">

@@ -90,7 +90,7 @@ export function Judge({ record, attempt }: { record: RunRecord; attempt: Attempt
   if (attempt.judgements.length === 0 && !attempt.files.judgeInput) {
     return (
       <EmptyState icon={Gavel} title="No judge">
-        This eval made no <code className="font-mono">t.judge()</code> calls.
+        This eval made no <code className="font-mono">c.judge()</code> calls.
       </EmptyState>
     )
   }

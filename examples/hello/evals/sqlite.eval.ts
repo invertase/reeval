@@ -6,12 +6,12 @@ import { docker } from 'reeval/sandbox'
 evaluate(
   'queries a seeded SQLite database',
   { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },
-  async (t) => {
-    await t.send(
+  async (c) => {
+    await c.send(
       'Load /opt/seed.sql into app.db with sqlite3, then write report.sql that lists customer ' +
         'names alphabetically, one per line.',
     )
-    const report = await t.exec('sqlite3 app.db < report.sql')
+    const report = await c.exec('sqlite3 app.db < report.sql')
     await expect(report).toSucceed()
     expect(report.stdout).toBe('Ada\nGrace\nLinus\n')
   },

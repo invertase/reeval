@@ -127,6 +127,24 @@ export function harnessLabel(h: RunRecord['stack']['harnesses'][number]): string
   return parts.length ? `${h.id} (${parts.join(', ')})` : h.id
 }
 
+/**
+ * The runtime reeval ran on, as `node 22.14.0`, or `bun 1.4.2 (node 26.3.0)` with the Node version
+ * it's compatible with. A run recorded before `stack.runtime` ran on Node.
+ */
+export function runtimeLabel(stack: Pick<RunRecord['stack'], 'node' | 'runtime'>): string {
+  const runtime = stack.runtime ?? { name: 'node', version: stack.node }
+  return runtime.name === 'node'
+    ? `node ${runtime.version}`
+    : `${runtime.name} ${runtime.version} (node ${stack.node})`
+}
+
+/** The evals' language as `typescript evals` or `dart 3.13.5 evals`; null when not recorded. */
+export function languageLabel(stack: Pick<RunRecord['stack'], 'language'>): string | null {
+  const language = stack.language
+  if (!language) return null
+  return `${language.version ? `${language.name} ${language.version}` : language.name} evals`
+}
+
 /** Harness-reported tokens as `127k in (98k cached) · 776 out`; null when none were reported. */
 export function formatUsage(usage: TokenUsage | null | undefined): string | null {
   if (!usage) return null
@@ -334,6 +352,44 @@ export function cellRows(e: EvalEntry): CellRow[] {
     effortVsControl: cellContrast(e, cell.key),
     attempts: e.attempts.filter((a) => a.cell === cell.key),
   }))
+}
+
+/** One side's wins over the decided votes it was in; `rate` is null when none decided. */
+export type AnswerRate = { name: string; wins: number; n: number; rate: number | null }
+
+export type AnswerRow = {
+  question: string
+  /** The model that answered: as served, when the provider said, else as configured. */
+  model: string
+  votes: number
+  ties: number
+  /** Arms against each other on one harness, then harnesses against each other on one arm. */
+  within: AnswerRate[]
+  across: AnswerRate[]
+  /** Why some or all of its votes are missing: the model call failed. */
+  error: string | null
+  /** No votes and no error: no pair had both sides pass their checks. */
+  noPairs: boolean
+}
+
+/** One row per compare question, with each cut's win rates in the record's order. */
+export function answerRows(e: Pick<EvalEntry, 'answers'>): AnswerRow[] {
+  return (e.answers ?? []).map((a) => {
+    const rates = (cut: string): AnswerRate[] =>
+      a.rates
+        .filter((r) => r.cut === cut)
+        .map((r) => ({ name: r.name, wins: r.wins, n: r.n, rate: r.n ? r.wins / r.n : null }))
+    return {
+      question: a.question,
+      model: a.resolvedModel ?? a.model,
+      votes: a.votes.length,
+      ties: a.votes.filter((v) => v.winner === 'tie').length,
+      within: rates('within'),
+      across: rates('across'),
+      error: a.error ?? null,
+      noPairs: a.votes.length === 0 && a.error === undefined,
+    }
+  })
 }
 
 /** Whether an eval needs the cells table: several cells, or several runs of one. */

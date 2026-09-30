@@ -55,6 +55,7 @@
   "init .init.tools[]=read_url_content",
   "init .init.tools[]=replace_file_content",
   "init .init.tools[]=run_command",
+  "init .init.tools[]=run_workflow",
   "init .init.tools[]=schedule",
   "init .init.tools[]=search_web",
   "init .init.tools[]=sed_file",

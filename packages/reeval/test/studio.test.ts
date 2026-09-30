@@ -11,6 +11,8 @@ import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
   activityLabel,
+  analysisDataPath,
+  answerRows,
   artifactPath,
   buildIndex,
   cellRows,
@@ -31,6 +33,7 @@ import {
   transcriptItems,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
+import { e2eNewlineAnswer, realAttempts } from './support/real-runs.ts'
 
 const RUN = '20260924T220414Z_f7e1b53_elliot-hesp_k3f9'
 
@@ -72,15 +75,15 @@ describe('studio data paths', () => {
 })
 
 // A real history: three recorded runs of the fake agent (pass, fail, a control and a variant ×
-// two runs) and one scratch run.
+// two runs, with a compare question) and one scratch run.
 const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const other = defineEnvironment('other', {})
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other] }, runs: 2 } : {}, () => {
-  evaluate('writes hello', async (t) => {
-    await t.send('write hello.txt')
-    await expect(t.exec('test -f hello.txt')).toSucceed()
-    expect(await t.judge('Did it write hello.txt?')).toPass()
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], question: 'Which wrote hello.txt?' }, runs: 2 } : {}, () => {
+  evaluate('writes hello', async (c) => {
+    await c.send('write hello.txt')
+    await expect(c.exec('test -f hello.txt')).toSucceed()
+    expect(await c.judge('Did it write hello.txt?')).toPass()
   })
 })
 `
@@ -94,7 +97,11 @@ const records = new Map<string, RunRecord>()
 before(async () => {
   const p = await project('studio', {
     '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n',
-    'reeval.config.ts': fakeConfig({ harness: agent }),
+    // The question's model picks whichever attempt it's shown first.
+    'reeval.config.ts': fakeConfig({
+      harness: agent,
+      extra: "analysis: { model: { kind: 'fake-analysis', vote: 'A' } },",
+    }),
     'evals/hello.eval.ts': evalFile,
     'reeval.fail.config.ts': fakeConfig({
       harness: agent,
@@ -128,9 +135,9 @@ const skilled = defineEnvironment('skilled', ({ skill }) => ({
 const compare = process.env.REEVAL_TEST_GATE_ALL
   ? { baseline: plain, variants: [skilled], gate: 'all' as const }
   : { baseline: plain, variants: [skilled] }
-evaluate('writes ok', { compare }, async (t) => {
-  await t.send('write ok.txt')
-  await expect(t.exec('test -f ok.txt')).toSucceed()
+evaluate('writes ok', { compare }, async (c) => {
+  await c.send('write ok.txt')
+  await expect(c.exec('test -f ok.txt')).toSucceed()
 })
 `
 
@@ -331,6 +338,55 @@ describe('view-models over a real history', () => {
         ['other', 'variant', true, 2, 2, 0, 2],
       ],
     )
+  })
+
+  test("compare answers: each question's win rates per cut, and nothing without one", () => {
+    const matrix = records.get(headers[2]?.runId as string) as RunRecord
+    // Both arms pass on both runs: two within pairs, each voted in both orders. The model picks
+    // the first slot, so each side wins the order it was shown first in.
+    assert.deepEqual(answerRows(matrix.evals[0] as RunRecord['evals'][number]), [
+      {
+        question: 'Which wrote hello.txt?',
+        model: 'fake',
+        votes: 4,
+        ties: 0,
+        within: [
+          { name: 'plain', wins: 2, n: 4, rate: 0.5 },
+          { name: 'other', wins: 2, n: 4, rate: 0.5 },
+        ],
+        across: [],
+        error: null,
+        noPairs: false,
+      },
+    ])
+    for (const h of [headers[0], headers[1], headers[3]]) {
+      const run = records.get(h?.runId as string) as RunRecord
+      assert.deepEqual(run.evals.flatMap(answerRows), [], `${h?.runId} asked no question`)
+    }
+  })
+
+  test("compare answers over real harnesses' diffs (real-e2e-pairs), a failed one and one with no pairs", async () => {
+    const [real] = realAttempts('real-e2e-pairs')
+    assert.ok(real)
+    const answer = await e2eNewlineAnswer()
+    const failed = { ...answer, question: 'Which is shorter?', votes: [], rates: [], error: '429' }
+    const none = { ...answer, question: 'Which is kinder?', votes: [], rates: [] }
+    const rows = answerRows({ ...real.eval, answers: [answer, failed, none] })
+    assert.deepEqual(
+      rows.map((r) => [r.question, r.votes, r.ties, r.error, r.noPairs]),
+      [
+        ['Which ends hello.txt with a newline?', 18, 10, null, false],
+        ['Which is shorter?', 0, 0, '429', false],
+        ['Which is kinder?', 0, 0, null, true],
+      ],
+    )
+    // Within, each harness's two runs tie; across, Codex's newline wins every decided vote.
+    assert.deepEqual(rows[0]?.within, [])
+    assert.deepEqual(rows[0]?.across, [
+      { name: 'cursor', wins: 0, n: 4, rate: 0 },
+      { name: 'codex', wins: 8, n: 8, rate: 1 },
+      { name: 'claude-code', wins: 0, n: 4, rate: 0 },
+    ])
   })
 
   test('eval history marks where the eval changed', () => {
@@ -668,6 +724,10 @@ describe('reeval studio build', () => {
         for (const ref of refs) urls.push(artifactPath(h.runId, ref.path))
       }
     }
+    const compared = headers[2]?.runId as string
+    const built = JSON.parse(readFileSync(join(out, recordPath(compared)), 'utf8')) as RunRecord
+    assert.equal(built.evals[0]?.answers?.[0]?.question, 'Which wrote hello.txt?')
+    assert.deepEqual(built.evals[0]?.answers, records.get(compared)?.evals[0]?.answers)
     for (const url of urls) {
       assert.ok(written.includes(url), `${url} is in the build`)
       const served = await (await app.request(`http://x/${url}`)).text()
@@ -679,6 +739,50 @@ describe('reeval studio build', () => {
         assert.equal(built, served, url)
       }
     }
+  })
+
+  test("analysis.agent's notes are in the build as the server serves them; a cached summary only live", async () => {
+    const p = await project('studio-notes', {
+      'reeval.config.ts': fakeConfig({
+        extra: `analysis: { agent: true, model: fakeAnalysis({ note: 'A note.', output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
+      }).replace(
+        "import { fakeJudge } from 'reeval/judge'",
+        "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
+      ),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes', async (c) => {
+  await c.send('Write it')
+  expect(1).toBe(1)
+})
+`,
+    })
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const [runId] = readdirSync(join(p.dir, '.reeval/runs')).filter((n) => !n.endsWith('.json'))
+    const out = join(p.dir, 'site')
+    assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out, '--scratch'])).code, 0)
+    const built = JSON.parse(readFileSync(join(out, analysisDataPath(runId as string)), 'utf8'))
+    assert.deepEqual(
+      [built.entries, built.notes.map((n: { text: string }) => n.text)],
+      [[], ['A note.']],
+    )
+    const app = createStudioApp({
+      source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
+      appDir: join(pkgRoot, 'dist/studio-app'),
+      es: 'test',
+      project: 'studio',
+      token: null,
+      hosts: [],
+    })
+    const served = await (await app.request(`http://x/${analysisDataPath(runId as string)}`)).json()
+    assert.deepEqual(served.notes, built.notes)
+    assert.deepEqual(
+      served.entries.map((e: { source: string; doc: { analysis: { tldr: string } } }) => [
+        e.source,
+        e.doc.analysis.tldr,
+      ]),
+      [['cached', 'A summary.']],
+    )
   })
 
   test('--no-artifacts writes records and the index only; a non-studio folder is refused', async () => {

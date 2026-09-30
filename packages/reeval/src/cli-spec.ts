@@ -265,7 +265,7 @@ export const COMMANDS: Record<string, CommandSpec> = {
     help: '',
     sub: {
       build: {
-        flags: ['dry-run', 'force'],
+        flags: ['profile', 'dry-run', 'force'],
         positionals: Number.POSITIVE_INFINITY,
         help: `
   reeval image build [filter...]
@@ -273,6 +273,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 image (bakes in its CLI), from and dockerfile images, install layers.
                                 Builds what's missing or stale (a from tag that moved upstream), three
                                 at a time, and reports every failure; exit 3 if any image failed
+    --profile <name>            Plan with a profile from reeval.config.ts, as reeval run does, so its
+                                harness, sandbox and tags pick the images (also REEVAL_PROFILE)
     --force                     Rebuild every image, pulling each base again
     --dry-run                   List the images, how each is made and how each stands, building
                                 nothing (a from tag is looked up in its registry, not pulled)`,

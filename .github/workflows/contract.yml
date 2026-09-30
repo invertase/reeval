@@ -6,10 +6,11 @@
 # the pinned images
 # (scripts/drift/latest-images.sh, which fails if it can't): the version-drift leg, where any change
 # to an agent's output format, its stored conversation or its behaviour fails a check, never skips.
-# It also checks the newest @ai-sdk/harness-claude-code against reeval's patch to the pinned one
-# (scripts/drift/claude-code-patch.mjs): it fails once upstream fixes the bug or the patch stops
-# applying. And it re-probes the newest @opencode/cli's providers (scripts/drift/
-# opencode-providers.mjs): it fails, with a diff, when the OpenCode provider table would change.
+# After the contract, whatever it did, it checks the newest @ai-sdk/harness-claude-code against
+# reeval's patch to the pinned one (scripts/drift/claude-code-patch.mjs): it fails once upstream
+# fixes the bug or the patch stops applying. And it re-probes the newest @opencode/cli's providers
+# (scripts/drift/opencode-providers.mjs): it fails, with a diff, when the OpenCode provider table
+# would change.
 name: contract
 
 on:
@@ -34,11 +35,10 @@ jobs:
       REEVAL_TEST_REQUIRE_DOCKER: '1'
       # Every real row; one without its key fails, naming the variable.
       REEVAL_CONTRACT_HARNESSES: cursor,antigravity,claude-code,opencode,opencode-anthropic,opencode-openai,goose,pi,codex
-      # The hard cap for this job: the contract (12 attempts, 10 on pi, which has no MCP) on all
-      # nine rows, the e2e (2) on the seven harnesses' own rows, and the real-tier fixtures (2 each,
-      # 10 of them): 106 + 14 + 20. Each reserves its attempts in the ledger first, and fails rather
-      # than go over.
-      REEVAL_REAL_ATTEMPT_BUDGET: '140'
+      # The hard cap for this job: the contract (12 attempts) on all nine rows, the e2e (2) on the
+      # seven harnesses' own rows, and the real-tier fixtures (2 each, 10 of them): 108 + 14 + 20.
+      # Each reserves its attempts in the ledger first, and fails rather than go over.
+      REEVAL_REAL_ATTEMPT_BUDGET: '142'
       REEVAL_REAL_LEDGER: ${{ github.workspace }}/../reeval-real-ledger
       CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
       GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
@@ -56,11 +56,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: bash scripts/drift/latest-images.sh
-      # Key-free: flags the newest adapter fixing the bug reeval patches (drop the patch) or the patch
-      # no longer applying (rebase it).
-      - if: inputs.versions == 'latest'
-        name: whether the newest @ai-sdk/harness-claude-code still needs reeval's patch
-        run: node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs
       # One suite at a time, one real row at a time; no retries: a failure is reported as it is.
       - name: harness contract${{ inputs.versions == 'pinned' && ' and e2e CLI scenarios' || '' }}
         working-directory: packages/reeval
@@ -84,6 +79,12 @@ jobs:
           REEVAL_TEST_KEEP: '1'
           TMPDIR: ${{ runner.temp }}/reeval-tests
         run: node --test --test-concurrency=1 --test-timeout=3600000 --experimental-strip-types --no-warnings test/features.test.ts
+      # The drift checks come last and run whatever the steps before them did: a failing one fails
+      # the leg, but never skips its contract. Key-free: flags the newest adapter fixing the bug
+      # reeval patches (drop the patch) or the patch no longer applying (rebase it).
+      - if: ${{ !cancelled() && inputs.versions == 'latest' }}
+        name: whether the newest @ai-sdk/harness-claude-code still needs reeval's patch
+        run: node --experimental-strip-types --no-warnings scripts/drift/claude-code-patch.mjs
       # Key-free (the probe's proxy answers every request itself), and whatever the contract did:
       # the newest @opencode/cli probed per provider as the committed table was, failing with a
       # diff when the table would change (scripts/drift/opencode-providers.mjs).

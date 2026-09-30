@@ -11,6 +11,7 @@ import { createPi } from '@reeval/harness-pi'
 const agent = new HarnessAgent({
   harness: createPi({
     auth: { GEMINI_API_KEY: process.env.GEMINI_API_KEY! },
+    mcpServers: { docs: { command: 'npx', args: ['-y', '@acme/docs-mcp@1.0.0'] } },
     requireCredentialBrokering: true,
   }),
   model: 'gemini-3.8-flash',
@@ -26,11 +27,12 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
 
 ## How it works
 
-- **Bootstrap.** Installs `@earendil-works/pi-coding-agent` 0.87.1 from the lockfile in `assets/`,
+- **Bootstrap.** Installs `@earendil-works/pi-coding-agent` 0.99.1 from the lockfile in `assets/`,
   with no build scripts (pi doesn't need them).
 - **Turns.** Each turn is one `pi --mode json -p --offline --approve --no-extensions --provider
   google --model <model> --session-id <id>` process; every turn uses the session's id, so pi
-  continues the conversation.
+  continues the conversation. With MCP servers, `-e builtin:mcp` loads pi's built-in MCP
+  extension, the only one.
 - **Stream.** pi's NDJSON events become harness stream parts: text, provider-executed tool calls
   and results (`read`, `write`, `edit`, `bash`), a `finish-step` per model call with its tokens,
   and a `finish` with their sum. pi's USD `cost` isn't passed on.
@@ -39,4 +41,8 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
   `generativelanguage.googleapis.com` only.
 - **Placement.** Skills go to `~/.pi/agent/skills` and instructions to `~/.pi/agent/AGENTS.md`;
   the repo skill directory is `.pi/skills`.
-- **MCP.** pi has no MCP client, so the adapter takes no MCP servers.
+- **MCP.** `mcpServers` (stdio `command`, or streamable HTTP `url`; pi has no SSE transport) go
+  in `~/.pi/agent/mcp.json`, each with `"exposure": "direct"`, so the model sees their tools as
+  `mcp__<server>__<tool>` rather than only through pi's `codemode` tool. pi expands `$NAME` in
+  `env` and header values and runs a value starting with `!` as a command, so the adapter
+  escapes them (`$` as `$$`, a leading `!` as `$!`): every value reaches the server as written.

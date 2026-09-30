@@ -26,14 +26,14 @@ export const reactTs = defineEnvironment('react-ts', ({ git }) => ({
 import { evaluate, expect } from '{{ pkg }}'
 import { reactTs } from './env.ts'
 
-evaluate('adds a reset button', { environment: reactTs }, async (t) => {
-  const turn = await t.send(
+evaluate('adds a reset button', { environment: reactTs }, async (c) => {
+  const turn = await c.send(
     'Add a Reset button to src/App.tsx that sets the count back to 0.',
   )
   expect(turn.diff.files).toEqual([
     { path: 'src/App.tsx', status: 'modified' },
   ])
-  await expect(t.exec('npm run build')).toSucceed()
+  await expect(c.exec('npm run build')).toSucceed()
 })
 ```
 

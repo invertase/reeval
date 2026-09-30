@@ -115,7 +115,7 @@ export type AttemptRecord = {
    * The models the harness's own API calls were served by, as the egress gateway saw them: named
    * in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent
    * uses on the side) or, for Codex, in the response, with its effort
-   * (`gpt-5.4-mini-2026-03-17[effort=medium]`); null when neither names one (Cursor) or nothing
+   * (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing
    * recorded them.
    */
   servedModels: string[] | null
@@ -346,7 +346,18 @@ export type RunRecord = {
 /** What ran and graded the agents: the machine, images, harnesses and judge. */
 export type Stack = {
   es: string
+  /** `process.versions.node`: under Bun or Deno, the Node version they're compatible with. */
   node: string
+  /**
+   * The runtime reeval ran on, `node`, `bun`, `deno` or another, and its own version. Absent in
+   * runs recorded before it, which ran on Node.
+   */
+  runtime?: { name: string; version: string }
+  /**
+   * The language the evals are written in, `typescript` for `*.eval.ts`, and the version of its
+   * toolchain when the runner reports one. Absent in runs recorded before it.
+   */
+  language?: { name: string; version?: string }
   os: string
   arch: string
   /** Every image an attempt started from. `id` is content-addressed; `repoDigests` only exist once pushed. */
@@ -370,8 +381,12 @@ export type Stack = {
      */
     resolvedModels: string[]
   }>
+  /**
+   * The run's judge: the config's, with what the profile's `judge` and `defaults.judge` set over it.
+   * `config.judgeModel` and `config.threshold` name the same one.
+   */
   judge: {
-    /** The config's default model; groups, evals and calls may use others (see each verdict). */
+    /** Its model; groups, evals and calls may use others (see each verdict). */
     model: string | null
     /** Model ids the provider reported serving, across every judge call in the run. */
     resolvedModels: string[]

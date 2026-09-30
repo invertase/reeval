@@ -537,8 +537,8 @@ evaluate('fine', async () => {})
     const p = await project('worker-killed', {
       'reeval.config.ts': fakeConfig(),
       'evals/dies.eval.ts': `import { evaluate } from 'reeval'
-evaluate('killed', async (t) => {
-  await t.sandbox()
+evaluate('killed', async (c) => {
+  await c.sandbox()
   process.kill(process.pid, 'SIGKILL')
 })
 `,
@@ -615,8 +615,8 @@ describe('evaluate wrapper with the fake harness', () => {
   const agentEval = (body: string, options = '') => `
 import { evaluate, expect } from 'reeval'
 import { fakeJudge } from 'reeval/judge'
-evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
-  const turn = await t.send('write hello.txt')
+evaluate('agent eval', ${options ? `${options}, ` : ''}async (c) => {
+  const turn = await c.send('write hello.txt')
   ${body}
 })
 `
@@ -629,11 +629,11 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
       }),
       'evals/agent.eval.ts': agentEval(`
   await expect(turn).toHaveFile('hello.txt', /hi/)
-  await expect(t).toHaveFile('big.txt')
-  await expect(t.exec('cat hello.txt')).toSucceed()
+  await expect(c).toHaveFile('big.txt')
+  await expect(c.exec('cat hello.txt')).toSucceed()
   expect(turn.diff.files).toEqual(expect.arrayContaining([{ path: 'hello.txt', status: 'added' }]))
   expect(turn.text).toMatch(/hello/)
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 `),
     })
     const r = await runCli(p.dir)
@@ -712,15 +712,15 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
     assert.deepEqual(liveSandboxes(p), [], 'sandbox destroyed')
   })
 
-  test('a second t.send continues the same sandbox and session', async () => {
+  test('a second c.send continues the same sandbox and session', async () => {
     const p = await project('multi-turn', {
       'reeval.config.ts': fakeConfig({ harness: `{ files: { 'n.txt': 'x' }, text: 'ok' }` }),
       'evals/agent.eval.ts': agentEval(`
-  await t.exec('echo 1 > counter')
-  const second = await t.send('again')
+  await c.exec('echo 1 > counter')
+  const second = await c.send('again')
   expect(second.prompt).toBe('again')
-  expect(t.turns).toEqual([turn, second])
-  expect(await t.readFile('counter')).toBe('1\\n')
+  expect(c.turns).toEqual([turn, second])
+  expect(await c.readFile('counter')).toBe('1\\n')
   expect(second.diff.files.map((f) => f.path).sort()).toEqual(['counter', 'n.txt'])
 `),
     })
@@ -740,21 +740,21 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (t) => {
       'evals/j.eval.ts': `import { evaluate, expect, group } from 'reeval'
 import { fakeJudge } from 'reeval/judge'
 group('strict', { judge: { threshold: 0.95 } }, () => {
-  evaluate('group threshold', async (t) => {
-    await t.send('x')
-    expect(await t.judge('from group')).toMatchObject({ verdict: 'fail', score: 0.9, threshold: 0.95 })
+  evaluate('group threshold', async (c) => {
+    await c.send('x')
+    expect(await c.judge('from group')).toMatchObject({ verdict: 'fail', score: 0.9, threshold: 0.95 })
   })
-  evaluate('eval model', { judge: { model: fakeJudge({ score: 0.5 }) } }, async (t) => {
-    await t.send('x')
-    expect(await t.judge('from eval')).toMatchObject({ verdict: 'fail', score: 0.5, threshold: 0.95 })
-    expect(await t.judge('from call', { threshold: 0.4 })).toMatchObject({ verdict: 'pass', score: 0.5 })
+  evaluate('eval model', { judge: { model: fakeJudge({ score: 0.5 }) } }, async (c) => {
+    await c.send('x')
+    expect(await c.judge('from eval')).toMatchObject({ verdict: 'fail', score: 0.5, threshold: 0.95 })
+    expect(await c.judge('from call', { threshold: 0.4 })).toMatchObject({ verdict: 'pass', score: 0.5 })
   })
 })
-evaluate('on a value', async (t) => {
-  const first = await t.send('first')
-  await t.send('second')
-  expect(await t.judge('custom', { on: 'some output' })).toMatchObject({ verdict: 'pass' })
-  expect(await t.judge('earlier turn', { on: first })).toMatchObject({ verdict: 'pass' })
+evaluate('on a value', async (c) => {
+  const first = await c.send('first')
+  await c.send('second')
+  expect(await c.judge('custom', { on: 'some output' })).toMatchObject({ verdict: 'pass' })
+  expect(await c.judge('earlier turn', { on: first })).toMatchObject({ verdict: 'pass' })
 })
 `,
     })
@@ -767,7 +767,7 @@ evaluate('on a value', async (t) => {
     const p = await project('plain-progress', {
       'reeval.config.ts': fakeConfig({ harness: "{ files: { 'hello.txt': 'hi' } }" }),
       'evals/agent.eval.ts': agentEval(`console.log('hello from', 'the eval')
-  await expect(t.exec('cat hello.txt')).toSucceed()`),
+  await expect(c.exec('cat hello.txt')).toSucceed()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
@@ -798,14 +798,14 @@ evaluate('on a value', async (t) => {
       'reeval.config.ts': fakeConfig(),
       'evals/o.eval.ts': `import { evaluate, expect } from 'reeval'
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms))
-evaluate('passes', async (t) => {
-  await t.send('go')
+evaluate('passes', async (c) => {
+  await c.send('go')
   await pause(400)
   console.log('log from passes')
 })
-evaluate('fails', async (t) => {
+evaluate('fails', async (c) => {
   await pause(200)
-  await t.send('go')
+  await c.send('go')
   console.error('log from fails')
   expect(1).toBe(2)
 })
@@ -863,7 +863,7 @@ evaluate('fails', async (t) => {
   test('agent mode prints failures only, with record and summary paths, and no colour', async () => {
     const p = await project('agent-mode', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
-      'evals/agent.eval.ts': `${agentEval(`expect(await t.judge('ok?')).toPass()`)}
+      'evals/agent.eval.ts': `${agentEval(`expect(await c.judge('ok?')).toPass()`)}
 evaluate('passes', async () => {})
 `,
     })
@@ -890,7 +890,7 @@ evaluate('passes', async () => {})
   test('a failing judge fails the eval as a judge error', async () => {
     const p = await project('judge-fail', {
       'reeval.config.ts': fakeConfig({ judge: '{ model: fakeJudge({ score: 0.3 }) }' }),
-      'evals/agent.eval.ts': agentEval(`expect(await t.judge('ok?')).toPass()`),
+      'evals/agent.eval.ts': agentEval(`expect(await c.judge('ok?')).toPass()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
@@ -939,13 +939,13 @@ evaluate('passes', async () => {})
 import { createGoogleGenerativeAI } from '${google}'
 const gemini = createGoogleGenerativeAI({ baseURL: 'http://127.0.0.1:${port}/v1beta', apiKey: 'reeval-judge-test-key' })
 group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test') } }, () => {
-  evaluate('friendly', async (t) => {
-    await t.send('greet me')
-    expect(await t.judge('Is the greeting friendly?')).toPass()
+  evaluate('friendly', async (c) => {
+    await c.send('greet me')
+    expect(await c.judge('Is the greeting friendly?')).toPass()
   })
-  evaluate('canary', async (t) => {
-    await t.send('greet me')
-    expect(await t.judge('Is the greeting in French?')).toPass()
+  evaluate('canary', async (c) => {
+    await c.send('greet me')
+    expect(await c.judge('Is the greeting in French?')).toPass()
   })
 })
 `,
@@ -976,7 +976,7 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
   test('a judge that errors fails the eval as a judge error', async () => {
     const p = await project('judge-error', {
       'reeval.config.ts': fakeConfig(),
-      'evals/agent.eval.ts': agentEval(`await t.judge('ok?', { model: 'no-provider' })`),
+      'evals/agent.eval.ts': agentEval(`await c.judge('ok?', { model: 'no-provider' })`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
@@ -1001,9 +1001,9 @@ const flaky = {
     return { answers: { answer: { type: 'boolean', probability: 0.9 } }, warnings: [] }
   },
 }
-evaluate('agent eval', async (t) => {
-  await t.send('x')
-  expect(await t.judge('ok?', { model: flaky })).toPass()
+evaluate('agent eval', async (c) => {
+  await c.send('x')
+  expect(await c.judge('ok?', { model: flaky })).toPass()
 })
 `,
     })
@@ -1017,31 +1017,31 @@ evaluate('agent eval', async (t) => {
     assert.match(readRun(p.dir).read('summary.md'), /mock\/flaky, after 1 retry\): ok\?/)
   })
 
-  test('t.judge before any turn is an assertion error', async () => {
+  test('c.judge before any turn is an assertion error', async () => {
     const p = await project('judge-early', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate } from 'reeval'
-evaluate('early', async (t) => { await t.judge('?') })
+evaluate('early', async (c) => { await c.judge('?') })
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
-    assert.match(r.stdout, /t\.judge\(\) has no turn to grade/)
+    assert.match(r.stdout, /c\.judge\(\) has no turn to grade/)
   })
 
-  test('t.judge with an empty question or a threshold outside 0…1 fails without asking the judge', async () => {
+  test('c.judge with an empty question or a threshold outside 0…1 fails without asking the judge', async () => {
     const p = await project('judge-bad-call', {
       'reeval.config.ts': fakeConfig(),
       'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('empty', async (t) => { await t.send('go'); await t.judge('  ') })
-evaluate('over one', async (t) => { await t.send('go'); await t.judge('Is it ok?', { threshold: 2 }) })
-evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it ok?', { threshold: 0.5 })).toPass() })
+evaluate('empty', async (c) => { await c.send('go'); await c.judge('  ') })
+evaluate('over one', async (c) => { await c.send('go'); await c.judge('Is it ok?', { threshold: 2 }) })
+evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it ok?', { threshold: 0.5 })).toPass() })
 `,
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /t\.judge\(\) needs a question: a non-empty string \(got " {2}"\)/)
-    assert.match(r.stdout, /t\.judge\(\) threshold must be between 0 and 1 \(got 2\)/)
+    assert.match(r.stdout, /c\.judge\(\) needs a question: a non-empty string \(got " {2}"\)/)
+    assert.match(r.stdout, /c\.judge\(\) threshold must be between 0 and 1 \(got 2\)/)
     const judged = Object.fromEntries(
       readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
     )
@@ -1052,7 +1052,7 @@ evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it 
   test('a failing check shows the tail of stderr', async () => {
     const p = await project('check-fail', {
       'reeval.config.ts': fakeConfig(),
-      'evals/agent.eval.ts': agentEval(`await expect(t.exec('echo boom >&2; exit 3')).toSucceed()`),
+      'evals/agent.eval.ts': agentEval(`await expect(c.exec('echo boom >&2; exit 3')).toSucceed()`),
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1)
@@ -1064,12 +1064,12 @@ evaluate('fine', async (t) => { await t.send('go'); expect(await t.judge('Is it 
     const p = await project('huge-failure', {
       'reeval.config.ts': fakeConfig(),
       'evals/h.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('noisy check', async (t) => {
-  await t.send('go')
-  await expect(t.exec('head -c 3000000 /dev/zero | tr "\\\\0" b; echo boom >&2; exit 3')).toSucceed()
+evaluate('noisy check', async (c) => {
+  await c.send('go')
+  await expect(c.exec('head -c 3000000 /dev/zero | tr "\\\\0" b; echo boom >&2; exit 3')).toSucceed()
 })
-evaluate('huge diff', async (t) => {
-  await t.sandbox()
+evaluate('huge diff', async (c) => {
+  await c.sandbox()
   expect('a'.repeat(3_000_000)).toBe('x')
 })
 `,
@@ -1146,10 +1146,10 @@ evaluate('huge diff', async (t) => {
       'reeval.config.ts': fakeConfig(),
       'evals/file.eval.ts': agentEval(`expect(turn).toHaveFile('missing.txt')`),
       'evals/exec.eval.ts': agentEval(
-        `expect(t.exec('sleep 0.3; echo ran > late.txt')).toSucceed()`,
+        `expect(c.exec('sleep 0.3; echo ran > late.txt')).toSucceed()`,
       ).replace("'agent eval'", "'unawaited pass'"),
       'evals/awaited.eval.ts': agentEval(
-        `await expect(t.exec('exit 2')).not.toSucceed()\n  await expect(turn).not.toHaveFile('missing.txt')`,
+        `await expect(c.exec('exit 2')).not.toSucceed()\n  await expect(turn).not.toHaveFile('missing.txt')`,
       ).replace("'agent eval'", "'awaited'"),
     })
     const r = await runCli(p.dir)
@@ -1218,13 +1218,13 @@ evaluate('asserted nothing', async () => {
       'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
-evaluate('compared', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('compared', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
-evaluate('repeated', { runs: 4 }, async (t) => {
-  await t.send('go')
-  expect(t.attempt.n % 4).not.toBe(0)
+evaluate('repeated', { runs: 4 }, async (c) => {
+  await c.send('go')
+  expect(c.attempt.n % 4).not.toBe(0)
 })
 `,
     })
@@ -1240,8 +1240,8 @@ evaluate('repeated', { runs: 4 }, async (t) => {
       'reeval.config.ts': fakeConfig(),
       'evals/hang.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-evaluate('stuck start', { harness: fakeHarness({ startHangs: true, startTimeout: '1s' }) }, async (t) => {
-  await t.send('go')
+evaluate('stuck start', { harness: fakeHarness({ startHangs: true, startTimeout: '1s' }) }, async (c) => {
+  await c.send('go')
 })
 evaluate('fine', async () => expect(1).toBe(1))
 `,
@@ -1269,11 +1269,11 @@ evaluate('fine', async () => expect(1).toBe(1))
       'reeval.config.ts': fakeConfig(),
       'evals/once.eval.ts': `import { evaluate } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-evaluate('recovers', { harness: fakeHarness({ id: 'flaky', startHangs: 1, startTimeout: '1s' }) }, async (t) => {
-  await t.send('go')
+evaluate('recovers', { harness: fakeHarness({ id: 'flaky', startHangs: 1, startTimeout: '1s' }) }, async (c) => {
+  await c.send('go')
 })
-evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) }, async (t) => {
-  await t.send('go')
+evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) }, async (c) => {
+  await c.send('go')
 })
 `,
     })
@@ -1328,8 +1328,8 @@ evaluate('canary', { harness: fakeHarness({ id: 'steady', startTimeout: '1s' }) 
       'reeval.config.ts': fakeConfig(),
       'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-evaluate('broken agent', { harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (t) => {
-  await t.send('go')
+evaluate('broken agent', { harness: fakeHarness({ failWith: 'agent CLI failed to start' }) }, async (c) => {
+  await c.send('go')
 })
 evaluate('wrong answer', async () => expect(1).toBe(2))
 evaluate('fine', async () => {})
@@ -1480,9 +1480,9 @@ boom.unref()
 `,
         'evals/agent.eval.ts': `import { writeFileSync } from 'node:fs'
 import { evaluate } from 'reeval'
-evaluate('agent eval', async (t) => {
+evaluate('agent eval', async (c) => {
   writeFileSync(new URL('../worker.pid', import.meta.url), String(process.pid))
-  await t.send('write hello.txt')
+  await c.send('write hello.txt')
 })
 `,
       })

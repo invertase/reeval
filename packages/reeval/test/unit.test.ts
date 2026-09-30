@@ -11,6 +11,7 @@ import {
   defaultConcurrency,
   evalRoot,
   findConfig,
+  malformedCredentials,
   missingCredentials,
   parseDuration,
   resolveConcurrency,
@@ -45,6 +46,7 @@ import { newRunId, RUN_ID } from '../src/ids.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
+import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
 import { redactSecrets } from '../src/redact.ts'
 import { createFakeSandbox, posixShell } from '../src/sandbox/fake.ts'
@@ -419,6 +421,56 @@ test('missingCredentials names the judge key for the configured provider', () =>
     [],
     'no judge, no key',
   )
+})
+
+test("the credential checks ask for the key of the judge the run uses, the profile's if it sets one", () => {
+  const config = resolveConfig(
+    {
+      judge: { model: 'google/gemini-2.5-flash' },
+      profiles: {
+        fake: { judge: { model: fakeJudge() } },
+        jev: { defaults: { judge: { model: 'typesafe-ai/jev-1.13.0' } } },
+        threshold: { judge: { threshold: 0.5 } },
+      },
+    },
+    '/p',
+  )
+  const env = { CURSOR_API_KEY: 'k' }
+  const google = 'GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'
+  const typesafe = 'TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN'
+  const profile = (name: string) => selectProfile(config, name, {})
+  assert.deepEqual(missingCredentials(config, env), [google])
+  assert.deepEqual(
+    missingCredentials(config, env, { profile: profile('fake') }),
+    [],
+    "a fake judge needs no key, whatever the config's judge is",
+  )
+  assert.deepEqual(missingCredentials(config, env, { profile: profile('jev') }), [typesafe])
+  assert.deepEqual(
+    missingCredentials(
+      config,
+      { ...env, GOOGLE_GENERATIVE_AI_API_KEY: 'g' },
+      {
+        profile: profile('jev'),
+      },
+    ),
+    [typesafe],
+    "the config judge's key doesn't stand in for the profile's",
+  )
+  assert.deepEqual(
+    missingCredentials(config, env, { profile: profile('threshold') }),
+    [google],
+    'a profile judge without a model keeps the config judge',
+  )
+
+  const bad = { ...env, GOOGLE_GENERATIVE_AI_API_KEY: 'g g', TYPESAFE_AI_API_KEY: 't\nt' }
+  assert.deepEqual(malformedCredentials(config, bad), [
+    'GOOGLE_GENERATIVE_AI_API_KEY (character 2)',
+  ])
+  assert.deepEqual(malformedCredentials(config, bad, { profile: profile('fake') }), [])
+  assert.deepEqual(malformedCredentials(config, bad, { profile: profile('jev') }), [
+    'TYPESAFE_AI_API_KEY (character 2)',
+  ])
 })
 
 test('judge strings use the provider package when its key is set, else the AI Gateway', () => {

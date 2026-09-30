@@ -190,24 +190,24 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    mcp: false,
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
   },
   {
     id: 'codex',
-    model: 'gpt-5.4-mini',
+    model: 'gpt-5.6-luna',
     key: { name: 'OPENAI_API_KEY', from: ['OPENAI_API_KEY'] },
     image: 'codex',
     skillContext: /^~\/\.agents\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.openai.com'],
     apiHost: 'api.openai.com',
     tokens: true,
-    // The Responses API serves a dated snapshot of the alias, at the effort Codex resolved for it,
-    // e.g. gpt-5.4-mini-2026-03-17[effort=medium]; both come from the response, via the gateway.
-    servedModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
-    wireModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
+    // The Responses API names the model, undated, and the effort Codex resolved for it; both come
+    // from the response, via the gateway. `effort=medium` is its catalog default: a model Codex's
+    // catalog doesn't list gets no effort (`effort=none`) and no apply_patch tool.
+    servedModel: /^gpt-5\.6-luna\[effort=medium\]$/,
+    wireModel: /^gpt-5\.6-luna\[effort=medium\]$/,
   },
 ]
 

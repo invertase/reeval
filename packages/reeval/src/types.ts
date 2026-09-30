@@ -68,7 +68,7 @@ export type TokenUsage = {
   reasoning: number | null
 }
 
-/** One agent turn. Immutable once `t.send()` resolves. */
+/** One agent turn. Immutable once `c.send()` resolves. */
 /** A turn as data, as a record or another language's runner carries it: `Turn` without its methods. */
 export type TurnData = {
   prompt: string
@@ -97,7 +97,7 @@ export type TurnData = {
 }
 
 export type Turn = TurnData & {
-  /** Runs in the eval's sandbox. Same as `t.exec`. */
+  /** Runs in the eval's sandbox. Same as `c.exec`. */
   exec(command: string): Promise<ExecResult>
   readFile(path: string): Promise<string | null>
 }
@@ -145,7 +145,7 @@ export type Verdict = {
   resolvedModel?: string
 }
 
-export type EvalContext = {
+export type AttemptContext = {
   /** Sends the next turn of this eval's agent session, starting the sandbox on first use. */
   send(prompt: string): Promise<Turn>
   /** Asks the judge a yes/no question about the latest turn (or `options.on`). */
@@ -155,9 +155,9 @@ export type EvalContext = {
   readFile(path: string): Promise<string | null>
   /**
    * Starts the sandbox and the agent session without a turn, for checks on what the environment
-   * set up. `t.send()` starts them too; calling both starts them once.
+   * set up. `c.send()` starts them too; calling both starts them once.
    */
-  sandbox(): Promise<Pick<EvalContext, 'exec' | 'readFile'>>
+  sandbox(): Promise<Pick<AttemptContext, 'exec' | 'readFile'>>
   /** Every turn so far, oldest first. */
   readonly turns: readonly Turn[]
   /** Aborted on timeout or Ctrl-C. */
@@ -165,7 +165,7 @@ export type EvalContext = {
   /** Which cell of the matrix this attempt is, and its run number (from 1). */
   readonly attempt: { id: string; cell: Cell; n: number }
 }
-export type EvalFn = (t: EvalContext) => Promise<void>
+export type EvalFn = (c: AttemptContext) => Promise<void>
 
 export type FakeHarnessDescriptor = {
   kind: 'fake'
@@ -196,7 +196,7 @@ export type FakeHarnessDescriptor = {
   /** Chance (0–1) that an attempt writes no files and says so, for flaky pass rates. */
   flakeRate?: number
   /**
-   * Real sandbox actions, one list per `t.send` (the last list repeats), run in order before
+   * Real sandbox actions, one list per `c.send` (the last list repeats), run in order before
    * `files`. `exec` runs as the agent: with the sandbox's own variables, none of the checks'.
    */
   script?: FakeScriptStep[][]
@@ -324,7 +324,8 @@ export type GooseHarnessDescriptor = {
 }
 /**
  * pi through `@reeval/harness-pi` (`pi --mode json` in the sandbox), made by `pi()`. It runs
- * Google models on a Gemini API key and reports each model call's tokens. It has no MCP client.
+ * Google models on a Gemini API key and reports each model call's tokens. It takes stdio and
+ * HTTP MCP servers, not SSE ones.
  */
 export type PiHarnessDescriptor = {
   kind: 'pi'
@@ -346,7 +347,7 @@ export type PiHarnessDescriptor = {
  */
 export type CodexHarnessDescriptor = {
   kind: 'codex'
-  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.4-mini`. */
+  /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`. */
   model: string
   /** Cell id; defaults to `codex:<model>`. */
   id?: string
@@ -420,7 +421,7 @@ export type Secret = {
   from?: string
   /** When the host variable is unset, skip it (the record says so) instead of failing. */
   optional?: boolean
-  /** `agent` (default): the container's environment. `checks`: only `t.exec` and `setup` steps. */
+  /** `agent` (default): the container's environment. `checks`: only `c.exec` and `setup` steps. */
   to?: 'agent' | 'checks'
   /**
    * Brokers the secret: the sandbox gets a per-attempt placeholder, and the Docker egress gateway

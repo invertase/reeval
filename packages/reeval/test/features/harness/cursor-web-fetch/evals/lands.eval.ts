@@ -3,8 +3,8 @@ import { plain, prompt, traceId } from './env.ts'
 
 // The agent really fetched the page, and the transcript shows the fetch. The Cursor SDK drops
 // web calls from its stream; the adapter's runner recovers them from the stored conversation.
-evaluate('lands', { environment: plain }, async (t) => {
-  const turn = await t.send(prompt)
+evaluate('lands', { environment: plain }, async (c) => {
+  const turn = await c.send(prompt)
   expect(turn.status).toBe('completed')
   const id = traceId.exec(turn.text)
   expect(id, turn.text).not.toBeNull()

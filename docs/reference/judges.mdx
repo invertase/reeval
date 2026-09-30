@@ -3,15 +3,15 @@ title: Judges
 description: Judge model strings, how reeval picks a provider and key, thresholds, concurrency, retries and fakeJudge.
 ---
 
-`t.judge(question)` asks a model a yes/no question about the latest turn and returns a verdict. `expect(verdict).toPass()` fails the eval when the answer is no.
+`c.judge(question)` asks a model a yes/no question about the latest turn and returns a verdict. `expect(verdict).toPass()` fails the eval when the answer is no.
 
 ```ts title="evals/greet.eval.ts"
 import { evaluate, expect, group } from '{{ pkg }}'
 
 group('greet', { judge: { threshold: 0.9 } }, () => {
-  evaluate('explains its change', async (t) => {
-    await t.send('Create greet.js exporting greet(name).')
-    const verdict = await t.judge(
+  evaluate('explains its change', async (c) => {
+    await c.send('Create greet.js exporting greet(name).')
+    const verdict = await c.judge(
       "Does the agent's final message describe what it changed?",
     )
     expect(verdict).toPass()
@@ -21,10 +21,10 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
 
 ## Settings
 
-`judge` is accepted in `reeval.config.ts`, profile `judge` and `defaults.judge`, groups, evals, and as the second argument of `t.judge()`. It merges field by field, the most specific level winning: the call, then the eval, then its groups, then the profile, then the config.
+`judge` is accepted in `reeval.config.ts`, profile `judge` and `defaults.judge`, groups, evals, and as the second argument of `c.judge()`. It merges field by field, the most specific level winning: the call, then the eval, then its groups, then the profile, then the config.
 
 <Property name="model" type="string | FakeJudgeModel | EvaluationModel" optional>
-  `"provider/model"`, such as `typesafe-ai/jev-1.13.0` (reeval's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK evaluation model object. There's no default: `t.judge()` without a model fails.
+  `"provider/model"`, such as `typesafe-ai/jev-1.13.0` (reeval's recommended judge) or `google/gemini-3.8-flash`. `fakeJudge()` for tests. Groups, evals and calls also accept an AI SDK evaluation model object. There's no default: `c.judge()` without a model fails.
 </Property>
 
 <Property name="threshold" type="number" optional>
@@ -39,7 +39,7 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
 </Property>
 
-`t.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff).
+`c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff).
 
 ## What the judge sees
 
@@ -57,7 +57,7 @@ reeval calls a provider's own package when its key is set, and the Vercel AI Gat
 
 [reeval analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.13.0` can judge but can't write an analysis.
 
-The run checks the judge's key before it starts, with the harness's:
+The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none:
 
 ```text
 reeval: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.
@@ -99,7 +99,7 @@ analysis: {
 }
 ```
 
-With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
+With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note. Its summary of the run reads up to three dropped evidence items and three failing attempts with the tools, then answers with `output`; an `output` function gets the digest with the evidence it read, and one that throws tests a failed summary.
 
 ```ts
 analysis: {
@@ -109,24 +109,24 @@ analysis: {
 }
 ```
 
-`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake.
+`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
 
 ## Errors
 
 | Mistake | Message |
 |---|---|
-| No model | `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.` |
-| No turn yet | `t.judge() has no turn to grade: call t.send() first` |
+| No model | `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in reeval.config.ts, on the group or eval, or pass { model } to this call.` |
+| No turn yet | `c.judge() has no turn to grade: call c.send() first` |
 | No provider prefix | `config.judge: Judge model "gemini-3.8-flash" needs a provider prefix, e.g. "typesafe-ai/jev-1.13.0" or "google/gemini-3.8-flash"` |
 | A model object in the config | `config.judge.model must be a "provider/model" string or fakeJudge(). Pass model objects per group, eval or call instead.` |
-| A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `t.judge() threshold must be between 0 and 1 (got 2)` |
-| An empty question | `t.judge() needs a question: a non-empty string (got "")`, before the judge is called |
+| A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
+| An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |
 
 ## Related
 
 - [Judges concepts](/concepts/judges)
-- [The t API](/reference/t)
+- [The attempt context](/reference/attempt-context)
 - [Matchers](/reference/matchers)
 - [Writing evals](/guide/writing-evals)

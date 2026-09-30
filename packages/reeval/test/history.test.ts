@@ -8,7 +8,7 @@ import { withUnknownFields } from '../scripts/schema/validate.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
-import { harnessLabel } from '../src/view/model.ts'
+import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
 import { readableRecord } from '../src/view/record.ts'
 import { baseEnv, fakeConfig, project, readRun, recordedRuns, runCli, tempDir } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -25,15 +25,15 @@ const sh = (cwd: string, ...args: string[]) =>
 
 const HISTORY = 'evals/.history'
 const agent = (name = 'agent') => `import { evaluate, expect } from 'reeval'
-evaluate('${name}', async (t) => {
-  await t.send('write hello.txt')
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+evaluate('${name}', async (c) => {
+  await c.send('write hello.txt')
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 })
 `
 const failing = `import { evaluate, expect } from 'reeval'
-evaluate('broken', async (t) => {
-  await t.send('write hello.txt')
-  await expect(t.exec('exit 4')).toSucceed()
+evaluate('broken', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('exit 4')).toSucceed()
 })
 `
 const harness = (text = 'Wrote it') => `{ files: { 'hello.txt': 'hi\\n' }, text: '${text}' }`
@@ -68,9 +68,26 @@ describe('recording runs into evals/.history', () => {
     const p = await gitProject('record-basic', { 'evals/agent.eval.ts': agent() })
     assert.equal((await runCli(p.dir)).code, 0)
     assert.deepEqual(recordedRuns(p.dir), [], 'nothing recorded without --record')
-    const { run } = readRun(p.dir)
+    const { run, evals } = readRun(p.dir)
     assert.match(run.runId, /^\d{8}T\d{6}Z_[0-9a-f]{7}_test-author_[0-9a-z]{4}$/)
     assert.equal(run.git?.sha.slice(0, 7), run.runId.split('_')[1])
+    assert.deepEqual(
+      evals[0]?.trial.egress,
+      {
+        policy: 'allow-all',
+        allowed: null,
+        recorded: false,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      },
+      'the fake sandbox records no traffic, and the record says so',
+    )
+    const state = (await runCli(p.dir, ['show', run.runId])).stdout
+    assert.match(state, /\n {2}Lockfiles +none found\n/)
+    assert.match(state, /\n {2}Images +none \(fake sandbox\)\n/)
+    assert.match(state, /\n {2}Judge +fake · threshold 0\.8 · version [0-9a-f]{12}\n/)
+    assert.match(state, /\n {2}Context +no skills, rules or MCP config found in the sandbox\n/)
 
     const r = await runCli(p.dir, ['record'])
     assert.equal(r.code, 0, r.stderr)
@@ -317,6 +334,9 @@ describe('recording runs into evals/.history', () => {
       ['package-lock.json'],
     )
     assert.deepEqual(run.stack.images, [])
+    assert.equal(run.stack.node, process.versions.node)
+    assert.deepEqual(run.stack.runtime, { name: 'node', version: process.versions.node })
+    assert.deepEqual(run.stack.language, { name: 'typescript' })
     assert.ok(
       run.stack.packages.ai && run.stack.packages['@vitest/expect'] && run.stack.packages.jiti,
     )
@@ -333,6 +353,10 @@ describe('recording runs into evals/.history', () => {
     )
     assert.match(shown.stdout, /Uncommitted +worktree\.patch, \d+ bytes/)
     assert.match(shown.stdout, /Lockfiles +package-lock\.json [0-9a-f]{12}/)
+    assert.match(
+      shown.stdout,
+      new RegExp(`reeval +\\S+ · node ${process.versions.node} · typescript evals · `),
+    )
     assert.doesNotMatch(shown.stdout, /!|not reproducible/, 'no warning when everything is saved')
     assert.match(read('summary.md'), /## State[\s\S]*\| Uncommitted \| worktree\.patch/)
 
@@ -343,6 +367,47 @@ describe('recording runs into evals/.history', () => {
     assert.equal(readFileSync(join(target, 'src/app.js'), 'utf8'), 'export const v = 2\n')
     assert.equal(readFileSync(join(target, 'src/new.js'), 'utf8'), 'export const added = true\n')
     sh(p.dir, 'worktree', 'remove', '--force', target)
+  })
+
+  test("a profile's judge is the judge the record names and fingerprints", async () => {
+    const withProfile = await project('record-profile-judge', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({
+        harness: harness(),
+        judge: `{ model: 'google/gemini-2.5-flash', threshold: 0.5 }`,
+        extra: `profiles: {
+    ci: { judge: { model: fakeJudge({ score: 0.9 }) }, defaults: { judge: { threshold: 0.8 } } },
+  },`,
+      }),
+    })
+    const r = await runCli(withProfile.dir, ['run', '--profile', 'ci'])
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const { run } = readRun(withProfile.dir)
+    assert.equal(run.evals[0]?.attempts[0]?.judgements[0]?.threshold, 0.8, 'the profile judged')
+    assert.deepEqual(
+      { model: run.stack.judge.model, threshold: run.stack.judge.threshold },
+      { model: 'fake', threshold: 0.8 },
+    )
+    assert.deepEqual(
+      { model: run.config.judgeModel, threshold: run.config.threshold },
+      { model: 'fake', threshold: 0.8 },
+    )
+
+    const direct = await project('record-config-judge', {
+      'evals/agent.eval.ts': agent(),
+      'reeval.config.ts': fakeConfig({
+        harness: harness(),
+        judge: '{ model: fakeJudge({ score: 0.9 }), threshold: 0.8 }',
+      }),
+    })
+    assert.equal((await runCli(direct.dir)).code, 0)
+    const same = readRun(direct.dir).run
+    assert.equal(run.stack.judge.version, same.stack.judge.version)
+    assert.equal(
+      run.evals[0]?.cells[0]?.fingerprintParts.judge,
+      same.evals[0]?.cells[0]?.fingerprintParts.judge,
+      'the same judge is the same measurement, however it was chosen',
+    )
   })
 
   test('a project reached through another spelling of its path records like any other', async () => {
@@ -400,9 +465,9 @@ describe('recording runs into evals/.history', () => {
 describe('what a record says about comparability', () => {
   const importing = `import { evaluate, expect } from 'reeval'
 import { prompt } from './helpers.ts'
-evaluate('agent', async (t) => {
-  await t.send(prompt)
-  expect(await t.judge('Did it write hello.txt?')).toPass()
+evaluate('agent', async (c) => {
+  await c.send(prompt)
+  expect(await c.judge('Did it write hello.txt?')).toPass()
 })
 `
   const compareJson = async (dir: string) => {
@@ -459,8 +524,8 @@ evaluate('agent', async (t) => {
 
   test('reeval compare --fail-on-regression fails on a regression and on a failing new eval; no base is no error', async () => {
     const flip = `import { evaluate, expect } from 'reeval'
-evaluate('flips', async (t) => {
-  await t.send('write hello.txt')
+evaluate('flips', async (c) => {
+  await c.send('write hello.txt')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
@@ -505,8 +570,8 @@ evaluate('flips', async (t) => {
 
   test('reeval compare --fail-on-regression fails on a failing eval that changed (not comparable); a passing one is fine', async () => {
     const edited = (prompt: string) => `import { evaluate, expect } from 'reeval'
-evaluate('edited', async (t) => {
-  await t.send('${prompt}')
+evaluate('edited', async (c) => {
+  await c.send('${prompt}')
   expect(process.env.REEVAL_TEST_BREAK ?? 'ok').toBe('ok')
 })
 `
@@ -535,7 +600,7 @@ evaluate('edited', async (t) => {
     const long = 'x'.repeat(20_000)
     const p = await project('turn-cap', {
       'reeval.config.ts': fakeConfig({ harness: `{ text: '${long}' }` }),
-      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (t) => { await t.send('x') })\n`,
+      'evals/t.eval.ts': `import { evaluate } from 'reeval'\nevaluate('long', async (c) => { await c.send('x') })\n`,
     })
     assert.equal((await runCli(p.dir)).code, 0)
     const [e] = readRun(p.dir).evals
@@ -551,12 +616,12 @@ evaluate('edited', async (t) => {
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const one = defineEnvironment('tools', { env: { FLAVOUR: 'one' } })
 const two = defineEnvironment('tools', { env: { FLAVOUR: 'two' } })
-evaluate('uses one', { environment: one, runs: 3 }, async (t) => {
-  await t.send('x')
-  expect(await t.judge('Is it fine?')).toPass()
+evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
+  await c.send('x')
+  expect(await c.judge('Is it fine?')).toPass()
 })
-evaluate('uses two', { environment: two }, async (t) => { await t.send('x') })
-evaluate('uses none', async (t) => { await t.send('x') })
+evaluate('uses two', { environment: two }, async (c) => { await c.send('x') })
+evaluate('uses none', async (c) => { await c.send('x') })
 `,
     })
     assert.equal((await runCli(p.dir)).code, 0)
@@ -724,6 +789,28 @@ describe('records from before a field existed', () => {
     assert.equal(
       harnessLabel(r.stack.harnesses[0] as RunRecord['stack']['harnesses'][number]),
       'fake',
+    )
+  })
+
+  test('stack.runtime and stack.language: a record without them ran on Node, and names no language', () => {
+    const r = readableRecord(raw())
+    assert.equal('runtime' in r.stack || 'language' in r.stack, false)
+    assert.equal(runtimeLabel(r.stack), `node ${r.stack.node}`)
+    assert.equal(languageLabel(r.stack), null)
+    assert.match(renderSummary(r), new RegExp(`\\| reeval \\| \\S+ · node ${r.stack.node} · \\w+/`))
+  })
+
+  test('the runtime and language labels', () => {
+    const bun = { node: '26.3.0', runtime: { name: 'bun', version: '1.4.2' } }
+    assert.equal(runtimeLabel(bun), 'bun 1.4.2 (node 26.3.0)')
+    assert.equal(
+      runtimeLabel({ node: '22.14.0', runtime: { name: 'node', version: '22.14.0' } }),
+      'node 22.14.0',
+    )
+    assert.equal(languageLabel({ language: { name: 'typescript' } }), 'typescript evals')
+    assert.equal(
+      languageLabel({ language: { name: 'dart', version: '3.13.5' } }),
+      'dart 3.13.5 evals',
     )
   })
 

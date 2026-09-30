@@ -1,9 +1,10 @@
-// Compare questions on a real model, nightly (real.yml's `real agents (Cursor)` job, never on PRs):
-// examples/hello's `questions` profile runs 4 real attempts on Cursor and pi, and the judge's
-// google/gemini-3.8-flash answers its question. Checks the record's structure only, never the
-// model's wording, and never retries. Skipped unless REEVAL_TEST_REAL=1.
+// Compare questions and the analyst on a real model, nightly (real.yml's `real agents (Cursor)` job,
+// never on PRs): examples/hello's `questions` profile, under reeval.analysis.config.ts (analysis.agent
+// on), runs 4 real attempts on Cursor and pi; google/gemini-3.8-flash answers its question, writes
+// a note on each harness and summarises the run. Checks structure only, never the model's wording,
+// and never retries. Skipped unless REEVAL_TEST_REAL=1.
 import assert from 'node:assert/strict'
-import { cpSync, readFileSync } from 'node:fs'
+import { cpSync, readdirSync, readFileSync } from 'node:fs'
 import { mkdir, symlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -11,7 +12,10 @@ import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { fits, validate } from '../scripts/schema/validate.ts'
 import { ratesOf } from '../src/compare/pairs.ts'
 import { answersLabel } from '../src/history/summary.ts'
+import type { RunRecord } from '../src/history/types.ts'
 import type { PairVote } from '../src/types.ts'
+import type { AnalysisDoc, AnalysisNote } from '../src/view/analysis.ts'
+import { answerRows, recordPath } from '../src/view/index.ts'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 import { harnesses, reserveAttempts } from './support/harnesses.ts'
 
@@ -25,7 +29,7 @@ const skip =
 /** A pair's identity, the same for its two votes. */
 const pairKey = (v: PairVote) => [v.cut, v.harness ?? v.arm, v.run, v.a, v.b].join('\0')
 
-test('examples/hello --profile questions: every pair is voted in both orders', {
+test('examples/hello --profile questions: every pair is voted in both orders; notes and a summary are written', {
   skip,
   timeout: 1_800_000,
 }, async (t) => {
@@ -45,7 +49,11 @@ test('examples/hello --profile questions: every pair is voted in both orders', {
     CURSOR_API_KEY: process.env.CURSOR_API_KEY,
     GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   }
-  const r = await runCli(dir, ['run', '--profile', 'questions'], { env, timeoutMs: 1_500_000 })
+  const r = await runCli(
+    dir,
+    ['run', '--config', 'reeval.analysis.config.ts', '--profile', 'questions'],
+    { env, timeoutMs: 1_500_000 },
+  )
   // The checks decide the exit code; a question never makes it 2 or 3.
   assert.ok(r.code === 0 || r.code === 1, `reeval run exited ${r.code}\n${r.stdout}\n${r.stderr}`)
   const { run } = readRun(dir)
@@ -97,4 +105,94 @@ test('examples/hello --profile questions: every pair is voted in both orders', {
       `every decided pair followed the ${slots[0]} slot: ${JSON.stringify(answer.votes)}`,
     )
   }
+
+  // analysis.agent: one note on each eval and harness, then one run-scoped summary in the cache.
+  const cache = join(dir, '.reeval/analysis')
+  const notesDir = join(cache, run.runId, 'notes')
+  const notes = readdirSync(notesDir).map(
+    (n) => JSON.parse(readFileSync(join(notesDir, n), 'utf8')) as AnalysisNote,
+  )
+  assert.deepEqual(
+    notes.map((n) => n.harness).sort(),
+    [...new Set(e.cells.map((c) => c.harness))].sort(),
+    'one note per harness of the one eval',
+  )
+  for (const note of notes) {
+    t.diagnostic(`note ${note.harness}: ${note.text.length} characters`)
+    assert.equal(note.error, undefined, `${note.harness}'s note failed: ${note.error}`)
+    assert.deepEqual(validate(schema('analysis-note'), note), [], `${note.harness}'s note`)
+    assert.ok(note.text.length > 0, `${note.harness}'s note has text`)
+    assert.deepEqual(
+      [...note.attempts].sort(),
+      e.attempts
+        .filter((a) => e.cells.find((c) => c.key === a.cell)?.harness === note.harness)
+        .map((a) => a.id)
+        .sort(),
+      `${note.harness}'s note covers its attempts`,
+    )
+  }
+  const docs = readdirSync(cache)
+    .filter((n) => n.endsWith('.json'))
+    .map((n) => JSON.parse(readFileSync(join(cache, n), 'utf8')) as AnalysisDoc)
+  assert.equal(docs.length, 1, 'one summary')
+  const [summary] = docs as [AnalysisDoc]
+  assert.equal(summary.error, undefined, `the summary failed: ${summary.error}`)
+  assert.deepEqual(validate(schema('analysis'), summary), [], 'the summary fits its schema')
+  assert.deepEqual(
+    [summary.scope.kind, summary.anchor, summary.model],
+    ['run', run.runId, 'google/gemini-3.8-flash'],
+  )
+  t.diagnostic(
+    `summary: ${summary.validation.citations} citations, ${summary.validation.invalid.length} invalid, ${summary.validation.dropped} dropped`,
+  )
+  const claims = [
+    ...summary.analysis.whatHappened,
+    ...summary.analysis.results,
+    ...summary.analysis.why,
+    ...summary.analysis.anomalies,
+    ...summary.analysis.actions,
+  ]
+  assert.ok(summary.analysis.tldr.length > 0, 'the summary has a TL;DR')
+  assert.ok(claims.length > 0, 'a claim survived validation')
+  const known = new Set(Object.keys(summary.attempts))
+  for (const c of claims) {
+    assert.ok(c.cites.length > 0, 'every kept claim cites something')
+    for (const id of c.cites.filter((x) => /^r\d+\//.test(x))) {
+      assert.ok(known.has(id.replace(/:check\d+$/, '')), `${id} is an attempt of the run`)
+    }
+  }
+  const analyze = await runCli(
+    dir,
+    ['analyze', run.runId, '--config', 'reeval.analysis.config.ts', '--json'],
+    { env },
+  )
+  assert.equal(analyze.code, 0, analyze.stderr)
+  assert.match(analyze.stderr, /^cached analysis from /, 'reeval analyze is served from the cache')
+  assert.deepEqual(JSON.parse(analyze.stdout), summary)
+  // The studio's run page reads the same answer from a static build (the run isn't recorded, so
+  // --scratch): one row, its rates per cut.
+  const out = join(dir, 'site')
+  const built = await runCli(dir, [
+    'studio',
+    'build',
+    '--out',
+    out,
+    '--scratch',
+    '--config',
+    'reeval.analysis.config.ts',
+  ])
+  assert.equal(built.code, 0, built.stderr)
+  const page = JSON.parse(readFileSync(join(out, recordPath(run.runId)), 'utf8')) as RunRecord
+  const [row, ...more] = answerRows(page.evals[0] as RunRecord['evals'][number])
+  assert.ok(row)
+  assert.equal(more.length, 0)
+  assert.equal(row.votes, answer.votes.length)
+  assert.equal(row.error, null)
+  assert.deepEqual(
+    [
+      ...row.within.map((r) => ['within', r.name, r.wins, r.n]),
+      ...row.across.map((r) => ['across', r.name, r.wins, r.n]),
+    ],
+    answer.rates.map((r) => [r.cut, r.name, r.wins, r.n]),
+  )
 })

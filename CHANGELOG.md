@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.0](https://github.com/invertase/reeval/compare/v0.2.0...v0.3.0) (2026-09-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** rename the eval context to AttemptContext and its parameter to c ([#175](https://github.com/invertase/reeval/issues/175))
+
+### Features
+
+* **analysis:** write per-harness analysis notes during a run ([#149](https://github.com/invertase/reeval/issues/149)) ([905b4ea](https://github.com/invertase/reeval/commit/905b4ea63670169a113fba60e300d80060d0c0b1))
+* **analysis:** write the run's analysis summary after a run ([#158](https://github.com/invertase/reeval/issues/158)) ([eb3d50c](https://github.com/invertase/reeval/commit/eb3d50ca66b2afd0f4af82218773446f39318ef3))
+* **cli:** add --profile to reeval image build ([#160](https://github.com/invertase/reeval/issues/160)) ([475cc42](https://github.com/invertase/reeval/commit/475cc423942062376e6798a25d9fa6d21a6efef9))
+* **compare:** answer compare questions with pairwise win rates ([#152](https://github.com/invertase/reeval/issues/152)) ([abc3bbd](https://github.com/invertase/reeval/commit/abc3bbd9e94b666944127b4c202188ed7950ec07))
+* **compare:** declare compare questions in the plan ([#147](https://github.com/invertase/reeval/issues/147)) ([879749e](https://github.com/invertase/reeval/commit/879749efd37e4fdc4fa44dba69e876549eadac8d))
+* **harness:** support MCP servers on pi 0.99 ([#156](https://github.com/invertase/reeval/issues/156)) ([54b619e](https://github.com/invertase/reeval/commit/54b619e874a0bdf4bc0243728c08d5f24aed269c))
+* **record:** record the real runtime and eval language ([#154](https://github.com/invertase/reeval/issues/154)) ([f660d33](https://github.com/invertase/reeval/commit/f660d3365839dd9689b18e9697b5adcd2b0ddb35))
+* **studio:** show compare answers on the run page ([#155](https://github.com/invertase/reeval/issues/155)) ([674e2ee](https://github.com/invertase/reeval/commit/674e2ee7b0f6fedf7bc1beeb612af4de5a52858c))
+
+
+### Bug Fixes
+
+* **history:** name the profile's judge in the run record ([#159](https://github.com/invertase/reeval/issues/159)) ([5ed3fd2](https://github.com/invertase/reeval/commit/5ed3fd2bfc93591aca1c2eb9cf85abac22a8d621))
+* **sandbox:** keep the image's PATH in login shells ([#157](https://github.com/invertase/reeval/issues/157)) ([d22883f](https://github.com/invertase/reeval/commit/d22883fa7223d79cc621b315aabf0db4d9508aef))
+
+
+### Code Refactoring
+
+* **api:** rename the eval context to AttemptContext and its parameter to c ([#175](https://github.com/invertase/reeval/issues/175)) ([dbc3664](https://github.com/invertase/reeval/commit/dbc36643188267d60b43df10f5421a017b61db00))
+
 ## [0.2.0](https://github.com/invertase/reeval/compare/v0.1.0...v0.2.0) (2026-09-29)
 
 

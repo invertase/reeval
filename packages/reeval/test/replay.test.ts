@@ -69,8 +69,6 @@ const signals: Record<string, (es: TranscriptEvent[]) => void> = {
   },
 }
 
-const NO_MCP = new Set(['pi'])
-
 const harnesses = existsSync(root)
   ? readdirSync(root, { withFileTypes: true })
       .filter((d) => d.isDirectory() && d.name !== 'formats')
@@ -85,9 +83,10 @@ for (const harness of harnesses) {
   describe(`replay: ${harness}`, () => {
     const files = readdirSync(join(root, harness)).filter((f) => f.endsWith('.raw.jsonl'))
     test('one capture per behaviour', () => {
-      // A harness with no MCP client has no MCP capture: its MCP attempts are refused.
-      const behaviours = Object.keys(signals).filter((b) => b !== 'mcp' || !NO_MCP.has(harness))
-      assert.deepEqual(files.map((f) => f.replace('.raw.jsonl', '')).sort(), behaviours.sort())
+      assert.deepEqual(
+        files.map((f) => f.replace('.raw.jsonl', '')).sort(),
+        Object.keys(signals).sort(),
+      )
     })
     for (const file of files) {
       const name = file.replace('.raw.jsonl', '')

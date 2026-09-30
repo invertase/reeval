@@ -18,7 +18,7 @@ When an eval fails, the reason is usually in the summary. When it isn't, reeval 
     ❯ evals/skill.eval.ts:24:7
         22|           'Add a package.json with "type": "module". No dependencies.',
         23|       )
-        24|       await expect(t.exec(greetAda)).toSucceed()
+        24|       await expect(c.exec(greetAda)).toSucceed()
           |       ^
         25|     })
         26|   },
@@ -31,7 +31,7 @@ The `record` line is the attempt's folder. It holds what the agent did:
 
 ```text
 .reeval/runs/<run>/<eval>/<cell>/2/
-  checks/1.log        a t.exec: command, exit code, stdout, stderr
+  checks/1.log        a c.exec: command, exit code, stdout, stderr
   diff.patch          what the agent changed in the workspace
   transcript.jsonl    every message, tool call and file edit
 ```

@@ -318,7 +318,7 @@ describe('unbrokered secrets', () => {
   test("a to: 'checks' secret's warning says the agent never gets it", () => {
     assert.equal(
       unbrokeredWarning({ label: 'CHECK_TOKEN', from: 'CHECK_TOKEN', checksOnly: true }),
-      "CHECK_TOKEN reaches the checks (t.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
+      "CHECK_TOKEN reaches the checks (c.exec, setup steps) as its real value; the agent never gets it. To give the checks only a placeholder, add the hosts it's sent to, e.g. secret.fromEnv('CHECK_TOKEN', { hosts: ['api.example.com'] }).",
     )
     const env = { CHECK_TOKEN: { kind: 'secret' as const, to: 'checks' as const } }
     const [found] = unbrokeredSecrets(env, [])

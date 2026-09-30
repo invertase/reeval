@@ -400,14 +400,6 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 'mcp.refused',
-    area: 'Environments',
-    name: 'MCP servers on a harness with no MCP client (pi) refused at plan time',
-    tests: [
-      'reeval/test/plan.test.ts › any MCP server on pi exits 2 at plan time; Goose takes stdio and http',
-    ],
-  },
-  {
     id: 'secret.template',
     area: 'Environments',
     name: '`secret.template` in MCP headers',
@@ -537,9 +529,9 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 't.sandbox',
+    id: 'c.sandbox',
     area: 'Environments',
-    name: '`t.sandbox()`: checks without a turn',
+    name: '`c.sandbox()`: checks without a turn',
     fixtures: ['env/files-home', 'skills/workspace-placement'],
   },
 
@@ -634,6 +626,12 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/plan.test.ts › canary: an eval without root gets no warning, so the check fails',
       docker('a root sandbox warns at the start of reeval run, in the record and in summary.md'),
     ],
+  },
+  {
+    id: 'docker.login-shell-path',
+    area: 'Sandbox',
+    name: "Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`)",
+    fixtures: ['sandbox/login-shell-path', 'sandbox/login-shell-path-dockerfile'],
   },
   {
     id: 'docker.limits',
@@ -921,7 +919,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'harness.pi',
     area: 'Harnesses',
-    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens; MCP refused',
+    name: '`pi()`: pi in the sandbox (`pi --mode json`) on a brokered Gemini key, with per-call tokens and stdio and HTTP MCP servers',
     fixtures: [
       'harness/pi-rules',
       'harness/pi-workspace-skills',
@@ -933,7 +931,15 @@ export const inventory: InventoryFeature[] = [
       harness(
         'pi reads rules from AGENTS.md, repo skills from .pi/skills and home skills from ~/.pi/agent/skills',
       ),
-      harness('pi has no MCP client, so MCP servers are refused, naming them'),
+      harness(
+        "MCP servers go in pi's mcp.json shape; it has no SSE transport and refuses odd names",
+      ),
+      'reeval/test/plan.test.ts › pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip',
+      piAdapter(
+        'unit',
+        'a session with MCP servers writes mcp.json under the home and loads the mcp extension',
+      ),
+      piAdapter('unit', 'env and header values are escaped so pi reads them literally'),
       harness("pi's adapter brokers only the Gemini key, as GEMINI_API_KEY, to the Gemini API"),
       piAdapter(
         'stream',
@@ -1091,7 +1097,7 @@ export const inventory: InventoryFeature[] = [
       engine('judge options cascade from config to group, eval and call'),
       engine('a failing judge fails the eval as a judge error'),
       engine(
-        't.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
+        'c.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
       ),
       unit('judge calls retry transient provider errors'),
     ],
@@ -1248,6 +1254,21 @@ export const inventory: InventoryFeature[] = [
       analysis('agent without a language model exits 2 at plan time'),
       options('common mistakes'),
     ],
+    real: ['questions › examples/hello --profile questions'],
+  },
+  {
+    id: 'analysis.agent.summary',
+    area: 'Records and studio',
+    name: "`analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error",
+    tests: [
+      analysis('on a real Cursor history, the tools read back dropped evidence'),
+      analysis('on each real harness'),
+      analysis('a fake run caches one run-scoped summary'),
+      analysis('a summary that fails is cached with its error and a warning'),
+      studio("analysis.agent's notes are in the build as the server serves them"),
+      "studio-web/test/e2e.test.ts › reeval studio shows analysis.agent's notes and summary",
+    ],
+    real: ['questions › examples/hello --profile questions'],
   },
   {
     id: 'studio',
@@ -1288,6 +1309,20 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/live.test.ts › a killed run is shown as stopped',
       'studio-web/test/e2e.test.ts › reeval studio shows a run in progress attempt by attempt',
     ],
+  },
+  {
+    id: 'studio.answers',
+    area: 'Records and studio',
+    name: "Compare questions' answers on the studio's run page: win rates within and across harnesses, the model, and a failed call's error",
+    tests: [
+      studio("compare answers: each question's win rates per cut, and nothing without one"),
+      studio("compare answers over real harnesses' diffs (real-e2e-pairs)"),
+      studio('writes a static site with the same paths the server answers'),
+      'studio-web/test/e2e.test.ts › a static build works from a subpath',
+      'studio-web/test/e2e.test.ts › every run in the record corpus renders',
+      "studio-web/test/e2e.test.ts › a compare answer over real harnesses' diffs (real-e2e-pairs)",
+    ],
+    real: ['questions › examples/hello --profile questions'],
   },
 
   // CLI and runner
