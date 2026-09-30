@@ -472,6 +472,12 @@ describe('recording runs into evals/.history', () => {
       /uncommitted changes when the run started \(git status\), not the agents' work/,
     )
     assert.match(r.stdout, /--skip-secret-scan\.$/m)
+    assert.match(
+      r.stdout,
+      /Nothing was committed\. Take the key out of those files, or add them to \.gitignore/,
+    )
+    assert.match(r.stdout, /rotate the key only if it's already been committed or pushed/)
+    assert.doesNotMatch(r.stdout, /rotate it/)
     assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
     assert.doesNotMatch(r.stdout, new RegExp(key))
 

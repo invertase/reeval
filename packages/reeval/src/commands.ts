@@ -99,7 +99,7 @@ export async function record(
     `warning: left worktree.patch out of ${runId}: it looks like it holds a secret.`,
     ...result.droppedPatch.map((line) => `  ${line}`),
     "  worktree.patch is your checkout's uncommitted changes when the run started (git status), not the agents' work.",
-    '  If the secret is real, rotate it and remove it from those files. The record says the patch was left out, so reeval checkout recreates the commit alone.',
+    "  Nothing was committed. Take the key out of those files, or add them to .gitignore, so a later commit doesn't carry it; rotate the key only if it's already been committed or pushed. The record says the patch was left out, so reeval checkout recreates the commit alone.",
     `  To keep it after checking by hand: delete ${where} and ${artifacts || 'its artifacts'}, then reeval record ${runId} --skip-secret-scan.`,
     recorded,
   ].join('\n')
