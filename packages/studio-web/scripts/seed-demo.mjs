@@ -1,7 +1,7 @@
 // Builds a throwaway reeval project with real run history for studio development, screenshots and
 // tests: a copy of examples/hello with a few commits and recorded fake runs (passing, failing, CI,
-// multi-cell with a compared skill environment, with analysis.agent's notes and summary), plus one
-// unrecorded scratch run whose summary fails.
+// multi-cell with a compared skill environment, its answered and failed compare questions, and
+// analysis.agent's notes and summary), plus one unrecorded scratch run whose summary fails.
 //
 //   node packages/studio-web/scripts/seed-demo.mjs [dir]    (default: $TMPDIR/reeval-studio-demo)
 import { spawnSync } from 'node:child_process'
@@ -69,6 +69,32 @@ const reasoning =
 
 const harness = (options) => `fakeHarness(${JSON.stringify(options, null, 2)})`
 
+/** The demo model's reply to review.eval.ts's second question, which the studio shows. */
+const QUESTION_ERROR = 'Rate limit exceeded (429): the demo model refuses this question'
+
+// Both arms write greet.js, so their checks pass and every pair of the compare is judged.
+const REVIEW = `import { evaluate, expect } from 'reeval'
+import { plain, withHouseGreeting } from './environments.ts'
+
+evaluate(
+  'reviews a greet module',
+  {
+    compare: {
+      baseline: plain,
+      variants: [withHouseGreeting],
+      question: [
+        'Which greet.js reads more like our house style?',
+        'Which greet.js handles a missing name?',
+      ],
+    },
+  },
+  async (t) => {
+    await t.send('Create greet.js exporting greet(name).')
+    await expect(t).toHaveFile('greet.js')
+  },
+)
+`
+
 const config = ({
   include,
   harnesses,
@@ -85,11 +111,15 @@ export default defineConfig({
   harness: [${harnesses.join(', ')}],
   sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: ${judge} }) },
-  // Answers skill.eval.ts's compare question: the attempt whose diff says Ahoy wins.
+  // Answers the compare questions: the attempt whose diff says Ahoy wins, then the one that
+  // defaults the name. review.eval.ts's second question fails at the model.
   analysis: {${agent ? '\n    agent: true,' : ''}
     model: fakeAnalysis({
-      vote: (p) =>
-        p.a.includes('Ahoy') === p.b.includes('Ahoy') ? 'tie' : p.a.includes('Ahoy') ? 'A' : 'B',${agent}
+      vote: (p) => {
+        if (p.question.includes('missing name')) throw new Error('${QUESTION_ERROR}')
+        const score = (diff) => (diff.includes('Ahoy') ? 2 : 0) + (diff.includes("name = 'world'") ? 1 : 0)
+        return score(p.a) === score(p.b) ? 'tie' : score(p.a) > score(p.b) ? 'A' : 'B'
+      },${agent}
     }),
   },
   timeout: '2m',
@@ -147,14 +177,17 @@ es(['run', '--config', 'reeval.demo.config.ts', '--record'], {
   GITHUB_RUN_ATTEMPT: '1',
 })
 
-// A matrix: two agents, each with skill.eval.ts's control and its house-greeting variant, three
-// runs per cell.
+// A matrix: two agents, each with skill.eval.ts's and review.eval.ts's control and house-greeting
+// variant, three runs per cell. Only the careful agent's greeting defaults the name.
 // biome-ignore lint/suspicious/noTemplateCurlyInString: the fake agent's file content
 const AHOY = "export function greet(name = 'world') {\n  return `Ahoy, ${name}!`\n}\n"
+// biome-ignore lint/suspicious/noTemplateCurlyInString: the fake agent's file content
+const TERSE_AHOY = 'export const greet = (name) => `Ahoy, ${name}!`\n'
+await writeFile(join(dir, 'evals/review.eval.ts'), REVIEW)
 await writeFile(
   join(dir, 'reeval.matrix.config.ts'),
   config({
-    include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
+    include: ['evals/hello.eval.ts', 'evals/skill.eval.ts', 'evals/review.eval.ts'],
     harnesses: [
       harness({
         ...good,
@@ -168,7 +201,7 @@ await writeFile(
         ...good,
         id: 'hasty',
         flakeRate: 0.35,
-        withSkill: { files: { 'greet.js': AHOY, 'package.json': PKG } },
+        withSkill: { files: { 'greet.js': TERSE_AHOY, 'package.json': PKG } },
       }),
     ],
     // analysis.agent: a note on each eval and harness (hasty's fail) and a summary of the run.
