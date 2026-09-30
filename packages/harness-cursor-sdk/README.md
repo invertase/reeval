@@ -44,7 +44,7 @@ this adapter passes them on as `finish-step` and `finish` usage.
   `mcp` with `providerIdentifier` and `toolName`), and usage. Tool paths under the workspace are
   reported relative to it, as ACP reports them. The SDK logs to stdout, so the runner keeps
   stdout for its lines and sends the rest to stderr.
-- **Bootstrap.** Checks for Node 22.21 or later and installs the pinned `@cursor/sdk` (1.0.32,
+- **Bootstrap.** Checks for Node 22.21 or later and installs the pinned `@cursor/sdk` (1.0.34,
   with its platform package: ripgrep and the sandbox helper) next to the runner.
 - **Auth and brokering.** A Cursor user or service-account API key (`CURSOR_API_KEY`). On a
   sandbox with `addRequestTransformations`, the runner gets a placeholder. The SDK sends the key
@@ -60,10 +60,10 @@ this adapter passes them on as `finish-step` and `finish` usage.
   SDK's `project` setting source. Harness-placed skills go to `~/.agents/skills/` (`user`).
   `instructions` are prepended to the prompt in the ACP adapters' `<session-guidance>` block.
   `mcpServers` go inline, in the SDK's `McpServerConfig` shape, on every turn.
-- **Web tools.** SDK 1.0.32 reports no `tool_call` events for its web search and fetch. Cursor's
-  backend sends `webSearchToolCall` and `webFetchToolCall` updates, but the SDK's converter maps
-  them to null, so they reach neither `run.stream()` nor `onDelta` / `onStep`, and no hook fires
-  for them. They run on Cursor's servers, not in the sandbox. The stored conversation keeps them,
+- **Web tools.** SDK 1.0.32 and 1.0.34 report no `tool_call` events for their web search and
+  fetch. Cursor's backend sends `webSearchToolCall` and `webFetchToolCall` updates, but the SDK's
+  converter maps them to null, so they reach neither `run.stream()` nor `onDelta` / `onStep`, and
+  no hook fires for them. They run on Cursor's servers, not in the sandbox. The stored conversation keeps them,
   so after each turn the runner reads `Agent.messages.list()` and reports the calls the stream
   didn't as `tool_call` events (marked `recovered`, with the backend's `started_at_ms` /
   `completed_at_ms`), before the result. The turn's `finish-step` waits for the result line, since

@@ -125,7 +125,7 @@ const ANTIGRAVITY_OPTIONAL = [
   'step_update/tool .step_update.tool_info.error.type',
 ]
 
-// codex exec's (0.157.1) `--json` JSONL, as codex-rs/exec/src/exec_events.rs types it: every
+// codex exec's (0.159.2) `--json` JSONL, as codex-rs/exec/src/exec_events.rs types it: every
 // event, item type, key and status it defines is the format, whichever a run shows. A command the
 // model ran that exited non-zero is `failed`; a turn that ends on a refused key is `error` events
 // (Codex retrying) and `turn.failed`; reasoning, to-do list, web search and sub-agent items come

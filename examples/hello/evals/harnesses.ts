@@ -8,4 +8,4 @@ export const agy = antigravity({ model: 'gemini-3.8-flash-medium' }) // id antig
 export const oc = opencode({ model: 'google/gemini-3.8-flash' }) // id opencode:gemini-3.8-flash
 export const gs = goose({ model: 'gemini-3.8-flash' }) // id goose:gemini-3.8-flash
 export const pim = pi({ model: 'gemini-3.8-flash' }) // id pi:gemini-3.8-flash
-export const cx = codex({ model: 'gpt-5.4-mini' }) // id codex:gpt-5.4-mini
+export const cx = codex({ model: 'gpt-5.6-luna' }) // id codex:gpt-5.6-luna
