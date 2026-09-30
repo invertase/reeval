@@ -57,7 +57,7 @@ group(
 )
 ```
 
-- `mcp.http(url, { headers })` connects the agent to a remote server. `mcp.sse(url)` works the same way for SSE servers, except on Goose and Codex, which have no SSE transport. pi has no MCP client, so any MCP server makes its plan exit 2.
+- `mcp.http(url, { headers })` connects the agent to a remote server. `mcp.sse(url)` works the same way for SSE servers, except on OpenCode, Goose, pi and Codex, which have no SSE transport, so their plans exit 2.
 - `secret.template('Bearer ${ACME_TOKEN}')` reads `ACME_TOKEN` from the host when the attempt starts.
 - The tool-call check runs only in the variant cell: the control has no server to call.
 

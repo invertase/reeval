@@ -2,7 +2,9 @@
 export { getPiBootstrap, PI_BOOTSTRAP_DIR, PI_CLI_PATH, PI_CLI_VERSION } from './pi-bootstrap.ts'
 export {
   buildPiCommand,
+  buildPiMcpConfig,
   createPi,
+  escapePiConfigValue,
   GEMINI_API_KEY_HEADER,
   GEMINI_API_URL,
   PI_AGENT_DIR,
@@ -11,8 +13,10 @@ export {
   PI_HARNESS_ID,
   PI_HOME_SKILLS_DIR,
   PI_INSTRUCTIONS_FILE,
+  PI_MCP_FILE,
   PI_WORKSPACE_SKILLS_DIR,
   type PiHarnessSettings,
+  type PiMcpServer,
 } from './pi-harness.ts'
 export { type PiEvent, PiStreamTranslator, type PiUsage, toUsage } from './pi-stream.ts'
 export { PI_BUILTIN_TOOLS, type PiBuiltinTools } from './pi-tools.ts'
