@@ -194,7 +194,10 @@ export async function startSession(
     f.executable ? [f.path.startsWith('~/') ? `${box.home}/${f.path.slice(2)}` : f.path] : [],
   )
   if (executable.length) {
-    const r = await box.exec(`chmod +x -- ${executable.map(shellQuote).join(' ')}`, {
+    // BSD chmod (macOS, where the fake sandbox runs on the host) reads `--` after the mode as a
+    // file, so a leading `-` is guarded with `./` instead.
+    const paths = executable.map((p) => shellQuote(p.startsWith('-') ? `./${p}` : p))
+    const r = await box.exec(`chmod +x ${paths.join(' ')}`, {
       signal: a.signal,
     })
     if (r.exitCode !== 0) {
