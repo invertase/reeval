@@ -24,6 +24,7 @@ import type {
   CellGate,
   CompareGate,
   CompareOptions,
+  ConfigJudgeOptions,
   Duration,
   EgressPolicy,
   Environment,
@@ -491,6 +492,12 @@ function applyLevel(
   for (const key of options.pin ?? []) if (!out.pin.includes(key)) out.pin.push(key)
 }
 
+/** What a profile sets over the config's judge: its `judge`, then its `defaults.judge`. */
+export const profileJudge = (profile: ResolvedProfile): ConfigJudgeOptions => ({
+  ...profile.judge,
+  ...profile.defaults.judge,
+})
+
 export type ResolvedEval = {
   resolved: Resolved
   /** What a profile changed, for the plan's notes column. */
@@ -520,10 +527,9 @@ export function cascade(
   const { profile } = options
   const notes: string[] = []
   if (profile) {
-    const { defaults, judge } = profile
     applyLevel(
       out,
-      { ...defaults, judge: { ...judge, ...defaults.judge } } as EvalOptions,
+      { ...profile.defaults, judge: profileJudge(profile) } as EvalOptions,
       `profiles.${profile.name}.defaults`,
       'inherited',
     )
