@@ -91,9 +91,9 @@ export function checkGate(value: unknown, where: string): void {
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 const GATES: CompareGate[] = ['variants', 'all', 'none']
-const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'question']
+const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'questions']
 const QUESTION_KEYS = ['question', 'model']
-const QUESTION_EXAMPLE = `question: 'Which handles state more cleanly?'`
+const QUESTION_EXAMPLE = `questions: ['Which handles state more cleanly?']`
 
 const ID = /^[A-Za-z0-9._:@+-]+$/
 
@@ -148,35 +148,35 @@ function checkQuestion(item: unknown, where: string): string {
   if (typeof item === 'string') {
     if (item.trim()) return item
     throw new UsageError(
-      `compare.question in ${where} is an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`,
+      `compare.questions in ${where} is an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`,
     )
   }
   if (typeof item !== 'object' || item === null || Array.isArray(item)) {
     throw new UsageError(
-      `compare.question in ${where} takes strings or { question, model? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
+      `compare.questions in ${where} takes strings or { question, model? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
     )
   }
   const unknown = Object.keys(item).filter((k) => !QUESTION_KEYS.includes(k))
   if (unknown.length) {
     throw new UsageError(
-      `compare.question in ${where} takes { question, model? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).`,
+      `compare.questions in ${where} takes { question, model? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).`,
     )
   }
   const { question, model } = item as { question?: unknown; model?: unknown }
   if (typeof question !== 'string' || !question.trim()) {
     throw new UsageError(
-      `compare.question in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
+      `compare.questions in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
     )
   }
   if (model !== undefined) {
     if (typeof model !== 'string' || checkModelString(model)) {
       throw new UsageError(
-        `compare.question "${question}" in ${where}: model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`,
+        `compare.questions "${question}" in ${where}: model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`,
       )
     }
     if (isEvaluationModel(model)) {
       throw new UsageError(
-        `compare.question "${question}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
+        `compare.questions "${question}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
       )
     }
   }
@@ -184,15 +184,20 @@ function checkQuestion(item: unknown, where: string): string {
 }
 
 function checkQuestions(value: unknown, where: string): void {
-  const list = Array.isArray(value) ? value : [value]
+  if (!Array.isArray(value)) {
+    throw new UsageError(
+      `compare.questions in ${where} is a list (got ${describe(value)}), e.g. ${QUESTION_EXAMPLE}.`,
+    )
+  }
+  const list: unknown[] = value
   if (list.length === 0) {
     throw new UsageError(
-      `compare.question in ${where} is an empty list. Ask at least one, e.g. ${QUESTION_EXAMPLE}, or leave question out.`,
+      `compare.questions in ${where} is an empty list. Ask at least one, e.g. ${QUESTION_EXAMPLE}, or leave questions out.`,
     )
   }
   const texts = list.map((item) => checkQuestion(item, where))
   const dupe = texts.find((t, i) => texts.indexOf(t) !== i)
-  if (dupe) throw new UsageError(`compare.question in ${where} asks "${dupe}" twice`)
+  if (dupe) throw new UsageError(`compare.questions in ${where} asks "${dupe}" twice`)
 }
 
 function checkCompare(value: unknown, where: string): void {
@@ -204,24 +209,25 @@ function checkCompare(value: unknown, where: string): void {
   const spec = value as { baseline?: unknown; variants?: unknown }
   if (typeof value !== 'object' || value === null || !Array.isArray(spec.variants)) {
     throw new UsageError(
-      `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, question? }.`,
+      `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions? }.`,
     )
   }
   for (const key of Object.keys(value)) {
     if (!COMPARE_KEYS.includes(key)) {
-      const hint = key === 'questions' ? '. Did you mean "question"?' : ''
+      const hint =
+        key === 'question' ? `. Did you mean "questions"? It's a list: ${QUESTION_EXAMPLE}.` : ''
       throw new UsageError(`Unknown compare option "${key}" in ${where}${hint}`)
     }
   }
-  const { baseline, variants, gate, minLift, harness, question } = spec as {
+  const { baseline, variants, gate, minLift, harness, questions } = spec as {
     baseline?: unknown
     variants: unknown[]
     gate?: unknown
     minLift?: unknown
     harness?: unknown
-    question?: unknown
+    questions?: unknown
   }
-  if (question !== undefined) checkQuestions(question, where)
+  if (questions !== undefined) checkQuestions(questions, where)
   if (baseline !== undefined && !isEnvironment(baseline)) {
     throw new UsageError(
       `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environment as the control.`,
@@ -433,8 +439,8 @@ export type NormalizedCompare = {
   questions: PlannedQuestion[]
 }
 
-const plannedQuestions = (value: CompareOptions['question']): PlannedQuestion[] =>
-  (value === undefined ? [] : Array.isArray(value) ? value : [value]).map((q) =>
+const plannedQuestions = (value: CompareOptions['questions']): PlannedQuestion[] =>
+  (value ?? []).map((q) =>
     typeof q === 'string'
       ? { question: q }
       : { question: q.question, ...(q.model !== undefined ? { model: q.model } : {}) },
@@ -473,7 +479,7 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
       ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
       : {}),
     of: value.variants.length,
-    questions: plannedQuestions(value.question),
+    questions: plannedQuestions(value.questions),
   }
 }
 

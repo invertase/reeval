@@ -229,12 +229,12 @@ evaluate('greets by name', {
   compare: {
     baseline: plain,
     variants: [withHouseGreeting],
-    question: 'Which greet.js handles a missing or empty name better?',
+    questions: ['Which greet.js handles a missing or empty name better?'],
   },
 }, async (c) => { … })
 ```
 
-Lift says which arm passes more often. A `question` asks which attempt did the better job, pair by pair, once every attempt of the eval has finished. Questions annotate the compare: they never change pass, fail or the exit code.
+Lift says which arm passes more often. Each of `questions` asks which attempt did the better job, pair by pair, once every attempt of the eval has finished. Questions annotate the compare: they never change pass, fail or the exit code.
 
 ```text
 plan  profile questions (--profile) · 1 eval · 4 cells · 4 attempts · …
@@ -243,7 +243,7 @@ evals/questions.eval.ts › greets by name  2          1         1     4
   question 1/1  Which greet.js handles a missing or empty name better? · after the run · google/gemini-3.8-flash
 ```
 
-`reeval run --dry-run` lists each question with the model that will answer it, and a profile that leaves only the baseline drops them. Pass a list for several, and `{ question, model }` to give one its own model. Without one, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
+`reeval run --dry-run` lists each question with the model that will answer it, and a profile that leaves only the baseline drops them. `questions` is always a list: each entry is a string, or `{ question, model }` to give that one its own model. Without one, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
 
 ## Read the answers
 

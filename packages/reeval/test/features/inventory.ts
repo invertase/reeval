@@ -141,9 +141,9 @@ export const inventory: InventoryFeature[] = [
     tests: [options('common mistakes')],
   },
   {
-    id: 'compare.question',
+    id: 'compare.questions',
     area: 'Config and selection',
-    name: '`compare.question`: questions in the plan, answered after the run with pairwise win rates',
+    name: '`compare.questions`: questions in the plan, answered after the run with pairwise win rates',
     plan: ['compare/questions', 'compare/questions-dropped', 'compare/questions-group'],
     tests: [
       options('--dry-run names the questions with no language model'),

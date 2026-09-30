@@ -13,7 +13,7 @@ group(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: 'Which greeting reads more like our house style?',
+      questions: ['Which greeting reads more like our house style?'],
     },
   },
   () => {

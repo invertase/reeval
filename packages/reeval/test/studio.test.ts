@@ -79,7 +79,7 @@ describe('studio data paths', () => {
 const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const other = defineEnvironment('other', {})
-group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], question: 'Which wrote hello.txt?' }, runs: 2 } : {}, () => {
+group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], questions: ['Which wrote hello.txt?'] }, runs: 2 } : {}, () => {
   evaluate('writes hello', async (c) => {
     await c.send('write hello.txt')
     await expect(c.exec('test -f hello.txt')).toSucceed()

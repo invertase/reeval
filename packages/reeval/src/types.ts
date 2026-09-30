@@ -656,10 +656,10 @@ export type CompareOptions<E = Environment> = {
   /** Harnesses (ids or descriptors) to compare on; the others run the control only. */
   harness?: Array<string | HarnessDescriptor>
   /**
-   * Asked of pairs of attempts after the run, one question or several. They annotate the
-   * compare with win rates and never change pass, fail or the exit code.
+   * Asked of pairs of attempts after the run, always a list. They annotate the compare with
+   * win rates and never change pass, fail or the exit code.
    */
-  question?: CompareQuestion | CompareQuestion[]
+  questions?: CompareQuestion[]
 }
 
 /**

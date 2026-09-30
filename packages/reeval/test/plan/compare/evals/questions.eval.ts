@@ -7,7 +7,7 @@ evaluate(
     compare: {
       baseline: base,
       variants: [skilled],
-      question: 'Which handles state more cleanly?',
+      questions: ['Which handles state more cleanly?'],
     },
   },
   async () => {},
@@ -18,7 +18,7 @@ evaluate(
     compare: {
       baseline: base,
       variants: [skilled, terse],
-      question: [
+      questions: [
         'Which handles state more cleanly?',
         {
           question: 'Which follows the house style more closely?',
@@ -32,7 +32,7 @@ evaluate(
 evaluate(
   'pinned',
   {
-    compare: { baseline: base, variants: [skilled], question: 'Which is shorter?' },
+    compare: { baseline: base, variants: [skilled], questions: ['Which is shorter?'] },
     pin: ['compare'],
   },
   async () => {},

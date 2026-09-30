@@ -8,7 +8,7 @@ group(
     compare: {
       baseline: base,
       variants: [skilled],
-      question: 'Which handles state more cleanly?',
+      questions: ['Which handles state more cleanly?'],
     },
   },
   () => {
