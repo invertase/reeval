@@ -172,7 +172,20 @@ export const app = defineEnvironment('acme-app', ({ git }) => ({
   workspace: git('https://github.com/acme/app', { ref: 'v2.3.0', path: 'examples/basic' }),
   setup: ['npm ci'],
 }))
+
+// Or seed a whole fixture directory: a plain object of file() entries, so spread and override it
+export const notes = defineEnvironment('acme-notes', ({ directory }) => ({
+  files: { ...directory('../fixture'), 'README.md': 'something' },
+  setup: [{ run: 'npm ci --no-audit --no-fund', timeout: '5m' }],
+}))
 ```
+
+Use `directory(path, { into?, glob?, defaultIgnores? })` for a fixture directory instead of
+mapping a file list through `file()`. It skips `.git`, `node_modules/`, `dist/`, top-level
+`build/`, caches and editor folders (`DEFAULT_DIRECTORY_IGNORES`; `defaultIgnores: false` keeps
+them, except `.git`). `glob` is ordered gitignore-style patterns where the last match wins and
+`!` excludes: `glob: ['src/**', 'package.json', '!**/*.test.ts']`. Executable files stay
+executable; empty directories aren't seeded.
 
 `workspace: git(repo, { ref, path })` takes a URL, `github:owner/repo`, a GitHub `/tree/` URL or
 a local path (relative to the file). reeval fetches it on the host before any attempt, with the
