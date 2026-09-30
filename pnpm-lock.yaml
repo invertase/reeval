@@ -50,7 +50,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/provider':
         specifier: 4.0.18
         version: 4.0.18
@@ -65,7 +65,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/provider':
         specifier: 4.0.18
         version: 4.0.18
@@ -80,7 +80,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/provider':
         specifier: 4.0.18
         version: 4.0.18
@@ -113,7 +113,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/harness-acp':
         specifier: 1.0.62
         version: 1.0.62(zod@4.6.5)
@@ -131,7 +131,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/provider':
         specifier: 4.0.18
         version: 4.0.18
@@ -149,7 +149,7 @@ importers:
         version: 4.0.79(zod@4.6.5)
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/harness-acp':
         specifier: 1.0.62
         version: 1.0.62(zod@4.6.5)
@@ -196,8 +196,8 @@ importers:
         specifier: 0.2.17
         version: 0.2.17
       ws:
-        specifier: 8.21.0
-        version: 8.21.0
+        specifier: 8.22.0
+        version: 8.22.0
       yaml:
         specifier: 2.9.1
         version: 2.9.1
@@ -246,7 +246,7 @@ importers:
     dependencies:
       '@ai-sdk/harness':
         specifier: 1.0.124
-        version: 1.0.124(ws@8.21.0)(zod@4.6.5)
+        version: 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/harness-claude-code':
         specifier: 1.0.128
         version: 1.0.128(patch_hash=5d1c985cccfd5adf255e05536c0c2bf570cb49aa634682b80eb516dad1535d37)(zod@4.6.5)
@@ -269,8 +269,8 @@ importers:
         specifier: workspace:0.2.0
         version: link:../harness-pi
       ws:
-        specifier: 8.21.0
-        version: 8.21.0
+        specifier: 8.22.0
+        version: 8.22.0
       zod:
         specifier: 4.6.5
         version: 4.6.5
@@ -2706,6 +2706,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   y18n@5.0.8:
     resolution: {integrity: sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA==}
     engines: {node: '>=10'}
@@ -2770,9 +2782,9 @@ snapshots:
 
   '@ai-sdk/harness-claude-code@1.0.128(patch_hash=5d1c985cccfd5adf255e05536c0c2bf570cb49aa634682b80eb516dad1535d37)(zod@4.6.5)':
     dependencies:
-      '@ai-sdk/harness': 1.0.124(ws@8.21.0)(zod@4.6.5)
+      '@ai-sdk/harness': 1.0.124(ws@8.22.0)(zod@4.6.5)
       '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
-      ws: 8.21.0
+      ws: 8.22.0
       zod: 4.6.5
     transitivePeerDependencies:
       - bufferutil
@@ -2786,6 +2798,15 @@ snapshots:
       zod: 4.6.5
     optionalDependencies:
       ws: 8.21.0
+
+  '@ai-sdk/harness@1.0.124(ws@8.22.0)(zod@4.6.5)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.18
+      '@ai-sdk/provider-utils': 5.0.47(zod@4.6.5)
+      ai: 7.0.114(zod@4.6.5)
+      zod: 4.6.5
+    optionalDependencies:
+      ws: 8.22.0
 
   '@ai-sdk/provider-utils@5.0.47(zod@4.6.5)':
     dependencies:
@@ -4807,6 +4828,8 @@ snapshots:
       strip-ansi: 7.2.0
 
   ws@8.21.0: {}
+
+  ws@8.22.0: {}
 
   y18n@5.0.8: {}
 
