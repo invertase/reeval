@@ -39,11 +39,67 @@ group('greet', { judge: { threshold: 0.9 } }, () => {
   The most judge calls at once to this model's provider, across the run. A whole number of at least 1.
 </Property>
 
+<Property name="include" type="string[]" optional>
+  Which changed files the judge's diff and file list show: gitignore-style patterns over workspace paths, matched like [`directory()`'s `glob`](/reference/helpers#directory). The last matching pattern wins and a `!pattern` excludes; with only `!` patterns, everything else stays in. Default: every changed file. A call's `include` replaces the config's, and `include: []` shows everything again.
+</Property>
+
+<Property name="files" type="string[]" optional>
+  Workspace files the judge sees whole, as they are when you call `c.judge()`, whether or not the agent changed them. They go in the state's `contents`, keyed by path, `null` for a missing file. A path in both `files` and the diff appears once, in `contents`. Works with `include`.
+</Property>
+
 `c.judge()` also takes `on`: a `Turn` to grade instead of the latest, or any JSON value to grade as the output (with the latest turn's task, files and diff).
 
 ## What the judge sees
 
-The judge gets the turn's prompt as the task, its final message as the output (or `on`), the changed files and the diff, and your question. The score is the model's probability that the answer is yes.
+```ts
+const verdict = await c.judge('Does sign-in handle a wrong password?', {
+  include: ['src/', '!**/*.test.ts'],
+  files: ['README.md'],
+})
+```
+
+The judge gets a JSON state and your question. The score is the model's probability that the answer is yes.
+
+| State field | What it holds |
+|---|---|
+| `task` | The turn's prompt |
+| `output` | The agent's final message, or `on` |
+| `files` | The changed files, `status path`, filtered by `include`; dependency and build directories as one line each |
+| `diff` | The diff since the eval started, filtered by `include`, without the paths in `files` |
+| `contents` | With `files`: each file whole, keyed by path |
+
+The diff leaves out what nobody wrote by hand, each file or directory replaced by a `[reeval: dropped …]` marker. To show one anyway, name it in `files`.
+
+| Left out | Matched by |
+|---|---|
+| Installed dependencies | `node_modules/`, `.venv/`, `.dart_tool/`, `.pub-cache/`, `__pycache__/` |
+| Build output | `dist/` and `.next/` at any depth; `build/` and `out/` at the top of the workspace |
+| Lockfiles | `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, `bun.lock`, `bun.lockb` |
+| Generated files | `*.map`, `*.tsbuildinfo` |
+| Minified files | A changed line of more than 1,000 characters |
+| Binaries | Anything git diffs as binary |
+
+What was left out, and why, is the judge input's `dropped` in `judge-input.json`, such as `dist/ (3 files): build output` or `notes.md: not in include`. The workspace's own `.gitignore` keeps the rest of the noise out of the diff; see [Environment](/reference/environment#fields).
+
+## Input limits
+
+reeval knows `typesafe-ai/jev-*`'s limit: 32k tokens for the state and the question. It estimates the input at four characters a token before the call. When the input is over the limit, the call fails without reaching the model, and the message names the biggest parts and files:
+
+```text
+judge failed for "Is it done?" (typesafe-ai/jev-1.13.0): The judge's input is ~72k tokens (estimated), over typesafe-ai/jev-1.13.0's limit of 32k for the state and question: diff 69k, of which src/huge.ts is 69k. Narrow what the judge sees with include, e.g. c.judge(question, { include: ['src/'] }), or set judge: { include } in the config; files shows chosen files in full.
+```
+
+A provider's own too-long error, such as TypeSafe's `max_tokens_exceeded`, gets the same breakdown, for a model reeval has no limit for too.
+
+## Failed calls
+
+A call that fails (a provider error after its retries, a missing key, an input over the limit) doesn't throw. `c.judge()` returns a `JudgeFailure`, the call's error is recorded with its input, and the judges and checks after it still run. When the eval's body is done, the attempt fails as a `judge` error with every failed call's message.
+
+```ts
+{ verdict: 'error', score: null, threshold, question, model, error }
+```
+
+`toPass()` and `.not.toPass()` both fail on it, with the call's error. `c.judge()` still throws on a mistake in the call itself (no model, an empty question, a bad threshold, `include` or `files`) and when the run is cancelled or times out.
 
 ## Providers and keys
 
@@ -67,7 +123,7 @@ reeval: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_A
 
 A transient provider error (408, 409, 425, 429, a 5xx, or a message about high demand, overload, rate limits or a reset connection) is retried up to six tries in all, with exponential backoff from 2 seconds, capped at 30 seconds, and at least any `retry-after`.
 
-Each retry is recorded on the verdict as `{ error, delayMs }`. A judge that still fails is a judge error for the attempt, not a failed check.
+Each retry is recorded on the verdict as `{ error, delayMs }`. A judge that still fails is a [failed call](#failed-calls): a judge error for the attempt, not a failed check.
 
 ## fakeJudge
 
@@ -77,7 +133,7 @@ import { fakeJudge } from '{{ pkg }}/judge'
 judge: { model: fakeJudge({ score: 0.95 }) }
 ```
 
-A judge that returns `score` (default `1`) for every question, with no key and no call. Its model name is `fake`. `'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
+A judge that returns `score` (default `1`) for every question, with no key and no call. Its model name is `fake`. Per group, eval or call, `score` can be a function of the state the judge would see, to test what reaches it: `fakeJudge({ score: (state) => (String(state.diff).includes('dist/') ? 0 : 1) })`. The config takes a number. `'{{ pkg }}/judge'` also exports `RECOMMENDED_JUDGE_MODEL` (`'typesafe-ai/jev-1.13.0'`) and `DEFAULT_THRESHOLD` (`0.8`).
 
 ## fakeAnalysis
 
@@ -122,6 +178,9 @@ analysis: {
 | A bad threshold | `judge.threshold must be between 0 and 1 (got 2) in reeval.config.ts`, or `in group("g")` on a group or eval; on a call, `c.judge() threshold must be between 0 and 1 (got 2)` |
 | An empty question | `c.judge() needs a question: a non-empty string (got "")`, before the judge is called |
 | A bad `maxConcurrent` | `maxConcurrent must be a whole number of at least 1 (got 0) for judge in evaluate("x")` |
+| A bad `include` or `files` | `judge.include must be a list of non-empty strings (got "src/") in group("g")`; on a call, `c.judge() include must be a list of non-empty strings (got "src/")` |
+| A score function in the config | `config.judge.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.` |
+| An input over the model's limit | `The judge's input is ~72k tokens (estimated), over typesafe-ai/jev-1.13.0's limit of 32k for the state and question: …`, as a failed call |
 | No key at call time | `No credentials for judge model "google/gemini-3.8-flash". Set GOOGLE_GENERATIVE_AI_API_KEY to call @ai-sdk/google directly, or AI_GATEWAY_API_KEY (or VERCEL_OIDC_TOKEN) to go through the Vercel AI Gateway.` |
 
 ## Related

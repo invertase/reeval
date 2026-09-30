@@ -78,7 +78,7 @@ A judge call that hits a transient error (a 429, a 5xx, "high demand", a dropped
 | Where | What's recorded |
 |---|---|
 | The verdict | `retries`: each error and the delay before the next try |
-| The attempt | A judge call that fails for good makes the attempt a `judge` failure |
+| The attempt | A judge call that fails for good returns `verdict: 'error'`; the judges and checks after it still run, then the attempt is a `judge` failure |
 | The timeout | Retries count toward the eval's `timeout` |
 
 `judge: { maxConcurrent: 2 }` caps calls at once per provider, for rate limits. See [Concurrency](/concepts/concurrency).
@@ -111,10 +111,28 @@ The judge sees four things: the latest turn's prompt as `task`, the agent's fina
 |---|---|
 | The latest turn's prompt | Earlier prompts |
 | The agent's final message | Its reasoning and intermediate messages |
-| Changed files, dependency folders collapsed | The transcript: commands it ran, tool calls, web fetches |
-| The diff since the eval started | Your checks and their output |
+| Changed files, dependency and build folders collapsed | The transcript: commands it ran, tool calls, web fetches |
+| The diff since the eval started, without build output, lockfiles, source maps and minified files | Your checks and their output |
 
 So the judge can't tell whether the agent ran the tests; check that with `c.exec`. `{ on: turn }` grades an earlier turn, and `{ on: value }` grades any value in place of the final message.
+
+## Narrow what the judge sees
+
+```ts title="evals/sign-in.eval.ts"
+const flow = await c.judge('Does this change implement email sign-in?', {
+  include: ['src/', '!**/*.test.ts'],
+  files: ['src/firebase.ts'],
+})
+expect.soft(flow, 'Email sign-in').toPass()
+```
+
+`include` keeps the diff to the files a question is about, and `files` shows files whole, changed or not. Set either on `judge` in the config, a group or an eval as a default; a call's own replaces it. A smaller state fits the model's limit, and the judge grades better without the noise.
+
+<Warning>
+  The diff is what changed in the workspace, so give the workspace its own `.gitignore`: an agent that runs `npm run build` leaves its output there. A Vite bundle once filled 97% of a 310k-token state and failed every call on Jev's 32k limit.
+</Warning>
+
+An input over a model's known limit fails before the call, naming the biggest files. See [Input limits](/reference/judges#input-limits).
 
 ## Write questions the judge can grade
 

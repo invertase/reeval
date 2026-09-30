@@ -669,7 +669,7 @@ test('the judge knows Jev’s input limit and names what fills an input over it'
   const message = overflowMessage('typesafe-ai/jev-1.13.0', 32_000, state, 'Is it done?')
   assert.match(
     message,
-    /^The judge's input is ~312k tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff 302k, of which src\/huge\.ts is 300k, src\/app\.ts is 2k; contents 10k, of which README\.md is 10k; /,
+    /^The judge's input is ~312k tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff 302k, of which src\/huge\.ts is 300k, src\/app\.ts is 2k; contents 10k, of which README\.md is 10k\. Narrow /,
   )
   assert.match(message, /include: \['src\/'\]/)
   assert.ok(isOverflowError('{"error_type":"max_tokens_exceeded"}'))

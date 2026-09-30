@@ -1119,7 +1119,7 @@ evaluate('scope', { environment: env }, async (c) => {
     assert.equal(e?.error?.kind, 'judge')
     assert.match(
       e?.error?.message ?? '',
-      /The judge's input is ~\d\dk tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff \d\dk, of which src\/huge\.ts is \d\dk; /,
+      /The judge's input is ~\d\dk tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff \d\dk, of which src\/huge\.ts is \d\dk\. Narrow /,
     )
     assert.match(e?.error?.message ?? '', /c\.judge\(question, \{ include: \['src\/'\] \}\)/)
     assert.deepEqual(e?.trial.judgements, [])

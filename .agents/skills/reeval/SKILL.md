@@ -127,10 +127,21 @@ group('hello', () => {
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `await c.readFile(path)` the text
   or `null` (`~/` for home). `await c.sandbox()` starts the sandbox without a turn, to check what
   the environment set up. `c.attempt.cell.role` is `'control'` or `'variant'`.
-- `await c.judge(question, { threshold?, model?, on? })`: the judge sees the prompt, the final
-  message, the changed files and the diff, not what the agent ran. Prefer deterministic checks
-  for what can be checked; use the judge for quality, with plain yes/no questions that don't
-  name one specific way of doing it.
+- `await c.judge(question, { threshold?, model?, on?, include?, files? })`: the judge sees the
+  prompt, the final message, the changed files and the diff, not what the agent ran. The diff
+  leaves out dependencies, build output (`dist/`, `.next/`, top-level `build/` and `out/`),
+  lockfiles, `*.map`, `*.tsbuildinfo` and minified files. `include: ['src/', '!**/*.test.ts']`
+  (gitignore-style, last match wins) narrows the diff; `files: ['README.md']` shows files whole,
+  changed or not. Both work as `judge` defaults in the config, a group or an eval. Prefer
+  deterministic checks for what can be checked; use the judge for quality, with plain yes/no
+  questions that don't name one specific way of doing it.
+- Give the environment a `.gitignore` in `files` (the project's isn't copied in): an agent that
+  runs a build otherwise fills the judge's diff with its output. Jev (`typesafe-ai/jev-*`) takes
+  32k tokens of state and question; a bigger input fails before the call, naming its biggest
+  files, so scope it with `include`.
+- A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
+  the later judges and checks still run, and the attempt fails as a judge error at the end.
+  Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw
@@ -340,6 +351,7 @@ them to `evals/.history/` to commit.
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |
 | `opencode({ model: 'gemini-3.8-flash' })` | `an OpenCode model id names its provider` (exit 2) | `'google/gemini-3.8-flash'` |
 | No `judge.model` anywhere | `c.judge() has no model` | Set one, or `fakeJudge()` |
+| A judge input over the model's limit | `The judge's input is ~72k tokens (estimated), over typesafe-ai/jev-1.13.0's limit of 32k …` | Add a `.gitignore` to the environment, or `include: ['src/']` |
 | `cursor()` with `fakeSandbox()` | real harnesses need `docker()` | Use `fakeHarness()` or `docker()` |
 | Forgetting `await` on `toHaveFile`/`toSucceed` | ``… wasn't awaited. Its check is async: write `await …` `` (the eval fails) | `await expect(...)` |
 | Secret as a string literal | refused | `secret.fromEnv('NAME')` in a callback |

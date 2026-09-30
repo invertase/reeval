@@ -115,7 +115,7 @@ const verdict = await c.judge('Is the change minimal?', { threshold: 0.9 })
 expect(verdict).toPass()
 ```
 
-The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions.
+The judge answers a yes/no question about the latest turn. It sees the task, the agent's final message, the changed files and the diff, without build output or minified files; `include` and `files` narrow it further. It returns `{ verdict, score, threshold, question, model }`, and passes when the probability of "yes" is at least the threshold (0.8 by default). Set the model in `reeval.config.ts`, as in [Your first real run](/guide/first-real-run); [Judges](/concepts/judges) covers writing good questions and [what the judge sees](/concepts/judges#narrow-what-the-judge-sees).
 
 ## Choose checks or the judge
 

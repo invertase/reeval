@@ -68,8 +68,9 @@ export const inputTokens = (state: Record<string, JSONValue>, question: string) 
  * estimated tokens, naming the biggest files in each.
  */
 export function describeSize(state: Record<string, JSONValue>, question: string): string {
-  return partsOf(state, question)
-    .filter((p) => p.chars > 0)
+  const parts = partsOf(state, question)
+  const big = parts.filter((p) => tokensOf(p.chars) >= 1000)
+  return (big.length ? big : parts.slice(0, 1))
     .map((p) => {
       const top = p.items
         .sort((a, b) => b.chars - a.chars)

@@ -90,7 +90,7 @@ It's synchronous: await the judge, not the matcher. Failure messages:
 judge score 0.95 is below 0.99 for "Is greet.js small and readable?" (fake)
 ```
 
-With `.not`, a passing verdict fails with `expected judge to fail: score … ≥ …`. Anything but a verdict throws `toPass() expects a c.judge() verdict`.
+With `.not`, a passing verdict fails with `expected judge to fail: score … ≥ …`. A [failed call](/reference/judges#failed-calls) fails both ways, with `judge failed for "…" (model): <error>`. Anything but a verdict throws `toPass() expects a c.judge() verdict`.
 
 ## toHaveSearched and toHaveFetched
 
