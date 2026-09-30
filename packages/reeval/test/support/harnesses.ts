@@ -190,7 +190,6 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.pi\/agent\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com'],
     apiHost: 'generativelanguage.googleapis.com',
-    mcp: false,
     tokens: true,
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,

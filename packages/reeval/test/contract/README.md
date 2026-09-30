@@ -9,7 +9,7 @@ what it should. The rows are in [`../support/harnesses.ts`](../support/harnesses
 |---|---|---|---|
 | skill placed where the agent reads it, and used | `skill-proof.txt` holds a code only the skill has | no turn: no proof | the attempt's `context` lists the skill at the harness's path |
 | rules read | `codeword.txt` holds a word only the rules have | no turn: no word | — |
-| stdio MCP server started and called | the server logged `tools/call`; the transcript names `mcp__stamp__house_stamp` | no turn: no call | the environment lists the server ; on a harness with no MCP client (pi), the MCP evals (tagged `mcp`) are left out of its run, and `--dry-run` of them exits 2 naming the eval, harness and server, while a `--dry-run` of an eval without MCP plans |
+| stdio MCP server started and called | the server logged `tools/call`; the transcript names `mcp__stamp__house_stamp` | no turn: no call | the environment lists the server ; on a harness with no MCP client, the MCP evals (tagged `mcp`) are left out of its run, and `--dry-run` of them exits 2 naming the eval, harness and server, while a `--dry-run` of an eval without MCP plans |
 | file edited and command run, both in the transcript | `notes.txt` changed; the transcript has its edit and a tool whose output is `contract-42` | no turn: unchanged | `changedFiles` has `notes.txt` |
 | tokens recorded where the harness reports them | — | — | every turn has usage (or none, for a harness that reports none) |
 | real key never in the container | after a turn, a scan of every process's environment and command line and every file under the writable roots finds no form of the key | the same scan finds a value planted in the environment and a home file | the key isn't in the run directory |
@@ -48,7 +48,7 @@ pnpm test:replay            # the captured streams, key-free
 
 Without `REEVAL_TEST_REAL=1` the real rows skip. With it, a row without its key fails before it starts
 anything, naming the variable it needs: narrow the run with `REEVAL_CONTRACT_HARNESSES=cursor`, which
-picks rows. Each real row is 12 attempts (10 on pi, which skips the MCP pair), 6 of them (5 on pi) with one short agent turn, at `--concurrency
+picks rows. Each real row is 12 attempts, 6 of them with one short agent turn, at `--concurrency
 2`; reeval.config.ts's `budget.attempts` is the hard cap, and in CI a ledger caps the whole job
 (`REEVAL_REAL_ATTEMPT_BUDGET`). `REEVAL_UPDATE_CAPTURES=1` refreshes `../replay/<harness>/` from the run,
 and `REEVAL_UPDATE_FORMATS=1` accepts the formats it saw.
