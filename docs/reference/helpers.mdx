@@ -213,7 +213,7 @@ export const notes = defineEnvironment('acme-notes', ({ directory }) => ({
 2. Each pattern that matches the file's path sets it: a plain one includes it, a `!` one excludes it. A later `src/gen/keep.ts` re-includes a file an earlier `!src/gen/` excluded.
 3. The default ignores apply on top, whatever `glob` says. To seed an ignored directory, set `defaultIgnores: false` and exclude what you don't want with `!` patterns.
 
-In a pattern, `*` and `?` stay within a name, `**` spans directories and `[abc]` (or `[!abc]`) matches one character. A pattern with a `/` in it, other than at the end, is anchored to the directory; otherwise it matches a name at any depth. A trailing `/` matches a directory and everything in it. A fixture's `.gitignore` isn't read, and it's seeded like any other file.
+Patterns are matched with [picomatch](https://github.com/micromatch/picomatch), with gitignore's anchoring on top. `*` and `?` stay within a name, `**` spans directories, `[abc]` matches one character (`[!abc]` or `[^abc]` any other), `{md,txt}` lists alternatives, and wildcards match dotfiles. A pattern with a `/` in it, other than at the end, is anchored to the directory; otherwise it matches a name at any depth. A trailing `/` matches a directory and everything in it. Unlike gitignore, a `!` pattern still excludes a file whose directory an earlier plain pattern named: the last match always wins. A fixture's `.gitignore` isn't read, and it's seeded like any other file.
 
 `DEFAULT_DIRECTORY_IGNORES`, exported from `{{ pkg }}`:
 

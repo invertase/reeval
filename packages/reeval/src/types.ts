@@ -454,9 +454,9 @@ export type DirectoryOptions = {
   /**
    * Ordered gitignore-style patterns over paths relative to the directory. A plain pattern
    * includes and a `!pattern` excludes; the last one that matches a file decides. With no plain
-   * pattern, every file starts included. `*` and `?` stay within a name, `**` spans directories,
-   * a pattern with a `/` in it (other than at the end) is anchored to the directory, and a
-   * trailing `/` matches a directory and everything in it.
+   * pattern, every file starts included. Matched with picomatch (`*`, `?`, `**`, `[…]`, `{a,b}`):
+   * a pattern with a `/` in it (other than at the end) is anchored to the directory, one without
+   * matches a name at any depth, and a trailing `/` matches a directory and everything in it.
    */
   glob?: string[]
   /** `false` walks into `DEFAULT_DIRECTORY_IGNORES` too. `.git` is always skipped. */

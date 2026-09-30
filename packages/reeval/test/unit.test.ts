@@ -1034,12 +1034,25 @@ test('directory() globs are ordered gitignore-style patterns: includes, excludes
   assert.equal(keep(['/a.ts'], 'x/a.ts'), false, 'a leading / anchors')
   assert.equal(keep(['a?.[jt]s'], 'ab.ts'), true, '? and [ ] match one character')
   assert.equal(keep(['a.[!j]s'], 'a.js'), false, '[! ] negates a set')
+  assert.equal(keep(['a.[^j]s'], 'a.ts'), true, 'so does [^ ]')
   assert.equal(keep(['a.ts'], 'aXts'), false, 'dots are literal')
+  assert.equal(keep(['*.{md,txt}'], 'docs/a.txt'), true, 'braces list alternatives')
+  assert.equal(keep(['*'], '.env'), true, 'wildcards match dotfiles')
+  assert.equal(
+    keep(['src/', '!src/x.ts'], 'src/x.ts'),
+    false,
+    'unlike gitignore, a ! still excludes a file in a directory a plain pattern named',
+  )
+  assert.equal(keep(['logs/'], 'logs'), false, 'a trailing / never matches a file')
   const ignored = globFilter(DEFAULT_DIRECTORY_IGNORES)
-  assert.equal(ignored('build/'), true, 'build/ at the top is output')
-  assert.equal(ignored('lib/build/'), false, 'a nested build/ can be source')
-  assert.equal(ignored('packages/app/node_modules/'), true)
-  assert.equal(ignored('vendor/'), false, 'a committed vendor/ is source an offline build needs')
+  assert.equal(ignored('build', true), true, 'build/ at the top is output')
+  assert.equal(ignored('lib/build', true), false, 'a nested build/ can be source')
+  assert.equal(ignored('packages/app/node_modules', true), true)
+  assert.equal(
+    ignored('vendor', true),
+    false,
+    'a committed vendor/ is source an offline build needs',
+  )
   assert.equal(ignored('py/notes.pyc'), true)
 })
 

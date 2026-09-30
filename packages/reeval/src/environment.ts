@@ -2,6 +2,7 @@ import { readdirSync, realpathSync, statSync } from 'node:fs'
 import { isIP } from 'node:net'
 import { dirname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import picomatch from 'picomatch'
 import { parseDuration } from './duration.ts'
 import { SECRET_NAME } from './redact.ts'
 import { COMPILED, PACKAGE_DIR } from './root.ts'
@@ -564,43 +565,34 @@ export const DEFAULT_DIRECTORY_IGNORES: readonly string[] = Object.freeze([
   '.vscode/',
 ])
 
-/** A gitignore-style pattern as a test of a file's path, which also matches a file in a directory it names. */
-function globTest(pattern: string): (path: string) => boolean {
+/**
+ * A gitignore-style pattern as a test of a file's path, matched by picomatch: a pattern without an
+ * inner `/` matches a name at any depth, a leading `/` anchors, a trailing `/` names a directory,
+ * and a pattern also matches every file in a directory it names.
+ */
+function globTest(pattern: string): (path: string, isDir?: boolean) => boolean {
   const dirOnly = pattern.endsWith('/')
-  const body = pattern.replace(/\/+$/, '')
-  const anchored = body.includes('/')
-  let re = ''
-  const glob = body.replace(/^\/+/, '')
-  for (let i = 0; i < glob.length; i++) {
-    const c = glob[i] as string
-    if (c === '*' && glob[i + 1] === '*') {
-      const slash = glob[i + 2] === '/'
-      re += slash ? '(?:.*/)?' : '.*'
-      i += slash ? 2 : 1
-    } else if (c === '*') re += '[^/]*'
-    else if (c === '?') re += '[^/]'
-    else if (c === '[' && glob.indexOf(']', i + 2) > i) {
-      const end = glob.indexOf(']', i + 2)
-      const set = glob.slice(i + 1, end).replace(/\\/g, '\\\\')
-      re += `[${set.startsWith('!') ? `^${set.slice(1)}` : set}]`
-      i = end
-    } else re += c.replace(/[.+^${}()|[\]\\/]/g, '\\$&')
-  }
-  const regex = new RegExp(`${anchored ? '^' : '(?:^|/)'}${re}${dirOnly ? '/' : '(?:$|/)'}`)
-  return (path) => regex.test(path)
+  // gitignore negates a set with [!…]; picomatch reads that as a literal !, and negates with [^…].
+  const body = pattern.replace(/\/+$/, '').replaceAll('[!', '[^')
+  const glob = body.includes('/') ? body.replace(/^\/+/, '') : `**/${body}`
+  const self = picomatch(glob, { dot: true })
+  const inside = picomatch(`${glob}/**/*`, { dot: true })
+  return (path, isDir = false) => inside(path) || ((isDir || !dirOnly) && self(path))
 }
 
 /**
  * `glob` as a test of a directory-relative file path: the last pattern that matches decides, a
  * `!` one excluding; a file no pattern matches is in unless some pattern includes.
  */
-export function globFilter(patterns: readonly string[]): (path: string) => boolean {
+export function globFilter(
+  patterns: readonly string[],
+): (path: string, isDir?: boolean) => boolean {
   const rules = patterns.map((p) => ({
     include: !p.startsWith('!'),
     test: globTest(p.replace(/^!/, '')),
   }))
   const start = !rules.some((r) => r.include)
-  return (path) => rules.reduce((keep, r) => (r.test(path) ? r.include : keep), start)
+  return (path, isDir) => rules.reduce((keep, r) => (r.test(path, isDir) ? r.include : keep), start)
 }
 
 const DIRECTORY_OPTIONS = ['into', 'glob', 'defaultIgnores']
@@ -676,7 +668,7 @@ function directoryHelper(base: string): EnvironmentHelpers['directory'] {
           )
         }
         if (target.isDirectory()) {
-          if (skip(`${relPath}/`)) continue
+          if (skip(relPath, true)) continue
           const real = realpathSync(full)
           if (seen.includes(real)) {
             throw new DefinitionError(
