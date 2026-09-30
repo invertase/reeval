@@ -636,6 +636,12 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'docker.login-shell-path',
+    area: 'Sandbox',
+    name: "Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`)",
+    fixtures: ['sandbox/login-shell-path', 'sandbox/login-shell-path-dockerfile'],
+  },
+  {
     id: 'docker.limits',
     area: 'Sandbox',
     name: '`docker({ memory, cpus, pids })` and their defaults',

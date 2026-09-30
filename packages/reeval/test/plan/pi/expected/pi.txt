@@ -10,6 +10,6 @@ image docker · 1 evals
 image docker · pi · 2 evals
   base  reeval-sandbox:pi-0.1.0  (reeval's image: built when missing or when its base changed)
 image docker:python:3.12-slim · 1 evals
-  from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-45d0b841  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:python:3.12-slim · pi · 1 evals
-  from python:3.12-slim  reeval-sandbox:pi-0.1.0-python-3-12-slim-45d0b841  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:pi-0.1.0-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

@@ -6,7 +6,7 @@ import { isTimeout } from '../errors.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
 import { collapseDependencies, patchForJudge } from '../judge/patch.ts'
-import { harnessId, sandboxId } from '../options.ts'
+import { harnessId, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
@@ -87,6 +87,9 @@ export type AssembleInput = {
   plan: RunPlan
   author: string
   es: string
+  runtime: NonNullable<Stack['runtime']>
+  /** What the evals are written in; a runner for another language gives its own. */
+  language: NonNullable<Stack['language']>
   /** Name and version of the embedded test engine. */
   enginePackages: Record<string, string>
   sandbox: SandboxVersions
@@ -646,12 +649,18 @@ const byName =
   (a: T, b: T) =>
     key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0
 
-function stackOf(input: AssembleInput, seen: Seen, judgeModel: string | null): Stack {
-  const { config } = input.ctx
+function stackOf(
+  input: AssembleInput,
+  seen: Seen,
+  judgeModel: string | null,
+  threshold: number,
+): Stack {
   const packages = packageVersions(input.enginePackages)
   return {
     es: input.es,
     node: process.versions.node,
+    runtime: input.runtime,
+    language: input.language,
     os: process.platform,
     arch: process.arch,
     images: [...seen.images.values()].sort(byName((i) => i.ref)),
@@ -662,7 +671,7 @@ function stackOf(input: AssembleInput, seen: Seen, judgeModel: string | null): S
     judge: {
       model: judgeModel,
       resolvedModels: [...seen.resolvedJudges].sort(),
-      threshold: config.judge.threshold,
+      threshold,
       version: judgeVersion(input.es, packages, judgeModel ?? ''),
     },
     context: [...seen.contexts.values()].sort(byName((c) => c.path)),
@@ -672,9 +681,10 @@ function stackOf(input: AssembleInput, seen: Seen, judgeModel: string | null): S
 
 export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const { ctx, engine } = input
-  const { config, runId } = ctx
+  const { config, runId, profile } = ctx
   const out = new Artifacts()
-  const judgeModel = config.judge.model === undefined ? null : judgeModelName(config.judge.model)
+  const runJudge = { ...config.judge, ...(profile && profileJudge(profile)) }
+  const judgeModel = runJudge.model === undefined ? null : judgeModelName(runJudge.model)
   const configHash = sha256(
     JSON.stringify({
       include: config.include,
@@ -691,7 +701,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
   const judge = sha256(
     JSON.stringify({
       model: judgeModel,
-      threshold: config.judge.threshold,
+      threshold: runJudge.threshold,
       version: judgeVersion(input.es, packageVersions(input.enginePackages), judgeModel ?? ''),
     }),
   )
@@ -711,7 +721,6 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       e.attempts.filter((a) => e.cells.find((c) => c.key === a.cell)?.gate === 'none'),
     )
     .filter((a) => a.outcome === 'fail').length
-  const { profile } = ctx
   const ids = (list: HarnessDescriptor | HarnessDescriptor[] | undefined) =>
     list === undefined ? undefined : [list].flat().map(harnessId)
   const record: RunRecord = {
@@ -726,7 +735,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
     git: gitState(input, out),
     runner: input.runner,
     dependencies: { lockfiles: input.lockfiles },
-    stack: stackOf(input, seen, judgeModel),
+    stack: stackOf(input, seen, judgeModel, runJudge.threshold),
     environments: [...seen.environments.values()].sort(byName((e) => e.name)),
     profile: profile
       ? {
@@ -758,7 +767,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       environment: config.environment?.name ?? null,
       runs: config.runs,
       judgeModel,
-      threshold: config.judge.threshold,
+      threshold: runJudge.threshold,
       timeoutMs: config.timeoutMs,
       concurrency: input.ctx.concurrency,
       configHash,
