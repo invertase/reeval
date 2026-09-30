@@ -46,7 +46,9 @@ The CLI has no ACP mode, so this isn't config over `@ai-sdk/harness-acp`.
   approval requests.
 
 Not supported (these throw `HarnessCapabilityUnsupportedError`): host-executed tools, non-text
-prompts, manual compaction, and suspending or continuing a turn. A prompt travels as one
+prompts, a JSON response format whose schema's root isn't `"type": "object"` (the CLI's
+`--json-schema` refuses one since 1.2.14), manual compaction, and suspending or continuing a
+turn. A prompt travels as one
 command-line argument, so on Linux it must stay under 128 KiB; a longer one fails the turn with
 the shell's "Argument list too long".
 
