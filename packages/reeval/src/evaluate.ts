@@ -245,11 +245,12 @@ function optionsFrom(data: EvalOptionsData): EvalOptions {
       ...rest,
       compare: {
         ...compare,
-        baseline: asEnv(compare.baseline),
+        ...(compare.baseline !== undefined ? { baseline: asEnv(compare.baseline) } : {}),
         variants: compare.variants.map(asEnv),
       },
     }
-    // Invalid data may set both. Keep `environment` so checkOptions names both keys.
+    // Without a baseline, `environment` is the control. With one, invalid data may set both:
+    // keep `environment` so checkOptions names both keys.
     return (
       environment === undefined ? revived : { ...revived, environment: asEnv(environment) }
     ) as EvalOptions

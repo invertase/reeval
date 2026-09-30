@@ -747,6 +747,270 @@
         {
           "type": "object",
           "properties": {
+            "compare": {
+              "type": "object",
+              "properties": {
+                "gate": {
+                  "enum": ["all", "none", "variants"]
+                },
+                "harness": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/AntigravityHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/CodexHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/CursorHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/FakeHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/GooseHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+                      },
+                      {
+                        "$ref": "#/$defs/PiHarnessDescriptor"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "minLift": {
+                  "type": "number"
+                },
+                "question": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/$defs/CompareQuestion"
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "model": {
+                          "type": "string"
+                        },
+                        "question": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["question"]
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "variants": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/EnvironmentData"
+                  }
+                }
+              },
+              "required": ["variants"]
+            },
+            "egress": {
+              "anyOf": [
+                {
+                  "enum": ["allow-all", "deny-all"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "allow": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": ["allow"]
+                }
+              ]
+            },
+            "env": {
+              "$ref": "#/$defs/EnvVars"
+            },
+            "environment": {
+              "$ref": "#/$defs/EnvironmentData"
+            },
+            "gate": {
+              "anyOf": [
+                {
+                  "const": "all"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "passRate": {
+                      "type": "number"
+                    }
+                  },
+                  "required": ["passRate"]
+                }
+              ]
+            },
+            "harness": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AntigravityHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/CodexHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/CursorHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/FakeHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/GooseHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/PiHarnessDescriptor"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/HarnessDescriptor"
+                  }
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "add": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AntigravityHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/ClaudeCodeHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/CodexHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/CursorHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/FakeHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/GooseHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/OpenCodeHarnessDescriptor"
+                        },
+                        {
+                          "$ref": "#/$defs/PiHarnessDescriptor"
+                        },
+                        {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/$defs/HarnessDescriptor"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["add"]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "only": {
+                      "anyOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ]
+                    }
+                  },
+                  "required": ["only"]
+                }
+              ]
+            },
+            "judge": {
+              "$ref": "#/$defs/ConfigJudgeOptions"
+            },
+            "pin": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PinnableKey"
+              }
+            },
+            "runs": {
+              "type": "number"
+            },
+            "sandbox": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DockerSandboxDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/FakeSandboxDescriptor"
+                }
+              ]
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "timeout": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "required": ["compare"]
+        },
+        {
+          "type": "object",
+          "properties": {
             "egress": {
               "anyOf": [
                 {

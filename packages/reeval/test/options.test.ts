@@ -885,9 +885,19 @@ describe('common mistakes', () => {
       /compare\.harness lists sonnet, which evaluate\("e"\) doesn't run \(it runs fake\)\./,
     ],
     [
-      'compare without a baseline',
-      `evaluate('e', { compare: { variants: [a] } }, async () => {})`,
-      /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got undefined\)/,
+      'a compare baseline that is not an environment',
+      `evaluate('e', { compare: { baseline: 'a' as never, variants: [a] } }, async () => {})`,
+      /compare\.baseline in evaluate\("e"\) must be an environment from defineEnvironment \(got "a"\)\. .* Leave it out to use the eval's environment as the control\./,
+    ],
+    [
+      'a variant that is the environment a compare without a baseline runs as its control',
+      `group('g', { environment: a }, () => { evaluate('e', { compare: { variants: [a, b] } }, async () => {}) })`,
+      /compare in evaluate\("g › e"\) lists a, which is the control: compare has no baseline, so the eval's environment is\./,
+    ],
+    [
+      'a variant named baseline in a compare without a baseline or environment',
+      `evaluate('e', { compare: { variants: [defineEnvironment('baseline', {})] } }, async () => {})`,
+      /compare in evaluate\("e"\) lists a variant named baseline, the name of the empty control a compare without a baseline or environment runs\. Rename the variant, or set compare\.baseline\./,
     ],
     [
       'compare as an array',
@@ -945,9 +955,9 @@ describe('common mistakes', () => {
       /compare\.question in evaluate\("e"\) asks "Which\?" twice/,
     ],
     [
-      'environment and compare on the same eval',
+      'environment and compare.baseline on the same eval',
       `evaluate('e', { environment: a, compare: { baseline: a, variants: [b] } }, async () => {})`,
-      /environment and compare can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment\./,
+      /environment and compare\.baseline can't both be set in evaluate\("e"\)\. compare: \{ baseline, variants \} names every arm, so drop environment, or drop baseline to make environment the control\./,
     ],
     [
       'compare: false on an eval',

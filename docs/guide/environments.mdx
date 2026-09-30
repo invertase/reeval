@@ -34,7 +34,7 @@ group(
 )
 ```
 
-`environment` sets what every eval in the group runs in when that eval does not compare. An eval that sets `compare: { baseline, variants }` names every arm itself. Do not put `environment` on that same object. The group's environment is not applied to that eval.
+`environment` sets what every eval in the group runs in. An eval that sets `compare: { baseline, variants }` names every arm itself: don't put `environment` on that same object, and the group's environment is not applied to it. Leave `baseline` out and the group's environment is the control.
 
 ## Add skills
 

@@ -46,9 +46,11 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `sandbox takes one sandbox, not a list (…). Different toolchains need different checks, so write a separate eval per sandbox.` | One sandbox per eval. |
 | `environment takes one environment, not a list (evaluate("x")). To compare environments, use compare: { baseline, variants: [a, b] }. baseline is the control; variants are not layered on it.` | Use `compare`. |
 | `compare must be an object in evaluate("e"). Use compare: { baseline, variants: [...] }.` | Pass `{ baseline, variants }`, not a bare array. |
-| `compare.baseline in evaluate("e") must be an environment from defineEnvironment (got undefined).` | Set `baseline` to the control. Variants are not layered on it. |
+| `compare.baseline in evaluate("e") must be an environment from defineEnvironment (got "a"). …` | Set `baseline` to an environment, or leave it out to make the eval's environment the control. Variants are not layered on it. |
+| `compare in evaluate("g › e") lists a, which is the control: compare has no baseline, so the eval's environment is. …` | Drop that variant: without a `baseline`, the cascaded `environment` is already the control. |
+| `compare in evaluate("e") lists a variant named baseline, the name of the empty control …` | Rename the variant, or set `compare.baseline`. |
 | `Unknown compare option "strategy" in evaluate("e")` | Drop `strategy`. Share setup with `extendEnvironment` before `compare`. |
-| `environment and compare can't both be set in evaluate("e")` | Drop `environment`. A parent `environment` can stay when only the child sets `compare`. |
+| `environment and compare.baseline can't both be set in evaluate("e")` | Drop `environment`, or drop `baseline` to make `environment` the control. A parent `environment` can stay beside a child's `baseline`, and isn't applied. |
 | `compare: false can't be set in evaluate("e")` | Omit `compare`, or pass `{ baseline, variants }`. A profile uses `limit.compare: false`. |
 | `compare.question in evaluate("e") is an empty list. …` | Ask at least one question, or leave `question` out. An empty string, an entry without its `question` and the same question twice are refused too. |
 | `compare.question "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |

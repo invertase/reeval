@@ -28,7 +28,7 @@ export const withSkill = base.extendEnvironment(
 )
 ```
 
-Use it as `environment` when the eval does not compare. For a compare, pass the baseline and the variants. Share layers first with `extendEnvironment`; `compare` does not layer them:
+Use it as `environment` when the eval does not compare. For a compare, pass the variants, and the baseline unless the eval's `environment` is the control. Share layers first with `extendEnvironment`; `compare` does not layer them:
 
 ```ts title="evals/style.eval.ts"
 group(

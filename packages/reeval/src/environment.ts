@@ -731,6 +731,12 @@ export type AppliedEnvironment = {
 
 export const NO_ENVIRONMENT = '-'
 
+/** The control of a compare without a `baseline` when nothing in the cascade sets an environment. */
+export const EMPTY_BASELINE = 'baseline'
+
+/** An environment with no layers: the sandbox and harness as they are. */
+export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
+
 export function applied(env: Pick<Environment, 'name' | 'layers'> | undefined): AppliedEnvironment {
   if (!env) return { name: NO_ENVIRONMENT, parent: null, layers: [] }
   return {

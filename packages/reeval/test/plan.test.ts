@@ -14,6 +14,12 @@ export const cases: PlanCase[] = [
   { dir: 'matrix', name: 'runs-override', args: ['--runs', '1'] },
   { dir: 'compare', name: 'control-and-variants', args: ['evals/variants.eval.ts'] },
   { dir: 'compare', name: 'independent', args: ['evals/independent.eval.ts'] },
+  { dir: 'compare', name: 'baseline-omitted', args: ['evals/omitted.eval.ts'] },
+  {
+    dir: 'compare',
+    name: 'baseline-omitted-off',
+    args: ['--profile', 'off', 'evals/omitted.eval.ts'],
+  },
   { dir: 'compare', name: 'harness-scoped', args: ['evals/scoped.eval.ts'] },
   { dir: 'compare', name: 'mixed-filter', args: ['evals/variants.eval.ts', 'b/skilled'] },
   { dir: 'compare', name: 'max-variants', args: ['--profile', 'lean', 'evals/limited.eval.ts'] },
