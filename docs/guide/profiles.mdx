@@ -31,9 +31,12 @@ This is `examples/hello`'s config. `pr` runs every cell once, drops compare vari
 npx reeval run --profile nightly
 REEVAL_PROFILE=nightly npx reeval run
 CI=1 npx reeval run               # defaultProfile.ci: pr
+npx reeval image build --profile nightly   # the images nightly's plan needs
 ```
 
 `--profile` wins, then `REEVAL_PROFILE`, then `defaultProfile.ci` when `CI` is set (or `defaultProfile.local` when it isn't). With none of those, no profile applies. The plan line says which profile ran and why, and the record keeps it.
+
+`reeval image build --profile nightly` picks the profile the same way, so a profile whose `defaults` change the harness or sandbox gets its images built before the run.
 
 ## Defaults fill in, limits narrow
 

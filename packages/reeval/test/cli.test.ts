@@ -98,6 +98,10 @@ describe('cli', () => {
       positionals: ['image', 'build', 'x', 'y'],
       values: { 'dry-run': true },
     })
+    assert.deepEqual(parseCli(['image', 'build', 'x', '--profile', 'nightly', '--dry-run']), {
+      positionals: ['image', 'build', 'x'],
+      values: { profile: 'nightly', 'dry-run': true },
+    })
     assert.deepEqual(parseCli(['studio', '--no-token', '--no-scratch']).values, {
       'no-token': true,
       'no-scratch': true,

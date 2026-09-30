@@ -219,7 +219,8 @@ function verbosityOf(flags: Flags): 0 | 1 | 2 {
 
 /**
  * `reeval image build`: collects the evals (as `--dry-run` does) and builds every image their Docker
- * sandboxes need; with `--dry-run`, lists them instead. Without a config, just reeval's image.
+ * sandboxes need; with `--dry-run`, lists them instead. `--profile` plans as `reeval run --profile`
+ * does. Without a config, just reeval's image.
  */
 async function imageBuildCommand(
   flags: Flags,
@@ -234,6 +235,7 @@ async function imageBuildCommand(
   let uses: Array<{ id: string; harness: HarnessDescriptor; sandbox: SandboxDescriptor }> = [
     { id: '', harness: fakeHarness(), sandbox: docker() },
   ]
+  if (!configPath && flags.profile) selectProfile(await loadConfig(undefined), flags.profile)
   if (configPath) {
     const setup = await prepareRun({ ...flags, 'dry-run': true }, configPath)
     const ctx = await startRun(setup)
