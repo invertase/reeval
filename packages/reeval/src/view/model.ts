@@ -127,6 +127,24 @@ export function harnessLabel(h: RunRecord['stack']['harnesses'][number]): string
   return parts.length ? `${h.id} (${parts.join(', ')})` : h.id
 }
 
+/**
+ * The runtime reeval ran on, as `node 22.14.0`, or `bun 1.4.2 (node 26.3.0)` with the Node version
+ * it's compatible with. A run recorded before `stack.runtime` ran on Node.
+ */
+export function runtimeLabel(stack: Pick<RunRecord['stack'], 'node' | 'runtime'>): string {
+  const runtime = stack.runtime ?? { name: 'node', version: stack.node }
+  return runtime.name === 'node'
+    ? `node ${runtime.version}`
+    : `${runtime.name} ${runtime.version} (node ${stack.node})`
+}
+
+/** The evals' language as `typescript evals` or `dart 3.13.5 evals`; null when not recorded. */
+export function languageLabel(stack: Pick<RunRecord['stack'], 'language'>): string | null {
+  const language = stack.language
+  if (!language) return null
+  return `${language.version ? `${language.name} ${language.version}` : language.name} evals`
+}
+
 /** Harness-reported tokens as `127k in (98k cached) · 776 out`; null when none were reported. */
 export function formatUsage(usage: TokenUsage | null | undefined): string | null {
   if (!usage) return null
