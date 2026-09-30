@@ -16,4 +16,6 @@ RUN npm install --global npm@11.20.0 && npm install --global pnpm@10.33.3
 RUN useradd --create-home --shell /bin/bash --uid 10001 --user-group reeval \
   && mkdir -p /reeval/workspace && chown -R reeval:reeval /reeval
 ENV PATH=/home/reeval/.local/bin:$PATH
+# Keep in step with toolchainDockerfile in src/build-image.ts, which writes the same file.
+COPY reeval-path.sh /etc/profile.d/00-reeval-path.sh
 WORKDIR /reeval/workspace

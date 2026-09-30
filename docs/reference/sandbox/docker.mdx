@@ -127,13 +127,22 @@ A rebuild removes the image its tag pointed at before, unless a container or ano
 
 Adapter versions: Cursor `0.1.1` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.34), Claude Code `1.0.128` (patched, so its tag is `1.0.128-patch.5d1c985c`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
-What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `reeval` user, and the workspace at `/reeval/workspace`. That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
+What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `reeval` user, the workspace at `/reeval/workspace`, and `/etc/profile.d/00-reeval-path.sh` (see [Inside the container](#inside-the-container)). That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
 
 Image builds don't count toward the eval timeout.
 
 ## Inside the container
 
 Every attempt gets a fresh container with the workspace at `/reeval/workspace`. The agent, setup steps and checks run as `reeval` (uid 10001, home `/home/reeval`, which is where `~/` paths go), with every capability dropped, `no-new-privileges`, and the limits above. An egress gateway runs with it, as root: it enforces the [egress policy](/reference/egress), records traffic, and swaps brokered secrets and the harness's key into allowed requests. The gateway needs Node in the image, which every image reeval builds has.
+
+Login shells keep the image's `PATH`. Cursor and Codex run the agent's commands through one, and Debian's `/etc/profile` resets `PATH` there, dropping what an `ENV PATH` added, such as `dart:stable`'s `/usr/lib/dart/bin`. Every image reeval builds has `/etc/profile.d/00-reeval-path.sh`, which puts the `PATH` the shell started with back in front, so the agent finds the same tools as your checks.
+
+```bash
+# the agent's shell in docker({ from: 'dart:stable' })
+$ sh -lc 'echo $PATH; dart --version'
+/home/reeval/.local/bin:/usr/lib/dart/bin:/root/.pub-cache/bin:/usr/local/sbin:…:/usr/games
+Dart SDK version: 3.13.5 (stable) (Tue Sep 29 01:00:52 2026 -0700) on "linux_x64"
+```
 
 Every image reeval builds has the `reeval` user. `docker({ image })` with an image that doesn't fails with `<image> has no reeval user to run the sandbox as. …`: rebuild it with reeval, or pass `root: true`.
 
