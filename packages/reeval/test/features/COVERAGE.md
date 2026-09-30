@@ -59,6 +59,7 @@
 | `files` in the workspace, and `file()`; paths that leave it are refused | ✓ 2 | — | — | — | — |
 | `files` under `~/` | ✓ 1 | — | ● 1 | ● 1 | — |
 | `files` from `file()` are copied as bytes | — | — | ● 1 | ● 1 | — |
+| `directory()`: a host directory as `files`, with `into`, ordered `glob` patterns, `DEFAULT_DIRECTORY_IGNORES` and the executable bit | ✓ 4 | ✓ 1 | ● 2 | ● 2 | — |
 | `env` variables, `secret.fromEnv` and `optional` | ✓ 1 | — | ● 1 | ● 1 | — |
 | `to: 'checks'` secrets: hidden from the agent | ✓ 1 | — | ● 1 | ● 1 | — |
 | Brokered secrets (`hosts`, `in`) and their placeholders | ✓ 2 | ✓ 1 | ● 2 | ● 2 | — |

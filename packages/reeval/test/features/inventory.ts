@@ -457,6 +457,21 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['env/files-binary'],
   },
   {
+    id: 'files.directory',
+    area: 'Environments',
+    name: '`directory()`: a host directory as `files`, with `into`, ordered `glob` patterns, `DEFAULT_DIRECTORY_IGNORES` and the executable bit',
+    fixtures: ['env/files-directory', 'env/files-directory-executable'],
+    plan: ['files/directory'],
+    tests: [
+      unit(
+        'directory() globs are ordered gitignore-style patterns: includes, excludes and re-includes',
+      ),
+      unit('directory() walks a host directory into files entries'),
+      unit("a host file's executable bit is kept and feeds the digest"),
+      options('common mistakes'),
+    ],
+  },
+  {
     id: 'env.vars',
     area: 'Environments',
     name: '`env` variables, `secret.fromEnv` and `optional`',

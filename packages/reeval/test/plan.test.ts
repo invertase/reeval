@@ -56,6 +56,7 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'levels', args: [] },
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
+  { dir: 'files', name: 'directory', args: [] },
 ]
 
 // Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'

@@ -447,6 +447,22 @@ export type EnvVars = Record<string, EnvValue>
 /** A file on the host, read when an attempt starts. Made by the `file` helper. */
 export type HostFile = { kind: 'file'; path: string }
 
+/** Options for the `directory` helper. */
+export type DirectoryOptions = {
+  /** A workspace-relative directory (or `~/…`) to place the files under, e.g. `'app'`. */
+  into?: string
+  /**
+   * Ordered gitignore-style patterns over paths relative to the directory. A plain pattern
+   * includes and a `!pattern` excludes; the last one that matches a file decides. With no plain
+   * pattern, every file starts included. Matched with picomatch (`*`, `?`, `**`, `[…]`, `{a,b}`):
+   * a pattern with a `/` in it (other than at the end) is anchored to the directory, one without
+   * matches a name at any depth, and a trailing `/` matches a directory and everything in it.
+   */
+  glob?: string[]
+  /** `false` walks into `DEFAULT_DIRECTORY_IGNORES` too. `.git` is always skipped. */
+  defaultIgnores?: boolean
+}
+
 export type McpServer =
   | { kind: 'mcp'; transport: 'stdio'; command: string; args: string[]; env: EnvVars }
   | {
@@ -559,6 +575,11 @@ export type EnvironmentHelpers = {
   mcp: McpHelper
   /** A host file, relative to the file that calls it (or an absolute path or `URL`). */
   file: (path: string | URL) => HostFile
+  /**
+   * Every file in a host directory, as `files` entries: workspace-relative paths mapped to the
+   * same sources `file()` returns, so spreading and overriding work. Walked when it's called.
+   */
+  directory: (path: string | URL, options?: DirectoryOptions) => Record<string, HostFile>
   /** A git repository for `workspace`: a URL, `github:owner/repo`, or a local path. */
   git: GitHelper
 }
@@ -1242,6 +1263,8 @@ export type AttemptMeta = {
   egress: PlannedEgress
   /** The git repository its workspace starts as, which the CLI fetches before any attempt. */
   workspace?: GitWorkspace
+  /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
+  files?: string[]
   plan: EvalPlan
 }
 
