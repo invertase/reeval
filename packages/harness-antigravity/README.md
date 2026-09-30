@@ -26,7 +26,7 @@ The CLI has no ACP mode, so this isn't config over `@ai-sdk/harness-acp`.
   parts: text, provider-executed tool calls and results under common names (`bash`, `read`,
   `write`, `edit`, `grep`, `glob`, `webSearch`), per-step `finish-step` and a `finish` with
   token usage. The CLI reports usage; Cursor doesn't.
-- **Bootstrap.** Downloads the pinned CLI release (1.2.11) for x64 or arm64 Linux and checks its
+- **Bootstrap.** Downloads the pinned CLI release (1.2.14) for x64 or arm64 Linux and checks its
   sha256. The binary needs glibc.
 - **Auth.** A Gemini API key only (`GEMINI_API_KEY`), with `modelProvider: "gemini"` pinned in
   the CLI's settings. Google-account sign-in is never used: automating it from other tools
