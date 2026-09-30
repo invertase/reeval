@@ -100,7 +100,7 @@ Bedrock's hosts, header and served model are checked with OpenCode against a moc
 
 ## Tokens
 
-None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.18), so reeval records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
+None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.20), so reeval records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
 
 ## Settings
 

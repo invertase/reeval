@@ -94,7 +94,7 @@ would generate differs from this one.
   `opencode acp` with its info logs on and holds the first `session/prompt` until each server has
   logged `mcp connected` or `mcp connect failed`, at most 30 seconds.
 - **Usage.** None. OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's
-  (still so in 2.0.18), so the `finish` part's usage is dropped rather than passed on as an
+  (still so in 2.0.20), so the `finish` part's usage is dropped rather than passed on as an
   undercount. `usage_update` doesn't help: its `used` is the last call's context and its `cost`
   the session's.
 - **Skills.** Harness-placed skills go to `~/.config/opencode/skills`; OpenCode's repo directory
