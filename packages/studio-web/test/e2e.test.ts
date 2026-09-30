@@ -228,6 +228,8 @@ describe('studio in a browser', () => {
       .map((n) => JSON.parse(readFileSync(join(out, 'data/runs', n), 'utf8')))
       .find((r) => r.evals.some((e: { answers?: unknown[] }) => e.answers))
     const review = matrix.evals.find((e: { name: string }) => e.name === 'reviews a greet module')
+    const cuts = review.answers[0].rates.map((r: { cut: string }) => r.cut)
+    assert.ok(cuts.includes('within') && cuts.includes('across'), `seeded rates: ${cuts}`)
     await page.goto(`${page.url().split('#')[0]}#/runs/${matrix.runId}?eval=${review.slug}`)
     const questions = page.locator('[data-questions]')
     await questions.getByText('Which greet.js reads more like our house style?').waitFor()

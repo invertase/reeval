@@ -221,10 +221,10 @@ importers:
         specifier: workspace:0.1.0
         version: link:../harness-goose
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.0
+        specifier: workspace:0.2.1
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.2.0
         version: link:../harness-pi
       '@reeval/sandbox-docker':
         specifier: workspace:*
@@ -257,10 +257,10 @@ importers:
         specifier: workspace:0.1.0
         version: link:../harness-goose
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.0
+        specifier: workspace:0.2.1
         version: link:../harness-opencode
       '@reeval/harness-pi':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.2.0
         version: link:../harness-pi
       ws:
         specifier: 8.21.0

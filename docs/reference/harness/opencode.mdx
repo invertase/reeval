@@ -42,10 +42,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
-| Adapter | `@reeval/harness-opencode` 0.2.0 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.0.18 |
+| Adapter | `@reeval/harness-opencode` 0.2.1 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | `@opencode/cli` 2.0.20 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.0` |
+| Image | `reeval-sandbox:opencode-0.2.1` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
@@ -100,7 +100,7 @@ Bedrock's hosts, header and served model are checked with OpenCode against a moc
 
 ## Tokens
 
-None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.18), so reeval records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
+None are recorded: every turn's `usage` is `null`. OpenCode's ACP server reports its last model call's tokens as the turn's, not the turn's total (still so in 2.0.20), so reeval records nothing rather than an undercount. Its `usage_update` doesn't help either: `used` is the last call's context size and `cost` the whole session's. The served model is still recorded, from the gateway's requests.
 
 ## Settings
 
@@ -185,7 +185,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 
 ## Supported providers
 
-Every provider OpenCode 2.0.18 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.0.20 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -218,6 +218,7 @@ Every provider OpenCode 2.0.18 knows whose key it sends in a header on known hos
 | Auriko | `auriko/…` | `AURIKO_API_KEY` | `Authorization: Bearer` | `api.auriko.ai` |
 | Bailing | `bailing/…` | `BAILING_API_TOKEN` | `Authorization: Bearer` | `api.tbox.cn` |
 | Baseten | `baseten/…` | `BASETEN_API_KEY` | `Authorization: Bearer` | `inference.baseten.co` |
+| Bee by HEOSSI | `bee/…` | `BEE_API_KEY` | `Authorization: Bearer` | `api.bee.heossi.com` |
 | Berget.AI | `berget/…` | `BERGET_API_KEY` | `Authorization: Bearer` | `api.berget.ai` |
 | Blue Claw | `blueclaw/…` | `BLUECLAW_API_KEY` | `Authorization: Bearer` | `openai.blueclaw.network` |
 | Bothub | `bothub/…` | `BOTHUB_API_KEY` | `Authorization: Bearer` | `openai.bothub.ru` |
@@ -321,9 +322,10 @@ Every provider OpenCode 2.0.18 knows whose key it sends in a header on known hos
 | Opper | `opper/…` | `OPPER_API_KEY` | `Authorization: Bearer` | `api.opper.ai` |
 | OrcaRouter | `orcarouter/…` | `ORCAROUTER_API_KEY` | `Authorization: Bearer` | `api.orcarouter.ai` |
 | OVHcloud AI Endpoints | `ovhcloud/…` | `OVHCLOUD_API_KEY` | `Authorization: Bearer` | `oai.endpoints.kepler.ai.cloud.ovh.net` |
+| Pareto Inference | `pareto/…` | `PARETO_API_KEY` | `Authorization: Bearer` | `api.paretoinference.com` |
 | Pendra | `pendra/…` | `PENDRA_API_KEY` | `Authorization: Bearer` | `api.pendra.ai` |
 | Perplexity Agent | `perplexity-agent/…` | `PERPLEXITY_API_KEY` | `Authorization: Bearer` | `api.perplexity.ai` |
-| Pioneer | `pioneer/…` | `PIONEER_API_KEY` | `Authorization: Bearer` | `api.pioneer.ai` |
+| Pioneer | `pioneer/…` | `PIONEER_API_KEY` | `Authorization: Bearer` | `api.fastino.ai` |
 | Poe | `poe/…` | `POE_API_KEY` | `Authorization: Bearer` | `api.poe.com` |
 | Poolside | `poolside/…` | `POOLSIDE_API_KEY` | `Authorization: Bearer` | `inference.poolside.ai` |
 | QiHang | `qihang-ai/…` | `QIHANG_API_KEY` | `Authorization: Bearer` | `api.qhaigc.net` |

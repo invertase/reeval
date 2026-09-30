@@ -68,9 +68,26 @@ describe('recording runs into evals/.history', () => {
     const p = await gitProject('record-basic', { 'evals/agent.eval.ts': agent() })
     assert.equal((await runCli(p.dir)).code, 0)
     assert.deepEqual(recordedRuns(p.dir), [], 'nothing recorded without --record')
-    const { run } = readRun(p.dir)
+    const { run, evals } = readRun(p.dir)
     assert.match(run.runId, /^\d{8}T\d{6}Z_[0-9a-f]{7}_test-author_[0-9a-z]{4}$/)
     assert.equal(run.git?.sha.slice(0, 7), run.runId.split('_')[1])
+    assert.deepEqual(
+      evals[0]?.trial.egress,
+      {
+        policy: 'allow-all',
+        allowed: null,
+        recorded: false,
+        contacted: [],
+        blocked: [],
+        expectedBlocked: [],
+      },
+      'the fake sandbox records no traffic, and the record says so',
+    )
+    const state = (await runCli(p.dir, ['show', run.runId])).stdout
+    assert.match(state, /\n {2}Lockfiles +none found\n/)
+    assert.match(state, /\n {2}Images +none \(fake sandbox\)\n/)
+    assert.match(state, /\n {2}Judge +fake · threshold 0\.8 · version [0-9a-f]{12}\n/)
+    assert.match(state, /\n {2}Context +no skills, rules or MCP config found in the sandbox\n/)
 
     const r = await runCli(p.dir, ['record'])
     assert.equal(r.code, 0, r.stderr)
