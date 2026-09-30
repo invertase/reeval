@@ -247,9 +247,14 @@ export function createStudioApp(options: StudioServerOptions) {
         return c.json(body, 200, noStore)
       }
       if (target.kind === 'analysis') {
-        const { listAnalyses } = await import('../analysis/files.ts')
+        const { listAnalyses, listNotes } = await import('../analysis/files.ts')
         const entries = await listAnalyses(source.root, [source.historyDir], target.runId, true)
-        const index: AnalysisIndex = { runId: target.runId, entries: sortAnalyses(entries) }
+        const notes = await listNotes(source.root, target.runId)
+        const index: AnalysisIndex = {
+          runId: target.runId,
+          entries: sortAnalyses(entries),
+          ...(notes.length ? { notes } : {}),
+        }
         return c.json(index, 200, noStore)
       }
       const file = await resolveFile(source, target)

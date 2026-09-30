@@ -132,7 +132,7 @@ export function cannedModel(answer: { text: string } | { error: string }): Langu
 /** A language model that answers with the fake's output. */
 function fakeModel(fake: FakeAnalysisModel, digest: Digest): LanguageModel {
   if (fake.output === undefined) {
-    throw new Error('fakeAnalysis() has no output, so reeval analyze has no answer to return')
+    throw new Error('fakeAnalysis() has no output, so it has no analysis to return')
   }
   const output = typeof fake.output === 'function' ? fake.output(digest) : fake.output
   return cannedModel({ text: typeof output === 'string' ? output : JSON.stringify(output) })

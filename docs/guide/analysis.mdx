@@ -239,6 +239,26 @@ With `agent: true`, `reeval run` writes a note on each eval and harness as soon 
 
 A note never changes an outcome or the exit code. If the call fails, the note keeps its `error` and the run prints a warning. `agent` is off by default because it's one more model call per eval and harness on every run; `maxInputTokens` and `maxOutputTokens` cap each one.
 
+## A summary after the run
+
+```text
+analysis: 2 notes in .reeval/analysis/20260929T224823Z_3e6c17d_cursor-agent_6jp9/notes
+analysis: summary in .reeval/analysis/2d23006542befac87f359270f49b8cc539a4fd24ef4070e6d342a50a75ba804b.json (reeval analyze shows it)
+…
+$ npx reeval analyze
+cached analysis from 2026-09-29T22:51:58.212Z (.reeval/analysis/2d23006542befac87f359270f49b8cc539a4fd24ef4070e6d342a50a75ba804b.json); --no-cache calls the model again
+…
+  - pi:control#1 failed because instead of creating greet.js, it exited asking for clarification on the greeting style. [E1:L63] [F8] [r1/questions/pi:control#1]
+…
+gemini-3.8-flash · analysis-v2 · digest v1 · 15493 in / 4862 out tokens · 18s · 33 citations checked, 0 invalid, 0 dropped · 2 commands checked, 0 rejected
+```
+
+Once the run is written, `agent: true` also summarises it: the document `reeval analyze` writes, against the same base and under the same cache key. So `reeval analyze` prints it with no call, and `--save` keeps it in the history folder. Before its answer, the model can read what the digest left out with tools: evidence dropped to fit `maxInputTokens`, and any attempt's steps, checks and diff.
+
+If the summary's call fails, the cache keeps it with its `error` and the run prints a warning; the exit code stands. `reeval analyze` counts a failed summary as a miss and asks again. The studio's Analysis tab shows the summary, each harness's notes, and a failed call's error:
+
+<Image src="/assets/studio/run-analysis-notes.png" alt="The Analysis tab's notes by harness: one note each for cursor:composer-2.5 and pi:gemini-3.8-flash on the questions eval" width={800} />
+
 ## Next
 
 <CardGroup cols={2}>

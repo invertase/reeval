@@ -73,7 +73,7 @@ flowchart LR
 1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, the judge's scores, failures, flaky cells, drift, the compare), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and check tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>`. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them.
 2. **Call.** One `generateText` call with a schema: TL;DR, what happened, results, why, anomalies, at most five actions (target, change, expected effect, verify command, impact, effort) and a confidence.
 3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged. Each verify command must parse as reeval's own CLI, with only that command's flags, and an `reeval run` or `reeval image build` must select an eval of the run: a `--tag` no eval has, or a filter that matches no eval file, name or cell, is rejected. The counts are in the footer.
-4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. With `analysis.agent`, `reeval run` also caches a note on each eval and harness in `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`.
+4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. With `analysis.agent`, `reeval run` also caches a note on each eval and harness in `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`, and, once the run is written, the run's summary under the key `reeval analyze <run>` computes, so `reeval analyze` prints it from the cache (`--save` keeps it). Before that summary's call, the model may read evidence the cap dropped and open attempts (steps, checks and diff) with tools, and it can cite what it read. A summary whose call failed is cached with `error`: the studio shows it, and `reeval analyze` treats it as a miss.
 
 ## Configuration
 
@@ -94,7 +94,7 @@ export default defineConfig({
 </Property>
 
 <Property name="analysis.agent" type="boolean" optional>
-  Also write a note on each eval and harness during `reeval run`, with this model and these caps. Default false. See [Notes during a run](/guide/analysis#notes-during-a-run).
+  Also write a note on each eval and harness during `reeval run`, and a summary of the run once it's written, with this model and these caps. Default false. See [Notes during a run](/guide/analysis#notes-during-a-run).
 </Property>
 
 <Property name="analysis.instructions" type="string" optional>
@@ -109,7 +109,7 @@ export default defineConfig({
   The answer's cap, at least 500. Default 8000.
 </Property>
 
-For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. reeval has no prices, so the footer shows tokens used and no cost.
+For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned output (or a function of the digest) through the same parsing and validation. In `analysis.agent`'s summary, the fake first reads up to three dropped evidence items and three failing attempts with the tools, and the function gets the digest with the evidence it read; a function that throws is a failed call. reeval has no prices, so the footer shows tokens used and no cost.
 
 ## Errors
 

@@ -35,10 +35,12 @@ const parse = (text: string, file: string): AnalysisDoc | null => {
   }
 }
 
+/** The cached analysis for `key`; a failed run summary (one with `error`) is a miss. */
 export async function readCached(root: string, key: string): Promise<AnalysisDoc | null> {
   const file = join(analysisCacheDir(root), `${key}.json`)
   const text = await readFile(file, 'utf8').catch(() => null)
-  return text === null ? null : parse(text, file)
+  const doc = text === null ? null : parse(text, file)
+  return doc?.error === undefined ? doc : null
 }
 
 export async function writeCached(root: string, key: string, doc: AnalysisDoc): Promise<string> {
