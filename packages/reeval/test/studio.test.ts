@@ -11,6 +11,7 @@ import { COOKIE, createStudioApp } from '../src/studio/server.ts'
 import { listHeaders, type StudioSource } from '../src/studio/source.ts'
 import {
   activityLabel,
+  analysisDataPath,
   answerRows,
   artifactPath,
   buildIndex,
@@ -738,6 +739,50 @@ describe('reeval studio build', () => {
         assert.equal(built, served, url)
       }
     }
+  })
+
+  test("analysis.agent's notes are in the build as the server serves them; a cached summary only live", async () => {
+    const p = await project('studio-notes', {
+      'reeval.config.ts': fakeConfig({
+        extra: `analysis: { agent: true, model: fakeAnalysis({ note: 'A note.', output: { tldr: 'A summary.', whatHappened: [], results: [], why: [], anomalies: [], actions: [], confidence: { overall: 'low', why: 'x' } } }) },`,
+      }).replace(
+        "import { fakeJudge } from 'reeval/judge'",
+        "import { fakeAnalysis, fakeJudge } from 'reeval/judge'",
+      ),
+      'evals/a.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('writes', async (t) => {
+  await t.send('Write it')
+  expect(1).toBe(1)
+})
+`,
+    })
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout + run.stderr)
+    const [runId] = readdirSync(join(p.dir, '.reeval/runs')).filter((n) => !n.endsWith('.json'))
+    const out = join(p.dir, 'site')
+    assert.equal((await runCli(p.dir, ['studio', 'build', '--out', out, '--scratch'])).code, 0)
+    const built = JSON.parse(readFileSync(join(out, analysisDataPath(runId as string)), 'utf8'))
+    assert.deepEqual(
+      [built.entries, built.notes.map((n: { text: string }) => n.text)],
+      [[], ['A note.']],
+    )
+    const app = createStudioApp({
+      source: { root: p.dir, historyDir: join(p.dir, 'evals/.history'), scratch: true },
+      appDir: join(pkgRoot, 'dist/studio-app'),
+      es: 'test',
+      project: 'studio',
+      token: null,
+      hosts: [],
+    })
+    const served = await (await app.request(`http://x/${analysisDataPath(runId as string)}`)).json()
+    assert.deepEqual(served.notes, built.notes)
+    assert.deepEqual(
+      served.entries.map((e: { source: string; doc: { analysis: { tldr: string } } }) => [
+        e.source,
+        e.doc.analysis.tldr,
+      ]),
+      [['cached', 'A summary.']],
+    )
   })
 
   test('--no-artifacts writes records and the index only; a non-studio folder is refused', async () => {

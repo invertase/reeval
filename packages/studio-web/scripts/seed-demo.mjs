@@ -1,7 +1,7 @@
 // Builds a throwaway reeval project with real run history for studio development, screenshots and
 // tests: a copy of examples/hello with a few commits and recorded fake runs (passing, failing, CI,
-// multi-cell with a compared skill environment and its answered and failed compare questions),
-// plus one unrecorded scratch run.
+// multi-cell with a compared skill environment, its answered and failed compare questions, and
+// analysis.agent's notes and summary), plus one unrecorded scratch run whose summary fails.
 //
 //   node packages/studio-web/scripts/seed-demo.mjs [dir]    (default: $TMPDIR/reeval-studio-demo)
 import { spawnSync } from 'node:child_process'
@@ -99,6 +99,7 @@ const config = ({
   include,
   harnesses,
   judge = 0.95,
+  agent = '',
   extra = '',
 }) => `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
@@ -112,13 +113,13 @@ export default defineConfig({
   judge: { model: fakeJudge({ score: ${judge} }) },
   // Answers the compare questions: the attempt whose diff says Ahoy wins, then the one that
   // defaults the name. review.eval.ts's second question fails at the model.
-  analysis: {
+  analysis: {${agent ? '\n    agent: true,' : ''}
     model: fakeAnalysis({
       vote: (p) => {
         if (p.question.includes('missing name')) throw new Error('${QUESTION_ERROR}')
         const score = (diff) => (diff.includes('Ahoy') ? 2 : 0) + (diff.includes("name = 'world'") ? 1 : 0)
         return score(p.a) === score(p.b) ? 'tie' : score(p.a) > score(p.b) ? 'A' : 'B'
-      },
+      },${agent}
     }),
   },
   timeout: '2m',
@@ -203,15 +204,40 @@ await writeFile(
         withSkill: { files: { 'greet.js': TERSE_AHOY, 'package.json': PKG } },
       }),
     ],
+    // analysis.agent: a note on each eval and harness (hasty's fail) and a summary of the run.
+    agent: `
+      note: ({ harness, attempts }) => {
+        if (harness === 'hasty') throw new Error('the analysis model timed out')
+        return attempts.filter((a) => a.outcome === 'pass').length + ' of ' + attempts.length + ' attempts passed on ' + harness + '.'
+      },
+      output: (d) => ({
+        tldr: 'The house-greeting skill makes both agents say Ahoy; hasty is flaky either way.',
+        whatHappened: [{ text: 'Every eval ran on careful and hasty, three times per cell.', cites: [d.facts[0].id], confidence: 'high' }],
+        results: [], why: [], anomalies: [], actions: [],
+        confidence: { overall: 'medium', why: 'Three runs per cell.' },
+      }),`,
     extra: 'runs: 3,',
   }),
 )
 commit('feat: compare agents with and without the house-greeting skill', 'Ada Lovelace')
 es(['run', '--config', 'reeval.matrix.config.ts', '--record'])
 
-// An unrecorded run with uncommitted changes: shows up as scratch.
+// An unrecorded run with uncommitted changes: shows up as scratch. Its analysis.agent summary
+// fails, so the studio shows the error in place of the empty Analysis tab.
 await writeFile(join(dir, 'NOTES.md'), 'Trying a stricter judge threshold.\n')
-es(['run', '--config', 'reeval.demo.config.ts'])
+await writeFile(
+  join(dir, 'reeval.scratch.config.ts'),
+  config({
+    include,
+    harnesses: [harness(good)],
+    agent: `
+      note: 'The fake agent passed every attempt.',
+      output: () => {
+        throw new Error('the analysis model is overloaded')
+      },`,
+  }),
+)
+es(['run', '--config', 'reeval.scratch.config.ts'])
 
 console.log(
   `Demo project: ${dir}\nRun: node ${cli} studio --config ${join(dir, 'reeval.demo.config.ts')}`,

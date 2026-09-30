@@ -75,6 +75,12 @@ const INTENDED = [
     fields: ['summary', 'live', 'record'],
     why: "compare question answers (#152): skill.eval.ts's compare asks a question, so the plan lists it and the run records and prints its answer.",
   },
+  {
+    file: 'example.test.ts.jsonl',
+    key: /^hello-copy run --config reeval\.fake\.config\.ts$/,
+    fields: ['live'],
+    why: "The fake config's analysis.agent also summarises the run, so the run prints where it cached the summary (#158).",
+  },
 ]
 
 /** An attempt's progress line, which the Vitest engine could drop (see `onlyProgressMissing`). */
