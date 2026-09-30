@@ -8,9 +8,17 @@ import type { Substitution } from '@reeval/sandbox-docker'
 import { type BrokeredSecret, resolveEnvironment } from '../src/environment/resolve.ts'
 import { applied, defineEnvironment, unbrokeredSecrets } from '../src/environment.ts'
 import { cursorMcpServers } from '../src/harness/agents.ts'
+import { findingLines, findingSummary, scanText } from '../src/history/secret-scan.ts'
 import type { PlannedAttempt } from '../src/options.ts'
 import { brokeredIn, secretVarsIn, unbrokered, unbrokeredWarning } from '../src/options.ts'
-import { countSecrets, redactSecrets, registerSecret } from '../src/redact.ts'
+import {
+  countSecrets,
+  findSecrets,
+  maskedMatch,
+  redactSecrets,
+  registerSecret,
+  type SecretMatch,
+} from '../src/redact.ts'
 import { brokerPhases } from '../src/sandbox/phases.ts'
 import type { EnvironmentInput } from '../src/types.ts'
 
@@ -460,5 +468,66 @@ describe('redacting fragments of a secret', () => {
     assert.equal(countSecrets(`tail ${key.slice(-12)}`, env), 1)
     assert.equal(countSecrets(`whole ${key} and tail ${key.slice(-12)}`, env), 2)
     assert.equal(countSecrets('nothing here', env), 0)
+  })
+
+  test('findSecrets says where each match is and why, and maskedMatch shows no known value', () => {
+    const google = `AIza${'Q'.repeat(31)}WXYZ`
+    const text = `a ${key} b ${google} c`
+    const found = findSecrets(text, env)
+    assert.deepEqual(
+      found.map((m) => [text.slice(m.start, m.end), m.rule, m.known]),
+      [
+        [key, 'the value of CURSOR_API_KEY', true],
+        [google, 'Google API key', false],
+      ],
+    )
+    assert.equal(maskedMatch(text, found[0] as SecretMatch), 'the value of CURSOR_API_KEY')
+    assert.equal(maskedMatch(text, found[1] as SecretMatch), 'Google API key (AIza…WXYZ)')
+    const tail = findSecrets(`tail ${key.slice(-12)}`, env)
+    assert.deepEqual(
+      tail.map((m) => m.rule),
+      ['the value of CURSOR_API_KEY'],
+    )
+  })
+
+  test('scanText places a match inside a patch by file and new-side line', () => {
+    const google = `AIza${'Q'.repeat(35)}`
+    const patch = [
+      'diff --git a/README.md b/README.md',
+      'index 1111111..2222222 100644',
+      '--- a/README.md',
+      '+++ b/README.md',
+      '@@ -1 +1 @@',
+      '-old',
+      '+new',
+      'diff --git a/.env.example b/.env.example',
+      'index 3333333..4444444 100644',
+      '--- a/.env.example',
+      '+++ b/.env.example',
+      '@@ -4,4 +4,4 @@ comment',
+      ' A=1',
+      '-B=',
+      '-GONE=1',
+      '+B=2',
+      `+GEMINI_API_KEY=${google}`,
+      ' C=3',
+      '',
+    ].join('\n')
+    const findings = scanText('worktree.patch', patch)
+    assert.deepEqual(
+      findings.map((f) => [f.file, f.line, f.rule]),
+      [['.env.example', 6, 'Google API key']],
+    )
+    assert.deepEqual(findingLines('worktree.patch', findings), [
+      'worktree.patch: .env.example line 6: Google API key (AIza…QQQQ)',
+    ])
+    assert.equal(findingSummary(findings), '.env.example line 6: Google API key')
+    assert.deepEqual(
+      scanText('notes.txt', `one\ntwo ${google}\n`).map((f) => [f.file, f.line]),
+      [[null, 2]],
+    )
+    const many = scanText('notes.txt', Array.from({ length: 7 }, () => google).join('\n'))
+    assert.equal(findingLines('notes.txt', many).at(-1), 'notes.txt: and 2 more')
+    assert.equal(findingSummary(many).endsWith(', and 4 more'), true)
   })
 })
