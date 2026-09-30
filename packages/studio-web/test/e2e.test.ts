@@ -21,6 +21,7 @@ import { after, before, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { type Browser, chromium, type Page } from 'playwright-core'
 import { withUnknownFields } from '../../reeval/scripts/schema/validate.ts'
+import { e2eNewlineAnswer } from '../../reeval/test/support/real-runs.ts'
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url))
 const cli = join(repo, 'packages/reeval/dist/cli.js')
@@ -191,6 +192,7 @@ describe('studio in a browser', () => {
     await page.waitForSelector('h2')
     assert.match(page.url(), /#\/runs\/\d{8}T\d{6}Z_[0-9a-f]+_grace-hopper/)
     assert.ok((await page.getByText('9 failed').count()) > 0)
+    assert.equal(await page.locator('[data-questions]').count(), 0, 'no questions, no section')
 
     await page.getByRole('tab', { name: 'Analysis' }).click()
     await page.getByText('The greet module regressed in one attempt.').waitFor()
@@ -219,7 +221,35 @@ describe('studio in a browser', () => {
       'no debug data in a build',
     )
 
-    await page.getByRole('link', { name: 'Compare' }).click()
+    // The matrix run's review eval: both arms pass, so its first question has within and across
+    // win rates; its second failed at the model.
+    const matrix = readdirSync(join(out, 'data/runs'))
+      .filter((n) => n.endsWith('.json'))
+      .map((n) => JSON.parse(readFileSync(join(out, 'data/runs', n), 'utf8')))
+      .find((r) => r.evals.some((e: { answers?: unknown[] }) => e.answers))
+    const review = matrix.evals.find((e: { name: string }) => e.name === 'reviews a greet module')
+    await page.goto(`${page.url().split('#')[0]}#/runs/${matrix.runId}?eval=${review.slug}`)
+    const questions = page.locator('[data-questions]')
+    await questions.getByText('Which greet.js reads more like our house style?').waitFor()
+    await questions.getByText('Within a harness').waitFor()
+    await questions.getByText('Across harnesses').waitFor()
+    const within = questions.locator('div.grid', { hasText: 'with-house-greeting' })
+    assert.match((await within.textContent()) ?? '', /100%\d+\/\d+/)
+    assert.match(
+      (await questions.locator('div.grid', { hasText: 'plain' }).textContent()) ?? '',
+      /^plain0%0\/\d+$/,
+    )
+    await questions
+      .getByText('failed: Rate limit exceeded (429): the demo model refuses this question')
+      .waitFor()
+    const shot = process.env.REEVAL_STUDIO_ANSWERS_SCREENSHOT
+    if (shot) {
+      await page.setViewportSize({ width: 1440, height: 1100 })
+      await questions.scrollIntoViewIfNeeded()
+      await page.screenshot({ path: shot })
+    }
+
+    await page.getByRole('link', { name: 'Compare', exact: true }).click()
     await page.getByText('Regressed').first().waitFor()
     assert.deepEqual(errors, [])
   })
@@ -254,10 +284,10 @@ describe('studio in a browser', () => {
     await page.getByText('local cache').first().waitFor()
     const notes = page.getByRole('region', { name: 'Notes by harness' })
     await notes.waitFor()
-    assert.equal(await notes.getByText(/attempts passed on careful\.$/).count(), 3, 'one per eval')
+    assert.equal(await notes.getByText(/attempts passed on careful\.$/).count(), 4, 'one per eval')
     assert.equal(
       await notes.getByText('the analysis model timed out').count(),
-      3,
+      4,
       "hasty's notes show their error",
     )
 
@@ -292,6 +322,34 @@ describe('studio in a browser', () => {
     return out
   }
 
+  type Answer = { question: string; votes: unknown[]; error?: string }
+
+  /** Opens each eval with compare answers on the run page; a run without any shows none. */
+  async function readAnswers(page: Page, url: string, runId: string, out: string, label: string) {
+    const record = JSON.parse(readFileSync(join(out, 'data/runs', `${runId}.json`), 'utf8'))
+    const answered = record.evals.filter((e: { answers?: Answer[] }) => e.answers?.length)
+    if (answered.length === 0) {
+      assert.equal(await page.locator('[data-questions]').count(), 0, `${label} ${runId}`)
+      return
+    }
+    for (const e of answered as Array<{ slug: string; answers: Answer[] }>) {
+      await page.goto(`${url}#/runs/${runId}?eval=${e.slug}`)
+      const questions = page.locator('[data-questions]')
+      for (const a of e.answers) {
+        await questions.getByText(a.question, { exact: true }).waitFor()
+        if (a.error) await questions.getByText(`failed: ${a.error}`).waitFor()
+      }
+      const empty = e.answers.filter((a) => a.votes.length === 0 && !a.error).length
+      assert.equal(
+        await questions.getByText('No pairs to judge', { exact: false }).count(),
+        empty,
+        `${label} ${runId} ${e.slug}`,
+      )
+    }
+    await page.goto(`${url}#/runs/${runId}`)
+    await page.waitForSelector('h2')
+  }
+
   /** Opens every run of a build, its analysis, and every tab of every attempt. */
   async function readEverything(out: string, label: string) {
     const url = await host(out)
@@ -312,6 +370,7 @@ describe('studio in a browser', () => {
         throw new Error(`${label} ${runId} didn't render: ${errors.join('\n') || e}`)
       })
       await broken(`${label} ${runId}`)
+      await readAnswers(page, url, runId, out, label)
       if (existsSync(join(out, 'data/analysis', `${runId}.json`))) {
         await page.getByRole('tab', { name: 'Analysis' }).click()
         await page.getByText('Suggested actions').first().waitFor()
@@ -346,6 +405,30 @@ describe('studio in a browser', () => {
     const names = readdirSync(corpus).filter((n) => existsSync(join(corpus, n, 'evals/.history')))
     assert.ok(names.length >= 3)
     for (const name of names) await readEverything(await buildCorpus(name), name)
+  })
+
+  test("a compare answer over real harnesses' diffs (real-e2e-pairs) shows each side's win rate", async (t) => {
+    if (!browser) return t.skip('no Chrome or Chromium found')
+    const answer = await e2eNewlineAnswer()
+    let target = { runId: '', slug: '' }
+    const out = await buildCorpus('real-e2e-pairs', (history) => {
+      const [name] = readdirSync(history).filter((n) => n.endsWith('.json'))
+      const r = JSON.parse(readFileSync(join(history, name as string), 'utf8'))
+      r.evals[0].answers = [answer]
+      target = { runId: r.runId, slug: r.evals[0].slug }
+      writeFileSync(join(history, name as string), JSON.stringify(r, null, 2))
+    })
+    const { page, errors } = await open(
+      `${await host(out)}#/runs/${target.runId}?eval=${target.slug}`,
+    )
+    const questions = page.locator('[data-questions]')
+    await questions.getByText('Which ends hello.txt with a newline?').waitFor()
+    assert.equal(await questions.getByText('Within a harness').count(), 0, 'every within vote tied')
+    const rows = await questions.locator('div.grid').allTextContents()
+    assert.deepEqual(rows, ['cursor0%0/4', 'codex100%8/8', 'claude-code0%0/4'])
+    await questions.getByText('18 votes, 10 ties').waitFor()
+    assert.deepEqual(errors, [])
+    await page.close()
   })
 
   test('a run from a newer reeval, with fields and values this one lacks, still renders', async (t) => {
