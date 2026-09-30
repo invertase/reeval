@@ -15,7 +15,7 @@ const nextApi = defineEnvironment('nextjs-api', ({ git }) => ({
 const withSkill = nextApi.extendEnvironment('with-api-conventions', ({ skill }) => ({
   skills: [
     skill.git('github:invertase/reeval', {
-      ref: '1bdbe83f74cdb51b5857529c9134b36c62be7684',
+      ref: '052108cae3ca4c9d1bad1e6b527d76bdf11fd4cc',
       path: 'examples/hello/skills',
       only: ['api-conventions'],
     }),

@@ -8,7 +8,7 @@ import { defineEnvironment, evaluate, expect } from 'reeval'
 import { claudeCode, codex, cursor } from 'reeval/harness'
 import { appFiles, probeUsers } from './api/app.ts'
 
-// create-next-app's API template at a release tag. No baseline, so it's the control.
+// create-next-app's API template at a tag. No baseline, so it's the control.
 const nextApi = defineEnvironment('nextjs-api', ({ git }) => ({
   workspace: git('github:vercel/next.js', {
     ref: 'v16.3.7',
@@ -21,7 +21,7 @@ const nextApi = defineEnvironment('nextjs-api', ({ git }) => ({
 const withSkill = nextApi.extendEnvironment('with-api-conventions', ({ skill }) => ({
   skills: [
     skill.git('github:invertase/reeval', {
-      ref: '1bdbe83f74cdb51b5857529c9134b36c62be7684',
+      ref: '052108cae3ca4c9d1bad1e6b527d76bdf11fd4cc',
       path: 'examples/hello/skills',
       only: ['api-conventions'],
     }),
