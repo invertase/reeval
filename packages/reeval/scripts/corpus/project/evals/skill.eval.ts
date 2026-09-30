@@ -6,14 +6,18 @@ const withHouseGreeting = defineEnvironment('with-house-greeting', ({ skill }) =
 }))
 
 // Only the variant greets in the house style, so that eval's control fails its check and its
-// question has no pairs; both arms write greet.js, so the second eval's question has votes.
+// questions have no pairs; both arms write greet.js, so the second eval's first question has
+// votes and its second fails at the model.
 group(
   'house greeting',
   {
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: 'Which greeting reads more like our house style?',
+      question: [
+        'Which greeting reads more like our house style?',
+        'Which greeting handles a missing name?',
+      ],
     },
   },
   () => {
