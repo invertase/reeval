@@ -83,7 +83,7 @@ config is `reeval.config.ts` and local state is `.reeval/`. Inside this monorepo
 | `packages/harness-pi` | `@reeval/harness-pi`: pi on a Gemini API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-pi` runs pi's loop in reeval's process on the host). Each turn is one `pi --mode json -p --offline --approve --no-extensions --session-id <id>` process, installed from a pinned lockfile in `assets/`; its NDJSON becomes stream parts with each model call's tokens. pi has no MCP client, so MCP servers are refused at plan time. Private, and bundled into `reeval` like `harness-antigravity`, with its `assets/` beside `dist/` |
 | `packages/harness-codex` | `@reeval/harness-codex`: OpenAI's Codex CLI on an OpenAI API key as an AI SDK harness, in the sandbox (`@ai-sdk/harness-codex` carries none of Codex's native events and drops reasoning tokens). Each turn is one `codex exec --json` process (later turns `resume` the thread), the pinned native build downloaded from npm and checked against its sha512. Its `config.toml` gives Codex an HTTP-only provider for the OpenAI API and turns off analytics and the plugin sync, so a turn contacts only `api.openai.com`; its NDJSON becomes stream parts with each turn's tokens, reasoning included. Codex reports no served model, so the gateway reads it, and the effort, from each Responses API response (`modelResponses` in the catalog). Private, and bundled into `reeval` like `harness-antigravity` |
 | `packages/sandbox-docker` | `@reeval/sandbox-docker`: the Docker sandbox as an AI SDK harness sandbox provider, the image build and base Dockerfile, and the egress gateway (credential brokering and network policy). It imports nothing from `reeval`. It's private: the build bundles it into `reeval` and ships `docker/` beside `dist/` there, so the published package needs no second package |
-| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `reeval.claude.config.ts`, `reeval.antigravity.config.ts`, `reeval.opencode.config.ts`, `reeval.goose.config.ts`, `reeval.pi.config.ts` and `reeval.codex.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose, pi and Codex), a fake one, and `reeval.bench.config.ts`, a concurrency benchmark (`reeval run --config reeval.bench.config.ts --concurrency N`). Its `tsconfig.json` extends nothing, so the example runs when copied out of the repo (with `reeval` pointed at the published package); `test/example.test.ts` copies it to a temp directory and runs the fake config |
+| `examples/hello` | The example evals (including a skill `compare`, a Python sandbox, an `install` layer and a Dockerfile), with a real config (with `pr`, `smoke` and `nightly` profiles), `reeval.claude.config.ts`, `reeval.antigravity.config.ts`, `reeval.opencode.config.ts`, `reeval.goose.config.ts`, `reeval.pi.config.ts` and `reeval.codex.config.ts` (the coding evals under Claude Code, Antigravity, OpenCode, Goose, pi and Codex), a fake one, `reeval.analysis.config.ts` (the main config with `analysis.agent` on, for the nightly analyst check), and `reeval.bench.config.ts`, a concurrency benchmark (`reeval run --config reeval.bench.config.ts --concurrency N`). Its `tsconfig.json` extends nothing, so the example runs when copied out of the repo (with `reeval` pointed at the published package); `test/example.test.ts` copies it to a temp directory and runs the fake config |
 
 ## Development
 
@@ -319,7 +319,8 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   Bump the family by hand, together with the adapter and its patch. It also skips the harness
   CLIs, which are pinned in each harness's source (Antigravity's and Goose's sha256, Codex's
   sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
-  lockfile). The drift leg in `real.yml` tracks those instead.
+  lockfile). The drift leg in `real.yml` tracks those instead. Node majors (`@types/node` and the
+  base image's `node`) are ignored too: they stay on the `engines` floor's line, Node 22.
 
 ### Changing what reeval persists
 
@@ -431,7 +432,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.1`, `claude-code-1.0.128-patch.5d1c985c`,
-   `antigravity-0.1.0`, `opencode-0.2.0`, `goose-0.1.0`, `pi-0.1.0`, `codex-0.1.0`), so
+   `antigravity-0.1.1`, `opencode-0.2.0`, `goose-0.1.0`, `pi-0.1.0`, `codex-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 

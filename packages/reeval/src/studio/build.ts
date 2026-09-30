@@ -70,14 +70,20 @@ export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
     await mkdir(dirname(join(out, path)), { recursive: true })
     await writeFile(join(out, path), JSON.stringify(body))
   }
-  const { listAnalyses } = await import('../analysis/files.ts')
+  const { listAnalyses, listNotes } = await import('../analysis/files.ts')
   for (const header of headers) {
     const dir = header.recorded ? source.historyDir : scratchDir(source.root)
     const saved = header.recorded
       ? await listAnalyses(source.root, [source.historyDir], header.runId, false)
       : []
-    if (saved.length) {
-      const index: AnalysisIndex = { runId: header.runId, entries: sortAnalyses(saved) }
+    // Notes have no saved form, so a build takes them from the cache; analyses only once saved.
+    const notes = await listNotes(source.root, header.runId)
+    if (saved.length || notes.length) {
+      const index: AnalysisIndex = {
+        runId: header.runId,
+        entries: sortAnalyses(saved),
+        ...(notes.length ? { notes } : {}),
+      }
       const file = join(out, analysisDataPath(header.runId))
       await mkdir(dirname(file), { recursive: true })
       await writeFile(file, JSON.stringify(index))
