@@ -9,10 +9,10 @@ evals/a.eval.ts › opencode on other providers, under deny-all: their hosts are
 evals/a.eval.ts › opencode on Bedrock, under deny-all: its region is its hosts                     opencode:global.anthropic.claude-haiku-4-5/-/docker  control  gated  ×1  egress "deny-all" + bedrock-mantle.us-east-1.api.aws, bedrock-runtime.us-east-1.amazonaws.com, mcp.exa.ai
 excluded: —
 image docker · 1 evals
-  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.1  (reeval's image: built when missing or when its base changed)
 image docker · opencode · 4 evals
   base  reeval-sandbox:opencode-0.2.1  (reeval's image: built when missing or when its base changed)
 image docker:python:3.12-slim · 1 evals
-  from python:3.12-slim  reeval-sandbox:cursor-0.1.0-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
+  from python:3.12-slim  reeval-sandbox:cursor-0.1.1-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:python:3.12-slim · opencode · 1 evals
   from python:3.12-slim  reeval-sandbox:opencode-0.2.1-python-3-12-slim-9f93541e  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

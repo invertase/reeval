@@ -12,4 +12,4 @@ evals/p.eval.ts › stays unprivileged               fake/-/docker  control  gat
 evals/p.eval.ts › on the fake sandbox              fake/-/fake    control  gated  ×1
 excluded: —
 image docker · 6 evals
-  base  reeval-sandbox:cursor-0.1.0  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.1  (reeval's image: built when missing or when its base changed)
