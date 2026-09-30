@@ -24,6 +24,10 @@ const innermost = (error: unknown): unknown => {
   return e?.name === 'AI_RetryError' && e.lastError ? innermost(e.lastError) : error
 }
 
+/** An error from the provider's API (an AI SDK `APICallError`), not one reeval raised itself. */
+export const isApiError = (error: unknown): boolean =>
+  typeof (innermost(error) as ProviderError)?.statusCode === 'number'
+
 /** Rate limits, 5xx, overload and network blips. Never a bad request, bad key or abort. */
 export function isTransient(error: unknown): boolean {
   const e = innermost(error) as ProviderError & Error

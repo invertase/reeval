@@ -127,6 +127,8 @@ A fake run printing `c.attempt` shows:
 
 A `Verdict` doesn't fail the eval on its own: pass it to `expect(…).toPass()`.
 
+A call that fails resolves with a `JudgeFailure` instead: `verdict: 'error'`, `score: null` and `error`, the call's message. It fails the attempt as a judge error once the eval's body is done; see [Failed calls](/reference/judges#failed-calls).
+
 ## Multi-turn
 
 Each `c.send()` continues the same session. Checks between turns see the workspace as the agent left it:

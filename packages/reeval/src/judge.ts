@@ -2,8 +2,15 @@
 // evaluation model objects, e.g. `openai.evaluationModel('…')`.
 import type { FakeAnalysisModel, FakeJudgeModel } from './types.ts'
 
-/** A judge that always returns `score`, without calling a model. For tests and dry runs. */
-export const fakeJudge = ({ score = 1 }: { score?: number } = {}): FakeJudgeModel => ({
+/**
+ * A judge that returns `score` without calling a model, for tests and dry runs. `score` can be a
+ * function of the state the judge would see (per group, eval or call; the config takes a number).
+ */
+export const fakeJudge = ({
+  score = 1,
+}: {
+  score?: FakeJudgeModel['score']
+} = {}): FakeJudgeModel => ({
   kind: 'fake-judge',
   score,
 })
@@ -36,6 +43,7 @@ export type {
   FakeNoteInput,
   FakeVote,
   JudgeCallOptions,
+  JudgeFailure,
   JudgeModel,
   JudgeOptions,
   Verdict,
