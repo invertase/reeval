@@ -15,11 +15,10 @@ import {
 } from 'node:fs'
 import { mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { killTree, windowsSpawn } from '@reeval/sandbox-docker/process'
 import type { AttemptRecord, EvalEntry, RunRecord, Stack } from '../src/history/types.ts'
-import { startCapture } from './support/differential.ts'
 
 export const pkgRoot = fileURLToPath(new URL('..', import.meta.url))
 const cli = join(pkgRoot, 'dist/cli.js')
@@ -154,8 +153,6 @@ export function runCli(
   opts: CliOptions = {},
 ): Promise<CliRun> {
   const timeoutMs = opts.timeoutMs ?? 60_000
-  const name = relative(tmpRoot, cwd).replace(/-[A-Za-z0-9]{6}(?=\/|$)/g, '')
-  const capture = startCapture(cwd, args, name)
   return new Promise((resolve, reject) => {
     // Detached, so the tests can signal its whole process group as a terminal would.
     const child = spawn(process.execPath, [cli, ...args], {
@@ -180,7 +177,6 @@ export function runCli(
     child.on('error', reject)
     child.on('close', (code) => {
       clearTimeout(timer)
-      capture({ code, stdout, stderr }, [cwd, realpathSync(cwd), tmpRoot, pkgRoot])
       resolve({ code, stdout, stderr })
     })
   })
