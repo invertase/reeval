@@ -99,7 +99,7 @@ analysis: {
 }
 ```
 
-With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note.
+With `analysis.agent`, each note calls the real tools as a model would: it lists the attempts and compares up to three failed-vs-passing pairs. Then it answers with `note`, a string or a function of `{ eval, harness, attempts, compared }`. `note: { error: '…' }` throws instead, to test a failed note. Its summary of the run reads up to three dropped evidence items and three failing attempts with the tools, then answers with `output`; an `output` function gets the digest with the evidence it read, and one that throws tests a failed summary.
 
 ```ts
 analysis: {
@@ -109,7 +109,7 @@ analysis: {
 }
 ```
 
-`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake.
+`vote` answers [compare questions](/guide/compare#ask-questions): `'A'` (the attempt shown first), `'B'` or `'tie'` for every pair, or a function of the blinded pair (`{ question, prompt, a, b }`, where `a` and `b` are the two diffs in the order shown). `{ error: '…' }` fails every call, to test an answer's `error`. Without `vote`, every pair is a tie; without `output`, `reeval analyze` refuses the fake, and `analysis.agent`'s summary fails.
 
 ## Errors
 

@@ -1,8 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Sparkles } from 'lucide-react'
-import { useState } from 'react'
-import { type AnalysisClaim, type AnalysisDoc, type AnalysisEntry, isSuperseded } from 'reeval/view'
+import { type ReactNode, useState } from 'react'
+import {
+  type AnalysisClaim,
+  type AnalysisDoc,
+  type AnalysisEntry,
+  type AnalysisNote,
+  isSuperseded,
+} from 'reeval/view'
 import { CopyButton } from '@/components/copy-button'
 import { EmptyState, ErrorState, RowsSkeleton } from '@/components/states'
 import { Badge } from '@/components/ui/badge'
@@ -84,16 +90,50 @@ function Claims({
   )
 }
 
+/** A model call that failed, in place of what it would have written. */
+function Failed({ what, error, children }: { what: string; error: string; children?: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-fail/40 bg-fail/5 p-3 text-sm">
+      <p>
+        <span className="font-medium text-fail">{what} failed: </span>
+        <span className="break-words">{error}</span>
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        The run's outcomes don't change.{children ? ' ' : ''}
+        {children}
+      </p>
+    </div>
+  )
+}
+
 function AnalysisView({ entry }: { entry: AnalysisEntry }) {
   const { doc } = entry
   const a = doc.analysis
   const v = doc.validation
+  const source = (
+    <Badge variant={entry.source === 'saved' ? 'secondary' : 'outline'}>
+      {entry.source === 'saved' ? 'saved' : 'local cache'}
+    </Badge>
+  )
+  if (doc.error !== undefined) {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          {source}
+          <span>
+            {doc.model} · {formatDate(doc.createdAt)}
+          </span>
+        </div>
+        <Failed what="The run's summary" error={doc.error}>
+          <code className="font-mono">reeval analyze {doc.anchor}</code> calls the model again.
+        </Failed>
+      </div>
+    )
+  }
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <Badge variant={entry.source === 'saved' ? 'secondary' : 'outline'}>
-          {entry.source === 'saved' ? 'saved' : 'local cache'}
-        </Badge>
+        {source}
         {isSuperseded(doc) ? (
           <Badge variant="outline" className="text-infra">
             superseded: re-run reeval analyze
@@ -184,14 +224,50 @@ function AnalysisView({ entry }: { entry: AnalysisEntry }) {
   )
 }
 
-/** The run's saved analyses, and in `reeval studio` the locally cached ones; read-only. */
+/** `analysis.agent`'s notes, by eval, one per harness. */
+function Notes({ notes }: { notes: AnalysisNote[] }) {
+  const evals = [...new Set(notes.map((n) => n.evalId))]
+  return (
+    <section className="space-y-3" aria-label="Notes by harness">
+      <h3 className="text-sm font-medium">Notes by harness</h3>
+      {evals.map((evalId) => (
+        <div key={evalId} className="space-y-2">
+          <p className="font-mono text-xs text-muted-foreground">{evalId}</p>
+          <ul className="space-y-2">
+            {notes
+              .filter((n) => n.evalId === evalId)
+              .map((n) => (
+                <li key={n.harness} className="rounded-lg border p-3 text-sm">
+                  <div className="mb-1.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="secondary">{n.harness}</Badge>
+                    <span>
+                      {n.attempts.length} attempt{n.attempts.length === 1 ? '' : 's'} ·{' '}
+                      {n.resolvedModel ?? n.model}
+                    </span>
+                  </div>
+                  {n.error !== undefined ? (
+                    <Failed what="This note" error={n.error} />
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{n.text}</p>
+                  )}
+                </li>
+              ))}
+          </ul>
+        </div>
+      ))}
+    </section>
+  )
+}
+
+/** The run's saved analyses, and in `reeval studio` the locally cached ones and notes; read-only. */
 export function RunAnalysis({ runId }: { runId: string }) {
   const { data, error, isPending } = useQuery(analysisQuery(runId))
   const [picked, setPicked] = useState<string | undefined>()
   if (error) return <ErrorState error={error} />
   if (isPending) return <RowsSkeleton rows={5} />
   const entries = data?.entries ?? []
-  if (entries.length === 0) {
+  const notes = data?.notes ?? []
+  if (entries.length === 0 && notes.length === 0) {
     return (
       <EmptyState icon={Sparkles} title="No analysis for this run yet">
         Run <code className="font-mono text-xs">reeval analyze {runId} --save</code> to write one
@@ -201,10 +277,10 @@ export function RunAnalysis({ runId }: { runId: string }) {
       </EmptyState>
     )
   }
-  const entry = entries.find((e) => e.file === picked) ?? (entries[0] as AnalysisEntry)
+  const entry = entries.find((e) => e.file === picked) ?? entries[0]
   return (
-    <div className="space-y-4">
-      {entries.length > 1 ? (
+    <div className="space-y-6">
+      {entry && entries.length > 1 ? (
         <Select value={entry.file} onValueChange={setPicked}>
           <SelectTrigger className="w-full sm:w-auto">
             <SelectValue />
@@ -213,12 +289,21 @@ export function RunAnalysis({ runId }: { runId: string }) {
             {entries.map((e) => (
               <SelectItem key={e.file} value={e.file}>
                 {formatDate(e.doc.createdAt)} · {e.source} · {e.doc.model}
+                {e.doc.error !== undefined ? ' · failed' : ''}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       ) : null}
-      <AnalysisView entry={entry} />
+      {entry ? (
+        <AnalysisView entry={entry} />
+      ) : (
+        <p className="text-sm text-muted-foreground">
+          No summary of the run: run{' '}
+          <code className="font-mono text-xs">reeval analyze {runId} --save</code> to write one.
+        </p>
+      )}
+      {notes.length ? <Notes notes={notes} /> : null}
     </div>
   )
 }

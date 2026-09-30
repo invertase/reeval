@@ -111,6 +111,13 @@ function cellTags(e: EvalEntry): Map<string, string> {
 const counted = (a: AttemptRecord) => a.outcome === 'pass' || a.outcome === 'fail'
 
 export async function buildDigest(input: DigestInput): Promise<Digest> {
+  return (await buildDigestKeepingDropped(input)).digest
+}
+
+/** The digest, and the evidence dropped from it to fit its cap, whole, for tools to read back. */
+export async function buildDigestKeepingDropped(
+  input: DigestInput,
+): Promise<{ digest: Digest; dropped: DigestEvidence[] }> {
   const { head, base, db } = input
   const runs = base ? [base, head] : [head]
   const short = new Map(runs.map((r, i) => [r.record.runId, `r${i + 1}`]))
@@ -572,12 +579,14 @@ export async function buildDigest(input: DigestInput): Promise<Digest> {
     evidence,
     dropped: [],
   }
+  const dropped: DigestEvidence[] = []
   while (digestChars(digest) > input.maxChars && digest.evidence.length) {
     const worst = digest.evidence.reduce((a, b) => (b.priority >= a.priority ? b : a))
     digest.evidence = digest.evidence.filter((x) => x !== worst)
     digest.dropped.push(worst.id)
+    dropped.push(worst)
   }
-  return digest
+  return { digest, dropped }
 }
 
 export const digestChars = (d: Digest) => JSON.stringify(d).length
