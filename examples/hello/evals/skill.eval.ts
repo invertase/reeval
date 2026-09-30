@@ -25,12 +25,12 @@ group(
     pin: ['compare'],
   },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send(
+    evaluate('greets in the house style', async (c) => {
+      await c.send(
         'Create greet.js exporting greet(name) that greets the person in our house greeting style. ' +
           'Add a package.json with "type": "module". No dependencies.',
       )
-      await expect(t.exec(greetAda)).toSucceed()
+      await expect(c.exec(greetAda)).toSucceed()
     })
   },
 )

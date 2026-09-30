@@ -6,12 +6,12 @@ import { docker } from 'reeval/sandbox'
 evaluate(
   'writes and tests fizzbuzz in python',
   { sandbox: docker({ from: 'python:3.12-slim', id: 'python' }) },
-  async (t) => {
-    await t.send(
+  async (c) => {
+    await c.send(
       'Write fizzbuzz.py with a function fizzbuzz(n) returning the usual FizzBuzz string for n, ' +
         'and test_fizzbuzz.py with unittest tests for 3, 5, 15 and 7. Standard library only.',
     )
-    await expect(t.exec('python3 --version')).toSucceed()
-    await expect(t.exec('python3 -m unittest -q')).toSucceed()
+    await expect(c.exec('python3 --version')).toSucceed()
+    await expect(c.exec('python3 -m unittest -q')).toSucceed()
   },
 )

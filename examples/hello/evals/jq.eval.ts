@@ -9,11 +9,11 @@ const withJq = docker({
   ],
 })
 
-evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (t) => {
-  await t.send(
+evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (c) => {
+  await c.send(
     'Write orders.json with five orders (id, customer, total), then count.sh, a bash script that ' +
       'prints the number of orders over 100 using jq. Make it executable.',
   )
-  await expect(t.exec('jq --version')).toSucceed()
-  await expect(t.exec('./count.sh')).toSucceed()
+  await expect(c.exec('jq --version')).toSucceed()
+  await expect(c.exec('./count.sh')).toSucceed()
 })

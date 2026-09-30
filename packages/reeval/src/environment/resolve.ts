@@ -64,7 +64,7 @@ export type ResolvedEnvironment = {
   files: Array<{ path: string; content: string | Uint8Array }>
   /** The container's variables, secret values included. Never write this anywhere. */
   vars: Record<string, string>
-  /** `to: 'checks'` secrets: only for `t.exec` and setup steps. */
+  /** `to: 'checks'` secrets: only for `c.exec` and setup steps. */
   checkVars: Record<string, string>
   /**
    * Brokered secrets: the sandbox has the placeholders, and these real values stay in the worker

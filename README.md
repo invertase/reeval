@@ -29,15 +29,15 @@ everything but the Docker tier on Windows and macOS.
 import { evaluate, expect, group } from 'reeval'
 
 group('greet module', () => {
-  evaluate('creates a tested greet module', async (t) => {
-    const turn = await t.send(
+  evaluate('creates a tested greet module', async (c) => {
+    const turn = await c.send(
       'Create greet.js exporting greet(name) that returns "Hello, <name>!", ' +
         'and greet.test.js that tests it with node:test. No dependencies.',
     )
 
     await expect(turn).toHaveFile('greet.js')
-    await expect(t.exec('node --test')).toSucceed()
-    expect(await t.judge("Does the agent's final message accurately describe what it changed?")).toPass()
+    await expect(c.exec('node --test')).toSucceed()
+    expect(await c.judge("Does the agent's final message accurately describe what it changed?")).toPass()
   })
 })
 ```
@@ -84,12 +84,12 @@ group(
   'house greeting',
   { compare: { baseline: plain, variants: [withHouseGreeting] } },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send(
+    evaluate('greets in the house style', async (c) => {
+      await c.send(
         'Create greet.js exporting greet(name) that greets the person ' +
           'in our house style.',
       )
-      await expect(t.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
+      await expect(c.exec(greetAda)).toSucceed() // passes only for "Ahoy, Ada!"
     })
   },
 )

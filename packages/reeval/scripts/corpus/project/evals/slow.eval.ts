@@ -5,8 +5,8 @@ import { fakeHarness } from 'reeval/harness'
 evaluate(
   'takes its time',
   { harness: fakeHarness({ id: 'slow', delayMs: 400, files: { 'greet.js': 'hi\n' } }) },
-  async (t) => {
-    await t.send('Write greet.js slowly.')
-    await expect(t.exec('test -f greet.js')).toSucceed()
+  async (c) => {
+    await c.send('Write greet.js slowly.')
+    await expect(c.exec('test -f greet.js')).toSucceed()
   },
 )

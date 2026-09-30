@@ -3,22 +3,22 @@ title: Multi-turn evals
 description: Send follow-up turns in one agent session, and check each turn's status, diff and transcript.
 ---
 
-Real work takes more than one prompt. Call `t.send` again and the agent carries on in the same session, with the same workspace. This is the second `greet` eval:
+Real work takes more than one prompt. Call `c.send` again and the agent carries on in the same session, with the same workspace. This is the second `greet` eval:
 
 ```ts title="evals/hello.eval.ts"
-evaluate('adds a default name in a follow-up turn', async (t) => {
-  await t.send(
+evaluate('adds a default name in a follow-up turn', async (c) => {
+  await c.send(
     'Create greet.js exporting greet(name) that returns "Hello, <name>!". ' +
       'No dependencies.',
   )
-  await t.send(
+  await c.send(
     'Make name default to "world" ' +
       'when greet() is called without arguments.',
   )
 
-  await expect(t.exec(callGreetWithNoArgs)).toSucceed()
+  await expect(c.exec(callGreetWithNoArgs)).toSucceed()
   expect(
-    await t.judge(
+    await c.judge(
       'Did the agent add the default without breaking greet(name)?',
     ),
   ).toPass()
@@ -50,17 +50,17 @@ Each turn gets a line with its time, tool calls and file edits. The summary coun
 ## Keep each turn
 
 ```ts title="evals/guide.eval.ts"
-evaluate('checks turns', async (t) => {
-  const first = await t.send(
+evaluate('checks turns', async (c) => {
+  const first = await c.send(
     'Create greet.js exporting greet(name) that returns "Hello, <name>!".',
   )
-  const second = await t.send('Make name default to "world".')
+  const second = await c.send('Make name default to "world".')
   // …
-  expect(t.turns).toHaveLength(2)
+  expect(c.turns).toHaveLength(2)
 })
 ```
 
-`t.send` returns a `Turn` for that turn, and `t.turns` lists every turn so far, oldest first. A turn doesn't change after it resolves, so you can check the first one after the second has run.
+`c.send` returns a `Turn` for that turn, and `c.turns` lists every turn so far, oldest first. A turn doesn't change after it resolves, so you can check the first one after the second has run.
 
 ## Check a turn's status
 
@@ -92,16 +92,16 @@ expect(edits.length).toBeGreaterThan(0)
 ## Judge an earlier turn
 
 ```ts
-const created = await t.judge('Does greet.js export greet(name)?', {
+const created = await c.judge('Does greet.js export greet(name)?', {
   on: first,
 })
 expect(created).toPass()
 ```
 
-`t.judge` grades the latest turn unless you pass `on`. `on: turn` grades an earlier turn, and `on: value` grades any value, such as a command's output.
+`c.judge` grades the latest turn unless you pass `on`. `on: turn` grades an earlier turn, and `on: value` grades any value, such as a command's output.
 
 <Info>
-  Checks and `t.exec` see the workspace as it is now, after every turn. To check the state between turns, run the check before the next `t.send`.
+  Checks and `c.exec` see the workspace as it is now, after every turn. To check the state between turns, run the check before the next `c.send`.
 </Info>
 
 ## Next
@@ -110,7 +110,7 @@ expect(created).toPass()
   <Card title="Compare and lift" icon="chart-line" href="/guide/compare">
     Run with and without a skill and read the lift.
   </Card>
-  <Card title="The t API" icon="book" href="/reference/t">
-    The `Turn` shape and every `t` method.
+  <Card title="The attempt context" icon="book" href="/reference/attempt-context">
+    The `Turn` shape and every `c` method.
   </Card>
 </CardGroup>

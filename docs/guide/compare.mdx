@@ -36,13 +36,13 @@ group(
     pin: ['compare'],
   },
   () => {
-    evaluate('greets in the house style', async (t) => {
-      await t.send(
+    evaluate('greets in the house style', async (c) => {
+      await c.send(
         'Create greet.js exporting greet(name) that greets the person ' +
           'in our house greeting style. ' +
           'Add a package.json with "type": "module". No dependencies.',
       )
-      await expect(t.exec(greetAda)).toSucceed()
+      await expect(c.exec(greetAda)).toSucceed()
     })
   },
 )
@@ -215,7 +215,7 @@ evaluate('greets by name', {
     variants: [withHouseGreeting],
     question: 'Which greet.js handles a missing or empty name better?',
   },
-}, async (t) => { … })
+}, async (c) => { … })
 ```
 
 Lift says which arm passes more often. A `question` asks which attempt did the better job, pair by pair, once every attempt of the eval has finished. Questions annotate the compare: they never change pass, fail or the exit code.

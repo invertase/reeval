@@ -11,8 +11,8 @@ import { DEFAULT_EGRESS_ALLOW, evaluate } from '{{ pkg }}'
 evaluate(
   'installs from the registry only',
   { egress: { allow: [...DEFAULT_EGRESS_ALLOW] } },
-  async (t) => {
-    await t.send('Add lodash and use it in index.js.')
+  async (c) => {
+    await c.send('Add lodash and use it in index.js.')
   },
 )
 ```

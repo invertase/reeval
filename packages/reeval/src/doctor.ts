@@ -423,7 +423,7 @@ export async function checkJudge(
     }),
   ]
   if (!models.length) {
-    return [{ id: 'judge', status: 'skip', summary: 'no judge model (t.judge needs one)' }]
+    return [{ id: 'judge', status: 'skip', summary: 'no judge model (c.judge needs one)' }]
   }
   return Promise.all(
     models.map(({ model, profile }) => {

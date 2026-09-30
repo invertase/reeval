@@ -35,10 +35,10 @@ export default defineConfig({
 
 ```ts title="evals/add.eval.ts"
 group('maths', { judge: { threshold: 0.7 }, tags: ['maths'] }, () => {
-  evaluate('adds two numbers', { timeout: '5m' }, async (t) => {
-    await t.send('Create add.js exporting add(a, b).')
-    await expect(t.exec('test -f add.js')).toSucceed()
-    expect(await t.judge('Does add.js export add?')).toPass()
+  evaluate('adds two numbers', { timeout: '5m' }, async (c) => {
+    await c.send('Create add.js exporting add(a, b).')
+    await expect(c.exec('test -f add.js')).toSucceed()
+    expect(await c.judge('Does add.js export add?')).toPass()
   })
 })
 ```
@@ -91,9 +91,9 @@ Most options replace: the nearest level wins outright. Four merge instead.
 evaluate('installs from npm only', {
   harness: (inherited) => inherited.slice(0, 1),
   egress: { allow: [...DEFAULT_EGRESS_ALLOW] },
-}, async (t) => {
-  await t.send('Add left-pad to package.json and install it.')
-  await expect(t.exec('npm ls left-pad')).toSucceed()
+}, async (c) => {
+  await c.send('Add left-pad to package.json and install it.')
+  await expect(c.exec('npm ls left-pad')).toSucceed()
 })
 ```
 

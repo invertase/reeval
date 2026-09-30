@@ -90,9 +90,9 @@ evaluate(
       ],
     },
   },
-  async (t) => {
-    await t.send('Create greet.js exporting greet(name).')
-    await expect(t).toHaveFile('greet.js')
+  async (c) => {
+    await c.send('Create greet.js exporting greet(name).')
+    await expect(c).toHaveFile('greet.js')
   },
 )
 `

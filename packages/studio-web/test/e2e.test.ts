@@ -542,9 +542,9 @@ describe('studio in a browser', () => {
       `import { existsSync } from 'node:fs'
 import { setTimeout as sleep } from 'node:timers/promises'
 import { evaluate, expect } from 'reeval'
-evaluate('waits for its gate', async (t) => {
-  while (!existsSync(new URL(\`../live-gate/\${t.attempt.n}\`, import.meta.url))) await sleep(50)
-  await expect(await t.send('Create greet.js')).toHaveFile('greet.js')
+evaluate('waits for its gate', async (c) => {
+  while (!existsSync(new URL(\`../live-gate/\${c.attempt.n}\`, import.meta.url))) await sleep(50)
+  await expect(await c.send('Create greet.js')).toHaveFile('greet.js')
 })
 `,
     )

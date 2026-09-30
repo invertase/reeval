@@ -14,14 +14,14 @@ const withJq = docker({
   install: ['apt-get update && apt-get install -y --no-install-recommends jq'],
 })
 
-evaluate('writes fizzbuzz in python', { sandbox: python }, async (t) => {
-  await t.send('Write fizzbuzz.py and unittest tests for it.')
-  await expect(t.exec('python -m unittest')).toSucceed()
+evaluate('writes fizzbuzz in python', { sandbox: python }, async (c) => {
+  await c.send('Write fizzbuzz.py and unittest tests for it.')
+  await expect(c.exec('python -m unittest')).toSucceed()
 })
 
-evaluate('counts orders with jq', { sandbox: withJq }, async (t) => {
-  await t.send('Write count.sh, which counts orders.json entries with jq.')
-  await expect(t.exec('bash count.sh')).toSucceed()
+evaluate('counts orders with jq', { sandbox: withJq }, async (c) => {
+  await c.send('Write count.sh, which counts orders.json entries with jq.')
+  await expect(c.exec('bash count.sh')).toSucceed()
 })
 ```
 

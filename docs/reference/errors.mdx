@@ -53,7 +53,7 @@ Errors in an eval file are prefixed with the file (`reeval: evals/skill.eval.ts:
 | `compare.question in evaluate("e") is an empty list. …` | Ask at least one question, or leave `question` out. An empty string, an entry without its `question` and the same question twice are refused too. |
 | `compare.question "Which?" in evaluate("e") names typesafe-ai/jev-1.13.0, an evaluation model: …` | Give the question a language model, e.g. `'google/gemini-3.8-flash'`. A model without a provider prefix is refused too. |
 | `"image" isn't an environment field (defineEnvironment("e")). …` | Image content belongs to `docker({ from, install, dockerfile })`; per-attempt steps to `setup`. The hint names `from` for a base image string and `install` for a list of steps. |
-| `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (t) => { … })`. |
+| `evaluate("x") has no function. …` | Pass the eval's body: `evaluate("x", async (c) => { … })`. |
 | `evaluate.only isn't allowed in CI` | Remove the `.only` before pushing. |
 
 ## Profiles and budgets
@@ -143,9 +143,9 @@ Each such attempt's `error.prepare` has `stage: "workspace"` and the workspace a
 
 | Message | Fix |
 |---|---|
-| `No sandbox yet: call t.send() or await t.sandbox() before t.exec() or t.readFile()` | Send a turn or `await t.sandbox()` first. |
-| `t.judge() has no turn to grade: call t.send() first` | Send a turn first, or pass `on`. |
-| `t.judge() has no model. …` | Set `judge.model` in the config, group, eval or call. |
+| `No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()` | Send a turn or `await c.sandbox()` first. |
+| `c.judge() has no turn to grade: call c.send() first` | Send a turn first, or pass `on`. |
+| `c.judge() has no model. …` | Set `judge.model` in the config, group, eval or call. |
 | `expected file greet.js to exist` | The agent didn't create it. Check the transcript. |
 | `expected command to succeed, exit code 1` | The command failed; the message has the tail of stderr and stdout. |
 | `expect(…).toSucceed() wasn't awaited. …` | Write `await expect(…)`. The eval fails even when the check passes. |

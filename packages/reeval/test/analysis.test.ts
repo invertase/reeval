@@ -292,9 +292,9 @@ describe('canaries: the verdicts flip when the data does', () => {
     const p = await project('canary-flaky', {
       'reeval.config.ts': fakeConfig(),
       'evals/f.eval.ts': `import { evaluate } from 'reeval'
-evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (t) => {
-  await t.send('go')
-  if (t.attempt.n % 2 === 0) throw new Error('every other attempt fails')
+evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
+  await c.send('go')
+  if (c.attempt.n % 2 === 0) throw new Error('every other attempt fails')
 })
 `,
     })
@@ -327,9 +327,9 @@ describe('effort next to lift', () => {
       'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
 const plain = defineEnvironment('plain', {})
 const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
-evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (t) => {
-  await t.send('go')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
 })
 `,
     })
@@ -870,14 +870,14 @@ export default defineConfig({
 
 const AGENT_EVALS = {
   'evals/w.eval.ts': `import { evaluate, expect } from 'reeval'
-evaluate('writes ok.txt', { runs: 3 }, async (t) => {
-  await t.send('Write ok.txt')
-  const wobble = t.attempt.cell.harness === 'wobbly' && t.attempt.n === 2
-  await expect(t).toHaveFile(wobble ? 'missing.txt' : 'ok.txt')
+evaluate('writes ok.txt', { runs: 3 }, async (c) => {
+  await c.send('Write ok.txt')
+  const wobble = c.attempt.cell.harness === 'wobbly' && c.attempt.n === 2
+  await expect(c).toHaveFile(wobble ? 'missing.txt' : 'ok.txt')
 })
-evaluate('reads ok.txt', async (t) => {
-  await t.send('Read ok.txt')
-  await expect(t).toHaveFile('ok.txt')
+evaluate('reads ok.txt', async (c) => {
+  await c.send('Read ok.txt')
+  await expect(c).toHaveFile('ok.txt')
 })
 `,
 }
@@ -1202,7 +1202,7 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
         `analysis: { agent: true, model: fakeAnalysis({ note: { error: 'the model is down' } }) },`,
       ),
       'evals/w.eval.ts': AGENT_EVALS['evals/w.eval.ts'].replace(
-        "t.attempt.cell.harness === 'wobbly' && t.attempt.n === 2",
+        "c.attempt.cell.harness === 'wobbly' && c.attempt.n === 2",
         'false',
       ),
     })
@@ -1493,7 +1493,7 @@ describe("analysis.agent: the run's summary after reeval run", () => {
     const p = await project('agent-summary-error', {
       'reeval.config.ts': AGENT_CONFIG(failing),
       'evals/w.eval.ts': AGENT_EVALS['evals/w.eval.ts'].replace(
-        "t.attempt.cell.harness === 'wobbly' && t.attempt.n === 2",
+        "c.attempt.cell.harness === 'wobbly' && c.attempt.n === 2",
         'false',
       ),
     })

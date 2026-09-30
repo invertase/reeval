@@ -74,7 +74,7 @@ async function failingProject(name: string) {
       extra: 'profiles: { pr: { defaults: { runs: 1 } } },',
     }),
     'evals/agent.eval.ts': `import { evaluate } from 'reeval'
-evaluate('agent eval', async (t) => { await t.send('go') })
+evaluate('agent eval', async (c) => { await c.send('go') })
 `,
     '.env.local': `WEBHOOK=${UNNAMED}\n`,
   })
@@ -252,7 +252,7 @@ describe('reeval report: the bundle', () => {
         harness: `{ failWith: 'agent failed: key ' + process.env.MY_API_KEY }`,
       }),
       'evals/agent.eval.ts': `import { evaluate } from 'reeval'
-evaluate('agent eval', async (t) => { await t.send('go') })
+evaluate('agent eval', async (c) => { await c.send('go') })
 `,
     })
     const env = { MY_API_KEY: NAMED }
@@ -309,7 +309,7 @@ if (process.argv.includes('run')) {
 `,
       '.gitignore': '.env*\n.reeval/\n',
       'evals/a.eval.ts': `import { evaluate } from 'reeval'
-evaluate('slow', async (t) => { await new Promise((r) => setTimeout(r, 2000)) })
+evaluate('slow', async (c) => { await new Promise((r) => setTimeout(r, 2000)) })
 `,
       '.reeval/.keep': '',
     })

@@ -111,7 +111,7 @@ evals/questions.eval.ts › pinned        2          1         1     4         p
 An eval that must keep a key whatever the profile says lists it in `pin`: `'runs'`, `'harness'` or `'compare'`. The plan notes `pinned: compare` when a pin blocked a limit. `--runs` still overrides `runs`, pinned or not.
 
 ```ts title="evals/skill.eval.ts"
-evaluate('keeps its variants', { pin: ['compare'] }, async (t) => {
+evaluate('keeps its variants', { pin: ['compare'] }, async (c) => {
   // …
 })
 ```

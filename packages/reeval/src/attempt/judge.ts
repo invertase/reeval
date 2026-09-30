@@ -5,11 +5,11 @@ import { changedFilesForJudge, patchForJudge } from '../judge/patch.ts'
 import type { RetriedError } from '../judge/retry.ts'
 import { withLease } from '../scheduler/client.ts'
 import { clip, formatDuration } from '../text.ts'
-import type { EvalContext, JSONValue, JudgeInput, Turn } from '../types.ts'
+import type { AttemptContext, JSONValue, JudgeInput, Turn } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 const noJudgeModel = (configFile: string) =>
-  `t.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in ${configFile}, ` +
+  `c.judge() has no model. Set judge: { model: 'typesafe-ai/jev-1.13.0' } in ${configFile}, ` +
   'on the group or eval, or pass { model } to this call.'
 
 const isTurn = (value: unknown): value is Turn =>
@@ -29,11 +29,11 @@ function judgeState(turn: Turn, output: JSONValue = turn.text): JudgeState {
  * the judge provider's concurrency lease. Every call's input is recorded, including calls that
  * fail, and a failure marks the attempt's assertion errors as the judge's.
  */
-export function judgeCaller(a: Attempt): EvalContext['judge'] {
+export function judgeCaller(a: Attempt): AttemptContext['judge'] {
   return async (question, { on, ...call } = {}) => {
     if (typeof question !== 'string' || !question.trim()) {
       throw new Error(
-        `t.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
+        `c.judge() needs a question: a non-empty string (got ${JSON.stringify(question)})`,
       )
     }
     const { threshold } = call
@@ -41,10 +41,10 @@ export function judgeCaller(a: Attempt): EvalContext['judge'] {
       threshold !== undefined &&
       !(typeof threshold === 'number' && threshold >= 0 && threshold <= 1)
     ) {
-      throw new Error(`t.judge() threshold must be between 0 and 1 (got ${String(threshold)})`)
+      throw new Error(`c.judge() threshold must be between 0 and 1 (got ${String(threshold)})`)
     }
     const subject = isTurn(on) ? on : a.turns.at(-1)
-    if (!subject) throw new Error('t.judge() has no turn to grade: call t.send() first')
+    if (!subject) throw new Error('c.judge() has no turn to grade: call c.send() first')
     const options = { ...a.spec.judge, ...call }
     const { model } = options
     if (model === undefined) {

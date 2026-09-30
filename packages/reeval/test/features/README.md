@@ -9,7 +9,7 @@ outside. Every user-facing feature or option lands with its fixtures in the same
 | The feature changes… | Add |
 |---|---|
 | which evals, cells, attempts or notes a run plans (options, profiles, selection, compare, images) | a plan case in `plan.test.ts`: a new directory under `test/plan/`, or a case on an existing one |
-| what lands in or happens inside an attempt (environment fields, sandbox behaviour, harness inputs, the `t` API) | a fixture here: one check and one canary |
+| what lands in or happens inside an attempt (environment fields, sandbox behaviour, harness inputs, the `c` API) | a fixture here: one check and one canary |
 | … and touches Docker, images, egress, ports or brokering | list it with `tiers: ['fake', 'docker']` (only `docker` if the fake can't model it) |
 | what a real harness receives (skills, MCP, rules, auth) | also list the `real` tier: the same fixture on real Cursor (see Running) |
 | runner behaviour (exit codes, output, history, cancel, budget, redaction) | a plain `node:test` case in the matching existing test file |
@@ -57,9 +57,9 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
 ## Checks without an agent, and checks as the agent
 
 - **Checks on what the environment set up** (files, rules, skills, setup steps) don't need a
-  turn: `const box = await t.sandbox()` starts the sandbox, and then `box.exec` and
-  `box.readFile` work (so do `t.exec` and `t.readFile`).
-- **What the agent itself sees** differs from what `t.exec` sees: checks get `to: 'checks'`
+  turn: `const box = await c.sandbox()` starts the sandbox, and then `box.exec` and
+  `box.readFile` work (so do `c.exec` and `c.readFile`).
+- **What the agent itself sees** differs from what `c.exec` sees: checks get `to: 'checks'`
   secrets, and the agent doesn't. Script the fake agent in `reeval.config.ts` with real sandbox
   actions, then assert on its transcript:
 
@@ -69,7 +69,7 @@ is the feature × tier matrix (unit, plan, fake, docker, real) generated from it
   turn.transcript.flatMap((e) => (e.type === 'tool' && e.tool === 'shell' ? [e.output] : []))
   ```
 
-  There's one step list per `t.send`, and the last list repeats. The steps are `{ exec }`,
+  There's one step list per `c.send`, and the last list repeats. The steps are `{ exec }`,
   `{ write: { path: content } }`, `{ reply }` and `{ mcp: '<server>/<tool>' }`, which starts the
   environment's stdio MCP server in the sandbox and calls the tool, reported as
   `mcp__<server>__<tool>`.
@@ -98,7 +98,7 @@ at a time, at `--concurrency 1`, and spend money, so keep them cheap:
 - One short turn per eval, with a prompt that names the exact action ("run `cat …` once").
 - The check reads something the model can't fake: a file a tool wrote, the agent's own tool
   output, or the record (`context`, taken after the first turn, lists the adapter's home).
-- A canary that needs no turn (`await t.sandbox()`) when the check allows it; else one short turn.
+- A canary that needs no turn (`await c.sandbox()`) when the check allows it; else one short turn.
 - A fixture whose behaviour only a real agent has (rules reaching its context) lists `real` alone,
   next to the fake/Docker fixture that checks where reeval put the file.
 

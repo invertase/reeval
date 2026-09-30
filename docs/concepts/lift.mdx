@@ -11,9 +11,9 @@ group('house greeting', {
   gate: { passRate: 0.8 },
   runs: 5,
 }, () => {
-  evaluate('greets in the house style', async (t) => {
-    await t.send('Create greet.js exporting greet(name) in our house style.')
-    await expect(t.exec(greetAda)).toSucceed()
+  evaluate('greets in the house style', async (c) => {
+    await c.send('Create greet.js exporting greet(name) in our house style.')
+    await expect(c.exec(greetAda)).toSucceed()
   })
 })
 ```

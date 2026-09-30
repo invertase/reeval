@@ -529,9 +529,9 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
-    id: 't.sandbox',
+    id: 'c.sandbox',
     area: 'Environments',
-    name: '`t.sandbox()`: checks without a turn',
+    name: '`c.sandbox()`: checks without a turn',
     fixtures: ['env/files-home', 'skills/workspace-placement'],
   },
 
@@ -1097,7 +1097,7 @@ export const inventory: InventoryFeature[] = [
       engine('judge options cascade from config to group, eval and call'),
       engine('a failing judge fails the eval as a judge error'),
       engine(
-        't.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
+        'c.judge with an empty question or a threshold outside 0…1 fails without asking the judge',
       ),
       unit('judge calls retry transient provider errors'),
     ],

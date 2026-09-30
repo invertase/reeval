@@ -35,8 +35,8 @@ group(
   'house style',
   { compare: { baseline: base, variants: [withSkill] } },
   () => {
-    evaluate('formats with tabs', async (t) => {
-      await t.send('Format src/index.ts.')
+    evaluate('formats with tabs', async (c) => {
+      await c.send('Format src/index.ts.')
     })
   },
 )

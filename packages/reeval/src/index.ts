@@ -7,6 +7,7 @@ export { evaluate, group } from './evaluate.ts'
 export type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './history/types.ts'
 export { HarnessCapabilityError } from './matchers.ts'
 export type {
+  AttemptContext,
   Budget,
   Cell,
   CellRole,
@@ -25,7 +26,6 @@ export type {
   EnvironmentSpec,
   EnvVars,
   EsConfig,
-  EvalContext,
   EvalFn,
   EvalOptions,
   ExecResult,

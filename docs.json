@@ -164,7 +164,7 @@
       "pages": [
         { "title": "group and evaluate", "href": "/reference/group-evaluate" },
         { "title": "defineEnvironment", "href": "/reference/environment" },
-        { "title": "The t API", "href": "/reference/t" },
+        { "title": "The attempt context", "href": "/reference/attempt-context" },
         { "title": "Matchers", "href": "/reference/matchers" },
         { "title": "secret, skill, mcp, file, git", "href": "/reference/helpers" }
       ]
