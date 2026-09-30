@@ -72,13 +72,15 @@ const harness = (options) => `fakeHarness(${JSON.stringify(options, null, 2)})`
 /** The demo model's reply to review.eval.ts's second question, which the studio shows. */
 const QUESTION_ERROR = 'Rate limit exceeded (429): the demo model refuses this question'
 
-// Both arms write greet.js, so their checks pass and every pair of the compare is judged.
+// Both arms write greet.js and neither agent flakes here, so every attempt passes its checks and
+// every pair of the compare is judged: the studio test needs both cuts' win rates on every seed.
 const REVIEW = `import { evaluate, expect } from 'reeval'
 import { plain, withHouseGreeting } from './environments.ts'
 
 evaluate(
   'reviews a greet module',
   {
+    harness: (inherited) => inherited.map((h) => (h.kind === 'fake' ? { ...h, flakeRate: 0 } : h)),
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
