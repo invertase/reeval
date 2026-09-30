@@ -743,6 +743,41 @@ describe('profiles', () => {
     )
   })
 
+  test("a profile's judge needs its own key, and a malformed one exits 2", async () => {
+    const p = await project('profile-judge-key', {
+      'reeval.config.ts': fakeConfig({
+        extra: `profiles: { real: { judge: { model: 'google/gemini-3.8-flash' } } },`,
+      }),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('judged', async (t) => {
+  await t.send('x')
+  expect(await t.judge('Did it?')).toPass()
+})
+`,
+    })
+    const noKeys = {
+      GOOGLE_GENERATIVE_AI_API_KEY: '',
+      AI_GATEWAY_API_KEY: '',
+      VERCEL_OIDC_TOKEN: '',
+    }
+    const canary = await runCli(p.dir, ['run'], { env: noKeys })
+    assert.equal(canary.code, 0, "the config's fake judge needs no key")
+    const missing = await runCli(p.dir, ['run', '--profile', 'real'], { env: noKeys })
+    assert.equal(missing.code, 2, missing.stdout + missing.stderr)
+    assert.match(
+      missing.stderr,
+      /Missing credentials: GOOGLE_GENERATIVE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN\./,
+    )
+    const malformed = await runCli(p.dir, ['run', '--profile', 'real'], {
+      env: { ...noKeys, GOOGLE_GENERATIVE_AI_API_KEY: 'AIza\nrest' },
+    })
+    assert.equal(malformed.code, 2, malformed.stdout + malformed.stderr)
+    assert.match(
+      malformed.stderr,
+      /Credentials with whitespace or a line break in them: GOOGLE_GENERATIVE_AI_API_KEY \(character 5\)/,
+    )
+  })
+
   test('a profile name typo exits 2 and lists the profiles', async () => {
     const p = await fixture('plan/profiles')
     const typo = await runCli(p.dir, ['run', '--profile', 'nigthly'])
@@ -1850,5 +1885,68 @@ evaluate('fake', { sandbox: (await import('reeval/sandbox')).fakeSandbox() }, as
     assert.doesNotMatch(out, /fake/)
     const runs = join(p.dir, '.reeval', 'runs')
     assert.equal(existsSync(runs) ? readdirSync(runs).length : 0, 0, 'a dry run writes no run')
+  })
+
+  test('reeval image build --profile plans the images with the profile, as reeval run does', async () => {
+    const p = await project('image-profile', {
+      'reeval.config.ts': `
+import { defineConfig } from 'reeval'
+import { claudeCode, fakeHarness } from 'reeval/harness'
+import { docker } from 'reeval/sandbox'
+import { fakeJudge } from 'reeval/judge'
+export default defineConfig({
+  harness: fakeHarness({}),
+  sandbox: docker(),
+  judge: { model: fakeJudge() },
+  profiles: {
+    claude: { defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }) } },
+    tools: { tags: ['tools'] },
+  },
+})
+`,
+      'docker/tools/Dockerfile': `ARG REEVAL_BASE\nFROM \${REEVAL_BASE}\nRUN echo tools\n`,
+      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
+evaluate('plain', async () => {})
+evaluate('tools', { tags: ['tools'], sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }, async () => {})
+`,
+    })
+    const cursor = /^ {2}[✓+~✗] base +reeval-sandbox:cursor-[\d.]+ /m
+    const claude = /^ {2}[✓+~✗] base +reeval-sandbox:claude-code-[\w.-]+ /m
+    const tools = /^docker:tools · 1 eval$/m
+    const dry = async (args: string[], env?: Record<string, string>) => {
+      const r = await runCli(p.dir, ['image', 'build', '--dry-run', ...args], env ? { env } : {})
+      assert.equal(r.code, 0, `${args.join(' ')}\n${r.stdout}${r.stderr}`)
+      return r.stdout
+    }
+
+    const none = await dry([])
+    assert.match(none, cursor)
+    assert.doesNotMatch(none, claude)
+    assert.match(none, tools)
+    // The profile's harness picks its image.
+    const onClaude = await dry(['--profile', 'claude'])
+    assert.match(onClaude, claude)
+    assert.doesNotMatch(onClaude, cursor)
+    // Its tags narrow the evals, so the plain eval's image drops out.
+    const tagged = await dry(['--profile', 'tools'])
+    assert.match(tagged, /^images {2}1 sandbox image /m)
+    assert.match(tagged, tools)
+    assert.doesNotMatch(tagged, /^docker · /m)
+    // REEVAL_PROFILE works too, and the flag wins over it.
+    assert.match(await dry([], { REEVAL_PROFILE: 'claude' }), claude)
+    assert.match(await dry(['--profile', 'claude'], { REEVAL_PROFILE: 'tools' }), claude)
+
+    const unknown = await runCli(p.dir, ['image', 'build', '--dry-run', '--profile', 'nope'])
+    assert.equal(unknown.code, 2, unknown.stdout + unknown.stderr)
+    assert.match(
+      unknown.stderr,
+      /^reeval: Unknown profile "nope"\. Profiles in reeval\.config\.ts: claude, tools\.\n$/,
+    )
+    // Without a config there are no profiles, so naming one is refused as reeval run refuses it.
+    const bare = await project('image-profile-bare', {})
+    const noConfig = await runCli(bare.dir, ['image', 'build', '--dry-run', '--profile', 'x'])
+    assert.equal(noConfig.code, 2, noConfig.stdout + noConfig.stderr)
+    assert.match(noConfig.stderr, /Unknown profile "x"\. reeval\.config\.ts defines no profiles\./)
   })
 })

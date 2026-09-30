@@ -4,7 +4,7 @@ import { inCI } from '../env.ts'
 import { git, repoTop } from '../git.ts'
 import { sha256, slugify } from '../ids.ts'
 import { stripCredentials } from '../redact.ts'
-import type { GitInfo, RunnerInfo } from './types.ts'
+import type { GitInfo, RunnerInfo, Stack } from './types.ts'
 
 const text = async (cwd: string, args: string[]) => {
   const r = await git(cwd, args)
@@ -53,6 +53,18 @@ export async function gitInfo(
     shallow: (await text(root, ['rev-parse', '--is-shallow-repository'])) === 'true',
     remote: remote ? stripCredentials(remote) : null,
   }
+}
+
+/**
+ * The runtime reeval runs on. Bun and Deno set `process.versions.node` too, to the Node version
+ * they're compatible with, so they're told apart by their own entry.
+ */
+export function runtimeInfo(
+  versions: Partial<Record<string, string>> = process.versions,
+): NonNullable<Stack['runtime']> {
+  if (versions.bun) return { name: 'bun', version: versions.bun }
+  if (versions.deno) return { name: 'deno', version: versions.deno }
+  return { name: 'node', version: versions.node ?? 'unknown' }
 }
 
 export function runnerInfo(env = process.env): RunnerInfo {

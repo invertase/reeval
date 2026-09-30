@@ -15,7 +15,7 @@ import {
 import { fromCwd } from './ids.ts'
 import { esJiti } from './jiti.ts'
 import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
-import { checkHarnesses, checkOptions } from './options.ts'
+import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
@@ -525,9 +525,14 @@ function agentModel(config: ResolvedConfig): string | null {
   return typeof model === 'string' && !model.startsWith('typesafe-ai/') ? model : null
 }
 
+/** The run's judge model: the profile's when it sets one, else the config's. */
+function runJudgeModel(config: ResolvedConfig, profile: ResolvedProfile | null | undefined) {
+  return profile ? (profileJudge(profile).model ?? config.judge.model) : config.judge.model
+}
+
 /**
  * Names the environment variables the run's providers need but don't have: the harnesses it
- * plans (default: the config's), the config's judge, the models that answer compare questions,
+ * plans (default: the config's), the run's judge, the models that answer compare questions,
  * the analysis model with `analysis.agent`, and required config and profile secrets.
  */
 export function missingCredentials(
@@ -543,8 +548,9 @@ export function missingCredentials(
   const missing: string[] = []
   const keys = new Set((options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? []))
   for (const key of keys) if (!env[key]) missing.push(key)
+  const judge = runJudgeModel(config, options.profile)
   const models = [
-    ...(config.judge.model !== undefined ? [config.judge.model] : []),
+    ...(judge !== undefined ? [judge] : []),
     ...(options.questionModels ?? []),
     ...(agentModel(config) ? [agentModel(config) as string] : []),
   ]
@@ -567,8 +573,8 @@ export const badCharacterAt = (value: string) =>
   [...value].findIndex((c) => /[\s\p{Cc}]/u.test(c)) + 1
 
 /**
- * Keys the run sends in request headers (the agents' credentials, the judge's and the compare
- * questions' models') whose value has
+ * Keys the run sends in request headers (the agents' credentials, the run's judge's and the
+ * compare questions' models') whose value has
  * whitespace or a control character in it, with where the first one is: a key pasted from a
  * wrapped terminal line picks up a line break, and the agent then hangs on a request it can't send
  * rather than failing to authenticate.
@@ -576,10 +582,15 @@ export const badCharacterAt = (value: string) =>
 export function malformedCredentials(
   config: ResolvedConfig,
   env = process.env,
-  options: { harnesses?: HarnessDescriptor[]; questionModels?: string[] } = {},
+  options: {
+    harnesses?: HarnessDescriptor[]
+    profile?: ResolvedProfile | null
+    questionModels?: string[]
+  } = {},
 ): string[] {
   const names = (options.harnesses ?? config.harness).flatMap((h) => credentialOf(h) ?? [])
-  if (config.judge.model !== undefined) names.push(...judgeCredentials(config.judge.model))
+  const judge = runJudgeModel(config, options.profile)
+  if (judge !== undefined) names.push(...judgeCredentials(judge))
   for (const model of options.questionModels ?? []) names.push(...judgeCredentials(model))
   const analyst = agentModel(config)
   if (analyst) names.push(...judgeCredentials(analyst))

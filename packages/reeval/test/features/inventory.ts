@@ -636,6 +636,12 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'docker.login-shell-path',
+    area: 'Sandbox',
+    name: "Login shells keep the image's `PATH` (`/etc/profile.d/00-reeval-path.sh`)",
+    fixtures: ['sandbox/login-shell-path', 'sandbox/login-shell-path-dockerfile'],
+  },
+  {
     id: 'docker.limits',
     area: 'Sandbox',
     name: '`docker({ memory, cpus, pids })` and their defaults',
@@ -1288,6 +1294,20 @@ export const inventory: InventoryFeature[] = [
       'reeval/test/live.test.ts › a killed run is shown as stopped',
       'studio-web/test/e2e.test.ts › reeval studio shows a run in progress attempt by attempt',
     ],
+  },
+  {
+    id: 'studio.answers',
+    area: 'Records and studio',
+    name: "Compare questions' answers on the studio's run page: win rates within and across harnesses, the model, and a failed call's error",
+    tests: [
+      studio("compare answers: each question's win rates per cut, and nothing without one"),
+      studio("compare answers over real harnesses' diffs (real-e2e-pairs)"),
+      studio('writes a static site with the same paths the server answers'),
+      'studio-web/test/e2e.test.ts › a static build works from a subpath',
+      'studio-web/test/e2e.test.ts › every run in the record corpus renders',
+      "studio-web/test/e2e.test.ts › a compare answer over real harnesses' diffs (real-e2e-pairs)",
+    ],
+    real: ['questions › examples/hello --profile questions'],
   },
 
   // CLI and runner

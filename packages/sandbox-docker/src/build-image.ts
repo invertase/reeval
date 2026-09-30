@@ -119,6 +119,10 @@ const BOOTSTRAPS: Record<
   },
 }
 
+/** Keeps the image's `PATH` in login shells, which Debian's `/etc/profile` resets. */
+const profilePathScript = () =>
+  readFileSync(join(DOCKER_CONTEXT, 'reeval-path.sh')).toString('base64')
+
 /**
  * Adds what the harness bridge needs to a Debian or Ubuntu based toolchain image: Node (copied
  * from the official image, so the base's own toolchain is untouched), pnpm, git, curl and bash.
@@ -138,7 +142,9 @@ RUN ln -sf ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \\
   && { id -u ${SANDBOX_USER} >/dev/null 2>&1 \\
     || useradd --create-home --shell /bin/bash --uid 10001 --user-group ${SANDBOX_USER} 2>/dev/null \\
     || useradd --create-home --shell /bin/bash --user-group ${SANDBOX_USER}; } \\
-  && mkdir -p ${SANDBOX_ROOT}/${WORKSPACE_DIR} && chown -R ${SANDBOX_USER}: ${SANDBOX_ROOT}
+  && mkdir -p ${SANDBOX_ROOT}/${WORKSPACE_DIR} && chown -R ${SANDBOX_USER}: ${SANDBOX_ROOT} \\
+  && mkdir -p /etc/profile.d \\
+  && echo ${profilePathScript()} | base64 -d > /etc/profile.d/00-reeval-path.sh
 ENV PATH=${SANDBOX_HOME}/.local/bin:$PATH
 WORKDIR ${SANDBOX_ROOT}/${WORKSPACE_DIR}
 `

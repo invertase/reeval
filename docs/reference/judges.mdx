@@ -57,7 +57,7 @@ reeval calls a provider's own package when its key is set, and the Vercel AI Gat
 
 [reeval analyze](/reference/cli/analyze) routes its `analysis.model` the same way: a direct key when the provider has one, the AI Gateway otherwise. It needs a language model, though, so an evaluation model such as `typesafe-ai/jev-1.13.0` can judge but can't write an analysis.
 
-The run checks the judge's key before it starts, with the harness's:
+The run checks the judge's key before it starts, with the harness's. When the run's profile sets a judge `model`, that judge's key is the one checked, and a `fakeJudge()` needs none:
 
 ```text
 reeval: Missing credentials: CURSOR_API_KEY, TYPESAFE_AI_API_KEY or AI_GATEWAY_API_KEY or VERCEL_OIDC_TOKEN. Set them in the environment or .env.local.
