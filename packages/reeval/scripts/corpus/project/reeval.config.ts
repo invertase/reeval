@@ -1,7 +1,7 @@
 // The project `node scripts/corpus/add.ts <name>` records into a new corpus entry: one run that
-// covers what a record can hold (a compare with lift and answered questions, judges that pass
-// and fail, a failed check, an infra error, todo and skipped evals, tool calls and reasoning), a
-// run that `budget` stops, and a saved analysis.
+// covers what a record can hold (a compare with lift, answered and failed questions, judges that
+// pass and fail, a failed check, an infra error, todo and skipped evals, tool calls and
+// reasoning), a run that `budget` stops, and a saved analysis.
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
@@ -28,9 +28,15 @@ export default defineConfig({
   judge: { model: fakeJudge({ score: 0.8 }) },
   analysis: {
     model: fakeAnalysis({
-      // Compare questions favour the attempt whose diff greets with Ahoy.
-      vote: (p) =>
-        p.a.includes('Ahoy') === p.b.includes('Ahoy') ? 'tie' : p.a.includes('Ahoy') ? 'A' : 'B',
+      // Compare questions favour the attempt whose diff greets with Ahoy; one fails at the model.
+      vote: (p) => {
+        if (p.question.includes('missing name')) throw new Error('Rate limit exceeded (429)')
+        return p.a.includes('Ahoy') === p.b.includes('Ahoy')
+          ? 'tie'
+          : p.a.includes('Ahoy')
+            ? 'A'
+            : 'B'
+      },
       output: (d) => {
         const cites = [d.facts[0]?.id ?? 'F1']
         return {

@@ -11,7 +11,9 @@ import type { ShapeSchema } from '../scripts/schema/generate.ts'
 import { fits, validate } from '../scripts/schema/validate.ts'
 import { ratesOf } from '../src/compare/pairs.ts'
 import { answersLabel } from '../src/history/summary.ts'
+import type { RunRecord } from '../src/history/types.ts'
 import type { PairVote } from '../src/types.ts'
+import { answerRows, recordPath } from '../src/view/index.ts'
 import { pkgRoot, readRun, runCli, tempDir } from './helpers.ts'
 import { harnesses, reserveAttempts } from './support/harnesses.ts'
 
@@ -97,4 +99,23 @@ test('examples/hello --profile questions: every pair is voted in both orders', {
       `every decided pair followed the ${slots[0]} slot: ${JSON.stringify(answer.votes)}`,
     )
   }
+
+  // The studio's run page reads the same answer from a static build (the run isn't recorded, so
+  // --scratch): one row, its rates per cut.
+  const out = join(dir, 'site')
+  const built = await runCli(dir, ['studio', 'build', '--out', out, '--scratch'])
+  assert.equal(built.code, 0, built.stderr)
+  const page = JSON.parse(readFileSync(join(out, recordPath(run.runId)), 'utf8')) as RunRecord
+  const [row, ...more] = answerRows(page.evals[0] as RunRecord['evals'][number])
+  assert.ok(row)
+  assert.equal(more.length, 0)
+  assert.equal(row.votes, answer.votes.length)
+  assert.equal(row.error, null)
+  assert.deepEqual(
+    [
+      ...row.within.map((r) => ['within', r.name, r.wins, r.n]),
+      ...row.across.map((r) => ['across', r.name, r.wins, r.n]),
+    ],
+    answer.rates.map((r) => [r.cut, r.name, r.wins, r.n]),
+  )
 })
