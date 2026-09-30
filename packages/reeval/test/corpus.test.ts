@@ -125,8 +125,21 @@ describe('the record corpus', () => {
         const where = `reeval ${args.join(' ')} in ${entry.name}\n${r.stdout}${r.stderr}`
         assert.ok(codes.includes(r.code as number), where)
         assert.doesNotMatch(r.stderr, /warning: skipped|TypeError|Cannot read prop/, where)
+        assert.doesNotMatch(r.stdout, /\bundefined\b|\bNaN\b|\[object Object\]|Invalid Date/, where)
         return r.stdout
       }
+      const STATE_ROWS = [
+        'Executed at',
+        'Lockfiles',
+        'Images',
+        'Harnesses',
+        'Environments',
+        'Judge',
+        'Context',
+        'Packages',
+        'reeval',
+        'Runner',
+      ]
       const ids = entry.runs.map((r) => r.runId)
       const listed = JSON.parse(await ok(['history', '--json', '--all'])) as {
         runs: Array<{ runId: string }>
@@ -138,7 +151,9 @@ describe('the record corpus', () => {
       )
       await ok(['history'])
       for (const run of entry.runs) {
-        await ok(['show', run.runId])
+        const text = await ok(['show', run.runId])
+        for (const row of STATE_ROWS)
+          assert.match(text, new RegExp(`\\n {2}${row} +\\S`), `${entry.name} ${run.runId}: ${row}`)
         await ok(['show', run.runId, '--md'])
         const shown = JSON.parse(await ok(['show', run.runId, '--json']))
         assert.deepEqual(shown, readableRecord(structuredClone(run.raw) as never))
