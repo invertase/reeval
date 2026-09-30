@@ -844,6 +844,39 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'compare/baseline-omitted',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['inherited', 'variant'],
+    canaryPass: ['variant'],
+    canary: /expected null to be 'variant-only'/,
+    record: ({ run }) => {
+      assert.deepEqual(run.environments.map((e) => e.name).sort(), ['inherited', 'variant'])
+      for (const e of run.evals) {
+        assert.deepEqual(e.compare, { baseline: 'inherited', from: 'environment' })
+        const control = e.cells.find((c) => c.role === 'control')
+        assert.equal(control?.environment, 'inherited')
+        assert.ok(e.cells.find((c) => c.role === 'variant')?.lift, JSON.stringify(e.cells))
+      }
+    },
+  },
+  {
+    dir: 'compare/baseline-empty',
+    tiers: ['fake', 'docker'],
+    env: 'variant',
+    cells: ['baseline', 'variant'],
+    canaryPass: ['variant'],
+    canary: /expected null to be 'variant-only'/,
+    record: ({ run }) => {
+      const empty = run.environments.find((e) => e.name === 'baseline')
+      assert.deepEqual(empty?.files, [])
+      for (const e of run.evals) {
+        assert.deepEqual(e.compare, { baseline: 'baseline', from: 'empty' })
+        assert.ok(e.cells.find((c) => c.role === 'variant')?.lift, JSON.stringify(e.cells))
+      }
+    },
+  },
+  {
     dir: 'env/files-binary',
     tiers: ['fake', 'docker'],
     env: 'binary-file',

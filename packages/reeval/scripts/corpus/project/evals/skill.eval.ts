@@ -14,7 +14,7 @@ group(
     compare: {
       baseline: plain,
       variants: [withHouseGreeting],
-      question: [
+      questions: [
         'Which greeting reads more like our house style?',
         'Which greeting handles a missing name?',
       ],

@@ -822,7 +822,7 @@ test('expand: per harness, the control then each variant; labels name the role',
   assert.notEqual(attempts[0]?.environment.name, 'extra')
 })
 
-test('environment and a compare object on the same options are an error', () => {
+test('environment beside a compare with a baseline is an error; without one it is the control', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
   assert.throws(
@@ -831,8 +831,9 @@ test('environment and a compare object on the same options are an error', () => 
         { environment: plain, compare: { baseline: plain, variants: [skill] } },
         'evaluate("e")',
       ),
-    /environment and compare can't both be set in evaluate\("e"\)/,
+    /environment and compare\.baseline can't both be set in evaluate\("e"\)/,
   )
+  checkOptions({ environment: plain, compare: { variants: [skill] } }, 'evaluate("e")')
   assert.throws(
     () => checkOptions({ environment: plain, compare: false }, 'evaluate("e")'),
     /compare: false can't be set in evaluate\("e"\)/,

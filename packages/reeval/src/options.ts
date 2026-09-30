@@ -7,6 +7,8 @@ import {
   applied,
   checkEgress,
   checkEnv,
+  EMPTY_BASELINE,
+  emptyEnvironment,
   isEnvironment,
   isMovingRef,
   plannedSecrets,
@@ -89,9 +91,9 @@ export function checkGate(value: unknown, where: string): void {
 }
 const PINNABLE: PinnableKey[] = ['harness', 'runs', 'compare']
 const GATES: CompareGate[] = ['variants', 'all', 'none']
-const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'question']
+const COMPARE_KEYS = ['baseline', 'variants', 'gate', 'minLift', 'harness', 'questions']
 const QUESTION_KEYS = ['question', 'model']
-const QUESTION_EXAMPLE = `question: 'Which handles state more cleanly?'`
+const QUESTION_EXAMPLE = `questions: ['Which handles state more cleanly?']`
 
 const ID = /^[A-Za-z0-9._:@+-]+$/
 
@@ -146,35 +148,35 @@ function checkQuestion(item: unknown, where: string): string {
   if (typeof item === 'string') {
     if (item.trim()) return item
     throw new UsageError(
-      `compare.question in ${where} is an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`,
+      `compare.questions in ${where} is an empty string. Ask something, e.g. ${QUESTION_EXAMPLE}.`,
     )
   }
   if (typeof item !== 'object' || item === null || Array.isArray(item)) {
     throw new UsageError(
-      `compare.question in ${where} takes strings or { question, model? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
+      `compare.questions in ${where} takes strings or { question, model? } (got ${describe(item)}), e.g. ${QUESTION_EXAMPLE}.`,
     )
   }
   const unknown = Object.keys(item).filter((k) => !QUESTION_KEYS.includes(k))
   if (unknown.length) {
     throw new UsageError(
-      `compare.question in ${where} takes { question, model? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).`,
+      `compare.questions in ${where} takes { question, model? } (got ${unknown.map((k) => `"${k}"`).join(', ')}).`,
     )
   }
   const { question, model } = item as { question?: unknown; model?: unknown }
   if (typeof question !== 'string' || !question.trim()) {
     throw new UsageError(
-      `compare.question in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
+      `compare.questions in ${where} has an entry without its question (got ${describe(question)}), e.g. { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' }.`,
     )
   }
   if (model !== undefined) {
     if (typeof model !== 'string' || checkModelString(model)) {
       throw new UsageError(
-        `compare.question "${question}" in ${where}: model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`,
+        `compare.questions "${question}" in ${where}: model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${describe(model)})`,
       )
     }
     if (isEvaluationModel(model)) {
       throw new UsageError(
-        `compare.question "${question}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
+        `compare.questions "${question}" in ${where} names ${model}, an evaluation model: it scores yes/no questions and can't pick between two attempts. Use a language model, e.g. 'google/gemini-3.8-flash'.`,
       )
     }
   }
@@ -182,15 +184,20 @@ function checkQuestion(item: unknown, where: string): string {
 }
 
 function checkQuestions(value: unknown, where: string): void {
-  const list = Array.isArray(value) ? value : [value]
+  if (!Array.isArray(value)) {
+    throw new UsageError(
+      `compare.questions in ${where} is a list (got ${describe(value)}), e.g. ${QUESTION_EXAMPLE}.`,
+    )
+  }
+  const list: unknown[] = value
   if (list.length === 0) {
     throw new UsageError(
-      `compare.question in ${where} is an empty list. Ask at least one, e.g. ${QUESTION_EXAMPLE}, or leave question out.`,
+      `compare.questions in ${where} is an empty list. Ask at least one, e.g. ${QUESTION_EXAMPLE}, or leave questions out.`,
     )
   }
   const texts = list.map((item) => checkQuestion(item, where))
   const dupe = texts.find((t, i) => texts.indexOf(t) !== i)
-  if (dupe) throw new UsageError(`compare.question in ${where} asks "${dupe}" twice`)
+  if (dupe) throw new UsageError(`compare.questions in ${where} asks "${dupe}" twice`)
 }
 
 function checkCompare(value: unknown, where: string): void {
@@ -202,27 +209,28 @@ function checkCompare(value: unknown, where: string): void {
   const spec = value as { baseline?: unknown; variants?: unknown }
   if (typeof value !== 'object' || value === null || !Array.isArray(spec.variants)) {
     throw new UsageError(
-      `compare takes { baseline, variants } (got ${describe(value)}) in ${where}. Use compare: { baseline, variants: [a, b], gate?, minLift?, harness? }.`,
+      `compare takes { variants, baseline? } (got ${describe(value)}) in ${where}. Use compare: { variants: [a, b], baseline?, gate?, minLift?, harness?, questions? }.`,
     )
   }
   for (const key of Object.keys(value)) {
     if (!COMPARE_KEYS.includes(key)) {
-      const hint = key === 'questions' ? '. Did you mean "question"?' : ''
+      const hint =
+        key === 'question' ? `. Did you mean "questions"? It's a list: ${QUESTION_EXAMPLE}.` : ''
       throw new UsageError(`Unknown compare option "${key}" in ${where}${hint}`)
     }
   }
-  const { baseline, variants, gate, minLift, harness, question } = spec as {
+  const { baseline, variants, gate, minLift, harness, questions } = spec as {
     baseline?: unknown
     variants: unknown[]
     gate?: unknown
     minLift?: unknown
     harness?: unknown
-    question?: unknown
+    questions?: unknown
   }
-  if (question !== undefined) checkQuestions(question, where)
-  if (!isEnvironment(baseline)) {
+  if (questions !== undefined) checkQuestions(questions, where)
+  if (baseline !== undefined && !isEnvironment(baseline)) {
     throw new UsageError(
-      `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment.`,
+      `compare.baseline in ${where} must be an environment from defineEnvironment (got ${describe(baseline)}). It is the control; variants are not layered on it or on the eval's environment. Leave it out to use the eval's environment as the control.`,
     )
   }
   if (gate !== undefined && !GATES.includes(gate as CompareGate)) {
@@ -306,9 +314,9 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     )
   }
   if (o.compare !== undefined) checkCompare(o.compare, where)
-  if (raw.environment !== undefined && raw.compare !== undefined) {
+  if (raw.environment !== undefined && o.compare?.baseline !== undefined) {
     throw new UsageError(
-      `environment and compare can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment.`,
+      `environment and compare.baseline can't both be set in ${where}. compare: { baseline, variants } names every arm, so drop environment, or drop baseline to make environment the control.`,
     )
   }
   if (o.pin !== undefined) {
@@ -416,7 +424,10 @@ function checkUnique(list: HarnessDescriptor[], where: string) {
 export type Level = { options: EvalOptions; where: string }
 
 export type NormalizedCompare = {
+  /** The control, once `cascade` resolves an omitted `baseline`. */
   baseline: Environment
+  /** Set when `baseline` was omitted: where the control came from. */
+  from?: 'environment' | 'empty'
   variants: Environment[]
   gate: CompareGate
   minLift?: number
@@ -428,8 +439,8 @@ export type NormalizedCompare = {
   questions: PlannedQuestion[]
 }
 
-const plannedQuestions = (value: CompareOptions['question']): PlannedQuestion[] =>
-  (value === undefined ? [] : Array.isArray(value) ? value : [value]).map((q) =>
+const plannedQuestions = (value: CompareOptions['questions']): PlannedQuestion[] =>
+  (value ?? []).map((q) =>
     typeof q === 'string'
       ? { question: q }
       : { question: q.question, ...(q.model !== undefined ? { model: q.model } : {}) },
@@ -457,7 +468,10 @@ export type Resolved = {
 function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | undefined {
   if (value === undefined) return undefined
   return {
-    baseline: value.baseline,
+    // An omitted baseline stays empty until `cascade` knows the eval's environment.
+    ...(value.baseline
+      ? { baseline: value.baseline }
+      : { baseline: emptyEnvironment(EMPTY_BASELINE), from: 'empty' as const }),
     variants: value.variants,
     gate: value.gate ?? 'variants',
     ...(value.minLift !== undefined ? { minLift: value.minLift } : {}),
@@ -465,7 +479,7 @@ function normalizeCompare(value: EvalOptions['compare']): NormalizedCompare | un
       ? { harness: value.harness.map((h) => (typeof h === 'string' ? h : harnessId(h))) }
       : {}),
     of: value.variants.length,
-    questions: plannedQuestions(value.question),
+    questions: plannedQuestions(value.questions),
   }
 }
 
@@ -535,6 +549,9 @@ export function cascade(
     )
   }
   for (const { options: own, where: at } of levels) applyLevel(out, own, at)
+  if (out.compare?.from && out.environment) {
+    out.compare = { ...out.compare, baseline: out.environment, from: 'environment' }
+  }
   checkUnique(out.harness, where)
   if (profile?.defaults.harness !== undefined && levels.some((l) => l.options.harness)) {
     notes.push('harness set by the eval')
@@ -550,7 +567,11 @@ export function cascade(
   for (const v of out.compare?.variants ?? []) {
     if (v.name === out.compare?.baseline.name) {
       throw new UsageError(
-        `compare in ${where} lists ${v.name}, which is the baseline. List only the other environments.`,
+        out.compare.from === 'empty'
+          ? `compare in ${where} lists a variant named ${v.name}, the name of the empty control a compare without a baseline or environment runs. Rename the variant, or set compare.baseline.`
+          : out.compare.from === 'environment'
+            ? `compare in ${where} lists ${v.name}, which is the control: compare has no baseline, so the eval's environment is. List only the other environments.`
+            : `compare in ${where} lists ${v.name}, which is the baseline. List only the other environments.`,
       )
     }
   }
@@ -626,8 +647,8 @@ export type PlannedAttempt = {
 export function expand(resolved: Resolved): PlannedAttempt[] {
   const { compare } = resolved
   const sandbox = sandboxId(resolved.sandbox)
-  // A compare names every arm. An environment from another level is not applied.
-  // The same options object cannot set both; checkOptions refuses that.
+  // A compare's control is its baseline, which `cascade` resolved when it was omitted. An
+  // environment from another level is not applied beside it.
   const control = applied(compare ? compare.baseline : resolved.environment)
   const policy = resolved.gate ?? 'all'
   const gateIf = (gated: boolean): CellGate => (gated ? policy : 'none')
@@ -818,7 +839,14 @@ export function evalPlan(
     variants: resolved.compare
       ? { run: resolved.compare.variants.length, of: resolved.compare.of }
       : null,
-    ...(resolved.compare ? { compare: { baseline: resolved.compare.baseline.name } } : {}),
+    ...(resolved.compare
+      ? {
+          compare: {
+            baseline: resolved.compare.baseline.name,
+            ...(resolved.compare.from ? { from: resolved.compare.from } : {}),
+          },
+        }
+      : {}),
     ...(!skip && resolved.compare?.questions.length
       ? { questions: resolved.compare.questions }
       : {}),

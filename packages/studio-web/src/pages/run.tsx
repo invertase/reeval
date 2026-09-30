@@ -415,7 +415,17 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
             </Badge>
           ))}
           {entry.compare ? (
-            <Badge variant="outline" className="font-mono text-[11px]">
+            <Badge
+              variant="outline"
+              className="font-mono text-[11px]"
+              title={
+                entry.compare.from === 'environment'
+                  ? "No compare.baseline: the eval's environment is the control"
+                  : entry.compare.from === 'empty'
+                    ? 'No compare.baseline or environment: the control is an empty environment'
+                    : undefined
+              }
+            >
               baseline {entry.compare.baseline}
             </Badge>
           ) : null}

@@ -191,9 +191,10 @@ never the environment's.
 
 ## compare, cells and lift
 
-`compare` answers "does this environment help?". `baseline` is the control. Each variant runs
-as that environment on its own, with the same prompt and checks. `compare` does not layer,
-inherit or extend. Share setup first:
+`compare` answers "does this environment help?". The control is `baseline`, or, when it's
+left out, the environment the eval would run in anyway (its own or an inherited `environment`,
+else an empty one named `baseline`). Each variant runs as that environment on its own, with the
+same prompt and checks. `compare` does not layer, inherit or extend. Share setup first:
 
 ```ts
 const greetsAda = `node -e "import('./greet.js').then((m) =>
@@ -220,10 +221,10 @@ group(
 - `parent.extendEnvironment(name, spec)` appends the child's spec as a new layer. The child wins
   on shared keys; `setup` concatenates. Call it before `compare`. Two stacks that should not
   share are two `defineEnvironment` calls, then `{ baseline, variants }`.
-- `environment` and `compare` are mutually exclusive on the same options object (`evaluate`
-  or `group`). Omit `compare` to run `environment`. A parent `environment` plus an eval that
-  only sets `compare` is allowed. Compare names every arm, and the inherited environment is
-  not applied. Setting both keys is exit 2. `compare: false` is not an eval or group option.
+- `compare: { variants: [houseStyle] }` with `environment: plain` (on the same object or a
+  parent) plans the same cells as the example: without `baseline`, the cascaded environment is
+  the control. A `baseline` names every arm instead: `environment` beside it is exit 2, and an
+  inherited one is not applied. `compare: false` is not an eval or group option.
 - Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
   prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
   `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
@@ -236,7 +237,7 @@ group(
 - With `runs > 1`, a cell passes only if every attempt passes, unless `gate: { passRate: 0.8 }`.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.
-- `compare.question` (a string, or a list of strings and `{ question, model? }`) asks which arm
+- `compare.questions` (always a list of strings and `{ question, model? }`) asks which arm
   did better, pair by pair, after the run. Questions annotate the compare and never gate:
   pass, fail and the exit code stay the checks'. Their model is the entry's `model`, else
   `analysis.model`, else the judge's when it's a language model (not `typesafe-ai/*`); with
@@ -317,10 +318,10 @@ them to `evals/.history/` to commit.
 | `environment: [a, b]` | `environment takes one environment, not a list` | `compare: { baseline: a, variants: [b] }` |
 | `compare: [b]` | `compare must be an object` | `compare: { baseline, variants: [b] }` |
 | `compare: { strategy: 'peer' }` | `Unknown compare option "strategy"` | Drop it. Variants already run on their own |
-| `environment` and `compare: { … }` together | `environment and compare can't both be set` | Drop `environment` |
+| `environment` and `compare: { baseline, … }` together | `environment and compare.baseline can't both be set` | Drop `environment`, or drop `baseline` to make it the control |
 | `compare: false` on an eval or group | `compare: false can't be set` | Use a profile's `limit.compare: false` |
-| `compare: { questions: [...] }` | `Unknown compare option "questions" … Did you mean "question"?` | `question: [...]` |
-| A compare question and no language model | `compare.question "…" (…) needs a language model` (exit 2) | Set `analysis.model`, or give the question its own `model` |
+| `compare: { question: '…' }` | `Unknown compare option "question" … Did you mean "questions"?` | `questions: ['…']`, always a list |
+| A compare question and no language model | `compare.questions "…" (…) needs a language model` (exit 2) | Set `analysis.model`, or give the question its own `model` |
 | `import { baseline }` | `reeval has no baseline` | `baseline` is a field of `compare`, not an export |
 | `repeat: 3` / `times` | `Unknown option "repeat" … Did you mean "runs"?` | `runs: 3` |
 | Judge model `'gemini-3.8-flash'` | needs a provider prefix | `'google/gemini-3.8-flash'` |

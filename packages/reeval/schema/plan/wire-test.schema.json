@@ -372,6 +372,9 @@
       "properties": {
         "baseline": {
           "type": "string"
+        },
+        "from": {
+          "enum": ["empty", "environment"]
         }
       },
       "required": ["baseline"]

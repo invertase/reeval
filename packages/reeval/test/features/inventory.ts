@@ -133,9 +133,17 @@ export const inventory: InventoryFeature[] = [
     tests: [options('compare.harness scopes variants')],
   },
   {
-    id: 'compare.question',
+    id: 'compare.baseline',
     area: 'Config and selection',
-    name: '`compare.question`: questions in the plan, answered after the run with pairwise win rates',
+    name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
+    plan: ['compare/baseline-omitted', 'compare/baseline-omitted-off'],
+    fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
+    tests: [options('common mistakes')],
+  },
+  {
+    id: 'compare.questions',
+    area: 'Config and selection',
+    name: '`compare.questions`: questions in the plan, answered after the run with pairwise win rates',
     plan: ['compare/questions', 'compare/questions-dropped', 'compare/questions-group'],
     tests: [
       options('--dry-run names the questions with no language model'),
