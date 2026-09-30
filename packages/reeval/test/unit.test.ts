@@ -54,8 +54,9 @@ import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
+import { isOverflowError, overflowMessage, stateLimit } from '../src/judge/budget.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
-import { changedFilesForJudge, patchForJudge } from '../src/judge/patch.ts'
+import { changedFilesForJudge, judgeDiff, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isTransient } from '../src/judge/retry.ts'
 import { fakeJudge } from '../src/judge.ts'
 import { cascade, checkOptions, expand, type Resolved } from '../src/options.ts'
@@ -571,6 +572,109 @@ test('an npm install in the sandbox collapses to one line for the judge', () => 
     { path: 'src/app.js', status: 'added' },
   ])
   assert.deepEqual(files, ['added src/app.js', 'changed node_modules/ (10000 files)'])
+})
+
+const added = (path: string, ...lines: string[]) =>
+  `diff --git a/${path} b/${path}\nnew file mode 100644\n--- /dev/null\n+++ b/${path}\n${lines.map((l) => `+${l}\n`).join('')}`
+
+test('the judge drops build output, source maps, build info and minified files, and says so', () => {
+  const bundle = `var e=${'x'.repeat(2000)};`
+  const paths = [
+    'dist/assets/index-D1Ii1dIv.js',
+    'dist/index.html',
+    'packages/web/.next/server/page.js',
+    'build/main.js',
+    'out/index.html',
+    'src/build/index.ts',
+    'src/app.ts.map',
+    'tsconfig.tsbuildinfo',
+    'public/vendor.js',
+    'src/app.ts',
+  ]
+  const patch = paths
+    .map((p) => (p === 'public/vendor.js' ? added(p, bundle) : added(p, `// ${p}`)))
+    .join('')
+  const shown = judgeDiff({ patch, files: paths.map((path) => ({ path, status: 'added' })) })
+  assert.deepEqual(shown.dropped, [
+    'dist/ (2 files): build output',
+    'packages/web/.next/ (1 file): build output',
+    'build/ (1 file): build output',
+    'out/ (1 file): build output',
+    'src/app.ts.map: generated',
+    'tsconfig.tsbuildinfo: generated',
+    'public/vendor.js: minified, a line of 2007 characters',
+  ])
+  for (const what of shown.dropped) assert.ok(shown.patch.includes(`[reeval: dropped ${what}]`))
+  assert.match(shown.patch, /\+\/\/ src\/app\.ts\n/)
+  assert.match(shown.patch, /\+\/\/ src\/build\/index\.ts/, 'a nested build/ can be source')
+  assert.doesNotMatch(shown.patch, /x{1000}/)
+  assert.deepEqual(shown.files, [
+    'added src/build/index.ts',
+    'added src/app.ts.map',
+    'added tsconfig.tsbuildinfo',
+    'added public/vendor.js',
+    'added src/app.ts',
+    'changed dist/ (2 files)',
+    'changed packages/web/.next/ (1 file)',
+    'changed build/ (1 file)',
+    'changed out/ (1 file)',
+  ])
+})
+
+test("the judge's include filters its diff and files, the last match winning; files leave the diff", () => {
+  const paths = ['src/app.ts', 'src/app.test.ts', 'src/secret/key.ts', 'README.md', 'dist/a.js']
+  const diff = {
+    patch: paths.map((p) => added(p, `// ${p}`)).join(''),
+    files: paths.map((path) => ({ path, status: 'added' })),
+  }
+  const only = judgeDiff(diff, { include: ['src/', '!*.test.ts', '!src/secret/', 'src/secret/'] })
+  assert.deepEqual(only.files, ['added src/app.ts', 'added src/secret/key.ts'])
+  assert.match(only.patch, /src\/app\.ts/)
+  assert.match(only.patch, /src\/secret\/key\.ts/, 'a later pattern includes it again')
+  assert.doesNotMatch(
+    only.patch,
+    /README|app\.test|dist\//,
+    'nothing outside include, not even a marker',
+  )
+  assert.deepEqual(only.dropped, [
+    'src/app.test.ts: not in include',
+    'README.md: not in include',
+    'dist/a.js: not in include',
+  ])
+  const without = judgeDiff(diff, { include: ['!README.md'] })
+  assert.deepEqual(without.files, [
+    'added src/app.ts',
+    'added src/app.test.ts',
+    'added src/secret/key.ts',
+    'changed dist/ (1 file)',
+  ])
+  const inFull = judgeDiff(diff, { inFull: new Set(['src/app.ts']) })
+  assert.doesNotMatch(inFull.patch, /\/\/ src\/app\.ts\n/, 'shown in full, so not in the diff')
+  assert.match(inFull.patch, /\/\/ src\/app\.test\.ts/)
+  assert.ok(inFull.files.includes('added src/app.ts'), 'still listed as changed')
+})
+
+test('the judge knows Jev’s input limit and names what fills an input over it', () => {
+  assert.equal(stateLimit('typesafe-ai/jev-1.13.0'), 32_000)
+  assert.equal(stateLimit('typesafe-ai/jev-latest'), 32_000)
+  assert.equal(stateLimit('typesafe.evaluation/jev-1.13.0'), 32_000, 'a model object')
+  assert.equal(stateLimit('google/gemini-3.8-flash'), undefined)
+  const state = {
+    task: 'Build a sign-in',
+    output: 'Done.',
+    files: ['added src/app.ts'],
+    diff: added('src/huge.ts', 'x'.repeat(1_200_000)) + added('src/app.ts', 'y'.repeat(8_000)),
+    contents: { 'README.md': 'z'.repeat(40_000) },
+  }
+  const message = overflowMessage('typesafe-ai/jev-1.13.0', 32_000, state, 'Is it done?')
+  assert.match(
+    message,
+    /^The judge's input is ~312k tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff 302k, of which src\/huge\.ts is 300k, src\/app\.ts is 2k; contents 10k, of which README\.md is 10k; /,
+  )
+  assert.match(message, /include: \['src\/'\]/)
+  assert.ok(isOverflowError('{"error_type":"max_tokens_exceeded"}'))
+  assert.ok(isOverflowError('The input token count exceeds the maximum context length'))
+  assert.ok(!isOverflowError('You exceeded your current quota'))
 })
 
 const entry = (

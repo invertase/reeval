@@ -984,6 +984,189 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
     assert.equal(readRun(p.dir).evals[0]?.error?.kind, 'judge')
   })
 
+  const judgeInputs = (e: ReturnType<typeof readRun>['evals'][number] | undefined) =>
+    JSON.parse(e?.read(e.trial.files.judgeInput?.path ?? '') ?? '[]') as Array<{
+      question: string
+      state: Record<string, unknown>
+      dropped?: string[]
+      error?: string
+      retries?: unknown[]
+    }>
+
+  test('a judge call that fails is recorded, and the judges and checks after it still run', async () => {
+    const p = await project('judge-soft', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': agentEval(`
+  const failed = await c.judge('first?', { model: 'no-provider' })
+  expect(failed).toMatchObject({ verdict: 'error', score: null, question: 'first?' })
+  expect.soft(failed, 'an errored judge fails .not.toPass() too').not.toPass()
+  expect.soft(await c.judge('second?')).toPass()
+  await expect.soft(c.exec('echo checked')).toSucceed()
+`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.error?.kind, 'judge')
+    assert.match(
+      e?.error?.message ?? '',
+      /judge failed for "first\?" \(no-provider\): Judge model "no-provider" needs a provider prefix/,
+    )
+    assert.deepEqual(
+      e?.trial.judgements.map((j) => [j.question, j.verdict]),
+      [['second?', 'pass']],
+    )
+    assert.deepEqual(
+      e?.trial.checks.map((c) => c.command),
+      ['echo checked'],
+    )
+    const inputs = judgeInputs(e)
+    assert.deepEqual(
+      inputs.map((i) => i.question),
+      ['first?', 'second?'],
+    )
+    assert.match(inputs[0]?.error ?? '', /needs a provider prefix/)
+    assert.equal(inputs[1]?.error, undefined)
+  })
+
+  test('a judge failure the eval never asserts on still fails the attempt, after its body', async () => {
+    const p = await project('judge-unasserted', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/agent.eval.ts': agentEval(`
+  await c.judge('first?', { model: 'no-provider' })
+  await c.judge('again?', { model: 'no-provider' })
+  await c.exec('echo after')
+`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.error?.kind, 'judge')
+    assert.match(e?.error?.message ?? '', /^2 judge calls failed:\nc\.judge\("first\?"\) failed: /)
+    assert.match(e?.error?.message ?? '', /\nc\.judge\("again\?"\) failed: /)
+    assert.deepEqual(
+      e?.trial.checks.map((c) => c.command),
+      ['echo after'],
+    )
+  })
+
+  test('judge include and files cascade from the config to the call; build output is dropped', async () => {
+    const p = await project('judge-scope', {
+      'reeval.config.ts': fakeConfig({
+        harness: `{ files: { 'src/app.ts': 'export const app = 1\\n', 'notes.md': 'notes\\n', 'dist/app.js': 'bundle\\n' } }`,
+        judge: `{ model: fakeJudge({ score: 0.9 }), include: ['src/'] }`,
+      }),
+      'evals/scope.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+const env = defineEnvironment('scoped', { files: { 'README.md': 'the readme\\n' } })
+evaluate('scope', { environment: env }, async (c) => {
+  await c.send('go')
+  expect(await c.judge('from the config')).toPass()
+  expect(await c.judge('from the call', { include: [], files: ['README.md', './src/app.ts'] })).toPass()
+  expect(await c.judge('a missing file', { files: ['gone.txt'] })).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [fromConfig, fromCall, missing] = judgeInputs(readRun(p.dir).evals[0])
+    assert.deepEqual(fromConfig?.state.files, ['added src/app.ts'])
+    assert.match(String(fromConfig?.state.diff), /\+export const app = 1/)
+    assert.doesNotMatch(String(fromConfig?.state.diff), /notes|dist/)
+    assert.deepEqual(fromConfig?.dropped, [
+      'dist/app.js: not in include',
+      'notes.md: not in include',
+    ])
+    assert.equal(fromConfig?.state.contents, undefined)
+
+    assert.deepEqual(fromCall?.state.files, [
+      'added notes.md',
+      'added src/app.ts',
+      'changed dist/ (1 file)',
+    ])
+    assert.match(
+      String(fromCall?.state.diff),
+      /\[reeval: dropped dist\/ \(1 file\): build output\]/,
+    )
+    assert.match(String(fromCall?.state.diff), /\+notes/)
+    assert.doesNotMatch(String(fromCall?.state.diff), /export const app/, 'shown once, in full')
+    assert.deepEqual(fromCall?.state.contents, {
+      'README.md': 'the readme\n',
+      'src/app.ts': 'export const app = 1\n',
+    })
+    assert.deepEqual(fromCall?.dropped, ['dist/ (1 file): build output'])
+
+    assert.deepEqual(missing?.state.contents, { 'gone.txt': null })
+    assert.deepEqual(missing?.state.files, ['added src/app.ts'], 'the config include still applies')
+  })
+
+  test("a judge input over the model's known limit fails before any call, naming what fills it", async () => {
+    const huge = 'export const line = 1\n'.repeat(12_000)
+    const p = await project('judge-overflow', {
+      'reeval.config.ts': fakeConfig({
+        harness: `{ files: { 'src/huge.ts': ${JSON.stringify(huge)}, 'src/app.ts': 'export {}\\n' } }`,
+        judge: `{ model: 'typesafe-ai/jev-1.13.0' }`,
+      }),
+      'evals/agent.eval.ts': agentEval(`
+  expect.soft(await c.judge('Is it done?')).toPass()
+  await expect.soft(c.exec('echo still checked')).toSucceed()
+`),
+    })
+    const r = await runCli(p.dir, ['run'], {
+      env: { TYPESAFE_AI_API_KEY: 'reeval-test-not-a-real-key' },
+    })
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.error?.kind, 'judge')
+    assert.match(
+      e?.error?.message ?? '',
+      /The judge's input is ~\d\dk tokens \(estimated\), over typesafe-ai\/jev-1\.13\.0's limit of 32k for the state and question: diff \d\dk, of which src\/huge\.ts is \d\dk; /,
+    )
+    assert.match(e?.error?.message ?? '', /c\.judge\(question, \{ include: \['src\/'\] \}\)/)
+    assert.deepEqual(e?.trial.judgements, [])
+    assert.deepEqual(
+      e?.trial.checks.map((c) => c.command),
+      ['echo still checked'],
+    )
+    assert.match(judgeInputs(e)[0]?.error ?? '', /over typesafe-ai\/jev-1\.13\.0's limit/)
+  })
+
+  test("a provider's too-long error names what filled the judge's input", async () => {
+    const server = createServer((_req, res) => {
+      res.statusCode = 422
+      res.setHeader('content-type', 'application/json')
+      res.end(JSON.stringify({ detail: { error_type: 'max_tokens_exceeded' } }))
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address() as AddressInfo
+    try {
+      const typesafe = pathToFileURL(
+        join(pkgRoot, 'node_modules/@ai-sdk/typesafe-ai/dist/index.js'),
+      ).href
+      const p = await project('judge-provider-overflow', {
+        'reeval.config.ts': fakeConfig({ harness: `{ files: { 'src/app.ts': 'export {}\\n' } }` }),
+        'evals/agent.eval.ts': `import { evaluate, expect } from 'reeval'
+import { createTypeSafeAi } from '${typesafe}'
+const jev = createTypeSafeAi({ baseURL: 'http://127.0.0.1:${port}/v1', apiKey: 'reeval-test-key' })
+evaluate('agent eval', async (c) => {
+  await c.send('go')
+  expect.soft(await c.judge('Is it done?', { model: jev.evaluationModel('jev-under-test') })).toPass()
+})
+`,
+      })
+      const r = await runCli(p.dir)
+      assert.equal(r.code, 1, r.stdout + r.stderr)
+      const [e] = readRun(p.dir).evals
+      assert.equal(e?.error?.kind, 'judge')
+      assert.match(
+        e?.error?.message ?? '',
+        /\{"error_type":"max_tokens_exceeded"\}\. The judge's input is ~\d+ tokens \(estimated\): .*diff \d+.*include/,
+      )
+      assert.equal(judgeInputs(e)[0]?.retries, undefined, 'not retried')
+    } finally {
+      server.close()
+    }
+  })
+
   test('a judge call retries a transient provider error and records it', async () => {
     const p = await project('judge-retry', {
       'reeval.config.ts': fakeConfig(),

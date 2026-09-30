@@ -41,6 +41,7 @@ export type {
   HistoryConfig,
   HostFile,
   JudgeCallOptions,
+  JudgeFailure,
   JudgeOptions,
   McpServer,
   PairVote,

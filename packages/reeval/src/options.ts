@@ -20,7 +20,7 @@ import {
 import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { opencodeModelError } from './harness.ts'
-import { checkModelString } from './judge/index.ts'
+import { badJudgeList, checkModelString } from './judge/index.ts'
 import type {
   Cell,
   CellGate,
@@ -282,6 +282,12 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   ) {
     throw new UsageError(
       `judge.threshold must be between 0 and 1 (got ${String(threshold)}) in ${where}`,
+    )
+  }
+  const badList = o.judge && badJudgeList(o.judge)
+  if (badList) {
+    throw new UsageError(
+      `judge.${badList.key} must be a list of non-empty strings (got ${badList.got}) in ${where}`,
     )
   }
   if (o.environment !== undefined) {

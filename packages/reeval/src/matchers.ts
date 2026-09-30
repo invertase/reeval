@@ -1,4 +1,11 @@
-import type { ExecResult, TranscriptEvent, Turn, Verdict, WebEventType } from './types.ts'
+import type {
+  ExecResult,
+  JudgeFailure,
+  TranscriptEvent,
+  Turn,
+  Verdict,
+  WebEventType,
+} from './types.ts'
 
 type Result = { pass: boolean; message: () => string }
 
@@ -98,7 +105,16 @@ export const matchers = {
     return webEvent('toHaveFetched', actual, 'web-fetch', (e) => ('url' in e ? e.url : ''), url)
   },
 
-  toPass(actual: unknown): Result {
+  toPass(this: { isNot?: boolean } | undefined, actual: unknown): Result {
+    const failure = actual as JudgeFailure
+    if (failure?.verdict === 'error' && typeof failure.error === 'string') {
+      // A failed call answered nothing, so `.not.toPass()` fails on it too.
+      return {
+        pass: !!this?.isNot,
+        message: () =>
+          `judge failed for "${failure.question}" (${failure.model}): ${failure.error}`,
+      }
+    }
     const v = actual as Verdict
     if (typeof v?.score !== 'number') throw new TypeError('toPass() expects a c.judge() verdict')
     const score = v.score.toFixed(2)

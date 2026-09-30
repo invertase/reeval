@@ -1065,6 +1065,11 @@ describe('common mistakes', () => {
       /judge\.threshold must be between 0 and 1 \(got 2\) in group\("g"\)/,
     ],
     [
+      'a judge include as one string on a group',
+      `group('g', { judge: { include: 'src/' as never } }, () => { evaluate('e', async () => {}) })`,
+      /judge\.include must be a list of non-empty strings \(got "src\/"\) in group\("g"\)/,
+    ],
+    [
       'a file path that climbs out of the workspace',
       `defineEnvironment('e', { files: { '../../escape.txt': 'x' } })`,
       /files\["\.\.\/\.\.\/escape\.txt"\] in defineEnvironment\("e"\): paths are relative to the workspace, or start with ~\/ for the home directory, and never use \.\./,
@@ -1313,6 +1318,16 @@ ${body}
       'a judge threshold as text in the config',
       `judge: { model: fakeJudge({ score: 0.9 }), threshold: '0.8' as never },`,
       /judge\.threshold must be between 0 and 1 \(got 0\.8\) in reeval\.config\.ts/,
+    ],
+    [
+      'an empty path in the judge files in the config',
+      `judge: { model: fakeJudge({ score: 0.9 }), files: ['README.md', ''] },`,
+      /judge\.files must be a list of non-empty strings \(got \["README\.md",""\]\)/,
+    ],
+    [
+      'a fake judge scoring with a function in the config',
+      `judge: { model: fakeJudge({ score: () => 1 }) },`,
+      /fakeJudge\(\{ score \}\) in the config takes a number\. Pass a score function per group, eval or call instead\./,
     ],
     [
       'keeping no debug runs',

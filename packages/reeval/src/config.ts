@@ -14,7 +14,12 @@ import {
 } from './harness/agents.ts'
 import { fromCwd } from './ids.ts'
 import { esJiti } from './jiti.ts'
-import { checkModelString, DEFAULT_THRESHOLD, judgeCredentials } from './judge/index.ts'
+import {
+  badJudgeList,
+  checkModelString,
+  DEFAULT_THRESHOLD,
+  judgeCredentials,
+} from './judge/index.ts'
 import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
@@ -502,6 +507,14 @@ function resolveJudge(
       `${where}.model must be a "provider/model" string or fakeJudge(). ` +
         'Pass model objects per group, eval or call instead.',
     )
+  } else if (model !== undefined && typeof model.score !== 'number') {
+    throw new UsageError(
+      `${where}.model: fakeJudge({ score }) in the config takes a number. Pass a score function per group, eval or call instead.`,
+    )
+  }
+  const bad = badJudgeList(judge)
+  if (bad) {
+    throw new UsageError(`${where}.${bad.key} must be a list of non-empty strings (got ${bad.got})`)
   }
   const threshold = judge.threshold ?? DEFAULT_THRESHOLD
   if (!(threshold >= 0 && threshold <= 1)) {
