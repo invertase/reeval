@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
-import { appendFile, writeFile } from 'node:fs/promises'
+import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { withUnknownFields } from '../scripts/schema/validate.ts'
@@ -293,8 +293,9 @@ describe('recording runs into evals/.history', () => {
     const r = await runCli(p.dir, ['record'], { env: { DEPLOY_TOKEN: leaked } })
     assert.equal(r.code, 2)
     assert.match(r.stderr, /Refusing to record .*look like they contain a secret/s)
-    assert.match(r.stderr, /\/transcript\.jsonl/)
+    assert.match(r.stderr, /\/transcript\.jsonl line \d+: the value of DEPLOY_TOKEN$/m)
     assert.doesNotMatch(r.stderr, new RegExp(leaked), 'names files, not the secret')
+    assert.doesNotMatch(r.stderr, new RegExp(leaked.slice(0, 4)), 'no part of a known value')
     assert.deepEqual(recordedRuns(p.dir), [])
 
     const { dir, evals } = readRun(p.dir)
@@ -451,14 +452,85 @@ describe('recording runs into evals/.history', () => {
     assert.doesNotMatch(r.stdout + r.stderr, /\.\.\//)
   })
 
-  test('a secret in the uncommitted changes stops the record', async () => {
+  test('a secret in the uncommitted changes records the run without worktree.patch, and says where', async () => {
+    const key = `AIza${'Q'.repeat(31)}WXYZ`
     const p = await gitProject('record-patch-secret', { 'evals/agent.eval.ts': agent() })
-    await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)
+    await writeFile(join(p.dir, '.env.example'), `# keys\nCURSOR_API_KEY=\nGEMINI_API_KEY=${key}\n`)
     assert.equal((await runCli(p.dir)).code, 0)
     const r = await runCli(p.dir, ['record'])
-    assert.equal(r.code, 2)
-    assert.match(r.stderr, /\/worktree\.patch/)
-    assert.deepEqual(recordedRuns(p.dir), [])
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(
+      r.stdout,
+      /^warning: left worktree\.patch out of \S+: it looks like it holds a secret\.$/m,
+    )
+    assert.match(
+      r.stdout,
+      /^ {2}worktree\.patch: \.env\.example line 3: Google API key \(AIza…WXYZ\)$/m,
+    )
+    assert.match(
+      r.stdout,
+      /uncommitted changes when the run started \(git status\), not the agents' work/,
+    )
+    assert.match(r.stdout, /--skip-secret-scan\.$/m)
+    assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+    assert.doesNotMatch(r.stdout, new RegExp(key))
+
+    const [runId] = recordedRuns(p.dir)
+    const historyDir = join(p.dir, 'evals/.history')
+    const record = JSON.parse(readFileSync(join(historyDir, `${runId}.json`), 'utf8'))
+    assert.equal(record.git.dirty, true)
+    assert.equal(record.git.worktreePatch, null)
+    assert.equal(
+      record.git.worktreePatchNote,
+      'not kept: it looked like it held a secret (.env.example line 3: Google API key)',
+    )
+    assert.ok(record.git.diffHash, 'the hash of the changes is still recorded')
+    const runDir = join(historyDir, runId as string)
+    assert.ok(!existsSync(join(runDir, 'worktree.patch')))
+    assert.match(readFileSync(join(runDir, 'summary.md'), 'utf8'), /not saved: not kept: it looked/)
+
+    const show = await runCli(p.dir, ['show'])
+    assert.match(
+      show.stdout,
+      /Uncommitted changes weren't saved \(not kept: it looked like it held a secret/,
+    )
+    const target = join(tempDir('record-patch-secret-checkout'), 'tree')
+    const co = await runCli(p.dir, ['checkout', 'latest', target])
+    assert.equal(co.code, 0, co.stderr)
+    assert.match(
+      co.stdout,
+      /^checked out \w{12} into \S+, without the run's uncommitted changes: they weren't saved \(not kept: it looked like it held a secret \(\.env\.example line 3: Google API key\)\)\.$/m,
+    )
+    assert.ok(!existsSync(join(target, '.env.example')))
+  })
+
+  test('--skip-secret-scan keeps a worktree.patch that looks like it holds a secret', async () => {
+    const p = await gitProject('record-patch-skip', { 'evals/agent.eval.ts': agent() })
+    await writeFile(join(p.dir, 'config.js'), `export const key = 'AIza${'Q'.repeat(35)}'\n`)
+    assert.equal((await runCli(p.dir)).code, 0)
+    const r = await runCli(p.dir, ['record', '--skip-secret-scan'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.doesNotMatch(r.stdout, /warning/)
+    const [runId] = recordedRuns(p.dir)
+    const runDir = join(p.dir, 'evals/.history', runId as string)
+    assert.ok(existsSync(join(runDir, 'worktree.patch')))
+  })
+
+  test('reeval checkout stops before making a worktree when the recorded worktree.patch is gone', async () => {
+    const p = await gitProject('record-patch-missing', { 'evals/agent.eval.ts': agent() })
+    await writeFile(join(p.dir, 'notes.txt'), 'uncommitted\n')
+    assert.equal((await runCli(p.dir, ['run', '--record'])).code, 0)
+    const [runId] = recordedRuns(p.dir)
+    const runDir = join(p.dir, 'evals/.history', runId as string)
+    await rm(join(runDir, 'worktree.patch'))
+    const target = join(tempDir('record-patch-missing-checkout'), 'tree')
+    const co = await runCli(p.dir, ['checkout', 'latest', target])
+    assert.equal(co.code, 2)
+    assert.match(
+      co.stderr,
+      /worktree\.patch is missing, but the record says the run's uncommitted changes are in it\. Restore it from git/,
+    )
+    assert.ok(!existsSync(target), 'no worktree is left behind')
   })
 })
 

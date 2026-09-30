@@ -92,7 +92,17 @@ export async function record(
   const extra = result.artifactDir
     ? ` + ${result.files} artifact files in ${rel(result.artifactDir)}/`
     : ''
-  return `recorded ${where}${extra} (${kb} KB). Commit it with git.`
+  const recorded = `recorded ${where}${extra} (${kb} KB). Commit it with git.`
+  if (result.droppedPatch.length === 0) return recorded
+  const artifacts = result.artifactDir ? `${rel(result.artifactDir)}/` : ''
+  return [
+    `warning: left worktree.patch out of ${runId}: it looks like it holds a secret.`,
+    ...result.droppedPatch.map((line) => `  ${line}`),
+    "  worktree.patch is your checkout's uncommitted changes when the run started (git status), not the agents' work.",
+    '  If the secret is real, rotate it and remove it from those files. The record says the patch was left out, so reeval checkout recreates the commit alone.',
+    `  To keep it after checking by hand: delete ${where} and ${artifacts || 'its artifacts'}, then reeval record ${runId} --skip-secret-scan.`,
+    recorded,
+  ].join('\n')
 }
 
 export async function recordCommand(ctx: Ctx, refs: string[]): Promise<number> {
@@ -212,20 +222,30 @@ export async function checkoutCommand(ctx: Ctx, args: string[]): Promise<number>
   }
   const target = resolve(args[1] ?? join(root, '.reeval', 'checkouts', run.runId))
   if (existsSync(target)) throw new CommandError(`${rel(target)} already exists`)
-  await gitText(root, ['worktree', 'add', '--detach', '-q', target, sha])
   const patchRef = run.git.worktreePatch
-  let applied = ''
-  if (patchRef) {
-    const patchPath = join(dir, run.runId, patchRef.path)
-    const bytes = await readFile(patchPath)
+  const patchPath = patchRef && join(dir, run.runId, patchRef.path)
+  if (patchRef && patchPath) {
+    const bytes = await readFile(patchPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error
+      return null
+    })
+    if (!bytes) {
+      throw new CommandError(
+        `${rel(patchPath)} is missing, but the record says the run's uncommitted changes are in it. ${entry.recorded ? "Restore it from git, where it's committed with the record, then try again." : "It's gone from .reeval/runs, so those changes can't be recreated."}`,
+      )
+    }
     if (sha256(bytes) !== patchRef.sha256) {
       throw new CommandError(`${rel(patchPath)} doesn't match the hash in the record`)
     }
+  }
+  await gitText(root, ['worktree', 'add', '--detach', '-q', target, sha])
+  let applied = ''
+  if (patchPath) {
     const r = await git(target, ['apply', '--binary', '--whitespace=nowarn', patchPath])
     if (r.code !== 0) throw new CommandError(`Applying worktree.patch failed: ${r.stderr.trim()}`)
     applied = ' and applied worktree.patch'
   } else if (run.git.dirty) {
-    applied = ` (the run was dirty, but its changes weren't saved: ${run.git.worktreePatchNote ?? 'unknown'})`
+    applied = `, without the run's uncommitted changes: they weren't saved (${run.git.worktreePatchNote ?? 'unknown'})`
   }
   ctx.out(
     `checked out ${sha.slice(0, 12)} into ${rel(target)}${applied}.\nRemove it with: git worktree remove ${rel(target)}`,
