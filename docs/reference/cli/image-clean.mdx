@@ -29,7 +29,7 @@ reeval image build [filter...]
 
 It collects the evals like `reeval run --dry-run` (so `--config`, `--profile`, `--tag` and filters apply) and prepares every image, three at a time, the way `reeval run` does before a run:
 
-1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.0`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
+1. reeval's image for each harness the plan uses, `reeval-sandbox:<harness>-<adapter version>` (for example `cursor-0.1.1`), which bakes that agent's CLI onto `reeval-sandbox-base:latest`: built when it's missing or reeval's base changed.
 2. Each `docker({ from })` image: built when missing, and rebuilt when its tag has moved upstream since.
 3. Each `docker({ dockerfile })` image and `install` layer: built when its content hash (or its base) is new.
 

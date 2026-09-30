@@ -215,7 +215,7 @@ importers:
         specifier: workspace:0.1.0
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-cursor-sdk
       '@reeval/harness-goose':
         specifier: workspace:0.1.0
@@ -251,7 +251,7 @@ importers:
         specifier: workspace:0.1.0
         version: link:../harness-codex
       '@reeval/harness-cursor-sdk':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-cursor-sdk
       '@reeval/harness-goose':
         specifier: workspace:0.1.0

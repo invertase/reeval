@@ -41,9 +41,9 @@ export function resolveCursorSdkCredentials(
 }
 
 /**
- * The one request the SDK sends the API key on (checked with @cursor/sdk 1.0.32): it trades
- * the key for session tokens, which it sends everywhere else. The same endpoint the Cursor CLI
- * uses, so a gateway that brokers the CLI brokers the SDK unchanged.
+ * The one request the SDK sends the API key on (checked with @cursor/sdk 1.0.32 and 1.0.34): it
+ * trades the key for session tokens, which it sends everywhere else. The same endpoint the Cursor
+ * CLI uses, so a gateway that brokers the CLI brokers the SDK unchanged.
  */
 export function cursorSdkEndpoints() {
   return [
