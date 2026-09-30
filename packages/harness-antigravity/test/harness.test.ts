@@ -157,6 +157,30 @@ describe('createAntigravity', () => {
     assert.match(sandbox.spawned[0]?.command ?? '', /'--json-schema' '[^']+schema-1\.json'/)
   })
 
+  test('a JSON schema whose root is not an object is unsupported, before the CLI starts', async () => {
+    for (const schema of [
+      { type: 'array', items: { type: 'string' } },
+      { type: 'string' },
+      { anyOf: [{ type: 'object' }, { type: 'null' }] },
+    ]) {
+      const sandbox = fakeSandbox({ turns: [{ stdout: result('c') }] })
+      const session = await start(sandbox)
+      await assert.rejects(
+        runTurn(session, 'go', { responseFormat: { type: 'json', schema } }),
+        (e) =>
+          HarnessCapabilityUnsupportedError.isInstance(e) &&
+          /root is "type": "object"/.test((e as Error).message),
+      )
+      assert.equal(sandbox.spawned.length, 0)
+    }
+  })
+
+  test('a JSON response format without a schema passes no --json-schema', async () => {
+    const sandbox = fakeSandbox({ turns: [{ stdout: result('c') }] })
+    await runTurn(await start(sandbox), 'go', { responseFormat: { type: 'json' } })
+    assert.doesNotMatch(sandbox.spawned[0]?.command ?? '', /--json-schema/)
+  })
+
   test('host tools, image prompts and compaction are unsupported, not ignored', async () => {
     const session = await start(fakeSandbox({}))
     await assert.rejects(
