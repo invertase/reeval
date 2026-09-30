@@ -1,7 +1,8 @@
 // `reeval doctor`: every check passing and failing on a machine the tests describe (DoctorDeps), then
 // the command end to end. No key's value appears in any output, text or JSON.
 import assert from 'node:assert/strict'
-import { writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { loadConfig } from '../src/config.ts'
@@ -9,12 +10,15 @@ import {
   type Check,
   checkDocker,
   checkEgress,
+  checkEnvFiles,
   checkGitignore,
   checkImages,
   checkJudge,
   checkKeys,
   checkRuntime,
   type DoctorDeps,
+  defaultDeps,
+  filledSecrets,
   probeKey,
 } from '../src/doctor.ts'
 import { runtimeInfo } from '../src/history/provenance.ts'
@@ -33,6 +37,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
   imageExists: async () => true,
   imageTags: async () => [],
   gitIgnored: async (_, paths) => paths.map(() => true),
+  gitVisibleEnvFiles: async () => [],
   fetch: async () => new Response('{}', { status: 200 }),
   ...over,
 })
@@ -355,6 +360,58 @@ describe('reeval doctor checks', () => {
     assert.equal((await checkGitignore(root, noGit)).status, 'fail')
     await writeFile(join(root, '.gitignore'), '.reeval\n.env*\n')
     assert.equal((await checkGitignore(root, noGit)).status, 'ok')
+  })
+
+  test('env files git sees: filled-in key values warn, empty ones and placeholders pass', async () => {
+    assert.deepEqual(
+      filledSecrets(
+        [
+          '# Harnesses',
+          'CURSOR_API_KEY=',
+          `GEMINI_API_KEY=${SECRET}`,
+          `export OPENAI_API_KEY="${SECRET}"`,
+          'ANTHROPIC_API_KEY=your-key-here',
+          'TYPESAFE_AI_API_KEY=<your key>',
+          `GITHUB_TOKEN=\${GITHUB_TOKEN}`,
+          'DB_PASSWORD=   # set in .env.local',
+          'AWS_SECRET_ACCESS_KEY=xxxx',
+          'PORT=3000',
+        ].join('\n'),
+      ),
+      ['GEMINI_API_KEY', 'OPENAI_API_KEY'],
+    )
+    const root = (await project('doctor-env-files', {})).dir
+    await writeFile(join(root, '.env.example'), `CURSOR_API_KEY=\nGEMINI_API_KEY=${SECRET}\n`)
+    await writeFile(join(root, '.env.sample'), 'CURSOR_API_KEY=\n')
+    const visible = (files: string[] | null) => deps({ gitVisibleEnvFiles: async () => files })
+    const warn = await checkEnvFiles(root, visible(['.env.example', '.env.sample']))
+    assert.equal(warn?.status, 'warn')
+    assert.equal(
+      warn?.summary,
+      ".env.example (GEMINI_API_KEY) has key values filled in, and git sees it: a commit, or a dirty run's worktree.patch, would carry them",
+    )
+    assert.match(warn?.fix ?? '', /\.env\.local/)
+    noSecret(warn ? [warn] : [])
+    const ok = await checkEnvFiles(root, visible(['.env.sample']))
+    assert.equal(ok?.status, 'ok')
+    assert.equal(await checkEnvFiles(root, visible([])), null)
+    assert.equal(await checkEnvFiles(root, visible(null)), null)
+  })
+
+  test('env files git sees: found with git ls-files, honouring .gitignore and its ! rules', async () => {
+    const root = (await project('doctor-env-files-git', {})).dir
+    await writeFile(join(root, '.gitignore'), 'node_modules/\n.env\n.env.*\n!.env.example\n')
+    await writeFile(join(root, '.env.example'), `GEMINI_API_KEY=${SECRET}\n`)
+    await writeFile(join(root, '.env.local'), `GEMINI_API_KEY=${SECRET}\n`)
+    await mkdir(join(root, 'app'))
+    await writeFile(join(root, 'app/.env.example'), 'GEMINI_API_KEY=\n')
+    const { gitVisibleEnvFiles } = defaultDeps()
+    assert.equal(await gitVisibleEnvFiles(root), null, 'outside a repository')
+    execFileSync('git', ['init', '-q'], { cwd: root })
+    assert.deepEqual((await gitVisibleEnvFiles(root))?.sort(), ['.env.example', 'app/.env.example'])
+    const check = await checkEnvFiles(root, deps({ gitVisibleEnvFiles }))
+    assert.equal(check?.status, 'warn')
+    assert.match(check?.summary ?? '', /^\.env\.example \(GEMINI_API_KEY\) has key values/)
   })
 })
 

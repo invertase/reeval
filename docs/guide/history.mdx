@@ -35,7 +35,7 @@ evals/.history/
 The history folder is `.history/` next to your evals. File names start with the UTC start time, so the listing is the history, and two branches that record runs merge without conflicts. A record is never edited once written.
 
 <Warning>
-  `reeval record` refuses any file that still looks like a secret after redaction, including the patch of uncommitted changes. Fix the leak rather than skipping the scan.
+  `reeval record` refuses any file that still looks like a secret after redaction, naming the file, the line and the rule. A patch of your uncommitted changes that looks like it holds one is left out of the record instead. Fix the leak rather than skipping the scan.
 </Warning>
 
 ## Record automatically
@@ -136,7 +136,11 @@ checked out b3ccaa3613e1 into .reeval/checkouts/20260926T171355Z_b3ccaa3_cursor-
 Remove it with: git worktree remove .reeval/checkouts/20260926T171355Z_b3ccaa3_cursor-agent_dw8v
 ```
 
-`reeval checkout` makes a git worktree at the commit the run executed at. If the run had uncommitted changes, the record saved them as `worktree.patch`, and checkout applies it.
+`reeval checkout` makes a git worktree at the commit the run executed at. If the run had uncommitted changes, the record saved them as `worktree.patch`, and checkout applies it. A run recorded without its patch (too large, `--artifacts none`, or it looked like it held a secret) checks out as the commit alone, and says so:
+
+```text
+checked out 161d9a9f93d7 into .reeval/checkouts/20260930T165638Z_161d9a9_ada-lovelace_vkcv, without the run's uncommitted changes: they weren't saved (not kept: it looked like it held a secret (.env.example line 3: Google API key)).
+```
 
 ## Next
 

@@ -26,7 +26,8 @@ reeval record [run...]        Copy runs (default: latest) from .reeval/runs into
 - **Default run:** `latest`. Pass one or more [run references](/reference/cli#run-references) to record others.
 - **Where:** the config's `history.dir`, by default `.history/` next to your evals (`evals/.history/` for the default `include`).
 - **Idempotent:** recording a run that's already recorded does nothing.
-- **Refusals** (exit 2): an interrupted or budget-stopped run, unless `--allow-incomplete` (`reeval run` records a budget-stopped run itself when it records); and any file that still looks like a secret after redaction, `worktree.patch` included, unless `--skip-secret-scan`.
+- **Refusals** (exit 2): an interrupted or budget-stopped run, unless `--allow-incomplete` (`reeval run` records a budget-stopped run itself when it records); and any file that still looks like a secret after redaction, unless `--skip-secret-scan`. The refusal names each file, the line, the rule and a masked value.
+- **`worktree.patch`:** a patch of uncommitted changes that looks like it holds a secret is left out rather than refused (below).
 - **Artifacts:** `--artifacts` overrides the config's `history.artifacts` for this copy: `all` (every attempt's files), `failures` (only failing attempts') or `none` (the record only).
 
 A real record, after a run:
@@ -34,6 +35,30 @@ A real record, after a run:
 ```text
 recorded evals/.history/20260926T174005Z_b010670_ada-lovelace_xdb9.json + 9 artifact files in evals/.history/20260926T174005Z_b010670_ada-lovelace_xdb9/ (32.7 KB). Commit it with git.
 ```
+
+## The secret scan
+
+Before it writes anything, `reeval record` scans the record and every text artifact for what redaction masks: the value of any `*KEY*`, `*TOKEN*`, `*SECRET*`, `*PASSWORD*` or `*CREDENTIAL*` variable (including `.env.local` and `.env`), declared `secret()` values, and credential shapes such as Google (`AIza…`), OpenAI and Anthropic (`sk-…`), GitHub, AWS and Slack keys, JWTs and private keys.
+
+```text
+reeval: Refusing to record 20260930T165330Z_97e4f24_test-author_1a2x: 1 file(s) look like they contain a secret:
+  20260930T165330Z_97e4f24_test-author_1a2x/…/1/transcript.jsonl line 4: the value of DEPLOY_TOKEN
+Check them, then pass --skip-secret-scan if these are false positives.
+```
+
+A variable's value is named, never shown. A credential shape shows its first and last four characters.
+
+`worktree.patch` is your checkout's uncommitted changes when the run started, not the agents' work. It's kept byte for byte, so `reeval checkout` can apply it, which means it can't be masked. When it looks like it holds a secret, `reeval record` leaves it out, records the run, and says why:
+
+```text
+warning: left worktree.patch out of 20260930T165638Z_161d9a9_ada-lovelace_vkcv: it looks like it holds a secret.
+  worktree.patch: .env.example line 3: Google API key (AIza…tUvW)
+  worktree.patch is your checkout's uncommitted changes when the run started (git status), not the agents' work.
+  …
+recorded evals/.history/20260930T165638Z_161d9a9_ada-lovelace_vkcv.json + 3 artifact files in … (9.2 KB). Commit it with git.
+```
+
+The record keeps `diffHash` and sets `worktreePatch` to `null`, with a `worktreePatchNote` naming the file, the line and the rule. Nothing was committed: take the key out of the file, or add the file to `.gitignore`, so a later commit doesn't carry it. Rotate the key only if it's already been committed or pushed. `--skip-secret-scan` keeps the patch once you've checked it by hand, on a run that isn't recorded yet.
 
 ## Recording automatically
 

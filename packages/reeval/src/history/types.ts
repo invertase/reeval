@@ -40,7 +40,10 @@ export type GitInfo = {
   diffHash: string | null
   /** Those changes as `worktree.patch` in the artifact dir; apply on `sha` to reproduce. */
   worktreePatch: FileRef | null
-  /** Why a dirty run has no `worktree.patch`, e.g. too large or artifacts: 'none'. */
+  /**
+   * Why a dirty run has no `worktree.patch`: too large, artifacts: 'none', or it looked like it held
+   * a secret (then where, and which rule, never the value).
+   */
   worktreePatchNote: string | null
   commitTime: string
   shallow: boolean
