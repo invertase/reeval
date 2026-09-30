@@ -309,7 +309,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
   },
-  // CLI 1.2.11 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
+  // CLI 1.2.14 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
   // path its docs give.
   antigravity: {
     rulesFile: 'AGENTS.md',
@@ -415,10 +415,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
-    // The only request CLI 1.2.11 sends the key on (its main model, and a lite one for titles).
+    // The only request CLI 1.2.14 sends the key on (its main model, and a lite one for titles).
     endpoints: GEMINI_ENDPOINTS,
-    // CLI 1.2.11 opens both in every session. Neither `enableTelemetry: false` nor any other
-    // setting or variable in the binary stops them (checked in its image behind a logging proxy).
+    // CLI 1.2.14 opens both in every session. Neither `enableTelemetry: false` nor any other
+    // setting or variable in the binary stops them (checked on 1.2.11 behind a logging proxy).
     expectedBlocked: {
       hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
       why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",

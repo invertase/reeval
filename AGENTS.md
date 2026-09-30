@@ -319,7 +319,8 @@ skipped, which passes. So the required set holds on either tier; rename or add j
   Bump the family by hand, together with the adapter and its patch. It also skips the harness
   CLIs, which are pinned in each harness's source (Antigravity's and Goose's sha256, Codex's
   sha512, Cursor's SDK version, OpenCode's inline lockfile) or in `packages/*/assets/` (pi's
-  lockfile). The drift leg in `real.yml` tracks those instead.
+  lockfile). The drift leg in `real.yml` tracks those instead. Node majors (`@types/node` and the
+  base image's `node`) are ignored too: they stay on the `engines` floor's line, Node 22.
 
 ### Changing what reeval persists
 
@@ -431,7 +432,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.0`, `claude-code-1.0.128-patch.5d1c985c`,
-   `antigravity-0.1.0`, `opencode-0.2.0`, `goose-0.1.0`, `pi-0.1.0`, `codex-0.1.0`), so
+   `antigravity-0.1.1`, `opencode-0.2.0`, `goose-0.1.0`, `pi-0.1.0`, `codex-0.1.0`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 

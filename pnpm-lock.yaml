@@ -209,7 +209,7 @@ importers:
         specifier: 2.1.0
         version: 2.1.0
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-antigravity
       '@reeval/harness-codex':
         specifier: workspace:0.1.0
@@ -245,7 +245,7 @@ importers:
         specifier: 1.0.128
         version: 1.0.128(patch_hash=5d1c985cccfd5adf255e05536c0c2bf570cb49aa634682b80eb516dad1535d37)(zod@4.6.5)
       '@reeval/harness-antigravity':
-        specifier: workspace:0.1.0
+        specifier: workspace:0.1.1
         version: link:../harness-antigravity
       '@reeval/harness-codex':
         specifier: workspace:0.1.0
