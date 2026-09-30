@@ -14,7 +14,7 @@ export const HARNESS_PACKAGES: Record<
   opencode: { name: '@reeval/harness-opencode', version: '0.2.1' },
   goose: { name: '@reeval/harness-goose', version: '0.1.0' },
   pi: { name: '@reeval/harness-pi', version: '0.2.0' },
-  codex: { name: '@reeval/harness-codex', version: '0.1.0' },
+  codex: { name: '@reeval/harness-codex', version: '0.1.1' },
 }
 
 /** A harness whose CLI an image can bake. */

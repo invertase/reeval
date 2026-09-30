@@ -160,8 +160,8 @@ const OPENAI_ENDPOINTS = [
 ] as const satisfies readonly EndpointMatch[]
 
 /**
- * The model the Responses API says served a request, from its response: the dated snapshot, and
- * the reasoning effort Codex resolved for it, e.g. `gpt-5.4-mini-2026-03-17[effort=medium]`.
+ * The model the Responses API says served a request, from its response (a dated snapshot for some
+ * models), and the reasoning effort Codex resolved for it, e.g. `gpt-5.6-luna[effort=medium]`.
  */
 const openaiServedModel: ServedModel = ({ host, path, responseModel, responseEffort }) =>
   host === 'api.openai.com' && path === '/v1/responses' && responseModel
@@ -524,7 +524,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
-    // The only request 0.157.1 sends the key on, on the adapter's provider (HTTP, not WebSockets),
+    // The only request 0.159.2 sends the key on, on the adapter's provider (HTTP, not WebSockets),
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,
