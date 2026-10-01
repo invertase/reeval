@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, test } from 'node:test'
 import {
   CURSOR_SDK_BUILTIN_TOOLS,
@@ -82,6 +82,16 @@ describe('bootstrap', () => {
     assert.match(script, /needs Node 22\.21\.0 or later/)
   })
 
+  // Its content is the marker a baked image carries: the image build and the run load different
+  // builds of this module, and a mismatch reruns the install at every start.
+  const dist = new URL('../dist/index.js', import.meta.url)
+  test('is the same whichever build loads it (the source, or the compiled dist)', {
+    skip: existsSync(dist) ? false : 'needs pnpm build',
+  }, async () => {
+    const compiled = (await import(dist.href)) as { getCursorSdkBootstrap: () => unknown }
+    assert.deepEqual(await compiled.getCursorSdkBootstrap(), await getCursorSdkBootstrap())
+  })
+
   test('the runner forces HTTP/1.1 (HTTP/2 ignores the proxy) and keeps stdout for NDJSON', () => {
     assert.match(CURSOR_SDK_RUNNER, /useHttp1ForAgent: true/)
     assert.match(CURSOR_SDK_RUNNER, /process\.stdout\.write = process\.stderr\.write/)
@@ -94,8 +104,8 @@ describe('bootstrap', () => {
       /Agent\.messages\.list\(agent\.agentId, \{ cwd: turn\.cwd, store \}\)/,
     )
     assert.match(CURSOR_SDK_RUNNER, /recovered: 'Agent\.messages\.list'/)
-    assert.match(CURSOR_SDK_RUNNER, /const storedWebCalls = function storedWebCalls\(/)
-    assert.match(CURSOR_SDK_RUNNER, /const storedShapeProblems = function storedShapeProblems\(/)
+    assert.match(CURSOR_SDK_RUNNER, /^function storedWebCalls\(/m)
+    assert.match(CURSOR_SDK_RUNNER, /^function storedShapeProblems\(/m)
     assert.doesNotThrow(
       () => new Function(`return async () => {${CURSOR_SDK_RUNNER.replace(/^import .*$/gm, '')}}`),
     )

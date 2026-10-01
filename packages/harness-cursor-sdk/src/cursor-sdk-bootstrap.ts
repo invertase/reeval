@@ -25,70 +25,87 @@ export type StoredWebCall = {
 }
 
 /**
- * The web calls in `Agent.messages.list()`'s messages (as JSON), wherever they're nested: each is
- * a `ToolCall` whose oneof key is in `recovered`. The runner embeds this function's source.
+ * The runner's stored-conversation helpers, as the JavaScript it embeds, and which
+ * {@link storedWebCalls} and {@link storedShapeProblems} run. Source text rather than a function's
+ * `toString()`, which is whatever the compiler emitted (tsc for this package's dist, tsdown for
+ * reeval's bundle): the bootstrap's content is the identity of the marker a baked image carries,
+ * so an image baked by one build and run by another would rerun the install at every start.
  */
-export function storedWebCalls(
-  value: unknown,
-  recovered: Record<string, string> = CURSOR_SDK_RECOVERED_TOOLS,
-  found: StoredWebCall[] = [],
-): StoredWebCall[] {
+export const CURSOR_SDK_STORED_HELPERS = `function storedWebCalls(value, recovered = RECOVERED, found = []) {
   if (Array.isArray(value)) {
     for (const v of value) storedWebCalls(v, recovered, found)
   } else if (value && typeof value === 'object') {
-    const o = value as Record<string, unknown>
     for (const [key, name] of Object.entries(recovered)) {
-      if (o[key] && typeof o.toolCallId === 'string') {
-        found.push({ name, id: o.toolCallId, at: o, call: o[key] as StoredWebCall['call'] })
+      if (value[key] && typeof value.toolCallId === 'string') {
+        found.push({ name, id: value.toolCallId, at: value, call: value[key] })
       }
     }
-    for (const v of Object.values(o)) storedWebCalls(v, recovered, found)
+    for (const v of Object.values(value)) storedWebCalls(v, recovered, found)
   }
   return found
 }
+function storedShapeProblems(value, calls, recovered = RECOVERED) {
+  const problems = []
+  const unknown = new Set()
+  const walk = (v) => {
+    if (Array.isArray(v)) for (const x of v) walk(x)
+    else if (v && typeof v === 'object') {
+      for (const [k, x] of Object.entries(v)) {
+        if (/^web\\w*ToolCall$/.test(k) && !(k in recovered)) unknown.add(k)
+        walk(x)
+      }
+    }
+  }
+  walk(value)
+  for (const k of unknown) problems.push(\`an unknown web tool call key \${k}\`)
+  const target = { webFetch: 'url', webSearch: 'searchTerm' }
+  for (const c of calls) {
+    const at = \`\${c.name} \${c.id}\`
+    const epoch = (x) => x !== undefined && x !== null && !Number.isNaN(Number(x))
+    if (!epoch(c.at.startedAtMs)) problems.push(\`\${at}: no startedAtMs\`)
+    if (!epoch(c.at.completedAtMs)) problems.push(\`\${at}: no completedAtMs\`)
+    const args = c.call?.args
+    const field = target[c.name]
+    if (!args || typeof args !== 'object') problems.push(\`\${at}: no args\`)
+    else if (field && typeof args[field] !== 'string') problems.push(\`\${at}: args has no \${field}\`)
+    const result = c.call?.result
+    if (!result || typeof result !== 'object' || !('success' in result || 'error' in result))
+      problems.push(\`\${at}: result has neither success nor error\`)
+  }
+  return problems
+}`
+
+const stored = new Function(
+  'RECOVERED',
+  `${CURSOR_SDK_STORED_HELPERS}\nreturn { storedWebCalls, storedShapeProblems }`,
+)(CURSOR_SDK_RECOVERED_TOOLS) as {
+  storedWebCalls: (
+    value: unknown,
+    recovered?: Record<string, string>,
+    found?: StoredWebCall[],
+  ) => StoredWebCall[]
+  storedShapeProblems: (
+    value: unknown,
+    calls: StoredWebCall[],
+    recovered?: Record<string, string>,
+  ) => string[]
+}
+
+/**
+ * The web calls in `Agent.messages.list()`'s messages (as JSON), wherever they're nested: each is
+ * a `ToolCall` whose oneof key is in `recovered`. The runner runs the same source.
+ */
+export const storedWebCalls = stored.storedWebCalls
 
 /**
  * What's wrong with the stored conversation's web calls, by the fields the runner reads: each
  * call's `toolCallId`, `startedAtMs` and `completedAtMs`, its `args` (`url` for a fetch,
  * `searchTerm` for a search) and a `result` with `success` or `error`; and any web tool key the
  * runner doesn't know (a renamed `webFetchToolCall` would otherwise just find nothing). Empty when
- * the shape is as the runner expects. The runner embeds this function's source, and reports what
- * it finds as the turn's unreported tools, with this message.
+ * the shape is as the runner expects. The runner runs the same source, and reports what it finds
+ * as the turn's unreported tools, with this message.
  */
-export function storedShapeProblems(
-  value: unknown,
-  calls: StoredWebCall[],
-  recovered: Record<string, string> = CURSOR_SDK_RECOVERED_TOOLS,
-): string[] {
-  const problems: string[] = []
-  const unknown = new Set<string>()
-  const walk = (v: unknown) => {
-    if (Array.isArray(v)) for (const x of v) walk(x)
-    else if (v && typeof v === 'object') {
-      for (const [k, x] of Object.entries(v)) {
-        if (/^web\w*ToolCall$/.test(k) && !(k in recovered)) unknown.add(k)
-        walk(x)
-      }
-    }
-  }
-  walk(value)
-  for (const k of unknown) problems.push(`an unknown web tool call key ${k}`)
-  const target: Record<string, string> = { webFetch: 'url', webSearch: 'searchTerm' }
-  for (const c of calls) {
-    const at = `${c.name} ${c.id}`
-    const epoch = (x: unknown) => x !== undefined && x !== null && !Number.isNaN(Number(x))
-    if (!epoch(c.at.startedAtMs)) problems.push(`${at}: no startedAtMs`)
-    if (!epoch(c.at.completedAtMs)) problems.push(`${at}: no completedAtMs`)
-    const args = c.call?.args
-    const field = target[c.name]
-    if (!args || typeof args !== 'object') problems.push(`${at}: no args`)
-    else if (field && typeof args[field] !== 'string') problems.push(`${at}: args has no ${field}`)
-    const result = c.call?.result
-    if (!result || typeof result !== 'object' || !('success' in result || 'error' in result))
-      problems.push(`${at}: result has neither success nor error`)
-  }
-  return problems
-}
+export const storedShapeProblems = stored.storedShapeProblems
 
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CURSOR_SDK_BOOTSTRAP_DIR = '.harness-bootstrap/cursor-sdk'
@@ -137,8 +154,7 @@ const { Agent, Cursor, JsonlLocalAgentStore } = sdk
 Cursor.configure({ local: { useHttp1ForAgent: true } })
 
 const RECOVERED = ${JSON.stringify(CURSOR_SDK_RECOVERED_TOOLS)}
-const storedWebCalls = ${storedWebCalls.toString()}
-const storedShapeProblems = ${storedShapeProblems.toString()}
+${CURSOR_SDK_STORED_HELPERS}
 const epochMs = (v) => (v === undefined || v === null || Number.isNaN(Number(v)) ? undefined : Number(v))
 // As JSON: in memory they're protobuf messages, whose oneofs are { case, value }.
 const listMessages = async (turn) =>
