@@ -1,9 +1,9 @@
 no profile · 3 evals · 5 cells · 5 attempts
-evals/a.eval.ts › both harnesses                          cursor:composer-2.5/-/docker                   control  gated  ×1
-                                                          pi:gemini-3.8-flash/-/docker                   control  gated  ×1
-evals/a.eval.ts › pi only, own id                         pim/-/docker                                   control  gated  ×1
-evals/a.eval.ts › pi on a toolchain base, under deny-all  cursor:composer-2.5/-/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
-                                                          pi:gemini-3.8-flash/-/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + generativelanguage.googleapis.com
+evals/a.eval.ts › both harnesses                          cursor:composer-2.5/-/docker                        control  gated  ×1
+                                                          pi:gemini-3.8-flash/-/docker                        control  gated  ×1
+evals/a.eval.ts › pi only, own id                         pim/-/docker                                        control  gated  ×1
+evals/a.eval.ts › pi on a toolchain base, under deny-all  cursor:composer-2.5/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + api2.cursor.sh, *.cursor.sh
+                                                          pi:gemini-3.8-flash/python/docker:python:3.12-slim  control  gated  ×1  egress "deny-all" + generativelanguage.googleapis.com
 excluded: —
 image docker · 1 evals
   base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

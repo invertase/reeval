@@ -66,7 +66,6 @@ function harnessOf(choice: InitChoice) {
 export function configSource(pkg: string, choice: InitChoice): string {
   const real = harnessOf(choice)
   const harnessImports = real ? `${real.factory}, fakeHarness` : 'fakeHarness'
-  const sandboxImports = real ? 'docker, fakeSandbox' : 'fakeSandbox'
   const fakeAgent = `// The fake agent writes the file ${EVAL_FILE} asks for: no keys, Docker or network.
 const fakeAgent = fakeHarness({
   files: { 'greet.js': 'export const greet = (name) => \`Hello, \${name}!\`\\n' },
@@ -83,25 +82,26 @@ const fakeAgent = fakeHarness({
     },`
   const body = real
     ? `  harness: ${real.factory}({ model: '${real.model}' }), // needs ${keyOf(real)}
-  sandbox: docker(),
   timeout: '15m',
   // For c.judge, add a judge and its key, e.g. { model: 'google/gemini-3.8-flash' }
   // with GOOGLE_GENERATIVE_AI_API_KEY.
   defaultProfile: { ci: 'pr' },
   profiles: {
     // reeval run --profile fake: the evals on the fake agent.
-    fake: { defaults: { harness: fakeAgent, sandbox: fakeSandbox() } },
+    fake: { defaults: { harness: fakeAgent, environment: fakeEnv } },
 ${profiles}
   },`
     : `  harness: fakeAgent,
-  sandbox: fakeSandbox(),
+  environment: fakeEnv,
   defaultProfile: { ci: 'pr' },
   profiles: {
 ${profiles}
   },`
-  return `import { defineConfig } from '${pkg}'
+  return `import { defineConfig, defineEnvironment } from '${pkg}'
 import { ${harnessImports} } from '${pkg}/harness'
-import { ${sandboxImports} } from '${pkg}/sandbox'
+import { fakeSandbox } from '${pkg}/sandbox'
+
+const fakeEnv = defineEnvironment('fake', { sandbox: fakeSandbox() })
 
 ${fakeAgent}
 export default defineConfig({

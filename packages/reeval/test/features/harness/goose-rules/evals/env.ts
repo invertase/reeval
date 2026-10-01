@@ -1,3 +1,12 @@
 import { defineEnvironment } from 'reeval'
+import { docker, fakeSandbox } from 'reeval/sandbox'
 
-export const houseRules = defineEnvironment('house-rules', { rules: 'Always write tests.' })
+const sandbox =
+  process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
+    ? docker()
+    : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+
+export const houseRules = defineEnvironment('house-rules', {
+  sandbox,
+  rules: 'Always write tests.',
+})

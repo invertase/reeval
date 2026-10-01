@@ -1,10 +1,12 @@
 no profile · 5 evals · 7 cells · 11 attempts
 hint: 2 evals run more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
-evals/p.eval.ts › plain                a/-/fake        control          gated    ×3
-evals/p.eval.ts › compared             a/plain/fake    control          ungated  ×1
-                                       a/skilled/fake  variant skilled  gated    ×1
-evals/p.eval.ts › regression           a/plain/fake    control          ungated  ×2
-                                       a/skilled/fake  variant skilled  gated    ×2
-evals/p.eval.ts › own harness          b/-/fake        control          gated    ×1
-evals/p.eval.ts › slow [nightly-only]  a/-/fake        control          gated    ×1
+evals/p.eval.ts › plain                a/-/docker        control          gated    ×3
+evals/p.eval.ts › compared             a/plain/docker    control          ungated  ×1
+                                       a/skilled/docker  variant skilled  gated    ×1
+evals/p.eval.ts › regression           a/plain/docker    control          ungated  ×2
+                                       a/skilled/docker  variant skilled  gated    ×2
+evals/p.eval.ts › own harness          b/-/docker        control          gated    ×1
+evals/p.eval.ts › slow [nightly-only]  a/-/docker        control          gated    ×1
 excluded: —
+image docker · 5 evals
+  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

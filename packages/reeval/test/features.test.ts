@@ -50,6 +50,8 @@ type Feature = {
   tiers: Tier[]
   /** The environment the evals run in: attempt ids are `fake/<env>/<sandbox>#1`. */
   env: string
+  /** Cell sandbox id, when it isn't the tier default (`fake` or `docker`). */
+  sandbox?: string
   /**
    * Cell environments in plan order, when an eval runs more than one (a compare).
    * Defaults to `[env]`.
@@ -800,12 +802,14 @@ export const features: Feature[] = [
     dir: 'sandbox/unprivileged',
     tiers: ['docker'],
     env: 'plain',
+    canaryEnv: 'rooted',
     canary: /expected '0 00000000000000cb \/ 0' to be '10001 0000000000000000 \/ 10001'/,
   },
   {
     dir: 'sandbox/login-shell-path',
     tiers: ['docker'],
     env: 'plain',
+    canaryEnv: 'stock',
     canary: /expected '' to be '\/opt\/reeval-fixture\/bin\/reeval-fixtur…'/,
     prepare: (dir) =>
       execFileSync(
@@ -818,12 +822,14 @@ export const features: Feature[] = [
     dir: 'sandbox/login-shell-path-dockerfile',
     tiers: ['docker'],
     env: 'plain',
+    canaryEnv: 'stock',
     canary: /expected '' to be '\/opt\/reeval-fixture\/bin\/reeval-fixtur…'/,
   },
   {
     dir: 'sandbox/limits',
     tiers: ['docker'],
     env: 'plain',
+    canaryEnv: 'unlimited',
     canary:
       /expected '4294967296\\n\d+ 100000\\n1024\\n' to be '536870912\\n100000 100000\\n256\\n'/,
   },
@@ -832,6 +838,20 @@ export const features: Feature[] = [
     tiers: ['fake', 'docker'],
     env: 'home-files',
     canary: /expected null to be 'from home'/,
+  },
+  {
+    dir: 'env/sandbox-image',
+    tiers: ['fake', 'docker'],
+    env: 'python',
+    sandbox: 'python',
+    canary: /expected 'python' to be 'docker'/,
+  },
+  {
+    dir: 'env/sandbox-extend-replace',
+    tiers: ['fake', 'docker'],
+    env: 'child',
+    sandbox: 'child',
+    canary: /expected 'child' to be 'parent'/,
   },
   {
     dir: 'compare/independent',
@@ -1452,7 +1472,7 @@ function fixtureTests(tiers: Tier[]) {
           },
           timeoutMs: timeout - 10_000,
         })
-        const sandbox = tier === 'fake' ? 'fake' : 'docker'
+        const sandbox = f.sandbox ?? (tier === 'fake' ? 'fake' : 'docker')
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'
         const ids = (names: string[]) => names.map((env) => `${harness}/${env}/${sandbox}#1`)

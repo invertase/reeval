@@ -21,6 +21,7 @@ import type {
   HostFile,
   McpHelper,
   McpServer,
+  SandboxDescriptor,
   Secret,
   SecretHelper,
   SecretOptions,
@@ -36,8 +37,18 @@ export class DefinitionError extends Error {
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._@+-]*$/
 const VAR = /^[A-Za-z_][A-Za-z0-9_]*$/
-const SPEC_KEYS = ['workspace', 'env', 'egress', 'files', 'rules', 'setup', 'skills', 'mcp']
-/** Image fields that belong on the sandbox, not the environment. */
+const SPEC_KEYS = [
+  'sandbox',
+  'workspace',
+  'env',
+  'egress',
+  'files',
+  'rules',
+  'setup',
+  'skills',
+  'mcp',
+]
+/** Image fields that belong on `sandbox: docker({ … })`, not as sibling keys. */
 const SANDBOX_KEYS = ['image', 'install', 'dockerfile', 'from']
 const SPEC_HINTS: Record<string, string> = {
   exec: 'setup',
@@ -747,13 +758,14 @@ function checkSpec(spec: unknown, where: string): EnvironmentSpec {
       const value = (spec as Record<string, unknown>)[key]
       const as = key === 'image' ? (typeof value === 'string' ? 'from' : 'install') : key
       throw new DefinitionError(
-        `"${key}" isn't an environment field (${where}). What's baked into the image is the sandbox's: docker({ ${as}: … }). An environment only runs setup steps, in every attempt, with its secrets.`,
+        `"${key}" isn't an environment field (${where}). Put the image on the sandbox: sandbox: docker({ ${as}: … }).`,
       )
     }
     const hint = SPEC_HINTS[key] ? ` Did you mean "${SPEC_HINTS[key]}"?` : ''
     throw new DefinitionError(`Unknown field "${key}" in ${where}.${hint}`)
   }
   const s = spec as EnvironmentSpec
+  if (s.sandbox !== undefined) checkSandbox(s.sandbox, where)
   if (s.workspace !== undefined && (s.workspace as GitWorkspace | null)?.kind !== 'git') {
     throw new DefinitionError(
       `workspace in ${where} must come from the git helper, e.g. workspace: git('https://github.com/acme/app', { ref: 'v1.0.0' }) (got ${JSON.stringify(s.workspace)})`,
@@ -841,18 +853,14 @@ export const environmentFrom = (data: EnvironmentData): Environment =>
 
 function makeEnvironment(name: string, layers: EnvironmentLayer[]): Environment {
   const env = { kind: 'environment' as const, name, layers: Object.freeze(layers) }
-  Object.defineProperty(env, 'extendEnvironment', {
-    enumerable: false,
-    value(child: string, input: EnvironmentInput) {
-      checkName(child, `${name}.extendEnvironment`)
-      const where = `${name}.extendEnvironment("${child}")`
-      const base = callerDir() ?? process.cwd()
-      return makeEnvironment(child, [
-        ...layers,
-        { name: child, spec: buildSpec(input, where, base) },
-      ])
-    },
-  })
+  const extend = (child: string, input: EnvironmentInput) => {
+    checkName(child, `${name}.extend`)
+    const where = `${name}.extend("${child}")`
+    const base = callerDir() ?? process.cwd()
+    return makeEnvironment(child, [...layers, { name: child, spec: buildSpec(input, where, base) }])
+  }
+  Object.defineProperty(env, 'extendEnvironment', { enumerable: false, value: extend })
+  Object.defineProperty(env, 'extend', { enumerable: false, value: extend })
   return Object.freeze(env) as Environment
 }
 
@@ -865,15 +873,17 @@ function checkName(name: unknown, what: string): asserts name is string {
 }
 
 /**
- * What an eval runs in: skills, MCP servers, files, rules, variables, secrets and setup steps.
- * Pass a spec, or a callback that destructures the typed helpers it needs:
+ * What an eval runs in: the sandbox, skills, MCP servers, files, rules, variables, secrets and
+ * setup steps. Pass a spec, or a callback that destructures the typed helpers it needs:
  *
  *     defineEnvironment('genkit', ({ secret, skill }) => ({
+ *       sandbox: docker({ from: 'node:24-bookworm' }),
  *       env: { GOOGLE_GENAI_API_KEY: secret.fromEnv('GOOGLE_GENERATIVE_AI_API_KEY') },
  *       skills: [skill.local('../skills/genkit')],
  *     }))
  *
  * The callback runs once, synchronously. Relative paths resolve against the calling file.
+ * `extend` / `extendEnvironment` replace `sandbox` entirely when the child sets one.
  */
 export function defineEnvironment(name: string, input: EnvironmentInput): Environment {
   checkName(name, 'defineEnvironment')
@@ -895,8 +905,38 @@ export const NO_ENVIRONMENT = '-'
 /** The control of a compare without a `baseline` when nothing in the cascade sets an environment. */
 export const EMPTY_BASELINE = 'baseline'
 
-/** An environment with no layers: the sandbox and harness as they are. */
+/**
+ * An environment with no layers. As a compare's empty control it uses the first
+ * variant's sandbox when that variant sets one, else the implicit default Docker sandbox.
+ */
 export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
+
+/** The last layer that sets `sandbox`, else `fallback` (the implicit default Docker sandbox). */
+export const sandboxOf = (
+  layers: readonly EnvironmentLayer[],
+  fallback: SandboxDescriptor,
+): SandboxDescriptor => layers.findLast((l) => l.spec.sandbox)?.spec.sandbox ?? fallback
+
+/** The sandbox an environment names, else `fallback`. */
+export const environmentSandbox = (
+  env: Pick<Environment, 'layers'> | undefined,
+  fallback: SandboxDescriptor,
+): SandboxDescriptor => sandboxOf(env?.layers ?? [], fallback)
+
+function checkSandbox(value: unknown, where: string): asserts value is SandboxDescriptor {
+  const kind = (value as { kind?: string } | null)?.kind
+  if (kind !== 'docker' && kind !== 'fake') {
+    throw new DefinitionError(
+      `sandbox in ${where} must come from docker() or fakeSandbox() (got ${JSON.stringify(value)})`,
+    )
+  }
+  const max = (value as SandboxDescriptor).maxConcurrent
+  if (max !== undefined && !(Number.isInteger(max) && max >= 1)) {
+    throw new DefinitionError(
+      `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
+    )
+  }
+}
 
 export function applied(env: Pick<Environment, 'name' | 'layers'> | undefined): AppliedEnvironment {
   if (!env) return { name: NO_ENVIRONMENT, parent: null, layers: [] }

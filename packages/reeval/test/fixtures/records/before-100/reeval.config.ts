@@ -1,4 +1,4 @@
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 
@@ -7,7 +7,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 // Don't re-record it: it's there to prove records from before those fields still load.
 export default defineConfig({
   harness: fakeHarness({ files: { 'greet.js': "export const greet = (n) => 'Hello, ' + n\n" } }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   // Its evals keep the names their records were made under.
   include: ['evals/**/*.es.ts'],
 })

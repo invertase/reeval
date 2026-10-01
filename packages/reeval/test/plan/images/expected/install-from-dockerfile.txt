@@ -1,10 +1,10 @@
 no profile · 4 evals · 4 cells · 4 attempts
-evals/i.eval.ts › config sandbox with install  fake/-/docker                   control  gated  ×1
-evals/i.eval.ts › same sandbox again           fake/-/docker                   control  gated  ×1
-evals/i.eval.ts › toolchain base               fake/-/docker:python:3.12-slim  control  gated  ×1
-evals/i.eval.ts › own dockerfile               fake/-/docker:docker            control  gated  ×1
+evals/i.eval.ts › config sandbox with install  fake/with-install/docker+be93ee53    control  gated  ×1
+evals/i.eval.ts › same sandbox again           fake/with-install/docker+be93ee53    control  gated  ×1
+evals/i.eval.ts › toolchain base               fake/python/docker:python:3.12-slim  control  gated  ×1
+evals/i.eval.ts › own dockerfile               fake/own/docker:docker               control  gated  ×1
 excluded: —
-image docker + install · 2 evals
+image docker+be93ee53 + install · 2 evals
   base               reeval-sandbox:cursor-0.1.2          (reeval's image: built when missing or when its base changed)
   install 1 command  reeval-install:<base id + commands>  (build unless cached)
 image docker:python:3.12-slim · 1 evals

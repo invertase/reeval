@@ -77,8 +77,10 @@ describe('studio data paths', () => {
 // A real history: three recorded runs of the fake agent (pass, fail, a control and a variant ×
 // two runs, with a compare question) and one scratch run.
 const evalFile = `import { defineEnvironment, evaluate, expect, group } from 'reeval'
-const plain = defineEnvironment('plain', {})
-const other = defineEnvironment('other', {})
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const other = defineEnvironment('other', { sandbox })
 group('greet', process.env.REEVAL_TEST_COMPARE ? { compare: { baseline: plain, variants: [other], questions: ['Which wrote hello.txt?'] }, runs: 2 } : {}, () => {
   evaluate('writes hello', async (c) => {
     await c.send('write hello.txt')
@@ -128,8 +130,11 @@ before(async () => {
 
 describe('run outcome and activity, as the CLI has them', () => {
   const skilled = `import { defineEnvironment, evaluate, expect } from 'reeval'
-const plain = defineEnvironment('plain', {})
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
 const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
   skills: [skill.inline({ name: 'ok', description: 'Writes ok.txt', content: 'Write ok.txt.' })],
 }))
 const compare = process.env.REEVAL_TEST_GATE_ALL
@@ -222,7 +227,7 @@ describe('view-models over a real history', () => {
     assert.match(evalHeader?.slug ?? '', /^evals-hello-eval-ts-greet-writes-hello-/)
     assert.deepEqual(
       evalHeader?.cells.map((c) => [c.key, c.pass, c.runs]),
-      [['fake/-/fake', 1, 1]],
+      [['fake/fake/fake', 1, 1]],
     )
   })
 

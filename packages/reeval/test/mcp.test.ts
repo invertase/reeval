@@ -23,13 +23,13 @@ type Json = Record<string, unknown>
 type Tool = { structuredContent?: unknown; content: unknown; isError?: boolean }
 
 const config = `
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness({ files: process.env.BREAK ? {} : { 'ok.txt': 'y' } }),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: {
     model: fakeAnalysis({

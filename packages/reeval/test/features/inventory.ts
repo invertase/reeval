@@ -136,7 +136,11 @@ export const inventory: InventoryFeature[] = [
     id: 'compare.baseline',
     area: 'Config and selection',
     name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
-    plan: ['compare/baseline-omitted', 'compare/baseline-omitted-off'],
+    plan: [
+      'compare/baseline-omitted',
+      'compare/baseline-omitted-off',
+      'environments/empty-control',
+    ],
     fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
     tests: [options('common mistakes')],
   },
@@ -545,10 +549,26 @@ export const inventory: InventoryFeature[] = [
     id: 'env.extend',
     area: 'Environments',
     name: '`extendEnvironment`, overrides and the environment digest',
-    fixtures: ['env/setup-order'],
+    fixtures: ['env/setup-order', 'env/sandbox-extend-replace'],
     tests: [
       unit('extendEnvironment layers and overrides; a separate environment does not'),
       harness('one environment has one digest'),
+    ],
+  },
+  {
+    id: 'environment.sandbox',
+    area: 'Environments',
+    name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it',
+    fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace'],
+    plan: [
+      'environments/images',
+      'environments/extend-replace',
+      'environments/config-control',
+      'environments/empty-control',
+    ],
+    tests: [
+      options('common mistakes'),
+      unit('extendEnvironment layers and overrides; a separate environment does not'),
     ],
   },
   {

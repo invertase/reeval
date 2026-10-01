@@ -1,8 +1,6 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
-  harness: fakeHarness({}),
-  sandbox: docker({ install: ['apt-get update && apt-get install -y --no-install-recommends jq'] }),
+  harness: fakeHarness(),
 })

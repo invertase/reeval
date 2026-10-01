@@ -34,7 +34,9 @@ const read = (path: string) => readFileSync(path, 'utf8')
 
 const script = "{ script: [[{ exec: 'echo from-the-agent' }, { write: { 'out.txt': 'hi\\n' } }]] }"
 const passing = `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('traced', {
+  sandbox: fakeSandbox(),
   files: { 'notes.md': 'notes\\n' },
   setup: ['echo set-up > setup.txt'],
 })
@@ -289,7 +291,9 @@ evaluate('leaks', async (c) => {
     const p = await project('debug-redact-declared', {
       'reeval.config.ts': fakeConfig(),
       'evals/b.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('sentry', ({ secret }) => ({
+  sandbox: fakeSandbox(),
   env: { SENTRY_DSN: secret.fromEnv('REEVAL_DEBUG_DSN') },
 }))
 evaluate('prints the dsn', { environment: env }, async (c) => {

@@ -54,13 +54,11 @@ OpenCode's model id names its provider, and the provider picks the key: `anthrop
 
 ```ts title="reeval.claude.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { docker } from '{{ pkg }}/sandbox'
 import { claude } from './evals/harnesses.ts'
 
 export default defineConfig({
   include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
   harness: claude,
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   timeout: '15m',
 })
@@ -77,13 +75,11 @@ Each harness has its own sandbox image with its agent baked in, such as `reeval-
 
 ```ts title="reeval.agents.config.ts"
 import { defineConfig } from '{{ pkg }}'
-import { docker } from '{{ pkg }}/sandbox'
 import { agy, composer } from './evals/harnesses.ts'
 
 export default defineConfig({
   include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
   harness: [composer, agy],
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   gate: { passRate: 0.5 },
   timeout: '15m',

@@ -1,4 +1,4 @@
-import { evaluate } from 'reeval'
+import { defineEnvironment, evaluate } from 'reeval'
 import { opencode } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 
@@ -10,7 +10,12 @@ evaluate(
 )
 evaluate(
   'opencode on a toolchain base, under deny-all',
-  { sandbox: docker({ from: 'python:3.12-slim' }), egress: 'deny-all' },
+  {
+    environment: defineEnvironment('python', {
+      sandbox: docker({ from: 'python:3.12-slim' }),
+    }),
+    egress: 'deny-all',
+  },
   async () => {},
 )
 evaluate(

@@ -1,20 +1,22 @@
 no profile · 3 evals · 14 cells · 14 attempts
-evals/questions.eval.ts › one question                           a/base/fake     control          ungated  ×1
-                                                                 a/skilled/fake  variant skilled  gated    ×1
-                                                                 b/base/fake     control          ungated  ×1
-                                                                 b/skilled/fake  variant skilled  gated    ×1
+evals/questions.eval.ts › one question                           a/base/docker     control          ungated  ×1
+                                                                 a/skilled/docker  variant skilled  gated    ×1
+                                                                 b/base/docker     control          ungated  ×1
+                                                                 b/skilled/docker  variant skilled  gated    ×1
                                                                  question: Which handles state more cleanly? · no language model
-evals/questions.eval.ts › two questions, one with its own model  a/base/fake     control          ungated  ×1
-                                                                 a/skilled/fake  variant skilled  gated    ×1
-                                                                 a/terse/fake    variant terse    gated    ×1
-                                                                 b/base/fake     control          ungated  ×1
-                                                                 b/skilled/fake  variant skilled  gated    ×1
-                                                                 b/terse/fake    variant terse    gated    ×1
+evals/questions.eval.ts › two questions, one with its own model  a/base/docker     control          ungated  ×1
+                                                                 a/skilled/docker  variant skilled  gated    ×1
+                                                                 a/terse/docker    variant terse    gated    ×1
+                                                                 b/base/docker     control          ungated  ×1
+                                                                 b/skilled/docker  variant skilled  gated    ×1
+                                                                 b/terse/docker    variant terse    gated    ×1
                                                                  question: Which handles state more cleanly? · no language model
                                                                  question: Which follows the house style more closely? · google/gemini-3.8-flash
-evals/questions.eval.ts › pinned                                 a/base/fake     control          ungated  ×1
-                                                                 a/skilled/fake  variant skilled  gated    ×1
-                                                                 b/base/fake     control          ungated  ×1
-                                                                 b/skilled/fake  variant skilled  gated    ×1
+evals/questions.eval.ts › pinned                                 a/base/docker     control          ungated  ×1
+                                                                 a/skilled/docker  variant skilled  gated    ×1
+                                                                 b/base/docker     control          ungated  ×1
+                                                                 b/skilled/docker  variant skilled  gated    ×1
                                                                  question: Which is shorter? · no language model
 excluded: —
+image docker · 3 evals
+  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

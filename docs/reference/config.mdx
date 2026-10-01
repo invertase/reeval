@@ -8,18 +8,16 @@ description: Every key of reeval.config.ts, its default and type, the callback's
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
-import { docker } from '{{ pkg }}/sandbox'
 
 export default defineConfig(({ ci, secret }) => ({
   harness: cursor({ model: 'composer-2.5' }),
-  sandbox: docker(),
   judge: { model: 'typesafe-ai/jev-1.13.0' },
   env: { NPM_TOKEN: secret({ hosts: ['registry.npmjs.org'] }) },
   concurrency: ci ? 2 : 4,
 }))
 ```
 
-Without a config file, every key takes its default. The option keys (`harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config.
+Without a config file, every key takes its default. The option keys (`harness`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config. The sandbox lives on `environment`, not on `defineConfig`.
 
 ## Loading
 
@@ -103,12 +101,8 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
   The agents every eval runs on, unless a group or eval replaces them. Default `cursor({ model: 'composer-2.5' })`, whose id is `cursor:composer-2.5`. An empty list, or two harnesses with the same id, is an error. See [Options](/reference/options#harness).
 </Property>
 
-<Property name="sandbox" type="Sandbox">
-  Where the agent runs: one `docker(…)` or `fakeSandbox(…)`. A list is an error. Default `docker()`. See [docker()](/reference/sandbox/docker) and [fakeSandbox()](/reference/sandbox/fake).
-</Property>
-
 <Property name="environment" type="Environment">
-  The environment every eval runs in, from `defineEnvironment`. Default none. See [defineEnvironment](/reference/environment).
+  The environment every eval runs in, from `defineEnvironment`. Put the sandbox here (`sandbox: docker({ … })`). This is the control when a compare omits `baseline`. Default none: attempts use the implicit default Docker sandbox. See [defineEnvironment](/reference/environment).
 </Property>
 
 <Property name="runs" type="number">

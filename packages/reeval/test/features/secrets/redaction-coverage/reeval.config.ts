@@ -1,7 +1,6 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
-import { docker, fakeSandbox } from 'reeval/sandbox'
 
 // As the agent: print the unbrokered secret raw, base64-, URL- and JSON-encoded, one per line,
 // and write them to leak.txt, so they reach the transcript, the diff and the judge's input.
@@ -16,8 +15,4 @@ console.log(forms.join("\\n"))
 export default defineConfig({
   harness: fakeHarness({ script: [[{ exec: leak }]] }),
   judge: { model: fakeJudge({ score: 0.9 }) },
-  sandbox:
-    process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
-      ? docker()
-      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })

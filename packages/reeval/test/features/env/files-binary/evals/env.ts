@@ -1,7 +1,14 @@
 import { defineEnvironment } from 'reeval'
+import { docker, fakeSandbox } from 'reeval/sandbox'
+
+const sandbox =
+  process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
+    ? docker()
+    : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
 // blob.tgz is a gzip that features.test.ts writes before the run: bytes that aren't UTF-8.
 export const binaryFile = defineEnvironment('binary-file', ({ file }) => ({
+  sandbox,
   files: { 'blob.tgz': file('../blob.tgz') },
 }))
 

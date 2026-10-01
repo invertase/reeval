@@ -111,7 +111,7 @@ export const withLocalDocs = defineEnvironment(
 ```
 
 ```ts title="reeval.fake.config.ts"
-import { defineConfig } from '{{ pkg }}'
+import { defineConfig, defineEnvironment } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
 
@@ -120,7 +120,7 @@ export default defineConfig({
   harness: fakeHarness({
     script: [[{ mcp: 'docs/latest_version' }, { reply: '4.2.0' }]],
   }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
 })
 ```
 

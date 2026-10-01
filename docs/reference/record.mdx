@@ -573,7 +573,7 @@ One failed judge try that was retried, and the backoff before the next.
 
 ### Cell
 
-One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own.
+One cell of an eval: a harness, an environment (`-` when none is set) and that environment's image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and each variant is that environment on its own, including its sandbox.
 
 <Property name="key" type="string"></Property>
 

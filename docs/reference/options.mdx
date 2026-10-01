@@ -33,7 +33,6 @@ group(
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
 | [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
-| [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
 | [`environment`](#environment) | ✓ | ✓ | ✓ |  |
 | [`runs`](#runs) | ✓ | ✓ | ✓ | ✓ |
 | [`gate`](#gate) | ✓ | ✓ | ✓ |  |
@@ -65,22 +64,18 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="environment" type="Environment">
-  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. Not on the same object as a `compare` with a `baseline`, and not applied to a compare with one. Beside or above a compare without a `baseline`, it's the control. Default none.
+  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. The sandbox lives on that environment (`sandbox: docker({ … })`), not on `evaluate`, `group`, a profile or `defineConfig`. Not on the same object as a `compare` with a `baseline`, and not applied to a compare with one. Beside or above a compare without a `baseline`, it's the control — including a default `environment` on the config. Default none: the attempt uses an implicit default Docker sandbox so a harness-only eval still runs.
 </Property>
 
 <Property name="compare" type="{ baseline?, variants, gate?, minLift?, harness?, questions? }">
   A control and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `compare: false` is not a value here. A profile turns compare off with `limit.compare: false`, which runs the control alone. `compare` does not layer.
 
-  - `baseline`: the control, an environment from `defineEnvironment`. With it, `environment` can't sit on the same object, and an inherited one is not applied. Without it, the control is the cascaded `environment` (the same object's, a group's or the config's), else an empty environment named `baseline`; a variant with the control's name is an error. The record's `evals[].compare` names the control and, for an omitted baseline, sets `from` to `environment` or `empty`.
+  - `baseline`: the control, an environment from `defineEnvironment`. With it, `environment` can't sit on the same object, and an inherited one is not applied. Without it, the control is the cascaded `environment` (the same object's, a group's or the config's), else an empty environment named `baseline`. That empty control uses the first variant's sandbox when the variant sets one, so the compare is the same machine without the variant's files, not implicit Docker versus Node 24. A variant with the control's name is an error. The record's `evals[].compare` names the control and, for an omitted baseline, sets `from` to `environment` or `empty`.
   - `variants`: the other environments. Each cell runs that environment alone.
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it.
   - `harness`: harness ids to compare on; the others run the control only. An id the eval doesn't run is an error.
   - `questions`: a list of strings and `{ question, model? }` entries (never a single value), asked of pairs of attempts after the run. Questions annotate the compare and never change pass, fail or the exit code. An entry's `model` is a `'provider/model'` language model; without one, `analysis.model` answers, else the judge's model when it's a language model. `reeval run` exits 2 at plan time when a question has no language model or would get an evaluation model; `--dry-run` only names them. An empty string or list, a value that isn't a list, an unknown entry key and the same question twice are errors. A profile's limit that leaves the baseline alone drops the questions.
-</Property>
-
-<Property name="sandbox" type="Sandbox">
-  Where the eval runs: one `docker(…)` or `fakeSandbox(…)`. **Replaces**. A list is an error. Default `docker()`.
 </Property>
 
 <Property name="runs" type="number">

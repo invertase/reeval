@@ -6,20 +6,24 @@ description: The Docker sandbox, its image options, how reeval tags and caches i
 `docker()` runs each attempt in its own local Docker container. It's the default sandbox, and the only one real harnesses run in.
 
 ```ts title="evals/python.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 
-const python = docker({ from: 'python:3.12-slim', id: 'python' })
-const withJq = docker({
-  install: ['apt-get update && apt-get install -y --no-install-recommends jq'],
+const python = defineEnvironment('python', {
+  sandbox: docker({ from: 'python:3.12-slim', id: 'python' }),
+})
+const jq = defineEnvironment('jq', {
+  sandbox: docker({
+    install: ['apt-get update && apt-get install -y --no-install-recommends jq'],
+  }),
 })
 
-evaluate('writes fizzbuzz in python', { sandbox: python }, async (c) => {
+evaluate('writes fizzbuzz in python', { environment: python }, async (c) => {
   await c.send('Write fizzbuzz.py and unittest tests for it.')
   await expect(c.exec('python -m unittest')).toSucceed()
 })
 
-evaluate('counts orders with jq', { sandbox: withJq }, async (c) => {
+evaluate('counts orders with jq', { environment: jq }, async (c) => {
   await c.send('Write count.sh, which counts orders.json entries with jq.')
   await expect(c.exec('bash count.sh')).toSucceed()
 })
@@ -87,7 +91,7 @@ WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ roo
 warning: extra capabilities in the sandbox: reeval.config.ts (docker({ capabilities: ['NET_RAW'] }))
 ```
 
-There's one line per place that set the sandbox: the config file, a profile's `defaults`, a `group` or an `evaluate`, however many evals inherit it. A sandbox with both gets both lines.
+There's one line per environment that set the sandbox: the config's `environment`, a profile's `defaults.environment`, a `group` or an `evaluate`, however many evals inherit it. A sandbox with both root and capabilities gets both lines.
 
 | Where | What you see |
 |---|---|
@@ -104,7 +108,7 @@ Each harness has its own sandbox image. `reeval image build` builds the images t
 images  4 sandbox images (nothing built: --dry-run)
 docker · 15 evals
   ✓ base  reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
-docker + install · 1 eval
+docker+0ab0e263 + install · 1 eval
   ✓ base               reeval-sandbox:cursor-0.1.0  (ready: built (e04d443bc8e2))
   + install 1 command  reeval-install:<base id + commands>  (to build: not built yet)
 python · 1 eval
@@ -164,14 +168,14 @@ Every image reeval builds has the `reeval` user. `docker({ image })` with an ima
 | A bad install timeout | `docker({ install }) command "x": Invalid duration "5 min". Use e.g. "90s" or "15m".` (zero or negative: `A duration is more than zero`) |
 | An empty `image` | `docker({ image }) must be a non-empty string (got "")` |
 
-Before any attempt starts, reeval builds every image the plan needs that isn't there, including its own image for each harness, three at a time, once each (see [Sandbox providers](/reference/sandbox/providers)). An image a group or eval sets that fails fails only its attempts; one the config sets stops the run.
+Before any attempt starts, reeval builds every image the plan needs that isn't there, including its own image for each harness, three at a time, once each (see [Sandbox providers](/reference/sandbox/providers)). An image a group or eval environment sets that fails fails only its attempts; one the config's `environment` sets stops the run.
 
 | Situation | Message |
 |---|---|
 | Docker isn't running | `Docker is not running. Start Docker and try again.` (exit 2); on Windows, `… Start Docker Desktop (with the WSL 2 backend and Linux containers) and try again.` |
 | Docker runs Windows containers | `Docker is running Windows containers, but reeval's sandboxes are Linux containers. Switch Docker Desktop to Linux containers (its tray menu: Switch to Linux containers) and try again.` (exit 2) |
 | An `image` that isn't there | `Docker image … not found. docker({ image }) is used as is, so pull or build it first …` |
-| The config's image fails | The failure, then `The sandbox docker + install is set by reeval.config.ts for every eval, so nothing ran.` (exit 3) |
+| The config's image fails | The failure, then `The sandbox docker+0ab0e263 + install is set by reeval.config.ts for every eval, so nothing ran.` (exit 3) |
 | A non-Debian base | `Building the toolchain layer FROM alpine:3.20 failed: reeval needs a Debian or Ubuntu based image (glibc and apt-get)` |
 | A failing install step | `Building the install layer (N commands) failed: install i/N exited <code>: <command>` |
 | A failing Dockerfile | `Building evals/x.Dockerfile failed: a RUN step exited 42`, or BuildKit's error (`dockerfile parse error on line 2: unknown instruction: COPYY …`) |

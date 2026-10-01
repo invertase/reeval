@@ -2,7 +2,7 @@
 // covers what a record can hold (a compare with lift, answered and failed questions, judges that
 // pass and fail, a failed check, an infra error, todo and skipped evals, tool calls and
 // reasoning), a run that `budget` stops, and a saved analysis.
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -24,7 +24,7 @@ export default defineConfig({
     }),
     fakeHarness({ id: 'broken', failWith: 'the fake sandbox fell over' }),
   ],
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   judge: { model: fakeJudge({ score: 0.8 }) },
   analysis: {
     model: fakeAnalysis({
