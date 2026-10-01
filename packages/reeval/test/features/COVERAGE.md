@@ -68,7 +68,7 @@
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — |
 | `extendEnvironment`, overrides and the environment digest | ✓ 2 | — | ● 2 | ● 2 | — |
-| `sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it; a named env inherits the cascaded sandbox | ✓ 2 | ✓ 5 | ● 3 | ● 3 | — |
+| `sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces or keeps it; a named env that omits sandbox uses the root machine | ✓ 3 | ✓ 5 | ● 3 | ● 3 | — |
 | `c.sandbox()`: checks without a turn | — | — | ● 2 | ● 2 | — |
 
 ## Sandbox

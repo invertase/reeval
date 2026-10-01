@@ -17,7 +17,7 @@ export default defineConfig(({ ci, secret }) => ({
 }))
 ```
 
-Without a config file, every key takes its default. The option keys (`harness`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config. The sandbox lives on `environment`, not on `defineConfig`.
+Without a config file, every key takes its default. The option keys (`harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge`, `timeout`) are the start of the cascade described on [Options](/reference/options); this page covers what's specific to the config. `sandbox` is the default machine when the resolved environment omits one; it is not an environment.
 
 ## Loading
 
@@ -101,8 +101,12 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
   The agents every eval runs on, unless a group or eval replaces them. Default `cursor({ model: 'composer-2.5' })`, whose id is `cursor:composer-2.5`. An empty list, or two harnesses with the same id, is an error. See [Options](/reference/options#harness).
 </Property>
 
+<Property name="sandbox" type="SandboxDescriptor">
+  The default machine when the resolved environment omits `sandbox`. Not an environment: it does not invent skills, files or a name. Profile defaults, groups and evals cascade over it. Default `docker()`. See [Options](/reference/options#sandbox).
+</Property>
+
 <Property name="environment" type="Environment">
-  The environment every eval runs in, from `defineEnvironment`. Put the sandbox here (`sandbox: docker({ … })`). This is the control when a compare omits `baseline`. A named compare arm that omits `sandbox` inherits this environment's sandbox. Default none: attempts use the implicit default Docker sandbox. See [defineEnvironment](/reference/environment).
+  The environment every eval runs in when the eval or compare arm did not name one, from `defineEnvironment`. This is the control when a compare omits `baseline`. A named environment is a total override: no skills, files or sandbox inherit from this one. Default none. See [defineEnvironment](/reference/environment).
 </Property>
 
 <Property name="runs" type="number">

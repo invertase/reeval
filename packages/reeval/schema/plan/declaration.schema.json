@@ -709,6 +709,16 @@
             "runs": {
               "type": "number"
             },
+            "sandbox": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DockerSandboxDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/FakeSandboxDescriptor"
+                }
+              ]
+            },
             "tags": {
               "type": "array",
               "items": {
@@ -944,6 +954,16 @@
             "runs": {
               "type": "number"
             },
+            "sandbox": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DockerSandboxDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/FakeSandboxDescriptor"
+                }
+              ]
+            },
             "tags": {
               "type": "array",
               "items": {
@@ -1120,6 +1140,16 @@
             },
             "runs": {
               "type": "number"
+            },
+            "sandbox": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DockerSandboxDescriptor"
+                },
+                {
+                  "$ref": "#/$defs/FakeSandboxDescriptor"
+                }
+              ]
             },
             "tags": {
               "type": "array",

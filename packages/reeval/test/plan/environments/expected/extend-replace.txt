@@ -1,8 +1,9 @@
-no profile · 2 evals · 2 cells · 2 attempts
-evals/extend.eval.ts › parent image            fake/parent/docker:node:22-bookworm  control  gated  ×1
-evals/extend.eval.ts › child replaces sandbox  fake/child/docker:node:24-bookworm   control  gated  ×1
+no profile · 3 evals · 3 cells · 3 attempts
+evals/extend.eval.ts › parent image                fake/parent/docker:node:22-bookworm  control  gated  ×1
+evals/extend.eval.ts › child replaces sandbox      fake/child/docker:node:24-bookworm   control  gated  ×1
+evals/extend.eval.ts › child keeps parent sandbox  fake/kept/docker:node:22-bookworm    control  gated  ×1
 excluded: —
-image docker:node:22-bookworm · 1 evals
+image docker:node:22-bookworm · 2 evals
   from node:22-bookworm  reeval-sandbox:cursor-0.1.2-node-22-bookworm-1cb530e9  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)
 image docker:node:24-bookworm · 1 evals
   from node:24-bookworm  reeval-sandbox:cursor-0.1.2-node-24-bookworm-cf9a0fc2  (Node, git and the harness bootstrap on top; reeval image build refreshes a moved tag)

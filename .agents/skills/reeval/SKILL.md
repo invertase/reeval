@@ -53,7 +53,7 @@ export default defineConfig({
 })
 ```
 
-Without an `environment`, the attempt uses the implicit default Docker sandbox (reeval's image: Node 22, git, pnpm, the agent CLI). Put a sandbox on `defineEnvironment`, not on `defineConfig`, `evaluate`, `group` or a profile. A named compare environment that omits `sandbox` inherits the cascaded environment's sandbox (the config's `environment` is the usual one), so a fake config still runs `plain` / skill variants without Docker. Do not put `fakeSandbox()` on `plain` itself: real Cursor runs need Docker.
+Without an `environment`, the attempt uses the cascaded `sandbox` option, else implicit Docker (reeval's image: Node 22, git, pnpm, the agent CLI). `defineConfig({ sandbox })` is the default machine when the resolved env omits `sandbox`; it is not an environment. A named env is a total override: no skills, files or sandbox inherit from the config environment. `.extend()` keeps the parent env's sandbox when the child omits it. A fake config puts `sandbox: fakeSandbox()` on `defineConfig` so `plain` / skill variants run without Docker. Do not put `fakeSandbox()` on `plain` itself: real Cursor runs need Docker.
 
 - Harnesses (`reeval/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
   Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
@@ -84,17 +84,15 @@ Without an `environment`, the attempt uses the implicit default Docker sandbox (
 ### Without Docker or API keys: the fake trio
 
 ```ts
-import { defineConfig, defineEnvironment } from 'reeval'
+import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
-const fake = defineEnvironment('fake', { sandbox: fakeSandbox() })
-
 export default defineConfig({
   // A scripted "agent": writes these files on every turn and replies with text.
   harness: fakeHarness({ files: { 'hello.txt': 'hello\n' }, text: 'Created hello.txt.' }),
-  environment: fake,                           // a temp dir on the host, no isolation
+  sandbox: fakeSandbox(),                      // default machine; not an environment
   judge: { model: fakeJudge({ score: 0.9 }) }, // fixed score, no model call
 })
 ```
@@ -153,10 +151,10 @@ group('hello', () => {
 
 `defineConfig`, `group` and `evaluate` take the same options; inner levels win: `harness` (one
 or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
-a function), `environment` (one), `runs`,
-`gate`, `env` (merged by name), `egress`, `judge` (merged by field), `timeout`, `tags`, `pin`.
-`compare` goes only on groups and evals. The sandbox lives on `defineEnvironment`, not on these
-options. Options are plain objects, never functions. Unknown keys are errors with a hint
+a function), `sandbox` (the default machine when the resolved env omits one), `environment` (one),
+`runs`, `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `timeout`, `tags`,
+`pin`. `compare` goes only on groups and evals. A named env is a total override of the config
+environment. Options are plain objects, never functions. Unknown keys are errors with a hint
 (`repeat` → "Did you mean runs?").
 
 ## Environments
@@ -253,8 +251,8 @@ group(
   parent) plans the same cells as the example: without `baseline`, the cascaded environment is
   the control. A `baseline` names every arm instead: `environment` beside it is exit 2, and an
   inherited environment is not applied as files, skills or variables. A named arm that omits
-  `sandbox` still inherits that cascaded environment's sandbox. `compare: false` is not an
-  eval or group option.
+  `sandbox` uses the cascaded `sandbox` option, else implicit Docker; `.extend()` keeps the
+  parent env's sandbox when the child omits it. `compare: false` is not an eval or group option.
 - Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
   prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
   `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.
@@ -297,7 +295,7 @@ docker({ root: true })                               // opt in: apt-get at run t
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
 `root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
 
-Put the sandbox on `defineEnvironment`. A list is an error. `npx reeval image build` builds every image the plan needs. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and 24 cannot share a cell. Environments that share an image still share one preflight build.
+Put a specific machine on `defineEnvironment`, or `sandbox` on `defineConfig` / profile / group / eval as the default when the resolved env omits one. A list is an error. `npx reeval image build` builds every image the plan needs. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and 24 cannot share a cell. Environments that share an image still share one preflight build.
 
 ## Secrets and egress
 

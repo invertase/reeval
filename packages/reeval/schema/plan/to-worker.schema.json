@@ -1116,6 +1116,16 @@
         "runs": {
           "type": "number"
         },
+        "sandbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DockerSandboxDescriptor"
+            },
+            {
+              "$ref": "#/$defs/FakeSandboxDescriptor"
+            }
+          ]
+        },
         "timeout": {
           "anyOf": [
             {

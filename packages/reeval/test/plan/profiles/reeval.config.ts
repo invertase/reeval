@@ -1,10 +1,10 @@
-import { defineConfig, defineEnvironment } from 'reeval'
+import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 
 export default defineConfig({
   harness: fakeHarness({ id: 'a' }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  sandbox: fakeSandbox(),
   defaultProfile: { ci: 'pr' },
   profiles: {
     pr: {

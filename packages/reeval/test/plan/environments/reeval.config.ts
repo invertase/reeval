@@ -9,5 +9,6 @@ export const node22 = defineEnvironment('node22', {
 
 export default defineConfig({
   harness: fakeHarness(),
+  sandbox: docker({ from: 'node:24-bookworm' }),
   environment: node22,
 })

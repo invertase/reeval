@@ -591,8 +591,9 @@ export type Environment = {
   readonly layers: readonly EnvironmentLayer[]
   /**
    * A child environment layered on this one; wherever it sets a key this one has, it wins.
-   * `sandbox` is replaced entirely when the child sets one. This is how two `compare` arms share
-   * setup: `compare` itself never layers.
+   * `sandbox` is replaced entirely when the child sets one; when the child omits it, the
+   * parent's sandbox is kept. This is how two `compare` arms share setup: `compare` itself
+   * never layers.
    */
   extendEnvironment(name: string, spec: EnvironmentInput): Environment
   /** Alias of `extendEnvironment`. */
@@ -777,6 +778,11 @@ export type CompareSpec<E = Environment> = CompareOptions<E>
 type EvalOptionFields = {
   /** The only list: each harness is its own cell. */
   harness?: HarnessOption
+  /**
+   * The default machine when the resolved environment omits `sandbox`. Cascades like `harness`.
+   * Not an environment: it does not invent skills, files or a name.
+   */
+  sandbox?: SandboxDescriptor
   /** Attempts per cell. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -851,6 +857,8 @@ export type Budget = { attempts?: number; duration?: Duration }
 /** What evals get when they don't say otherwise: under groups and evals. */
 export type ProfileDefaults = {
   harness?: HarnessDescriptor | HarnessDescriptor[]
+  /** The default machine when the resolved environment omits `sandbox`. */
+  sandbox?: SandboxDescriptor
   environment?: Environment
   runs?: number
   gate?: GatePolicy
@@ -930,6 +938,11 @@ export type AnalysisConfig = {
 export type EsConfig = {
   include?: string[]
   harness?: HarnessDescriptor | HarnessDescriptor[]
+  /**
+   * The default machine when the resolved environment omits `sandbox`. Not an environment:
+   * it does not invent skills, files or a name. Implicit `docker()` when nobody sets one.
+   */
+  sandbox?: SandboxDescriptor
   environment?: Environment
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -991,8 +1004,9 @@ export type ResolvedConfig = {
   include: string[]
   harness: HarnessDescriptor[]
   /**
-   * The implicit default Docker sandbox used when neither the attempt's environment nor the
-   * cascaded environment sets one. Not a public `defineConfig` option; always `docker()`.
+   * The default machine when the resolved environment omits `sandbox`. `defineConfig({ sandbox })`
+   * sets it; profile defaults, groups and evals cascade over it. Implicit `docker()` when nobody
+   * sets one.
    */
   sandbox: SandboxDescriptor
   environment: Environment | undefined

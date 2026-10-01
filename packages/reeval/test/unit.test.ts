@@ -939,6 +939,48 @@ test('expand: per harness, the control then each variant; labels name the role',
   assert.notEqual(attempts[0]?.environment.name, 'extra')
 })
 
+test('named compare uses the cascaded sandbox option, not the config environment', () => {
+  const configEnv = defineEnvironment('config', {
+    sandbox: { kind: 'fake', id: 'from-config-env' },
+  })
+  const plain = defineEnvironment('plain', {})
+  const skill = defineEnvironment('skill', {})
+  const parent = defineEnvironment('parent', { sandbox: { kind: 'fake', id: 'parent' } })
+  const kept = parent.extend('kept', { files: { 'x.txt': 'y' } })
+  const { resolved } = cascade(
+    { ...base, sandbox: { kind: 'fake', id: 'from-root' }, environment: configEnv },
+    [{ options: { compare: { baseline: plain, variants: [skill] } }, where: 'e' }],
+    'e',
+  )
+  assert.deepEqual(
+    expand(resolved).map((a) => [a.cell.environment, a.sandbox.id]),
+    [
+      ['plain', 'from-root'],
+      ['skill', 'from-root'],
+      ['plain', 'from-root'],
+      ['skill', 'from-root'],
+    ],
+  )
+  const child = cascade(
+    { ...base, sandbox: { kind: 'fake', id: 'from-root' } },
+    [{ options: { environment: kept }, where: 'e' }],
+    'e',
+  )
+  assert.equal(expand(child.resolved)[0]?.sandbox.id, 'parent')
+  const evalSandbox = cascade(
+    { ...base, sandbox: { kind: 'fake', id: 'from-root' } },
+    [
+      {
+        options: { sandbox: { kind: 'fake', id: 'from-eval' }, environment: plain },
+        where: 'e',
+      },
+    ],
+    'e',
+  )
+  assert.equal(evalSandbox.resolved.sandbox.id, 'from-eval')
+  assert.equal(expand(evalSandbox.resolved)[0]?.sandbox.id, 'from-eval')
+})
+
 test('environment beside a compare with a baseline is an error; without one it is the control', () => {
   const plain = defineEnvironment('plain', {})
   const skill = defineEnvironment('skill', {})
