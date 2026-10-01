@@ -43,7 +43,11 @@ The table is generated, not written: `scripts/probe-providers.ts` runs the pinne
 through a local MITM proxy that answers every request itself (nothing leaves the host), once per
 provider and per model API (a provider's models can use several), with this package's config and
 a distinct placeholder in each of the provider's variables, and records where each placeholder
-went. `scripts/provider-table.ts` turns that into the table. On an OpenCode bump:
+went. It takes each provider's models from models.dev's catalog, newest first, while OpenCode
+runs on the catalog built into its release; when that knows none of them (models.dev renamed the
+provider's models since the release), the newest runs with `OPENCODE_MODELS_PATH` on the same
+catalog, so a rename never reads as a refused provider. `scripts/provider-table.ts` turns that
+into the table. On an OpenCode bump:
 
 ```bash
 curl -so /tmp/catalog.json https://models.opencode.ai/api.json   # a model id per provider
