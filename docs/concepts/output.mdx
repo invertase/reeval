@@ -151,7 +151,7 @@ Duration  2m 39s
  Results  .reeval/runs/20260926T174444Z_b010670_ada-lovelace_7gmj/summary.md
 ```
 
-An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, pi and Codex do): input includes cached reads, and there's no cost line because reeval prices no models.
+An eval's pass count covers every cell, and its rate only the gated ones, so `4/8 100%` means the gated variants all passed. The `Tokens` line appears when the harness reports tokens (Cursor, Claude Code, Antigravity, OpenCode, pi and Codex do): input includes cached reads, and there's no cost line because reeval prices no models.
 
 Failures are grouped by kind (judge verdicts, assertions with a code frame, timeouts, infra errors, cancelled), each with its artifact directory. `--output-logs errors-only` keeps detail for failing attempts only, and `none` drops it; the summary still has every failure. Misses in ungated cells (a compare's controls, by default) get their own neutral `Expected misses, not gated` section instead, one line of why each, and `summary.md` folds their detail into `<details>`.
 

@@ -97,10 +97,11 @@ would generate differs from this one.
   `reeval-opencode-gate` (`OPENCODE_GATE`, written beside OpenCode's bin at start), which runs
   `opencode acp` with its info logs on and holds the first `session/prompt` until each server has
   logged `mcp connected` or `mcp connect failed`, at most 30 seconds.
-- **Usage.** None. OpenCode's ACP `PromptResponse.usage` is its last model call's, not the turn's
-  (still so in 2.0.20), so the `finish` part's usage is dropped rather than passed on as an
-  undercount. `usage_update` doesn't help: its `used` is the last call's context and its `cost`
-  the session's.
+- **Usage.** `@ai-sdk/harness-acp` maps ACP `PromptResponse.usage` onto the `finish` part.
+  OpenCode #52467 reports the whole turn (thought and cache tokens when the model reports them).
+  `usage_update` is unused: its `used` is still the last step's context and `cost` the session's.
+  The pinned CLI is 2.0.21, published before that fix, so a multi-step turn on this pin is still
+  the last call until the next `@opencode/cli`.
 - **Skills.** Harness-placed skills go to `~/.config/opencode/skills`; OpenCode's repo directory
   is `.opencode/skills`. It also reads `.claude/skills` and `.agents/skills`, in the repo and the
   home directory, and nothing turns that off. It reads `AGENTS.md` for rules.
