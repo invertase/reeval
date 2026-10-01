@@ -293,7 +293,9 @@ async function startSession(
         sessionDir: posix.join(home, PI_AGENT_DIR, 'sessions'),
         mcp,
       })
-      const translator = new PiStreamTranslator()
+      const translator = new PiStreamTranslator({
+        mcpServers: Object.keys(settings.mcpServers ?? {}),
+      })
       const emit = (parts: HarnessV1StreamPart[]) => {
         for (const part of parts) turn.emit(part)
       }

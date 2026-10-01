@@ -79,12 +79,32 @@ const text = (content: PiContent[] | undefined) =>
   (content ?? []).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : [])).join('')
 
 /**
+ * pi names an MCP tool `mcp__<server>__<tool>` with every `-` made `_` (since 0.99.2). This puts
+ * the server's configured name back when no other server sanitizes to the same name. The tool
+ * part stays as pi named it: the adapter doesn't know the server's tool names, and pi shortens a
+ * colliding or over-64-character name with a hash.
+ */
+export function configuredMcpToolName(name: string, servers: readonly string[]): string {
+  const sanitize = (server: string) => server.replaceAll('-', '_')
+  const owner = servers
+    .filter((s) => s.includes('-') && name.startsWith(`mcp__${sanitize(s)}__`))
+    .sort((a, b) => b.length - a.length)[0]
+  if (!owner || servers.some((s) => s !== owner && sanitize(s) === sanitize(owner))) return name
+  return `mcp__${owner}__${name.slice(`mcp__${sanitize(owner)}__`.length)}`
+}
+
+/**
  * Turns one `pi --mode json` process's NDJSON into harness stream parts. Each assistant message
  * is one model call: its `message_end` is a `finish-step` with that call's usage, and the turn's
  * `finish` has their sum. A call pi reports as failed (`stopReason: 'error'`) is an error part.
  */
 export class PiStreamTranslator {
   sessionId: string | undefined
+  /** The configured MCP server names, which tool names are mapped back to. */
+  private readonly mcpServers: readonly string[]
+  constructor(options: { mcpServers?: readonly string[] } = {}) {
+    this.mcpServers = options.mcpServers ?? []
+  }
   private started = false
   private finished = false
   /** The block a `*_start` opened; its start part goes out with its first non-empty delta. */
@@ -167,7 +187,7 @@ export class PiStreamTranslator {
       parts.push({
         type: 'tool-result',
         toolCallId: e.toolCallId,
-        toolName: e.toolName ?? 'unknown',
+        toolName: this.toolName(e.toolName),
         result:
           e.result?.details !== undefined ? { output, details: e.result.details as never } : output,
         ...(e.isError ? { isError: true } : {}),
@@ -203,11 +223,15 @@ export class PiStreamTranslator {
       parts.push({
         type: 'tool-call',
         toolCallId: u.toolCall.id,
-        toolName: u.toolCall.name ?? 'unknown',
+        toolName: this.toolName(u.toolCall.name),
         input: JSON.stringify(u.toolCall.arguments ?? {}),
         providerExecuted: true,
       })
     }
+  }
+
+  private toolName(name: string | undefined) {
+    return name === undefined ? 'unknown' : configuredMcpToolName(name, this.mcpServers)
   }
 
   private start(parts: HarnessV1StreamPart[], modelId?: string) {

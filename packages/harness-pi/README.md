@@ -46,3 +46,5 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
   `mcp__<server>__<tool>` rather than only through pi's `codemode` tool. pi expands `$NAME` in
   `env` and header values and runs a value starting with `!` as a command, so the adapter
   escapes them (`$` as `$$`, a leading `!` as `$!`): every value reaches the server as written.
+  pi writes each `-` in those names as `_`; the translator puts a server's configured name back
+  when no other server sanitizes alike, and leaves the tool part as pi wrote it.

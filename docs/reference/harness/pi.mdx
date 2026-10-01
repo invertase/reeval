@@ -105,6 +105,15 @@ The adapter writes `mcp.stdio` servers as `command`, `args` and `env`, and `mcp.
 
 pi expands `$NAME` and `${NAME}` in `env` and header values, and runs a value that starts with `!` as a shell command. The adapter escapes both (`$` as `$$`, a leading `!` as `$!`), so every value, a brokered placeholder included, reaches the server as written.
 
+pi turns every `-` in an MCP tool's name into `_`. The adapter knows the server names, so it puts the server part back, and the transcript names a `my-docs` server's tool `mcp__my-docs__…` as on other harnesses. It doesn't know the tool names, so these stay as pi wrote them:
+
+| Configured | In the transcript |
+|---|---|
+| server `my-docs`, tool `latest_version` | `mcp__my-docs__latest_version` |
+| server `docs`, tool `latest-version` | `mcp__docs__latest_version` |
+| servers `a-b` and `a_b` | `mcp__a_b__…` for both: they can't be told apart |
+| a name over 64 characters, or two tools that sanitize alike | pi's shortened name, ending `_<hash>` |
+
 pi has no SSE transport, and skips a server whose name isn't letters, digits, `_` and `-`. An eval that gives it either is refused at plan time, naming the server: the run (and `--dry-run`) exits 2 before any attempt starts.
 
 ## Errors
