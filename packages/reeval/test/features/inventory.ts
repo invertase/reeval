@@ -558,10 +558,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace'],
     plan: ['environments/images', 'environments/extend-replace', 'environments/config-control'],
     tests: [
-      options('sandbox on evaluate'),
-      options('sandbox on group'),
-      options('sandbox on defineConfig'),
-      options('sandbox on profile defaults'),
+      options('common mistakes'),
       unit('extendEnvironment layers and overrides; a separate environment does not'),
     ],
   },

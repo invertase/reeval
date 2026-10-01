@@ -1,13 +1,15 @@
 no profile · 2 evals · 10 cells · 14 attempts
 hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
-evals/variants.eval.ts › control and two variants               a/base/fake     control          ungated  ×1
-                                                                a/skilled/fake  variant skilled  gated    ×1
-                                                                a/terse/fake    variant terse    gated    ×1
-                                                                b/base/fake     control          ungated  ×1
-                                                                b/skilled/fake  variant skilled  gated    ×1
-                                                                b/terse/fake    variant terse    gated    ×1
-evals/variants.eval.ts › every cell gated, with a minimum lift  a/base/fake     control          gated    ×2
-                                                                a/skilled/fake  variant skilled  gated    ×2  minLift 0.2
-                                                                b/base/fake     control          gated    ×2
-                                                                b/skilled/fake  variant skilled  gated    ×2  minLift 0.2
+evals/variants.eval.ts › control and two variants               a/base/docker     control          ungated  ×1
+                                                                a/skilled/docker  variant skilled  gated    ×1
+                                                                a/terse/docker    variant terse    gated    ×1
+                                                                b/base/docker     control          ungated  ×1
+                                                                b/skilled/docker  variant skilled  gated    ×1
+                                                                b/terse/docker    variant terse    gated    ×1
+evals/variants.eval.ts › every cell gated, with a minimum lift  a/base/docker     control          gated    ×2
+                                                                a/skilled/docker  variant skilled  gated    ×2  minLift 0.2
+                                                                b/base/docker     control          gated    ×2
+                                                                b/skilled/docker  variant skilled  gated    ×2  minLift 0.2
 excluded: —
+image docker · 2 evals
+  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

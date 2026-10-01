@@ -296,6 +296,11 @@
     "Environment": {
       "type": "object",
       "properties": {
+        "extend": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
         "extendEnvironment": {
           "type": "object",
           "properties": {},
@@ -314,7 +319,7 @@
           "type": "string"
         }
       },
-      "required": ["extendEnvironment", "kind", "layers", "name"]
+      "required": ["extend", "extendEnvironment", "kind", "layers", "name"]
     },
     "EnvironmentLayer": {
       "type": "object",
@@ -383,6 +388,16 @@
             },
             {
               "type": "string"
+            }
+          ]
+        },
+        "sandbox": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DockerSandboxDescriptor"
+            },
+            {
+              "$ref": "#/$defs/FakeSandboxDescriptor"
             }
           ]
         },
@@ -1100,16 +1115,6 @@
         },
         "runs": {
           "type": "number"
-        },
-        "sandbox": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DockerSandboxDescriptor"
-            },
-            {
-              "$ref": "#/$defs/FakeSandboxDescriptor"
-            }
-          ]
         },
         "timeout": {
           "anyOf": [

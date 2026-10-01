@@ -703,7 +703,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (c) => {
     assert.equal(e.trial.id, 'fake/fake/fake#1')
     assert.match(
       e.trial.files.diff?.path ?? '',
-      new RegExp(`^${e.slug}/fake-fake-[0-9a-f]{6}/1/diff\\.patch$`),
+      new RegExp(`^${e.slug}/fake-fake-fake-[0-9a-f]{6}/1/diff\\.patch$`),
     )
     assert.equal(
       e.trial.files.transcript?.path,
@@ -878,7 +878,7 @@ evaluate('passes', async () => {})
     assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
     assert.match(
       out[3] ?? '',
-      /^ {2}record: \.reeval\/runs\/[^/]+\/evals-agent-eval-ts-agent-eval-[0-9a-f]{6}\/fake-fake-[0-9a-f]{6}\/1$/,
+      /^ {2}record: \.reeval\/runs\/[^/]+\/evals-agent-eval-ts-agent-eval-[0-9a-f]{6}\/fake-fake-fake-[0-9a-f]{6}\/1$/,
     )
     assert.equal(out[4], '1 passed, 1 failed')
     assert.match(out[5] ?? '', /^summary: \.reeval\/runs\/[^/]+\/summary\.md$/)

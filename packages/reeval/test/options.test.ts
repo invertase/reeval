@@ -58,8 +58,11 @@ group('g', { runs: 2 }, () => {
     assert.match(r.stdout, /^plan {2}1 eval · 2 cells · 4 attempts · ~/m)
     assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.eval\.ts › g › writes ok\.txt/m)
     assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.eval\.ts › g › writes ok\.txt/m)
-    assert.match(r.stdout, /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/-\/fake +2\/2 +100%/)
-    assert.match(r.stdout, /bad\/-\/fake +0\/2 +0%/)
+    assert.match(
+      r.stdout,
+      /✗ writes ok\.txt +2\/4 +50% +4 attempts\n +good\/fake\/fake +2\/2 +100%/,
+    )
+    assert.match(r.stdout, /bad\/fake\/fake +0\/2 +0%/)
     assert.match(r.stdout, /2 passed · 2 failed \(4 attempts, 1 evals\)/)
     const thirds = await project('matrix-thirds', {
       'reeval.config.ts': config('', `fakeHarness({ id: 'one' })`),
@@ -74,7 +77,7 @@ evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal(rounded.code, 0, rounded.stdout + rounded.stderr)
     assert.match(
       rounded.stdout,
-      /✓ two of three +2\/3 +67% +3 attempts\n +one\/-\/fake +2\/3 +67% /,
+      /✓ two of three +2\/3 +67% +3 attempts\n +one\/fake\/fake +2\/3 +67% /,
       'pass rates round to the nearest percent',
     )
     const { run, evals } = readRun(p.dir)
@@ -252,7 +255,9 @@ evaluate('judged', async (c) => {
 
 describe('compare', () => {
   const envs = `import { defineEnvironment } from 'reeval'
-export const base = defineEnvironment('base', { env: { MODE: 'base' } })
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+export const base = defineEnvironment('base', { sandbox, env: { MODE: 'base' } })
 export const skilled = base.extendEnvironment('skilled', ({ skill }) => ({
   env: { MODE: 'skilled' },
   skills: [skill.local('../skills')],
@@ -408,8 +413,10 @@ evaluate('scoped', { compare: { baseline: base, variants: [skilled], harness: ['
 describe('compare questions', () => {
   const asks = (question: string) => ({
     'evals/envs.ts': `import { defineEnvironment } from 'reeval'
-export const base = defineEnvironment('base', {})
-export const skilled = defineEnvironment('skilled', {})
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+export const base = defineEnvironment('base', { sandbox })
+export const skilled = defineEnvironment('skilled', { sandbox })
 `,
     'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
 import { base, skilled } from './envs.ts'
@@ -542,7 +549,9 @@ export default defineConfig({
 
   // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
   // its check on every attempt, so it's in no pair but still in the pass rate and the exit code.
-  const threeHarnesses = (analysis: string) => `import { defineConfig, defineEnvironment } from 'reeval'
+  const threeHarnesses = (
+    analysis: string,
+  ) => `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -1247,7 +1256,7 @@ describe('common mistakes', () => {
     ],
     [
       "an environment's allowlist on the fake sandbox",
-      `evaluate('e', { environment: defineEnvironment('n', { egress: { allow: ['api.example.com'] } }) }, async () => {})`,
+      `evaluate('e', { environment: defineEnvironment('n', { sandbox: fakeSandbox(), egress: { allow: ['api.example.com'] } }) }, async () => {})`,
       /evaluate\("e"\) runs under egress \{ allow: \['api\.example\.com'\] \}, which needs a host allowlist \(api\.example\.com\), but the fake sandbox enforces no egress policy/,
     ],
     [
@@ -1273,8 +1282,19 @@ describe('common mistakes', () => {
   ]
   for (const [what, body, message] of cases) {
     test(`${what} exits 2 with a fix`, async () => {
+      const noConfigEnv =
+        what === 'a variant named baseline in a compare without a baseline or environment'
       const p = await project('mistake', {
-        'reeval.config.ts': fakeConfig(),
+        'reeval.config.ts': noConfigEnv
+          ? `import { defineConfig } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeJudge } from 'reeval/judge'
+export default defineConfig({
+  harness: fakeHarness({}),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+})
+`
+          : fakeConfig(),
         'evals/o.eval.ts': `import { defineEnvironment, evaluate, group } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { docker, fakeSandbox } from 'reeval/sandbox'
@@ -1624,7 +1644,11 @@ export default defineConfig(({ secret }) => ({
       'skills/house-greeting/examples.md': 'Ahoy, Ada!\n',
       'docs/api.md': '# API\n',
       'evals/envs.ts': `import { defineEnvironment } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
+export const plain = defineEnvironment('plain', { sandbox })
 export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, skill }) => ({
+  sandbox,
   skills: [skill.local('../skills')],
   mcp: { docs: mcp.stdio('npx', ['-y', 'docs-mcp', '--port', '0']) },
   rules: 'Always write tests.',
@@ -1638,9 +1662,9 @@ export const withSkill = defineEnvironment('with-skill', ({ file, mcp, secret, s
   setup: [{ run: 'printf %s "$EXTRA_TOKEN$CHECK_TOKEN" | wc -c > secret-length.txt', timeout: '10s' }],
 }))
 `,
-      'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-import { withSkill } from './envs.ts'
-evaluate('greets', { compare: { baseline: defineEnvironment('plain', {}), variants: [withSkill] } }, async (c) => {
+      'evals/e.eval.ts': `import { evaluate, expect } from 'reeval'
+import { plain, withSkill } from './envs.ts'
+evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, async (c) => {
   const turn = await c.send('greet')
   const loaded = turn.transcript.some((e) => e.type === 'text' && e.text === 'Loaded skills: house-greeting; mcp: docs')
   const token = (await c.exec('printf %s "$APP_TOKEN"')).stdout
@@ -1938,7 +1962,7 @@ evaluate('fake', { environment: defineEnvironment('host', { sandbox: fakeSandbox
     assert.match(
       out,
       new RegExp(
-        `^docker \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
+        `^docker\\+[0-9a-f]+ \\+ install · 2 evals\\n {2}${st}base +reeval-sandbox:cursor-[\\d.]+ +\\((ready|to build|stale): .+\\)\\n {2}${st}install 2 commands +reeval-install:<base id \\+ commands> +\\(`,
         'm',
       ),
     )

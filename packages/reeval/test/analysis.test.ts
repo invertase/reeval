@@ -969,7 +969,9 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     )
     assert.ok(!('error' in ((await call('list_attempts', {})) as object)))
     assert.match(
-      String(((await call('open_attempt', { id: 'fake/fake/fake#1' })) as { error?: string }).error),
+      String(
+        ((await call('open_attempt', { id: 'fake/fake/fake#1' })) as { error?: string }).error,
+      ),
       /The input budget \(analysis\.maxInputTokens\) is spent/,
       'the tools stop at the input budget',
     )

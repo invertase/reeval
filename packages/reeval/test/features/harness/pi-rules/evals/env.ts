@@ -6,4 +6,7 @@ const sandbox =
     ? docker()
     : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
-export const houseRules = defineEnvironment('house-rules', { rules: 'Always write tests.' })
+export const houseRules = defineEnvironment('house-rules', {
+  sandbox,
+  rules: 'Always write tests.',
+})

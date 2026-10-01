@@ -35,7 +35,10 @@ const SCRATCH = '.reeval/runs'
 const RUN_FILE = /^\d{8}T\d{6}Z_[0-9a-z]+_[0-9a-z-]+_[0-9a-z]{4}\.json$/
 
 /** The corpus's own config: enough for every reader, and nothing that needs a key or Docker. */
-const config = (note: string, recordedBy: string) => `import { defineConfig, defineEnvironment } from 'reeval'
+const config = (
+  note: string,
+  recordedBy: string,
+) => `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'

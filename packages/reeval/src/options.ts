@@ -38,12 +38,12 @@ import type {
   GatePolicy,
   HarnessDescriptor,
   HarnessEdit,
+  InstallStep,
   JudgeOptions,
   PinnableKey,
   PlannedEgress,
   PlannedQuestion,
   ResolvedProfile,
-  InstallStep,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'

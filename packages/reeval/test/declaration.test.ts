@@ -13,7 +13,6 @@ import { defineEnvironment } from '../src/environment.ts'
 import { declaredBody, declaredTree, declareTree, evaluate, group } from '../src/evaluate.ts'
 import { cursor, fakeHarness } from '../src/harness.ts'
 import { planEval } from '../src/plan-eval.ts'
-import { docker } from '../src/sandbox.ts'
 import type { RunContext } from '../src/types.ts'
 import { tempDir } from './helpers.ts'
 
@@ -21,7 +20,7 @@ function runIn(root: string): RunContext {
   const config = resolveConfig(
     {
       harness: [fakeHarness(), cursor({ model: 'composer-2.5' })],
-          runs: 1,
+      runs: 1,
     },
     root,
   )

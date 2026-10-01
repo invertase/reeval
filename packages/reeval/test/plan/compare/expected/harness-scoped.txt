@@ -1,5 +1,7 @@
 no profile · 1 evals · 3 cells · 3 attempts
-evals/scoped.eval.ts › variant on b only  a/base/fake     control          ungated  ×1
-                                          b/base/fake     control          ungated  ×1
-                                          b/skilled/fake  variant skilled  gated    ×1
+evals/scoped.eval.ts › variant on b only  a/base/docker     control          ungated  ×1
+                                          b/base/docker     control          ungated  ×1
+                                          b/skilled/docker  variant skilled  gated    ×1
 excluded: —
+image docker · 1 evals
+  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

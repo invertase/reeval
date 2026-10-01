@@ -50,6 +50,8 @@ type Feature = {
   tiers: Tier[]
   /** The environment the evals run in: attempt ids are `fake/<env>/<sandbox>#1`. */
   env: string
+  /** Cell sandbox id, when it isn't the tier default (`fake` or `docker`). */
+  sandbox?: string
   /**
    * Cell environments in plan order, when an eval runs more than one (a compare).
    * Defaults to `[env]`.
@@ -841,12 +843,14 @@ export const features: Feature[] = [
     dir: 'env/sandbox-image',
     tiers: ['fake', 'docker'],
     env: 'python',
+    sandbox: 'python',
     canary: /expected 'python' to be 'docker'/,
   },
   {
     dir: 'env/sandbox-extend-replace',
     tiers: ['fake', 'docker'],
     env: 'child',
+    sandbox: 'child',
     canary: /expected 'child' to be 'parent'/,
   },
   {
@@ -1468,7 +1472,7 @@ function fixtureTests(tiers: Tier[]) {
           },
           timeoutMs: timeout - 10_000,
         })
-        const sandbox = tier === 'fake' ? 'fake' : 'docker'
+        const sandbox = f.sandbox ?? (tier === 'fake' ? 'fake' : 'docker')
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'
         const ids = (names: string[]) => names.map((env) => `${harness}/${env}/${sandbox}#1`)
