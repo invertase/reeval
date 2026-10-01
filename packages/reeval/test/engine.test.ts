@@ -1062,7 +1062,8 @@ group('model judge', { judge: { model: gemini.evaluationModel('gemini-under-test
         judge: `{ model: fakeJudge({ score: 0.9 }), include: ['src/'] }`,
       }),
       'evals/scope.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const env = defineEnvironment('scoped', { files: { 'README.md': 'the readme\\n' } })
+import { fakeSandbox } from 'reeval/sandbox'
+const env = defineEnvironment('scoped', { sandbox: fakeSandbox(), files: { 'README.md': 'the readme\\n' } })
 evaluate('scope', { environment: env }, async (c) => {
   await c.send('go')
   expect(await c.judge('from the config')).toPass()
@@ -1373,8 +1374,13 @@ evaluate('asserted nothing', async () => {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
       'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const plain = defineEnvironment('plain', {})
-const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
 evaluate('compared', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')

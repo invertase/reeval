@@ -325,8 +325,13 @@ describe('effort next to lift', () => {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
       'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const plain = defineEnvironment('plain', {})
-const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/s')] }))
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
 evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')

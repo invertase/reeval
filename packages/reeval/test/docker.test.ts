@@ -1116,12 +1116,11 @@ evaluate('hi', async (c) => { await c.send('hi') })
       execFileSync('docker', ['pull', '-q', 'busybox:1.37'], { stdio: 'ignore' })
       const value = 'reeval-docker-user-secret-5e4d3c2b1a'
       const p = await project('docker-secret-no-broker', {
-        'reeval.config.ts': config('{}').replace(
-          'docker()',
-          "docker({ image: 'busybox:1.37', root: true })",
-        ),
+        'reeval.config.ts': config('{}'),
         'evals/d.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker } from 'reeval/sandbox'
 const keys = defineEnvironment('keys', ({ secret }) => ({
+  sandbox: docker({ image: 'busybox:1.37', root: true }),
   env: { GEMINI_API_KEY: secret.fromEnv('REEVAL_DOCKER_SECRET', { hosts: secret.hosts.gemini }) },
 }))
 evaluate('hi', { environment: keys }, async (c) => { await c.sandbox() })

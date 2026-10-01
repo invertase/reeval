@@ -30,8 +30,13 @@ describe('reeval query', () => {
       'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
       'skills/house-greeting/SKILL.md': skill('house-greeting'),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const plain = defineEnvironment('plain', {})
-const skilled = defineEnvironment('skilled', ({ skill }) => ({ skills: [skill.local('../skills/house-greeting')] }))
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/house-greeting')],
+}))
 evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 }, async (c) => {
   await c.send('go')
   await expect(c).toHaveFile('ok.txt')
@@ -177,8 +182,16 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
       'skills/alpha/SKILL.md': skill('alpha'),
       'skills/beta/SKILL.md': skill('beta'),
       'evals/j.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
-const a = defineEnvironment('tools', ({ skill }) => ({ skills: [skill.local('../skills/alpha')] }))
-const b = defineEnvironment('tools', ({ skill }) => ({ skills: [skill.local('../skills/beta')] }))
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const a = defineEnvironment('tools', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/alpha')],
+}))
+const b = defineEnvironment('tools', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/beta')],
+}))
 evaluate('with alpha', { environment: a }, async (c) => { await c.send('x'); throw new Error('no') })
 evaluate('with beta', { environment: b }, async (c) => { await c.send('x'); throw new Error('no') })
 `,
@@ -238,7 +251,7 @@ evaluate('judged', async (c) => {
     const [flaky] = await query(p.dir, 'flaky_cells')
     assert.deepEqual(
       [flaky?.eval_key, flaky?.cell_key, flaky?.pass, flaky?.counted],
-      ['evals/d.eval.ts › flaky', 'fake/-/fake', 4, 6],
+      ['evals/d.eval.ts › flaky', 'fake/fake/fake', 4, 6],
       'grouped by fingerprint: two runs at the first, one at the second',
     )
     const flips = await query(

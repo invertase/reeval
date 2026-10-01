@@ -1725,7 +1725,11 @@ evaluate('greets', { compare: { baseline: plain, variants: [withSkill] } }, asyn
     const p = await project('missing-secret', {
       'reeval.config.ts': fakeConfig(),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
-const needs = defineEnvironment('needs', ({ secret }) => ({ env: { NEEDED: secret.fromEnv('REEVAL_TEST_NOT_SET') } }))
+import { fakeSandbox } from 'reeval/sandbox'
+const needs = defineEnvironment('needs', ({ secret }) => ({
+  sandbox: fakeSandbox(),
+  env: { NEEDED: secret.fromEnv('REEVAL_TEST_NOT_SET') },
+}))
 evaluate('needs it', { environment: needs }, async (c) => { await c.send('x') })
 `,
     })
@@ -1739,7 +1743,11 @@ evaluate('needs it', { environment: needs }, async (c) => { await c.send('x') })
     const failing = await project('setup-fails', {
       'reeval.config.ts': fakeConfig(),
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
-const broken = defineEnvironment('broken', { setup: [{ run: 'true' }, { run: 'echo nope >&2; exit 4' }] })
+import { fakeSandbox } from 'reeval/sandbox'
+const broken = defineEnvironment('broken', {
+  sandbox: fakeSandbox(),
+  setup: [{ run: 'true' }, { run: 'echo nope >&2; exit 4' }],
+})
 evaluate('x', { environment: broken, timeout: '1s' }, async (c) => { await c.send('x') })
 `,
     })
@@ -1770,7 +1778,9 @@ evaluate('x', { environment: broken, timeout: '1s' }, async (c) => { await c.sen
     writeFileSync(
       join(p.dir, 'evals/g.eval.ts'),
       `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('remote', ({ skill }) => ({
+  sandbox: fakeSandbox(),
   skills: [
     skill.git('${pathToFileURL(repo).href}', { ref: 'v1', path: 'skills', only: ['house-greeting'] }),
     skill.inline({ name: 'house-rules', description: 'Rules.', content: 'Be nice.' }, { placement: 'workspace' }),
@@ -1802,7 +1812,9 @@ evaluate('loads it', { environment: env }, async (c) => {
     const p = await project('skill-hygiene', {
       'reeval.config.ts': fakeConfig(),
       'evals/h.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('reviewer', ({ skill }) => ({
+  sandbox: fakeSandbox(),
   skills: [skill.local('../skills/skill-reviewer', { placement: 'workspace' })],
 }))
 evaluate('staged', { environment: env }, async (c) => {
