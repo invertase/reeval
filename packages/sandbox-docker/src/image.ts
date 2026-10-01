@@ -8,7 +8,7 @@ export const HARNESS_PACKAGES: Record<
   'cursor' | 'claude-code' | 'antigravity' | 'opencode' | 'goose' | 'pi' | 'codex',
   { readonly name: string; readonly version: string; readonly patch?: string }
 > = {
-  cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.1' },
+  cursor: { name: '@reeval/harness-cursor-sdk', version: '0.1.2' },
   'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.138', patch: '8edc594f' },
   antigravity: { name: '@reeval/harness-antigravity', version: '0.1.1' },
   opencode: { name: '@reeval/harness-opencode', version: '0.2.1' },
