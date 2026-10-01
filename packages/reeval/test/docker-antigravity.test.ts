@@ -46,12 +46,12 @@ describe('antigravity in docker', () => {
     agyImage,
     async () => {
       const agyConfig = (sandbox: string) => `
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { antigravity } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: antigravity({ model: 'gemini-3.8-flash-low' }),
-  sandbox: ${sandbox},
+  environment: defineEnvironment('box', { sandbox: ${sandbox} }),
   timeout: '90s',
 })
 `
