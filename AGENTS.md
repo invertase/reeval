@@ -422,7 +422,7 @@ pnpm reeval run --config reeval.fake.config.ts --dry-run --profile nightly   # t
 
 1. Build the sandbox images once. This bakes each planned harness's CLI into reeval's image for it,
    `reeval-sandbox:<harness>-<adapter version>` (`cursor-0.1.2`, `claude-code-1.0.138-patch.8edc594f`,
-   `antigravity-0.1.1`, `opencode-0.2.1`, `goose-0.1.0`, `pi-0.2.0`, `codex-0.1.1`), so
+   `antigravity-0.1.1`, `opencode-0.2.1`, `goose-0.1.0`, `pi-0.2.0`, `codex-0.1.2`), so
    the tag pins the CLI build, then builds every other image the evals' sandboxes need (`from`,
    `dockerfile` and `install`; `--dry-run` lists them). Rebuild after bumping a harness adapter.
 
