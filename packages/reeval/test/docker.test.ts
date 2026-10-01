@@ -472,7 +472,7 @@ evaluate('ok', async (c) => {
       }
       const lines = r.stdout.split('\n')
       const failedAt = lines.findIndex((l) =>
-        /✗ docker \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
+        /✗ docker\+[0-9a-f]+ \+ install failed to prepare \(set by group\("broken tools"\)/.test(l),
       )
       assert.ok(failedAt >= 0, r.stdout)
       assert.ok(
@@ -481,7 +481,7 @@ evaluate('ok', async (c) => {
       )
       assert.equal(
         lines.filter((l) =>
-          l.startsWith('::error title=Sandbox docker + install failed to prepare::'),
+          /^::error title=Sandbox docker\+[0-9a-f]+ \+ install failed to prepare::/.test(l),
         ).length,
         1,
       )
@@ -537,7 +537,7 @@ evaluate('b', async (c) => { await c.sandbox() })
       )
       assert.match(
         r.stderr,
-        /The sandbox docker \+ install is set by reeval\.config\.ts for every eval, so nothing ran\./,
+        /The sandbox docker\+[0-9a-f]+ \+ install is set by reeval\.config\.ts for every eval, so nothing ran\./,
       )
       assert.doesNotMatch(r.stdout, /▶/, 'no attempt started')
 
