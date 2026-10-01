@@ -136,12 +136,10 @@ group('greet module', () => {
 // reeval.config.ts
 import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: cursor({ model: 'composer-2.5' }), // or claudeCode({ model }), antigravity({ model }), opencode({ model }), goose({ model }), pi({ model }), codex({ model }), or a list: each is its own cell
-  sandbox: docker(),
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // optional; pin the version
   timeout: '15m',
   profiles: {
