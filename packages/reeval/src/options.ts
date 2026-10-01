@@ -657,8 +657,17 @@ export type PlannedAttempt = {
 }
 
 /** The sandbox an attempt runs in: the environment's, else the implicit default Docker sandbox. */
-export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor =>
-  sandboxOf(env.layers, resolved.sandbox)
+export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor => {
+  const own = env.layers.findLast((l) => l.spec.sandbox)?.spec.sandbox
+  if (own) return own
+  // An omitted-baseline empty control has no layers. Use the first variant's sandbox so the
+  // compare is the same machine without the variant's files, not implicit Docker vs Node 24.
+  const variant =
+    resolved.compare?.from === 'empty' && env.name === EMPTY_BASELINE
+      ? resolved.compare.variants[0]
+      : undefined
+  return sandboxOf(variant?.layers ?? [], resolved.sandbox)
+}
 
 /**
  * Which level set this attempt's sandbox: the cascade source of the environment that named one,
@@ -669,7 +678,16 @@ export function sandboxSetBy(
   resolved: Resolved,
   configFile: string,
 ): string {
-  if (!planned.environment.layers.some((l) => l.spec.sandbox)) return configFile
+  if (!planned.environment.layers.some((l) => l.spec.sandbox)) {
+    if (
+      resolved.compare?.from === 'empty' &&
+      planned.cell.role === 'control' &&
+      resolved.compare.variants[0]?.layers.some((l) => l.spec.sandbox)
+    ) {
+      return resolved.sources?.compare ?? configFile
+    }
+    return configFile
+  }
   if (resolved.compare) {
     if (planned.cell.role === 'control') {
       if (resolved.compare.from === 'environment') {

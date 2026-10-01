@@ -60,6 +60,11 @@ export const cases: PlanCase[] = [
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'extend-replace', args: ['evals/extend.eval.ts'] },
   { dir: 'environments', name: 'config-control', args: ['evals/compare.eval.ts'] },
+  {
+    dir: 'environments',
+    name: 'empty-control',
+    args: ['--config', 'reeval.empty.config.ts', 'evals/empty.eval.ts'],
+  },
 ]
 
 // Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'

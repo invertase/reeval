@@ -23,7 +23,7 @@
 | Option cascade through groups and evals; harness edits (`{ add }`, `{ only }`, functions) | ✓ 3 | ✓ 1 | — | — | — |
 | `compare`: control, variants, lift and `minLift` | ✓ 2 | ✓ 2 | ● 1 | ● 1 | — |
 | `compare.harness` | ✓ 1 | ✓ 1 | — | — | — |
-| `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 2 | ● 2 | ● 2 | — |
+| `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 3 | ● 2 | ● 2 | — |
 | `compare.questions`: questions in the plan, answered after the run with pairwise win rates | ✓ 10 | ✓ 3 | — | — | ◐ 1 (1 without a canary) |
 | `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 2 | — | — | — | — |
 | Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 3 | — | — | — |
@@ -68,7 +68,7 @@
 | `setup` steps: order, a failing step named, a missing `cwd`, `setup.log` | ✓ 1 | — | ● 2 | ● 2 | — |
 | A setup step's own `timeout` | — | — | ● 1 | ● 1 | — |
 | `extendEnvironment`, overrides and the environment digest | ✓ 2 | — | ● 2 | ● 2 | — |
-| `sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it | ✓ 2 | ✓ 3 | ● 2 | ● 2 | — |
+| `sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it | ✓ 2 | ✓ 4 | ● 2 | ● 2 | — |
 | `c.sandbox()`: checks without a turn | — | — | ● 2 | ● 2 | — |
 
 ## Sandbox

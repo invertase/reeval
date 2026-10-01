@@ -136,7 +136,11 @@ export const inventory: InventoryFeature[] = [
     id: 'compare.baseline',
     area: 'Config and selection',
     name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
-    plan: ['compare/baseline-omitted', 'compare/baseline-omitted-off'],
+    plan: [
+      'compare/baseline-omitted',
+      'compare/baseline-omitted-off',
+      'environments/empty-control',
+    ],
     fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
     tests: [options('common mistakes')],
   },
@@ -556,7 +560,12 @@ export const inventory: InventoryFeature[] = [
     area: 'Environments',
     name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it',
     fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace'],
-    plan: ['environments/images', 'environments/extend-replace', 'environments/config-control'],
+    plan: [
+      'environments/images',
+      'environments/extend-replace',
+      'environments/config-control',
+      'environments/empty-control',
+    ],
     tests: [
       options('common mistakes'),
       unit('extendEnvironment layers and overrides; a separate environment does not'),

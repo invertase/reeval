@@ -905,7 +905,10 @@ export const NO_ENVIRONMENT = '-'
 /** The control of a compare without a `baseline` when nothing in the cascade sets an environment. */
 export const EMPTY_BASELINE = 'baseline'
 
-/** An environment with no layers: the implicit default Docker sandbox and the harness as they are. */
+/**
+ * An environment with no layers. As a compare's empty control it uses the first
+ * variant's sandbox when that variant sets one, else the implicit default Docker sandbox.
+ */
 export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
 
 /** The last layer that sets `sandbox`, else `fallback` (the implicit default Docker sandbox). */
