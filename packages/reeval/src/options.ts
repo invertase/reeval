@@ -656,7 +656,11 @@ export type PlannedAttempt = {
   label: string
 }
 
-/** The sandbox an attempt runs in: the environment's, else the implicit default Docker sandbox. */
+/**
+ * The sandbox an attempt runs in: the environment's, else the first variant's when this is an
+ * omitted-baseline empty control, else the cascaded environment's, else the implicit default
+ * Docker sandbox.
+ */
 export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor => {
   const own = env.layers.findLast((l) => l.spec.sandbox)?.spec.sandbox
   if (own) return own
@@ -666,12 +670,16 @@ export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): San
     resolved.compare?.from === 'empty' && env.name === EMPTY_BASELINE
       ? resolved.compare.variants[0]
       : undefined
-  return sandboxOf(variant?.layers ?? [], resolved.sandbox)
+  return sandboxOf(
+    [...(resolved.environment?.layers ?? []), ...(variant?.layers ?? [])],
+    resolved.sandbox,
+  )
 }
 
 /**
  * Which level set this attempt's sandbox: the cascade source of the environment that named one,
- * else the config (the implicit default Docker sandbox).
+ * else the cascaded environment that supplied the sandbox, else the config (the implicit default
+ * Docker sandbox).
  */
 export function sandboxSetBy(
   planned: Pick<PlannedAttempt, 'environment' | 'cell'>,
@@ -685,6 +693,9 @@ export function sandboxSetBy(
       resolved.compare.variants[0]?.layers.some((l) => l.spec.sandbox)
     ) {
       return resolved.sources?.compare ?? configFile
+    }
+    if (resolved.environment?.layers.some((l) => l.spec.sandbox)) {
+      return resolved.sources?.environment ?? configFile
     }
     return configFile
   }

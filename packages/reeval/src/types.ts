@@ -991,8 +991,8 @@ export type ResolvedConfig = {
   include: string[]
   harness: HarnessDescriptor[]
   /**
-   * The implicit default Docker sandbox used when an environment does not set one. Not a public
-   * `defineConfig` option; always `docker()`.
+   * The implicit default Docker sandbox used when neither the attempt's environment nor the
+   * cascaded environment sets one. Not a public `defineConfig` option; always `docker()`.
    */
   sandbox: SandboxDescriptor
   environment: Environment | undefined

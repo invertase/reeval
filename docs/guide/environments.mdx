@@ -34,7 +34,9 @@ group(
 )
 ```
 
-`environment` sets what every eval in the group runs in. An eval that sets `compare: { baseline, variants }` names every arm itself: don't put `environment` on that same object, and the group's environment is not applied to it. Leave `baseline` out and the group's environment is the control.
+`environment` sets what every eval in the group runs in. An eval that sets `compare: { baseline, variants }` names every arm itself: don't put `environment` on that same object.
+
+A named arm that omits `sandbox` still inherits the cascaded environment's sandbox, so a fake config runs a `plain` / skill compare without Docker. Leave `baseline` out and the group's environment is the control.
 
 ## Add skills
 

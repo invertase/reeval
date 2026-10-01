@@ -53,7 +53,7 @@ export default defineConfig({
 })
 ```
 
-Without an `environment`, the attempt uses the implicit default Docker sandbox (reeval's image: Node 22, git, pnpm, the agent CLI). Put a sandbox on `defineEnvironment`, not on `defineConfig`, `evaluate`, `group` or a profile.
+Without an `environment`, the attempt uses the implicit default Docker sandbox (reeval's image: Node 22, git, pnpm, the agent CLI). Put a sandbox on `defineEnvironment`, not on `defineConfig`, `evaluate`, `group` or a profile. A named compare environment that omits `sandbox` inherits the cascaded environment's sandbox (the config's `environment` is the usual one), so a fake config still runs `plain` / skill variants without Docker. Do not put `fakeSandbox()` on `plain` itself: real Cursor runs need Docker.
 
 - Harnesses (`reeval/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
   Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
@@ -252,7 +252,9 @@ group(
 - `compare: { variants: [houseStyle] }` with `environment: plain` (on the same object or a
   parent) plans the same cells as the example: without `baseline`, the cascaded environment is
   the control. A `baseline` names every arm instead: `environment` beside it is exit 2, and an
-  inherited one is not applied. `compare: false` is not an eval or group option.
+  inherited environment is not applied as files, skills or variables. A named arm that omits
+  `sandbox` still inherits that cascaded environment's sandbox. `compare: false` is not an
+  eval or group option.
 - Only variant cells gate by default (`gate?: 'variants' | 'all' | 'none'`). A control's miss
   prints `(not gated)` under `Expected misses, not gated` (`MISS` in agent output), never under
   `Failures`. `compare.harness: ['cursor:composer-2.5']` compares on some harnesses only.

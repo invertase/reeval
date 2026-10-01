@@ -907,7 +907,8 @@ export const EMPTY_BASELINE = 'baseline'
 
 /**
  * An environment with no layers. As a compare's empty control it uses the first
- * variant's sandbox when that variant sets one, else the implicit default Docker sandbox.
+ * variant's sandbox when that variant sets one, else the cascaded environment's, else
+ * the implicit default Docker sandbox.
  */
 export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
 

@@ -854,6 +854,14 @@ export const features: Feature[] = [
     canary: /expected 'child' to be 'parent'/,
   },
   {
+    dir: 'env/sandbox-inherit',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    sandbox: 'from-config',
+    cells: ['plain', 'skilled'],
+    canary: /expected 'from-config' to be 'docker'/,
+  },
+  {
     dir: 'compare/independent',
     tiers: ['fake', 'docker'],
     env: 'variant',

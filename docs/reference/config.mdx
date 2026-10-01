@@ -102,7 +102,7 @@ Pass a function to get helpers and facts about the run. It runs once, when the c
 </Property>
 
 <Property name="environment" type="Environment">
-  The environment every eval runs in, from `defineEnvironment`. Put the sandbox here (`sandbox: docker({ … })`). This is the control when a compare omits `baseline`. Default none: attempts use the implicit default Docker sandbox. See [defineEnvironment](/reference/environment).
+  The environment every eval runs in, from `defineEnvironment`. Put the sandbox here (`sandbox: docker({ … })`). This is the control when a compare omits `baseline`. A named compare arm that omits `sandbox` inherits this environment's sandbox. Default none: attempts use the implicit default Docker sandbox. See [defineEnvironment](/reference/environment).
 </Property>
 
 <Property name="runs" type="number">

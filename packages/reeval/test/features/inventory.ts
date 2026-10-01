@@ -558,12 +558,13 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'environment.sandbox',
     area: 'Environments',
-    name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it',
-    fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace'],
+    name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it; a named env inherits the cascaded sandbox',
+    fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace', 'env/sandbox-inherit'],
     plan: [
       'environments/images',
       'environments/extend-replace',
       'environments/config-control',
+      'environments/inherit-config',
       'environments/empty-control',
     ],
     tests: [
