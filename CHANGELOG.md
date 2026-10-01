@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.4.0](https://github.com/invertase/reeval/compare/v0.3.0...v0.4.0) (2026-10-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* **judge:** scope what the judge sees and size its provider errors ([#185](https://github.com/invertase/reeval/issues/185))
+* **compare:** make compare.baseline optional and compare.questions a list ([#177](https://github.com/invertase/reeval/issues/177))
+
+### Features
+
+* **compare:** make compare.baseline optional and compare.questions a list ([#177](https://github.com/invertase/reeval/issues/177)) ([439bdde](https://github.com/invertase/reeval/commit/439bdde2fd7350d5ce40e3ede5f625f0f07e07b5))
+* **environment:** add a directory helper that seeds files from a host directory ([#178](https://github.com/invertase/reeval/issues/178)) ([0dbd4e9](https://github.com/invertase/reeval/commit/0dbd4e913b3b24468ce049a165df477f65a705b0))
+* **history:** record a run without a secret-looking worktree.patch, and name each match ([#186](https://github.com/invertase/reeval/issues/186)) ([6d413a0](https://github.com/invertase/reeval/commit/6d413a0878aa235cee3e63f17b808fc4eb00ef71))
+* **judge:** scope what the judge sees and size its provider errors ([#185](https://github.com/invertase/reeval/issues/185)) ([c684198](https://github.com/invertase/reeval/commit/c68419810fd1f243a7ab51fed9cc387bce12131e))
+
+
+### Bug Fixes
+
+* **sandbox:** make files executable without chmod's -- for macOS ([#182](https://github.com/invertase/reeval/issues/182)) ([e854d82](https://github.com/invertase/reeval/commit/e854d82d006a09ee4e90b04dd6d97d7a03c7e51d))
+
 ## [0.3.0](https://github.com/invertase/reeval/compare/v0.2.0...v0.3.0) (2026-09-30)
 
 
