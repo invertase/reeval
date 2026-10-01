@@ -100,7 +100,7 @@
     "@reeval/harness-cursor-sdk": "workspace:0.1.2",
     "@reeval/harness-goose": "workspace:0.1.0",
     "@reeval/harness-opencode": "workspace:0.2.2",
-    "@reeval/harness-pi": "workspace:0.2.0",
+    "@reeval/harness-pi": "workspace:0.2.1",
     "@reeval/sandbox-docker": "workspace:*",
     "@types/picomatch": "4.0.3",
     "studio-web": "workspace:*",

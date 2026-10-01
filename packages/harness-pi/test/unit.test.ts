@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
+import type { HarnessV1StreamPart } from '@ai-sdk/harness'
 import { getPiBootstrap, PI_CLI_VERSION } from '../src/pi-bootstrap.ts'
 import {
   buildPiCommand,
@@ -127,12 +128,15 @@ test('mcp.json declares every server directly, with literal env and headers, and
 })
 
 /** A sandbox that brokers and records what's written and spawned. */
-function recordingSandbox() {
+function recordingSandbox(stdout: string[] = []) {
   const writes: Array<{ path: string; content: string }> = []
   const spawned: string[] = []
-  const empty = () =>
+  const stream = (lines: string[] = []) =>
     new ReadableStream<Uint8Array>({
-      start: (c) => c.close(),
+      start: (c) => {
+        for (const line of lines) c.enqueue(new TextEncoder().encode(`${line}\n`))
+        c.close()
+      },
     })
   const sandbox = {
     addRequestTransformations: async () => {},
@@ -144,8 +148,8 @@ function recordingSandbox() {
     spawn: async (o: { command: string }) => {
       spawned.push(o.command)
       return {
-        stdout: empty(),
-        stderr: empty(),
+        stdout: stream(stdout),
+        stderr: stream(),
         wait: async () => ({ exitCode: 0 }),
         kill: async () => {},
       }
@@ -154,8 +158,9 @@ function recordingSandbox() {
   return { sandbox, writes, spawned }
 }
 
-async function oneTurn(mcpServers?: Record<string, PiMcpServer>) {
-  const { sandbox, writes, spawned } = recordingSandbox()
+async function oneTurn(mcpServers?: Record<string, PiMcpServer>, stdout?: string[]) {
+  const { sandbox, writes, spawned } = recordingSandbox(stdout)
+  const parts: HarnessV1StreamPart[] = []
   const harness = createPi({
     auth: { [PI_CREDENTIAL_ENV]: 'AIza-k' },
     ...(mcpServers ? { mcpServers } : {}),
@@ -170,10 +175,10 @@ async function oneTurn(mcpServers?: Record<string, PiMcpServer>) {
     prompt: 'hi',
     tools: [],
     skills: [],
-    emit: () => {},
+    emit: (part: HarnessV1StreamPart) => parts.push(part),
   } as never)
   await control.done
-  return { writes, spawned }
+  return { writes, spawned, parts }
 }
 
 test('a session with MCP servers writes mcp.json under the home and loads the mcp extension', async () => {
@@ -182,6 +187,29 @@ test('a session with MCP servers writes mcp.json under the home and loads the mc
   assert.equal(mcp?.path, `/root/${PI_MCP_FILE}`)
   assert.equal(JSON.parse(String(mcp?.content)).mcpServers.stamp.exposure, 'direct')
   assert.match(spawned[0] ?? '', / --no-extensions -e builtin:mcp /)
+})
+
+test("a dashed server's tools are named with its configured name, not pi's mcp__my_docs__", async () => {
+  const { parts } = await oneTurn({ 'my-docs': { command: 'node', args: ['docs.mjs'] } }, [
+    JSON.stringify({
+      type: 'message_update',
+      assistantMessageEvent: {
+        type: 'toolcall_end',
+        toolCall: { id: 'c1', name: 'mcp__my_docs__latest_version', arguments: {} },
+      },
+    }),
+    JSON.stringify({
+      type: 'tool_execution_end',
+      toolCallId: 'c1',
+      toolName: 'mcp__my_docs__latest_version',
+      result: { content: [{ type: 'text', text: '4.2.0' }] },
+    }),
+    JSON.stringify({ type: 'agent_end' }),
+  ])
+  assert.deepEqual(
+    parts.flatMap((p) => (p.type === 'tool-call' || p.type === 'tool-result' ? [p.toolName] : [])),
+    ['mcp__my-docs__latest_version', 'mcp__my-docs__latest_version'],
+  )
 })
 
 test('a session without MCP servers writes no mcp.json and loads no extension', async () => {

@@ -27,7 +27,7 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
 
 ## How it works
 
-- **Bootstrap.** Installs `@earendil-works/pi-coding-agent` 0.99.1 from the lockfile in `assets/`,
+- **Bootstrap.** Installs `@earendil-works/pi-coding-agent` 0.99.2 from the lockfile in `assets/`,
   with no build scripts (pi doesn't need them).
 - **Turns.** Each turn is one `pi --mode json -p --offline --approve --no-extensions --provider
   google --model <model> --session-id <id>` process; every turn uses the session's id, so pi
@@ -46,3 +46,5 @@ global `fs` module to reach the sandbox's files. This package runs the pi CLI in
   `mcp__<server>__<tool>` rather than only through pi's `codemode` tool. pi expands `$NAME` in
   `env` and header values and runs a value starting with `!` as a command, so the adapter
   escapes them (`$` as `$$`, a leading `!` as `$!`): every value reaches the server as written.
+  pi writes each `-` in those names as `_`; the translator puts a server's configured name back
+  when no other server sanitizes alike, and leaves the tool part as pi wrote it.

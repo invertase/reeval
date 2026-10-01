@@ -4,6 +4,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@earendil-works/pi-coding-agent": "0.99.1"
+    "@earendil-works/pi-coding-agent": "0.99.2"
   }
 }
