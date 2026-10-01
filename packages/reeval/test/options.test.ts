@@ -1428,6 +1428,7 @@ evaluate('judged', async (c) => { await c.send('x'); await c.judge('ok?') })
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const env = defineEnvironment('s', ({ secret }) => ({
+  sandbox: docker(),
   env: { AWS_SECRET_ACCESS_KEY: secret.fromEnv('AWS_SECRET_ACCESS_KEY') },
 }))
 evaluate('one', { environment: env }, async () => {})
@@ -1524,6 +1525,7 @@ evaluate('one', { environment: env }, async () => {})
   const unbrokeredEval = `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const keys = defineEnvironment('keys', ({ secret }) => ({
+  sandbox: docker(),
   env: {
     GEMINI_API_KEY: secret.fromEnv('HOST_GEMINI', { hosts: secret.hosts.gemini }),
     AWS_SECRET_ACCESS_KEY: secret(),
@@ -1539,6 +1541,7 @@ evaluate('two', { environment: keys }, async () => {})
       'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
+  sandbox: docker(),
   env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
 evaluate('one', { environment: maybe }, async () => {})
@@ -1561,6 +1564,7 @@ evaluate('one', { environment: maybe }, async () => {})
       'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
+  sandbox: docker(),
   env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
 evaluate('one', { environment: maybe }, async () => {})

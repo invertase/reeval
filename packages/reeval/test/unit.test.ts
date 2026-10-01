@@ -949,7 +949,7 @@ test('named compare uses the cascaded sandbox option, not the config environment
   const kept = parent.extend('kept', { files: { 'x.txt': 'y' } })
   const { resolved } = cascade(
     { ...base, sandbox: { kind: 'fake', id: 'from-root' }, environment: configEnv },
-    [{ options: { compare: { baseline: plain, variants: [skill] } }, where: 'e' }],
+    [{ options: { compare: { baseline: plain, variants: [skill] }, runs: 1 }, where: 'e' }],
     'e',
   )
   assert.deepEqual(
