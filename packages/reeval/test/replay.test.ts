@@ -524,13 +524,20 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
   const unknownIn = (events: Record<string, unknown>[]) =>
     signatures('pi', events).filter((s) => !known.has(s))
 
-  test('a nightly contract turn whose one model call Gemini refused (503) is not a format change', () => {
-    const capture = readFileSync(
-      join(testDir, 'fixtures', 'pi-provider-unavailable.raw.jsonl'),
-      'utf8',
-    )
-    assert.match(capture, /"stopReason":"error"/)
-    assert.deepEqual(unknownIn(nativeEvents(capture)), [])
+  // A nightly contract turn on pi 0.99 (edit and run) whose second model call Gemini refused (503).
+  const unavailable = readFileSync(
+    join(testDir, 'fixtures', 'pi-provider-unavailable.raw.jsonl'),
+    'utf8',
+  )
+
+  test('a turn whose model call Gemini refused (503) is not a format change', () => {
+    assert.match(unavailable, /"type":"message_start","message":\{[^\n]*"stopReason":"error"/)
+    assert.deepEqual(unknownIn(nativeEvents(unavailable)), [])
+  })
+
+  test("twin: a key pi's failed call doesn't send is a format change", () => {
+    const changed = unavailable.replaceAll('"thinkingLevel"', '"thinking_level"')
+    assert.notDeepEqual(unknownIn(nativeEvents(changed)), [])
   })
 
   test("pi 0.87.1's whole failed turn (a bad key): message_start, message_end and turn_end", () => {
@@ -549,6 +556,28 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
     const base = read('pi', 'edit-and-run.raw.jsonl')
     const changed = base.replaceAll('"stopReason":"stop"', '"stopReason":"deferred"')
     assert.notDeepEqual(unknownIn(nativeEvents(changed)), [])
+  })
+})
+
+describe("replay: OpenCode's format holds a model call it retried", () => {
+  // A nightly contract turn (egress, gemini-3.8-flash) where Gemini refused the first call (503)
+  // and OpenCode retried it: `session_info_update`s set `opencode/retry`, then clear it.
+  const retried = readFileSync(
+    join(testDir, 'fixtures', 'opencode-provider-retry.raw.jsonl'),
+    'utf8',
+  )
+
+  test('the retry updates are not a format change, and the turn still ends', () => {
+    assert.match(retried, /"opencode\/retry":\{"attempt":2/)
+    assert.match(retried, /"opencode\/retry":null/)
+    assert.deepEqual(unknownSignatures('opencode', nativeEvents(retried)), [])
+    assert.ok(events(parse(retried)).some((e) => e.type === 'tool'))
+  })
+
+  test('twin: a key OpenCode sends outside _meta is a format change', () => {
+    const changed = retried.replaceAll('"_meta":{"opencode/retry"', '"retry":{"opencode/retry"')
+    assert.notEqual(changed, retried)
+    assert.notDeepEqual(unknownSignatures('opencode', nativeEvents(changed)), [])
   })
 })
 

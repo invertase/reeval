@@ -68,7 +68,7 @@ fake or phrase differently:
 | key | a hash scan of the container, after a real turn | a grep for the key would need the key in the container |
 | egress | the CONNECT status the `curl` wrote, and the gateway's record | the agent's account of what happened |
 | tokens, served model | the record's numbers and ids, by shape (> 0, a pattern) | exact counts change every run |
-| stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons; pi's stop reasons and `errorMessage`; the Cursor SDK's statuses and the runner's failure lines; agy's `error_message` steps; Codex's item types and statuses) | which values a run shows is the model's or the provider's doing: a stray write outside the workspace makes a tool call `failed`, a Gemini 503 makes pi's call `error` |
+| stream format | the event kinds and keys, plus every value the protocol defines (ACP's statuses, tool kinds, stop reasons; pi's stop reasons and a failed call's `errorMessage` and `thinkingLevel`; OpenCode's `session_info_update` while it retries a call; the Cursor SDK's statuses and the runner's failure lines; agy's `error_message` steps; Codex's item types and statuses) | which values a run shows is the model's or the provider's doing: a stray write outside the workspace makes a tool call `failed`, a Gemini 503 makes pi's call `error` and OpenCode retry |
 | e2e | exit codes, JSON from `reeval compare`/`reeval query`, files on disk | the CLI's text output changes with the run |
 
 Prompts name the exact action and ask for one short turn. The e2e eval allows a trailing period in
