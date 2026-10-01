@@ -152,9 +152,9 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  * providers' keys and OpenCode 1's, so this is reeval's own thin config over `@ai-sdk/harness-acp`.
  *
  * OpenCode ignores its config's `model` over ACP (a session starts on its own default), so each
- * turn sets the session's `model` config option. Its ACP `PromptResponse.usage` is its last
- * model call's, not the turn's, so turns report no usage here rather than an undercount (see
- * {@link OpenCodeStreamTranslator}).
+ * turn sets the session's `model` config option. `@ai-sdk/harness-acp` maps
+ * `PromptResponse.usage` onto the `finish` part; OpenCode #52467 reports the whole turn
+ * (see {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
   const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})

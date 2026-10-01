@@ -14,16 +14,6 @@ const BUILTIN_BY_NATIVE = new Map<string, string>([
   ['patch', 'edit'],
 ])
 
-const NO_USAGE = {
-  inputTokens: {
-    total: undefined,
-    noCache: undefined,
-    cacheRead: undefined,
-    cacheWrite: undefined,
-  },
-  outputTokens: { total: undefined, text: undefined, reasoning: undefined },
-}
-
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 
@@ -54,9 +44,9 @@ const searchResults = (text: string) =>
  * - A call it couldn't name (`acp_tool_<id>`) is named from OpenCode's first `tool_call` update,
  *   whose title is the tool's name: `shell` (its later titles are the command), `patch` (an
  *   `edit`), or `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
- * - The `finish` part's usage is dropped: OpenCode's ACP `PromptResponse.usage` is its last model
- *   call's, not the turn's, and an undercount is worse than none. Its `usage_update` is no help:
- *   `used` is the last call's context size, and `cost` the whole session's.
+ * - The `finish` part's usage is left as `@ai-sdk/harness-acp` mapped it from
+ *   `PromptResponse.usage`. OpenCode #52467 reports the whole turn; `usage_update.used` is still
+ *   the last step's context size, so it is not used here.
  */
 export class OpenCodeStreamTranslator {
   private readonly titles = new Map<string, string>()
@@ -73,7 +63,6 @@ export class OpenCodeStreamTranslator {
       this.observe(record(part.rawValue))
       return [part]
     }
-    if (part.type === 'finish') return [{ ...part, totalUsage: NO_USAGE }]
     if (part.type !== 'tool-call' && part.type !== 'tool-result') return [part]
     const id = typeof part.toolCallId === 'string' ? part.toolCallId : ''
     let out = part

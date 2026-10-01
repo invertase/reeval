@@ -865,7 +865,7 @@ export const inventory: InventoryFeature[] = [
       harness('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills'),
       harness("the key is swapped in on OpenCode's model endpoint only"),
       harness("OpenCode's edits and writes are file edits, relative to the workspace"),
-      opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
+      opencodeAdapter('stream', 'names a call from its first update, and keeps the usage'),
       opencodeAdapter('stream', "a tool's output is its content's text, with its metadata"),
       opencodeAdapter('stream', "a web search's results are its references"),
       opencodeAdapter(
@@ -1024,7 +1024,10 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: 'Token usage and the served model, per turn and totalled, from any harness',
     fixtures: ['harness/cursor-reports-usage'],
-    tests: [harness('token usage and the served model, from any harness')],
+    tests: [
+      harness('token usage and the served model, from any harness'),
+      harness('OpenCode: ACP PromptResponse.usage as harness-acp maps it'),
+    ],
     real: [
       'contract › tokens recorded where the harness reports them',
       'contract › served model recorded',

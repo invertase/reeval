@@ -71,8 +71,8 @@ export default defineConfig({
   `codex({ model })` (`OPENAI_API_KEY`; an OpenAI model id, e.g. `gpt-5.6-luna`; no `mcp.sse`) and
   `fakeHarness(…)`. A list runs each harness as its own cell.
   Keys never enter the sandbox: the agent sees a placeholder that reeval's gateway swaps on the
-  harness's own endpoints. Cursor, Claude Code, Antigravity, pi and Codex report tokens, which reeval records
-  per turn, attempt and run (no prices); OpenCode's and Goose's can't be trusted, so it records none for them.
+  harness's own endpoints. Cursor, Claude Code, Antigravity, OpenCode, pi and Codex report tokens, which reeval records
+  per turn, attempt and run (no prices); Goose's ACP usage is only the last model call, so it records none for Goose.
 - Judge models: `'typesafe-ai/jev-1.13.0'` (`TYPESAFE_AI_API_KEY`, recommended),
   `'google/gemini-3.8-flash'` (`GOOGLE_GENERATIVE_AI_API_KEY`), any other `provider/model` via
   the Vercel AI Gateway (`AI_GATEWAY_API_KEY`). Always a provider prefix.

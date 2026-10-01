@@ -51,7 +51,7 @@ const turn = (parts: Part[], mcpServers?: string[]) => {
   return [...parts, { type: 'finish', totalUsage: LAST_CALL }].flatMap((p) => t.push(p))
 }
 
-test('names a call from its first update, and drops the usage', () => {
+test('names a call from its first update, and keeps the usage', () => {
   const out = turn([
     ...call('b1', 'shell', 'echo contract-$((6*7))', { command: 'echo contract-$((6*7))' }),
     ...call('w1', 'webfetch', 'https://example.com', { url: 'https://example.com' }),
@@ -68,8 +68,7 @@ test('names a call from its first update, and drops the usage', () => {
   const finish = out.find((p) => p.type === 'finish') as {
     totalUsage: Record<string, { total?: number }>
   }
-  assert.equal(finish.totalUsage.inputTokens?.total, undefined)
-  assert.equal(finish.totalUsage.outputTokens?.total, undefined)
+  assert.deepEqual(finish.totalUsage, LAST_CALL)
 })
 
 test('twin: without the first update the call keeps its generic name', () => {
