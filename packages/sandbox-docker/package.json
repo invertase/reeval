@@ -39,11 +39,11 @@
     "@ai-sdk/harness": "1.0.137",
     "@ai-sdk/harness-claude-code": "1.0.141",
     "@reeval/harness-antigravity": "workspace:0.1.1",
-    "@reeval/harness-codex": "workspace:0.1.1",
-    "@reeval/harness-cursor-sdk": "workspace:0.1.1",
+    "@reeval/harness-codex": "workspace:0.1.2",
+    "@reeval/harness-cursor-sdk": "workspace:0.1.2",
     "@reeval/harness-goose": "workspace:0.1.0",
-    "@reeval/harness-opencode": "workspace:0.2.1",
-    "@reeval/harness-pi": "workspace:0.2.0",
+    "@reeval/harness-opencode": "workspace:0.2.2",
+    "@reeval/harness-pi": "workspace:0.2.1",
     "ws": "8.22.0",
     "zod": "4.6.5"
   }

@@ -46,7 +46,7 @@ reeval: Unknown profile "nigthly". Profiles in reeval.config.ts: smoke, nightly.
 A profile takes `defaults`, `limit`, `judge`, `budget`, `record` and `tags`. Anything else is an error.
 
 <Property name="defaults" type="object" optional>
-  Options that fill in what the config set and the eval files didn't. Accepts `harness`, `sandbox`, `environment`, `runs`, `gate`, `env`, `egress`, `judge` and `timeout`, with the same types as on [Options](/reference/options). They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
+  Options that fill in what the config set and the eval files didn't. Accepts `harness`, `environment`, `runs`, `gate`, `env`, `egress`, `judge` and `timeout`, with the same types as on [Options](/reference/options). The sandbox is part of `environment`, not a profile default of its own. They sit above the config and below every group and eval. When `defaults.harness` is set and an eval sets its own, the plan notes `harness set by the eval`.
 </Property>
 
 <Property name="limit" type="{ runs?, compare?, harness? }" optional>

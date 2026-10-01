@@ -423,7 +423,12 @@ export async function resolveEnvironment(
 
   let egressSet = false
   let workspace: GitWorkspace | undefined
+  let sandboxSet = false
   for (const { spec } of environment.layers) {
+    if (spec.sandbox !== undefined) {
+      if (sandboxSet) overrides.add('sandbox')
+      sandboxSet = true
+    }
     if (spec.workspace !== undefined) {
       if (workspace) overrides.add('workspace')
       workspace = spec.workspace

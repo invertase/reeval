@@ -1,11 +1,9 @@
 import { defineConfig } from 'reeval'
-import { docker } from 'reeval/sandbox'
 import { composer } from './evals/harnesses.ts'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: composer,
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   // agent: true writes a note on each eval and harness after its attempts, on the judge's model:
   // one more call per eval and harness, every run, so it's off here.

@@ -34,7 +34,8 @@ async function withEval(env: string, body = 'await c.sandbox()', harness?: strin
   const p = await project('workspace', {
     'reeval.config.ts': fakeConfig(harness ? { harness } : {}),
     'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const env = defineEnvironment('app', ({ git }) => ({ ${env} }))
+import { fakeSandbox } from 'reeval/sandbox'
+const env = defineEnvironment('app', ({ git }) => ({ sandbox: fakeSandbox(), ${env} }))
 evaluate('works on the repo', { environment: env }, async (c) => {
   ${body}
 })
@@ -172,7 +173,9 @@ describe('git workspaces', { concurrency: true }, () => {
         harness: `{ script: [[{ exec: 'echo x > NOTES.md && git add -A && git -c user.name=a -c user.email=a@b commit -qm notes' }]] }`,
       }),
       'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
 const env = defineEnvironment('app', ({ git }) => ({
+  sandbox: fakeSandbox(),
   workspace: git('../repo', { ref: 'v1', init: true }),
   files: { 'app/extra.js': 'x' },
 }))
@@ -257,7 +260,11 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (c) => {
         harness: `{ script: [[{ write: { 'app/greet.js': "export const greeting = 'Hi'\\n", 'NOTES.md': 'x' } }]] }`,
       }),
       'evals/w.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const base = defineEnvironment('base', ({ git }) => ({ workspace: git('../repo', { ref: 'v1' }) }))
+import { fakeSandbox } from 'reeval/sandbox'
+const base = defineEnvironment('base', ({ git }) => ({
+  sandbox: fakeSandbox(),
+  workspace: git('../repo', { ref: 'v1' }),
+}))
 const sub = base.extendEnvironment('sub', ({ git }) => ({ workspace: git('../repo', { ref: 'v1', path: 'app' }) }))
 evaluate('edits the repo', { environment: base }, async (c) => {
   const turn = await c.send('x')

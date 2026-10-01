@@ -3,12 +3,14 @@ title: defineEnvironment
 description: Every field of an environment, the order an attempt applies them in, extend and overrides, and the fields it refuses.
 ---
 
-`defineEnvironment(name, spec)` describes what an eval runs in: the code the workspace starts as, variables, secrets, files, rules, setup steps, skills, MCP servers and egress.
+`defineEnvironment(name, spec)` describes what an eval runs in: the sandbox, the code the workspace starts as, variables, secrets, files, rules, setup steps, skills, MCP servers and egress.
 
 ```ts title="evals/environments.ts"
 import { DEFAULT_EGRESS_ALLOW, defineEnvironment } from '{{ pkg }}'
+import { docker } from '{{ pkg }}/sandbox'
 
 export const base = defineEnvironment('base', ({ secret }) => ({
+  sandbox: docker({ from: 'node:24-bookworm' }),
   env: {
     NODE_ENV: 'test',
     NPM_TOKEN: secret({ hosts: ['registry.npmjs.org'] }),
@@ -57,9 +59,13 @@ defineEnvironment(name, (helpers) => spec)
   The fields below, or a callback that gets `secret`, `skill`, `mcp`, `file` and `git` (see [Helpers](/reference/helpers)). The callback runs once, synchronously, when the file loads; returning a `Promise` is an error. Relative paths resolve against the file that calls `defineEnvironment`.
 </Property>
 
-It returns a frozen `Environment` with `name`, `layers` and `extendEnvironment`.
+It returns a frozen `Environment` with `name`, `layers` and `extend` / `extendEnvironment`.
 
 ## Fields
+
+<Property name="sandbox" type="SandboxDescriptor" optional>
+  Where the attempt runs: `docker()` or `fakeSandbox()`. This is the only place to set a sandbox; `evaluate`, `group`, a profile and `defineConfig` refuse `sandbox`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; `install` is not merged onto the parent image. Omit it and the attempt uses the implicit default Docker sandbox. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and Node 24 cannot share a cell. Environments that share an image still share one preflight build.
+</Property>
 
 <Property name="workspace" type="GitWorkspace" optional>
   The code every attempt's workspace starts as: a git repository, or one directory of it, from the `git` helper (`git(repo, { ref, path, init, token })`; see [Helpers](/reference/helpers#git)). reeval fetches it on the host once per run, before any attempt, and copies its tree in before `files` and `setup`: without `.git`, or with a new one holding one commit of the tree when `init: true`. Submodules and Git LFS files aren't fetched. The record's `workspace` keeps the commit the ref resolved to and the tree's hash, which is in the environment's digest.
@@ -128,6 +134,7 @@ parent.extendEnvironment(name, (helpers) => spec)
 
 | Field | When both set it |
 |---|---|
+| `sandbox` | The child's replaces the parent's entirely |
 | `env` | Merged by variable name; the child wins |
 | `files` | Merged by path; the child wins |
 | `skills`, `mcp` | Merged by name; the child wins |
@@ -136,14 +143,14 @@ parent.extendEnvironment(name, (helpers) => spec)
 | `egress` | The child's replaces the parent's |
 | `setup` | Concatenated, parent first |
 
-Every key the child replaced is listed in the environment's `overrides` in the record (`env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `mcp.docs`, `egress`). Call it before `compare`. A variant cell then runs as that environment alone.
+Every key the child replaced is listed in the environment's `overrides` in the record (`sandbox`, `env.NODE_ENV`, `files.src/a.ts`, `rules`, `workspace`, `skills.house-style`, `mcp.docs`, `egress`). Call it before `compare`. A variant cell then runs as that environment alone. `extend` is an alias of `extendEnvironment`.
 
 ## Refused fields
 
-An environment has no image of its own. What's baked into the image belongs to the sandbox:
+Image fields belong on `sandbox: docker({ … })`, not as sibling keys:
 
 ```text
-reeval: evals/e.eval.ts: "image" isn't an environment field (defineEnvironment("e")). What's baked into the image is the sandbox's: docker({ install: … }). An environment only runs setup steps, in every attempt, with its secrets.
+reeval: evals/e.eval.ts: "image" isn't an environment field (defineEnvironment("e")). Put the image on the sandbox: sandbox: docker({ from: … }).
 ```
 
 `install`, `dockerfile` and `from` get the same message, naming their own key; `image` set to a string, such as `'node:22'`, names `docker({ from: … })`. Near misses get a hint: `steps`, `exec` and `run` point to `setup`; `vars` and `secrets` to `env`; `network` and `networkPolicy` to `egress`; `skill` to `skills`; `file` to `files`; `agents` to `rules`; `use` to `extend`; `repo`, `git` and `template` to `workspace`.

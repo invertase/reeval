@@ -111,7 +111,7 @@ export const withLocalDocs = defineEnvironment(
 ```
 
 ```ts title="reeval.fake.config.ts"
-import { defineConfig } from '{{ pkg }}'
+import { defineConfig, defineEnvironment } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
 
@@ -120,7 +120,7 @@ export default defineConfig({
   harness: fakeHarness({
     script: [[{ mcp: 'docs/latest_version' }, { reply: '4.2.0' }]],
   }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
 })
 ```
 
@@ -185,7 +185,7 @@ Summary
 - **A published stdio server:** `mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0'])`. Pin the version, and give its env secrets `hosts` to broker them: `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })`.
 - **Check the answer, not the call:** drop the tool check and add `c.judge('Does the reply name 4.2.0 as the latest version?')`.
 - **Server plus docs skill:** `compare: { baseline: plain, variants: [withDocsMcp, withDocsSkill] }` compares both against the same control, and `withDocsMcp.extendEnvironment('mcp-and-skill', …)` adds a cell with both.
-- **Every harness:** set `harness: [cursor(…), claudeCode(…)]`. The `mcp__<server>__<tool>` name is the same on each (see [Compare agents](/recipes/compare-agents)).
+- **Every harness:** set `harness: [cursor(…), claudeCode(…)]`. The `mcp__<server>__<tool>` name is the same on each (see [Compare agents](/recipes/compare-agents)), except that pi writes a `-` in a tool's name as `_` ([pi](/reference/harness/pi)).
 
 ## Next
 

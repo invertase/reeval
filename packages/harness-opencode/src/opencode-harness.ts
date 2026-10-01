@@ -31,7 +31,7 @@ import { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-to
 
 export const OPENCODE_HARNESS_ID = 'opencode'
 /** The `@opencode/cli` release the bootstrap installs (pinned in `opencode-install.ts`). */
-export const OPENCODE_CLI_VERSION = '2.0.20'
+export const OPENCODE_CLI_VERSION = '2.0.21'
 /** Where harness-placed skills go, under the sandbox home: OpenCode's own global directory. */
 export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
 /**
@@ -139,7 +139,7 @@ export type OpenCodeHarnessSettings = {
 }
 
 /**
- * The requests OpenCode sends the model's provider's key on (probed on 2.0.20, see
+ * The requests OpenCode sends the model's provider's key on (probed on 2.0.21, see
  * `opencode-provider-table.ts`). A gateway that enforces them refuses the key anywhere else.
  */
 export const openCodeEndpoints = (model: string, env: Record<string, string | undefined> = {}) =>
@@ -152,9 +152,9 @@ export const openCodeEndpoints = (model: string, env: Record<string, string | un
  * providers' keys and OpenCode 1's, so this is reeval's own thin config over `@ai-sdk/harness-acp`.
  *
  * OpenCode ignores its config's `model` over ACP (a session starts on its own default), so each
- * turn sets the session's `model` config option. Its ACP `PromptResponse.usage` is its last
- * model call's, not the turn's, so turns report no usage here rather than an undercount (see
- * {@link OpenCodeStreamTranslator}).
+ * turn sets the session's `model` config option. `@ai-sdk/harness-acp` maps
+ * `PromptResponse.usage` onto the `finish` part; OpenCode #52467 reports the whole turn
+ * (see {@link OpenCodeStreamTranslator}).
  */
 export function createOpenCode(settings: OpenCodeHarnessSettings): HarnessV1<OpenCodeBuiltinTools> {
   const resolved = resolveOpenCodeProvider(settings.model, settings.vars ?? {})

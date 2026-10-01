@@ -91,7 +91,6 @@ Without a profile, `reeval run` uses the agent you picked, in Docker. The eval d
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: cursor({ model: 'composer-2.5' }), // needs CURSOR_API_KEY
-  sandbox: docker(),
   …
 })
 ```

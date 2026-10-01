@@ -1,6 +1,5 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { docker, fakeSandbox } from 'reeval/sandbox'
 
 const target = `http://${process.env.REEVAL_EGRESS_TARGET}/`
 
@@ -19,8 +18,4 @@ export default defineConfig({
       ],
     ],
   }),
-  sandbox:
-    process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
-      ? docker()
-      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })

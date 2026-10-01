@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { EngineEval, EngineRun } from '../engine/node.ts'
-import { NO_ENVIRONMENT } from '../environment.ts'
+import { environmentSandbox, NO_ENVIRONMENT } from '../environment.ts'
 import { isTimeout } from '../errors.ts'
 import { attemptId, attemptKey, evalSlug, recordFileName, sha256 } from '../ids.ts'
 import { judgeModelName } from '../judge/index.ts'
@@ -745,7 +745,9 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
             JSON.stringify({
               harness: ids(profile.defaults.harness),
               environment: profile.defaults.environment?.name,
-              sandbox: profile.defaults.sandbox && sandboxId(profile.defaults.sandbox),
+              sandbox:
+                profile.defaults.environment &&
+                sandboxId(environmentSandbox(profile.defaults.environment, config.sandbox)),
               runs: profile.defaults.runs,
               timeout: profile.defaults.timeout,
               env: profile.defaults.env && Object.keys(profile.defaults.env).sort(),

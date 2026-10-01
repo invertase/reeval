@@ -38,10 +38,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; pi sees it as `GEMINI_API_KEY`) |
-| Adapter | `@reeval/harness-pi` 0.2.0, bundled with reeval |
-| CLI | `@earendil-works/pi-coding-agent` 0.99.1, from a pinned lockfile |
+| Adapter | `@reeval/harness-pi` 0.2.1, bundled with reeval |
+| CLI | `@earendil-works/pi-coding-agent` 0.99.2, from a pinned lockfile |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:pi-0.2.0` |
+| Image | `reeval-sandbox:pi-0.2.1` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.pi/agent/skills` |
 | Skills (`placement: 'workspace'`) | `.pi/skills` in the workspace |
@@ -104,6 +104,15 @@ The prompt is a command-line argument, so it must stay under 128 KiB. Instructio
 The adapter writes `mcp.stdio` servers as `command`, `args` and `env`, and `mcp.http` ones as `url` and `headers`. Each has `"exposure": "direct"`, so the model sees its tools as `mcp__<server>__<tool>`, their name in the transcript too; pi's default exposure reaches them only through its `codemode` tool, which the adapter doesn't load. pi also reads a `.pi/mcp.json` in the workspace, which `--approve` trusts.
 
 pi expands `$NAME` and `${NAME}` in `env` and header values, and runs a value that starts with `!` as a shell command. The adapter escapes both (`$` as `$$`, a leading `!` as `$!`), so every value, a brokered placeholder included, reaches the server as written.
+
+pi turns every `-` in an MCP tool's name into `_`. The adapter knows the server names, so it puts the server part back, and the transcript names a `my-docs` server's tool `mcp__my-docs__…` as on other harnesses. It doesn't know the tool names, so these stay as pi wrote them:
+
+| Configured | In the transcript |
+|---|---|
+| server `my-docs`, tool `latest_version` | `mcp__my-docs__latest_version` |
+| server `docs`, tool `latest-version` | `mcp__docs__latest_version` |
+| servers `a-b` and `a_b` | `mcp__a_b__…` for both: they can't be told apart |
+| a name over 64 characters, or two tools that sanitize alike | pi's shortened name, ending `_<hash>` |
 
 pi has no SSE transport, and skips a server whose name isn't letters, digits, `_` and `-`. An eval that gives it either is refused at plan time, naming the server: the run (and `--dry-run`) exits 2 before any attempt starts.
 

@@ -136,7 +136,11 @@ export const inventory: InventoryFeature[] = [
     id: 'compare.baseline',
     area: 'Config and selection',
     name: '`compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control',
-    plan: ['compare/baseline-omitted', 'compare/baseline-omitted-off'],
+    plan: [
+      'compare/baseline-omitted',
+      'compare/baseline-omitted-off',
+      'environments/empty-control',
+    ],
     fixtures: ['compare/baseline-omitted', 'compare/baseline-empty'],
     tests: [options('common mistakes')],
   },
@@ -545,10 +549,26 @@ export const inventory: InventoryFeature[] = [
     id: 'env.extend',
     area: 'Environments',
     name: '`extendEnvironment`, overrides and the environment digest',
-    fixtures: ['env/setup-order'],
+    fixtures: ['env/setup-order', 'env/sandbox-extend-replace'],
     tests: [
       unit('extendEnvironment layers and overrides; a separate environment does not'),
       harness('one environment has one digest'),
+    ],
+  },
+  {
+    id: 'environment.sandbox',
+    area: 'Environments',
+    name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it',
+    fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace'],
+    plan: [
+      'environments/images',
+      'environments/extend-replace',
+      'environments/config-control',
+      'environments/empty-control',
+    ],
+    tests: [
+      options('common mistakes'),
+      unit('extendEnvironment layers and overrides; a separate environment does not'),
     ],
   },
   {
@@ -865,7 +885,7 @@ export const inventory: InventoryFeature[] = [
       harness('OpenCode reads rules from AGENTS.md, repo skills from .opencode/skills'),
       harness("the key is swapped in on OpenCode's model endpoint only"),
       harness("OpenCode's edits and writes are file edits, relative to the workspace"),
-      opencodeAdapter('stream', 'names a call from its first update, and drops the usage'),
+      opencodeAdapter('stream', 'names a call from its first update, and keeps the usage'),
       opencodeAdapter('stream', "a tool's output is its content's text, with its metadata"),
       opencodeAdapter('stream', "a web search's results are its references"),
       opencodeAdapter(
@@ -1024,7 +1044,10 @@ export const inventory: InventoryFeature[] = [
     area: 'Harnesses',
     name: 'Token usage and the served model, per turn and totalled, from any harness',
     fixtures: ['harness/cursor-reports-usage'],
-    tests: [harness('token usage and the served model, from any harness')],
+    tests: [
+      harness('token usage and the served model, from any harness'),
+      harness('OpenCode: ACP PromptResponse.usage as harness-acp maps it'),
+    ],
     real: [
       'contract › tokens recorded where the harness reports them',
       'contract › served model recorded',

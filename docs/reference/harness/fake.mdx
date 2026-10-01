@@ -6,7 +6,7 @@ description: A scripted stand-in for a coding agent, for testing evals, configs 
 `fakeHarness()` is an agent that writes canned files and replies with canned text. It needs no key, costs nothing and finishes in milliseconds.
 
 ```ts title="reeval.fake.config.ts"
-import { defineConfig } from '{{ pkg }}'
+import { defineConfig, defineEnvironment } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
@@ -21,7 +21,7 @@ export default defineConfig({
       ],
     ],
   }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   judge: { model: fakeJudge({ score: 0.9 }) },
 })
 ```

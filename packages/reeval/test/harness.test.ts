@@ -1806,6 +1806,22 @@ describe('token usage and the served model, from any harness', () => {
     assert.equal(formatUsage(usage), '19k in (15k cached) · 311 out')
   })
 
+  test('OpenCode: ACP PromptResponse.usage as harness-acp maps it', async () => {
+    // @ai-sdk/harness-acp 1.0.72's mapACPUsage, after OpenCode #52467 reports the turn.
+    const acp = {
+      inputTokens: { total: 33942, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 117, reasoning: 21 },
+    }
+    const { usage } = await turnThrough(finishWith(acp))
+    assert.deepEqual(usage, {
+      input: 33942,
+      output: 117,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: 21,
+    })
+  })
+
   test('a harness that reports neither records null for both', async () => {
     const none = cursorUsage(undefined)
     const { usage, served } = await turnThrough(finishWith(none))

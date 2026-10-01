@@ -20,7 +20,7 @@ import {
   DEFAULT_THRESHOLD,
   judgeCredentials,
 } from './judge/index.ts'
-import { checkHarnesses, checkOptions, profileJudge } from './options.ts'
+import { checkHarnesses, checkOptions, profileJudge, sandboxMigration } from './options.ts'
 import { ownFileURL } from './root.ts'
 import { docker } from './sandbox.ts'
 import type {
@@ -39,7 +39,6 @@ export { UsageError }
 const CONFIG_KEYS = [
   'include',
   'harness',
-  'sandbox',
   'environment',
   'runs',
   'gate',
@@ -60,7 +59,6 @@ const CONFIG_KEYS = [
 const PROFILE_KEYS = ['defaults', 'limit', 'judge', 'budget', 'record', 'tags']
 const DEFAULTS_KEYS = [
   'harness',
-  'sandbox',
   'environment',
   'runs',
   'gate',
@@ -219,6 +217,9 @@ function checkProfile(name: string, profile: unknown): Profile {
   unknownKey(profile, PROFILE_KEYS, where)
   const p = profile as Profile
   if (p.defaults !== undefined) {
+    if ('sandbox' in p.defaults && (p.defaults as { sandbox?: unknown }).sandbox !== undefined) {
+      throw new UsageError(sandboxMigration(`${where}.defaults`))
+    }
     unknownKey(p.defaults, DEFAULTS_KEYS, `${where}.defaults`)
     checkOptions(p.defaults, `${where}.defaults`)
   }
@@ -349,7 +350,7 @@ export function resolveConfig(
     optionKeys: Object.keys(user),
     include,
     harness,
-    sandbox: user.sandbox ?? docker(),
+    sandbox: docker(),
     environment: user.environment,
     runs: user.runs ?? 1,
     gate: user.gate,

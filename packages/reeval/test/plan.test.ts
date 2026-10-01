@@ -57,6 +57,14 @@ export const cases: PlanCase[] = [
   { dir: 'privileges', name: 'profile', args: ['--profile', 'rooted'] },
   { dir: 'workspace', name: 'git', args: [] },
   { dir: 'files', name: 'directory', args: [] },
+  { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
+  { dir: 'environments', name: 'extend-replace', args: ['evals/extend.eval.ts'] },
+  { dir: 'environments', name: 'config-control', args: ['evals/compare.eval.ts'] },
+  {
+    dir: 'environments',
+    name: 'empty-control',
+    args: ['--config', 'reeval.empty.config.ts', 'evals/empty.eval.ts'],
+  },
 ]
 
 // Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'
@@ -157,10 +165,8 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       const p = await project(`refused-${where}-${model.split('/')[0]}${env ? '-env' : ''}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor, opencode } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: ${where === 'config' ? harness : "cursor({ model: 'composer-2.5' })"},
-  sandbox: docker(),
 })
 `,
         'evals/r.eval.ts': `import { evaluate } from 'reeval'
@@ -201,10 +207,8 @@ evaluate('refused', ${where === 'eval' ? `{ harness: ${harness} }, ` : ''}async 
       const p = await project(`sse-${factory}`, {
         'reeval.config.ts': `import { defineConfig } from 'reeval'
 import { cursor, ${factory} } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: [cursor({ model: 'composer-2.5' }), ${factory}({ model: '${model}' })],
-  sandbox: docker(),
 })
 `,
         'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
@@ -227,8 +231,7 @@ evaluate('streams', { environment: events }, async () => {})
   test('pi and Goose take stdio and http MCP servers; pi exits 2 on a server name it would skip', async () => {
     const config = (factory: string) => `import { defineConfig } from 'reeval'
 import { ${factory} } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
-export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }), sandbox: docker() })
+export default defineConfig({ harness: ${factory}({ model: 'gemini-3.8-flash' }) })
 `
     const evals = (local: string) => `import { defineEnvironment, evaluate } from 'reeval'
 const tools = defineEnvironment('tools', ({ mcp }) => ({

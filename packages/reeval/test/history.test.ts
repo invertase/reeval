@@ -692,8 +692,10 @@ evaluate('edited', async (c) => {
     const p = await project('joins', {
       'reeval.config.ts': fakeConfig({ extra: 'concurrency: 1,' }),
       'evals/e.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
-const one = defineEnvironment('tools', { env: { FLAVOUR: 'one' } })
-const two = defineEnvironment('tools', { env: { FLAVOUR: 'two' } })
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const one = defineEnvironment('tools', { sandbox, env: { FLAVOUR: 'one' } })
+const two = defineEnvironment('tools', { sandbox, env: { FLAVOUR: 'two' } })
 evaluate('uses one', { environment: one, runs: 3 }, async (c) => {
   await c.send('x')
   expect(await c.judge('Is it fine?')).toPass()
@@ -713,7 +715,9 @@ evaluate('uses none', async (c) => { await c.send('x') })
       assert.equal(run.environments.filter((e) => e.name === c?.environment).length, 2)
     }
     assert.notEqual(cell('uses one')?.environmentDigest, cell('uses two')?.environmentDigest)
-    assert.equal(cell('uses none')?.environmentDigest, null)
+    assert.equal(cell('uses none')?.environment, 'fake')
+    assert.ok(cell('uses none')?.environmentDigest)
+    assert.notEqual(cell('uses none')?.environmentDigest, cell('uses one')?.environmentDigest)
     assert.deepEqual([cell('uses one')?.harnessKind, cell('uses one')?.model], ['fake', null])
 
     const attempts = run.evals.flatMap((e) => e.attempts)
@@ -771,7 +775,7 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     const first = readRun(p.dir).run
     assert.deepEqual(
       first.evals.flatMap((e) => e.attempts.map((a) => `${e.id} ${a.id}`)),
-      ['evals/agent.eval.ts › agent root/-/fake#1'],
+      ['evals/agent.eval.ts › agent root/fake/fake#1'],
       "the config's .env.local, not the current directory's",
     )
 

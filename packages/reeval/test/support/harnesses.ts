@@ -119,9 +119,7 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['generativelanguage.googleapis.com', 'mcp.exa.ai'],
     apiHost: 'generativelanguage.googleapis.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     // Its ACP server names no model; the turn records the one the gateway saw it request.
     servedModel: /^gemini-3\.8-flash$/,
     wireModel: /^gemini-3\.8-flash$/,
@@ -137,9 +135,7 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.anthropic.com', 'mcp.exa.ai'],
     apiHost: 'api.anthropic.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /^claude-haiku-4-5/,
     wireModel: /^claude-haiku-4-5/,
   },
@@ -154,9 +150,7 @@ export const harnesses: HarnessRow[] = [
     skillContext: /^~\/\.config\/opencode\/skills\/contract-probe\/SKILL\.md$/,
     autoHosts: ['api.openai.com', 'mcp.exa.ai'],
     apiHost: 'api.openai.com',
-    tokens: false,
-    tokensWhy:
-      "its ACP server reports its last model call's usage, not the turn's, so the adapter drops it rather than record an undercount.",
+    tokens: true,
     servedModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
     wireModel: /^gpt-5\.4-mini-\d{4}-\d{2}-\d{2}\[effort=\w+\]$/,
   },

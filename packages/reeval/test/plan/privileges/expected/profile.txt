@@ -3,13 +3,13 @@ WARNING: running as root in the sandbox: profiles.rooted.defaults (docker({ root
 WARNING: running as root in the sandbox: group("system packages") (docker({ root: true })) [group evals/p.eval.ts]
 WARNING: running as root in the sandbox: evaluate("installs deps") (docker({ root: true })) [eval evals/p.eval.ts]
 warning: extra capabilities in the sandbox: evaluate("installs deps") (docker({ capabilities: ['NET_ADMIN'] })) [eval evals/p.eval.ts]
-evals/p.eval.ts › pings a host                     fake/-/docker  control  gated  ×1
-evals/p.eval.ts › traces a route                   fake/-/docker  control  gated  ×1
-evals/p.eval.ts › system packages › installs jq    fake/-/docker  control  gated  ×1
-evals/p.eval.ts › system packages › installs curl  fake/-/docker  control  gated  ×1
-evals/p.eval.ts › installs deps                    fake/-/docker  control  gated  ×1
-evals/p.eval.ts › stays unprivileged               fake/-/docker  control  gated  ×1
-evals/p.eval.ts › on the fake sandbox              fake/-/fake    control  gated  ×1
+evals/p.eval.ts › pings a host                     fake/rooted/docker  control  gated  ×1
+evals/p.eval.ts › traces a route                   fake/rooted/docker  control  gated  ×1
+evals/p.eval.ts › system packages › installs jq    fake/pkgs/docker    control  gated  ×1
+evals/p.eval.ts › system packages › installs curl  fake/pkgs/docker    control  gated  ×1
+evals/p.eval.ts › installs deps                    fake/deps/docker    control  gated  ×1
+evals/p.eval.ts › stays unprivileged               fake/plain/docker   control  gated  ×1
+evals/p.eval.ts › on the fake sandbox              fake/host/fake      control  gated  ×1
 excluded: —
 image docker · 6 evals
-  base  reeval-sandbox:cursor-0.1.1  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

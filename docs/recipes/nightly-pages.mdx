@@ -29,7 +29,6 @@ import { composer, sonnet } from './evals/harnesses.ts'
 
 export default defineConfig({
   harness: composer,
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   defaultProfile: { ci: 'pr' },
   profiles: {

@@ -9,7 +9,6 @@ import {
   opencode,
   pi,
 } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 
 // The CLI end to end on a real agent: e2e-real.test.ts records two runs of this one eval and
 // reads them back with compare, query, history and studio build. Same rows as the contract
@@ -39,7 +38,6 @@ const harness = () => {
 
 export default defineConfig({
   harness: harness(),
-  sandbox: docker(),
   runs: 1,
   timeout: '4m',
   budget: { attempts: 1 },

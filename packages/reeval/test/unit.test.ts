@@ -1037,11 +1037,16 @@ test('effort under 10s reads in tenths, so a ratio matches its times', async () 
 
 test('extendEnvironment layers and overrides; a separate environment does not', async () => {
   const main = defineEnvironment('main', ({ secret }) => ({
+    sandbox: { kind: 'fake', id: 'parent' },
     env: { KEY: secret.fromEnv('REEVAL_UNIT_KEY', { optional: true }), MODE: 'main' },
     files: { 'a.txt': 'main' },
     setup: ['echo one'],
   }))
-  const branch = main.extendEnvironment('branch', { env: { MODE: 'branch' }, setup: ['echo two'] })
+  const branch = main.extendEnvironment('branch', {
+    sandbox: { kind: 'fake', id: 'child' },
+    env: { MODE: 'branch' },
+    setup: ['echo two'],
+  })
   const other = defineEnvironment('other', { files: { 'a.txt': 'other' }, rules: 'Be terse.' })
   const child = applied(branch)
   assert.deepEqual(
@@ -1050,7 +1055,9 @@ test('extendEnvironment layers and overrides; a separate environment does not', 
     'extendEnvironment keeps the parent layers',
   )
   const r = await resolveEnvironment(child, {}, '/p', 'e', 'AGENTS.md')
-  assert.deepEqual(r.record.overrides, ['env.MODE'])
+  assert.deepEqual(r.record.overrides, ['sandbox', 'env.MODE'])
+  assert.equal(child.layers.at(-1)?.spec.sandbox?.id, 'child')
+  assert.equal(main.layers[0]?.spec.sandbox?.id, 'parent')
   assert.deepEqual(r.record.setup, ['echo one', 'echo two'])
   assert.deepEqual(r.record.unset, ['KEY'])
   assert.equal(r.vars.MODE, 'branch')

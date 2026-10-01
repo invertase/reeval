@@ -15,6 +15,7 @@ import {
 } from './config.ts'
 import { unenforceable } from './egress.ts'
 import { loadEnvFiles } from './env.ts'
+import { environmentSandbox } from './environment.ts'
 import { credentialOf } from './harness/agents.ts'
 import { runtimeInfo } from './history/provenance.ts'
 import type { Stack } from './history/types.ts'
@@ -153,14 +154,20 @@ export function checkRuntime(runtime: Runtime, nodeVersion: string): Check {
 /** Every harness and sandbox a run of the config can use: the config's, then each profile's. */
 export function configuredUses(config: ResolvedConfig) {
   const uses: Array<{ harness: HarnessDescriptor; sandbox: SandboxDescriptor; profile?: string }> =
-    config.harness.map((harness) => ({ harness, sandbox: config.sandbox }))
+    config.harness.map((harness) => ({
+      harness,
+      sandbox: environmentSandbox(config.environment, config.sandbox),
+    }))
   for (const [name, profile] of Object.entries(config.profiles)) {
     const harnesses = profile.defaults?.harness
       ? [profile.defaults.harness].flat()
-      : profile.defaults?.sandbox
+      : profile.defaults?.environment
         ? config.harness
         : []
-    const sandbox = profile.defaults?.sandbox ?? config.sandbox
+    const sandbox = environmentSandbox(
+      profile.defaults?.environment ?? config.environment,
+      config.sandbox,
+    )
     for (const harness of harnesses) uses.push({ harness, sandbox, profile: name })
   }
   return uses
@@ -170,7 +177,7 @@ export function describeConfig(config: ResolvedConfig): string {
   const profiles = Object.keys(config.profiles)
   return [
     `harness ${config.harness.map(harnessId).join(', ')}`,
-    `sandbox ${sandboxId(config.sandbox)}`,
+    `sandbox ${sandboxId(environmentSandbox(config.environment, config.sandbox))}`,
     profiles.length ? `profiles ${profiles.join(', ')}` : 'no profiles',
   ].join(', ')
 }

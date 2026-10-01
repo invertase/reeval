@@ -21,7 +21,6 @@ import { docker } from '{{ pkg }}/sandbox'
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],
   harness: cursor({ model: 'composer-2.5' }),
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   timeout: '15m',
 })
@@ -86,15 +85,15 @@ npx reeval image build
 ```
 
 ```text
-Building reeval-sandbox:cursor-0.1.1
+Building reeval-sandbox:cursor-0.1.2
 Building reeval-sandbox-base:latest
 Installing the Cursor harness bootstrap
-Cursor @cursor/sdk 1.0.34
-✓ docker: reeval-sandbox:cursor-0.1.1 3892d1805da5
+Cursor @cursor/sdk 1.0.35
+✓ docker: reeval-sandbox:cursor-0.1.2 c8287a5e70c2
 1 image ready
 ```
 
-reeval bakes the agent into its image once, tagged with the harness adapter's version (`reeval-sandbox:cursor-0.1.1`). Rebuild after you upgrade reeval.
+reeval bakes the agent into its image once, tagged with the harness adapter's version (`reeval-sandbox:cursor-0.1.2`). Rebuild after you upgrade reeval.
 
 ## Add your keys
 

@@ -45,7 +45,7 @@ const deps = (over: Partial<DoctorDeps> = {}): DoctorDeps => ({
 /** A resolved config from `reeval.config.ts` source that imports from `reeval`. */
 async function configOf(name: string, body: string) {
   const p = await project(`doctor-${name}`, {
-    'reeval.config.ts': `import { defineConfig } from 'reeval'
+    'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { claudeCode, codex, cursor, fakeHarness, pi } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { docker, fakeSandbox } from 'reeval/sandbox'
@@ -116,7 +116,10 @@ describe('reeval doctor checks', () => {
   })
 
   test('docker: skipped without a Docker sandbox, fails when down, warns on little memory', async () => {
-    const fake = await configOf('fake', '{ harness: fakeHarness(), sandbox: fakeSandbox() }')
+    const fake = await configOf(
+      'fake',
+      `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }) }`,
+    )
     const down = async () => 'down' as const
     assert.deepEqual(statuses((await checkDocker(fake, deps({ dockerState: down }))).checks), [
       'skip',
@@ -155,7 +158,7 @@ describe('reeval doctor checks', () => {
     // A profile's Docker sandbox counts too.
     const profiled = await configOf(
       'profile-docker',
-      '{ harness: fakeHarness(), sandbox: fakeSandbox(), profiles: { real: { defaults: { sandbox: docker() } } } }',
+      `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }), profiles: { real: { defaults: { environment: defineEnvironment('real', { sandbox: docker() }) } } } }`,
     )
     assert.equal(
       (await checkDocker(profiled, deps({ dockerState: down }))).checks[0]?.status,
@@ -195,7 +198,7 @@ describe('reeval doctor checks', () => {
 
     const own = await configOf(
       'own-image',
-      "{ harness: cursor({ model: 'composer-2.5' }), sandbox: docker({ image: 'mine:1' }) }",
+      "{ harness: cursor({ model: 'composer-2.5' }), environment: defineEnvironment('own', { sandbox: docker({ image: 'mine:1' }) }) }",
     )
     const ownMissing = await checkImages(own, deps({ imageExists: async () => false }))
     assert.deepEqual(statuses(ownMissing.checks), ['fail'])
@@ -246,7 +249,10 @@ describe('reeval doctor checks', () => {
     assert.deepEqual(statuses(codexSet), ['ok'])
     noSecret(codexSet)
 
-    const fake = await configOf('keys-fake', '{ harness: fakeHarness(), sandbox: fakeSandbox() }')
+    const fake = await configOf(
+      'keys-fake',
+      `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }) }`,
+    )
     assert.deepEqual(statuses(await checkKeys(fake, deps(), false, '.env.local')), ['skip'])
   })
 
@@ -305,16 +311,19 @@ describe('reeval doctor checks', () => {
   })
 
   test("judge: none, a fake one, and a model's key", async () => {
-    const none = await configOf('judge-none', '{ harness: fakeHarness(), sandbox: fakeSandbox() }')
+    const none = await configOf(
+      'judge-none',
+      `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }) }`,
+    )
     assert.deepEqual(statuses(await checkJudge(none, deps(), false, '.env.local')), ['skip'])
     const fake = await configOf(
       'judge-fake',
-      '{ harness: fakeHarness(), sandbox: fakeSandbox(), judge: { model: fakeJudge({ score: 1 }) } }',
+      `{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }), judge: { model: fakeJudge({ score: 1 }) } }`,
     )
     assert.deepEqual(statuses(await checkJudge(fake, deps(), false, '.env.local')), ['ok'])
     const google = await configOf(
       'judge-google',
-      "{ harness: fakeHarness(), sandbox: fakeSandbox(), judge: { model: 'google/gemini-3.8-flash' } }",
+      "{ harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }), judge: { model: 'google/gemini-3.8-flash' } }",
     )
     const missing = await checkJudge(google, deps(), false, '.env.local')
     assert.equal(missing[0]?.status, 'fail')
@@ -340,7 +349,7 @@ describe('reeval doctor checks', () => {
     const fake = await configOf(
       'egress-fake',
       `{ harness: cursor({ model: 'composer-2.5' }),
-         profiles: { fake: { defaults: { harness: fakeHarness(), sandbox: fakeSandbox(), egress: { allow: ['example.com'] } } } } }`,
+         profiles: { fake: { defaults: { harness: fakeHarness(), environment: defineEnvironment('fake', { sandbox: fakeSandbox() }), egress: { allow: ['example.com'] } } } } }`,
     )
     const checks = checkEgress(fake)
     assert.deepEqual(statuses(checks), ['ok', 'ok', 'fail'])

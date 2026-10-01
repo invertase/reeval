@@ -20,6 +20,7 @@ import {
   matchesTags,
   type PlannedAttempt,
   type Resolved,
+  sandboxSetBy,
   secretVarsIn,
   unbrokered,
   unbrokeredError,
@@ -113,11 +114,12 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     if (mcp) throw new UsageError(`${where} on ${harnessId(planned.harness)}: ${mcp}`)
   }
   const path = ctx.file ? relativeFile(ctx.config.root, ctx.file) : null
-  const setBy = {
-    sandbox: resolved.sources?.sandbox ?? ctx.config.file,
-    harness: resolved.sources?.harness ?? ctx.config.file,
-  }
+  const harnessBy = resolved.sources?.harness ?? ctx.config.file
   const plan = evalPlan(resolvedEval, plannedAttempts, { configFile: ctx.config.file, file: path })
+  const setByOf = (planned: PlannedAttempt) => ({
+    sandbox: sandboxSetBy(planned, resolved, ctx.config.file),
+    harness: harnessBy,
+  })
   if (resolvedEval.skip) {
     const [first] = expand(resolved)
     if (!first) return []
@@ -130,7 +132,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       label: '',
       harness: first.harness,
       sandbox: first.sandbox,
-      setBy,
+      setBy: setByOf(first),
       gate: 'none',
       brokered: [],
       secretVars: [],
@@ -144,6 +146,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     if (!cells.includes(planned.cell.key)) cells.push(planned.cell.key)
     const workspace = workspaceOf(planned.environment.layers)
     const files = filesOf(planned.environment.layers)
+    const setBy = setByOf(planned)
     const attempt: AttemptMeta = {
       name,
       groups,
@@ -186,7 +189,7 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
         timeoutMs,
         env: resolved.env,
         judge: resolved.judge,
-        sources: resolved.sources ?? {},
+        sources: { ...resolved.sources, sandbox: setBy.sandbox },
         notes: resolvedEval.notes,
       },
     }

@@ -1,14 +1,16 @@
 no profile · 3 evals · 12 cells · 12 attempts
-evals/omitted.eval.ts › no environment                    a/baseline/fake  control          ungated  ×1
-                                                          a/skilled/fake   variant skilled  gated    ×1
-                                                          b/baseline/fake  control          ungated  ×1
-                                                          b/skilled/fake   variant skilled  gated    ×1
-evals/omitted.eval.ts › inherits › the group environment  a/base/fake      control          ungated  ×1
-                                                          a/skilled/fake   variant skilled  gated    ×1
-                                                          b/base/fake      control          ungated  ×1
-                                                          b/skilled/fake   variant skilled  gated    ×1
-evals/omitted.eval.ts › its own environment               a/base/fake      control          ungated  ×1
-                                                          a/skilled/fake   variant skilled  gated    ×1
-                                                          b/base/fake      control          ungated  ×1
-                                                          b/skilled/fake   variant skilled  gated    ×1
+evals/omitted.eval.ts › no environment                    a/baseline/docker  control          ungated  ×1
+                                                          a/skilled/docker   variant skilled  gated    ×1
+                                                          b/baseline/docker  control          ungated  ×1
+                                                          b/skilled/docker   variant skilled  gated    ×1
+evals/omitted.eval.ts › inherits › the group environment  a/base/docker      control          ungated  ×1
+                                                          a/skilled/docker   variant skilled  gated    ×1
+                                                          b/base/docker      control          ungated  ×1
+                                                          b/skilled/docker   variant skilled  gated    ×1
+evals/omitted.eval.ts › its own environment               a/base/docker      control          ungated  ×1
+                                                          a/skilled/docker   variant skilled  gated    ×1
+                                                          b/base/docker      control          ungated  ×1
+                                                          b/skilled/docker   variant skilled  gated    ×1
 excluded: —
+image docker · 3 evals
+  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

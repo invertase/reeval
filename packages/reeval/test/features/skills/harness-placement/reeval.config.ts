@@ -1,6 +1,5 @@
 import { defineConfig } from 'reeval'
 import { cursor, fakeHarness } from 'reeval/harness'
-import { docker, fakeSandbox } from 'reeval/sandbox'
 
 // REEVAL_FIXTURE_SANDBOX picks the tier: the fake sandbox (F) by default, or docker (D).
 // REEVAL_FIXTURE_HARNESS=cursor runs it on real Cursor (C), which needs CURSOR_API_KEY.
@@ -18,8 +17,4 @@ export default defineConfig({
             ],
           ],
         }),
-  sandbox:
-    process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
-      ? docker()
-      : fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
 })

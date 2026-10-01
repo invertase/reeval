@@ -12,17 +12,15 @@ Keep a second config next to your real one. It swaps in `fakeHarness()`, `fakeSa
 ```ts title="reeval.config.ts"
 import { defineConfig } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
-import { docker } from '{{ pkg }}/sandbox'
 
 export default defineConfig({
   harness: cursor({ model: 'composer-2.5' }),
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash' },
 })
 ```
 
 ```ts title="reeval.fake.config.ts"
-import { defineConfig } from '{{ pkg }}'
+import { defineConfig, defineEnvironment } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
@@ -47,7 +45,7 @@ export default defineConfig({
       [{ exec: 'node --test' }, { reply: 'Tests pass.' }],
     ],
   }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   judge: { model: fakeJudge({ score: 0.95 }) },
 })
 ```
@@ -141,14 +139,14 @@ summary: .reeval/runs/20260927T120651Z_25cb0b1_ada-lovelace_2hbg/summary.md
 ## Simulate an infra failure
 
 ```ts title="reeval.fail.config.ts"
-import { defineConfig } from '{{ pkg }}'
+import { defineConfig, defineEnvironment } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
 
 export default defineConfig({
   include: ['evals/scripted.eval.ts'],
   harness: fakeHarness({ failWith: 'the agent CLI crashed on start' }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
 })
 ```
 

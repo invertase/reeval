@@ -1,6 +1,5 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 
 // Docker only: login shells read the image's /etc/profile. The Dockerfile layers on reeval's own
 // image and puts /opt/reeval-fixture/bin on PATH. As the agent, a login shell looks the tool up:
@@ -15,5 +14,4 @@ export default defineConfig({
       ],
     ],
   }),
-  sandbox: docker({ dockerfile: './docker/Dockerfile', id: 'docker' }),
 })

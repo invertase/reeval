@@ -66,6 +66,28 @@ test("each stop reason pi ends a call with is that step's finish reason, pi's ow
   assert.deepEqual(lastStep('aborted'), { unified: 'other', raw: 'aborted' })
 })
 
+test("a dashed MCP server's name is put back in pi's mcp__<server>__ prefix, unless it's ambiguous", () => {
+  const name = (toolName: string, mcpServers: string[]) => {
+    const lines = [
+      {
+        type: 'message_update',
+        assistantMessageEvent: { type: 'toolcall_end', toolCall: { id: 'c', name: toolName } },
+      },
+      { type: 'agent_end' },
+    ].map((e) => JSON.stringify(e))
+    const t = new PiStreamTranslator({ mcpServers })
+    const call = lines.flatMap((l) => t.push(l)).find((p) => p.type === 'tool-call')
+    return call && 'toolName' in call ? call.toolName : undefined
+  }
+  assert.equal(name('mcp__my_docs__x', ['my-docs']), 'mcp__my-docs__x')
+  // The tool part keeps pi's `_`: the adapter doesn't know the server's tool names.
+  assert.equal(name('mcp__my_docs__latest_version', ['my-docs']), 'mcp__my-docs__latest_version')
+  // Two servers that sanitize alike can't be told apart, so pi's name stands.
+  assert.equal(name('mcp__a_b__x', ['a-b', 'a_b']), 'mcp__a_b__x')
+  assert.equal(name('mcp__stamp__house_stamp', ['stamp']), 'mcp__stamp__house_stamp')
+  assert.equal(name('read', ['my-docs']), 'read')
+})
+
 test('twin: a process that dies before agent_end is an error, not a clean finish', () => {
   const lines = fixture('edit-and-run')
   const cut = lines.findIndex((l) => l.includes('"type":"agent_end"'))
