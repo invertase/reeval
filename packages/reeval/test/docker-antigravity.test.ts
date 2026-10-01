@@ -138,10 +138,8 @@ evaluate('hi', async (c) => {
         'reeval.config.ts': `
 import { defineConfig } from 'reeval'
 import { antigravity } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 export default defineConfig({
   harness: antigravity({ model: 'gemini-3.8-flash-low' }),
-  sandbox: docker(),
   timeout: '5m',
 })
 `,

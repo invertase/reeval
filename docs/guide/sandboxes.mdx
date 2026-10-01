@@ -20,12 +20,16 @@ A sandbox has one base (`image`, `from` or `dockerfile`), and optionally `instal
 ## Start from a toolchain image
 
 ```ts title="evals/python.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
+
+const python = defineEnvironment('python', {
+  sandbox: docker({ from: 'python:3.12-slim', id: 'python' }),
+})
 
 evaluate(
   'writes and tests fizzbuzz in python',
-  { sandbox: docker({ from: 'python:3.12-slim', id: 'python' }) },
+  { environment: python },
   async (c) => {
     await c.send(
       'Write fizzbuzz.py with a function fizzbuzz(n) returning the usual ' +
@@ -43,14 +47,16 @@ evaluate(
 ## Add tools with install
 
 ```ts title="evals/jq.eval.ts"
-const withJq = docker({
-  install: [
-    'apt-get update && apt-get install -y --no-install-recommends jq ' +
-      '&& rm -rf /var/lib/apt/lists/*',
-  ],
+const jq = defineEnvironment('jq', {
+  sandbox: docker({
+    install: [
+      'apt-get update && apt-get install -y --no-install-recommends jq ' +
+        '&& rm -rf /var/lib/apt/lists/*',
+    ],
+  }),
 })
 
-evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (c) => {
+evaluate('summarises a JSON file with jq', { environment: jq }, async (c) => {
   // …
   await expect(c.exec('jq --version')).toSucceed()
   await expect(c.exec('./count.sh')).toSucceed()
@@ -73,9 +79,13 @@ COPY seed.sql /opt/seed.sql
 ```
 
 ```ts title="evals/sqlite.eval.ts"
+const sqlite = defineEnvironment('sqlite', {
+  sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }),
+})
+
 evaluate(
   'queries a seeded SQLite database',
-  { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },
+  { environment: sqlite },
   async (c) => {
     // …
     const report = await c.exec('sqlite3 app.db < report.sql')

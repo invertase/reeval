@@ -97,12 +97,12 @@ describe('engine', () => {
 
   test('a path filter and a cell filter together run only that cell of that file', async () => {
     const p = await project('mixed-filter', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: [fakeHarness({ id: 'left' }), fakeHarness({ id: 'right' })],
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
 })
 `,
       'evals/scaffold.eval.ts': math(1),
@@ -114,7 +114,7 @@ export default defineConfig({
     const { evals } = readRun(p.dir)
     assert.deepEqual(
       evals.map((e) => [e.id, e.cells.map((c) => c.key)]),
-      [['evals/scaffold.eval.ts › math', ['right/-/fake']]],
+      [['evals/scaffold.eval.ts › math', ['right/fake/fake']]],
     )
   })
 
@@ -315,13 +315,13 @@ group('area', () => {
 
   test('.env.local wins over .env, the shell wins over both, and evals see them', async () => {
     const p = await project('dotenv', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 const id = (name: string) => process.env[name] ?? 'unset'
 export default defineConfig({
   harness: [fakeHarness({ id: id('REEVAL_T_BOTH') }), fakeHarness({ id: id('REEVAL_T_ENV') }), fakeHarness({ id: id('REEVAL_T_SHELL') })],
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
 })
 `,
       '.env': 'REEVAL_T_BOTH=from-env\nREEVAL_T_ENV=only-env\nREEVAL_T_SHELL=from-env\n',
@@ -337,7 +337,7 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
     const plan = await runCli(p.dir, ['run', '--dry-run', '--json'], { env })
     assert.equal(plan.code, 0, plan.stdout + plan.stderr)
     const cells = JSON.parse(plan.stdout).evals[0].cells.map((c: { key: string }) => c.key)
-    assert.deepEqual(cells, ['from-local/-/fake', 'only-env/-/fake', 'from-shell/-/fake'])
+    assert.deepEqual(cells, ['from-local/fake/fake', 'only-env/fake/fake', 'from-shell/fake/fake'])
 
     await writeFile(join(p.dir, 'evals/.env.local'), 'REEVAL_T_ENV=from-cwd\n')
     const fromSub = await runCli(
@@ -387,7 +387,7 @@ evaluate('canary', async () => expect(process.env.REEVAL_T_BOTH).toBe('from-env'
     assert.equal((await runCli(empty.dir, ['--help'])).code, 0)
 
     const real = await project('creds', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'\nexport default defineConfig({})\n`,
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'\nexport default defineConfig({})\n`,
       'evals/math.eval.ts': math(1),
     })
     const creds = await runCli(real.dir)
@@ -700,7 +700,7 @@ evaluate('agent eval', ${options ? `${options}, ` : ''}async (c) => {
     const [input] = JSON.parse(e.read(e.trial.files.judgeInput?.path ?? ''))
     assert.equal(input.question, 'Did it write hello.txt?')
     assert.equal(input.state.task, 'write hello.txt')
-    assert.equal(e.trial.id, 'fake/-/fake#1')
+    assert.equal(e.trial.id, 'fake/fake/fake#1')
     assert.match(
       e.trial.files.diff?.path ?? '',
       new RegExp(`^${e.slug}/fake-fake-[0-9a-f]{6}/1/diff\\.patch$`),

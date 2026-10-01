@@ -6,10 +6,13 @@ description: How many attempts run at once, in what order, and how to choose a v
 Every attempt has its own sandbox, so attempts run in parallel: up to `concurrency` of them at once, across every eval, cell and file in the run. Tighter caps can sit on top for resources several attempts share.
 
 ```ts title="reeval.config.ts"
+const limited = defineEnvironment('limited', {
+  sandbox: docker({ maxConcurrent: 4 }),
+})
+
 export default defineConfig({
   concurrency: 8,
-  // Docker containers at once, whatever their image
-  sandbox: docker({ maxConcurrent: 4 }),
+  environment: limited,
   // Cursor attempts at once, across every Cursor model
   harness: cursor({ model: 'composer-2.5', maxConcurrent: 3 }),
   // judge calls at once, per provider

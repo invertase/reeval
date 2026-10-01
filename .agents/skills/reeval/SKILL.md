@@ -43,17 +43,17 @@ message, one at a time.
 ```ts
 import { defineConfig } from 'reeval'
 import { cursor } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 
 export default defineConfig({
   include: ['evals/**/*.eval.ts'],              // default
-  harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY; docker()
-  sandbox: docker(),                          // reeval's image: Node 22, git, pnpm, the agent CLI
+  harness: cursor({ model: 'composer-2.5' }), // model required; CURSOR_API_KEY
   judge: { model: 'typesafe-ai/jev-1.13.0', threshold: 0.8 }, // no default model; pin versions
   runs: 1,                                    // attempts per cell
   timeout: '15m',                             // per attempt
 })
 ```
+
+Without an `environment`, the attempt uses the implicit default Docker sandbox (reeval's image: Node 22, git, pnpm, the agent CLI). Put a sandbox on `defineEnvironment`, not on `defineConfig`, `evaluate`, `group` or a profile.
 
 - Harnesses (`reeval/harness`): `cursor({ model, params? })` (`CURSOR_API_KEY`;
   Cursor's agent through the Cursor SDK; `params` such as `{ fast: 'true' }` pick the variant; unset ones take Cursor's default, which
@@ -84,15 +84,17 @@ export default defineConfig({
 ### Without Docker or API keys: the fake trio
 
 ```ts
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 
+const fake = defineEnvironment('fake', { sandbox: fakeSandbox() })
+
 export default defineConfig({
   // A scripted "agent": writes these files on every turn and replies with text.
   harness: fakeHarness({ files: { 'hello.txt': 'hello\n' }, text: 'Created hello.txt.' }),
-  sandbox: fakeSandbox(),                      // a temp dir on the host, no isolation
+  environment: fake,                           // a temp dir on the host, no isolation
   judge: { model: fakeJudge({ score: 0.9 }) }, // fixed score, no model call
 })
 ```
@@ -151,10 +153,11 @@ group('hello', () => {
 
 `defineConfig`, `group` and `evaluate` take the same options; inner levels win: `harness` (one
 or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
-a function), `environment` (one), `sandbox` (one), `runs`,
+a function), `environment` (one), `runs`,
 `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `timeout`, `tags`, `pin`.
-`compare` goes only on groups and evals. Options are plain objects, never functions. Unknown keys
-are errors with a hint (`repeat` → "Did you mean runs?").
+`compare` goes only on groups and evals. The sandbox lives on `defineEnvironment`, not on these
+options. Options are plain objects, never functions. Unknown keys are errors with a hint
+(`repeat` → "Did you mean runs?").
 
 ## Environments
 
@@ -209,9 +212,10 @@ the attempts that use it (infra error, exit 3). Submodules and LFS files aren't 
 
 Skills: `skill.local | git | npm | registry | inline` (pin git refs; `placement: 'workspace'`
 writes them into the repo's skill directory). `extendEnvironment` is the only composition; the
-child wins on shared keys. A skill is a directory whose `SKILL.md` has YAML frontmatter (`name`,
-`description`; quote values containing `: `). Baking (`image`, `install`) is the sandbox's job,
-never the environment's.
+child wins on shared keys and **replaces** `sandbox` entirely when it sets one (install is not
+merged onto the parent image). A skill is a directory whose `SKILL.md` has YAML frontmatter
+(`name`, `description`; quote values containing `: `). Baking (`from`, `install`, `dockerfile`)
+is `sandbox: docker({ … })` on the environment.
 
 ## compare, cells and lift
 
@@ -291,7 +295,7 @@ docker({ root: true })                               // opt in: apt-get at run t
 The agent, setup and `c.exec` run as `reeval` (home `/home/reeval`) with no capabilities; builds run as root.
 `root: true` or `capabilities` print a warning at the start of every run, so prefer `install`.
 
-One sandbox per eval (a list is an error). `npx reeval image build` builds every image the plan needs.
+Put the sandbox on `defineEnvironment`. A list is an error. `npx reeval image build` builds every image the plan needs. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and 24 cannot share a cell. Environments that share an image still share one preflight build.
 
 ## Secrets and egress
 

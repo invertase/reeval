@@ -32,6 +32,6 @@ evaluate(
 evaluate('MCP headers go to their server', { environment: docs }, async () => {})
 evaluate(
   'the fake sandbox gets placeholders too, and no warning',
-  { environment: gemini, sandbox: fakeSandbox() },
+  { environment: gemini.extend('gemini-fake', { sandbox: fakeSandbox() }) },
   async () => {},
 )

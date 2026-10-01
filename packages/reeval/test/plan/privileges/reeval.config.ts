@@ -1,11 +1,18 @@
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 
-// The config adds a capability; the rooted profile runs every eval that doesn't pick its own
-// sandbox as root.
+export const net = defineEnvironment('net', {
+  sandbox: docker({ capabilities: ['NET_RAW'] }),
+})
+
+export const rooted = defineEnvironment('rooted', {
+  sandbox: docker({ root: true }),
+})
+
+// The config environment adds a capability; the rooted profile replaces it entirely.
 export default defineConfig({
   harness: fakeHarness(),
-  sandbox: docker({ capabilities: ['NET_RAW'] }),
-  profiles: { rooted: { defaults: { sandbox: docker({ root: true }) } } },
+  environment: net,
+  profiles: { rooted: { defaults: { environment: rooted } } },
 })

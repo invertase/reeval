@@ -68,7 +68,6 @@ import { docker } from '{{ pkg }}/sandbox'
 
 export default defineConfig({
   harness: cursor({ model: 'composer-2.5' }),
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash' },
 })
 ```

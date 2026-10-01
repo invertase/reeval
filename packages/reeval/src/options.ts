@@ -1,5 +1,6 @@
 // The options cascade shared by the config, profiles, groups and evals, and the cells it expands to.
 
+import { createHash } from 'node:crypto'
 import { parseDuration } from './duration.ts'
 import { egressLabel, plannedEgress } from './egress.ts'
 import {
@@ -12,6 +13,7 @@ import {
   isEnvironment,
   isMovingRef,
   plannedSecrets,
+  sandboxOf,
   type UnbrokeredSecret,
   unbrokeredSecrets,
   workspaceLabel,
@@ -41,13 +43,13 @@ import type {
   PlannedEgress,
   PlannedQuestion,
   ResolvedProfile,
+  InstallStep,
   SandboxDescriptor,
   SandboxWarning,
 } from './types.ts'
 
 const KNOWN = [
   'harness',
-  'sandbox',
   'environment',
   'compare',
   'runs',
@@ -61,7 +63,8 @@ const KNOWN = [
 ]
 const SUGGEST: Record<string, string> = {
   harnesses: 'harness',
-  sandboxes: 'sandbox',
+  sandboxes: 'environment',
+  sandbox: 'environment',
   environments: 'environment',
   baseline: 'environment',
   variants: 'compare',
@@ -106,24 +109,37 @@ export function harnessId(h: HarnessDescriptor): string {
   return h.model ? `${h.kind}:${sanitize(h.model)}` : h.kind
 }
 
+function installId(install: readonly InstallStep[] | undefined): string {
+  if (!install?.length) return ''
+  const key = JSON.stringify(
+    install.map((step) =>
+      typeof step === 'string' ? step : { run: step.run, timeout: step.timeout },
+    ),
+  )
+  return `+${createHash('sha256').update(key).digest('hex').slice(0, 8)}`
+}
+
 export function sandboxId(s: SandboxDescriptor): string {
   if (s.id) return s.id
   if (s.kind === 'fake') return 'fake'
+  const install = s.kind === 'docker' ? installId(s.install) : ''
   if (s.dockerfile) {
     const [file = '', dir = ''] = s.dockerfile.split(/[\\/]/).reverse()
-    return `docker:${sanitize(file === 'Dockerfile' ? dir || file : file)}`
+    return `docker:${sanitize(file === 'Dockerfile' ? dir || file : file)}${install}`
   }
   const image = s.image ?? s.from
-  return image ? `docker:${sanitize(image)}` : 'docker'
+  return image ? `docker:${sanitize(image)}${install}` : `docker${install}`
 }
+
+/** `evaluate("x")`, `reeval.config.ts`, …: sandbox is not an option there. */
+export const sandboxMigration = (where: string) =>
+  `sandbox can't be set in ${where}. Put it on an environment: defineEnvironment('name', { sandbox: docker({ … }) }). When neither the eval nor the config sets an environment, the default Docker sandbox is used.`
 
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
   `${harness}/${environment}/${sandbox}`
 
 const isHarness = (v: unknown) =>
   (v as { kind?: string })?.kind === 'fake' || isAgentKind((v as { kind?: string })?.kind)
-const isSandbox = (v: unknown) =>
-  (v as { kind?: string })?.kind === 'docker' || (v as { kind?: string })?.kind === 'fake'
 
 function checkMaxConcurrent(value: unknown, where: string): void {
   if (value === undefined || (Number.isInteger(value) && (value as number) >= 1)) return
@@ -256,6 +272,9 @@ function checkCompare(value: unknown, where: string): void {
 
 /** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
+  if ('sandbox' in options && (options as { sandbox?: unknown }).sandbox !== undefined) {
+    throw new UsageError(sandboxMigration(where))
+  }
   for (const key of Object.keys(options)) {
     if (allowed.includes(key)) continue
     const hint = SUGGEST[key] ? ` Did you mean "${SUGGEST[key]}"?` : ''
@@ -301,17 +320,6 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
         `environment in ${where} must come from defineEnvironment(…) (got ${describe(o.environment)})`,
       )
     }
-  }
-  if (o.sandbox !== undefined) {
-    if (Array.isArray(o.sandbox)) {
-      throw new UsageError(
-        `sandbox takes one sandbox, not a list (${where}). Different toolchains need different checks, so write a separate eval per sandbox.`,
-      )
-    }
-    if (!isSandbox(o.sandbox)) {
-      throw new UsageError(`sandbox in ${where} must be like docker() (got ${describe(o.sandbox)})`)
-    }
-    checkMaxConcurrent(o.sandbox.maxConcurrent, `sandbox in ${where}`)
   }
   const raw = options as { environment?: unknown; compare?: unknown }
   if (raw.compare === false) {
@@ -500,7 +508,6 @@ function applyLevel(
   }
   if (options.egress !== undefined) out.egress[egress] = options.egress
   out.harness = applyHarness(out.harness, options.harness, where)
-  if (options.sandbox !== undefined) out.sandbox = options.sandbox
   if (options.environment !== undefined) out.environment = options.environment
   if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
   if (options.runs !== undefined) out.runs = options.runs
@@ -649,10 +656,36 @@ export type PlannedAttempt = {
   label: string
 }
 
+/** The sandbox an attempt runs in: the environment's, else the implicit default Docker sandbox. */
+export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor =>
+  sandboxOf(env.layers, resolved.sandbox)
+
+/**
+ * Which level set this attempt's sandbox: the cascade source of the environment that named one,
+ * else the config (the implicit default Docker sandbox).
+ */
+export function sandboxSetBy(
+  planned: Pick<PlannedAttempt, 'environment' | 'cell'>,
+  resolved: Resolved,
+  configFile: string,
+): string {
+  if (!planned.environment.layers.some((l) => l.spec.sandbox)) return configFile
+  if (resolved.compare) {
+    if (planned.cell.role === 'control') {
+      if (resolved.compare.from === 'environment') {
+        return resolved.sources?.environment ?? configFile
+      }
+      if (resolved.compare.from === 'empty') return configFile
+      return resolved.sources?.compare ?? configFile
+    }
+    return resolved.sources?.compare ?? configFile
+  }
+  return resolved.sources?.environment ?? configFile
+}
+
 /** Per harness: the control, then each variant it compares on; then run numbers. */
 export function expand(resolved: Resolved): PlannedAttempt[] {
   const { compare } = resolved
-  const sandbox = sandboxId(resolved.sandbox)
   // A compare's control is its baseline, which `cascade` resolved when it was omitted. An
   // environment from another level is not applied beside it.
   const control = applied(compare ? compare.baseline : resolved.environment)
@@ -661,29 +694,42 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
   const attempts: PlannedAttempt[] = []
   for (const harness of resolved.harness) {
     const hid = harnessId(harness)
-    const cells: Array<{ env: AppliedEnvironment; cell: Cell; gate: CellGate }> = [
-      {
-        env: control,
-        cell: {
-          key: cellKey(hid, control.name, sandbox),
-          harness: hid,
-          environment: control.name,
+    const cells: Array<{
+      env: AppliedEnvironment
+      sandbox: SandboxDescriptor
+      cell: Cell
+      gate: CellGate
+    }> = [
+      (() => {
+        const sandbox = attemptSandbox(resolved, control)
+        const sid = sandboxId(sandbox)
+        return {
+          env: control,
           sandbox,
-          role: 'control',
-        },
-        gate: gateIf(!compare || compare.gate === 'all'),
-      },
+          cell: {
+            key: cellKey(hid, control.name, sid),
+            harness: hid,
+            environment: control.name,
+            sandbox: sid,
+            role: 'control' as const,
+          },
+          gate: gateIf(!compare || compare.gate === 'all'),
+        }
+      })(),
     ]
     if (compare && (!compare.harness || compare.harness.includes(hid))) {
       for (const v of compare.variants) {
         const env = applied(v)
+        const sandbox = attemptSandbox(resolved, env)
+        const sid = sandboxId(sandbox)
         cells.push({
           env,
+          sandbox,
           cell: {
-            key: cellKey(hid, env.name, sandbox),
+            key: cellKey(hid, env.name, sid),
             harness: hid,
             environment: env.name,
-            sandbox,
+            sandbox: sid,
             role: 'variant',
             variant: v.name,
           },
@@ -691,7 +737,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
         })
       }
     }
-    for (const { env, cell, gate } of cells) {
+    for (const { env, sandbox, cell, gate } of cells) {
       const axes = [
         resolved.harness.length > 1 ? hid : '',
         compare ? (cell.role === 'control' ? 'control' : env.name) : '',
@@ -701,7 +747,7 @@ export function expand(resolved: Resolved): PlannedAttempt[] {
         attempts.push({
           cell,
           harness,
-          sandbox: resolved.sandbox,
+          sandbox,
           environment: env,
           egress: plannedEgress(resolved.egress, harness, resolved.env, env.layers),
           gate,
@@ -797,38 +843,45 @@ export const levelOf = (where: string): SandboxWarning['level'] =>
         : 'config'
 
 /**
- * A warning per privilege the eval's Docker sandbox adds, naming the level that set it: the
- * config when no profile, group or eval did.
+ * A warning per privilege an attempt's Docker sandbox adds, naming the level that set the
+ * environment which owns that sandbox: the config when no profile, group or eval did.
  */
 export function sandboxWarnings(
+  attempts: PlannedAttempt[],
   resolved: Resolved,
   origin: { configFile: string; file: string | null },
 ): SandboxWarning[] {
-  const { sandbox } = resolved
-  if (sandbox.kind !== 'docker') return []
-  const where = resolved.sources?.sandbox ?? origin.configFile
-  const level = levelOf(where)
-  const file = level === 'eval' || level === 'group' ? origin.file : null
   const out: SandboxWarning[] = []
-  if (sandbox.root) {
-    out.push({
-      kind: 'root',
-      level,
-      where,
-      file,
-      message: `running as root in the sandbox: ${where} (docker({ root: true }))`,
-    })
-  }
-  if (sandbox.capabilities?.length) {
-    const list = sandbox.capabilities.map((c) => `'${c}'`).join(', ')
-    out.push({
-      kind: 'capabilities',
-      level,
-      where,
-      file,
-      capabilities: [...sandbox.capabilities],
-      message: `extra capabilities in the sandbox: ${where} (docker({ capabilities: [${list}] }))`,
-    })
+  const seen = new Set<string>()
+  for (const a of attempts) {
+    if (a.sandbox.kind !== 'docker') continue
+    const where = sandboxSetBy(a, resolved, origin.configFile)
+    const level = levelOf(where)
+    const file = level === 'eval' || level === 'group' ? origin.file : null
+    if (a.sandbox.root) {
+      const message = `running as root in the sandbox: ${where} (docker({ root: true }))`
+      const key = `${file}\0${message}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        out.push({ kind: 'root', level, where, file, message })
+      }
+    }
+    if (a.sandbox.capabilities?.length) {
+      const list = a.sandbox.capabilities.map((c) => `'${c}'`).join(', ')
+      const message = `extra capabilities in the sandbox: ${where} (docker({ capabilities: [${list}] }))`
+      const key = `${file}\0${message}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        out.push({
+          kind: 'capabilities',
+          level,
+          where,
+          file,
+          capabilities: [...a.sandbox.capabilities],
+          message,
+        })
+      }
+    }
   }
   return out
 }
@@ -865,7 +918,7 @@ export function evalPlan(
       ...environmentWarnings(attempts),
       ...unbrokered(r.resolved.env, attempts).filter(reachesSandbox).map(unbrokeredWarning),
     ],
-    sandboxWarnings: skip ? [] : sandboxWarnings(resolved, origin),
+    sandboxWarnings: skip ? [] : sandboxWarnings(attempts, resolved, origin),
     brokered: [...new Set(attempts.flatMap((a) => brokeredIn(r.resolved.env, a)))],
     egress: [...new Set(attempts.map((a) => egressLabel(a.egress)).filter(Boolean))],
     workspaces: [

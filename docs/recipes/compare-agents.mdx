@@ -28,7 +28,6 @@ import { agy, composer } from './evals/harnesses.ts'
 export default defineConfig({
   include: ['evals/hello.eval.ts', 'evals/skill.eval.ts'],
   harness: [composer, agy],
-  sandbox: docker(),
   judge: { model: 'google/gemini-3.8-flash', threshold: 0.8 },
   gate: { passRate: 0.5 },
   timeout: '15m',

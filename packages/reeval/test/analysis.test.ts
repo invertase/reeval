@@ -52,12 +52,12 @@ type Row = Record<string, unknown>
 const FIXTURES = join(pkgRoot, 'test/fixtures/analysis')
 const UPDATE = !!process.env.REEVAL_UPDATE_SNAPSHOTS
 
-const CONFIG = `import { defineConfig } from 'reeval'
+const CONFIG = `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: fakeHarness({}),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   ANALYSIS
 })
 `
@@ -855,14 +855,14 @@ async function contractGroup(harness: string): Promise<AttemptView[]> {
 }
 
 const AGENT_CONFIG = (analysis: string) => `import { appendFileSync } from 'node:fs'
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 const called = () => appendFileSync(new URL('./calls.log', import.meta.url), 'call\\n')
 export default defineConfig({
   harness: [fakeHarness({ id: 'steady', files: { 'ok.txt': 'yes' } }), fakeHarness({ id: 'wobbly', files: { 'ok.txt': 'yes' } })],
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   ${analysis}
 })
@@ -899,16 +899,16 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
   test('on made-up staged records, missing and cut-short ones too, the tools pair failures and find where steps diverge', async () => {
     const dir = join(tempDir('notes-staging'), 'staging')
     const results = [
-      staged(dir, 'fake/-/fake', 1, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
+      staged(dir, 'fake/fake/fake', 1, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
         files: ['ok.txt'],
         verdict: 'pass',
       }),
-      staged(dir, 'fake/-/fake', 2, 'fail', ['ls', 'cat SKILL.md', 'touch ok.tx'], {
+      staged(dir, 'fake/fake/fake', 2, 'fail', ['ls', 'cat SKILL.md', 'touch ok.tx'], {
         exit: 1,
         files: ['ok.tx'],
         verdict: 'fail',
       }),
-      staged(dir, 'fake/-/fake', 3, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
+      staged(dir, 'fake/fake/fake', 3, 'pass', ['ls', 'cat SKILL.md', 'touch ok.txt'], {
         files: ['ok.txt'],
       }),
       staged(dir, 'fake/skilled/fake', 1, 'fail', ['ls'], { exit: 1 }),
@@ -921,9 +921,9 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     assert.deepEqual(
       attempts.map((a) => [a.id, a.outcome, a.error?.kind ?? null]),
       [
-        ['fake/-/fake#1', 'pass', null],
-        ['fake/-/fake#2', 'fail', 'assertion'],
-        ['fake/-/fake#3', 'pass', null],
+        ['fake/fake/fake#1', 'pass', null],
+        ['fake/fake/fake#2', 'fail', 'assertion'],
+        ['fake/fake/fake#3', 'pass', null],
         ['fake/skilled/fake#1', 'fail', 'assertion'],
         ['fake/skilled/fake#2', 'fail', 'assertion'],
         ['fake/skilled/fake#3', 'fail', 'assertion'],
@@ -931,10 +931,10 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     )
     const listed = listOutcomes(attempts)
     assert.deepEqual(listed.pairs, [
-      { failed: 'fake/-/fake#2', passed: 'fake/-/fake#1', match: 'cell' },
-      { failed: 'fake/skilled/fake#1', passed: 'fake/-/fake#1', match: 'harness' },
-      { failed: 'fake/skilled/fake#2', passed: 'fake/-/fake#1', match: 'harness' },
-      { failed: 'fake/skilled/fake#3', passed: 'fake/-/fake#3', match: 'harness' },
+      { failed: 'fake/fake/fake#2', passed: 'fake/fake/fake#1', match: 'cell' },
+      { failed: 'fake/skilled/fake#1', passed: 'fake/fake/fake#1', match: 'harness' },
+      { failed: 'fake/skilled/fake#2', passed: 'fake/fake/fake#1', match: 'harness' },
+      { failed: 'fake/skilled/fake#3', passed: 'fake/fake/fake#3', match: 'harness' },
     ])
     assert.deepEqual(listed.attempts[1]?.failedChecks, ['test -f ok.txt'])
     assert.equal(listed.attempts[0]?.steps, 3)
@@ -962,14 +962,14 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
         messages: [],
       })
     assert.deepEqual(
-      await call('compare_attempts', { failed: 'nope#1', passed: 'fake/-/fake#1' }),
+      await call('compare_attempts', { failed: 'nope#1', passed: 'fake/fake/fake#1' }),
       {
         error: `No attempt nope#1. The attempts are ${attempts.map((a) => a.id).join(', ')}.`,
       },
     )
     assert.ok(!('error' in ((await call('list_attempts', {})) as object)))
     assert.match(
-      String(((await call('open_attempt', { id: 'fake/-/fake#1' })) as { error?: string }).error),
+      String(((await call('open_attempt', { id: 'fake/fake/fake#1' })) as { error?: string }).error),
       /The input budget \(analysis\.maxInputTokens\) is spent/,
       'the tools stop at the input budget',
     )
@@ -1132,17 +1132,17 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     assert.deepEqual(
       notes.map((n) => [n.evalId, n.harness, n.attempts]),
       [
-        ['evals/w.eval.ts › reads ok.txt', 'steady', ['steady/-/fake#1']],
-        ['evals/w.eval.ts › reads ok.txt', 'wobbly', ['wobbly/-/fake#1']],
+        ['evals/w.eval.ts › reads ok.txt', 'steady', ['steady/fake/fake#1']],
+        ['evals/w.eval.ts › reads ok.txt', 'wobbly', ['wobbly/fake/fake#1']],
         [
           'evals/w.eval.ts › writes ok.txt',
           'steady',
-          ['steady/-/fake#1', 'steady/-/fake#2', 'steady/-/fake#3'],
+          ['steady/fake/fake#1', 'steady/fake/fake#2', 'steady/fake/fake#3'],
         ],
         [
           'evals/w.eval.ts › writes ok.txt',
           'wobbly',
-          ['wobbly/-/fake#1', 'wobbly/-/fake#2', 'wobbly/-/fake#3'],
+          ['wobbly/fake/fake#1', 'wobbly/fake/fake#2', 'wobbly/fake/fake#3'],
         ],
       ].sort((a, b) =>
         noteFileName(a[0] as string, a[1] as string).localeCompare(
@@ -1157,7 +1157,7 @@ describe('analysis.agent: a note per eval and harness during reeval run', () => 
     const wobbly = notes.find((n) => n.harness === 'wobbly' && n.evalId.endsWith('writes ok.txt'))
     const input = JSON.parse(wobbly?.text ?? '{}')
     assert.deepEqual(input.compared, [
-      { failed: 'wobbly/-/fake#2', passed: 'wobbly/-/fake#1', divergedAt: null },
+      { failed: 'wobbly/fake/fake#2', passed: 'wobbly/fake/fake#1', divergedAt: null },
     ])
     assert.deepEqual(
       input.attempts.map((a: { outcome: string }) => a.outcome),

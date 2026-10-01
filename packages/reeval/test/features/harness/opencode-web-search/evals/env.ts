@@ -1,7 +1,13 @@
 import { defineEnvironment, type Turn } from 'reeval'
+import { docker, fakeSandbox } from 'reeval/sandbox'
+
+const sandbox =
+  process.env.REEVAL_FIXTURE_SANDBOX === 'docker'
+    ? docker()
+    : fakeSandbox({ dir: new URL('../sandboxes', import.meta.url) })
 
 // deny-all: the search host is one the adapter's automatic hosts let through.
-export const closed = defineEnvironment('closed', { egress: 'deny-all' })
+export const closed = defineEnvironment('closed', { sandbox, egress: 'deny-all' })
 
 export const prompt =
   'Use your websearch tool (not the shell, not curl) once, to search for "anomalyco opencode ' +

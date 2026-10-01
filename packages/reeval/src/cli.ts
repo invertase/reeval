@@ -23,7 +23,7 @@ import {
 import { budgetMarker } from './engine/budget.ts'
 import type { CollectedPlan, EngineRun, PlannedItem } from './engine/node.ts'
 import { inCI, loadEnvFiles } from './env.ts'
-import { workspaceLabel } from './environment.ts'
+import { environmentSandbox, workspaceLabel } from './environment.ts'
 import { author, gitInfo, runnerInfo, runtimeInfo } from './history/provenance.ts'
 import type { GitInfo } from './history/types.ts'
 import { evalSlug, fromCwd, newRunId, RUN_STAMP_LENGTH } from './ids.ts'
@@ -454,8 +454,10 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     }
   }
   const sandboxes = [
-    config.sandbox,
-    ...(profile?.defaults.sandbox ? [profile.defaults.sandbox] : []),
+    environmentSandbox(config.environment, config.sandbox),
+    ...(profile?.defaults.environment
+      ? [environmentSandbox(profile.defaults.environment, config.sandbox)]
+      : []),
   ]
   const concurrency = await resolveConcurrency(config, flags.concurrency, async () => {
     // Sized from the Docker VM when Docker answers, as a real run is, so --dry-run shows the same.

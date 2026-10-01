@@ -403,7 +403,7 @@ export type FakeSandboxDescriptor = {
 }
 export type DockerSandboxDescriptor = {
   kind: 'docker'
-  /** Cell id; defaults to `docker`, or `docker:<image>` for other images. */
+  /** Cell id; defaults to `docker`, or `docker:<image>` for other images, plus an install hash. */
   id?: string
   /** An image that already has the harness baked in, used as is. */
   image?: string
@@ -559,6 +559,11 @@ export type GitHelper = (
 
 /** What an eval runs in: the declarative, phased spec of one environment. */
 export type EnvironmentSpec = {
+  /**
+   * Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment`
+   * replaces the parent's entirely when it sets one; install is not merged onto the parent image.
+   */
+  sandbox?: SandboxDescriptor
   /** The code the workspace starts as, before `files`, `rules` and `setup`; a child's replaces its parent's. */
   workspace?: GitWorkspace
   env?: EnvVars
@@ -577,8 +582,8 @@ export type EnvironmentSpec = {
 export type EnvironmentLayer = { name: string; spec: EnvironmentSpec }
 
 /**
- * What an eval runs in: skills, MCP servers, files, rules, variables, secrets and setup. Plain
- * data (`layers` root first), plus a non-enumerable `extendEnvironment`; see `defineEnvironment`.
+ * What an eval runs in: the sandbox, skills, MCP servers, files, rules, variables, secrets and
+ * setup. Plain data (`layers` root first), plus non-enumerable `extend` / `extendEnvironment`.
  */
 export type Environment = {
   readonly kind: 'environment'
@@ -586,9 +591,12 @@ export type Environment = {
   readonly layers: readonly EnvironmentLayer[]
   /**
    * A child environment layered on this one; wherever it sets a key this one has, it wins.
-   * This is how two `compare` arms share setup: `compare` itself never layers.
+   * `sandbox` is replaced entirely when the child sets one. This is how two `compare` arms share
+   * setup: `compare` itself never layers.
    */
   extendEnvironment(name: string, spec: EnvironmentInput): Environment
+  /** Alias of `extendEnvironment`. */
+  extend(name: string, spec: EnvironmentInput): Environment
 }
 
 /** Typed helpers for environment specs, passed to `defineEnvironment` and `extend` callbacks. */
@@ -682,7 +690,7 @@ export type CompareGate = 'variants' | 'all' | 'none'
 
 /**
  * The baseline and each variant run as their own environments, with the same prompt and checks.
- * `compare` does not layer them. Share setup first with `environment.extendEnvironment`.
+ * `compare` does not layer them. Share setup first with `environment.extend` / `extendEnvironment`.
  * `false` is not a value here: a profile turns compare off with `limit.compare`.
  */
 export type CompareOptions<E = Environment> = {
@@ -769,7 +777,6 @@ export type CompareSpec<E = Environment> = CompareOptions<E>
 type EvalOptionFields = {
   /** The only list: each harness is its own cell. */
   harness?: HarnessOption
-  sandbox?: SandboxDescriptor
   /** Attempts per cell. */
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -825,8 +832,8 @@ export type EvalOptionsData = Omit<EvalOptionFields, 'harness' | 'judge'> & {
   judge?: ConfigJudgeOptions
 } & EnvironmentOrCompare<EnvironmentData>
 
-/** An `Environment` as data, as JSON carries it: without `extendEnvironment`. */
-export type EnvironmentData = Omit<Environment, 'extendEnvironment'>
+/** An `Environment` as data, as JSON carries it: without `extend` / `extendEnvironment`. */
+export type EnvironmentData = Omit<Environment, 'extendEnvironment' | 'extend'>
 
 /** The config file is plain data sent to workers, so its judge model can't be an object. */
 export type ConfigJudgeOptions = Omit<JudgeOptions, 'model'> & { model?: string | FakeJudgeModel }
@@ -844,7 +851,6 @@ export type Budget = { attempts?: number; duration?: Duration }
 /** What evals get when they don't say otherwise: under groups and evals. */
 export type ProfileDefaults = {
   harness?: HarnessDescriptor | HarnessDescriptor[]
-  sandbox?: SandboxDescriptor
   environment?: Environment
   runs?: number
   gate?: GatePolicy
@@ -924,7 +930,6 @@ export type AnalysisConfig = {
 export type EsConfig = {
   include?: string[]
   harness?: HarnessDescriptor | HarnessDescriptor[]
-  sandbox?: SandboxDescriptor
   environment?: Environment
   runs?: number
   /** How each cell's attempts decide its outcome; default `'all'`. */
@@ -985,6 +990,10 @@ export type ResolvedConfig = {
   optionKeys?: string[]
   include: string[]
   harness: HarnessDescriptor[]
+  /**
+   * The implicit default Docker sandbox used when an environment does not set one. Not a public
+   * `defineConfig` option; always `docker()`.
+   */
   sandbox: SandboxDescriptor
   environment: Environment | undefined
   runs: number
@@ -1053,9 +1062,10 @@ export type PhaseTimings = {
 export type CellRole = 'control' | 'variant'
 
 /**
- * One cell of an eval: a harness and an environment (`-` for none) on the eval's sandbox. With
- * `compare`, the control is `baseline` (or the cascaded environment, or an empty `baseline`) and
- * each variant is that environment on its own.
+ * One cell of an eval: a harness, an environment (`-` when none is set) and that environment's
+ * image (`sandbox` id: tag, dockerfile and install). With `compare`, the control is `baseline`
+ * (or the cascaded environment, or an empty `baseline`) and each variant is that environment on
+ * its own, including its sandbox.
  */
 export type Cell = {
   key: string

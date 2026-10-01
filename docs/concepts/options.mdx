@@ -24,7 +24,7 @@ export default defineConfig({
   harness: fakeHarness({
     files: { 'add.js': 'export const add = (a, b) => a + b\n' },
   }),
-  sandbox: fakeSandbox(),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   timeout: '2m',
   profiles: {

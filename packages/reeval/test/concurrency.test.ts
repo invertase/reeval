@@ -216,7 +216,7 @@ describe('concurrency', () => {
   test('--dry-run sizes the default concurrency from the Docker VM, as a real run does', async () => {
     const p = await project('conc-docker-vm', {
       'reeval.config.ts': fakeConfig().replace(
-        "sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),",
+        "environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),",
         "sandbox: (await import('reeval/sandbox')).docker(),",
       ),
       'evals/a.eval.ts': `import { evaluate } from 'reeval'\nevaluate('a', async (c) => { await c.send('go') })\n`,
@@ -235,13 +235,13 @@ describe('concurrency', () => {
 
   test('a sandbox cap holds on top of the run cap; the judge takes its own leases', async () => {
     const p = await project('conc-sandbox-cap', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness({ delayMs: 400 }),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url), maxConcurrent: 2 }) }),
   judge: { model: fakeJudge({ score: 0.9 }), maxConcurrent: 1 },
 })
 `,

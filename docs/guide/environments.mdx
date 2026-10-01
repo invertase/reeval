@@ -3,7 +3,7 @@ title: Environments and skills
 description: Give the agent a starting codebase, skills, MCP servers, rules, files, variables and setup steps with defineEnvironment.
 ---
 
-The sandbox is where the agent runs. An environment is what it runs with: a starting codebase, skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
+The sandbox is where the agent runs, and it lives on the environment: `defineEnvironment('python', { sandbox: docker({ from: 'python:3.12-slim' }) })`. An environment is also what the agent runs with: a starting codebase, skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'

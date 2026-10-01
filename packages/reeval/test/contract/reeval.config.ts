@@ -9,7 +9,6 @@ import {
   opencode,
   pi,
 } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 import { fakeScript } from './evals/probes.ts'
 
 // The harness contract: every real harness runs these evals in Docker. contract.test.ts picks the
@@ -40,7 +39,6 @@ const harness = () => {
 
 export default defineConfig({
   harness: harness(),
-  sandbox: docker(),
   // No retries, one attempt per cell: a failure is a failure (see README, flake policy).
   runs: 1,
   timeout: '4m',

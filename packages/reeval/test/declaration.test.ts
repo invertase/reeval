@@ -21,8 +21,7 @@ function runIn(root: string): RunContext {
   const config = resolveConfig(
     {
       harness: [fakeHarness(), cursor({ model: 'composer-2.5' })],
-      sandbox: docker(),
-      runs: 1,
+          runs: 1,
     },
     root,
   )

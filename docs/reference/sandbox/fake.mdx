@@ -6,14 +6,16 @@ description: A temporary directory on the host that stands in for a container, f
 `fakeSandbox()` gives each attempt a temporary directory on the host instead of a container. It's for the fake harness and for testing your evals and configs; it isolates nothing.
 
 ```ts title="reeval.fake.config.ts"
-import { defineConfig } from '{{ pkg }}'
+import { defineConfig, defineEnvironment } from '{{ pkg }}'
 import { fakeHarness } from '{{ pkg }}/harness'
 import { fakeJudge } from '{{ pkg }}/judge'
 import { fakeSandbox } from '{{ pkg }}/sandbox'
 
+const fake = defineEnvironment('fake', { sandbox: fakeSandbox() })
+
 export default defineConfig({
   harness: fakeHarness({ files: { 'greet.js': 'export const greet = 1\n' } }),
-  sandbox: fakeSandbox(),
+  environment: fake,
   judge: { model: fakeJudge() },
 })
 ```

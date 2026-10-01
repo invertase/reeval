@@ -11,6 +11,7 @@ import { inCI, loadEnvFiles } from '../env.ts'
 import type { AttemptRecord, RunRecord } from '../history/types.ts'
 import { SECRET_NAME } from '../redact.ts'
 import { PACKAGE_VERSION } from '../root.ts'
+import { environmentSandbox } from '../environment.ts'
 import type { ResolvedConfig } from '../types.ts'
 import { readInvocations } from './invocations.ts'
 import { masks, registerEnvFileValues, type Scrubber, scrubber } from './scrub.ts'
@@ -72,10 +73,12 @@ export function packageManager(
 /** The config's keys and the kinds it uses; no value, model or path from it. */
 export function configShape(config: ResolvedConfig): NonNullable<ReportBundle['config']> {
   const harnesses = new Set(config.harness.map((h) => h.kind))
-  const sandboxes = new Set([config.sandbox.kind])
+  const sandboxes = new Set([environmentSandbox(config.environment, config.sandbox).kind])
   for (const profile of Object.values(config.profiles)) {
     for (const h of [profile.defaults?.harness ?? []].flat()) harnesses.add(h.kind)
-    if (profile.defaults?.sandbox) sandboxes.add(profile.defaults.sandbox.kind)
+    if (profile.defaults?.environment) {
+      sandboxes.add(environmentSandbox(profile.defaults.environment, config.sandbox).kind)
+    }
   }
   return {
     file: config.file,

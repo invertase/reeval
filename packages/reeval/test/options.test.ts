@@ -8,13 +8,14 @@ import { fakeConfig, project, readRun, recordedRuns, runCli } from './helpers.ts
 import { fixture } from './support/fixture.ts'
 
 const config = (extra: string, harness = 'fakeHarness({})') => `
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
+const sandbox = fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) })
 export default defineConfig({
   harness: ${harness},
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   ${extra}
 })
@@ -95,20 +96,20 @@ evaluate('two of three', { runs: 3, gate: { passRate: 0.5 } }, async (c) => {
     assert.deepEqual(
       e?.cells.map((c) => [c.key, c.role, c.gate, c.runs, c.pass, c.passRate, c.outcome]),
       [
-        ['good/-/fake', 'control', 'all', 2, 2, 1, 'pass'],
-        ['bad/-/fake', 'control', 'all', 2, 0, 0, 'fail'],
+        ['good/fake/fake', 'control', 'all', 2, 2, 1, 'pass'],
+        ['bad/fake/fake', 'control', 'all', 2, 0, 0, 'fail'],
       ],
     )
     assert.deepEqual(
       e?.attempts.map((a) => a.id),
-      ['good/-/fake#1', 'good/-/fake#2', 'bad/-/fake#1', 'bad/-/fake#2'],
+      ['good/fake/fake#1', 'good/fake/fake#2', 'bad/fake/fake#1', 'bad/fake/fake#2'],
     )
 
     const narrowed = await runCli(p.dir, ['run', 'good/', '--runs', '1'])
     assert.equal(narrowed.code, 0, narrowed.stdout)
     assert.deepEqual(
       readRun(p.dir).evals[0]?.attempts.map((a) => a.id),
-      ['good/-/fake#1'],
+      ['good/fake/fake#1'],
       'a filter matches cell keys, and --runs overrides the group',
     )
   })
@@ -501,13 +502,13 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
 
   test('with a language model the run plans its questions and the outcome is the checks', async () => {
     const p = await project('questions-fake-model', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: ${OK},
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: { model: fakeAnalysis({ output: {} }) },
 })
@@ -541,7 +542,7 @@ export default defineConfig({
 
   // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
   // its check on every attempt, so it's in no pair but still in the pass rate and the exit code.
-  const threeHarnesses = (analysis: string) => `import { defineConfig } from 'reeval'
+  const threeHarnesses = (analysis: string) => `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -552,7 +553,7 @@ export default defineConfig({
     fakeHarness({ id: 'bad', files: { 'no.txt': 'no' } }),
   ],
   runs: 2,
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   ${analysis}
 })
@@ -626,13 +627,13 @@ export default defineConfig({
 
   test('a model error is kept on its answer and warned about; the outcome and exit code stand', async () => {
     const p = await project('questions-model-error', {
-      'reeval.config.ts': `import { defineConfig } from 'reeval'
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   harness: ${OK},
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   analysis: { model: fakeAnalysis({ vote: { error: 'the model is over quota' } }) },
 })
@@ -982,12 +983,12 @@ describe('common mistakes', () => {
     [
       'image steps on an environment',
       `defineEnvironment('firebase', { image: ['npm i -g firebase-tools'] })`,
-      /"image" isn't an environment field \(defineEnvironment\("firebase"\)\)\. What's baked into the image is the sandbox's: docker\(\{ install: … \}\)\. An environment only runs setup steps, in every attempt, with its secrets\./,
+      /"image" isn't an environment field \(defineEnvironment\("firebase"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ install: … \}\)\./,
     ],
     [
       'a dockerfile on an environment',
       `defineEnvironment('py', { dockerfile: './Dockerfile' })`,
-      /"dockerfile" isn't an environment field \(defineEnvironment\("py"\)\)\. What's baked into the image is the sandbox's: docker\(\{ dockerfile: … \}\)/,
+      /"dockerfile" isn't an environment field \(defineEnvironment\("py"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ dockerfile: … \}\)/,
     ],
     [
       'an async callback',
@@ -1005,9 +1006,14 @@ describe('common mistakes', () => {
       /harness takes \{ add \} or \{ only \}, not both, in evaluate\("e"\)/,
     ],
     [
-      'a list of sandboxes',
-      `evaluate('e', { sandbox: [fakeSandbox(), fakeSandbox()] }, async () => {})`,
-      /sandbox takes one sandbox, not a list \(evaluate\("e"\)\)/,
+      'sandbox on evaluate',
+      `evaluate('e', { sandbox: fakeSandbox() }, async () => {})`,
+      /sandbox can't be set in evaluate\("e"\)\. Put it on an environment: defineEnvironment\('name', \{ sandbox: docker\(\{ … \}\) \}\)\./,
+    ],
+    [
+      'sandbox on group',
+      `group('g', { sandbox: fakeSandbox() }, () => {})`,
+      /sandbox can't be set in group\("g"\)\. Put it on an environment/,
     ],
     [
       'an old option name',
@@ -1027,7 +1033,7 @@ describe('common mistakes', () => {
     [
       'a base image on an environment',
       `defineEnvironment('node', { image: 'node:22' })`,
-      /"image" isn't an environment field \(defineEnvironment\("node"\)\)\. What's baked into the image is the sandbox's: docker\(\{ from: … \}\)/,
+      /"image" isn't an environment field \(defineEnvironment\("node"\)\)\. Put the image on the sandbox: sandbox: docker\(\{ from: … \}\)/,
     ],
     [
       'a setup step with an empty cwd',
@@ -1354,6 +1360,16 @@ ${body}
       `profiles: { pr: { reuse: 'control' } },`,
       /Unknown option "reuse" in profiles\.pr\. Reusing control results from \.history isn’t built yet/,
     ],
+    [
+      'sandbox on defineConfig',
+      `sandbox: fakeSandbox(),`,
+      /sandbox can't be set in reeval\.config\.ts\. Put it on an environment: defineEnvironment\('name', \{ sandbox: docker\(\{ … \}\) \}\)/,
+    ],
+    [
+      'sandbox on profile defaults',
+      `profiles: { pr: { defaults: { sandbox: fakeSandbox() } } },`,
+      /sandbox can't be set in profiles\.pr\.defaults\. Put it on an environment/,
+    ],
   ]
   for (const [what, extra, message] of configCases) {
     test(`${what} exits 2 with a fix`, async () => {
@@ -1399,7 +1415,7 @@ import { docker } from 'reeval/sandbox'
 const env = defineEnvironment('s', ({ secret }) => ({
   env: { AWS_SECRET_ACCESS_KEY: secret.fromEnv('AWS_SECRET_ACCESS_KEY') },
 }))
-evaluate('one', { sandbox: docker(), environment: env }, async () => {})
+evaluate('one', { environment: env }, async () => {})
 `,
     })
     const cases: Array<[string, string[], RegExp]> = [
@@ -1498,8 +1514,8 @@ const keys = defineEnvironment('keys', ({ secret }) => ({
     AWS_SECRET_ACCESS_KEY: secret(),
   },
 }))
-evaluate('one', { sandbox: docker(), environment: keys }, async () => {})
-evaluate('two', { sandbox: docker(), environment: keys }, async () => {})
+evaluate('one', { environment: keys }, async () => {})
+evaluate('two', { environment: keys }, async () => {})
 `
 
   test("an optional secret that isn't set gets no real-value warning; set, it does", async () => {
@@ -1510,7 +1526,7 @@ import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
   env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
-evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
+evaluate('one', { environment: maybe }, async () => {})
 `,
     })
     const warning = /SENTRY_TOKEN is in the sandbox as its real value/
@@ -1532,7 +1548,7 @@ import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
   env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
-evaluate('one', { sandbox: docker(), environment: maybe }, async () => {})
+evaluate('one', { environment: maybe }, async () => {})
 `,
     })
     const refused =
@@ -1593,13 +1609,13 @@ describe('environments and secrets', () => {
   test('skills, MCP, rules, files, setup steps and secrets reach the sandbox and the record', async () => {
     const p = await project('environments', {
       'reeval.config.ts': `
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeSandbox } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
 export default defineConfig(({ secret }) => ({
   harness: fakeHarness({}),
-  sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }),
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
   judge: { model: fakeJudge({ score: 0.9 }) },
   env: { APP_TOKEN: secret.fromEnv('REEVAL_TEST_HOST_TOKEN'), MODE: 'test' },
 }))
@@ -1873,9 +1889,10 @@ describe('sandbox images', () => {
       const p = await project('sandbox-mistake', {
         'reeval.config.ts': fakeConfig(),
         'evals/Dockerfile': 'FROM debian:bookworm-slim\n',
-        'evals/o.eval.ts': `import { evaluate } from 'reeval'
+        'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
-evaluate('e', { sandbox: ${sandbox} }, async () => {})
+const env = defineEnvironment('e', { sandbox: ${sandbox} })
+evaluate('e', { environment: env }, async () => {})
 `,
       })
       const r = await runCli(p.dir, ['run', '--dry-run'])
@@ -1887,26 +1904,29 @@ evaluate('e', { sandbox: ${sandbox} }, async () => {})
   test('reeval image build --dry-run lists every image the planned sandboxes need', async () => {
     const p = await project('image-plan', {
       'reeval.config.ts': `
-import { defineConfig } from 'reeval'
+import { defineConfig, defineEnvironment } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { docker } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
+const tools = defineEnvironment('tools', {
+  sandbox: docker({ install: ['apt-get update && apt-get install -y jq', { run: 'jq --version', timeout: '1m' }] }),
+})
 export default defineConfig({
   harness: fakeHarness({}),
-  sandbox: docker({ install: ['apt-get update && apt-get install -y jq', { run: 'jq --version', timeout: '1m' }] }),
+  environment: tools,
   judge: { model: fakeJudge() },
 })
 `,
       'docker/tools/Dockerfile': `ARG REEVAL_BASE\nFROM \${REEVAL_BASE}\nRUN echo tools\n`,
       'evals/py.Dockerfile': 'FROM python:3.12-slim\n',
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'
-import { docker } from 'reeval/sandbox'
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { docker, fakeSandbox } from 'reeval/sandbox'
 evaluate('default', async () => {})
 evaluate('default again', async () => {})
-evaluate('tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }, async () => {})
-evaluate('py', { sandbox: docker({ dockerfile: new URL('./py.Dockerfile', import.meta.url) }) }, async () => {})
-evaluate('from', { sandbox: docker({ from: 'python:3.12-slim', maxConcurrent: 2 }) }, async () => {})
-evaluate('fake', { sandbox: (await import('reeval/sandbox')).fakeSandbox() }, async () => {})
+evaluate('tools', { environment: defineEnvironment('own-tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }) }, async () => {})
+evaluate('py', { environment: defineEnvironment('py', { sandbox: docker({ dockerfile: new URL('./py.Dockerfile', import.meta.url) }) }) }, async () => {})
+evaluate('from', { environment: defineEnvironment('from', { sandbox: docker({ from: 'python:3.12-slim', maxConcurrent: 2 }) }) }, async () => {})
+evaluate('fake', { environment: defineEnvironment('host', { sandbox: fakeSandbox() }) }, async () => {})
 `,
     })
     const r = await runCli(p.dir, ['image', 'build', '--dry-run'])
@@ -1957,7 +1977,6 @@ import { docker } from 'reeval/sandbox'
 import { fakeJudge } from 'reeval/judge'
 export default defineConfig({
   harness: fakeHarness({}),
-  sandbox: docker(),
   judge: { model: fakeJudge() },
   profiles: {
     claude: { defaults: { harness: claudeCode({ model: 'claude-sonnet-5' }) } },
@@ -1966,10 +1985,10 @@ export default defineConfig({
 })
 `,
       'docker/tools/Dockerfile': `ARG REEVAL_BASE\nFROM \${REEVAL_BASE}\nRUN echo tools\n`,
-      'evals/a.eval.ts': `import { evaluate } from 'reeval'
+      'evals/a.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 evaluate('plain', async () => {})
-evaluate('tools', { tags: ['tools'], sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }, async () => {})
+evaluate('tools', { tags: ['tools'], environment: defineEnvironment('tools', { sandbox: docker({ dockerfile: '../docker/tools/Dockerfile' }) }) }, async () => {})
 `,
     })
     const cursor = /^ {2}[✓+~✗] base +reeval-sandbox:cursor-[\d.]+ /m

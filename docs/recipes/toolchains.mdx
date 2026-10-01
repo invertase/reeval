@@ -19,14 +19,18 @@ All three of the first examples are in `examples/hello`.
 ## Python from the official image
 
 ```ts title="evals/python.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
+
+const python = defineEnvironment('python', {
+  sandbox: docker({ from: 'python:3.12-slim', id: 'python' }),
+})
 
 // A non-Node toolchain: reeval bakes Node (for the harness bridge) and the Cursor CLI onto the
 // official Python image the first time this runs, then reuses it.
 evaluate(
   'writes and tests fizzbuzz in python',
-  { sandbox: docker({ from: 'python:3.12-slim', id: 'python' }) },
+  { environment: python },
   async (c) => {
     await c.send(
       'Write fizzbuzz.py with a function fizzbuzz(n) returning the usual FizzBuzz string for n, ' +
@@ -43,16 +47,18 @@ evaluate(
 ## Packages on reeval's image
 
 ```ts title="evals/jq.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
 
-const withJq = docker({
-  install: [
-    'apt-get update && apt-get install -y --no-install-recommends jq && rm -rf /var/lib/apt/lists/*',
-  ],
+const withJq = defineEnvironment('jq', {
+  sandbox: docker({
+    install: [
+      'apt-get update && apt-get install -y --no-install-recommends jq && rm -rf /var/lib/apt/lists/*',
+    ],
+  }),
 })
 
-evaluate('summarises a JSON file with jq', { sandbox: withJq }, async (c) => {
+evaluate('summarises a JSON file with jq', { environment: withJq }, async (c) => {
   await c.send(
     'Write orders.json with five orders (id, customer, total), then count.sh, a bash script that ' +
       'prints the number of orders over 100 using jq. Make it executable.',
@@ -78,12 +84,16 @@ COPY seed.sql /opt/seed.sql
 ```
 
 ```ts title="evals/sqlite.eval.ts"
-import { evaluate, expect } from '{{ pkg }}'
+import { defineEnvironment, evaluate, expect } from '{{ pkg }}'
 import { docker } from '{{ pkg }}/sandbox'
+
+const sqlite = defineEnvironment('sqlite', {
+  sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }),
+})
 
 evaluate(
   'queries a seeded SQLite database',
-  { sandbox: docker({ dockerfile: '../docker/sqlite/Dockerfile' }) },
+  { environment: sqlite },
   async (c) => {
     await c.send(
       'Load /opt/seed.sql into app.db with sqlite3, then write report.sql that lists customer ' +

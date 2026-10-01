@@ -1,6 +1,5 @@
 import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
-import { docker } from 'reeval/sandbox'
 
 // Docker only: login shells read the image's /etc/profile. The `from` image is built locally
 // from ./image by the fixture's `prepare`, and puts /opt/reeval-fixture/bin on PATH. As the
@@ -15,5 +14,4 @@ export default defineConfig({
       ],
     ],
   }),
-  sandbox: docker({ from: 'reeval-fixture-login-path:latest', id: 'docker' }),
 })
