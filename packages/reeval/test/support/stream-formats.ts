@@ -58,10 +58,15 @@ const ACP_DEFINED = {
   ],
 }
 
+// OpenCode reports a model call it's retrying (a 503) as a `session_info_update` whose `_meta`
+// holds `opencode/retry`, then clears it with `null`. harness-acp keeps it as a raw part only.
+const OPENCODE_OPTIONAL = ['session_info_update ._meta', 'session_info_update .sessionUpdate']
+
 // pi's assistant messages: pi-ai's StopReason, but `deferred` (pi's one-shot `-p` loop never defers
 // a call) and `pending` (only while a message streams), and a failed call's `errorMessage`. A
 // contract run shows `error` only when the provider fails a call (a 503), `length` and `aborted`
-// only when the model runs out of tokens or reeval stops the turn.
+// only when the model runs out of tokens or reeval stops the turn. A failed call's `message_start`
+// is the finished message, so it carries the `thinkingLevel` a streaming one doesn't.
 const PI_MESSAGES = ['message_start/assistant', 'message_end/assistant', 'turn_end/assistant']
 const PI_STOP = ['stop', 'toolUse', 'length', 'aborted', 'error']
 const PI_DEFINED = Object.fromEntries(
@@ -70,7 +75,10 @@ const PI_DEFINED = Object.fromEntries(
     kind === 'message_start/assistant' ? ['pending', ...PI_STOP] : PI_STOP,
   ]),
 )
-const PI_OPTIONAL = PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`)
+const PI_OPTIONAL = [
+  ...PI_MESSAGES.map((kind) => `${kind} .message.errorMessage`),
+  'message_start/assistant .message.thinkingLevel',
+]
 
 // The Cursor runner's lines, as CursorSdkRunnerLine types them, and the SDK's (1.0.32) own values:
 // SDKStatusMessage's status and message, SDKToolUseMessage's status and truncated, RunResult's
@@ -234,7 +242,9 @@ const FORMATS: Record<string, Format> = {
     values: ['status', 'kind', 'stopReason'],
     lists: [],
     defined: ACP_DEFINED,
-  }, // Goose's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
+    optional: OPENCODE_OPTIONAL,
+  },
+  // Goose's ACP `session/update`s, by `sessionUpdate`, and its `session/prompt` response.
   goose: {
     kind: (e) =>
       typeof e.sessionUpdate === 'string'

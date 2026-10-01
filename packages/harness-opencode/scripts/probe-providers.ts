@@ -218,38 +218,50 @@ async function worker() {
       }
       continue
     }
+    const probe = async (variant: string, model: string, extra: Record<string, string> = {}) => {
+      const home = mkdtempSync(join(dir, `home-${i.id}-`))
+      mkdirSync(join(home, 'w'))
+      const env: Record<string, string> = {
+        HOME: home,
+        HTTPS_PROXY: `http://127.0.0.1:${port}`,
+        HTTP_PROXY: `http://127.0.0.1:${port}`,
+        NO_PROXY: '127.0.0.1,localhost',
+        NODE_EXTRA_CA_CERTS: caFile,
+        SSL_CERT_FILE: caFile,
+        OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig({ model: `${i.id}/${model}` })),
+        ...extra,
+      }
+      for (const n of names) env[n] = placeholderOf(i.id, n)
+      for (const v of PROVIDER_VARS[i.id] ?? []) env[v.name] = v.probe
+      const before = seen.get(normal(i.id))?.length ?? 0
+      const out = await run(
+        ['run', '--standalone', '-m', `${i.id}/${model}`, 'Say hi.'],
+        env,
+        30_000,
+      )
+      const error = clean(out.stderr).slice(-300)
+      return {
+        variant,
+        model,
+        exit: out.code,
+        error,
+        requests: (seen.get(normal(i.id)) ?? []).slice(before),
+      }
+    }
     const probed = []
     for (const group of groups) {
-      let last: Record<string, unknown> = {}
+      let last: Awaited<ReturnType<typeof probe>> | undefined
       for (const model of group.models.slice(0, 12)) {
-        const home = mkdtempSync(join(dir, `home-${i.id}-`))
-        mkdirSync(join(home, 'w'))
-        const env: Record<string, string> = {
-          HOME: home,
-          HTTPS_PROXY: `http://127.0.0.1:${port}`,
-          HTTP_PROXY: `http://127.0.0.1:${port}`,
-          NO_PROXY: '127.0.0.1,localhost',
-          NODE_EXTRA_CA_CERTS: caFile,
-          SSL_CERT_FILE: caFile,
-          OPENCODE_CONFIG_CONTENT: JSON.stringify(openCodeConfig({ model: `${i.id}/${model}` })),
-        }
-        for (const n of names) env[n] = placeholderOf(i.id, n)
-        for (const v of PROVIDER_VARS[i.id] ?? []) env[v.name] = v.probe
-        const before = seen.get(normal(i.id))?.length ?? 0
-        const out = await run(
-          ['run', '--standalone', '-m', `${i.id}/${model}`, 'Say hi.'],
-          env,
-          30_000,
-        )
-        const error = clean(out.stderr).slice(-300)
-        last = {
-          variant: group.key,
-          model,
-          exit: out.code,
-          error,
-          requests: (seen.get(normal(i.id)) ?? []).slice(before),
-        }
-        if (!/Model unavailable/.test(error)) break
+        last = await probe(group.key, model)
+        if (!/Model unavailable/.test(last.error)) break
+      }
+      // OpenCode knows only the models in the catalog built into its release, and models.dev
+      // renames a provider's models now and then: when it knows none of these, the newest one
+      // runs on the catalog they came from, so what's probed is still where the key goes.
+      if (last && /Model unavailable/.test(last.error)) {
+        last = await probe(group.key, group.models[0] as string, {
+          OPENCODE_MODELS_PATH: catalogFile,
+        })
       }
       probed.push(last)
     }
