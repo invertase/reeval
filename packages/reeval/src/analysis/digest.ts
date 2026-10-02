@@ -74,6 +74,7 @@ export type DigestInput = {
 
 export const RULES = [
   `Pass-rate lift is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
+  'When sources or the eval fingerprint differ across the compared runs, the pass-rate difference is not comparable: the eval changed. Never call it an effect. Keep the counts. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
   'Effort (tool calls, agent time) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot); pooled across evals it is an effect only when at least 2/3 of strata agree.',
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
@@ -107,6 +108,22 @@ function digestLiftVerdict(
 ): 'insufficient' | 'within noise' | 'effect' {
   if (Math.min(variantCounted, controlCounted) < LIFT_MIN_COUNTED) return 'insufficient'
   return withinNoise ? 'within noise' : 'effect'
+}
+
+/** Observed sources (or eval fingerprint) drift is not an effect of the thing under test. */
+function evalChangedLift(variantCounted: number, controlCounted: number): string {
+  return `not comparable: the eval changed (${variantCounted} vs ${controlCounted})`
+}
+
+function sourcesKey(e: EvalEntry): string {
+  return JSON.stringify(e.sources.map((s) => [s.path, s.sha256]))
+}
+
+/** The eval's sources, or the sources part of its fingerprint, differ across the two runs. */
+function evalSourcesChanged(base: EvalEntry, head: EvalEntry): boolean {
+  if (sourcesKey(base) !== sourcesKey(head)) return true
+  const prev = new Map(base.cells.map((c) => [c.key, c.fingerprintParts.sources]))
+  return head.cells.some((c) => prev.has(c.key) && prev.get(c.key) !== c.fingerprintParts.sources)
 }
 
 /** Short tags for the evals in scope: the file's base name, numbered when a file has several. */
@@ -292,14 +309,21 @@ export async function buildDigestKeepingDropped(
       ...(f.strata && (f.strata as number) > 1 ? { strata: f.strata } : {}),
       ...(f.runs ? { runs: f.runs } : {}),
       passRate: `${f.variant_pass}/${f.variant_counted} vs ${f.control_pass}/${f.control_counted}`,
-      lift: digestLift(
-        f.variant_counted as number,
-        f.control_counted as number,
-        f.points as number,
-        f.lo as number,
-        f.hi as number,
-      ),
-      passVerdict: f.pass_verdict,
+      ...(f.pass_verdict === 'not_comparable' || f.factor === 'sources'
+        ? {
+            lift: evalChangedLift(f.variant_counted as number, f.control_counted as number),
+            passVerdict: 'not comparable',
+          }
+        : {
+            lift: digestLift(
+              f.variant_counted as number,
+              f.control_counted as number,
+              f.points as number,
+              f.lo as number,
+              f.hi as number,
+            ),
+            passVerdict: f.pass_verdict,
+          }),
       toolCalls: f.tools_ratios,
       toolsP: f.tools_p,
       effortVerdict: f.effort_verdict,
@@ -444,6 +468,20 @@ export async function buildDigestKeepingDropped(
       verdict: f.verdict,
       cause: f.cause,
     })
+  }
+
+  // Compared runs whose eval sources (or sources fingerprint) differ are not an effect.
+  if (base) {
+    for (const e of scopeEvals) {
+      const prior = base.record.evals.find((x) => x.key === e.key)
+      if (!prior || !evalSourcesChanged(prior, e)) continue
+      fact('eval-changed', {
+        eval: tagOf(e.key),
+        from: 'r1',
+        to: 'r2',
+        note: 'not comparable: the eval changed; the pass-rate difference is not an effect of the thing under test',
+      })
+    }
   }
 
   // Drift between the two runs, grouped by what changed.

@@ -169,6 +169,7 @@ export const inventory: InventoryFeature[] = [
     name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",
     tests: [
       'reeval/test/results.test.ts › the option takes all or { passRate }',
+      "reeval/test/results.test.ts › 'all' matches { passRate: 1 }",
       options('a config-level gate applies to every eval'),
     ],
   },
@@ -1339,8 +1340,10 @@ export const inventory: InventoryFeature[] = [
     tests: [
       analysis('the digest is facts with ids, evidence by rule'),
       analysis('the prompt and rules say insufficient lift is not measured'),
+      analysis('the prompt and rules say a changed eval is not an effect'),
       analysis('the prompt asks for one sentence and does not self-rate checks'),
       analysis('one counted attempt a side is insufficient lift'),
+      analysis('a changed eval is not comparable, not an effect'),
       analysis('two counted attempts can still be an effect'),
       analysis('claims with invented citations or quotes are dropped'),
       analysis('validation caps confidence when citations or commands fail'),

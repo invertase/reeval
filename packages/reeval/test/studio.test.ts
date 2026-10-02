@@ -900,7 +900,7 @@ describe('reeval studio build', () => {
     })
     const urls = [manifestPath, ...new Set(headers.map((h) => shardPath(h.startedAt.slice(0, 7))))]
     for (const h of headers) {
-      urls.push(recordPath(h.runId))
+      urls.push(recordPath(h.runId), analysisDataPath(h.runId))
       const run = records.get(h.runId) as RunRecord
       for (const a of run.evals.flatMap((e) => e.attempts)) {
         const refs = [...Object.values(a.files), ...a.checks.flatMap((c) => (c.log ? [c.log] : []))]
