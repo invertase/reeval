@@ -66,6 +66,8 @@ An eval's page lists it across runs, with a mark where its fingerprint changed. 
 
 Each attempt has tabs for its transcript (tool calls folded), its diff, each check's command and output, and each judge call with its input. The State tab shows the environment and [egress](/guide/secrets-and-egress). Attempts with local debug data also get a Debug tab, covered in [Debugging a run](/guide/debugging).
 
+When the record points at a log that is not on disk, the empty state says it was recorded but is missing (often a `*.log` gitignore), not that the run never wrote it.
+
 ## It works on a phone
 
 <Image src="/assets/studio/mobile-run.png" alt="The studio's run page on a phone-sized screen" width={320} />

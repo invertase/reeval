@@ -1221,6 +1221,16 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'history.logs',
+    area: 'Records and studio',
+    name: 'History `.gitignore` un-ignores recorded logs; `reeval record` warns when git still ignores them',
+    tests: [
+      'reeval/test/history.test.ts › a parent *.log does not drop recorded logs',
+      'reeval/test/history.test.ts › reeval record warns when git still ignores a written file',
+      'studio-web/test/artifact.test.ts › a recorded path that is not on disk names the usual *.log gitignore',
+    ],
+  },
+  {
     id: 'history.commands',
     area: 'Records and studio',
     name: '`reeval history`, `reeval show` and `reeval compare`, with `--json` and `--md`',

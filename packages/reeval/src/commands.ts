@@ -93,7 +93,16 @@ export async function record(
     ? ` + ${result.files} artifact files in ${rel(result.artifactDir)}/`
     : ''
   const recorded = `recorded ${where}${extra} (${kb} KB). Commit it with git.`
-  if (result.droppedPatch.length === 0) return recorded
+  const ignored =
+    result.ignored.length === 0
+      ? []
+      : [
+          `warning: git ignores ${result.ignored.length} recorded file(s); they won't be committed:`,
+          ...result.ignored.map((i) => `  ${i.path}  ignored by ${i.rule} (${i.source})`),
+        ]
+  if (result.droppedPatch.length === 0) {
+    return ignored.length === 0 ? recorded : `${ignored.join('\n')}\n${recorded}`
+  }
   const artifacts = result.artifactDir ? `${rel(result.artifactDir)}/` : ''
   return [
     `warning: left worktree.patch out of ${runId}: it looks like it holds a secret.`,
@@ -101,6 +110,7 @@ export async function record(
     "  worktree.patch is your checkout's uncommitted changes when the run started (git status), not the agents' work.",
     "  Nothing was committed. Take the key out of those files, or add them to .gitignore, so a later commit doesn't carry it; rotate the key only if it's already been committed or pushed. The record says the patch was left out, so reeval checkout recreates the commit alone.",
     `  To keep it after checking by hand: delete ${where} and ${artifacts || 'its artifacts'}, then reeval record ${runId} --skip-secret-scan.`,
+    ...ignored,
     recorded,
   ].join('\n')
 }

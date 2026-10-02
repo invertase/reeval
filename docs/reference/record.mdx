@@ -15,6 +15,7 @@ npx reeval show latest --json | jq '.evals[] | select(.outcome != "pass") | .id'
 
 ```text
 evals/.history/                            commit this
+  .gitignore                               un-ignores recorded files (`*.log` and the rest)
   <runId>.json                             the record
   <runId>/summary.md                       the run as Markdown
   <runId>/worktree.patch                   uncommitted changes, when the run was dirty

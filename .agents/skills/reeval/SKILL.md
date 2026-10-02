@@ -336,7 +336,8 @@ Filters: a part naming an eval file picks files; any other part picks evals by n
 above (paths resolve from its directory), or `--config <path>`. Exit codes: 0 pass (and
 `--dry-run`), 1 a gated failure, 2 usage/config error (including a filter that matches nothing),
 3 infra error, 130 Ctrl-C, 143 SIGTERM. Runs land in `.reeval/runs/`; `--record` (or `record: 'ci'` in CI) copies
-them to `evals/.history/` to commit.
+them to `evals/.history/` to commit. That folder gets a `.gitignore` that un-ignores
+recorded `*.log` files; `reeval record` warns if git still ignores a file it wrote.
 
 ## Common mistakes (and the fix)
 

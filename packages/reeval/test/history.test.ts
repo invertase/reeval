@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, readdirSync, readFileSync, symlinkSync } from 'node:fs'
 import { appendFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { withUnknownFields } from '../scripts/schema/validate.ts'
 import { fingerprintOf } from '../src/history/assemble.ts'
+import { HISTORY_GITIGNORE, parseCheckIgnore } from '../src/history/ignore.ts'
 import { renderSummary } from '../src/history/summary.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { harnessLabel, languageLabel, runtimeLabel } from '../src/view/model.ts'
@@ -34,6 +35,12 @@ const failing = `import { evaluate, expect } from 'reeval'
 evaluate('broken', async (c) => {
   await c.send('write hello.txt')
   await expect(c.exec('exit 4')).toSucceed()
+})
+`
+const logged = `import { evaluate, expect } from 'reeval'
+evaluate('logged', async (c) => {
+  await c.send('write hello.txt')
+  await expect(c.exec('echo ok')).toSucceed()
 })
 `
 const harness = (text = 'Wrote it') => `{ files: { 'hello.txt': 'hi\\n' }, text: '${text}' }`
@@ -115,6 +122,7 @@ describe('recording runs into evals/.history', () => {
     assert.deepEqual(input.state.diff.$ref, 'diff.patch', 'the judge input points at diff.patch')
     assert.equal(sh(p.dir, 'status', '--porcelain'), '?? evals/.history/', 'plain files for git')
 
+    assert.equal(readFileSync(join(p.dir, HISTORY, '.gitignore'), 'utf8'), HISTORY_GITIGNORE)
     assert.match((await runCli(p.dir, ['record', run.runId])).stdout, /already recorded/)
 
     // The history folder and .reeval/ never make the next run dirty.
@@ -129,6 +137,61 @@ describe('recording runs into evals/.history', () => {
       (await runCli(p.dir, ['history'])).stdout,
       /✓✓ +2\/2 +evals\/agent\.eval\.ts › agent/,
     )
+  })
+
+  test('a parent *.log does not drop recorded logs', async () => {
+    const p = await gitProject('record-log-tracked', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n*.log\n',
+      'evals/logged.eval.ts': logged,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const r = await runCli(p.dir, ['record'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.doesNotMatch(r.stdout + r.stderr, /git ignores/)
+    assert.equal(readFileSync(join(p.dir, HISTORY, '.gitignore'), 'utf8'), HISTORY_GITIGNORE)
+
+    const recorded = readRun(p.dir, { history: HISTORY })
+    const log = recorded.evals[0]?.trial.checks[0]?.log?.path
+    assert.ok(log, 'c.exec writes checks/n.log')
+    const logPath = join(HISTORY, recorded.run.runId, log)
+    assert.equal(
+      spawnSync('git', ['check-ignore', '-q', '--no-index', logPath], {
+        cwd: p.dir,
+        env: GIT_ENV,
+      }).status,
+      1,
+      `${logPath} is not ignored`,
+    )
+    sh(p.dir, 'add', HISTORY)
+    assert.match(sh(p.dir, 'diff', '--cached', '--name-only'), /checks\/1\.log/)
+    assert.match(sh(p.dir, 'diff', '--cached', '--name-only'), /\.gitignore/)
+  })
+
+  test('reeval record warns when git still ignores a written file', async () => {
+    const p = await gitProject('record-log-ignored', {
+      '.gitignore': '.reeval/\nnode_modules/\nsandboxes/\n*.log\n',
+      'evals/logged.eval.ts': logged,
+    })
+    mkdirSync(join(p.dir, HISTORY), { recursive: true })
+    await writeFile(join(p.dir, HISTORY, '.gitignore'), '# local, no un-ignore\n')
+    assert.equal((await runCli(p.dir)).code, 0)
+    const r = await runCli(p.dir, ['record'])
+    assert.equal(r.code, 0, r.stderr)
+    assert.match(
+      r.stdout,
+      /^warning: git ignores \d+ recorded file\(s\); they won't be committed:$/m,
+    )
+    assert.match(r.stdout, /checks\/1\.log {2}ignored by \*\.log \(\.gitignore:\d+\)$/m)
+    assert.match(r.stdout, /^recorded evals\/\.history\/\S+\.json/m)
+  })
+
+  test('git check-ignore -v lines name the rule and its source', () => {
+    assert.deepEqual(parseCheckIgnore('.gitignore:3:*.log\tevals/.history/run/setup.log'), {
+      path: 'evals/.history/run/setup.log',
+      rule: '*.log',
+      source: '.gitignore:3',
+    })
+    assert.equal(parseCheckIgnore('not a check-ignore line'), null)
   })
 
   test('a history file that is not a readable record is named on stderr, not silently skipped', async () => {
