@@ -1429,7 +1429,7 @@ export const features: Feature[] = [
         message: /c\.capture\(\) is refused: capture\.browser is false/,
       },
     },
-    canary: /expected .*refused: capture\.browser is false.* to match \/skipped\//,
+    canary: /expected 'c\.capture\(\) is refused: capture\.brows…' to match \/skipped\//,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },
@@ -1446,7 +1446,7 @@ export const features: Feature[] = [
         message: /c\.capture\(\) is refused: REEVAL_CAPTURE_BROWSER=0/,
       },
     },
-    canary: /expected .*REEVAL_CAPTURE_BROWSER=0.* to match \/skipped\//,
+    canary: /expected 'c\.capture\(\) is refused: REEVAL_CAPTUR…' to match \/skipped\//,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },
