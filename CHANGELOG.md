@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0](https://github.com/invertase/reeval/compare/v0.4.0...v0.5.0) (2026-10-02)
+
+
+### ⚠ BREAKING CHANGES
+
+* **environment:** put sandbox only on defineEnvironment ([#196](https://github.com/invertase/reeval/issues/196))
+
+### Features
+
+* **environment:** put sandbox only on defineEnvironment ([#196](https://github.com/invertase/reeval/issues/196)) ([c678e11](https://github.com/invertase/reeval/commit/c678e1107ac33134b8b5e7ccaa14463e28c79e2b))
+* **opencode:** record the turn's ACP token usage ([#195](https://github.com/invertase/reeval/issues/195)) ([5d72368](https://github.com/invertase/reeval/commit/5d72368f102904130c0b36ff2378443b1e0cb573))
+* **ui:** show per-key judge rates, scores and tokens ([#212](https://github.com/invertase/reeval/issues/212)) ([4380067](https://github.com/invertase/reeval/commit/43800677d8b0f9d5e76be873fb41f3d14853552c))
+
+
+### Bug Fixes
+
+* **analysis:** treat lift below two attempts as insufficient ([#210](https://github.com/invertase/reeval/issues/210)) ([845e242](https://github.com/invertase/reeval/commit/845e24263e6c61a4c0d873e6a867850a4c19a6b2))
+* **cursor:** keep the bootstrap the same in every build so baked images skip the install ([#188](https://github.com/invertase/reeval/issues/188)) ([2fbdf83](https://github.com/invertase/reeval/commit/2fbdf83c5bc07ac5f5caa42590e3415baa6c7d67))
+* **engine:** tag timeout and cancel instead of sniffing the message ([#203](https://github.com/invertase/reeval/issues/203)) ([0417bf1](https://github.com/invertase/reeval/commit/0417bf1782703ee09fe19c7339724fa2477b40c9))
+* **environment:** inherit the config sandbox when a named env omits one ([#197](https://github.com/invertase/reeval/issues/197)) ([675ff4d](https://github.com/invertase/reeval/commit/675ff4d45e5c1e4eccc92414787021ed5165c86a))
+* **history:** keep recorded logs tracked under a parent *.log ([#211](https://github.com/invertase/reeval/issues/211)) ([a5f33ac](https://github.com/invertase/reeval/commit/a5f33ac771725b6683cb3c32dbea7181e66292f9))
+* **opencode:** probe a provider on models.dev's catalog when OpenCode's knows none of its models ([#189](https://github.com/invertase/reeval/issues/189)) ([993995c](https://github.com/invertase/reeval/commit/993995cd86856b91caff61a06c9ec5f63a8e7d20))
+
 ## [0.4.0](https://github.com/invertase/reeval/compare/v0.3.0...v0.4.0) (2026-10-01)
 
 
