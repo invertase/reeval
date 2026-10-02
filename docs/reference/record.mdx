@@ -307,7 +307,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 </Property>
 
 <Property name="outcome" type="Outcome">
-  Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.
+  Over gated cells: `fail` if any failed, else `infra_error` if any is (a cell is `infra_error` only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's failures don't fail the eval.
 </Property>
 
 <Property name="todo" type="boolean">
@@ -369,7 +369,7 @@ Also has every field of `Cell`.
 <Property name="passRate" type="number | null"></Property>
 
 <Property name="outcome" type="Outcome">
-  By `gate` (`'none'` reports the worst outcome); a variant below its `minLift` fails too.
+  By `gate`. `'all'` matches `{ passRate: 1 }` (infra only when nothing counted); `'none'` reports the worst outcome. A variant below its `minLift` fails too.
 </Property>
 
 <Property name="lift" type="Lift" optional></Property>
