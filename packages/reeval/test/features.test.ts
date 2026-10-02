@@ -92,6 +92,11 @@ type Feature = {
    * Cursor: a harness-specific behaviour only that agent has.
    */
   realHarness?: HarnessRow['id']
+  /**
+   * `reeval run` bound for this fixture (node:test gets 10s more). Defaults: fake 60s,
+   * docker 240s, real 600s.
+   */
+  timeoutMs?: Partial<Record<Tier, number>>
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
@@ -1313,6 +1318,10 @@ export const features: Feature[] = [
     },
     canary: /expected 'completed' to be 'aborted'/,
     record: ({ run }) => assert.equal(landed(run)?.turns[0]?.status, 'aborted'),
+    // Lands waits a 4s eval timeout; the canary waits the 10s fake delay. Windows
+    // CI runs four fixtures at once, and that pair has exceeded the default 50s
+    // runCli bound while still making progress (main CI #210).
+    timeoutMs: { fake: 180_000 },
   },
   {
     dir: 'env/setup-order',
@@ -1454,7 +1463,7 @@ function skipTier(tier: Tier, image?: BakedHarness, posixModes?: true): string |
 function fixtureTests(tiers: Tier[]) {
   for (const f of features) {
     for (const tier of f.tiers.filter((t) => tiers.includes(t))) {
-      const timeout = { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
+      const timeout = f.timeoutMs?.[tier] ?? { fake: 60_000, docker: 240_000, real: 600_000 }[tier]
       test(`${f.dir} [${tier}]`, {
         skip: skipTier(tier, f.image, f.posixModes),
         timeout,

@@ -138,6 +138,23 @@ function readTrace(dir: string): Trace[] {
     .map((line) => JSON.parse(line) as Trace)
 }
 
+/** The most intervals that were open at the same moment. Ends before starts at a tie. */
+function maxSpanOverlap(spans: { start: number; end: number }[]): number {
+  let running = 0
+  let most = 0
+  const events = spans
+    .flatMap((s) => [
+      { at: s.start, d: 1 },
+      { at: s.end, d: -1 },
+    ])
+    .sort((a, b) => a.at - b.at || a.d - b.d)
+  for (const e of events) {
+    running += e.d
+    most = Math.max(most, running)
+  }
+  return most
+}
+
 /** The most attempts that were between their start and end at the same moment. */
 function maxOverlap(trace: Trace[]): number {
   let running = 0
@@ -158,6 +175,27 @@ const wall = (trace: Trace[]) =>
   Math.max(...trace.map((t) => t.at)) - Math.min(...trace.map((t) => t.at))
 
 describe('concurrency', () => {
+  test('attempt windows overlap when parallel and do not when stacked', () => {
+    assert.equal(
+      maxSpanOverlap([
+        { start: 0, end: 1000 },
+        { start: 1000, end: 2000 },
+        { start: 2000, end: 3000 },
+        { start: 3000, end: 4000 },
+      ]),
+      1,
+    )
+    assert.equal(
+      maxSpanOverlap([
+        { start: 0, end: 1200 },
+        { start: 100, end: 1300 },
+        { start: 200, end: 1400 },
+        { start: 300, end: 1500 },
+      ]),
+      4,
+    )
+  })
+
   test('--concurrency caps attempts across files, and the first slots go to every eval', async () => {
     const p = await project('conc-cap', {
       'reeval.config.ts': fakeConfig({ harness: '{ delayMs: 800 }' }),
@@ -332,16 +370,27 @@ for (const name of ['a', 'b']) {
       'evals/trace.ts': TRACE,
       'evals/a.eval.ts': tracedEval('a', "{ runs: 4, timeout: '1s' }"),
     })
-    const started = Date.now()
-    const r = await runCli(p.dir, ['run', '--concurrency', '4'])
+    // Hang detector only: Windows CI has spent ~25s on sandbox startup while the
+    // four 1s timeouts still overlapped. Parallelism is the attempt windows below.
+    const r = await runCli(p.dir, ['run', '--concurrency', '4'], { timeoutMs: 120_000 })
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.ok(Date.now() - started < 15_000, 'the timeouts ran in parallel')
     const attempts = readRun(p.dir).run.evals.flatMap((e) => e.attempts)
     assert.deepEqual(
       attempts.map((a) => a.error?.kind),
       ['timeout', 'timeout', 'timeout', 'timeout'],
     )
     assert.deepEqual(liveSandboxes(p), [])
+    // startedAt + durationMs exclude queue time. A host budget (15s) fails on a
+    // slow runner; four serial 1s timeouts still make span ≈ sum(durationMs).
+    const windows = attempts.map((a) => {
+      assert.ok(a.startedAt, `${a.id} never started`)
+      const start = Date.parse(a.startedAt)
+      return { start, end: start + a.durationMs }
+    })
+    assert.equal(maxSpanOverlap(windows), 4, 'all four attempts were in flight')
+    const span = Math.max(...windows.map((w) => w.end)) - Math.min(...windows.map((w) => w.start))
+    const total = attempts.reduce((sum, a) => sum + a.durationMs, 0)
+    assert.ok(span < total * 0.75, `attempt span ${span}ms is no better than serial ${total}ms`)
   })
 
   test('Ctrl-C cancels running attempts, skips queued ones and destroys every sandbox', {
