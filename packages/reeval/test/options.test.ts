@@ -1274,6 +1274,31 @@ describe('common mistakes', () => {
       `defineEnvironment('app', ({ git }) => ({ workspace: git('https://x-access-token:ghp_abc123@github.com/acme/app') }))`,
       /git\("https:\/\/\*\*\*:\*\*\*@github\.com\/acme\/app"\): the URL has a password or token in it\. reeval fetches the repository on the host with your own git credentials/,
     ],
+    [
+      'capture as a string',
+      `evaluate('e', { capture: 5173 as never }, async () => {})`,
+      /capture is \{ viewport\?, timeout\?, browser\? \} \(got 5173\) in evaluate\("e"\)/,
+    ],
+    [
+      'an unknown capture key',
+      `evaluate('e', { capture: { ready: true } as never }, async () => {})`,
+      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser\./,
+    ],
+    [
+      'capture.port on evaluate',
+      `evaluate('e', { capture: { port: 5173 } as never }, async () => {})`,
+      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser\./,
+    ],
+    [
+      'a capture viewport without height',
+      `evaluate('e', { capture: { viewport: { width: 1280 } as never } }, async () => {})`,
+      /capture\.viewport is \{ width, height \} in CSS pixels/,
+    ],
+    [
+      'capture.browser as a string',
+      `evaluate('e', { capture: { browser: 'off' as never } }, async () => {})`,
+      /capture\.browser is true or false \(got "off"\) in evaluate\("e"\)/,
+    ],
   ]
   for (const [what, body, message] of cases) {
     test(`${what} exits 2 with a fix`, async () => {

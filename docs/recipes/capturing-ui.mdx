@@ -1,0 +1,82 @@
+---
+title: Capturing UI
+description: Take a PNG of a port the agent left running, keep it as an artifact, and show it in Studio.
+---
+
+**Goal:** screenshot whatever the agent left running on a port, store it under `artifacts/`, and
+see it on the attempt in Studio.
+
+`c.capture()` is the PNG helper. reeval takes the shot on the host through the existing port
+tunnel. The sandbox image does not grow a browser. `capture.browser: false` or
+`REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
+
+## Seeded app
+
+`setup` backgrounds the server on a declared port. The agent edits it. `c.capture` polls, then
+screenshots.
+
+```ts title="evals/login.eval.ts"
+import { defineEnvironment, evaluate } from '{{ pkg }}'
+
+const firebaseWeb = defineEnvironment('firebase-web', {
+  setup: [
+    'npm run dev -- --port 5173 --host 127.0.0.1 >/tmp/dev.log 2>&1 &',
+  ],
+})
+
+evaluate('login screen', { environment: firebaseWeb }, async (c) => {
+  await c.send('Add a labelled email field to the login form.')
+  await c.capture(5173, { name: 'login', path: '/login' })
+})
+```
+
+## Author starts the server
+
+After the turn, start the server with `c.exec({ background: true })` or `c.serve`, then capture.
+
+```ts title="evals/landing.eval.ts"
+import { evaluate } from '{{ pkg }}'
+
+evaluate('landing page', async (c) => {
+  await c.send('Build a Vite app. I will start the server.')
+  const server = await c.serve(
+    'npm run dev -- --port $PORT --host 127.0.0.1',
+  )
+  await c.capture(server, { name: 'home' })
+})
+```
+
+`$PORT` expands on a bash string. `{port}` is not expanded unless the command is argv.
+`c.serve` is not an environment or eval option.
+
+## Agent starts the server
+
+The prompt names the port. `c.capture` polls; nothing listening fails the attempt.
+
+```ts title="evals/agent-serve.eval.ts"
+import { evaluate } from '{{ pkg }}'
+
+evaluate('landing page', async (c) => {
+  await c.send('Build a Vite app. Serve it on 127.0.0.1:5173.')
+  await c.capture(5173, { name: 'home' })
+})
+```
+
+## What you get
+
+The PNG lands at `artifacts/<name>.png` on the attempt. Studio shows it under Artefacts as
+`image/png`. Retention is `history.artifacts` (`all`, `failures`, `none`).
+
+The first `chrome-headless-shell` download is visible in `reeval run` (name, pinned version,
+size, progress, cache path). A cache hit is quiet. Fake-tier stubs never download.
+
+## Next
+
+<CardGroup cols={2}>
+  <Card title="The attempt context" icon="terminal" href="/reference/attempt-context">
+    `c.capture`, `c.serve` and `c.exec({ background })`.
+  </Card>
+  <Card title="Options" icon="sliders" href="/reference/options">
+    The `capture` cascade: viewport, timeout, browser.
+  </Card>
+</CardGroup>

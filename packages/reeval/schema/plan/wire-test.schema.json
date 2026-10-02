@@ -137,6 +137,37 @@
         "tags"
       ]
     },
+    "CaptureOptions": {
+      "type": "object",
+      "properties": {
+        "browser": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "viewport": {
+          "$ref": "#/$defs/Viewport"
+        }
+      },
+      "required": []
+    },
     "Cell": {
       "type": "object",
       "properties": {
@@ -396,6 +427,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "capture": {
+          "$ref": "#/$defs/CaptureOptions"
         },
         "compare": {
           "$ref": "#/$defs/EvalCompareMeta"
@@ -956,6 +990,18 @@
         }
       },
       "required": ["file", "kind", "level", "message", "where"]
+    },
+    "Viewport": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": ["height", "width"]
     },
     "WireTest": {
       "type": "object",

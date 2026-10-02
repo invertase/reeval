@@ -65,8 +65,9 @@ export function parseDataPath(path: string): DataTarget | null {
 const TYPES: Array<[RegExp, string]> = [
   [/\.json$/, 'application/json; charset=utf-8'],
   [/\.jsonl$/, 'application/json; charset=utf-8'],
+  [/\.png$/, 'image/png'],
 ]
 
-/** Artifacts are untrusted agent output: JSON stays JSON, everything else is plain text. */
+/** Artifacts are untrusted agent output: JSON stays JSON, PNGs are images, else plain text. */
 export const artifactType = (name: string) =>
   TYPES.find(([re]) => re.test(name))?.[1] ?? 'text/plain; charset=utf-8'

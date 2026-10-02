@@ -10,6 +10,7 @@ import { InfraError, type Sandbox } from '../sandbox/index.ts'
 import { PrepareError } from '../sandbox/provider.ts'
 import { capMiddle, clip } from '../text.ts'
 import type { ErrorKind, EvalMeta, TranscriptEvent } from '../types.ts'
+import { writeCaptureSidecars } from './capture.ts'
 import type { Attempt } from './state.ts'
 
 function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; message: string } {
@@ -76,6 +77,11 @@ export async function writeRecord(a: Attempt, stagingDir: string, id: string): P
     recordFileName(attemptKey(id, spec.cell.key, spec.n)),
   )
   await mkdir(join(stagingDir, 'evals'), { recursive: true })
+  await writeCaptureSidecars(
+    stagingDir,
+    recordFileName(attemptKey(id, spec.cell.key, spec.n)),
+    a.artifactBlobs,
+  )
   // Replaced whole: reeval studio reads it while the run goes on.
   const tmp = `${recordPath}.${process.pid}.tmp`
   await writeFile(tmp, redactSecrets(JSON.stringify(record, null, 2)))

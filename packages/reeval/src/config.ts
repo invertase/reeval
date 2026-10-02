@@ -46,6 +46,7 @@ const CONFIG_KEYS = [
   'env',
   'egress',
   'judge',
+  'capture',
   'timeout',
   'concurrency',
   'record',
@@ -67,6 +68,7 @@ const DEFAULTS_KEYS = [
   'env',
   'egress',
   'judge',
+  'capture',
   'timeout',
 ]
 const LIMIT_KEYS = ['runs', 'compare', 'harness']
@@ -359,6 +361,7 @@ export function resolveConfig(
     profiles,
     defaultProfile,
     judge: resolveJudge(user.judge),
+    capture: user.capture ?? {},
     timeoutMs: parseDuration(user.timeout ?? '15m'),
     concurrency:
       user.concurrency === undefined

@@ -661,6 +661,59 @@ describe('collapsed judges, per-key rates and tokens', () => {
   })
 })
 
+test('browser-download names the binary, version, size and cache', () => {
+  const download = {
+    kind: 'browser-download' as const,
+    name: 'chrome-headless-shell',
+    version: '140.0.7339.185',
+    bytes: 274 * 1024 * 1024,
+    received: 128 * 1024 * 1024,
+    cache: '~/.cache/reeval',
+  }
+  const events: EsEvent[] = [
+    {
+      type: 'run-start',
+      at: T0,
+      version: '0.1.0',
+      files: 1,
+      harness: 'cursor/composer-2.5',
+      sandbox: 'docker',
+      concurrency: 1,
+    },
+    {
+      type: 'collected',
+      at: T0,
+      file: 'evals/hello.eval.ts',
+      evals: [
+        {
+          id: GREET,
+          key: keyOf(GREET),
+          group: ['greet module'],
+          name: greetResult.name,
+          skipped: false,
+        },
+      ],
+    },
+    { type: 'eval-start', at: s(0), id: GREET, key: keyOf(GREET), attempt: greetResult.attempt },
+    progress(GREET, s(1), download),
+  ]
+  const plain = render(events, options({ logOrder: 'stream' }))
+  assert.match(
+    plain,
+    /downloading chrome-headless-shell 140\.0\.7339\.185 128\.0 MB \/ 274\.0 MB → ~\/\.cache\/reeval/,
+  )
+  let agent = ''
+  const renderer = new AgentRenderer({
+    out: { write: (chunk: string) => (agent += chunk) },
+    attemptDir: () => '.reeval/runs/run-1/greet/1',
+  })
+  for (const e of events) renderer.onEvent(e)
+  assert.match(
+    agent,
+    /downloading chrome-headless-shell 140\.0\.7339\.185 128\.0 MB \/ 274\.0 MB → ~\/\.cache\/reeval/,
+  )
+})
+
 describe('agent renderer', () => {
   test('prints failures only, each with its record path, and ends with the summary path', () => {
     let text = ''

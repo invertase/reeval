@@ -24,8 +24,16 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
   Sends the next turn of the agent session and waits for it to finish. The first call starts the sandbox, applies the environment and starts the agent. Later calls continue the same session, so the agent keeps its context. It resolves even when the turn ends in `error`; check `turn.status` when that matters.
 </Property>
 
-<Property name="exec" type="(command: string) => Promise<ExecResult>">
-  Runs a shell command in the sandbox's workspace and resolves with `{ exitCode, stdout, stderr }`. It doesn't throw on a non-zero exit: use `toSucceed()`. It sees secrets sent `to: 'checks'`, which the agent never does. Calling it before the sandbox starts throws `No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()`.
+<Property name="exec" type="(command: string, options?: { background?: boolean }) => Promise<ExecResult | BackgroundHandle>">
+  Runs a shell command in the sandbox's workspace. Without `background` it resolves with `{ exitCode, stdout, stderr }` and doesn't throw on a non-zero exit: use `toSucceed()`. `c.exec(cmd, { background: true })` starts the command without waiting for exit and returns `{ kill() }`; teardown kills it if the eval didn't. It sees secrets sent `to: 'checks'`, which the agent never does. Calling it before the sandbox starts throws `No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()`.
+</Property>
+
+<Property name="serve" type="(command: string, port?: number) => Promise<ServeHandle>">
+  Starts `command` in the background and returns `{ kill, port }`. A given `port` is used; omit it and reeval allocates one. Sets `PORT` so a bash string can use `$PORT`. `{port}` is not expanded unless the command is argv. Needs a sandbox, same as `c.exec`.
+</Property>
+
+<Property name="capture" type="(target: number | ServeHandle, options?: CaptureCall) => Promise<Capture>">
+  Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. The first argument is the container port or a `ServeHandle` from `c.serve`. Options are `{ name?, path?, viewport?, timeout? }` — no `port` field. Default `path` is `/`; default `name` comes from the path (`/login` → `login`, `/` → `root`). `name` matches `[a-z0-9_-]+`; reusing a name in the same attempt fails. `viewport` and `timeout` override the cascaded camera defaults. Polls until any HTTP response arrives, then takes a PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` throws; the attempt fails, with no skip, no empty PNG and no download. Needs a sandbox, same as `c.exec`. See [Capturing UI](/recipes/capturing-ui).
 </Property>
 
 <Property name="readFile" type="(path: string) => Promise<string | null>">
