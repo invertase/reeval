@@ -81,8 +81,8 @@ export function ownDir(path: string): string {
   return to
 }
 
-/** Where a compiled reeval keeps what it copies out of itself. */
-function cacheDir(): string {
+/** Host cache root: `XDG_CACHE_HOME/reeval`, else `~/.cache/reeval` (and the platform equivalent). */
+export function cacheDir(): string {
   const base =
     process.env.XDG_CACHE_HOME ||
     (process.platform === 'win32'

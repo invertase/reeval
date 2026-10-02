@@ -45,6 +45,7 @@ const STARTS: Partial<Record<Progress['kind'], Progress['kind']>> = {
   'turn-end': 'turn-start',
   'check-end': 'check-start',
   'judge-end': 'judge-start',
+  'browser-download': 'browser-download',
 }
 
 type Attempt = {

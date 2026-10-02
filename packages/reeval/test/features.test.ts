@@ -28,6 +28,7 @@ import { GOOSE_CLI_VERSION } from '@reeval/harness-goose'
 import { OPENCODE_CLI_VERSION } from '@reeval/harness-opencode'
 import { PI_CLI_VERSION } from '@reeval/harness-pi'
 import { type BakedHarness, DEFAULT_IMAGE, imageFor, LABEL } from '@reeval/sandbox-docker'
+import { pngSize, stubPng } from '../src/capture/stub.ts'
 import type { RunRecord } from '../src/history/types.ts'
 import { liveSandboxes, readRun, runCli, spawnTool } from './helpers.ts'
 import { fixture, testDir } from './support/fixture.ts'
@@ -1381,6 +1382,84 @@ export const features: Feature[] = [
       const { state } = judgeInputOf(run, runDir)
       assert.deepEqual(Object.keys(state.contents as object), ['README.md', 'src/app.ts'])
       assert.doesNotMatch(String(state.diff), /export const app/, 'shown in full, not in the diff')
+    },
+  },
+  {
+    dir: 'ui/capture',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'artifacts\/home\.png' to be 'artifacts\/wrong\.png'/,
+    record: ({ run, runDir, tier }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.ok(art, 'files.artifacts names the PNG')
+      assert.match(art.path, /artifacts\/home\.png$/)
+      assert.equal(art.name, 'home')
+      assert.equal(art.mediaType, 'image/png')
+      const bytes = readFileSync(join(runDir, art.path))
+      const viewport = art.capture?.viewport ?? { width: 1280, height: 720 }
+      const port = art.capture?.port ?? 0
+      if (tier === 'fake') {
+        assert.deepEqual(bytes, stubPng('home', port, '/', viewport))
+      } else {
+        assert.deepEqual(pngSize(bytes), viewport)
+      }
+    },
+  },
+  {
+    dir: 'ui/capture-unreachable',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message: /nothing listening on port 59999/,
+      },
+    },
+    canary: /expected 'nothing listening on port 59999' to be 'port is closed'/,
+  },
+  {
+    dir: 'ui/capture-browser-false',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message: /c\.capture\(\) is refused: capture\.browser is false/,
+      },
+    },
+    canary: /expected .*refused: capture\.browser is false.* to match \/skipped\//,
+    record: ({ run }) => {
+      assert.equal(landed(run)?.files.artifacts, undefined)
+    },
+  },
+  {
+    dir: 'ui/capture-browser-env',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    hostEnv: { REEVAL_CAPTURE_BROWSER: '0' },
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message: /c\.capture\(\) is refused: REEVAL_CAPTURE_BROWSER=0/,
+      },
+    },
+    canary: /expected .*REEVAL_CAPTURE_BROWSER=0.* to match \/skipped\//,
+    record: ({ run }) => {
+      assert.equal(landed(run)?.files.artifacts, undefined)
+    },
+  },
+  {
+    dir: 'ui/capture-no-download',
+    tiers: ['fake', 'docker'],
+    env: 'plain',
+    hostEnv: (dir) => ({ XDG_CACHE_HOME: join(dir, '.cache') }),
+    canary: /expected null to be 'present'/,
+    record: ({ project }) => {
+      const cache = join(project, '.cache', 'reeval')
+      assert.equal(existsSync(join(cache, 'chrome-headless-shell')), false)
     },
   },
 ]

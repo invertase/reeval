@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, SearchX } from 'lucide-react'
 import {
   type AttemptRecord,
   activityLabel,
+  artifactPath,
   findAttempt,
   findEval,
   formatDuration,
@@ -235,6 +236,26 @@ export function AttemptPage() {
       <div className="rounded-xl border bg-card p-4">
         <Timings attempt={attempt} />
       </div>
+
+      {attempt.files.artifacts?.length ? (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium">Artefacts</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {attempt.files.artifacts.map((art) =>
+              art.mediaType === 'image/png' ? (
+                <figure key={art.path} className="space-y-2">
+                  <img
+                    src={artifactPath(record.runId, art.path)}
+                    alt={art.name}
+                    className="w-full rounded-lg border bg-muted"
+                  />
+                  <figcaption className="text-xs text-muted-foreground">{art.name}</figcaption>
+                </figure>
+              ) : null,
+            )}
+          </div>
+        </section>
+      ) : null}
 
       <Tabs
         value={tab}

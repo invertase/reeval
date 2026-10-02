@@ -1389,6 +1389,23 @@ export const inventory: InventoryFeature[] = [
     real: ['questions › examples/hello --profile questions'],
   },
   {
+    id: 'ui.capture',
+    area: 'Records and studio',
+    name: '`c.capture()`, `c.serve` and `c.exec({ background })`',
+    fixtures: [
+      'ui/capture',
+      'ui/capture-unreachable',
+      'ui/capture-browser-false',
+      'ui/capture-browser-env',
+      'ui/capture-no-download',
+    ],
+    plan: ['capture/options'],
+    tests: [
+      'reeval/test/ui.test.ts › browser-download names the binary, version, size and cache',
+      'reeval/test/capture.test.ts › stub PNG bytes are unique for the capture key',
+    ],
+  },
+  {
     id: 'studio',
     area: 'Records and studio',
     name: '`reeval studio` and `reeval studio build`',

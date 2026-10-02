@@ -54,6 +54,14 @@ export type ProgressUpdate =
       ms: number
     }
   | { kind: 'cleanup' }
+  | {
+      kind: 'browser-download'
+      name: string
+      version: string
+      bytes: number | null
+      received: number
+      cache: string
+    }
 
 /** A progress update stamped with the worker's clock (epoch ms). */
 export type Progress = { at: number } & ProgressUpdate

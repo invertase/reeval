@@ -4,7 +4,15 @@ import type { HarnessSession } from '../harness/types.ts'
 import type { PlannedAttempt } from '../options.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import type { BrokerPhases } from '../sandbox/phases.ts'
-import type { EnvVars, EvalRecord, HarnessDescriptor, JudgeOptions, Turn } from '../types.ts'
+import type {
+  BackgroundHandle,
+  CaptureOptions,
+  EnvVars,
+  EvalRecord,
+  HarnessDescriptor,
+  JudgeOptions,
+  Turn,
+} from '../types.ts'
 import type { ProgressUpdate } from '../ui/events.ts'
 
 /** Extra time an attempt gets, outside its eval timeout, when its image may need building. */
@@ -17,6 +25,7 @@ export type AttemptSpec = PlannedAttempt & {
   timeoutMs: number
   env: EnvVars
   judge: JudgeOptions
+  capture: CaptureOptions
   /** Which level set each option; unset means the config or its default. */
   sources: Partial<Record<string, string>>
   /** What the profile's limit changed. */
@@ -48,6 +57,12 @@ export type Attempt = {
   judgeErrored: boolean
   /** Judge calls that failed without throwing, which fail the attempt once the eval's body is done. */
   judgeErrors: string[]
+  /** `c.capture()` names already used in this attempt. */
+  captureNames: Set<string>
+  /** Background processes from `c.exec({ background })` / `c.serve`; teardown kills leftovers. */
+  backgrounds: BackgroundHandle[]
+  /** PNG bytes keyed by capture name; written as sidecars next to the staging JSON. */
+  artifactBlobs: Map<string, Buffer>
 }
 
 export function createAttempt(
@@ -82,6 +97,9 @@ export function createAttempt(
     signal,
     judgeErrored: false,
     judgeErrors: [],
+    captureNames: new Set(),
+    backgrounds: [],
+    artifactBlobs: new Map(),
   }
 }
 

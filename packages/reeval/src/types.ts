@@ -51,6 +51,52 @@ export type WebEventType = 'web-search' | 'web-fetch'
 
 export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 
+/** CSS pixels for `c.capture()`. Default 1280×720 when the call and cascade omit it. */
+export type Viewport = { width: number; height: number }
+
+/**
+ * Screenshot settings. Cascades config → profile defaults → group → eval, shallow-merged.
+ * `viewport` on a level replaces the whole object. `c.capture({ port, viewport, timeout })`
+ * overrides the cascade for that call.
+ */
+export type CaptureOptions = {
+  /** Container port the server binds. Required when `c.capture()` runs (cascade or the call). */
+  port?: number
+  viewport?: Viewport
+  /** How long to poll before failing. Default `'60s'`. */
+  timeout?: Duration
+  /** `false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. */
+  browser?: boolean
+}
+
+/** A background process started by `c.exec(..., { background: true })` or `c.serve`. */
+export type BackgroundHandle = {
+  kill(): Promise<void>
+}
+
+/** `c.serve`: a background process plus the port it was given or allocated. */
+export type ServeHandle = BackgroundHandle & { port: number }
+
+/** What `c.capture()` returns: the PNG is also in the attempt record under `artifacts/`. */
+export type Capture = {
+  name: string
+  /** Container port that was tunneled. */
+  port: number
+  /** Path on the app, as passed in. */
+  path: string
+  viewport: Viewport
+  /** `artifacts/<name>.png` under the attempt directory. */
+  file: { path: string; sha256: string; bytes: number }
+}
+
+export type CaptureCall = {
+  name: string
+  path: string
+  port?: number
+  viewport?: Viewport
+  timeout?: Duration
+}
+
 export type FileChange = { path: string; status: 'added' | 'modified' | 'deleted' }
 export type Diff = { patch: string; files: FileChange[] }
 
@@ -174,6 +220,18 @@ export type AttemptContext = {
   /** Asks the judge a yes/no question about the latest turn (or `options.on`). */
   judge(question: string, options?: JudgeCallOptions): Promise<Verdict | JudgeFailure>
   exec(command: string): Promise<ExecResult>
+  exec(command: string, options: { background: true }): Promise<BackgroundHandle>
+  exec(command: string, options?: { background?: boolean }): Promise<ExecResult | BackgroundHandle>
+  /**
+   * Starts `command` in the background and returns its port. A given `port` is used; omit it
+   * and reeval allocates one. Sets `PORT` so a bash string can use `$PORT`.
+   */
+  serve(command: string, port?: number): Promise<ServeHandle>
+  /**
+   * Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`.
+   * Needs a sandbox, same as `c.exec`.
+   */
+  capture(options: CaptureCall): Promise<Capture>
   /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
   readFile(path: string): Promise<string | null>
   /**
@@ -795,6 +853,8 @@ type EvalOptionFields = {
    */
   egress?: EgressPolicy
   judge?: JudgeOptions
+  /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` replaces the whole object. */
+  capture?: CaptureOptions
   /** Per attempt. */
   timeout?: Duration
   tags?: string[]
@@ -866,6 +926,7 @@ export type ProfileDefaults = {
   egress?: EgressPolicy
   judge?: ConfigJudgeOptions
   timeout?: Duration
+  capture?: CaptureOptions
 }
 
 /** Over every eval, and it can only narrow; `pin` on a group or eval skips it. */
@@ -951,6 +1012,11 @@ export type EsConfig = {
   egress?: EgressPolicy
   judge?: ConfigJudgeOptions
   timeout?: Duration
+  /**
+   * Screenshot defaults for `c.capture()`. `REEVAL_CAPTURE_BROWSER=0` refuses the host
+   * binary when `c.capture()` runs; it does not change this object.
+   */
+  capture?: CaptureOptions
   /** How many attempts run at once. `--concurrency` and `REEVAL_CONCURRENCY` override it. */
   concurrency?: number
   /** When runs are copied into the history folder: `reeval record` only, in CI, or on every run. */
@@ -1017,6 +1083,7 @@ export type ResolvedConfig = {
   egress?: EgressPolicy
   judge: ConfigJudgeOptions & { threshold: number }
   timeoutMs: number
+  capture: CaptureOptions
   /** The config's own `concurrency`; see `resolveConcurrency` for the run's. */
   concurrency: number | undefined
   record: RecordMode
@@ -1224,6 +1291,17 @@ export type EvalRecord = {
   egress?: EgressRecord
   /** See `AttemptRecord.servedModels`. */
   servedModels?: string[] | null
+  /**
+   * PNGs from `c.capture()`. Bytes live in a sidecar next to this JSON
+   * (`<stem>.artifacts/<name>.png`) so redact never touches them.
+   */
+  artifacts?: Array<{
+    name: string
+    mediaType: 'image/png'
+    sha256: string
+    bytes: number
+    capture: { port: number; path: string; viewport: Viewport }
+  }>
 }
 
 /** Which environment ran as the control, so the studio can show it. */
@@ -1262,6 +1340,8 @@ export type EvalPlan = {
   egress: string[]
   /** Each distinct git workspace its attempts start from, as `repo#ref:path`. */
   workspaces: string[]
+  /** Resolved `capture` defaults when any field is set. Missing `port` is fine. */
+  capture?: CaptureOptions
 }
 
 /**

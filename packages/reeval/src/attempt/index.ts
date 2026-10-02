@@ -10,6 +10,7 @@ import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { formatDuration } from '../text.ts'
 import type { AttemptContext, EvalFn } from '../types.ts'
+import { capturePage, serveCommand } from './capture.ts'
 import { createChecks } from './checks.ts'
 import { contextTaker } from './context.ts'
 import { tracePlan } from './debug.ts'
@@ -80,6 +81,8 @@ async function attemptBody(
     turns: a.turns,
     exec,
     readFile,
+    serve: (command, port) => serveCommand(a, command, port),
+    capture: (options) => capturePage(a, options),
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },
     async sandbox() {
       await start()
@@ -117,6 +120,7 @@ async function attemptBody(
     // Checks the eval didn't await still use the sandbox: let them finish before teardown.
     if (!a.signal.aborted) await unawaited().catch(() => {})
     clock?.clear()
+    for (const bg of a.backgrounds) await bg.kill().catch(() => {})
     const { sandbox } = a
     if (sandbox && !a.signal.aborted) await takeContext(sandbox, AbortSignal.timeout(30_000))
     if (sandbox) a.report({ kind: 'cleanup' })

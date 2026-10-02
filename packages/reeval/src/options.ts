@@ -24,6 +24,7 @@ import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
 import { opencodeModelError } from './harness.ts'
 import { badJudgeList, checkModelString } from './judge/index.ts'
 import type {
+  CaptureOptions,
   Cell,
   CellGate,
   CompareGate,
@@ -58,6 +59,7 @@ const KNOWN = [
   'env',
   'egress',
   'judge',
+  'capture',
   'timeout',
   'tags',
   'pin',
@@ -348,6 +350,50 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
       )
     }
   }
+  if (o.capture !== undefined) checkCapture(o.capture, where)
+}
+
+const CAPTURE_KEYS = ['port', 'viewport', 'timeout', 'browser']
+
+/** Throws unless `capture` is a shallow-merge object with a port, viewport, timeout and/or browser. */
+export function checkCapture(value: unknown, where: string): void {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new UsageError(
+      `capture is { port?, viewport?, timeout?, browser? } (got ${JSON.stringify(value)}) in ${where}`,
+    )
+  }
+  const o = value as CaptureOptions & Record<string, unknown>
+  const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
+  if (unknown.length) {
+    throw new UsageError(
+      `Unknown capture key "${unknown[0]}" in ${where}. Use port, viewport, timeout, browser.`,
+    )
+  }
+  if (o.port !== undefined && !(Number.isInteger(o.port) && o.port >= 1 && o.port <= 65535)) {
+    throw new UsageError(
+      `capture.port is a container port from 1 to 65535 (got ${String(o.port)}) in ${where}`,
+    )
+  }
+  if (o.viewport !== undefined) {
+    const { width, height } = o.viewport
+    const keys =
+      typeof o.viewport === 'object' && o.viewport !== null ? Object.keys(o.viewport) : []
+    if (
+      keys.some((k) => k !== 'width' && k !== 'height') ||
+      !(Number.isInteger(width) && width > 0) ||
+      !(Number.isInteger(height) && height > 0)
+    ) {
+      throw new UsageError(
+        `capture.viewport is { width, height } in CSS pixels (got ${JSON.stringify(o.viewport)}) in ${where}`,
+      )
+    }
+  }
+  if (o.timeout !== undefined) parseDuration(o.timeout)
+  if (o.browser !== undefined && typeof o.browser !== 'boolean') {
+    throw new UsageError(
+      `capture.browser is true or false (got ${JSON.stringify(o.browser)}) in ${where}`,
+    )
+  }
 }
 
 function applyHarness(
@@ -479,6 +525,7 @@ export type Resolved = {
   /** From the config and profile defaults, under the environment; from groups and the eval, over it. */
   egress: { inherited?: EgressPolicy; own?: EgressPolicy }
   judge: JudgeOptions
+  capture: CaptureOptions
   timeout: Duration | undefined
   tags: string[]
   pin: PinnableKey[]
@@ -523,6 +570,11 @@ function applyLevel(
   if (options.timeout !== undefined) out.timeout = options.timeout
   Object.assign(out.env, options.env)
   Object.assign(out.judge, options.judge)
+  if (options.capture !== undefined) {
+    const { viewport, ...rest } = options.capture
+    out.capture = { ...out.capture, ...rest }
+    if (viewport !== undefined) out.capture.viewport = viewport
+  }
   for (const tag of options.tags ?? []) if (!out.tags.includes(tag)) out.tags.push(tag)
   for (const key of options.pin ?? []) if (!out.pin.includes(key)) out.pin.push(key)
 }
@@ -556,6 +608,7 @@ export function cascade(
     env: { ...base.env },
     egress: { ...base.egress },
     judge: { ...base.judge },
+    capture: { ...base.capture },
     tags: [...base.tags],
     pin: [...base.pin],
   }
@@ -925,7 +978,9 @@ export function evalPlan(
   attempts: PlannedAttempt[],
   origin: { configFile: string; file: string | null },
 ): EvalPlan {
-  const { resolved, notes, skip } = r
+  const { resolved, skip } = r
+  const capture = captureNote(resolved.capture)
+  const notes = capture ? [...r.notes, capture] : r.notes
   return {
     harnesses: skip ? 0 : resolved.harness.length,
     variants: resolved.compare
@@ -962,7 +1017,19 @@ export function evalPlan(
         }),
       ),
     ],
+    ...(capture ? { capture: resolved.capture } : {}),
   }
+}
+
+function captureNote(c: CaptureOptions): string | undefined {
+  const parts: string[] = []
+  if (c.port !== undefined) parts.push(`port ${c.port}`)
+  if (c.viewport) parts.push(`${c.viewport.width}×${c.viewport.height}`)
+  if (c.timeout !== undefined) {
+    parts.push(typeof c.timeout === 'number' ? `${c.timeout}ms` : c.timeout)
+  }
+  if (c.browser === false) parts.push('browser false')
+  return parts.length ? `capture: ${parts.join(' · ')}` : undefined
 }
 
 /** `--tag a --tag !b`: every entry must hold. */

@@ -194,6 +194,12 @@ export async function createDockerSandbox(
       typeof content === 'string'
         ? network.writeTextFile({ path: resolve(path), content })
         : network.writeBinaryFile({ path: resolve(path), content }),
+    getPortEndpoint: async ({ port, protocol = 'http' }) => {
+      const session = network as {
+        getPortEndpoint: (o: { port: number; protocol?: 'http' | 'ws' }) => Promise<{ url: string }>
+      }
+      return session.getPortEndpoint({ port, protocol })
+    },
     destroy: async () => {
       await Promise.resolve(network.destroy()).catch(() => {})
     },

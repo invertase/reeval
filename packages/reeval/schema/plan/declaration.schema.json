@@ -41,6 +41,40 @@
       },
       "required": ["kind", "model"]
     },
+    "CaptureOptions": {
+      "type": "object",
+      "properties": {
+        "browser": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "number"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "viewport": {
+          "$ref": "#/$defs/Viewport"
+        }
+      },
+      "required": []
+    },
     "ClaudeCodeHarnessDescriptor": {
       "type": "object",
       "properties": {
@@ -505,6 +539,9 @@
         {
           "type": "object",
           "properties": {
+            "capture": {
+              "$ref": "#/$defs/CaptureOptions"
+            },
             "compare": {
               "type": "object",
               "properties": {
@@ -750,6 +787,9 @@
         {
           "type": "object",
           "properties": {
+            "capture": {
+              "$ref": "#/$defs/CaptureOptions"
+            },
             "compare": {
               "type": "object",
               "properties": {
@@ -995,6 +1035,9 @@
         {
           "type": "object",
           "properties": {
+            "capture": {
+              "$ref": "#/$defs/CaptureOptions"
+            },
             "egress": {
               "anyOf": [
                 {
@@ -1941,6 +1984,18 @@
     },
     "SubstituteIn": {
       "enum": ["body", "header", "query"]
+    },
+    "Viewport": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": ["height", "width"]
     }
   }
 }
