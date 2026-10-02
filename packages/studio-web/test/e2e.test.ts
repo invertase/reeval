@@ -71,15 +71,24 @@ function host(root: string): Promise<string> {
   )
 }
 
+/** The run header fetches analysis; a missing file is empty, not a page error. */
+const analysis404 = /\/data\/analysis\/[^/]+\.json$/
+
 async function open(url: string): Promise<{ page: Page; errors: string[] }> {
   const page = await (browser as Browser).newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(String(e)))
+  page.on('response', (r) => {
+    if (r.status() !== 404) return
+    const path = new URL(r.url()).pathname
+    if (analysis404.test(path)) return
+    errors.push(`404 ${path}`)
+  })
   page.on('console', (m) => {
     if (m.type() !== 'error') return
     const text = m.text()
-    // The run header fetches analysis; a run without one is a 404 the query treats as empty.
-    if (/data\/analysis\/.+\.json/.test(text) && /404/.test(text)) return
+    // Chromium logs a 404 fetch as this, without the URL.
+    if (text.includes('Failed to load resource') && /404/.test(text)) return
     errors.push(text)
   })
   await page.goto(url)
