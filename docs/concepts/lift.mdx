@@ -68,6 +68,11 @@ When the interval spans 0, the summary adds `within noise`: at this many attempt
 
 Lift gates; the win rates of a [compare question](/guide/compare#ask-questions) only annotate. They judge the attempts that passed their checks against each other, and never change a cell's outcome.
 
+Each judge key also has its own pass rate on the cell
+(`login 4/5 · checkout 0/5`). A key's lift prints only when both sides have at
+least two counted attempts — the same floor at which an all-or-nothing split
+can exclude 0. An attempt still fails if any judge fails.
+
 ## Why two runs is usually noise
 
 The interval is wide when attempts are few. These are reeval's own intervals for common results:

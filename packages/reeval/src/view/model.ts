@@ -18,6 +18,7 @@ import {
   stackChanges,
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
+import { cellJudgeRates, cellUsage, type JudgeKeyRate } from './judgements.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 import { readableTranscriptLine } from './record.ts'
 
@@ -318,6 +319,10 @@ export type CellRow = {
   effort: CellEffort | null
   /** A variant's effort against its control, with the rank test's verdict. */
   effortVsControl: EffortContrast | null
+  /** Per-key judge pass/counted over this cell's counted attempts. */
+  judgeRates: JudgeKeyRate[]
+  /** Sum of counted attempts' tokens; null when none reported. */
+  usage: TokenUsage | null
   attempts: AttemptRecord[]
 }
 
@@ -350,6 +355,8 @@ export function cellRows(e: EvalEntry): CellRow[] {
     belowMinLift: cell.lift?.minLift !== undefined && cell.lift.interval.lo < cell.lift.minLift,
     effort: cellEffort(e, cell.key),
     effortVsControl: cellContrast(e, cell.key),
+    judgeRates: cellJudgeRates(e, cell.key),
+    usage: cellUsage(e, cell.key),
     attempts: e.attempts.filter((a) => a.cell === cell.key),
   }))
 }
