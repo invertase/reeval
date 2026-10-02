@@ -169,6 +169,7 @@ export const inventory: InventoryFeature[] = [
     name: "`gate` (`'all'`, `{ passRate }`) and `compare.gate`",
     tests: [
       'reeval/test/results.test.ts › the option takes all or { passRate }',
+      "reeval/test/results.test.ts › 'all' matches { passRate: 1 }",
       options('a config-level gate applies to every eval'),
     ],
   },

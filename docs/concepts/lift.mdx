@@ -48,7 +48,7 @@ The `gate` option (on the config, a profile's `defaults`, a group or an eval) de
 
 | `gate` | A cell passes when |
 |---|---|
-| `'all'` (default) | Every attempt passes |
+| `'all'` (default) | Every counted attempt passes |
 | `{ passRate: 0.8 }` | At least 80% of its passes and fails are passes |
 
 Infra errors and skipped attempts don't count either way. `'all'` gets harder to meet as `runs` grows, even for an agent that's no worse, so the plan prints a hint when an eval runs more than once with it.

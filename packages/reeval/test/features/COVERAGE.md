@@ -25,7 +25,7 @@
 | `compare.harness` | ✓ 1 | ✓ 1 | — | — | — |
 | `compare.baseline` omitted: the cascaded environment, or an empty `baseline`, is the control | ✓ 1 | ✓ 3 | ● 2 | ● 2 | — |
 | `compare.questions`: questions in the plan, answered after the run with pairwise win rates | ✓ 10 | ✓ 3 | — | — | ◐ 1 (1 without a canary) |
-| `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 2 | — | — | — | — |
+| `gate` (`'all'`, `{ passRate }`) and `compare.gate` | ✓ 3 | — | — | — | — |
 | Profiles: `defaults`, `limit`, `pin`, selection and typos | ✓ 3 | ✓ 3 | — | — | — |
 | `limit.compare.maxVariants` | — | ✓ 1 | — | — | — |
 | `reeval run --dry-run` and `--dry-run --json` | ✓ 2 | ✓ 1 | — | — | — |
