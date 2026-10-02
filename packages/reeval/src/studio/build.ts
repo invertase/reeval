@@ -78,14 +78,16 @@ export async function buildStudio(options: BuildOptions): Promise<BuildResult> {
       : []
     // Notes have no saved form, so a build takes them from the cache; analyses only once saved.
     const notes = await listNotes(source.root, header.runId)
-    const index: AnalysisIndex = {
-      runId: header.runId,
-      entries: sortAnalyses(saved),
-      ...(notes.length ? { notes } : {}),
+    if (saved.length || notes.length) {
+      const index: AnalysisIndex = {
+        runId: header.runId,
+        entries: sortAnalyses(saved),
+        ...(notes.length ? { notes } : {}),
+      }
+      const file = join(out, analysisDataPath(header.runId))
+      await mkdir(dirname(file), { recursive: true })
+      await writeFile(file, JSON.stringify(index))
     }
-    const file = join(out, analysisDataPath(header.runId))
-    await mkdir(dirname(file), { recursive: true })
-    await writeFile(file, JSON.stringify(index))
     const target = join(out, recordPath(header.runId))
     await mkdir(dirname(target), { recursive: true })
     await cp(join(dir, `${header.runId}.json`), target)

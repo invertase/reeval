@@ -76,7 +76,11 @@ async function open(url: string): Promise<{ page: Page; errors: string[] }> {
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(String(e)))
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() !== 'error') return
+    const text = m.text()
+    // The run header fetches analysis; a run without one is a 404 the query treats as empty.
+    if (/data\/analysis\/.+\.json/.test(text) && /404/.test(text)) return
+    errors.push(text)
   })
   await page.goto(url)
   return { page, errors }
@@ -195,7 +199,10 @@ describe('studio in a browser', () => {
     assert.equal(await page.locator('[data-questions]').count(), 0, 'no questions, no section')
 
     await page.getByRole('tab', { name: 'Analysis' }).click()
-    await page.getByText('The greet module regressed in one attempt.').waitFor()
+    await page
+      .getByRole('tabpanel', { name: 'Analysis' })
+      .getByText('The greet module regressed in one attempt.')
+      .waitFor()
     await page.getByText('Verify command rejected: reeval run --nope').waitFor()
     await page.getByRole('link', { name: 'r1/greet/control#1' }).click()
     await page.waitForSelector('[role=tablist]')
@@ -281,6 +288,7 @@ describe('studio in a browser', () => {
     await page.goto(new URL(`/#/runs/${matrix}`, url).href)
     await page.getByRole('tab', { name: 'Analysis' }).click()
     await page
+      .getByRole('tabpanel', { name: 'Analysis' })
       .getByText('The house-greeting skill makes both agents say Ahoy; hasty is flaky either way.')
       .waitFor()
     await page.getByText('local cache').first().waitFor()
