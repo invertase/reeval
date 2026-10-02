@@ -554,6 +554,12 @@ describe('reeval analyze', () => {
     assert.match(RULES[0] ?? '', new RegExp(`fewer than ${LIFT_MIN_COUNTED} counted attempts`))
   })
 
+  test('the prompt and rules say a changed eval is not an effect', () => {
+    assert.match(SYSTEM_PROMPT, /first line says the eval changed/)
+    assert.match(SYSTEM_PROMPT, /A lift is an effect only when sources match/)
+    assert.match(RULES[1] ?? '', /not comparable: the eval changed/)
+  })
+
   test('the digest is facts with ids, evidence by rule, and the verdict rules; --context needs no key', async () => {
     const p = await historyProject('analyze-context', 'dogfood')
     const { text, digest } = await digestOf(p.dir)
@@ -607,6 +613,77 @@ describe('reeval analyze', () => {
       controlled.map((r) => [r.pass_verdict, r.variant_counted, r.control_counted]),
       [['insufficient', 1, 1]],
     )
+  })
+
+  test('a changed eval is not comparable, not an effect', async () => {
+    const p = await project('analyze-eval-changed', {
+      'reeval.config.ts': fakeConfig({
+        harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }",
+        extra: "record: 'always',",
+      }),
+      'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
+      'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    writeFileSync(
+      join(p.dir, 'evals/c.eval.ts'),
+      `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 }, async (c) => {
+  await c.send('go now')
+})
+`,
+    )
+    assert.equal((await runCli(p.dir)).code, 0)
+    const observed = await query(
+      p.dir,
+      "SELECT factor, pass_verdict, note, variant_counted, control_counted FROM factor_effects WHERE tier = 'observed'",
+    )
+    assert.ok(observed.length > 0, 'sources drift is an observed factor')
+    assert.ok(
+      observed.every((r) => r.factor === 'sources' && r.pass_verdict === 'not_comparable'),
+      JSON.stringify(observed),
+    )
+    assert.ok(observed.every((r) => String(r.note).includes('the eval changed')))
+    const implicit = await digestOf(p.dir)
+    assert.ok(
+      implicit.digest.facts.some((f) => f.kind === 'eval-changed'),
+      'analyze with no --vs still sees the previous recorded run',
+    )
+    const { digest, text } = await digestOf(p.dir, ['--vs', 'latest~1'])
+    assert.match(text, /not comparable: the eval changed/)
+    const changed = digest.facts.filter((f) => f.kind === 'eval-changed')
+    assert.equal(changed.length, 1)
+    assert.match(String(changed[0]?.note), /not an effect of the thing under test/)
+    const sources = digest.facts.filter((f) => f.kind === 'factor' && f.factor === 'sources')
+    assert.ok(sources.length > 0)
+    assert.ok(
+      sources.every(
+        (f) =>
+          f.passVerdict === 'not comparable' &&
+          String(f.lift).startsWith('not comparable: the eval changed'),
+      ),
+      JSON.stringify(sources),
+    )
+    assert.ok(digest.rules.some((r) => r.includes('the eval changed')))
   })
 
   test('two counted attempts can still be an effect', async () => {

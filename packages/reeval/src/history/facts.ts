@@ -435,6 +435,9 @@ export function deriveFacts(db: DatabaseSync): void {
       if (real.length === 0) continue
       // Observed over time: what changed between two runs of the same cell.
       const judgeOnly = real.length === 1 && real[0] === 'judge'
+      const sourcesChanged = real.includes('sources')
+      const cols = passCols(side(cur), side(prev))
+      if (sourcesChanged) cols.pass_verdict = 'not_comparable'
       factorRows.push({
         factor: real.length === 1 ? (real[0] as string) : 'confounded',
         level: cur.run_id,
@@ -445,13 +448,15 @@ export function deriveFacts(db: DatabaseSync): void {
         eval_key: cur.eval_key,
         strata: 1,
         runs: 2,
-        ...passCols(side(cur), side(prev)),
+        ...cols,
         ...effortCols(contrastEffort(side(cur).samples, side(prev).samples)),
-        note: judgeOnly
-          ? 'the judge changed: a measurement change, not an effect of the thing under test'
-          : real.length > 1
-            ? `confounded: ${real.join(', ')} changed together`
-            : null,
+        note: sourcesChanged
+          ? 'the eval changed: not comparable, not an effect of the thing under test'
+          : judgeOnly
+            ? 'the judge changed: a measurement change, not an effect of the thing under test'
+            : real.length > 1
+              ? `confounded: ${real.join(', ')} changed together`
+              : null,
       })
     }
   }

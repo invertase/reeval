@@ -259,7 +259,9 @@ group(
 - **Lift** is variant pass rate minus control pass rate, with a 95% interval; with few runs it's
   usually "within noise". The summary still prints that interval at 1 vs 1. `reeval analyze`
   treats fewer than two counted attempts a side as `insufficient` (not measured), never a
-  results line. The summary also prints **effort** under each variant (median tool
+  results line. When the eval's sources changed across the compared runs, that pass-rate
+  difference is `not comparable: the eval changed`, not an effect. The summary also prints
+  **effort** under each variant (median tool
   calls and agent time vs the control's), which often shows a skill's effect before pass rates
   do: `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
