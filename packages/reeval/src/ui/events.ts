@@ -18,6 +18,8 @@ export type EvalResult = {
   state: 'passed' | 'failed' | 'skipped'
   durationMs: number
   errors: string[]
+  /** The first error's `name` (`TimeoutError`, `AbortError`), when the worker sent one. */
+  errorName?: string
   /** `errors` as Vitest prints them (diff, code frame), with ANSI colour codes. */
   formattedErrors: string[]
   meta: EvalMeta | undefined

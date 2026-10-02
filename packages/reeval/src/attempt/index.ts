@@ -4,6 +4,7 @@
 import { AttemptDebug, withDebug } from '../debug/attempt.ts'
 import { attemptDebugDir } from '../debug/files.ts'
 import { getRunContext, type TestHandle } from '../engine/runtime.ts'
+import { TimeoutError } from '../errors.ts'
 import type { HarnessSession } from '../harness/types.ts'
 import { attemptId, evalId, evalSlug, relativeFile } from '../ids.ts'
 import type { Sandbox } from '../sandbox/index.ts'
@@ -110,7 +111,7 @@ async function attemptBody(
     }
   } catch (error) {
     recordFailure(a, error, timedOut())
-    if (timedOut()) throw new Error(`Eval timed out after ${spec.timeoutMs / 1000}s`)
+    if (timedOut()) throw new TimeoutError(`Eval timed out after ${spec.timeoutMs / 1000}s`)
     throw error
   } finally {
     // Checks the eval didn't await still use the sandbox: let them finish before teardown.

@@ -40,6 +40,7 @@ import {
   isMovingRef,
   parseGitRepo,
 } from '../src/environment.ts'
+import { isTimeout, TimeoutError } from '../src/errors.ts'
 import {
   AGENTS,
   type AgentKind,
@@ -859,11 +860,28 @@ test('judge calls fail at once on permanent errors, and after the last try on tr
   assert.equal(down.calls, quick.attempts)
 })
 
+test('isTimeout is the TimeoutError name, not the message', () => {
+  assert.equal(isTimeout(new TimeoutError('Eval timed out after 1s')), true)
+  assert.equal(isTimeout(new DOMException('Eval timed out after 1s', 'TimeoutError')), true)
+  assert.equal(
+    isTimeout(Object.assign(new Error('Eval timed out after 1s'), { name: 'TimeoutError' })),
+    true,
+  )
+  assert.equal(isTimeout(new Error('Eval timed out after 1s')), false)
+  assert.equal(isTimeout(new Error('setup step timed out after 1s')), false)
+  assert.equal(isTimeout('timed out'), false)
+  assert.equal(isTimeout(null), false)
+})
+
 test('transient judge errors and bounded backoff', () => {
   assert.equal(isTransient({ name: 'AI_APICallError', statusCode: 500, message: 'x' }), true)
   assert.equal(isTransient({ statusCode: 400, message: 'bad request' }), false)
   assert.equal(isTransient(new Error('fetch failed')), true)
+  assert.equal(isTransient(new Error('ETIMEDOUT')), true)
   assert.equal(isTransient(new Error('No credentials for judge model')), false)
+  assert.equal(isTransient(new TimeoutError('Eval timed out after 1s')), false)
+  assert.equal(isTransient(new Error('request timed out')), false)
+  assert.equal(isTransient({ name: 'AbortError', message: 'The run was cancelled' }), false)
   assert.equal(
     isTransient({ name: 'AI_RetryError', message: 'x', lastError: { statusCode: 503 } }),
     true,

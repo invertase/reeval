@@ -226,6 +226,7 @@ async function runFiles(input: RunInput): Promise<EngineRun> {
     state: result.state,
     durationMs: Math.round(result.durationMs),
     errors: result.errors.map((e) => capMiddle(String(e.message))),
+    ...(result.errors[0]?.name ? { errorName: result.errors[0].name } : {}),
     formattedErrors: result.errors.map((e) =>
       capMiddle(formatError(e, { root, hide, columns: process.stdout.columns })),
     ),

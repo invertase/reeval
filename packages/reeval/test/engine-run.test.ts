@@ -135,6 +135,7 @@ describe('runTests', () => {
       onReady: () => {},
     })
     assert.equal(results.get(0)?.state, 'failed')
+    assert.equal(results.get(0)?.errors[0]?.name, 'TimeoutError')
     assert.equal(results.get(0)?.errors[0]?.message, 'Eval timed out after 0.05s')
     assert.equal(released, true, 'runTests waits for the body')
     assert.deepEqual(events.at(-1), ['meta', 0, meta])
