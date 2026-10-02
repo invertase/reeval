@@ -33,7 +33,7 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
 </Property>
 
 <Property name="capture" type="(options: CaptureCall) => Promise<Capture>">
-  Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. `name` matches `[a-z0-9_-]+`; reusing a name in the same attempt fails. `path` is the path on the app (`/login`). `port`, `viewport` and `timeout` override the cascaded `capture` option. Polls until any HTTP response arrives, then takes a PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` throws; the attempt fails, with no skip, no empty PNG and no download. Needs a sandbox, same as `c.exec`. See [Capturing UI](/recipes/capturing-ui).
+  Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. `name` matches `[a-z0-9_-]+`; reusing a name in the same attempt fails. `path` is the path on the app (`/login`). `port` is required on the call (the container port the server binds; `c.serve` returns one). `viewport` and `timeout` override the cascaded camera defaults. Polls until any HTTP response arrives, then takes a PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` throws; the attempt fails, with no skip, no empty PNG and no download. Needs a sandbox, same as `c.exec`. See [Capturing UI](/recipes/capturing-ui).
 </Property>
 
 <Property name="readFile" type="(path: string) => Promise<string | null>">

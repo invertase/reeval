@@ -51,8 +51,27 @@ test('refusedBrowser names the env first when both refuse', () => {
 
 test('resolveCaptureCall needs a port and keeps the call path', () => {
   assert.throws(
-    () => resolveCaptureCall({ name: 'home', path: '/' }, {}),
-    /c\.capture\(\) needs a port/,
+    () => resolveCaptureCall({ name: 'home', path: '/' } as never, {}),
+    /c\.capture\(\) needs a port: pass port on the call/,
+  )
+  assert.throws(
+    () => resolveCaptureCall({ name: 'home', path: '/', port: 0 }, {}),
+    /c\.capture\(\) port is a container port from 1 to 65535 \(got 0\)/,
+  )
+  assert.deepEqual(
+    resolveCaptureCall(
+      { name: 'home', path: '/login', port: 9 },
+      {
+        viewport: { width: 390, height: 844 },
+        timeout: '30s',
+      },
+    ),
+    {
+      port: 9,
+      path: '/login',
+      viewport: { width: 390, height: 844 },
+      timeoutMs: 30_000,
+    },
   )
   assert.deepEqual(resolveCaptureCall({ name: 'home', path: '/login', port: 9 }, {}), {
     port: 9,

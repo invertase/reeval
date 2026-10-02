@@ -3,5 +3,5 @@ import { fakeHarness } from 'reeval/harness'
 
 export default defineConfig({
   harness: fakeHarness({}),
-  capture: { port: 5173 },
+  capture: { timeout: '60s' },
 })

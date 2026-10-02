@@ -1,7 +1,7 @@
 import { evaluate } from 'reeval'
 import { plain } from './env.ts'
 
-evaluate('lands', { environment: plain, capture: { port: 9 } }, async (c) => {
+evaluate('lands', { environment: plain }, async (c) => {
   await c.sandbox()
-  await c.capture({ name: 'x', path: '/' })
+  await c.capture({ name: 'x', path: '/', port: 9 })
 })

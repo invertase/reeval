@@ -1,5 +1,5 @@
 no profile · 3 evals · 3 cells · 3 attempts
-evals/c.eval.ts › with defaults    a/-/fake  control  gated  ×1  capture: port 5173 · 1280×720 · 30s
-evals/c.eval.ts › no cascade port  a/-/fake  control  gated  ×1
-evals/c.eval.ts › browser off      a/-/fake  control  gated  ×1  capture: browser false
+evals/c.eval.ts › with defaults       a/-/fake  control  gated  ×1  capture: 1280×720 · 30s
+evals/c.eval.ts › no camera defaults  a/-/fake  control  gated  ×1
+evals/c.eval.ts › browser off         a/-/fake  control  gated  ×1  capture: browser false
 excluded: —

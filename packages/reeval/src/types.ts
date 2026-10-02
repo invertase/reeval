@@ -55,13 +55,11 @@ export type ExecResult = { exitCode: number; stdout: string; stderr: string }
 export type Viewport = { width: number; height: number }
 
 /**
- * Screenshot settings. Cascades config → profile defaults → group → eval, shallow-merged.
- * `viewport` on a level replaces the whole object. `c.capture({ port, viewport, timeout })`
- * overrides the cascade for that call.
+ * Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval,
+ * shallow-merged. `viewport` on a level replaces the whole object. `port` is not an option:
+ * pass it on the call.
  */
 export type CaptureOptions = {
-  /** Container port the server binds. Required when `c.capture()` runs (cascade or the call). */
-  port?: number
   viewport?: Viewport
   /** How long to poll before failing. Default `'60s'`. */
   timeout?: Duration
@@ -92,7 +90,8 @@ export type Capture = {
 export type CaptureCall = {
   name: string
   path: string
-  port?: number
+  /** Container port the server binds. Required; there is no cascade default. */
+  port: number
   viewport?: Viewport
   timeout?: Duration
 }
@@ -1340,7 +1339,7 @@ export type EvalPlan = {
   egress: string[]
   /** Each distinct git workspace its attempts start from, as `repo#ref:path`. */
   workspaces: string[]
-  /** Resolved `capture` defaults when any field is set. Missing `port` is fine. */
+  /** Resolved camera defaults when any field is set. */
   capture?: CaptureOptions
 }
 

@@ -50,11 +50,12 @@ export function resolveCaptureCall(
   call: CaptureCall,
   cascade: CaptureOptions,
 ): { port: number; path: string; viewport: Viewport; timeoutMs: number } {
-  const port = call.port ?? cascade.port
+  const port = call.port
   if (port === undefined) {
-    throw new Error(
-      'c.capture() needs a port: set capture.port on the eval, a group, the profile or the config, or pass port on the call',
-    )
+    throw new Error('c.capture() needs a port: pass port on the call')
+  }
+  if (!(Number.isInteger(port) && port >= 1 && port <= 65535)) {
+    throw new Error(`c.capture() port is a container port from 1 to 65535 (got ${String(port)})`)
   }
   return {
     port,

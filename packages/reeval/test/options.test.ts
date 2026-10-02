@@ -1277,17 +1277,17 @@ describe('common mistakes', () => {
     [
       'capture as a string',
       `evaluate('e', { capture: 5173 as never }, async () => {})`,
-      /capture is \{ port\?, viewport\?, timeout\?, browser\? \} \(got 5173\) in evaluate\("e"\)/,
+      /capture is \{ viewport\?, timeout\?, browser\? \} \(got 5173\) in evaluate\("e"\)/,
     ],
     [
       'an unknown capture key',
       `evaluate('e', { capture: { ready: true } as never }, async () => {})`,
-      /Unknown capture key "ready" in evaluate\("e"\)\. Use port, viewport, timeout, browser\./,
+      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser\./,
     ],
     [
-      'a capture port of 0',
-      `evaluate('e', { capture: { port: 0 } }, async () => {})`,
-      /capture\.port is a container port from 1 to 65535 \(got 0\) in evaluate\("e"\)/,
+      'capture.port on evaluate',
+      `evaluate('e', { capture: { port: 5173 } as never }, async () => {})`,
+      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser\./,
     ],
     [
       'a capture viewport without height',

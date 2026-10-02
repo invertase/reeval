@@ -24,14 +24,10 @@ const firebaseWeb = defineEnvironment('firebase-web', {
   ],
 })
 
-evaluate(
-  'login screen',
-  { environment: firebaseWeb, capture: { port: 5173 } },
-  async (c) => {
-    await c.send('Add a labelled email field to the login form.')
-    await c.capture({ name: 'login', path: '/login' })
-  },
-)
+evaluate('login screen', { environment: firebaseWeb }, async (c) => {
+  await c.send('Add a labelled email field to the login form.')
+  await c.capture({ name: 'login', path: '/login', port: 5173 })
+})
 ```
 
 ## Author starts the server
@@ -60,9 +56,9 @@ The prompt names the port. `c.capture` polls; nothing listening fails the attemp
 ```ts title="evals/agent-serve.eval.ts"
 import { evaluate } from '{{ pkg }}'
 
-evaluate('landing page', { capture: { port: 5173 } }, async (c) => {
+evaluate('landing page', async (c) => {
   await c.send('Build a Vite app. Serve it on 127.0.0.1:5173.')
-  await c.capture({ name: 'home', path: '/' })
+  await c.capture({ name: 'home', path: '/', port: 5173 })
 })
 ```
 
@@ -81,6 +77,6 @@ size, progress, cache path). A cache hit is quiet. Fake-tier stubs never downloa
     `c.capture`, `c.serve` and `c.exec({ background })`.
   </Card>
   <Card title="Options" icon="sliders" href="/reference/options">
-    The `capture` cascade: port, viewport, timeout, browser.
+    The `capture` cascade: viewport, timeout, browser.
   </Card>
 </CardGroup>

@@ -4,7 +4,6 @@ evaluate(
   'with defaults',
   {
     capture: {
-      port: 5173,
       viewport: { width: 1280, height: 720 },
       timeout: '30s',
     },
@@ -12,6 +11,6 @@ evaluate(
   async () => {},
 )
 
-evaluate('no cascade port', async () => {})
+evaluate('no camera defaults', async () => {})
 
 evaluate('browser off', { capture: { browser: false } }, async () => {})

@@ -353,25 +353,20 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.capture !== undefined) checkCapture(o.capture, where)
 }
 
-const CAPTURE_KEYS = ['port', 'viewport', 'timeout', 'browser']
+const CAPTURE_KEYS = ['viewport', 'timeout', 'browser']
 
-/** Throws unless `capture` is a shallow-merge object with a port, viewport, timeout and/or browser. */
+/** Throws unless `capture` is a shallow-merge object with a viewport, timeout and/or browser. */
 export function checkCapture(value: unknown, where: string): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new UsageError(
-      `capture is { port?, viewport?, timeout?, browser? } (got ${JSON.stringify(value)}) in ${where}`,
+      `capture is { viewport?, timeout?, browser? } (got ${JSON.stringify(value)}) in ${where}`,
     )
   }
   const o = value as CaptureOptions & Record<string, unknown>
   const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
   if (unknown.length) {
     throw new UsageError(
-      `Unknown capture key "${unknown[0]}" in ${where}. Use port, viewport, timeout, browser.`,
-    )
-  }
-  if (o.port !== undefined && !(Number.isInteger(o.port) && o.port >= 1 && o.port <= 65535)) {
-    throw new UsageError(
-      `capture.port is a container port from 1 to 65535 (got ${String(o.port)}) in ${where}`,
+      `Unknown capture key "${unknown[0]}" in ${where}. Use viewport, timeout, browser.`,
     )
   }
   if (o.viewport !== undefined) {
@@ -1023,7 +1018,6 @@ export function evalPlan(
 
 function captureNote(c: CaptureOptions): string | undefined {
   const parts: string[] = []
-  if (c.port !== undefined) parts.push(`port ${c.port}`)
   if (c.viewport) parts.push(`${c.viewport.width}×${c.viewport.height}`)
   if (c.timeout !== undefined) {
     parts.push(typeof c.timeout === 'number' ? `${c.timeout}ms` : c.timeout)

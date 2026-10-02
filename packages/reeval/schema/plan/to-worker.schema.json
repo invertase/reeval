@@ -78,9 +78,6 @@
         "browser": {
           "type": "boolean"
         },
-        "port": {
-          "type": "number"
-        },
         "timeout": {
           "anyOf": [
             {
