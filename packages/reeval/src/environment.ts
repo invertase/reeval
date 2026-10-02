@@ -883,7 +883,9 @@ function checkName(name: unknown, what: string): asserts name is string {
  *     }))
  *
  * The callback runs once, synchronously. Relative paths resolve against the calling file.
- * `extend` / `extendEnvironment` replace `sandbox` entirely when the child sets one.
+ * `extend` / `extendEnvironment` replace `sandbox` entirely when the child sets one; when
+ * the child omits it, the parent's sandbox is kept. A bare `defineEnvironment('plain', {})`
+ * that is not an extend uses the cascaded option sandbox, else implicit Docker.
  */
 export function defineEnvironment(name: string, input: EnvironmentInput): Environment {
   checkName(name, 'defineEnvironment')
@@ -907,11 +909,12 @@ export const EMPTY_BASELINE = 'baseline'
 
 /**
  * An environment with no layers. As a compare's empty control it uses the first
- * variant's sandbox when that variant sets one, else the implicit default Docker sandbox.
+ * variant's sandbox when that variant sets one, else the cascaded option sandbox,
+ * else the implicit default Docker sandbox.
  */
 export const emptyEnvironment = (name: string): Environment => makeEnvironment(name, [])
 
-/** The last layer that sets `sandbox`, else `fallback` (the implicit default Docker sandbox). */
+/** The last layer that sets `sandbox`, else `fallback` (the cascaded option sandbox). */
 export const sandboxOf = (
   layers: readonly EnvironmentLayer[],
   fallback: SandboxDescriptor,

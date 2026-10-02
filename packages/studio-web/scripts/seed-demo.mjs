@@ -103,7 +103,7 @@ const config = ({
   judge = 0.95,
   agent = '',
   extra = '',
-}) => `import { defineConfig, defineEnvironment } from 'reeval'
+}) => `import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -111,7 +111,7 @@ import { fakeSandbox } from 'reeval/sandbox'
 export default defineConfig({
   include: ${JSON.stringify(include)},
   harness: [${harnesses.join(', ')}],
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: ${judge} }) },
   // Answers the compare questions: the attempt whose diff says Ahoy wins, then the one that
   // defaults the name. review.eval.ts's second question fails at the model.

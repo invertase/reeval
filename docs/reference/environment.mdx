@@ -64,7 +64,7 @@ It returns a frozen `Environment` with `name`, `layers` and `extend` / `extendEn
 ## Fields
 
 <Property name="sandbox" type="SandboxDescriptor" optional>
-  Where the attempt runs: `docker()` or `fakeSandbox()`. This is the only place to set a sandbox; `evaluate`, `group`, a profile and `defineConfig` refuse `sandbox`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; `install` is not merged onto the parent image. Omit it and the attempt uses the implicit default Docker sandbox. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and Node 24 cannot share a cell. Environments that share an image still share one preflight build.
+  Where the attempt runs: `docker()` or `fakeSandbox()`. A child's `extend` / `extendEnvironment` replaces the parent's entirely when it sets one; when the child omits it, the parent's sandbox is kept. `install` is not merged onto the parent image. A bare environment that is not an extend, and that omits `sandbox`, uses the cascaded option (`defineConfig` / profile defaults / group / eval), else implicit Docker. It does not inherit the config environment's sandbox. The cell key includes the image (`from`, `dockerfile`, `install`), so Node 22 and Node 24 cannot share a cell. Environments that share an image still share one preflight build.
 </Property>
 
 <Property name="workspace" type="GitWorkspace" optional>
@@ -134,7 +134,7 @@ parent.extendEnvironment(name, (helpers) => spec)
 
 | Field | When both set it |
 |---|---|
-| `sandbox` | The child's replaces the parent's entirely |
+| `sandbox` | The child's replaces the parent's entirely; omit it and the parent's is kept |
 | `env` | Merged by variable name; the child wins |
 | `files` | Merged by path; the child wins |
 | `skills`, `mcp` | Merged by name; the child wins |

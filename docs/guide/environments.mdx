@@ -3,7 +3,7 @@ title: Environments and skills
 description: Give the agent a starting codebase, skills, MCP servers, rules, files, variables and setup steps with defineEnvironment.
 ---
 
-The sandbox is where the agent runs, and it lives on the environment: `defineEnvironment('python', { sandbox: docker({ from: 'python:3.12-slim' }) })`. An environment is also what the agent runs with: a starting codebase, skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
+The sandbox is where the agent runs: put a specific machine on the environment (`defineEnvironment('python', { sandbox: docker({ from: 'python:3.12-slim' }) })`), or set `sandbox` on `defineConfig` as the default when the resolved environment omits one. An environment is also what the agent runs with: a starting codebase, skills, MCP servers, rules, files, variables and setup steps, applied fresh to every attempt. The house-greeting compare used the smallest one:
 
 ```ts title="evals/environments.ts"
 import { defineEnvironment } from '{{ pkg }}'
@@ -34,7 +34,9 @@ group(
 )
 ```
 
-`environment` sets what every eval in the group runs in. An eval that sets `compare: { baseline, variants }` names every arm itself: don't put `environment` on that same object, and the group's environment is not applied to it. Leave `baseline` out and the group's environment is the control.
+`environment` sets what every eval in the group runs in. An eval that sets `compare: { baseline, variants }` names every arm itself: don't put `environment` on that same object.
+
+A named arm that omits `sandbox` uses the root `sandbox` option (a fake config puts `sandbox: fakeSandbox()` there), not the config environment's sandbox. `.extend()` keeps the parent environment's sandbox when the child omits it. Leave `baseline` out and the group's environment is the control.
 
 ## Add skills
 

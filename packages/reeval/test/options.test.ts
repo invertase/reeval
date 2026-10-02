@@ -1015,14 +1015,9 @@ describe('common mistakes', () => {
       /harness takes \{ add \} or \{ only \}, not both, in evaluate\("e"\)/,
     ],
     [
-      'sandbox on evaluate',
-      `evaluate('e', { sandbox: fakeSandbox() }, async () => {})`,
-      /sandbox can't be set in evaluate\("e"\)\. Put it on an environment: defineEnvironment\('name', \{ sandbox: docker\(\{ … \}\) \}\)\./,
-    ],
-    [
-      'sandbox on group',
-      `group('g', { sandbox: fakeSandbox() }, () => {})`,
-      /sandbox can't be set in group\("g"\)\. Put it on an environment/,
+      'a sandbox that is not docker() or fakeSandbox() on evaluate',
+      `evaluate('e', { sandbox: { kind: 'vm' } as never }, async () => {})`,
+      /sandbox in evaluate\("e"\) must come from docker\(\) or fakeSandbox\(\)/,
     ],
     [
       'an old option name',
@@ -1381,14 +1376,14 @@ ${body}
       /Unknown option "reuse" in profiles\.pr\. Reusing control results from \.history isn’t built yet/,
     ],
     [
-      'sandbox on defineConfig',
-      `sandbox: fakeSandbox(),`,
-      /sandbox can't be set in reeval\.config\.ts\. Put it on an environment: defineEnvironment\('name', \{ sandbox: docker\(\{ … \}\) \}\)/,
+      'a sandbox that is not docker() or fakeSandbox() on defineConfig',
+      `sandbox: { kind: 'vm' } as never,`,
+      /sandbox in reeval\.config\.ts must come from docker\(\) or fakeSandbox\(\)/,
     ],
     [
-      'sandbox on profile defaults',
-      `profiles: { pr: { defaults: { sandbox: fakeSandbox() } } },`,
-      /sandbox can't be set in profiles\.pr\.defaults\. Put it on an environment/,
+      'a sandbox that is not docker() or fakeSandbox() on profile defaults',
+      `profiles: { pr: { defaults: { sandbox: { kind: 'vm' } as never } } },`,
+      /sandbox in profiles\.pr\.defaults must come from docker\(\) or fakeSandbox\(\)/,
     ],
   ]
   for (const [what, extra, message] of configCases) {
@@ -1433,6 +1428,7 @@ evaluate('judged', async (c) => { await c.send('x'); await c.judge('ok?') })
       'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const env = defineEnvironment('s', ({ secret }) => ({
+  sandbox: docker(),
   env: { AWS_SECRET_ACCESS_KEY: secret.fromEnv('AWS_SECRET_ACCESS_KEY') },
 }))
 evaluate('one', { environment: env }, async () => {})
@@ -1529,6 +1525,7 @@ evaluate('one', { environment: env }, async () => {})
   const unbrokeredEval = `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const keys = defineEnvironment('keys', ({ secret }) => ({
+  sandbox: docker(),
   env: {
     GEMINI_API_KEY: secret.fromEnv('HOST_GEMINI', { hosts: secret.hosts.gemini }),
     AWS_SECRET_ACCESS_KEY: secret(),
@@ -1544,6 +1541,7 @@ evaluate('two', { environment: keys }, async () => {})
       'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
+  sandbox: docker(),
   env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
 evaluate('one', { environment: maybe }, async () => {})
@@ -1566,6 +1564,7 @@ evaluate('one', { environment: maybe }, async () => {})
       'evals/o.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
 import { docker } from 'reeval/sandbox'
 const maybe = defineEnvironment('maybe', ({ secret }) => ({
+  sandbox: docker(),
   env: { SENTRY_TOKEN: secret.fromEnv('REEVAL_TEST_MAYBE_TOKEN', { optional: true }) },
 }))
 evaluate('one', { environment: maybe }, async () => {})

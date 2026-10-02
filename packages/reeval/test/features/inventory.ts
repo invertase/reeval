@@ -558,17 +558,19 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'environment.sandbox',
     area: 'Environments',
-    name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces it',
-    fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace'],
+    name: '`sandbox` on `defineEnvironment`; cell identity includes the image; `.extend` replaces or keeps it; a named env that omits sandbox uses the root machine',
+    fixtures: ['env/sandbox-image', 'env/sandbox-extend-replace', 'env/sandbox-inherit'],
     plan: [
       'environments/images',
       'environments/extend-replace',
       'environments/config-control',
+      'environments/inherit-config',
       'environments/empty-control',
     ],
     tests: [
       options('common mistakes'),
       unit('extendEnvironment layers and overrides; a separate environment does not'),
+      unit('named compare uses the cascaded sandbox option, not the config environment'),
     ],
   },
   {

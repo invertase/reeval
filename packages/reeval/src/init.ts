@@ -88,20 +88,18 @@ const fakeAgent = fakeHarness({
   defaultProfile: { ci: 'pr' },
   profiles: {
     // reeval run --profile fake: the evals on the fake agent.
-    fake: { defaults: { harness: fakeAgent, environment: fakeEnv } },
+    fake: { defaults: { harness: fakeAgent, sandbox: fakeSandbox() } },
 ${profiles}
   },`
     : `  harness: fakeAgent,
-  environment: fakeEnv,
+  sandbox: fakeSandbox(),
   defaultProfile: { ci: 'pr' },
   profiles: {
 ${profiles}
   },`
-  return `import { defineConfig, defineEnvironment } from '${pkg}'
+  return `import { defineConfig } from '${pkg}'
 import { ${harnessImports} } from '${pkg}/harness'
 import { fakeSandbox } from '${pkg}/sandbox'
-
-const fakeEnv = defineEnvironment('fake', { sandbox: fakeSandbox() })
 
 ${fakeAgent}
 export default defineConfig({

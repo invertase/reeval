@@ -3,7 +3,7 @@
 // greeting only when it's given a skill, so skill.eval.ts shows the compare and its lift.
 // analysis.agent writes a canned note on each eval and harness into .reeval/analysis/.
 // (python.eval.ts needs the real agent and custom.eval.ts needs a Gemini key in the sandbox.)
-import { defineConfig, defineEnvironment } from 'reeval'
+import { defineConfig } from 'reeval'
 import { fakeHarness } from 'reeval/harness'
 import { fakeAnalysis, fakeJudge } from 'reeval/judge'
 import { fakeSandbox } from 'reeval/sandbox'
@@ -36,7 +36,7 @@ export default defineConfig({
       text: 'I created greet.js in the house style.',
     },
   }),
-  environment: defineEnvironment('fake', { sandbox: fakeSandbox() }),
+  sandbox: fakeSandbox(),
   judge: { model: fakeJudge({ score: 0.95 }) },
   analysis: {
     agent: true,

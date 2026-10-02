@@ -1,10 +1,8 @@
 profile pr (auto: CI is set) · 3 evals (1 skipped) · 4 cells · 6 attempts · budget attempts 5 ✗
 hint: 1 eval runs more than once with the default gate, so every attempt must pass; set gate: { passRate: 0.8 } to gate on a pass rate instead
-evals/p.eval.ts › plain        a/-/docker        control          gated    ×1  runs 3 → 1 (profile pr)
-evals/p.eval.ts › compared     a/plain/docker    control          ungated  ×1  compare off (profile pr)
-evals/p.eval.ts › regression   a/plain/docker    control          ungated  ×2  pinned: compare, runs
-                               a/skilled/docker  variant skilled  gated    ×2
+evals/p.eval.ts › plain        a/-/fake        control          gated    ×1  runs 3 → 1 (profile pr)
+evals/p.eval.ts › compared     a/plain/fake    control          ungated  ×1  compare off (profile pr)
+evals/p.eval.ts › regression   a/plain/fake    control          ungated  ×2  pinned: compare, runs
+                               a/skilled/fake  variant skilled  gated    ×2
 evals/p.eval.ts › own harness  skipped: no harness left: profile pr allows a
 excluded: —
-image docker · 3 evals
-  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)

@@ -33,6 +33,7 @@ group(
 |---|---|---|---|---|
 | [`include`](#include) | ✓ |  |  |  |
 | [`harness`](#harness) | ✓ | ✓ | ✓ | ✓ |
+| [`sandbox`](#sandbox) | ✓ | ✓ | ✓ |  |
 | [`environment`](#environment) | ✓ | ✓ | ✓ |  |
 | [`runs`](#runs) | ✓ | ✓ | ✓ | ✓ |
 | [`gate`](#gate) | ✓ | ✓ | ✓ |  |
@@ -63,14 +64,18 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   Which agents run the eval. **Replaces** the inherited value. The only list: each harness is its own cell. An edit changes the inherited list instead: `{ add: cursor({ model: 'composer-2' }) }` appends one or a list, `{ only: 'cursor:composer-2.5' }` keeps the inherited harnesses with these ids (one or a list), and a function gets the list and returns a new one, `(h) => [...h, cursor({ model: 'composer-2' })]`. An empty list, two harnesses with the same id, or an `only` id nothing inherited has, is an error. Default `cursor({ model: 'composer-2.5' })`.
 </Property>
 
+<Property name="sandbox" type="SandboxDescriptor">
+  The default machine when the resolved environment omits `sandbox`. **Replaces**. Cascades config → profile `defaults` → group → eval. Not an environment: it does not invent skills, files or a name. A named environment is a total override and does not inherit the config environment's sandbox. `.extend()` keeps the parent environment's sandbox when the child omits it. Default `docker()`.
+</Property>
+
 <Property name="environment" type="Environment">
-  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. The sandbox lives on that environment (`sandbox: docker({ … })`), not on `evaluate`, `group`, a profile or `defineConfig`. Not on the same object as a `compare` with a `baseline`, and not applied to a compare with one. Beside or above a compare without a `baseline`, it's the control — including a default `environment` on the config. Default none: the attempt uses an implicit default Docker sandbox so a harness-only eval still runs.
+  What the eval runs in, from `defineEnvironment`. **Replaces**. One environment, never a list. Used only when the eval or compare arm did not name an environment; a named env is a total override (no skills, files or sandbox from this one). Beside or above a compare without a `baseline`, it's the control — including a default `environment` on the config. Default none: the attempt uses the cascaded `sandbox` option, else implicit Docker.
 </Property>
 
 <Property name="compare" type="{ baseline?, variants, gate?, minLift?, harness?, questions? }">
   A control and other environments, each run on its own and reported as lift. **Replaces**. Groups and evals only: it's refused in `reeval.config.ts`. `compare: false` is not a value here. A profile turns compare off with `limit.compare: false`, which runs the control alone. `compare` does not layer.
 
-  - `baseline`: the control, an environment from `defineEnvironment`. With it, `environment` can't sit on the same object, and an inherited one is not applied. Without it, the control is the cascaded `environment` (the same object's, a group's or the config's), else an empty environment named `baseline`. That empty control uses the first variant's sandbox when the variant sets one, so the compare is the same machine without the variant's files, not implicit Docker versus Node 24. A variant with the control's name is an error. The record's `evals[].compare` names the control and, for an omitted baseline, sets `from` to `environment` or `empty`.
+  - `baseline`: the control, an environment from `defineEnvironment`. With it, `environment` can't sit on the same object, and an inherited one is not applied as files, skills or variables. A named arm that omits `sandbox` uses the cascaded `sandbox` option, else implicit Docker; it does not inherit the config environment's sandbox. `.extend()` keeps the parent environment's sandbox when the child omits it. Without a `baseline`, the control is the cascaded `environment` (the same object's, a group's or the config's), else an empty environment named `baseline`. That empty control uses the first variant's sandbox when the variant sets one, so the compare is the same machine without the variant's files, not implicit Docker versus Node 24. A variant with the control's name is an error. The record's `evals[].compare` names the control and, for an omitted baseline, sets `from` to `environment` or `empty`.
   - `variants`: the other environments. Each cell runs that environment alone.
   - `gate`: `'variants'` (default) gates only variant cells; `'all'` gates the control too; `'none'` only reports.
   - `minLift`: a number from -1 to 1. A variant cell fails when its lift interval's lower bound is below it.

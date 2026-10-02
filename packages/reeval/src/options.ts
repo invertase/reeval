@@ -50,6 +50,7 @@ import type {
 
 const KNOWN = [
   'harness',
+  'sandbox',
   'environment',
   'compare',
   'runs',
@@ -63,8 +64,7 @@ const KNOWN = [
 ]
 const SUGGEST: Record<string, string> = {
   harnesses: 'harness',
-  sandboxes: 'environment',
-  sandbox: 'environment',
+  sandboxes: 'sandbox',
   environments: 'environment',
   baseline: 'environment',
   variants: 'compare',
@@ -130,10 +130,6 @@ export function sandboxId(s: SandboxDescriptor): string {
   const image = s.image ?? s.from
   return image ? `docker:${sanitize(image)}${install}` : `docker${install}`
 }
-
-/** `evaluate("x")`, `reeval.config.ts`, …: sandbox is not an option there. */
-export const sandboxMigration = (where: string) =>
-  `sandbox can't be set in ${where}. Put it on an environment: defineEnvironment('name', { sandbox: docker({ … }) }). When neither the eval nor the config sets an environment, the default Docker sandbox is used.`
 
 export const cellKey = (harness: string, environment: string, sandbox: string) =>
   `${harness}/${environment}/${sandbox}`
@@ -272,9 +268,6 @@ function checkCompare(value: unknown, where: string): void {
 
 /** Throws on keys that aren't options, and on values of the wrong shape, suggesting a fix. */
 export function checkOptions(options: object, where: string, allowed = KNOWN): void {
-  if ('sandbox' in options && (options as { sandbox?: unknown }).sandbox !== undefined) {
-    throw new UsageError(sandboxMigration(where))
-  }
   for (const key of Object.keys(options)) {
     if (allowed.includes(key)) continue
     const hint = SUGGEST[key] ? ` Did you mean "${SUGGEST[key]}"?` : ''
@@ -308,6 +301,20 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
     throw new UsageError(
       `judge.${badList.key} must be a list of non-empty strings (got ${badList.got}) in ${where}`,
     )
+  }
+  if (o.sandbox !== undefined) {
+    const kind = (o.sandbox as { kind?: string }).kind
+    if (kind !== 'docker' && kind !== 'fake') {
+      throw new UsageError(
+        `sandbox in ${where} must come from docker() or fakeSandbox() (got ${describe(o.sandbox)})`,
+      )
+    }
+    const max = o.sandbox.maxConcurrent
+    if (max !== undefined && !(Number.isInteger(max) && max >= 1)) {
+      throw new UsageError(
+        `sandbox.maxConcurrent in ${where} must be a whole number of at least 1 (got ${String(max)})`,
+      )
+    }
   }
   if (o.environment !== undefined) {
     if (Array.isArray(o.environment)) {
@@ -508,6 +515,7 @@ function applyLevel(
   }
   if (options.egress !== undefined) out.egress[egress] = options.egress
   out.harness = applyHarness(out.harness, options.harness, where)
+  if (options.sandbox !== undefined) out.sandbox = options.sandbox
   if (options.environment !== undefined) out.environment = options.environment
   if (options.compare !== undefined) out.compare = normalizeCompare(options.compare)
   if (options.runs !== undefined) out.runs = options.runs
@@ -656,7 +664,12 @@ export type PlannedAttempt = {
   label: string
 }
 
-/** The sandbox an attempt runs in: the environment's, else the implicit default Docker sandbox. */
+/**
+ * The sandbox an attempt runs in: the resolved environment's (including an `.extend()`
+ * parent's), else the first variant's when this is an omitted-baseline empty control, else
+ * the cascaded option (`defineConfig` / profile defaults / group / eval), else implicit Docker.
+ * A named environment is a total override: the config environment's sandbox is not inherited.
+ */
 export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): SandboxDescriptor => {
   const own = env.layers.findLast((l) => l.spec.sandbox)?.spec.sandbox
   if (own) return own
@@ -670,8 +683,10 @@ export const attemptSandbox = (resolved: Resolved, env: AppliedEnvironment): San
 }
 
 /**
- * Which level set this attempt's sandbox: the cascade source of the environment that named one,
- * else the config (the implicit default Docker sandbox).
+ * Which level set this attempt's sandbox: the cascade source of the environment that named one
+ * (an `.extend()` child still names that environment), else the first variant when this is an
+ * omitted-baseline empty control, else the cascaded `sandbox` option, else the config (implicit
+ * Docker).
  */
 export function sandboxSetBy(
   planned: Pick<PlannedAttempt, 'environment' | 'cell'>,
@@ -686,7 +701,7 @@ export function sandboxSetBy(
     ) {
       return resolved.sources?.compare ?? configFile
     }
-    return configFile
+    return resolved.sources?.sandbox ?? configFile
   }
   if (resolved.compare) {
     if (planned.cell.role === 'control') {

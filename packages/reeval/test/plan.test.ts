@@ -60,6 +60,7 @@ export const cases: PlanCase[] = [
   { dir: 'environments', name: 'images', args: ['evals/images.eval.ts'] },
   { dir: 'environments', name: 'extend-replace', args: ['evals/extend.eval.ts'] },
   { dir: 'environments', name: 'config-control', args: ['evals/compare.eval.ts'] },
+  { dir: 'environments', name: 'inherit-config', args: ['evals/inherit.eval.ts'] },
   {
     dir: 'environments',
     name: 'empty-control',
