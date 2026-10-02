@@ -8,6 +8,7 @@ import type {
   AnalysisBody,
   AnalysisClaim,
   AnalysisValidation,
+  Confidence,
 } from '../view/analysis.ts'
 import { citable, type Digest } from './digest.ts'
 import type { AnalysisOutput } from './schema.ts'
@@ -87,6 +88,20 @@ export function unverifiedNumbers(text: string, sources: string[]): string[] {
     if (Number.isInteger(n) && Math.abs(n) <= 5) return false
     return !close(n)
   })
+}
+
+/**
+ * After citation and command checks, the model's overall rating cannot stay `high` when any
+ * check failed, and a dropped claim or rejected command is `low`. The model never sees these
+ * counts, so it cannot self-rate them.
+ */
+export function capConfidence(
+  overall: Confidence,
+  validation: Pick<AnalysisValidation, 'invalid' | 'dropped' | 'invalidCommands'>,
+): Confidence {
+  if (validation.dropped > 0 || validation.invalidCommands.length > 0) return 'low'
+  if (validation.invalid.length > 0 && overall === 'high') return 'medium'
+  return overall
 }
 
 export function validateAnalysis(
@@ -185,7 +200,10 @@ export function validateAnalysis(
       why,
       anomalies,
       actions,
-      confidence: output.confidence,
+      confidence: {
+        overall: capConfidence(output.confidence.overall, validation),
+        why: output.confidence.why,
+      },
     },
     validation,
   }

@@ -18,7 +18,7 @@ import {
   stackChanges,
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
-import { cellJudgeRates, cellUsage, type JudgeKeyRate } from './judgements.ts'
+import { cellJudgeRates, cellUsage, type JudgeKeyRate, judgeLabel } from './judgements.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 import { readableTranscriptLine } from './record.ts'
 
@@ -180,6 +180,57 @@ export function runOutcome(run: {
   if (outcomes.includes('fail') || run.status === 'budget') return 'fail'
   if (outcomes.includes('infra_error')) return 'infra_error'
   return 'pass'
+}
+
+function andList(items: readonly string[]): string {
+  if (items.length <= 1) return items[0] ?? ''
+  if (items.length === 2) return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`
+}
+
+/** Distinct judge labels that failed on a counted attempt, in first-seen order. */
+export function failedJudgeLabels(record: Pick<RunRecord, 'evals'>): string[] {
+  const seen = new Set<string>()
+  const labels: string[] = []
+  for (const e of record.evals) {
+    for (const a of e.attempts) {
+      if (a.outcome !== 'pass' && a.outcome !== 'fail') continue
+      for (const j of a.judgements) {
+        if (j.verdict !== 'fail') continue
+        const label = judgeLabel(j.question)
+        if (seen.has(label)) continue
+        seen.add(label)
+        labels.push(label)
+      }
+    }
+  }
+  return labels
+}
+
+/**
+ * One sentence for the studio run header: counted pass/fail, which judges failed, and infra.
+ * Works without `reeval analyze`.
+ */
+export function runLead(record: Pick<RunRecord, 'summary' | 'evals'>): string {
+  const { pass, fail, infraError } = record.summary
+  const counted = pass + fail
+  const judges = failedJudgeLabels(record)
+  const parts: string[] = []
+  if (counted === 0) parts.push('No counted attempts')
+  else {
+    parts.push(`${pass} of ${counted} counted attempts passed`)
+    if (fail > 0) {
+      parts.push(
+        judges.length
+          ? `${fail} failed the ${andList(judges)} judge${judges.length === 1 ? '' : 's'}`
+          : `${fail} failed`,
+      )
+    }
+  }
+  if (infraError > 0) {
+    parts.push(`${infraError} infra error${infraError === 1 ? '' : 's'}`)
+  }
+  return `${parts.join('; ')}.`
 }
 
 export type RunRow = {

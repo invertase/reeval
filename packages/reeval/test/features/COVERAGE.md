@@ -147,11 +147,11 @@
 | Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts | ✓ 2 | — | — | — | — |
 | Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 2 | — | — | — | — |
 | Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio | ✓ 3 | — | — | — | — |
-| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 9 | — | — | — | — |
+| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 11 | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
 | `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | ◐ 1 (1 without a canary) |
 | `analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error | ✓ 6 | — | — | — | ◐ 1 (1 without a canary) |
-| `reeval studio` and `reeval studio build` | ✓ 5 | — | — | — | ◐ 1 (1 without a canary) |
+| `reeval studio` and `reeval studio build` | ✓ 7 | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 4 | — | — | — | — |
 | Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 9 | — | — | — | — |
 | Compare questions' answers on the studio's run page: win rates within and across harnesses, the model, and a failed call's error | ✓ 6 | — | — | — | ◐ 1 (1 without a canary) |

@@ -24,7 +24,7 @@ export function renderMarkdown(doc: AnalysisDoc): string {
   const md = [
     `## reeval analysis · ${doc.scope.head}${doc.scope.base ? ` vs ${doc.scope.base}` : ''}`,
     '',
-    `**TL;DR.** ${a.tldr}`,
+    `**TL;DR** (${a.confidence.overall}). ${a.tldr}`,
     '',
   ]
   for (const [title, items] of [
@@ -70,7 +70,7 @@ export function renderText(doc: AnalysisDoc): string {
   const lines = [
     `analysis ${doc.scope.head}${doc.scope.base ? ` vs ${doc.scope.base}` : ''}`,
     '',
-    `TL;DR  ${a.tldr}`,
+    `TL;DR (${a.confidence.overall})  ${a.tldr}`,
   ]
   for (const [title, items] of [
     ['What happened', a.whatHappened],

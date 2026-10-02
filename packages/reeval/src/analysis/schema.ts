@@ -19,7 +19,9 @@ const claim = z.object({
 })
 
 export const analysisSchema = z.object({
-  tldr: z.string().describe('2-3 sentences: what happened, and does the thing under test help'),
+  tldr: z
+    .string()
+    .describe('One sentence: what happened, how sure, why, next. No fact ids or intervals'),
   whatHappened: z.array(claim),
   results: z
     .array(claim)
@@ -72,4 +74,6 @@ Rules:
 - Explain a failed judge verdict by comparing the cited output with the judge question, and say it's your reading: judges record no reason.
 - Actions: at most 5, each with a concrete target, the change, the expected measurable effect, and a verify command that is exactly one of the reeval commands in the CLI list, with only the flags listed for it. "No actions" is a valid answer when nothing is worth doing. No generic advice ("add more tests") without a concrete target.
 - Quotes, if any, must be copied exactly from the cited evidence.
+- TL;DR: one sentence: what happened, how sure, why, next. No fact ids or intervals.
+- Do not rate your own citation or command checks; reeval caps confidence after it checks them.
 - Plain, direct English. No hype.`
