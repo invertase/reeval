@@ -114,6 +114,17 @@ An eval with several attempts shows its passes over every counted attempt, then 
 
 The `gated` label says the rate leaves out the ungated cells, whose failures don't fail the eval. The studio's eval history labels the rate the same way.
 
+A single-attempt eval's line shows each judge as `pass 0.92/0.80` or
+`fail 0.78/0.80`. Three or more judges collapse to the lowest score plus a
+count (`fail 0.33/0.80 · 3 judges`). Token usage, when the harness reported it,
+follows the turns.
+
+An eval with several attempts also prints each judge key's passes over counted
+attempts on the cell row (`login 4/5 · checkout 0/5`). A variant key shows lift
+only when both sides have at least two counted attempts. The cell's tokens are
+the sum of those counted attempts; a harness that reports none leaves the field
+blank, never `0`.
+
 ## What it writes
 
 Every run, including one where nothing passed, writes a scratch run to `.reeval/runs/<runId>.json` and its artifacts to `.reeval/runs/<runId>/`. `--record`, or `record: 'ci'` with `CI` set, or `record: 'always'`, also copies it into the history folder. Each attempt's local debug data goes to `.reeval/debug/`.

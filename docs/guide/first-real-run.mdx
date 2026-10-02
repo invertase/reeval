@@ -144,8 +144,8 @@ reeval 0.0.1 · 1 eval file · harness cursor:composer-2.5 · sandbox docker · 
 Summary
  evals/hello.eval.ts
    greet module
-     ✓ creates a tested greet module                 9s  judge 0.99  1 turn
-     ✓ adds a default name in a follow-up turn      16s  judge 1.00  2 turns
+     ✓ creates a tested greet module                 9s  pass 0.99/0.80  1 turn
+     ✓ adds a default name in a follow-up turn      16s  pass 1.00/0.80  2 turns
 
    Evals  2 passed (2)
 Duration  17s
@@ -155,7 +155,11 @@ Duration  17s
 
 `hello` is a filter: it matches the file `evals/hello.eval.ts`. Each eval ran as one [attempt](/concepts/attempt-lifecycle) in its own container, side by side. With `--log-order grouped`, each attempt prints as one block when it ends: the sandbox, each turn, each check and each judge verdict.
 
-`Tokens` is what Cursor reported for the run: input tokens, the part of them served from cache, and output tokens. reeval records them per turn and per attempt, but prices no models, so there's no cost.
+Each attempt line shows the judge as `pass 0.99/0.80` (score against the
+threshold). `Tokens` is what Cursor reported for the run — input, the cached
+part, and output — and the same figures appear on each attempt line when the
+harness reports them. reeval records them per turn and per attempt, but prices
+no models, so there's no cost.
 
 On a terminal, the same run is in colour:
 

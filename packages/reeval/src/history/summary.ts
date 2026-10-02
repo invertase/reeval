@@ -1,7 +1,14 @@
 import { clip, formatDuration } from '../text.ts'
 import type { CompareAnswer, Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
-import { harnessLabel, isUngatedMiss, languageLabel, runtimeLabel } from '../view/model.ts'
+import { cellJudgeRates, cellUsage, judgeRatesLabel } from '../view/judgements.ts'
+import {
+  formatUsage,
+  harnessLabel,
+  isUngatedMiss,
+  languageLabel,
+  runtimeLabel,
+} from '../view/model.ts'
 import { warnings } from './state.ts'
 import type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './types.ts'
 
@@ -83,6 +90,8 @@ export function cellCounts(e: EvalEntry): string {
         ...[cellContrast(e, c.key)].flatMap((effort) =>
           effort ? [`effort ${effortLabel(effort)}`] : [],
         ),
+        ...[judgeRatesLabel(cellJudgeRates(e, c.key))].filter(Boolean),
+        ...[formatUsage(cellUsage(e, c.key))].filter((u): u is string => Boolean(u)),
         c.overrides.length ? `overrides ${c.overrides.join(', ')}` : '',
       ].filter(Boolean)
       return `${c.key} ${c.pass}/${c.pass + c.fail}${notes.length ? ` (${notes.join(', ')})` : ''}`
