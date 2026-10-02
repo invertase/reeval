@@ -57,7 +57,7 @@ export type Viewport = { width: number; height: number }
 /**
  * Camera defaults for `c.capture()`. Cascades config → profile defaults → group → eval,
  * shallow-merged. `viewport` on a level replaces the whole object. `port` is not an option:
- * pass it on the call.
+ * pass it as the first argument to `c.capture`.
  */
 export type CaptureOptions = {
   viewport?: Viewport
@@ -87,11 +87,14 @@ export type Capture = {
   file: { path: string; sha256: string; bytes: number }
 }
 
+/**
+ * Optional camera and path for `c.capture(port | ServeHandle, options?)`.
+ * `port` is the first argument, not a field here. Default `path` is `/`;
+ * default `name` is derived from the path.
+ */
 export type CaptureCall = {
-  name: string
-  path: string
-  /** Container port the server binds. Required; there is no cascade default. */
-  port: number
+  name?: string
+  path?: string
   viewport?: Viewport
   timeout?: Duration
 }
@@ -228,9 +231,10 @@ export type AttemptContext = {
   serve(command: string, port?: number): Promise<ServeHandle>
   /**
    * Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`.
+   * First argument is the container port or a `ServeHandle` from `c.serve`.
    * Needs a sandbox, same as `c.exec`.
    */
-  capture(options: CaptureCall): Promise<Capture>
+  capture(target: number | ServeHandle, options?: CaptureCall): Promise<Capture>
   /** Workspace-relative, or `~/` for the home directory; `null` when there's no such file. */
   readFile(path: string): Promise<string | null>
   /**

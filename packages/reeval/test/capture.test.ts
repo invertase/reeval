@@ -9,9 +9,11 @@ import {
   checkCaptureName,
   chromeBinaryPath,
   ensureChrome,
+  nameFromPath,
   pageUrl,
   refusedBrowser,
   resolveCaptureCall,
+  resolveCaptureTarget,
   stubPng,
 } from '../src/capture/index.ts'
 import { unzip } from '../src/capture/zip.ts'
@@ -49,36 +51,50 @@ test('refusedBrowser names the env first when both refuse', () => {
   assert.equal(refusedBrowser({}), undefined)
 })
 
-test('resolveCaptureCall needs a port and keeps the call path', () => {
+test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
   assert.throws(
-    () => resolveCaptureCall({ name: 'home', path: '/' } as never, {}),
-    /c\.capture\(\) needs a port: pass port on the call/,
+    () => resolveCaptureTarget({ port: 9 } as never),
+    /needs a port or a ServeHandle as the first argument/,
   )
   assert.throws(
-    () => resolveCaptureCall({ name: 'home', path: '/', port: 0 }, {}),
+    () => resolveCaptureTarget(0),
     /c\.capture\(\) port is a container port from 1 to 65535 \(got 0\)/,
   )
+  assert.throws(
+    () => resolveCaptureCall(9, { port: 9 } as never, {}),
+    /takes the port as the first argument, not in the options/,
+  )
+  const handle = { port: 4173, kill: async () => {} }
   assert.deepEqual(
     resolveCaptureCall(
-      { name: 'home', path: '/login', port: 9 },
+      handle,
+      { name: 'home', path: '/login', timeout: '30s' },
       {
         viewport: { width: 390, height: 844 },
-        timeout: '30s',
       },
     ),
     {
-      port: 9,
+      port: 4173,
+      name: 'home',
       path: '/login',
       viewport: { width: 390, height: 844 },
       timeoutMs: 30_000,
     },
   )
-  assert.deepEqual(resolveCaptureCall({ name: 'home', path: '/login', port: 9 }, {}), {
+  assert.deepEqual(resolveCaptureCall(9, undefined, {}), {
     port: 9,
-    path: '/login',
+    name: 'root',
+    path: '/',
     viewport,
     timeoutMs: 60_000,
   })
+})
+
+test('nameFromPath slugs the path', () => {
+  assert.equal(nameFromPath('/'), 'root')
+  assert.equal(nameFromPath('/login'), 'login')
+  assert.equal(nameFromPath('/foo/bar'), 'foo-bar')
+  assert.equal(nameFromPath('/Login'), 'login')
 })
 
 test('checkCaptureName accepts [a-z0-9_-]+', () => {

@@ -82,7 +82,7 @@ async function attemptBody(
     exec,
     readFile,
     serve: (command, port) => serveCommand(a, command, port),
-    capture: (options) => capturePage(a, options),
+    capture: (target, options) => capturePage(a, target, options),
     attempt: { id: attemptId(spec.cell.key, spec.n), cell: spec.cell, n: spec.n },
     async sandbox() {
       await start()

@@ -32,8 +32,8 @@ Each attempt gets a fresh `c`, a fresh sandbox and a fresh agent session.
   Starts `command` in the background and returns `{ kill, port }`. A given `port` is used; omit it and reeval allocates one. Sets `PORT` so a bash string can use `$PORT`. `{port}` is not expanded unless the command is argv. Needs a sandbox, same as `c.exec`.
 </Property>
 
-<Property name="capture" type="(options: CaptureCall) => Promise<Capture>">
-  Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. `name` matches `[a-z0-9_-]+`; reusing a name in the same attempt fails. `path` is the path on the app (`/login`). `port` is required on the call (the container port the server binds; `c.serve` returns one). `viewport` and `timeout` override the cascaded camera defaults. Polls until any HTTP response arrives, then takes a PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` throws; the attempt fails, with no skip, no empty PNG and no download. Needs a sandbox, same as `c.exec`. See [Capturing UI](/recipes/capturing-ui).
+<Property name="capture" type="(target: number | ServeHandle, options?: CaptureCall) => Promise<Capture>">
+  Screenshots a path on a tunneled sandbox port and writes `artifacts/<name>.png`. The first argument is the container port or a `ServeHandle` from `c.serve`. Options are `{ name?, path?, viewport?, timeout? }` — no `port` field. Default `path` is `/`; default `name` comes from the path (`/login` → `login`, `/` → `root`). `name` matches `[a-z0-9_-]+`; reusing a name in the same attempt fails. `viewport` and `timeout` override the cascaded camera defaults. Polls until any HTTP response arrives, then takes a PNG. `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` throws; the attempt fails, with no skip, no empty PNG and no download. Needs a sandbox, same as `c.exec`. See [Capturing UI](/recipes/capturing-ui).
 </Property>
 
 <Property name="readFile" type="(path: string) => Promise<string | null>">

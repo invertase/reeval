@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseDuration } from '../duration.ts'
 import { cacheDir } from '../root.ts'
-import type { CaptureCall, CaptureOptions, Duration, Viewport } from '../types.ts'
+import type { CaptureCall, CaptureOptions, Duration, ServeHandle, Viewport } from '../types.ts'
 
 export type { DownloadProgress, DownloadReporter } from './browser.ts'
 export {
@@ -46,22 +46,57 @@ export function refusedBrowser(capture: CaptureOptions): string | undefined {
   }
 }
 
+export function resolveCaptureTarget(target: number | ServeHandle): number {
+  if (typeof target === 'number') {
+    if (!(Number.isInteger(target) && target >= 1 && target <= 65535)) {
+      throw new Error(
+        `c.capture() port is a container port from 1 to 65535 (got ${String(target)})`,
+      )
+    }
+    return target
+  }
+  if (
+    target !== null &&
+    typeof target === 'object' &&
+    typeof target.port === 'number' &&
+    typeof target.kill === 'function'
+  ) {
+    return resolveCaptureTarget(target.port)
+  }
+  throw new Error('c.capture() needs a port or a ServeHandle as the first argument')
+}
+
+/** Artifact name from a path: `/login` → `login`, `/foo/bar` → `foo-bar`, `/` → `root`. */
+export function nameFromPath(path: string): string {
+  const slug = (path.split(/[?#]/, 1)[0] ?? '')
+    .replaceAll('\\', '/')
+    .split('/')
+    .filter(Boolean)
+    .join('-')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || 'root'
+}
+
 export function resolveCaptureCall(
-  call: CaptureCall,
+  target: number | ServeHandle,
+  call: CaptureCall | undefined,
   cascade: CaptureOptions,
-): { port: number; path: string; viewport: Viewport; timeoutMs: number } {
-  const port = call.port
-  if (port === undefined) {
-    throw new Error('c.capture() needs a port: pass port on the call')
+): { port: number; name: string; path: string; viewport: Viewport; timeoutMs: number } {
+  if (call && Object.hasOwn(call, 'port')) {
+    throw new Error('c.capture() takes the port as the first argument, not in the options')
   }
-  if (!(Number.isInteger(port) && port >= 1 && port <= 65535)) {
-    throw new Error(`c.capture() port is a container port from 1 to 65535 (got ${String(port)})`)
-  }
+  const port = resolveCaptureTarget(target)
+  const path = call?.path || '/'
+  const name = call?.name ?? nameFromPath(path)
+  checkCaptureName(name)
   return {
     port,
-    path: call.path,
-    viewport: call.viewport ?? cascade.viewport ?? DEFAULT_VIEWPORT,
-    timeoutMs: parseDuration(call.timeout ?? cascade.timeout ?? DEFAULT_TIMEOUT),
+    name,
+    path,
+    viewport: call?.viewport ?? cascade.viewport ?? DEFAULT_VIEWPORT,
+    timeoutMs: parseDuration(call?.timeout ?? cascade.timeout ?? DEFAULT_TIMEOUT),
   }
 }
 

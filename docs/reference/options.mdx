@@ -105,7 +105,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="capture" type="{ viewport?, timeout?, browser? }">
-  Camera defaults for `c.capture()`. **Shallow-merged**; a level that sets `viewport` replaces the whole viewport object. `viewport` is `{ width, height }` in CSS pixels (default 1280×720). `timeout` is how long to poll before failing (default `'60s'`). `browser: false` refuses the host `chrome-headless-shell` binary: `c.capture()` then throws. `port` is not an option here: pass it on the call. See [The attempt context](/reference/attempt-context) and [Capturing UI](/recipes/capturing-ui).
+  Camera defaults for `c.capture()`. **Shallow-merged**; a level that sets `viewport` replaces the whole viewport object. `viewport` is `{ width, height }` in CSS pixels (default 1280×720). `timeout` is how long to poll before failing (default `'60s'`). `browser: false` refuses the host `chrome-headless-shell` binary: `c.capture()` then throws. `port` is not an option here: pass it as the first argument to `c.capture`. See [The attempt context](/reference/attempt-context) and [Capturing UI](/recipes/capturing-ui).
 </Property>
 
 <Property name="timeout" type="number | string">

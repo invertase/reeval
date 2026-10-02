@@ -3,7 +3,6 @@ import { join } from 'node:path'
 import {
   allocatePort,
   cacheLabel,
-  checkCaptureName,
   ensureChrome,
   pageUrl,
   pollHttp,
@@ -70,14 +69,17 @@ export async function serveCommand(
   return { ...handle, port: bound }
 }
 
-export async function capturePage(a: Attempt, call: CaptureCall): Promise<Capture> {
+export async function capturePage(
+  a: Attempt,
+  target: number | ServeHandle,
+  call?: CaptureCall,
+): Promise<Capture> {
   const refused = refusedBrowser(a.spec.capture)
   if (refused) throw new Error(refused)
-  checkCaptureName(call.name)
-  if (a.captureNames.has(call.name)) {
-    throw new Error(`c.capture() reused the name "${call.name}"`)
+  const resolved = resolveCaptureCall(target, call, a.spec.capture)
+  if (a.captureNames.has(resolved.name)) {
+    throw new Error(`c.capture() reused the name "${resolved.name}"`)
   }
-  const resolved = resolveCaptureCall(call, a.spec.capture)
   const box = requireSandbox(a, 'c.capture()')
   if (!box.getPortEndpoint) {
     throw new Error('c.capture() needs a sandbox that can tunnel a port')
@@ -91,28 +93,28 @@ export async function capturePage(a: Attempt, call: CaptureCall): Promise<Captur
   } catch {
     throw new Error(`nothing listening on port ${resolved.port}`)
   }
-  a.captureNames.add(call.name)
+  a.captureNames.add(resolved.name)
   const png =
     a.spec.sandbox.kind === 'fake'
-      ? stubPng(call.name, resolved.port, resolved.path, resolved.viewport)
+      ? stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport)
       : await shot(a, pageUrl(origin, resolved.path), resolved.viewport, resolved.timeoutMs)
   const digest = sha256(png)
   const file = {
-    path: `artifacts/${call.name}.png`,
+    path: `artifacts/${resolved.name}.png`,
     sha256: digest,
     bytes: png.length,
   }
   a.record.artifacts = a.record.artifacts ?? []
   a.record.artifacts.push({
-    name: call.name,
+    name: resolved.name,
     mediaType: 'image/png',
     sha256: digest,
     bytes: png.length,
     capture: { port: resolved.port, path: resolved.path, viewport: resolved.viewport },
   })
-  a.artifactBlobs.set(call.name, png)
+  a.artifactBlobs.set(resolved.name, png)
   return {
-    name: call.name,
+    name: resolved.name,
     port: resolved.port,
     path: resolved.path,
     viewport: resolved.viewport,

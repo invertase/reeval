@@ -26,7 +26,7 @@ const firebaseWeb = defineEnvironment('firebase-web', {
 
 evaluate('login screen', { environment: firebaseWeb }, async (c) => {
   await c.send('Add a labelled email field to the login form.')
-  await c.capture({ name: 'login', path: '/login', port: 5173 })
+  await c.capture(5173, { name: 'login', path: '/login' })
 })
 ```
 
@@ -42,7 +42,7 @@ evaluate('landing page', async (c) => {
   const server = await c.serve(
     'npm run dev -- --port $PORT --host 127.0.0.1',
   )
-  await c.capture({ name: 'home', path: '/', port: server.port })
+  await c.capture(server, { name: 'home' })
 })
 ```
 
@@ -58,7 +58,7 @@ import { evaluate } from '{{ pkg }}'
 
 evaluate('landing page', async (c) => {
   await c.send('Build a Vite app. Serve it on 127.0.0.1:5173.')
-  await c.capture({ name: 'home', path: '/', port: 5173 })
+  await c.capture(5173, { name: 'home' })
 })
 ```
 
