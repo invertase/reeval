@@ -26,6 +26,11 @@ export interface Sandbox {
   servedRequests?(): string[]
   /** Idempotent, never throws. */
   destroy(): Promise<void>
+  /**
+   * Host URL for a container (or fake-host) port. Docker tunnels through the egress
+   * gateway; the fake sandbox is `http://127.0.0.1:<port>`.
+   */
+  getPortEndpoint?(opts: { port: number; protocol?: 'http' | 'ws' }): Promise<{ url: string }>
 }
 
 /** A failure of the sandbox or harness infrastructure, as opposed to the agent's work. */

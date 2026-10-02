@@ -45,6 +45,7 @@ describe('the egress cascade', () => {
       env: {},
       egress: { inherited: { allow: ['config.example.com'] } },
       judge: {},
+      capture: {},
       timeout: undefined,
       tags: [],
       pin: [],

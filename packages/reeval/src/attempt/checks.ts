@@ -1,17 +1,16 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
+import type { BackgroundHandle, ExecResult } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 /** Runs a check or setup step with the checks' brokered secrets swapped in (see brokerPhases). */
 export const asCheck = <T>(a: Attempt, fn: () => Promise<T>) =>
   a.phases ? a.phases.checks(fn) : fn()
 
-function requireSandbox(a: Attempt): Sandbox {
+export function requireSandbox(a: Attempt, who = 'c.exec() or c.readFile()'): Sandbox {
   if (!a.sandbox) {
-    throw new Error(
-      'No sandbox yet: call c.send() or await c.sandbox() before c.exec() or c.readFile()',
-    )
+    throw new Error(`No sandbox yet: call c.send() or await c.sandbox() before ${who}`)
   }
   return a.sandbox
 }
@@ -22,7 +21,7 @@ function requireSandbox(a: Attempt): Sandbox {
  */
 export function createChecks(a: Attempt) {
   const checkEnv = () => (a.env?.checkVars ?? {}) as Record<string, string>
-  const exec = async (command: string) => {
+  const execForeground = async (command: string) => {
     const box = requireSandbox(a)
     const start = performance.now()
     a.report({ kind: 'check-start', command })
@@ -43,6 +42,22 @@ export function createChecks(a: Attempt) {
     )
     a.report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
     return r
+  }
+  async function exec(command: string): Promise<ExecResult>
+  async function exec(command: string, options: { background: true }): Promise<BackgroundHandle>
+  async function exec(
+    command: string,
+    options?: { background?: boolean },
+  ): Promise<ExecResult | BackgroundHandle>
+  async function exec(
+    command: string,
+    options?: { background?: boolean },
+  ): Promise<ExecResult | BackgroundHandle> {
+    if (options?.background) {
+      const { startBackground } = await import('./capture.ts')
+      return startBackground(a, command)
+    }
+    return execForeground(command)
   }
   const readFile = (path: string) => requireSandbox(a).readFile(path)
   return { exec, readFile }

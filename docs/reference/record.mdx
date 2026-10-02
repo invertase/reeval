@@ -25,6 +25,7 @@ evals/.history/                            commit this
     judge-input.json                       what each judge call saw
     setup.log                              each environment setup step's output
     checks/<n>.log                         each c.exec: command, exit code, stdout, stderr
+    artifacts/<name>.png                   each c.capture() PNG (`history.artifacts` keeps it)
 .reeval/                                       scratch: gitignore it
   runs/<runId>.json + <runId>/             every reeval run, same shape
   debug/<runId>/…                          local debug data, never recorded
@@ -523,6 +524,24 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 <Property name="diff" type="FileRef" optional></Property>
 
 <Property name="judgeInput" type="FileRef" optional></Property>
+
+<Property name="artifacts" type="ArtifactRef[]" optional>
+  PNGs from `c.capture()`, under `artifacts/<name>.png`.
+</Property>
+
+### ArtifactRef
+
+A generic attempt file from `c.capture()` (and later video).
+
+Also has every field of `FileRef`.
+
+<Property name="name" type="string"></Property>
+
+<Property name="mediaType" type="'image/png'"></Property>
+
+<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}}" optional>
+  Set when the file came from `c.capture()`.
+</Property>
 
 ### JudgementRecord
 

@@ -96,7 +96,17 @@ export function progressLine(c: Colors, p: Progress): string {
       return judgeLine(c, p)
     case 'cleanup':
       return c.dim('cleaning up')
+    case 'browser-download': {
+      const total = p.bytes == null ? '?' : formatBytes(p.bytes)
+      return `downloading ${p.name} ${p.version} ${formatBytes(p.received)} / ${total} → ${p.cache}`
+    }
   }
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
 export function judgeLine(
@@ -135,6 +145,8 @@ export function phaseOf(p: Progress | undefined): string {
       return 'judging'
     case 'cleanup':
       return 'cleanup'
+    case 'browser-download':
+      return 'browser download'
   }
 }
 

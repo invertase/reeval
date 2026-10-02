@@ -27,6 +27,18 @@ export type RecordMode = 'manual' | 'ci' | 'always'
 /** `path` is relative to the run's artifact directory; `sha256` is of the bytes on disk. */
 export type FileRef = { path: string; sha256: string; bytes: number }
 
+/** A generic attempt file from `c.capture()` (and later video). */
+export type ArtifactRef = FileRef & {
+  name: string
+  mediaType: 'image/png'
+  /** Set when the file came from `c.capture()`. */
+  capture?: {
+    port: number
+    path: string
+    viewport?: { width: number; height: number }
+  }
+}
+
 export type GitInfo = {
   /**
    * The commit the run executed at: HEAD when `reeval run` started. The later commit that adds the
@@ -90,6 +102,8 @@ export type AttemptFiles = {
   rawTranscript?: FileRef
   diff?: FileRef
   judgeInput?: FileRef
+  /** PNGs from `c.capture()`, under `artifacts/<name>.png`. */
+  artifacts?: ArtifactRef[]
 }
 
 export type ContextFile = { path: string; sha256: string }

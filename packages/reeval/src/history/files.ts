@@ -261,7 +261,7 @@ const keeps = (e: EvalEntry, level: ArtifactLevel) =>
 
 const refsOf = (e: EvalEntry): FileRef[] =>
   e.attempts.flatMap((a) => [
-    ...Object.values(a.files),
+    ...Object.values(a.files).flatMap((v) => (Array.isArray(v) ? v : v ? [v] : [])),
     ...a.checks.flatMap((c) => (c.log ? [c.log] : [])),
   ])
 

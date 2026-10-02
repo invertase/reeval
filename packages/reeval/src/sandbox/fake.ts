@@ -95,6 +95,9 @@ export async function createFakeSandbox(
     },
     home: base,
     readFile: (path) => readFile(resolve(path), 'utf8').catch(() => null),
+    getPortEndpoint: async ({ port, protocol = 'http' }) => ({
+      url: `${protocol === 'ws' ? 'ws' : 'http'}://127.0.0.1:${port}`,
+    }),
     async writeFile(path, content) {
       const target = resolve(path)
       await mkdir(dirname(target), { recursive: true })

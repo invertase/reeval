@@ -7,6 +7,51 @@
     "ArtifactLevel": {
       "enum": ["all", "failures", "none"]
     },
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "number"
+        },
+        "capture": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "port": {
+              "type": "number"
+            },
+            "viewport": {
+              "type": "object",
+              "properties": {
+                "height": {
+                  "type": "number"
+                },
+                "width": {
+                  "type": "number"
+                }
+              },
+              "required": ["height", "width"]
+            }
+          },
+          "required": ["path", "port"]
+        },
+        "mediaType": {
+          "const": "image/png"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": ["bytes", "mediaType", "name", "path", "sha256"]
+    },
     "AttemptError": {
       "type": "object",
       "properties": {
@@ -25,6 +70,12 @@
     "AttemptFiles": {
       "type": "object",
       "properties": {
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ArtifactRef"
+          }
+        },
         "diff": {
           "$ref": "#/$defs/FileRef"
         },

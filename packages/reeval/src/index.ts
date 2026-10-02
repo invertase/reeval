@@ -12,7 +12,11 @@ export type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './history/
 export { HarnessCapabilityError } from './matchers.ts'
 export type {
   AttemptContext,
+  BackgroundHandle,
   Budget,
+  Capture,
+  CaptureCall,
+  CaptureOptions,
   Cell,
   CellRole,
   CompareAnswer,
@@ -51,11 +55,13 @@ export type {
   ProfileLimit,
   Secret,
   SecretTemplate,
+  ServeHandle,
   SetupStep,
   SkillSource,
   TranscriptEvent,
   Turn,
   TurnData,
   Verdict,
+  Viewport,
   WebEventType,
 } from './types.ts'

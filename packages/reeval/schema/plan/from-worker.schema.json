@@ -137,6 +137,37 @@
         "tags"
       ]
     },
+    "CaptureOptions": {
+      "type": "object",
+      "properties": {
+        "browser": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "viewport": {
+          "$ref": "#/$defs/Viewport"
+        }
+      },
+      "required": []
+    },
     "Cell": {
       "type": "object",
       "properties": {
@@ -494,6 +525,9 @@
           "items": {
             "type": "string"
           }
+        },
+        "capture": {
+          "$ref": "#/$defs/CaptureOptions"
         },
         "compare": {
           "$ref": "#/$defs/EvalCompareMeta"
@@ -1226,6 +1260,40 @@
             "at": {
               "type": "number"
             },
+            "bytes": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "cache": {
+              "type": "string"
+            },
+            "kind": {
+              "const": "browser-download"
+            },
+            "name": {
+              "type": "string"
+            },
+            "received": {
+              "type": "number"
+            },
+            "version": {
+              "type": "string"
+            }
+          },
+          "required": ["at", "bytes", "cache", "kind", "name", "received", "version"]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "at": {
+              "type": "number"
+            },
             "command": {
               "type": "string"
             },
@@ -1510,6 +1578,18 @@
     },
     "TurnStatus": {
       "enum": ["aborted", "completed", "error"]
+    },
+    "Viewport": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": ["height", "width"]
     },
     "WireResult": {
       "type": "object",

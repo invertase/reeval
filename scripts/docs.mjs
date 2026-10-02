@@ -246,6 +246,7 @@ const RECORD_TYPES = [
   'FingerprintParts',
   'AttemptRecord',
   'AttemptFiles',
+  'ArtifactRef',
   'JudgementRecord',
   'JudgeRetry',
   'FileRef',

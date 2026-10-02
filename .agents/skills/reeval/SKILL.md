@@ -124,9 +124,15 @@ group('hello', () => {
   `%#` in the name). The eval id is `file › group › name`; renaming an eval restarts its history.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
-- `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `await c.readFile(path)` the text
-  or `null` (`~/` for home). `await c.sandbox()` starts the sandbox without a turn, to check what
-  the environment set up. `c.attempt.cell.role` is `'control'` or `'variant'`.
+- `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `c.exec(cmd, { background: true })`
+  starts it without waiting and returns `{ kill() }`. `await c.serve(cmd, port?)` is that plus a
+  port (`PORT` / `$PORT` on a bash string). `await c.capture(port | server, { name?, path? })`
+  screenshots the tunneled port into `artifacts/<name>.png`. The first argument is the
+  container port or a `ServeHandle`; default `path` is `/`, default `name` comes from the path.
+  `capture.browser: false` or `REEVAL_CAPTURE_BROWSER=0` makes `c.capture()` throw.
+  `await c.readFile(path)` the text or `null` (`~/` for home). `await c.sandbox()` starts the
+  sandbox without a turn, to check what the environment set up. `c.attempt.cell.role` is
+  `'control'` or `'variant'`.
 - `await c.judge(question, { threshold?, model?, on?, include?, files? })`: the judge sees the
   prompt, the final message, the changed files and the diff, not what the agent ran. The diff
   leaves out dependencies, build output (`dist/`, `.next/`, top-level `build/` and `out/`),
@@ -152,7 +158,9 @@ group('hello', () => {
 `defineConfig`, `group` and `evaluate` take the same options; inner levels win: `harness` (one
 or a list, or an edit of the inherited list: `{ add: h }`, `{ only: 'cursor:composer-2.5' }` or
 a function), `sandbox` (the default machine when the resolved env omits one), `environment` (one),
-`runs`, `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `timeout`, `tags`,
+`runs`, `gate`, `env` (merged by name), `egress`, `judge` (merged by field), `capture`
+(shallow-merged camera defaults: viewport, timeout, browser; viewport replaces the object;
+port is not an option), `timeout`, `tags`,
 `pin`. `compare` goes only on groups and evals. A named env is a total override of the config
 environment. Options are plain objects, never functions. Unknown keys are errors with a hint
 (`repeat` → "Did you mean runs?").

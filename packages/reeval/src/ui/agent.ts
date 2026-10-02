@@ -13,6 +13,7 @@ import {
   formatDuration,
   outcomeOf,
   prepareLines,
+  progressLine,
 } from './format.ts'
 import { type AttemptDir, failingAttempts, resultFor } from './summary.ts'
 import { Tagger } from './tags.ts'
@@ -103,6 +104,12 @@ export class AgentRenderer implements Renderer {
         const logs = this.#logs.get(e.key) ?? []
         logs.push(...e.text.replace(/\n$/, '').split('\n'))
         this.#logs.set(e.key, logs)
+        return
+      }
+      case 'eval-progress': {
+        if (e.progress.kind !== 'browser-download') return
+        const label = this.#labels.get(e.key) ?? `[${e.key}]`
+        this.#write(`${label} ${progressLine(this.#c, e.progress)}`)
         return
       }
       case 'eval-end': {

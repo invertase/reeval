@@ -916,6 +916,7 @@ const base: Resolved = {
   env: {},
   egress: {},
   judge: {},
+  capture: {},
   timeout: undefined,
   tags: [],
   pin: [],

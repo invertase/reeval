@@ -1,5 +1,6 @@
 // `reeval/view`: browser-safe data for the studio, and later the TUI. No `node:` imports.
 export type {
+  ArtifactRef,
   AttemptRecord,
   CellRecord,
   EvalEntry,

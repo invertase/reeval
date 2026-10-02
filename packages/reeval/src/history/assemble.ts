@@ -179,6 +179,13 @@ class Artifacts {
     return { path, sha256: sha256(bytes), bytes: bytes.length }
   }
 
+  /** Binary artifacts (PNGs). Must not run `redactSecrets` — it would corrupt the bytes. */
+  addBinary(path: string, content: Uint8Array): FileRef {
+    const bytes = Buffer.from(content)
+    this.files.set(path, bytes)
+    return { path, sha256: sha256(bytes), bytes: bytes.length }
+  }
+
   json(path: string, value: unknown): FileRef {
     return this.add(path, `${JSON.stringify(value, null, 2)}\n`)
   }
@@ -460,26 +467,34 @@ async function addAttempt(
     outcome,
     error,
     durationMs: e.durationMs,
-    ...attemptEvidence(record, `${entry.slug}/${evalSlug(cell.key)}/${n}`, out),
+    ...(await attemptEvidence(
+      record,
+      `${entry.slug}/${evalSlug(cell.key)}/${n}`,
+      out,
+      join(ctx.stagingDir, 'evals', recordFileName(e.key)),
+    )),
   })
 }
 
 /** Turns, timings, activity, verdicts, checks and changed files, with their artifact files. */
-function attemptEvidence(
+async function attemptEvidence(
   record: EvalRecord | null,
   dir: string,
   out: Artifacts,
-): Pick<
-  AttemptRecord,
-  | 'turns'
-  | 'usage'
-  | 'timings'
-  | 'activity'
-  | 'judgements'
-  | 'startRetries'
-  | 'checks'
-  | 'changedFiles'
-  | 'files'
+  stagingRecord?: string,
+): Promise<
+  Pick<
+    AttemptRecord,
+    | 'turns'
+    | 'usage'
+    | 'timings'
+    | 'activity'
+    | 'judgements'
+    | 'startRetries'
+    | 'checks'
+    | 'changedFiles'
+    | 'files'
+  >
 > {
   const files: AttemptFiles = {}
   if (record?.setup?.length) {
@@ -500,6 +515,21 @@ function attemptEvidence(
   if (patch !== null) files.diff = out.add(`${dir}/diff.patch`, patch)
   if (record?.judgeInputs?.length) {
     files.judgeInput = out.json(`${dir}/judge-input.json`, judgeInputs(record, patch, 'diff.patch'))
+  }
+  if (record?.artifacts?.length && stagingRecord) {
+    const sidecar = stagingRecord.replace(/\.json$/, '.artifacts')
+    const artifacts = []
+    for (const art of record.artifacts) {
+      const png = await readFile(join(sidecar, `${art.name}.png`)).catch(() => null)
+      if (!png) continue
+      artifacts.push({
+        ...out.addBinary(`${dir}/artifacts/${art.name}.png`, png),
+        name: art.name,
+        mediaType: art.mediaType,
+        capture: art.capture,
+      })
+    }
+    if (artifacts.length) files.artifacts = artifacts
   }
   const judgements: JudgementRecord[] = (record?.judgements ?? []).map((j, i) => ({
     ...j,
