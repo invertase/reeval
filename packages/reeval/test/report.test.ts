@@ -206,7 +206,13 @@ describe('reeval report: the bundle', () => {
     assert.equal(bundle.run?.failures[0]?.error?.kind, 'infra')
     assert.ok(bundle.run?.failures[0]?.debugLog.some((l) => l.includes('teardown')))
     assert.ok(bundle.run?.failures[0]?.debugFiles.includes('debug.log'))
-    assert.deepEqual(bundle.config?.optionKeys, ['environment', 'harness', 'judge', 'profiles'])
+    assert.deepEqual(bundle.config?.optionKeys, [
+      'environment',
+      'harness',
+      'judge',
+      'profiles',
+      'sandbox',
+    ])
     assert.deepEqual(bundle.config?.harnesses, ['fake'])
     assert.deepEqual(bundle.config?.profiles, [
       { name: 'pr', keys: ['defaults'], defaults: ['runs'] },
