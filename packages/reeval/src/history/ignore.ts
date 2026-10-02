@@ -42,6 +42,8 @@ export function parseCheckIgnore(line: string): IgnoredRecorded | null {
   if (!match) return null
   const [, source, lineNo, rule] = match
   if (!source || !rule) return null
+  // `-v` prints the last matching pattern even when it's a `!` un-ignore; those are not ignored.
+  if (rule.startsWith('!')) return null
   return { path: pathname, rule, source: `${source}:${lineNo}` }
 }
 

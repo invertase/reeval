@@ -191,6 +191,11 @@ describe('recording runs into evals/.history', () => {
       rule: '*.log',
       source: '.gitignore:3',
     })
+    assert.equal(
+      parseCheckIgnore('evals/.history/.gitignore:6:!*.log\tevals/.history/run/setup.log'),
+      null,
+      'a ! un-ignore is not an ignore',
+    )
     assert.equal(parseCheckIgnore('not a check-ignore line'), null)
   })
 
