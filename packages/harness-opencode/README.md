@@ -28,7 +28,7 @@ its table.
 
 ## Providers
 
-`opencode-provider-table.ts` lists every provider OpenCode 2.0.21 knows: the ones whose key it
+`opencode-provider-table.ts` lists every provider OpenCode 2.0.22 knows: the ones whose key it
 sends in a header on known hosts, each with the variable it reads, the headers and the requests it
 sends the key on, and the others with the reason a gateway can't broker them (per-account hosts,
 SigV4, service accounts, subscriptions, local servers, provider packages it installs from npm).
@@ -61,7 +61,7 @@ would generate differs from this one.
 
 ## How it works
 
-- **Bootstrap.** Installs `@opencode/cli` 2.0.21 from a pinned lockfile, letting pnpm run only its
+- **Bootstrap.** Installs `@opencode/cli` 2.0.22 from a pinned lockfile, letting pnpm run only its
   postinstall (which links the platform binary). The musl builds are left out: the package marks
   none with a libc, so pnpm would otherwise install all four Linux builds.
 - **Model.** `<provider>/<model>`, set as the ACP session's `model` config option each turn:
@@ -100,8 +100,6 @@ would generate differs from this one.
 - **Usage.** `@ai-sdk/harness-acp` maps ACP `PromptResponse.usage` onto the `finish` part.
   OpenCode #52467 reports the whole turn (thought and cache tokens when the model reports them).
   `usage_update` is unused: its `used` is still the last step's context and `cost` the session's.
-  The pinned CLI is 2.0.21, published before that fix, so a multi-step turn on this pin is still
-  the last call until the next `@opencode/cli`.
 - **Skills.** Harness-placed skills go to `~/.config/opencode/skills`; OpenCode's repo directory
   is `.opencode/skills`. It also reads `.claude/skills` and `.agents/skills`, in the repo and the
   home directory, and nothing turns that off. It reads `AGENTS.md` for rules.

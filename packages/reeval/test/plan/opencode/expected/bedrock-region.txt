@@ -2,4 +2,4 @@ no profile · 1 evals · 1 cells · 1 attempts
 evals/a.eval.ts › opencode on Bedrock, under deny-all: its region is its hosts  opencode:global.anthropic.claude-haiku-4-5/-/docker  control  gated  ×1  egress "deny-all" + bedrock-mantle.eu-west-1.api.aws, bedrock-runtime.eu-west-1.amazonaws.com, mcp.exa.ai
 excluded: —
 image docker · opencode · 1 evals
-  base  reeval-sandbox:opencode-0.2.2  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:opencode-0.2.3  (reeval's image: built when missing or when its base changed)
