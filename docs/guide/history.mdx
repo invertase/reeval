@@ -26,11 +26,16 @@ git commit -m "Record eval run"
 
 ```text
 evals/.history/
+  .gitignore                                        un-ignores recorded files
   20260926T174005Z_b010670_ada-lovelace_xdb9.json    the record
   20260926T174005Z_b010670_ada-lovelace_xdb9/        its artifacts
     summary.md
     <eval>/<cell>/<n>/                              transcript, diff, checks, judge input
 ```
+
+A project `*.log` would drop `setup.log` and `checks/<n>.log`. `reeval record` writes
+`.gitignore` in the history folder to keep them. If git still ignores a file it wrote, it
+warns and names the rule.
 
 The history folder is `.history/` next to your evals. File names start with the UTC start time, so the listing is the history, and two branches that record runs merge without conflicts. A record is never edited once written.
 

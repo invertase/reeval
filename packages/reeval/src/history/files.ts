@@ -15,6 +15,12 @@ import { fromCwd, RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID } from '../root.ts'
 import { runHeader } from '../view/header.ts'
 import { NewerSchemaError, readableRecord } from '../view/record.ts'
+import {
+  ensureHistoryGitignore,
+  historyGitignorePath,
+  type IgnoredRecorded,
+  ignoredRecordedFiles,
+} from './ignore.ts'
 import { type Finding, findingLines, findingSummary, scanText } from './secret-scan.ts'
 import { renderSummary } from './summary.ts'
 import type { ArtifactLevel, EvalEntry, FileRef, HistoryEntry, RunRecord } from './types.ts'
@@ -274,6 +280,8 @@ export type RecordResult = WrittenRun & {
   bytes: number
   /** Where `worktree.patch` looked like it held a secret, so it was left out; else empty. */
   droppedPatch: string[]
+  /** Files `git check-ignore` still matches after the history `.gitignore` was written. */
+  ignored: IgnoredRecorded[]
 }
 
 /** Why a patch that looked like it held a secret isn't in the record. Starts with `SECRET_NOTE`. */
@@ -354,7 +362,17 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
       )
     }
   }
+  await ensureHistoryGitignore(options.historyDir)
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
-  return { ...written, files: files.size, bytes, droppedPatch }
+  if (!written.created) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }
+  const writtenPaths = [
+    written.recordPath,
+    historyGitignorePath(options.historyDir),
+    ...[...files.keys()].map((path) =>
+      join(written.artifactDir ?? options.historyDir, ...path.split('/')),
+    ),
+  ]
+  const ignored = await ignoredRecordedFiles(options.root, writtenPaths)
+  return { ...written, files: files.size, bytes, droppedPatch, ignored }
 }
