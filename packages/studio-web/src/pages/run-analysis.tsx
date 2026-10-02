@@ -146,7 +146,7 @@ function AnalysisView({ entry }: { entry: AnalysisEntry }) {
         </span>
       </div>
       <p className="rounded-lg border bg-muted/40 p-3 text-sm leading-relaxed">
-        <span className="font-semibold">TL;DR. </span>
+        <span className="font-semibold">TL;DR ({a.confidence.overall}). </span>
         {a.tldr}
       </p>
       <Claims doc={doc} title="What happened" items={a.whatHappened} />

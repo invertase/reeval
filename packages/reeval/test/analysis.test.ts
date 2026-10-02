@@ -33,7 +33,8 @@ import { analyseDigest, defaultBase, prepareAnalysis } from '../src/analysis/com
 import { RULES } from '../src/analysis/digest.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { resolveAnalysisModel } from '../src/analysis/model.ts'
-import { SYSTEM_PROMPT } from '../src/analysis/schema.ts'
+import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
+import { capConfidence } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { allRuns } from '../src/commands.ts'
 import { resolveConfig } from '../src/config.ts'
@@ -44,7 +45,7 @@ import { fakeAnalysis } from '../src/judge.ts'
 import { mannWhitney, minimumP } from '../src/stats.ts'
 import { createStudioApp } from '../src/studio/server.ts'
 import type { EvalResult } from '../src/ui/events.ts'
-import { type AnalysisNote, analysisDataPath } from '../src/view/analysis.ts'
+import { type AnalysisNote, analysisDataPath, pinnedAnalysis } from '../src/view/analysis.ts'
 import { contrastEffort, effortLabel } from '../src/view/effort.ts'
 import { parseTranscript } from '../src/view/model.ts'
 import { NewerSchemaError, readableAnalysis, readableAnalysisNote } from '../src/view/record.ts'
@@ -560,6 +561,61 @@ describe('reeval analyze', () => {
     assert.match(RULES[1] ?? '', /not comparable: the eval changed/)
   })
 
+  test('the prompt asks for one sentence and does not self-rate checks', () => {
+    assert.match(SYSTEM_PROMPT, /one sentence: what happened, how sure, why, next/)
+    assert.match(SYSTEM_PROMPT, /Do not rate your own citation or command checks/)
+    assert.match(
+      analysisSchema.shape.tldr.description ?? '',
+      /One sentence: what happened, how sure, why, next/,
+    )
+  })
+
+  test('validation caps confidence when citations or commands fail', () => {
+    const empty = { invalid: [] as string[], dropped: 0, invalidCommands: [] as string[] }
+    assert.equal(capConfidence('high', empty), 'high')
+    assert.equal(capConfidence('high', { ...empty, invalid: ['whatHappened[0]: F9'] }), 'medium')
+    assert.equal(capConfidence('medium', { ...empty, invalid: ['whatHappened[0]: F9'] }), 'medium')
+    assert.equal(capConfidence('high', { ...empty, dropped: 1 }), 'low')
+    assert.equal(capConfidence('medium', { ...empty, dropped: 1 }), 'low')
+    assert.equal(
+      capConfidence('high', { ...empty, invalidCommands: ['reeval eval: not a command'] }),
+      'low',
+    )
+    const pinned = pinnedAnalysis([
+      {
+        file: 'old.json',
+        source: 'cached',
+        doc: {
+          createdAt: '2026-01-01T00:00:00.000Z',
+          error: undefined,
+          analysis: { tldr: 'Older.' },
+        },
+      },
+      {
+        file: 'new.json',
+        source: 'saved',
+        doc: {
+          createdAt: '2026-01-02T00:00:00.000Z',
+          error: undefined,
+          analysis: { tldr: 'Newer sentence.' },
+        },
+      },
+      {
+        file: 'failed.json',
+        source: 'cached',
+        doc: {
+          createdAt: '2026-01-03T00:00:00.000Z',
+          error: 'the model is down',
+          analysis: { tldr: '' },
+        },
+      },
+    ] as Parameters<typeof pinnedAnalysis>[0])
+    assert.deepEqual(
+      [pinned?.file, pinned?.source, pinned?.doc.analysis.tldr],
+      ['new.json', 'saved', 'Newer sentence.'],
+    )
+  })
+
   test('the digest is facts with ids, evidence by rule, and the verdict rules; --context needs no key', async () => {
     const p = await historyProject('analyze-context', 'dogfood')
     const { text, digest } = await digestOf(p.dir)
@@ -758,6 +814,8 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
       text.stdout,
       /14 citations checked, 4 invalid, 4 dropped · 4 commands checked, 3 rejected/,
     )
+    assert.equal(a.confidence.overall, 'low', 'dropped claims and rejected commands cap to low')
+    assert.match(text.stdout, /^TL;DR \(low\) {2}/m)
   })
 
   test('a cached analysis makes no call; --no-cache does', async () => {

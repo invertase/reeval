@@ -334,6 +334,8 @@ reeval run [filter...]   --dry-run [--json] --runs <n> --tag <t> --profile <p> -
 reeval record            reeval history      reeval show [run]      reeval compare [base] [head] [--md]
 reeval query lift        reeval query effort      reeval query "SELECT … FROM failing_attempts"
 reeval analyze           (one checked LLM reading of a run; --context for your own agent)
+                         TL;DR is one sentence; confidence is capped after citation/command checks
+                         (not high if any check failed; low if a claim dropped or a command rejected)
                          analysis: { agent: true } also notes each eval × harness during reeval run
                          (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
                          (a model call each, off by default; never gates)

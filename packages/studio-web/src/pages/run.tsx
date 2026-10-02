@@ -33,7 +33,9 @@ import {
   isMatrix,
   isUngatedMiss,
   type JudgeKeyRate,
+  pinnedAnalysis,
   type RunRecord,
+  runLead,
   runOutcome,
   type SandboxWarning,
   shortSha,
@@ -54,7 +56,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { headersQuery, recordQuery } from '@/lib/data'
+import { analysisQuery, headersQuery, recordQuery } from '@/lib/data'
 import { formatDate, plural, timeAgo } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { RunAnalysis } from '@/pages/run-analysis'
@@ -551,6 +553,7 @@ export function RunPage() {
   const navigate = useNavigate({ from: '/runs/$runId' })
   const { data: record, error, isPending } = useQuery(recordQuery(runId))
   const { data: index } = useQuery(headersQuery)
+  const { data: analyses } = useQuery(analysisQuery(runId))
   const tree = useMemo(() => (record ? evalTree(record) : []), [record])
 
   if (error) return <ErrorState error={error} />
@@ -575,6 +578,7 @@ export function RunPage() {
   const previous = headers.find((h) => h.runId < runId && h.status === 'complete')
   const { pass, fail: failed, notGated, infraError, skipped } = record.summary
   const fail = failed - notGated
+  const pinned = pinnedAnalysis(analyses?.entries ?? [])
 
   return (
     <div className="space-y-6">
@@ -600,6 +604,14 @@ export function RunPage() {
           ) : null}
         </div>
       </RunHeader>
+
+      <p className="text-sm leading-relaxed">{runLead(record)}</p>
+      {pinned ? (
+        <p className="rounded-lg border bg-muted/40 p-3 text-sm leading-relaxed">
+          <span className="font-semibold">TL;DR ({pinned.doc.analysis.confidence.overall}). </span>
+          {pinned.doc.analysis.tldr}
+        </p>
+      ) : null}
 
       <SandboxWarnings warnings={record.plan.sandboxWarnings} />
 

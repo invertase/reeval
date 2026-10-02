@@ -2,7 +2,7 @@
 // checked. Browser-safe, so the studio's Analysis tab renders the same document the CLI prints.
 
 /** Bumped when the system prompt or output schema changes: an older analysis is superseded. */
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v4'
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v5'
 /** Bumped when the digest's shape or selection rules change. */
 export const DIGEST_VERSION = 3
 
@@ -135,6 +135,13 @@ export type AnalysisIndex = {
 }
 
 export const analysisDataPath = (runId: string) => `data/analysis/${runId}.json`
+
+/** The newest analysis that wrote a TL;DR, for the studio run header. */
+export function pinnedAnalysis(entries: readonly AnalysisEntry[]): AnalysisEntry | undefined {
+  return sortAnalyses([...entries]).find(
+    (e) => e.doc.error === undefined && e.doc.analysis.tldr.length > 0,
+  )
+}
 
 /** Newest first, saved before cached at the same time. */
 export function sortAnalyses(entries: AnalysisEntry[]): AnalysisEntry[] {

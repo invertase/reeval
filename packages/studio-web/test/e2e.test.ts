@@ -71,12 +71,25 @@ function host(root: string): Promise<string> {
   )
 }
 
+/** The run header fetches analysis; a missing file is empty, not a page error. */
+const analysis404 = /\/data\/analysis\/[^/]+\.json$/
+
 async function open(url: string): Promise<{ page: Page; errors: string[] }> {
   const page = await (browser as Browser).newPage()
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(String(e)))
+  page.on('response', (r) => {
+    if (r.status() !== 404) return
+    const path = new URL(r.url()).pathname
+    if (analysis404.test(path)) return
+    errors.push(`404 ${path}`)
+  })
   page.on('console', (m) => {
-    if (m.type() === 'error') errors.push(m.text())
+    if (m.type() !== 'error') return
+    const text = m.text()
+    // Chromium logs a 404 fetch as this, without the URL.
+    if (text.includes('Failed to load resource') && /404/.test(text)) return
+    errors.push(text)
   })
   await page.goto(url)
   return { page, errors }
@@ -195,7 +208,10 @@ describe('studio in a browser', () => {
     assert.equal(await page.locator('[data-questions]').count(), 0, 'no questions, no section')
 
     await page.getByRole('tab', { name: 'Analysis' }).click()
-    await page.getByText('The greet module regressed in one attempt.').waitFor()
+    await page
+      .getByRole('tabpanel', { name: 'Analysis' })
+      .getByText('The greet module regressed in one attempt.')
+      .waitFor()
     await page.getByText('Verify command rejected: reeval run --nope').waitFor()
     await page.getByRole('link', { name: 'r1/greet/control#1' }).click()
     await page.waitForSelector('[role=tablist]')
@@ -281,6 +297,7 @@ describe('studio in a browser', () => {
     await page.goto(new URL(`/#/runs/${matrix}`, url).href)
     await page.getByRole('tab', { name: 'Analysis' }).click()
     await page
+      .getByRole('tabpanel', { name: 'Analysis' })
       .getByText('The house-greeting skill makes both agents say Ahoy; hasty is flaky either way.')
       .waitFor()
     await page.getByText('local cache').first().waitFor()

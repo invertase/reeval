@@ -24,12 +24,14 @@ import {
   debugApiPath,
   evalHistory,
   evalTree,
+  failedJudgeLabels,
   judgeLabel,
   LIFT_MIN_COUNTED,
   manifestPath,
   parseDataPath,
   parseTranscript,
   recordPath,
+  runLead,
   runOutcome,
   runRows,
   shardPath,
@@ -203,6 +205,63 @@ evaluate('writes ok', { compare }, async (c) => {
       runOutcome({ status: 'complete', evals: [...pass, { outcome: 'infra_error' }] }),
       'infra_error',
     )
+  })
+
+  test('a run lead names pass, fail, infra and failed judges', () => {
+    const judgement = (question: string, verdict: 'pass' | 'fail') => ({
+      question,
+      verdict,
+      score: verdict === 'pass' ? 0.9 : 0.2,
+      threshold: 0.8,
+      model: 'fake',
+      key: question,
+    })
+    const attempt = (
+      outcome: 'pass' | 'fail' | 'infra_error',
+      judgements: ReturnType<typeof judgement>[] = [],
+    ) => ({ outcome, judgements }) as RunRecord['evals'][number]['attempts'][number]
+    const record = (
+      summary: Pick<RunRecord['summary'], 'pass' | 'fail' | 'infraError'>,
+      attempts: RunRecord['evals'][number]['attempts'],
+    ) =>
+      ({
+        summary: { evals: 1, attempts: attempts.length, notGated: 0, skipped: 0, ...summary },
+        evals: [{ attempts }] as RunRecord['evals'],
+      }) as Pick<RunRecord, 'summary' | 'evals'>
+
+    const mixed = record({ pass: 9, fail: 2, infraError: 1 }, [
+      attempt('pass', [judgement('login?', 'pass')]),
+      attempt('fail', [judgement('login?', 'fail')]),
+      attempt('fail', [judgement('login?', 'fail'), judgement('checkout?', 'fail')]),
+      attempt('infra_error'),
+    ])
+    assert.deepEqual(failedJudgeLabels(mixed), ['login', 'checkout'])
+    assert.equal(
+      runLead(mixed),
+      '9 of 11 counted attempts passed; 2 failed the login and checkout judges; 1 infra error.',
+    )
+    assert.equal(
+      runLead(record({ pass: 12, fail: 0, infraError: 0 }, [attempt('pass')])),
+      '12 of 12 counted attempts passed.',
+    )
+    assert.equal(
+      runLead(record({ pass: 0, fail: 2, infraError: 0 }, [attempt('fail'), attempt('fail')])),
+      '0 of 2 counted attempts passed; 2 failed.',
+    )
+    assert.equal(
+      runLead(record({ pass: 0, fail: 0, infraError: 3 }, [attempt('infra_error')])),
+      'No counted attempts; 3 infra errors.',
+    )
+    const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
+    assert.match(runPage, /runLead\(record\)/)
+    assert.match(runPage, /pinnedAnalysis/)
+  })
+
+  test('the run page leads with a verdict, then the stats', () => {
+    const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
+    const lead = runPage.indexOf('runLead(record)')
+    const tally = runPage.indexOf('{pass}</span> passed')
+    assert.ok(lead > 0 && tally > lead, 'the one-line verdict sits above the pass/fail tally')
   })
 
   test('tool calls and file edits are counted apart, on every page', () => {
