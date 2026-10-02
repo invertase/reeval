@@ -15,12 +15,17 @@ import {
   answerRows,
   artifactPath,
   buildIndex,
+  cellJudgeRates,
   cellRows,
+  cellUsage,
+  collapsedJudgeLabel,
   compareView,
   type DebugView,
   debugApiPath,
   evalHistory,
   evalTree,
+  judgeLabel,
+  LIFT_MIN_COUNTED,
   manifestPath,
   parseDataPath,
   parseTranscript,
@@ -210,6 +215,11 @@ evaluate('writes ok', { compare }, async (c) => {
       assert.match(page, /activityLabel\((a|attempt)\.activity\)/)
       assert.doesNotMatch(page, /'tool call'/, 'no page counts tool calls its own way')
     }
+    const runPage = readFileSync(join(pkgRoot, '../studio-web/src/pages/run.tsx'), 'utf8')
+    assert.match(runPage, /formatUsage\(a\.usage\)/)
+    assert.match(runPage, /formatUsage\(row\.usage\)/)
+    assert.match(runPage, /row\.judgeRates/)
+    assert.match(runPage, /collapsedJudges\(a\.judgements\)/)
   })
 })
 
@@ -343,6 +353,105 @@ describe('view-models over a real history', () => {
         ['other', 'variant', true, 2, 2, 0, 2],
       ],
     )
+    assert.deepEqual(
+      rows.map((r) => [r.usage, r.judgeRates]),
+      [
+        [null, []],
+        [null, []],
+      ],
+    )
+  })
+
+  test('per-key judge rates, collapsed scores and cell usage', () => {
+    const j = (question: string, verdict: 'pass' | 'fail', score: number, key: string) => ({
+      question,
+      verdict,
+      score,
+      threshold: 0.8,
+      model: 'fake',
+      key,
+    })
+    const tokens = { input: 50, output: 5, cacheRead: 0, cacheWrite: 0, reasoning: null }
+    const attempt = (
+      cell: string,
+      n: number,
+      outcome: 'pass' | 'fail',
+      login: 'pass' | 'fail',
+      usage: typeof tokens | null,
+    ) =>
+      ({
+        id: `${cell}#${n}`,
+        cell,
+        n,
+        outcome,
+        usage,
+        judgements: [
+          j('login', login, login === 'pass' ? 0.9 : 0.2, '0:login'),
+          j('checkout', 'fail', 0.1, '1:checkout'),
+        ],
+      }) as RunRecord['evals'][number]['attempts'][number]
+    const cell = (key: string, role: 'control' | 'variant', env: string) =>
+      ({
+        key,
+        harness: 'fake',
+        environment: env,
+        sandbox: 'fake',
+        role,
+      }) as RunRecord['evals'][number]['cells'][number]
+    const entry = {
+      cells: [
+        cell('fake/plain/fake', 'control', 'plain'),
+        cell('fake/skill/fake', 'variant', 'skill'),
+      ],
+      attempts: [
+        attempt('fake/plain/fake', 1, 'fail', 'fail', tokens),
+        attempt('fake/plain/fake', 2, 'fail', 'pass', tokens),
+        attempt('fake/skill/fake', 1, 'pass', 'pass', tokens),
+        attempt('fake/skill/fake', 2, 'pass', 'pass', null),
+      ],
+    } as RunRecord['evals'][number]
+
+    const first = entry.attempts.find((a) => a.id === 'fake/plain/fake#1')
+    const skillOne = entry.attempts.find((a) => a.id === 'fake/skill/fake#1')
+    assert.ok(first && skillOne)
+    assert.equal(LIFT_MIN_COUNTED, 2)
+    assert.equal(judgeLabel('login?'), 'login')
+    assert.equal(collapsedJudgeLabel(first.judgements), 'fail 0.20/0.80 · fail 0.10/0.80')
+    assert.equal(
+      collapsedJudgeLabel([...first.judgements, j('extra', 'fail', 0.05, '2:extra')]),
+      'fail 0.05/0.80 · 3 judges',
+    )
+    assert.deepEqual(
+      cellJudgeRates(entry, 'fake/skill/fake').map((r) => [
+        r.label,
+        r.pass,
+        r.counted,
+        r.lift && Math.round(r.lift.points * 100),
+      ]),
+      [
+        ['login', 2, 2, 50],
+        ['checkout', 0, 2, 0],
+      ],
+    )
+    const thin = {
+      ...entry,
+      attempts: [first, skillOne],
+    }
+    assert.equal(
+      cellJudgeRates(thin, 'fake/skill/fake').every((r) => r.lift === null),
+      true,
+    )
+    assert.deepEqual(cellUsage(entry, 'fake/plain/fake'), {
+      input: 100,
+      output: 10,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: null,
+    })
+    assert.deepEqual(cellUsage(entry, 'fake/skill/fake'), tokens)
+    const rows = cellRows(entry)
+    assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.5)
+    assert.equal(rows[0]?.usage?.input, 100)
   })
 
   test("compare answers: each question's win rates per cut, and nothing without one", () => {

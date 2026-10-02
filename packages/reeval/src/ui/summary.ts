@@ -2,6 +2,12 @@ import { answersLabel, gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
+import {
+  cellJudgeRates,
+  cellUsage,
+  collapsedJudgeLabel,
+  judgeRatesLabel,
+} from '../view/judgements.ts'
 import { formatUsage, hasUngatedCells, isUngatedMiss } from '../view/model.ts'
 import { type Colors, colors } from './colors.ts'
 import type { EsEvent, EvalResult } from './events.ts'
@@ -82,10 +88,12 @@ function evalColumns(c: Colors, e: EvalEntry): string {
   }
   if (attemptOutcome(attempt) === 'cancelled') return c.yellow('cancelled')
   const cols = [formatDuration(attempt.durationMs).padStart(7)]
-  const scores = attempt.judgements.map((j) => j.score)
-  if (scores.length) cols.push(`judge ${Math.min(...scores).toFixed(2)}`)
+  const judges = collapsedJudgeLabel(attempt.judgements)
+  if (judges) cols.push(judges)
   const turns = attempt.turns.length
   cols.push(`${turns} turn${turns === 1 ? '' : 's'}`)
+  const tokens = formatUsage(attempt.usage)
+  if (tokens) cols.push(tokens)
   return c.dim(cols.join('  '))
 }
 
@@ -107,9 +115,13 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
     } else if (compare && cell.gate === 'none' && cell.fail > 0) note = `   ${c.dim('not gated')}`
     if (cell.gate !== 'all' && cell.gate !== 'none')
       note += `   ${c.dim(`gate ${gateLabel(cell.gate)}`)}`
+    const tokens = formatUsage(cellUsage(e, cell.key))
+    const usage = tokens ? `   ${c.dim(tokens)}` : ''
     const rows = [
-      `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  ${pct(cell.passRate)}${note}${infra}`,
+      `${indent}${c.dim(cell.key.padEnd(width))}${role}  ${counts}  ${pct(cell.passRate)}${note}${infra}${usage}`,
     ]
+    const rates = judgeRatesLabel(cellJudgeRates(e, cell.key))
+    if (rates) rows.push(`${indent}  ${c.dim(rates)}`)
     const effort = cellContrast(e, cell.key)
     if (effort) rows.push(`${indent}  ${c.dim(`effort: ${effortLabel(effort)}`)}`)
     if (cell.overrides.length) {

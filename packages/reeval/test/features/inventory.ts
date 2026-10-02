@@ -1295,6 +1295,34 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'summary.judge-keys',
+    area: 'Records and studio',
+    name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',
+    tests: [
+      'reeval/test/ui.test.ts › cell rows show per-key rates',
+      studio('per-key judge rates, collapsed scores and cell usage'),
+    ],
+  },
+  {
+    id: 'summary.judge-score',
+    area: 'Records and studio',
+    name: 'Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count)',
+    tests: [
+      'reeval/test/ui.test.ts › two judges print as fail',
+      studio('per-key judge rates, collapsed scores and cell usage'),
+    ],
+  },
+  {
+    id: 'summary.usage',
+    area: 'Records and studio',
+    name: 'Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio',
+    tests: [
+      'reeval/test/ui.test.ts › a collapsed attempt line shows verdict',
+      'reeval/test/ui.test.ts › null usage is omitted',
+      studio('per-key judge rates, collapsed scores and cell usage'),
+    ],
+  },
+  {
     id: 'analyze',
     area: 'Records and studio',
     name: '`reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation',

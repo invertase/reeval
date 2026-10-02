@@ -22,6 +22,7 @@ import {
   answerRows,
   type CellRow,
   cellRows,
+  collapsedJudges,
   type EvalEntry,
   effortSummary,
   evalTree,
@@ -31,6 +32,7 @@ import {
   formatUsage,
   isMatrix,
   isUngatedMiss,
+  type JudgeKeyRate,
   type RunRecord,
   runOutcome,
   type SandboxWarning,
@@ -213,6 +215,7 @@ function pruneFailed(nodes: TreeNode[]): TreeNode[] {
 function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slug: string }) {
   const showLift = rows.some((r) => r.lift !== null)
   const showEffort = rows.some((r) => r.effort !== null)
+  const showUsage = rows.some((r) => r.usage)
   const compare = rows.some((r) => r.role === 'variant')
   return (
     <div className="overflow-hidden rounded-lg border">
@@ -225,6 +228,7 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
             <TableHead className="hidden 2xl:table-cell">Sandbox</TableHead>
             <TableHead>Attempts</TableHead>
             <TableHead className="text-right">Pass rate</TableHead>
+            {showUsage ? <TableHead className="text-right">Tokens</TableHead> : null}
             {showLift || showEffort ? (
               <TableHead className="text-right">
                 {showLift && showEffort ? 'Lift and effort' : showLift ? 'Lift' : 'Effort'}
@@ -283,7 +287,17 @@ function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slu
                 <span className="tabular ml-1.5 text-xs text-muted-foreground">
                   {row.pass}/{row.pass + row.fail}
                 </span>
+                {row.judgeRates.length ? (
+                  <div className="mt-1 text-left text-[11px] text-muted-foreground">
+                    <JudgeRates rates={row.judgeRates} />
+                  </div>
+                ) : null}
               </TableCell>
+              {showUsage ? (
+                <TableCell className="text-right text-xs text-muted-foreground">
+                  {formatUsage(row.usage) ?? '–'}
+                </TableCell>
+              ) : null}
               {showLift || showEffort ? (
                 <TableCell className="min-w-44 whitespace-normal text-right">
                   {showLift ? <Lift points={row.lift} interval={row.liftInterval} /> : null}
@@ -325,6 +339,23 @@ function Effort({ row }: { row: CellRow }) {
         </div>
       ) : null}
     </div>
+  )
+}
+
+function JudgeRates({ rates }: { rates: JudgeKeyRate[] }) {
+  if (rates.length === 0) return null
+  return (
+    <p className="text-xs text-muted-foreground">
+      {rates.map((r, i) => (
+        <span key={r.key} className="tabular" title={r.question}>
+          {i > 0 ? ' · ' : ''}
+          {r.label} {r.pass}/{r.counted}
+          {r.lift
+            ? ` (${r.lift.points >= 0 ? '+' : '−'}${Math.round(Math.abs(r.lift.points) * 100)} pts)`
+            : ''}
+        </span>
+      ))}
+    </p>
   )
 }
 
@@ -393,6 +424,7 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
   const rows = cellRows(entry)
   const matrix = isMatrix(entry)
   const answers = answerRows(entry)
+  const standingRates = !matrix && rows[0]?.judgeRates.length ? rows[0].judgeRates : []
   return (
     <div className="space-y-5">
       <div>
@@ -437,6 +469,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
           <h3 className="text-sm font-medium">Cells</h3>
           <CellsTable rows={rows} runId={record.runId} slug={entry.slug} />
         </section>
+      ) : standingRates.length ? (
+        <JudgeRates rates={standingRates} />
       ) : null}
 
       {answers.length ? <Questions rows={answers} /> : null}
@@ -445,7 +479,8 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
         <h3 className="text-sm font-medium">{plural(entry.attempts.length, 'attempt')}</h3>
         <div className="divide-y overflow-hidden rounded-lg border">
           {entry.attempts.map((a) => {
-            const judge = a.judgements[0]
+            const judges = collapsedJudges(a.judgements)
+            const tokens = formatUsage(a.usage)
             const missed = isUngatedMiss(entry, a)
             return (
               <Link
@@ -461,15 +496,22 @@ function EvalPanel({ record, entry }: { record: RunRecord; entry: EvalEntry }) {
                     <span className="text-xs text-muted-foreground">
                       {formatDuration(a.durationMs)} · {plural(a.turns.length, 'turn')} ·{' '}
                       {activityLabel(a.activity)}
+                      {tokens ? ` · ${tokens}` : ''}
                     </span>
-                    {judge ? (
+                    {judges.shown.map((j) => (
                       <span
+                        key={j.key}
                         className={cn(
                           'tabular text-xs',
-                          judge.verdict === 'pass' ? 'text-pass' : 'text-fail',
+                          j.verdict === 'pass' ? 'text-pass' : 'text-fail',
                         )}
                       >
-                        judge {judge.score.toFixed(2)} / {judge.threshold}
+                        {j.verdict} {j.score.toFixed(2)}/{j.threshold.toFixed(2)}
+                      </span>
+                    ))}
+                    {judges.extra ? (
+                      <span className="tabular text-xs text-muted-foreground">
+                        {judges.extra} judges
                       </span>
                     ) : null}
                     {missed ? (
