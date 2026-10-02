@@ -1556,6 +1556,11 @@ export const inventory: InventoryFeature[] = [
     name: 'Eval timeouts, Ctrl-C and SIGTERM',
     tests: [
       'reeval/test/concurrency.test.ts › Ctrl-C cancels running attempts',
+      'reeval/test/unit.test.ts › isTimeout is the TimeoutError name, not the message',
+      'reeval/test/results.test.ts › without a record, TimeoutError is a timeout',
+      'reeval/test/engine-node.test.ts › a failed result keeps the error name',
+      'reeval/test/engine-run.test.ts › a timeout fails at the timeout',
+      'reeval/test/engine-worker.test.ts › a cancel aborts the running attempts',
       engine('a timeout aborts the agent and destroys the sandbox'),
       engine('a turn whose agent ignores the abort is cut off shortly after the timeout'),
       engine('records the run and destroys the sandbox'),

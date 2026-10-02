@@ -9,7 +9,7 @@ export const JUDGE_RETRY: RetryPolicy = { attempts: 6, baseMs: 2_000, maxMs: 30_
 
 const TRANSIENT_STATUS = new Set([408, 409, 425, 429])
 const TRANSIENT_MESSAGE =
-  /high demand|overloaded|unavailable|rate.?limit|resource.?exhausted|try again|timed? ?out|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed/i
+  /high demand|overloaded|unavailable|rate.?limit|resource.?exhausted|try again|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|socket hang up|fetch failed/i
 
 type ProviderError = {
   statusCode?: number
@@ -28,10 +28,10 @@ const innermost = (error: unknown): unknown => {
 export const isApiError = (error: unknown): boolean =>
   typeof (innermost(error) as ProviderError)?.statusCode === 'number'
 
-/** Rate limits, 5xx, overload and network blips. Never a bad request, bad key or abort. */
+/** Rate limits, 5xx, overload and network blips. Never a bad request, bad key, abort or timeout. */
 export function isTransient(error: unknown): boolean {
   const e = innermost(error) as ProviderError & Error
-  if (!e || e.name === 'AbortError') return false
+  if (!e || e.name === 'AbortError' || e.name === 'TimeoutError') return false
   if (typeof e.statusCode === 'number') {
     return e.statusCode >= 500 || TRANSIENT_STATUS.has(e.statusCode) || e.isRetryable === true
   }

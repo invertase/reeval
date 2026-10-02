@@ -128,11 +128,11 @@ export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
   if (e.state === 'skipped') return { outcome: 'skipped', error: null }
   if (e.state === 'passed') return { outcome: 'pass', error: null }
   const message = e.errors[0] ?? 'Eval failed'
-  // The worker's own classification wins: "timed out" in an infra error, such as a setup step's
-  // own timeout, isn't the eval's timeout. Without a record, the engine's message is all there is.
+  // The worker's own classification wins: a setup InfraError whose message says "timed out"
+  // isn't the eval's timeout. Without a record, the engine's error name is all there is.
   const error =
     record?.error ??
-    (isTimeout(message)
+    (isTimeout({ name: e.errorName })
       ? { kind: 'timeout' as const, message }
       : { kind: 'assertion' as const, message })
   return { outcome: record?.outcome === 'infra_error' ? 'infra_error' : 'fail', error }

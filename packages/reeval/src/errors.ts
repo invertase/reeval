@@ -1,5 +1,11 @@
-/** The engine's, the harness's and the attempt's own timeout messages all say "timed out". */
-export const isTimeout = (message: string) => /timed out/i.test(message)
+/** The eval clock, or the engine's hard wall, fired. */
+export class TimeoutError extends Error {
+  override name = 'TimeoutError'
+}
+
+/** A tagged `TimeoutError` or a `DOMException` with that name, not a message that says "timed out". */
+export const isTimeout = (error: unknown): boolean =>
+  !!error && typeof error === 'object' && (error as { name?: unknown }).name === 'TimeoutError'
 
 /** A mistake in the config, an eval's options or the command line. Exits 2. */
 export class UsageError extends Error {

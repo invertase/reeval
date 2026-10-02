@@ -5,6 +5,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import { existsSync } from 'node:fs'
 import { format } from 'node:util'
 import { processError } from '@vitest/utils/error'
+import { TimeoutError } from '../errors.ts'
 import { acquire, type Lease } from '../scheduler/client.ts'
 import type { EvalMeta } from '../types.ts'
 import type { Progress } from '../ui/events.ts'
@@ -183,7 +184,7 @@ function withTimeout(running: Promise<void>, ms: number, abort: AbortController)
   let timer: NodeJS.Timeout | undefined
   const timedOut = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
-      const error = new Error(`Eval timed out after ${ms / 1000}s`)
+      const error = new TimeoutError(`Eval timed out after ${ms / 1000}s`)
       abort.abort(error)
       reject(error)
     }, ms)
