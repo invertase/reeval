@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-codex",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "An AI SDK harness adapter for OpenAI's Codex CLI on an OpenAI API key, running codex exec --json in the sandbox",
   "license": "Apache-2.0",
