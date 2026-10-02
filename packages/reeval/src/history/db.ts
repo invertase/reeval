@@ -458,7 +458,8 @@ function insertRun(
       }
       for (const [kind, ref] of Object.entries(a.files)) {
         // A newer reeval may add other fields here; only file refs are artifacts.
-        if (typeof ref?.path !== 'string') continue
+        // `files.artifacts` is an array of PNG refs, not a single FileRef.
+        if (ref == null || Array.isArray(ref) || typeof ref.path !== 'string') continue
         run(
           'INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?)',
           record.runId,

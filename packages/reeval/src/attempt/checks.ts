@@ -1,6 +1,7 @@
 import { debugLog, debugTrace } from '../debug/attempt.ts'
 import type { Sandbox } from '../sandbox/index.ts'
 import { clip, formatDuration } from '../text.ts'
+import type { BackgroundHandle, ExecResult } from '../types.ts'
 import type { Attempt } from './state.ts'
 
 /** Runs a check or setup step with the checks' brokered secrets swapped in (see brokerPhases). */
@@ -42,7 +43,16 @@ export function createChecks(a: Attempt) {
     a.report({ kind: 'check-end', command, exitCode: r.exitCode, ms: durationMs })
     return r
   }
-  const exec = async (command: string, options?: { background?: boolean }) => {
+  async function exec(command: string): Promise<ExecResult>
+  async function exec(command: string, options: { background: true }): Promise<BackgroundHandle>
+  async function exec(
+    command: string,
+    options?: { background?: boolean },
+  ): Promise<ExecResult | BackgroundHandle>
+  async function exec(
+    command: string,
+    options?: { background?: boolean },
+  ): Promise<ExecResult | BackgroundHandle> {
     if (options?.background) {
       const { startBackground } = await import('./capture.ts')
       return startBackground(a, command)
