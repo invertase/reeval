@@ -354,10 +354,13 @@ describe('view-models over a real history', () => {
       ],
     )
     assert.deepEqual(
-      rows.map((r) => [r.usage, r.judgeRates]),
+      rows.map((r) => [
+        r.usage,
+        r.judgeRates.map((k) => [k.label, k.pass, k.counted, k.lift?.points ?? null]),
+      ]),
       [
-        [null, []],
-        [null, []],
+        [null, [['Did it write…', 2, 2, null]]],
+        [null, [['Did it write…', 2, 2, 0]]],
       ],
     )
   })
@@ -449,7 +452,14 @@ describe('view-models over a real history', () => {
       reasoning: null,
     })
     assert.deepEqual(cellUsage(entry, 'fake/skill/fake'), tokens)
-    const rows = cellRows(entry)
+    const rows = cellRows({
+      ...entry,
+      attempts: entry.attempts.map((a) => ({
+        ...a,
+        activity: { tools: 1, fileEdits: 0, webSearches: null, webFetches: null, reasoningMs: 0 },
+        timings: { setupMs: 0, agentMs: 100, diffMs: 0, checksMs: 0, judgeMs: 0 },
+      })),
+    })
     assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.5)
     assert.equal(rows[0]?.usage?.input, 100)
   })
