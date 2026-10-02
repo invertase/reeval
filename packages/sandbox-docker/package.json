@@ -36,8 +36,8 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.134",
-    "@ai-sdk/harness-claude-code": "1.0.138",
+    "@ai-sdk/harness": "1.0.137",
+    "@ai-sdk/harness-claude-code": "1.0.141",
     "@reeval/harness-antigravity": "workspace:0.1.1",
     "@reeval/harness-codex": "workspace:0.1.2",
     "@reeval/harness-cursor-sdk": "workspace:0.1.2",
