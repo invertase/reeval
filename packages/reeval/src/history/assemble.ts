@@ -560,14 +560,15 @@ function liftOf(control: CellRecord, variant: CellRecord): Lift | undefined {
 }
 
 /**
- * A cell's outcome by its gate. `'all'` and `'none'` take the worst attempt; `{ passRate }` passes
- * when enough of the passes and fails are passes, and is an infra error only when nothing counted.
+ * A cell's outcome by its gate. `'all'` matches `{ passRate: 1 }`: every counted attempt must
+ * pass, and it is an infra error only when nothing counted. `'none'` takes the worst attempt.
  */
 export function cellOutcome(outcomes: Outcome[], gate: CellGate): Outcome {
-  if (gate === 'all' || gate === 'none') return worstOutcome(outcomes)
+  if (gate === 'none') return worstOutcome(outcomes)
+  const required = gate === 'all' ? 1 : gate.passRate
   const rate = passRateOf(outcomes)
   if (rate === null) return worstOutcome(outcomes)
-  return rate >= gate.passRate ? 'pass' : 'fail'
+  return rate >= required ? 'pass' : 'fail'
 }
 
 /** Per-cell and per-eval counts, pass rates, lift, outcomes and fingerprints, once every attempt is in. */

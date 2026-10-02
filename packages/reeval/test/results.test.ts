@@ -149,6 +149,10 @@ describe('gate policies', () => {
   const cases: Array<[string, Parameters<typeof cellOutcome>[1], Outcome]> = [
     ['ppppf', 'all', 'fail'],
     ['ppppp', 'all', 'pass'],
+    ['ppppi', 'all', 'pass'],
+    ['pppfi', 'all', 'fail'],
+    ['iiiii', 'all', 'infra_error'],
+    ['issss', 'all', 'infra_error'],
     ['ppppf', { passRate: 0.8 }, 'pass'],
     ['pppff', { passRate: 0.8 }, 'fail'],
     ['ppppf', { passRate: 0.9 }, 'fail'],
@@ -156,12 +160,20 @@ describe('gate policies', () => {
     ['iiiii', { passRate: 0.5 }, 'infra_error'],
     ['sssss', { passRate: 0.5 }, 'skipped'],
     ['ppppf', 'none', 'fail'],
+    ['ppppi', 'none', 'infra_error'],
   ]
   for (const [spec, gate, outcome] of cases) {
     test(`${spec} under ${JSON.stringify(gate)} is ${outcome}`, () => {
       assert.equal(cellOutcome(runs(spec), gate), outcome)
     })
   }
+
+  test("'all' matches { passRate: 1 }: infra only when nothing counted", () => {
+    assert.equal(cellOutcome(runs('ppppi'), 'all'), cellOutcome(runs('ppppi'), { passRate: 1 }))
+    assert.equal(cellOutcome(runs('iiiii'), 'all'), cellOutcome(runs('iiiii'), { passRate: 1 }))
+    assert.equal(cellOutcome(runs('ppppi'), 'all'), 'pass')
+    assert.equal(cellOutcome(runs('iiiii'), 'all'), 'infra_error')
+  })
 
   test("more runs don't make a steady 80% agent fail a rate gate", () => {
     for (const n of [5, 10, 20]) {

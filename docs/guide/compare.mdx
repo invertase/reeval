@@ -178,7 +178,7 @@ By default only variant cells decide pass or fail. The control is expected to do
 }
 ```
 
-A cell passes only when every attempt passes, by default. That gets harder as `runs` grows, even for an agent that's no worse, which is what the plan's hint says. `gate: { passRate: 0.8 }` passes a cell when at least 80% of its attempts pass. Infra errors don't count either way.
+A cell passes only when every counted attempt passes, by default. That gets harder as `runs` grows, even for an agent that's no worse, which is what the plan's hint says. `gate: { passRate: 0.8 }` passes a cell when at least 80% of its attempts pass. Infra errors don't count either way; a cell is `infra_error` only when nothing counted.
 
 ## Require a minimum lift
 

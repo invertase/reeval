@@ -264,7 +264,9 @@ group(
   do: `effort: tools 3 vs 24 (×0.13), agent 15s vs 1m 03s (×0.24)`.
   `compare: { baseline, variants: [x], minLift: 0 }` fails a variant whose interval's lower
   bound is below 0.
-- With `runs > 1`, a cell passes only if every attempt passes, unless `gate: { passRate: 0.8 }`.
+- With `runs > 1`, a cell passes only if every counted attempt passes, unless
+  `gate: { passRate: 0.8 }`. Infra errors don't count; a cell is `infra_error`
+  only when nothing counted.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.
 - `compare.questions` (always a list of strings and `{ question, model? }`) asks which arm

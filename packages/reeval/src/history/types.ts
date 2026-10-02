@@ -180,8 +180,9 @@ export type EvalEntry = {
   /** The baseline environment, when the eval uses `compare`. */
   compare?: EvalCompareMeta
   /**
-   * Over gated cells: `fail` if any failed, else `infra_error` if any errored, else `skipped` if
-   * all were, else `pass`. An ungated cell's failures don't fail the eval.
+   * Over gated cells: `fail` if any failed, else `infra_error` if any is (a cell is `infra_error`
+   * only when nothing counted), else `skipped` if all were, else `pass`. An ungated cell's
+   * failures don't fail the eval.
    */
   outcome: Outcome
   /** A placeholder, `evaluate.todo` or `group.todo`: it never runs, and its outcome is `skipped`. */
@@ -249,7 +250,10 @@ export type CellRecord = Cell & {
   infraError: number
   skipped: number
   passRate: number | null
-  /** By `gate` (`'none'` reports the worst outcome); a variant below its `minLift` fails too. */
+  /**
+   * By `gate`. `'all'` matches `{ passRate: 1 }` (infra only when nothing counted); `'none'`
+   * reports the worst outcome. A variant below its `minLift` fails too.
+   */
   outcome: Outcome
   lift?: Lift
 }

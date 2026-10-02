@@ -88,7 +88,7 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
 </Property>
 
 <Property name="gate" type="'all' | { passRate: number }">
-  How a cell passes. **Replaces**. `'all'` (default) passes only when every attempt passes. `{ passRate: 0.8 }` passes when at least 80% of passes and fails are passes; infra errors don't count.
+  How a cell passes. **Replaces**. `'all'` (default) is `{ passRate: 1 }`: every counted attempt must pass. `{ passRate: 0.8 }` passes when at least 80% of passes and fails are passes. Infra errors don't count; a cell is `infra_error` only when nothing counted.
 </Property>
 
 <Property name="env" type="Record<string, string | Secret>">
