@@ -417,6 +417,30 @@ describe('runEngine: running', () => {
     )
   })
 
+  test('a failed result keeps the error name so assemble can classify without sniffing', async () => {
+    const { run } = project(['evals/a.eval.ts'])
+    const { spawn } = fakeSpawn((ctl) => {
+      ctl.emit({ t: 'collected', tests: [test0(0, 'a')] })
+      if (ctl.init.select) {
+        ctl.emit({
+          t: 'result',
+          index: 0,
+          result: {
+            state: 'failed',
+            errors: [{ name: 'TimeoutError', message: 'Eval timed out after 1s' }],
+            durationMs: 10,
+          },
+        })
+        ctl.emit({ t: 'ready' })
+      }
+      ctl.emit({ t: 'done' })
+      ctl.exit()
+    })
+    const r = await engine({ run }, spawn)
+    assert.equal(r.evals[0]?.errorName, 'TimeoutError')
+    assert.equal(r.evals[0]?.errors[0], 'Eval timed out after 1s')
+  })
+
   test('a cancel reaches running workers, and files not started never start', async () => {
     const { run } = project(['evals/a.eval.ts', 'evals/b.eval.ts'])
     const one = { ...run, concurrency: 1 }

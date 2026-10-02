@@ -6,10 +6,13 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
+import { recordFailure } from '../src/attempt/record.ts'
+import type { Attempt } from '../src/attempt/state.ts'
 import { type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
 import { answerQuestion, blindPair, stagedAttempt } from '../src/compare/questions.ts'
 import type { EngineEval } from '../src/engine/node.ts'
-import { cellOutcome, fingerprintOf, judgementKey } from '../src/history/assemble.ts'
+import { TimeoutError } from '../src/errors.ts'
+import { cellOutcome, fingerprintOf, judgementKey, mergeOutcome } from '../src/history/assemble.ts'
 import { runnerInfo } from '../src/history/provenance.ts'
 import { traceSources } from '../src/history/sources.ts'
 import type { FingerprintParts } from '../src/history/types.ts'
@@ -82,6 +85,61 @@ describe("Newcombe's interval for lift, from two Wilson intervals", () => {
     // Treating 56/70 − 48/80 as one proportion gives a different (and meaningless) interval.
     const wrong = wilson(Math.round(0.2 * 70), 70)
     assert.ok(Math.abs(wrong.low - 0.0524) > 0.01, 'the check tells the two methods apart')
+  })
+})
+
+describe('mergeOutcome and abort classification', () => {
+  const failed = (errorName?: string, message = 'Eval timed out after 1s'): EngineEval =>
+    ({ state: 'failed', errors: [message], errorName }) as EngineEval
+
+  test('without a record, TimeoutError is a timeout and a "timed out" message is not', () => {
+    assert.equal(mergeOutcome(failed('TimeoutError'), null).error?.kind, 'timeout')
+    assert.equal(
+      mergeOutcome(failed(undefined, 'setup step 1/1 "sleep" timed out after 1s'), null).error
+        ?.kind,
+      'assertion',
+    )
+  })
+
+  test("the worker's record wins, including an infra error whose message says timed out", () => {
+    const record = {
+      outcome: 'infra_error',
+      error: { kind: 'infra', message: 'setup step timed out after 1s' },
+    } as EvalRecord
+    assert.deepEqual(mergeOutcome(failed('TimeoutError'), record), {
+      outcome: 'infra_error',
+      error: record.error,
+    })
+  })
+
+  test('recordFailure classifies an abort by TimeoutError, not the message', () => {
+    const attempt = (signal: AbortSignal) =>
+      ({
+        record: { error: null, judgements: [], outcome: 'pass' },
+        signal,
+        judgeErrored: false,
+      }) as unknown as Attempt
+
+    const timeout = new AbortController()
+    timeout.abort(new TimeoutError('Eval timed out after 1s'))
+    const timedOut = attempt(timeout.signal)
+    recordFailure(timedOut, new Error('ignored'), false)
+    assert.deepEqual(timedOut.record.error, { kind: 'timeout', message: 'The eval timed out' })
+
+    const cancel = new AbortController()
+    cancel.abort(Object.assign(new Error('The run was cancelled'), { name: 'AbortError' }))
+    const cancelled = attempt(cancel.signal)
+    recordFailure(cancelled, new Error('ignored'), false)
+    assert.deepEqual(cancelled.record.error, {
+      kind: 'aborted',
+      message: 'The run was cancelled',
+    })
+
+    const setup = new AbortController()
+    setup.abort(new Error('setup step 1/1 "sleep" timed out after 1s'))
+    const other = attempt(setup.signal)
+    recordFailure(other, new Error('setup timed out'), false)
+    assert.deepEqual(other.record.error, { kind: 'aborted', message: 'The run was cancelled' })
   })
 })
 

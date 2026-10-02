@@ -15,8 +15,7 @@ import type { Attempt } from './state.ts'
 function classify(error: unknown, signal: AbortSignal): { kind: ErrorKind; message: string } {
   const message = error instanceof Error ? error.message : String(error)
   if (signal.aborted) {
-    const reason = signal.reason instanceof Error ? signal.reason.message : String(signal.reason)
-    return isTimeout(reason)
+    return isTimeout(signal.reason)
       ? { kind: 'timeout', message: 'The eval timed out' }
       : { kind: 'aborted', message: 'The run was cancelled' }
   }

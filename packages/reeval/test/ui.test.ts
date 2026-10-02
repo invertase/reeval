@@ -2,13 +2,14 @@ import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import type { EvalEntry, RunRecord } from '../src/history/types.ts'
-import type { AttemptMeta, CompareAnswer } from '../src/types.ts'
+import type { EvalEntry, JudgementRecord, RunRecord } from '../src/history/types.ts'
+import type { AttemptMeta, CompareAnswer, TokenUsage } from '../src/types.ts'
 import { AgentRenderer } from '../src/ui/agent.ts'
 import { colors } from '../src/ui/colors.ts'
 import type { EsEvent, EvalResult, Progress } from '../src/ui/events.ts'
 import { type OutputOptions, resolveOutput } from '../src/ui/mode.ts'
 import { PlainRenderer } from '../src/ui/plain.ts'
+import { renderSummary } from '../src/ui/summary.ts'
 import { Tagger } from '../src/ui/tags.ts'
 import { pkgRoot } from './helpers.ts'
 
@@ -268,7 +269,7 @@ const SUMMARY = [
   'Summary',
   ' evals/hello.eval.ts',
   '   greet module',
-  '     ✓ creates a tested greet module             3m 12s  judge 0.92  1 turn',
+  '     ✓ creates a tested greet module             3m 12s  pass 0.92/0.80  1 turn',
   '     ✗ adds a default name in a follow-up turn   6m 03s  2 turns',
   '',
   'Failures (1)',
@@ -460,7 +461,7 @@ describe('compare answers in the summary', () => {
     assert.ok(
       out.includes(
         lines(
-          '     ✓ creates a tested greet module             3m 12s  judge 0.92  1 turn',
+          '     ✓ creates a tested greet module             3m 12s  pass 0.92/0.80  1 turn',
           ...ANSWER_LINES.map((l) => `         question  ${l}`),
           '     ✗ adds a default name in a follow-up turn   6m 03s  2 turns',
         ),
@@ -486,6 +487,177 @@ describe('compare answers in the summary', () => {
       ),
       text,
     )
+  })
+})
+
+const judgement = (
+  question: string,
+  verdict: 'pass' | 'fail',
+  score: number,
+  key: string,
+  threshold = 0.8,
+): JudgementRecord => ({ question, verdict, score, threshold, model: 'fake', key })
+
+const usage = (input: number, output: number): TokenUsage => ({
+  input,
+  output,
+  cacheRead: 0,
+  cacheWrite: 0,
+  reasoning: null,
+})
+
+function summaryOf(evals: EvalEntry[]): string {
+  const attempts = evals.reduce((n, e) => n + e.attempts.length, 0)
+  return renderSummary(
+    colors(false),
+    {
+      type: 'run-end',
+      at: T0,
+      record: {
+        durationMs: 1000,
+        cost: { usage: null },
+        summary: {
+          evals: evals.length,
+          attempts,
+          pass: 0,
+          fail: 0,
+          notGated: 0,
+          infraError: 0,
+          skipped: 0,
+        },
+        evals,
+      } as unknown as RunRecord,
+      summaryPath: '.reeval/runs/run-1/summary.md',
+      results: [],
+      unhandledErrors: [],
+    },
+    () => '.reeval/runs/run-1/x/1',
+  ).join('\n')
+}
+
+function withAttempt(base: EvalEntry, patch: Partial<EvalEntry['attempts'][number]>): EvalEntry {
+  const [first, ...rest] = base.attempts
+  assert.ok(first)
+  return { ...base, attempts: [{ ...first, ...patch }, ...rest] }
+}
+
+describe('collapsed judges, per-key rates and tokens', () => {
+  test('a collapsed attempt line shows verdict and score/threshold, and usage when reported', () => {
+    const e = withAttempt(entry(greetResult, 1, 0.92), {
+      usage: usage(1270, 80),
+      judgements: [judgement('Accurate summary?', 'pass', 0.92, '0:acc')],
+    })
+    const out = summaryOf([e])
+    assert.match(out, /pass 0\.92\/0\.80/)
+    assert.match(out, /1270 in · 80 out/)
+    assert.doesNotMatch(out, /judge 0\.92[^/]/)
+  })
+
+  test('two judges print as fail 0.78/0.80 · pass 0.99/0.80; many collapse to the min plus a count', () => {
+    const two = withAttempt(entry(greetResult, 1), {
+      judgements: [
+        judgement('login', 'fail', 0.78, '0:login'),
+        judgement('checkout', 'pass', 0.99, '1:checkout'),
+      ],
+    })
+    assert.match(summaryOf([two]), /fail 0\.78\/0\.80 · pass 0\.99\/0\.80/)
+
+    const many = withAttempt(entry(greetResult, 1), {
+      judgements: [
+        judgement('a', 'fail', 0.5, '0:a'),
+        judgement('b', 'fail', 0.33, '1:b'),
+        judgement('c', 'pass', 0.9, '2:c'),
+      ],
+    })
+    const out = summaryOf([many])
+    assert.match(out, /fail 0\.33\/0\.80 · 3 judges/)
+    assert.doesNotMatch(out, /0\.50/)
+  })
+
+  test('null usage is omitted, never printed as zero', () => {
+    const e = withAttempt(entry(greetResult, 1, 0.92), { usage: null })
+    const out = summaryOf([e])
+    assert.doesNotMatch(out, /0 in/)
+    assert.doesNotMatch(out, /0 out/)
+  })
+
+  test('cell rows show per-key rates, lift only when both sides have enough counted, and a usage sum', () => {
+    const cell = (
+      key: string,
+      role: 'control' | 'variant',
+      env: string,
+    ): EvalEntry['cells'][number] =>
+      ({
+        key,
+        harness: 'fake',
+        environment: env,
+        sandbox: 'fake',
+        role,
+        gate: role === 'control' ? 'none' : 'all',
+        overrides: [],
+        runs: 2,
+        pass: role === 'variant' ? 2 : 0,
+        fail: role === 'variant' ? 0 : 2,
+        infraError: 0,
+        skipped: 0,
+        passRate: role === 'variant' ? 1 : 0,
+        outcome: role === 'variant' ? 'pass' : 'fail',
+      }) as EvalEntry['cells'][number]
+
+    const attemptOf = (
+      cellKey: string,
+      n: number,
+      outcome: 'pass' | 'fail',
+      login: 'pass' | 'fail',
+      checkout: 'pass' | 'fail',
+      tokens: TokenUsage | null,
+    ) =>
+      ({
+        id: `${cellKey}#${n}`,
+        cell: cellKey,
+        n,
+        outcome,
+        usage: tokens,
+        turns: [{}],
+        judgements: [
+          judgement('login', login, login === 'pass' ? 0.95 : 0.2, '0:login'),
+          judgement('checkout', checkout, checkout === 'pass' ? 0.91 : 0.1, '1:checkout'),
+        ],
+      }) as unknown as EvalEntry['attempts'][number]
+
+    const multi: EvalEntry = {
+      ...entry(greetResult, 1),
+      cells: [
+        cell('fake/plain/fake', 'control', 'plain'),
+        cell('fake/skill/fake', 'variant', 'skill'),
+      ],
+      attempts: [
+        attemptOf('fake/plain/fake', 1, 'fail', 'fail', 'fail', usage(100, 10)),
+        attemptOf('fake/plain/fake', 2, 'fail', 'pass', 'fail', usage(100, 10)),
+        attemptOf('fake/skill/fake', 1, 'pass', 'pass', 'fail', usage(80, 8)),
+        attemptOf('fake/skill/fake', 2, 'pass', 'pass', 'fail', usage(80, 8)),
+      ],
+    }
+    const out = summaryOf([multi])
+    assert.match(out, /login 1\/2/)
+    assert.match(out, /checkout 0\/2/)
+    assert.match(out, /login 2\/2 \(\+50 pts\)/)
+    assert.match(out, /200 in · 20 out/)
+    assert.match(out, /160 in · 16 out/)
+
+    const thin: EvalEntry = {
+      ...multi,
+      cells: multi.cells.map((c) => ({
+        ...c,
+        runs: 1,
+        pass: c.role === 'variant' ? 1 : 0,
+        fail: c.role === 'variant' ? 0 : 1,
+      })),
+      attempts: multi.attempts.filter((a) => a.n === 1),
+    }
+    const thinOut = summaryOf([thin])
+    assert.match(thinOut, /login 1\/1/)
+    assert.doesNotMatch(thinOut, /\(\+\d+ pts\)/)
   })
 })
 

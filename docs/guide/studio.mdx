@@ -35,7 +35,12 @@ When the record lands, the run's own page replaces the live one. A run that was 
 
 <Image src="/assets/studio/run-cells-lift.png" alt="A run page with a cells table showing the control at 0% and the variant at 100%, with its lift" width={800} />
 
-A run's page is its eval tree, with each cell's pass rate, role, lift and effort. This is the cross-agent run from [Harnesses](/guide/harnesses). A run you've analysed with `reeval analyze`, or run with `analysis.agent`, also has an Analysis tab: the summary, each harness's notes, and a failed call's error; [Analysis](/guide/analysis) shows how.
+A run's page is its eval tree, with each cell's pass rate, per-key judge rates
+(`login 4/5 · checkout 0/5`), role, lift, effort and token usage. Per-key lift
+shows only when both sides have enough counted attempts; tokens sum those
+attempts and stay blank when a harness reports none. A run you've analysed with
+`reeval analyze`, or run with `analysis.agent`, also has an Analysis tab; see
+[Analysis](/guide/analysis).
 
 <Image src="/assets/studio/run-questions.png" alt="An eval's cells, then its questions: win rates within a harness and across harnesses, and a question whose model call failed" width={800} />
 

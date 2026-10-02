@@ -173,14 +173,19 @@ registerTest('slow', { mode: 'run', timeout: 20 }, async (h) => {
     const { file, run } = evalFile(`
 registerTest('waits', { mode: 'run' }, async (h) => {
   await new Promise((resolve) => h.signal.addEventListener('abort', resolve))
-  h.setMeta({ cancelled: true })
+  h.signal.throwIfAborted()
 })
 `)
     c.send({ t: 'init', run, file, select: [0] })
     await until(() => c.sent.some((m) => m.t === 'start'))
     c.send({ t: 'cancel' })
     await c.exit
-    assert.ok(c.types().includes('result'))
+    const cancelled = c.sent.find(
+      (m): m is Extract<FromWorker, { t: 'result' }> => m.t === 'result',
+    )
+    assert.equal(cancelled?.result.state, 'failed')
+    assert.equal(cancelled?.result.errors[0]?.name, 'AbortError')
+    assert.equal(cancelled?.result.errors[0]?.message, 'The run was cancelled')
 
     const orphan = fakeChannel()
     startWorker(orphan.channel)
