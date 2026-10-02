@@ -11,6 +11,7 @@ import {
   ensureChrome,
   nameFromPath,
   pageUrl,
+  pickPageDebuggerUrl,
   refusedBrowser,
   resolveCaptureCall,
   resolveCaptureTarget,
@@ -102,6 +103,20 @@ test('checkCaptureName accepts [a-z0-9_-]+', () => {
   checkCaptureName('login_1')
   assert.throws(() => checkCaptureName('Home'), /name must match/)
   assert.throws(() => checkCaptureName('has space'), /name must match/)
+})
+
+test('pickPageDebuggerUrl skips the browser target', () => {
+  assert.equal(
+    pickPageDebuggerUrl([
+      { type: 'browser', webSocketDebuggerUrl: 'ws://127.0.0.1:9/browser' },
+      { type: 'page', webSocketDebuggerUrl: 'ws://127.0.0.1:9/page' },
+    ]),
+    'ws://127.0.0.1:9/page',
+  )
+  assert.equal(
+    pickPageDebuggerUrl([{ type: 'browser', webSocketDebuggerUrl: 'ws://x' }]),
+    undefined,
+  )
 })
 
 test('pageUrl joins origin and path without a doubled slash', () => {

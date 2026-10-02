@@ -209,6 +209,43 @@ function waitForPortFile(file: string, timeoutMs: number): Promise<number> {
   })
 }
 
+export function pickPageDebuggerUrl(
+  targets: Array<{ type?: string; webSocketDebuggerUrl?: string }>,
+): string | undefined {
+  return targets.find((t) => t.webSocketDebuggerUrl && t.type !== 'browser')?.webSocketDebuggerUrl
+}
+
+async function pageDebuggerUrl(port: number, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs
+  const listPages = async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/json/list`)
+    if (!res.ok) return undefined
+    const list = (await res.json()) as Array<{ type?: string; webSocketDebuggerUrl?: string }>
+    return pickPageDebuggerUrl(list)
+  }
+  for (;;) {
+    const url = await listPages()
+    if (url) return url
+    if (Date.now() > deadline) break
+    await new Promise((r) => setTimeout(r, 50))
+  }
+  const version = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()) as {
+    webSocketDebuggerUrl?: string
+  }
+  if (!version.webSocketDebuggerUrl) {
+    throw new Error('chrome-headless-shell reported no DevTools URL')
+  }
+  const browser = await cdpConnect(version.webSocketDebuggerUrl, timeoutMs)
+  try {
+    await browser.send('Target.createTarget', { url: 'about:blank' })
+  } finally {
+    browser.close()
+  }
+  const created = await listPages()
+  if (!created) throw new Error('chrome-headless-shell reported no page target')
+  return created
+}
+
 async function cdpConnect(url: string, timeoutMs: number): Promise<Cdp> {
   const ws = new WebSocket(url)
   await new Promise<void>((resolve, reject) => {
@@ -237,7 +274,7 @@ export async function screenshotWithChrome(
   const child = spawn(
     bin,
     [
-      '--headless=new',
+      '--headless',
       '--disable-gpu',
       '--no-sandbox',
       '--disable-dev-shm-usage',
@@ -252,12 +289,7 @@ export async function screenshotWithChrome(
   )
   try {
     const port = await waitForPortFile(join(userData, 'DevToolsActivePort'), timeoutMs)
-    const version = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()) as {
-      webSocketDebuggerUrl?: string
-    }
-    const wsUrl = version.webSocketDebuggerUrl
-    if (!wsUrl) throw new Error('chrome-headless-shell reported no DevTools URL')
-    const cdp = await cdpConnect(wsUrl, timeoutMs)
+    const cdp = await cdpConnect(await pageDebuggerUrl(port, timeoutMs), timeoutMs)
     try {
       await cdp.send('Page.enable')
       await cdp.send('Emulation.setDeviceMetricsOverride', {

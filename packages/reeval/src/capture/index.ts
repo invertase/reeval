@@ -11,6 +11,7 @@ export {
   CHROME_VERSION,
   chromeBinaryPath,
   ensureChrome,
+  pickPageDebuggerUrl,
   screenshotWithChrome,
 } from './browser.ts'
 export { pollHttp } from './poll.ts'
