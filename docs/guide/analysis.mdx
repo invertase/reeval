@@ -173,7 +173,7 @@ gemini-3.8-flash · analysis-v2 · digest v1 · 10381 in / 3196 out tokens · 13
 
 `reeval analyze` explains the latest run against its nearest recorded ancestor, here the cross-agent run from [Harnesses](/guide/harnesses): what happened, the results, why, anomalies, and at most five actions.
 
-reeval computes the facts, the model only explains them, and every claim must cite a fact (`F…`) or evidence (`E…`) from the digest. reeval drops claims that don't, flags numbers no cited fact holds, and rejects any verify command its CLI wouldn't parse. The footer counts all three.
+reeval computes the facts, the model only explains them, and every claim must cite a fact (`F…`) or evidence (`E…`) from the digest. reeval drops claims that don't, flags numbers no cited fact holds, and rejects any verify command its CLI wouldn't parse. The footer counts all three; an `insufficient` lift or effort verdict is not measured, so it is not a results line.
 
 <Warning>
   A check doesn't make a claim right. Here the verify command parses, but `evals/skill.eval.ts` has no `skill` tag, so it would run nothing. Read each action before you act on it.

@@ -30,11 +30,14 @@ import {
   stagedAttempts,
 } from '../src/analysis/agent/tools.ts'
 import { analyseDigest, defaultBase, prepareAnalysis } from '../src/analysis/command.ts'
+import { RULES } from '../src/analysis/digest.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { resolveAnalysisModel } from '../src/analysis/model.ts'
+import { SYSTEM_PROMPT } from '../src/analysis/schema.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { allRuns } from '../src/commands.ts'
 import { resolveConfig } from '../src/config.ts'
+import { LIFT_MIN_COUNTED } from '../src/history/facts.ts'
 import type { HistoryEntry } from '../src/history/types.ts'
 import { recordFileName } from '../src/ids.ts'
 import { fakeAnalysis } from '../src/judge.ts'
@@ -62,6 +65,27 @@ export default defineConfig({
 })
 `
 
+/** A compare eval whose variant writes a file the control never does. */
+async function compareProject(name: string, runs: number) {
+  return project(name, {
+    'reeval.config.ts': fakeConfig({ harness: "{ withSkill: { files: { 'ok.txt': 'y' } } }" }),
+    'skills/s/SKILL.md': '---\nname: s\ndescription: A skill. Use when testing.\n---\nBody.\n',
+    'evals/c.eval.ts': `import { defineEnvironment, evaluate, expect } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const plain = defineEnvironment('plain', { sandbox })
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/s')],
+}))
+evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: ${runs} }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+  })
+}
+
 /** A project whose history is a copy of a fixture history, with an optional `analysis` config. */
 async function historyProject(name: string, fixture: string, analysis = '') {
   const p = await project(name, { 'reeval.config.ts': CONFIG.replace('ANALYSIS', analysis) })
@@ -88,6 +112,7 @@ type Digest = {
   facts: Array<Row & { id: string; kind: string }>
   evidence: Array<{ id: string; ref: string; lines: string[] }>
   attempts: Record<string, Row>
+  rules: string[]
 }
 
 /** Compares `value` with a golden file; REEVAL_UPDATE_SNAPSHOTS=1 rewrites it. */
@@ -524,6 +549,11 @@ const HEAD = '20260926T104633Z_041aef3_ci_jzvq'
 const BASE = '20260926T104130Z_60f3dc9_cursor-agent_92gs'
 
 describe('reeval analyze', () => {
+  test('the prompt and rules say insufficient lift is not measured', () => {
+    assert.match(SYSTEM_PROMPT, /insufficient is not measured: never put it on a results line/)
+    assert.match(RULES[0] ?? '', new RegExp(`fewer than ${LIFT_MIN_COUNTED} counted attempts`))
+  })
+
   test('the digest is facts with ids, evidence by rule, and the verdict rules; --context needs no key', async () => {
     const p = await historyProject('analyze-context', 'dogfood')
     const { text, digest } = await digestOf(p.dir)
@@ -546,6 +576,54 @@ describe('reeval analyze', () => {
     assert.ok(digest.evidence.some((e) => e.ref.startsWith('tool-strip:r2/scaffold/es-good#')))
     const scoped = (await digestOf(p.dir, ['--eval', 'fix-config'])).digest
     assert.ok(Object.keys(scoped.attempts).every((id) => id.includes('/fix-config/')))
+  })
+
+  test('one counted attempt a side is insufficient lift, not a results verdict', async () => {
+    const p = await compareProject('analyze-sparse-lift', 1)
+    const run = await runCli(p.dir)
+    assert.equal(run.code, 0, run.stdout)
+    assert.match(
+      run.stdout,
+      /lift \+100 pts \(95% −12…\+100, 1\/1 vs 0\/1\), within noise/,
+      'the run summary still prints the interval',
+    )
+    const { digest } = await digestOf(p.dir)
+    const pass = digest.facts.find((f) => f.kind === 'pass-rate')
+    const variant = (
+      pass?.cells as Array<{ lift?: string; verdict?: string; cell: string }> | undefined
+    )?.find((c) => c.lift)
+    assert.deepEqual(
+      { lift: variant?.lift, verdict: variant?.verdict },
+      { lift: 'not enough attempts for lift (1 vs 1)', verdict: 'insufficient' },
+    )
+    assert.ok(
+      digest.rules.some((r) => r.includes('not measured') && r.includes('never a results line')),
+    )
+    const controlled = await query(
+      p.dir,
+      "SELECT pass_verdict, variant_counted, control_counted FROM factor_effects WHERE tier = 'controlled'",
+    )
+    assert.deepEqual(
+      controlled.map((r) => [r.pass_verdict, r.variant_counted, r.control_counted]),
+      [['insufficient', 1, 1]],
+    )
+  })
+
+  test('two counted attempts can still be an effect', async () => {
+    const p = await compareProject('analyze-lift-effect', 2)
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { digest } = await digestOf(p.dir)
+    const pass = digest.facts.find((f) => f.kind === 'pass-rate')
+    const variant = (pass?.cells as Array<{ lift?: string; verdict?: string }> | undefined)?.find(
+      (c) => c.lift,
+    )
+    assert.match(variant?.lift ?? '', /^\+100 pts \(95% \+7…\+100\)$/)
+    assert.equal(variant?.verdict, 'effect')
+    const [row] = await query(
+      p.dir,
+      "SELECT pass_verdict FROM factor_effects WHERE tier = 'controlled'",
+    )
+    assert.equal(row?.pass_verdict, 'effect')
   })
 
   test('claims with invented citations or quotes are dropped; invented CLI flags are rejected', async () => {
