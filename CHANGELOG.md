@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/invertase/reeval/compare/v0.5.0...v0.6.0) (2026-10-02)
+
+
+### Features
+
+* **capture:** add c.capture screenshots as attempt artifacts ([315423d](https://github.com/invertase/reeval/commit/315423d63e6ba950634b3ce490738da1690fa421)), closes [#207](https://github.com/invertase/reeval/issues/207)
+
+
+### Bug Fixes
+
+* **analyze:** cap confidence and lead with a one-line verdict ([#222](https://github.com/invertase/reeval/issues/222)) ([9dfcb19](https://github.com/invertase/reeval/commit/9dfcb19930a2b651f9aeedcf87d76dc254c180b1))
+* **analyze:** do not treat a changed eval as an effect ([#220](https://github.com/invertase/reeval/issues/220)) ([38f7887](https://github.com/invertase/reeval/commit/38f788711d3ceb394471532b94b7e403e694288b))
+* **history:** treat a cell as infra only when nothing counted ([#219](https://github.com/invertase/reeval/issues/219)) ([4a39a83](https://github.com/invertase/reeval/commit/4a39a834345e6b2ca9c6fb036317bc261755b785))
+
 ## [0.5.0](https://github.com/invertase/reeval/compare/v0.4.0...v0.5.0) (2026-10-02)
 
 
