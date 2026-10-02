@@ -21,7 +21,11 @@ const claim = z.object({
 export const analysisSchema = z.object({
   tldr: z.string().describe('2-3 sentences: what happened, and does the thing under test help'),
   whatHappened: z.array(claim),
-  results: z.array(claim).describe('Pass rate and effort, each with its noise verdict'),
+  results: z
+    .array(claim)
+    .describe(
+      'Pass rate and effort that were measured, each with its noise verdict. insufficient is not measured: never a results line',
+    ),
   why: z
     .array(claim)
     .describe('Causes: the thing under test, the eval itself, or reeval/infrastructure'),
@@ -62,7 +66,7 @@ You get a DIGEST: facts computed deterministically by reeval (ids F1...), eviden
 Rules:
 - Every claim cites at least one id from the digest: F<n>, E<n>, E<n>:L<line> for a line the evidence shows, an attempt id, or <attempt id>:check<n>. Never cite anything that isn't in the digest.
 - Take numbers from the facts. Don't compute new statistics beyond simple ratios of cited numbers.
-- The verdicts in the facts are final: if a lift or effort verdict says within noise or insufficient, say so; never call it an effect. Name each factor claim's tier (controlled, pooled, observed).
+- The verdicts in the facts are final: if a lift or effort verdict says within noise or insufficient, say so; never call it an effect. insufficient is not measured: never put it on a results line. Name each factor claim's tier (controlled, pooled, observed).
 - Say what can't be attributed (factors that are not_measured).
 - Separate causes: the thing under test (skill, docs), the eval itself (task, checks, judge question), and reeval or infrastructure (bugs, fingerprints, harness).
 - Explain a failed judge verdict by comparing the cited output with the judge question, and say it's your reading: judges record no reason.

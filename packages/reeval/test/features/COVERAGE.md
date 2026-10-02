@@ -143,7 +143,7 @@
 | `reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
 | Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio | ✓ 3 | — | — | — | — |
-| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 6 | — | — | — | — |
+| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 9 | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
 | `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | ◐ 1 (1 without a canary) |
 | `analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error | ✓ 6 | — | — | — | ◐ 1 (1 without a canary) |

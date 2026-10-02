@@ -1300,6 +1300,9 @@ export const inventory: InventoryFeature[] = [
     name: '`reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation',
     tests: [
       analysis('the digest is facts with ids, evidence by rule'),
+      analysis('the prompt and rules say insufficient lift is not measured'),
+      analysis('one counted attempt a side is insufficient lift'),
+      analysis('two counted attempts can still be an effect'),
       analysis('claims with invented citations or quotes are dropped'),
       analysis('verify commands must parse as reeval commands'),
       analysis('reeval run and reeval image build verify commands must select an eval of the run'),
