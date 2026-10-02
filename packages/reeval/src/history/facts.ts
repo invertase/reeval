@@ -15,6 +15,11 @@ import {
 
 /** Counted attempts, pooled over comparable runs, before a cell with mixed outcomes is `flaky`. */
 export const FLAKY_MIN_ATTEMPTS = 6
+/**
+ * Counted attempts a side before pass-rate lift can exclude 0. Below this the verdict is
+ * `insufficient` (not measured). See the table in `docs/concepts/lift.mdx`.
+ */
+export const LIFT_MIN_COUNTED = 2
 /** A failing verdict this close to its threshold points at the judge, not the agent. */
 export const JUDGE_MARGIN = 0.1
 
@@ -124,7 +129,12 @@ function passCols(v: Side, c: Side): Row {
     lo: round3(lift.low),
     hi: round3(lift.high),
     within_noise: noise ? 1 : 0,
-    pass_verdict: v.counted && c.counted ? (noise ? 'noise' : 'effect') : 'insufficient',
+    pass_verdict:
+      Math.min(v.counted, c.counted) < LIFT_MIN_COUNTED
+        ? 'insufficient'
+        : noise
+          ? 'noise'
+          : 'effect',
   }
 }
 

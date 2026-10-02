@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
 import type { HistoryDb } from '../history/db.ts'
-import { FLAKY_MIN_ATTEMPTS } from '../history/facts.ts'
+import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
 import { sha256 } from '../ids.ts'
 import { clip } from '../text.ts'
@@ -73,7 +73,7 @@ export type DigestInput = {
 }
 
 export const RULES = [
-  'Pass-rate lift is an effect only when its 95% interval (Newcombe) excludes 0; otherwise it is within noise, whatever the point estimate.',
+  `Pass-rate lift is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
   'Effort (tool calls, agent time) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot); pooled across evals it is an effect only when at least 2/3 of strata agree.',
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
@@ -86,6 +86,28 @@ const pts = (x: number | null | undefined) =>
   x === null || x === undefined ? null : `${x >= 0 ? '+' : '−'}${Math.round(Math.abs(x) * 100)}`
 const liftText = (points: number, lo: number, hi: number) =>
   `${pts(points)} pts (95% ${pts(lo)}…${pts(hi)})`
+
+/** Digest lift copy: sparse cells are not measured, and keep the counts. */
+function digestLift(
+  variantCounted: number,
+  controlCounted: number,
+  points: number,
+  lo: number,
+  hi: number,
+): string {
+  return Math.min(variantCounted, controlCounted) < LIFT_MIN_COUNTED
+    ? `not enough attempts for lift (${variantCounted} vs ${controlCounted})`
+    : liftText(points, lo, hi)
+}
+
+function digestLiftVerdict(
+  variantCounted: number,
+  controlCounted: number,
+  withinNoise: boolean,
+): 'insufficient' | 'within noise' | 'effect' {
+  if (Math.min(variantCounted, controlCounted) < LIFT_MIN_COUNTED) return 'insufficient'
+  return withinNoise ? 'within noise' : 'effect'
+}
 
 /** Short tags for the evals in scope: the file's base name, numbered when a file has several. */
 function evalTags(evals: EvalEntry[]): Map<string, string> {
@@ -185,8 +207,18 @@ export async function buildDigestKeepingDropped(
           gated: c.gate !== 'none',
           ...(c.lift
             ? {
-                lift: liftText(c.lift.points, c.lift.interval.lo, c.lift.interval.hi),
-                verdict: c.lift.withinNoise ? 'within noise' : 'effect',
+                lift: digestLift(
+                  c.lift.variant.counted,
+                  c.lift.control.counted,
+                  c.lift.points,
+                  c.lift.interval.lo,
+                  c.lift.interval.hi,
+                ),
+                verdict: digestLiftVerdict(
+                  c.lift.variant.counted,
+                  c.lift.control.counted,
+                  c.lift.withinNoise,
+                ),
               }
             : {}),
         })),
@@ -260,7 +292,13 @@ export async function buildDigestKeepingDropped(
       ...(f.strata && (f.strata as number) > 1 ? { strata: f.strata } : {}),
       ...(f.runs ? { runs: f.runs } : {}),
       passRate: `${f.variant_pass}/${f.variant_counted} vs ${f.control_pass}/${f.control_counted}`,
-      lift: liftText(f.points as number, f.lo as number, f.hi as number),
+      lift: digestLift(
+        f.variant_counted as number,
+        f.control_counted as number,
+        f.points as number,
+        f.lo as number,
+        f.hi as number,
+      ),
       passVerdict: f.pass_verdict,
       toolCalls: f.tools_ratios,
       toolsP: f.tools_p,

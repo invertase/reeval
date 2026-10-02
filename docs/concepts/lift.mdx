@@ -88,7 +88,7 @@ The interval is wide when attempts are few. These are reeval's own intervals for
 | 10/10 | 5/10 | +50 | +12…+76 | no |
 | 20/20 | 10/20 | +50 | +24…+70 | no |
 
-At two runs per cell only an all-or-nothing difference clears noise. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
+At two runs per cell only an all-or-nothing difference clears noise. `reeval analyze` treats fewer than two counted attempts a side as `insufficient` (not measured), not as a results line; the run summary still prints the interval. reeval's own dogfood suite, run on Cursor with a good skill, a weak skill and no skill at `runs: 2`, is a real example:
 
 ```text
      ✓ fixes a broken config and explains it      5/6 · 100% gated  6 attempts
@@ -137,7 +137,7 @@ The smallest p a rank test can give depends only on the attempt counts, so a ver
 
 ## Effects across runs
 
-`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. Each row has an evidence tier:
+`reeval query factor_effects` contrasts one factor at a time (`environment`, `harness`, `model`) with a pass-rate verdict from the Newcombe interval and an effort verdict from the rank test. `pass_verdict` is `insufficient` when either side has fewer than two counted attempts. Each row has an evidence tier:
 
 | `tier` | The contrast |
 |---|---|
