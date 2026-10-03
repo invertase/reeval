@@ -145,7 +145,10 @@ export type CliOptions = {
   env?: NodeJS.ProcessEnv
   /** Called with all stdout so far on every chunk, until it returns true. */
   onOutput?: (stdout: string, pid: number) => boolean
-  /** Kills the CLI's process group and fails after this long (default 60s). */
+  /**
+   * Kills the CLI's process group when it goes this long with no stdout or stderr
+   * (default 60s). A slow host that still prints is not treated as hung.
+   */
   timeoutMs?: number
 }
 
@@ -165,22 +168,39 @@ export function runCli(
     let stdout = ''
     let stderr = ''
     let watching = !!opts.onOutput
-    const timer = setTimeout(() => {
-      if (child.pid) killTree(child.pid)
-      reject(new Error(`reeval ${args.join(' ')} took over ${timeoutMs}ms\n${stdout}\n${stderr}`))
-    }, timeoutMs)
+    let settled = false
+    let timer: ReturnType<typeof setTimeout>
+    const finish = (fn: () => void) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      fn()
+    }
+    const arm = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        finish(() => {
+          if (child.pid) killTree(child.pid)
+          reject(
+            new Error(
+              `reeval ${args.join(' ')} produced no output for ${timeoutMs}ms\n${stdout}\n${stderr}`,
+            ),
+          )
+        })
+      }, timeoutMs)
+    }
+    arm()
     child.stdout.on('data', (d) => {
       stdout += d
+      arm()
       if (watching && child.pid) watching = !opts.onOutput?.(stdout, child.pid)
     })
     child.stderr.on('data', (d) => {
       stderr += d
+      arm()
     })
-    child.on('error', reject)
-    child.on('close', (code) => {
-      clearTimeout(timer)
-      resolve({ code, stdout, stderr })
-    })
+    child.on('error', (error) => finish(() => reject(error)))
+    child.on('close', (code) => finish(() => resolve({ code, stdout, stderr })))
   })
 }
 

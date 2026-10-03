@@ -405,7 +405,9 @@ describe('studio in a browser', () => {
         await page.waitForSelector('[role=tablist]')
         for (const tab of ['Transcript', 'Diff', 'Checks', 'Judge', 'State']) {
           await page.getByRole('tab', { name: new RegExp(`^${tab}`) }).click()
-          await page.waitForTimeout(50)
+          await page
+            .locator('[role=tab][aria-selected=true]', { hasText: new RegExp(`^${tab}`) })
+            .waitFor()
           await broken(`${label} ${href} ${tab}`)
         }
         await page.getByText('Package versions').waitFor()
@@ -413,7 +415,7 @@ describe('studio in a browser', () => {
     }
     if (runs.length > 1) {
       await page.goto(`${url}#/compare?base=${runs[0]}&head=${runs.at(-1)}`)
-      await page.waitForTimeout(300)
+      await page.getByRole('heading', { name: 'Compare runs' }).waitFor()
       await broken(`${label} compare`)
     }
     await page.close()

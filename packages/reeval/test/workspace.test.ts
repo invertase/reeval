@@ -74,7 +74,10 @@ async function failsOnlyItsAttempts(env: string, message: RegExp, hostEnv: NodeJ
   return { p, r, run }
 }
 
-describe('git workspaces', { concurrency: true }, () => {
+// Sequential: each case starts a `reeval run` that fetches git. Concurrent cases on a
+// 2-vCPU Windows runner starve each other and trip the CLI idle detector
+// (https://github.com/invertase/reeval/actions/runs/37116068820).
+describe('git workspaces', { concurrency: false }, () => {
   test('a ref the repository lacks fails only the attempts that use it', async () => {
     const { run } = await failsOnlyItsAttempts(
       `workspace: git('../repo', { ref: 'v9' })`,
