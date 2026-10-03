@@ -129,7 +129,7 @@ docker:sqlite · 1 eval
 
 A rebuild removes the image its tag pointed at before, unless a container or another tag still uses it, and a `from` build drops its intermediate `…-base` tag once the harness is committed, so rebuilds leave no dangling images behind.
 
-Adapter versions: Cursor `0.1.2` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.35), Claude Code `1.0.141` (patched, so its tag is `1.0.141-patch.8edc594f`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
+Adapter versions: Cursor `0.1.2` (`@reeval/harness-cursor-sdk`, which installs `@cursor/sdk` 1.0.35), Claude Code `1.0.142` (patched, so its tag is `1.0.142-patch.8edc594f`), Antigravity `0.1.0`. A fake harness with a `layout` uses that agent's image; without one, Cursor's.
 
 What reeval adds on top of a `from` or foreign `dockerfile` base: `bash`, `ca-certificates`, `curl`, `git`, `procps`, Node 22, npm and pnpm, the `reeval` user, the workspace at `/reeval/workspace`, and `/etc/profile.d/00-reeval-path.sh` (see [Inside the container](#inside-the-container)). That needs `apt-get`, hence Debian or Ubuntu. Build output goes to `.reeval/cache/images/<tag>.log`.
 
