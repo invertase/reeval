@@ -234,16 +234,18 @@ Which features have fixtures on which tier is a generated matrix:
 ### CI and releases
 
 GitHub Actions runs on every PR, every merge-queue entry (`merge_group`), every push to `main`
-and nightly, on `ubuntu-24.04` with Node from `engines`, plus the Node 22.13 floor and Windows and
-macOS legs on full runs (below). PRs and the queue get a deliberately light tier while PRs are
-many; `main`, nightly and the `ci:full` label run everything, so nothing loses coverage overall:
+and nightly, on `ubuntu-24.04` with Node from `engines`, plus Windows and macOS on full runs
+(below). The Node 22.13 floor and the coverage report run on nightly, `workflow_dispatch`,
+release and `ci:full`. PRs and the queue get a deliberately light tier while PRs are many;
+`main` still runs Windows, macOS, Docker and npm 10.9, so a merge cannot skip those:
 
 | Event | Runs |
 |---|---|
 | PR, merge queue (light tier) | Always `lint, typecheck and docs`; on any code change, `unit and plan (1/4 … 4/4)`; each heavier job only when its paths change (`ci.yml`'s `changes` job, against the base, or the merge group's base): `features (fake)` for the engine, attempt, sandbox, harness and ui code and the fixtures; `docker (…)` for sandbox-docker, the harness packages and reeval's sandbox, harness and attempt code and the Docker tests; `studio` for studio-web and reeval's studio and view code; `packed install` for package manifests, the bundle config and what ships beside `dist/`; `engine coverage` for the engine and its tests. Docs-only changes (`docs/`, `docs.json`, root-level `*.md`, `.agents/`) skip the unit shards, studio-web-only ones too. A change to `.github/`, the lockfile, the workspace, `patches/` or a `tsconfig` runs every Linux job. No coverage |
 | PR, merge queue (full tier) | Every Linux job on any code change |
-| PR labelled `ci:full` | Everything, unscoped, as on `main` (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
-| `main`, nightly, `workflow_dispatch`, release | Everything: every Linux job, `extended.yml` (Node 22.13, Windows, macOS), npm 10.9's packed install and the coverage report |
+| PR labelled `ci:full` | Everything, unscoped, including the Node 22.13 floor, Windows and macOS (`ci-full.yml` runs it once when the label is added; later pushes' own runs are full) |
+| `main` | Every Linux job, Windows, macOS and npm 10.9. No Node 22.13 floor (newest Node already ran on the PR) and no coverage report. Each SHA has its own concurrency group, so a burst of merges does not cancel pending runs |
+| nightly, `workflow_dispatch`, release | Everything: every Linux job, `extended.yml` (Node 22.13, Windows, macOS), npm 10.9's packed install and the coverage report |
 
 **Switching the PR tier.** `ci.yml`'s `PR_TIER` picks the tier for PRs and the queue: `light` by
 default, or the `CI_PR_TIER` repository variable (Settings → Secrets and variables → Actions →
@@ -257,7 +259,7 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 | Workflow | Jobs |
 |---|---|
 | `ci.yml` | `changes` (the scope), `lint, typecheck and docs` (`biome ci`, the build, typecheck, the schema check and both docs checks), `unit and plan (1/4 … 4/4)` (the newest Node that `engines` allows, in four `--test-shard`s, since a 2-vCPU runner runs one test file at a time; the first also runs the other packages' tests, where sandbox-docker's container tests skip), `features (fake)`, `docker (…)` with `REEVAL_TEST_REQUIRE_DOCKER=1` (reeval's Docker tier in five legs, split by `--test-name-pattern` and `--test-skip-pattern` on one regex so no test falls between them, and sandbox-docker's suite), `studio` (with the browser test), `engine coverage` (100% of the engine's files), `packed install (npm 11)` (uploads the packed tarball, then the pack test and `npm publish --dry-run`) and `(npm 10.9)`, `extended` (calls `extended.yml`), `coverage` (below) and `ci` (the gate) |
-| `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `unit and plan (node 22.13, 1/4 … 4/4)`, `windows (unit 1/6 … 6/6, tiers, packed)` and `macos` |
+| `extended.yml` | Called by `ci.yml` on `main`, nightly, on demand, on release and for `ci:full`: `windows (unit 1/6 … 6/6, tiers, packed)`, `macos (unit, tiers, packed)` in parallel, and `unit and plan (node 22.13, 1/4 … 4/4)` except on ordinary `main` pushes |
 | `ci-full.yml` | On a PR labelled `ci:full`: `ci.yml`, unscoped, as `full / …` |
 | `commits.yml` | `conventional commits`: the PR title and every commit in the PR; in the merge queue, every commit the merge group adds to `main` (the squash commits, whose subjects are the PR titles) |
 | `real.yml` | The real-agent tier, nightly, on demand and on PRs labelled `real-agents` (this repository's branches only, never a fork's). A missing `CURSOR_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` secret fails the rows that need it, naming the variable (the gate annotates it too): `contract (pinned)` (the harness contract, the real-tier fixtures on Cursor such as `harness/cursor-web-fetch`, the check that `@cursor/sdk` still declares the stored-conversation fields the Cursor harness recovers web calls from (`scripts/drift/cursor-sdk-shape.mjs`), and the e2e CLI suite), `contract (latest)` (the version-drift leg: the same but the e2e, after `scripts/drift/latest-images.sh` swaps the newest `agy`, `@cursor/sdk`, OpenCode, Goose, pi and Codex into the images (Claude Code stays pinned), then, whatever the contract did, checks whether the newest Claude Code adapter still needs reeval's patch (`scripts/drift/claude-code-patch.mjs`) and re-runs the OpenCode provider probe against the newest `@opencode/cli` (`scripts/drift/opencode-providers.mjs`), both key-free; any change to a CLI's output format, the stored conversation, behaviour or the OpenCode provider table fails it, the last with a diff; not on PRs) and `real agents (Cursor)` (examples/hello's smoke profile; not on PRs). One run at a time, one leg after another |
@@ -265,10 +267,10 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 | `release.yml` | release-please on `main`; on a release, `ci.yml` on the release commit, then publishing to npm |
 
 - **Windows and macOS** (in `extended.yml`, so not on PRs without `ci:full`) run `scripts/ci-os.sh`: the unit and plan files (in six shards on
-  Windows), then `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
+  Windows; one job on macOS), `tiers` (typecheck, schema check, lint, the fake-tier fixtures, the studio and
   its browser test, the other packages) and `packed` (the pack test, then `reeval init` → `reeval run` →
   `reeval doctor` → `reeval studio build` in a fresh project from the tarball, and `reeval doctor`'s Docker
-  fix). There's no Docker tier there: GitHub's Windows runners have Windows containers only (reeval's
+  fix) as parallel jobs. There's no Docker tier there: GitHub's Windows runners have Windows containers only (reeval's
   sandboxes are Linux containers) and its macOS runners have no Docker. Tests that need POSIX
   signals skip on Windows with a reason (`noSignals` in `test/helpers.ts`). Anything reeval writes
   or prints uses posix paths (`relativeFile`), and host commands go through
@@ -279,8 +281,9 @@ skipped, which passes. So the required set holds on either tier; rename or add j
 - Each test job runs `pnpm build` first, since the tests run `dist/`. The Docker jobs cache
   every harness's sandbox image (`.github/actions/sandbox-images`) keyed on the adapter
   versions and the build context.
-- **Coverage** (off PRs and the queue): the `unit` (newest Node), `features`, `docker` and `studio`
-  jobs run their tests with `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
+- **Coverage** (nightly, `workflow_dispatch` and release; off PRs, the queue and ordinary `main`
+  pushes): the `unit` (newest Node), `features`, `docker` and `studio` jobs run their tests with
+  `NODE_V8_COVERAGE` and upload it; the `coverage` job merges it, uploads the HTML report
   (`coverage-report`) and writes the summary and the feature × tier matrix to the job summary.
   It's report-only, so it doesn't fail on a low number.
 - **Merge with squash,** so the PR title (checked by `commits.yml`) is the commit release-please

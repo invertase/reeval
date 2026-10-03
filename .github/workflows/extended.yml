@@ -1,15 +1,21 @@
-# ci.yml's full-run legs, which PRs skip unless labelled ci:full: the unit and plan files on the
-# engines floor (Node 22.13), and every tier that needs no Docker on Windows and macOS, through
-# scripts/ci-os.sh. ci.yml calls this on main, nightly, on demand, on release and for ci:full, and
+# ci.yml's full-run legs, which PRs skip unless labelled ci:full: Windows and macOS through
+# scripts/ci-os.sh, and (when `floor` is true) the unit and plan files on the engines floor
+# (Node 22.13). ci.yml calls this on main, nightly, on demand, on release and for ci:full, and
 # its `ci` check fails when any of these fails. No concurrency group: the caller's applies.
 #
 # The Docker tier runs on Linux only: GitHub's Windows runners have Windows containers only, while
 # reeval's sandboxes are Linux containers (on Windows, Docker Desktop on WSL 2), and its macOS runners
-# have no Docker. Windows starts processes slowly, so its unit files run in six shards.
+# have no Docker. Windows starts processes slowly, so its unit files run in six shards. macOS
+# splits the same way so unit, tiers and packed overlap.
 name: extended
 
 on:
   workflow_call:
+    inputs:
+      floor:
+        description: Run the Node 22.13 unit floor (off ordinary main pushes)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -17,6 +23,7 @@ permissions:
 jobs:
   unit-floor:
     name: unit and plan (node 22.13, ${{ matrix.shard }})
+    if: inputs.floor
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -71,15 +78,18 @@ jobs:
       - run: scripts/ci-os.sh ${{ matrix.part }}
 
   macos:
-    name: macos
+    name: macos (${{ matrix.part }})
     runs-on: macos-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [unit, tiers, packed]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: ./.github/actions/setup
       - run: pnpm build
-      - run: echo "::notice title=No Docker tier on macOS::GitHub's macOS runners have no Docker. The docker jobs run the Docker tier on Linux."
-      - run: scripts/ci-os.sh unit
-      - run: scripts/ci-os.sh tiers
-      - run: scripts/ci-os.sh packed
+      - if: matrix.part == 'tiers'
+        run: echo "::notice title=No Docker tier on macOS::GitHub's macOS runners have no Docker. The docker jobs run the Docker tier on Linux."
+      - run: scripts/ci-os.sh ${{ matrix.part }}

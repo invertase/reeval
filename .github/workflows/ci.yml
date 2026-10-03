@@ -6,13 +6,13 @@
 #   light  lint, the build, typecheck and docs, and the unit and plan files in four shards, on every
 #          code change; each heavier job only when the files it tests change (the `changes` job).
 #   full   every Linux tier on every code change, as before the light tier.
-# `main`, the nightly run, workflow_dispatch, release.yml's call and a PR labelled `ci:full`
-# (ci-full.yml) run everything, unscoped: also extended.yml (the Node 22.13 floor, Windows and
-# macOS), npm 10.9's packed install and the coverage report.
+# `main` runs the Linux tiers plus Windows, macOS and npm 10.9. The Node 22.13 floor and the
+# coverage report run on nightly, workflow_dispatch, release.yml's call and a PR labelled
+# `ci:full` (ci-full.yml): newest Node already ran on the PR, and coverage is report-only.
 #
-# Coverage runs on full runs only: the test jobs collect V8 coverage from every process they start
-# (NODE_V8_COVERAGE, set after the build), and the coverage job merges it into one report. It's
-# report-only: no threshold.
+# Coverage (nightly, dispatch, release): the test jobs collect V8 coverage from every process
+# they start (NODE_V8_COVERAGE, set after the build), and the coverage job merges it. Report-only:
+# no threshold.
 name: ci
 
 on:
@@ -36,28 +36,31 @@ env:
 
 concurrency:
   # github.workflow is the caller's when release.yml or ci-full.yml calls this, so those runs don't
-  # share a group with this workflow's own run and can't be replaced by the next push's. A merge
-  # group has no PR number; its github.ref (refs/heads/gh-readonly-queue/main/pr-…) is unique per
-  # entry.
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # Superseded PR pushes are cancelled; every commit on main and every queue entry gets a full run.
-  cancel-in-progress: ${{ github.event_name != 'merge_group' && github.ref != 'refs/heads/main' }}
+  # share a group with this workflow's own run and can't be replaced by the next push's. PRs share
+  # a group so a newer push replaces the last. Main, nightly and the queue key on the SHA: GitHub
+  # cancels queued runs in a group even when cancel-in-progress is false, and a burst of merges
+  # used to drop every intermediate main run (only the first in-flight and the last SHA finished).
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Which jobs this run needs. Off PRs and the queue, and with the ci:full label, all of them
-  # (`full`: also extended.yml and npm 10.9; `coverage` off PRs and the queue). Otherwise from the
-  # files changed against the base (the merge group's base in the queue). Docs-only changes
-  # (docs/, docs.json, root-level *.md, .agents/, issue templates) need only `checks`, which always
-  # runs. Any other change needs `unit` unless it's only in packages/studio-web. On the light tier,
-  # the rest follow their own paths, and a change to CI, the lockfile or the workspace needs every
-  # job; on the full tier, every code change needs every job.
+  # (`full`: also extended.yml and npm 10.9). Coverage is nightly, dispatch and release only.
+  # Otherwise from the files changed against the base (the merge group's base in the queue).
+  # Docs-only changes (docs/, docs.json, root-level *.md, .agents/, issue templates) need only
+  # `checks`, which always runs. Any other change needs `unit` unless it's only in
+  # packages/studio-web. On the light tier, the rest follow their own paths, and a change to CI,
+  # the lockfile or the workspace needs every job; on the full tier, every code change needs every
+  # job.
   changes:
     name: changes
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       full: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-      coverage: ${{ github.event_name != 'pull_request' && github.event_name != 'merge_group' }}
+      # Report-only; newest-Node coverage already landed on the PR. Collect on nightly, a
+      # manual run, or release.yml (github.workflow is the caller).
+      coverage: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.workflow == 'release' }}
       unit: ${{ steps.scope.outputs.unit }}
       features: ${{ steps.scope.outputs.features }}
       docker: ${{ steps.scope.outputs.docker }}
@@ -389,12 +392,15 @@ jobs:
           pnpm pack --pack-destination "$RUNNER_TEMP/dry-run"
           npm publish --dry-run --access public --tag ci "$RUNNER_TEMP"/dry-run/*.tgz
 
-  # The Node 22.13 floor, Windows and macOS.
+  # Windows and macOS on every full run. The Node 22.13 floor is nightly / dispatch /
+  # release / ci:full: every PR already ran the newest Node that engines allow.
   extended:
     name: extended
     needs: changes
     if: needs.changes.outputs.full == 'true'
     uses: ./.github/workflows/extended.yml
+    with:
+      floor: ${{ github.event_name != 'push' || github.workflow != 'ci' }}
 
   coverage:
     name: coverage
