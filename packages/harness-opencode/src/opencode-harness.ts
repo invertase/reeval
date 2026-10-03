@@ -31,7 +31,7 @@ import { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-to
 
 export const OPENCODE_HARNESS_ID = 'opencode'
 /** The `@opencode/cli` release the bootstrap installs (pinned in `opencode-install.ts`). */
-export const OPENCODE_CLI_VERSION = '2.0.21'
+export const OPENCODE_CLI_VERSION = '2.0.22'
 /** Where harness-placed skills go, under the sandbox home: OpenCode's own global directory. */
 export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
 /**
@@ -139,7 +139,7 @@ export type OpenCodeHarnessSettings = {
 }
 
 /**
- * The requests OpenCode sends the model's provider's key on (probed on 2.0.21, see
+ * The requests OpenCode sends the model's provider's key on (probed on 2.0.22, see
  * `opencode-provider-table.ts`). A gateway that enforces them refuses the key anywhere else.
  */
 export const openCodeEndpoints = (model: string, env: Record<string, string | undefined> = {}) =>

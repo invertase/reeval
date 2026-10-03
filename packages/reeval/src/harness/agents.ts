@@ -469,7 +469,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    // The requests 2.0.21 sends each provider's key on (its model, and the same model for titles),
+    // The requests 2.0.22 sends each provider's key on (its model, and the same model for titles),
     // probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
