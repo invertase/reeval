@@ -11,8 +11,8 @@ description: >
 
 reeval runs a real coding agent (Cursor, Claude Code, Antigravity, OpenCode, Goose, pi or Codex) on a task
 in a fresh Docker sandbox, then checks the result with deterministic assertions and an LLM judge.
-You write evals in TypeScript; `reeval run` runs them. The package is `reeval` (a
-placeholder name) and the CLI is `reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
+You write evals in TypeScript; `reeval run` runs them. The package and CLI are
+`reeval`. Full docs: the `docs/` folder of github.com/invertase/reeval (a docs.page
 site; its Reference tab has every option, flag and error).
 
 ## Workflow
