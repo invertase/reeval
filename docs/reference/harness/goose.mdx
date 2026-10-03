@@ -38,10 +38,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GOOGLE_GENERATIVE_AI_API_KEY` (a Gemini API key; Goose sees it as `GOOGLE_API_KEY`) |
-| Adapter | `@reeval/harness-goose` 0.1.0 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | Goose 1.52.0, from its GitHub release, checked against its sha256 |
+| Adapter | `@reeval/harness-goose` 0.1.1 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | Goose 1.53.0, from its GitHub release, checked against its sha256 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:goose-0.1.0` |
+| Image | `reeval-sandbox:goose-0.1.1` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `.config/goose/skills` in Goose's own home (below) |
 | Skills (`placement: 'workspace'`) | `.goose/skills` in the workspace |
@@ -52,7 +52,7 @@ Build its image once with `reeval image build` in a project whose config uses `g
 
 ## The key
 
-reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives it to Goose as `GOOGLE_API_KEY`; the real key never enters the container. The gateway swaps it in on one kind of request, the only one Goose 1.52.0 sends it on:
+reeval passes `GOOGLE_GENERATIVE_AI_API_KEY` to the adapter explicitly, which gives it to Goose as `GOOGLE_API_KEY`; the real key never enters the container. The gateway swaps it in on one kind of request, the only one Goose 1.53.0 sends it on:
 
 | Host | Endpoint |
 |---|---|
@@ -77,7 +77,7 @@ None are recorded: every turn's `usage` is `null`. Goose's ACP server reports it
 
 Goose runs with a private home, `~/.ai-sdk-harness/.harness-bootstrap/goose/implementation/home`, so its config and home skills live there, not in the sandbox user's `~/.config/goose`. The attempt's `context` lists them under that path. In the workspace it reads `.goose/skills`, and also `.agents/skills` and `.claude/skills`; nothing turns those off.
 
-MCP servers go in Goose's `config.yaml` as enabled extensions (`stdio`, or `streamable_http` for `http` servers; Goose has no SSE). Servers passed over ACP start disabled in 1.52.0 until the model enables them itself. Their tools are named `mcp__<server>__<tool>` in the transcript.
+MCP servers go in Goose's `config.yaml` as enabled extensions (`stdio`, or `streamable_http` for `http` servers; Goose has no SSE). Servers passed over ACP start disabled in 1.53.0 until the model enables them itself. Their tools are named `mcp__<server>__<tool>` in the transcript.
 
 ## Errors
 

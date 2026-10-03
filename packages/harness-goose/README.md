@@ -21,7 +21,7 @@ const agent = new HarnessAgent({
 
 ## How it works
 
-- **Bootstrap.** Downloads the Goose 1.52.0 release for x86_64 or aarch64 Linux, checks its
+- **Bootstrap.** Downloads the Goose 1.53.0 release for x86_64 or aarch64 Linux, checks its
   sha256, and puts `goose` in a private home under the bootstrap directory.
 - **Model.** `model` is `GOOSE_MODEL`, which Goose needs before `session/new`; each turn's model
   is then set as the ACP session's `model` config option.
@@ -30,7 +30,7 @@ const agent = new HarnessAgent({
 - **Brokering.** On a sandbox with `addRequestTransformations`, Goose gets a placeholder
   `GOOGLE_API_KEY`; the real key is swapped in on `x-goog-api-key` to
   `generativelanguage.googleapis.com` only.
-- **MCP.** Servers go in Goose's `config.yaml` as enabled extensions (`gooseConfig`): Goose 1.52.0
+- **MCP.** Servers go in Goose's `config.yaml` as enabled extensions (`gooseConfig`): Goose 1.53.0
   leaves servers from ACP `session/new` disabled until the model enables them itself.
 - **Tools.** `shell`, `write` and `edit` map to `bash`, `write` and `edit`. Any other call is named
   from Goose's `_meta.goose.toolCall`: an MCP server's as `mcp__<server>__<tool>`, Goose's own by
