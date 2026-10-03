@@ -60,40 +60,25 @@ function killTagged(sh: string, tag: string) {
 
 /**
  * Kills host processes whose cwd is the sandbox, including native `node.exe` `c.serve` starts.
- * Git Bash `pwd` is `/tmp/...` or `/d/...`; `readlink /proc/pid/cwd` for node.exe is often
- * `D:\\Users\\...\\Temp\\...`. Match both forms, and the unique `reeval-sandbox-*` name.
+ * Match only the unique `reeval-sandbox-*` folder name: Git Bash `pwd` and node.exe's
+ * `/proc/cwd` disagree (`/tmp/...` vs `D:\\Users\\...\\Temp\\...`), and an empty
+ * `"$prefix"/*` is `/*`, which SIGKILLs the Windows runner (exit 2304).
  */
 const KILL_UNDER = `cd "$1" || exit 0
 base=$(pwd -P 2>/dev/null || pwd)
-[ -n "$base" ] || exit 0
 name=\${base##*/}
 case "$name" in
-  reeval-sandbox-*) ;;
+  reeval-sandbox-?*) ;;
   *) exit 0 ;;
 esac
-win=$(pwd -W 2>/dev/null || true)
-norm() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's|\\\\|/|g'; }
-b1=$(norm "$base")
-b2=$(norm "$win")
 for f in /proc/[0-9]*/cwd; do
   t=$(readlink "$f" 2>/dev/null) || continue
-  n=$(norm "$t")
-  hit=
-  case "$n" in
-    "$b1"|"$b1"/*) hit=1 ;;
+  case "$t" in
+    *"$name"*) ;;
+    *) continue ;;
   esac
-  if [ -z "$hit" ] && [ -n "$b2" ]; then
-    case "$n" in
-      "$b2"|"$b2"/*) hit=1 ;;
-    esac
-  fi
-  if [ -z "$hit" ]; then
-    case "$n" in
-      "$name"|"$name"/*|*/"$name"|*/"$name"/*) hit=1 ;;
-    esac
-  fi
-  [ -n "$hit" ] || continue
   p=\${f#/proc/}; p=\${p%/cwd}
+  [ -n "$p" ] || continue
   kill -9 "$p" 2>/dev/null
   wp=$(tr -d '\\r\\n' < /proc/$p/winpid 2>/dev/null)
   [ -n "$wp" ] && taskkill /F /PID "$wp" >/dev/null 2>&1
