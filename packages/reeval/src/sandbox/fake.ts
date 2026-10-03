@@ -59,7 +59,8 @@ function killTagged(sh: string, tag: string) {
 }
 
 /** Kills host processes whose cwd is the sandbox, including native `node.exe` `c.serve` starts. */
-const KILL_UNDER = `base=$(cd "$1" && { pwd -P 2>/dev/null || pwd; })
+const KILL_UNDER = `base=$(cd "$1" && { pwd -P 2>/dev/null || pwd; }) || exit 0
+[ -n "$base" ] || exit 0
 for f in /proc/[0-9]*/cwd; do
   t=$(readlink "$f" 2>/dev/null) || continue
   case "$t" in
@@ -147,10 +148,15 @@ export async function createFakeSandbox(
     // An abort destroys the sandbox while the body may still be writing into it, so a later
     // call removes again instead of reusing the settled promise. Background `c.serve` / `node`
     // leftovers hold the workdir on Windows; kill them before rm, and retry while handles drop.
+    // POSIX unlinks the tree even if a process still has it as cwd, so a second destroy is just rm.
     destroy: () => {
       destroyed ??= (async () => {
-        await runSh(sh, KILL_UNDER, base)
-        await removeTree(base)
+        if (process.platform === 'win32') {
+          if (existsSync(base)) await runSh(sh, KILL_UNDER, base)
+          await removeTree(base)
+          return
+        }
+        await rm(base, { recursive: true, force: true }).catch(() => {})
       })().finally(() => {
         destroyed = undefined
       })

@@ -207,6 +207,14 @@ test('destroying the fake sandbox removes it after a leftover host process', asy
   assert.equal(existsSync(box.home), false, 'the sandbox directory is gone')
 })
 
+test('destroying an already-removed fake sandbox is a no-op', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  await box.destroy()
+  assert.equal(existsSync(box.home), false)
+  await box.destroy()
+  assert.equal(existsSync(box.home), false)
+})
+
 test("the fake agent's MCP step waits for a slow server's reply, and reports a crash", async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
   // Event-driven, not timed: the server marks that the call arrived, then answers only once the
