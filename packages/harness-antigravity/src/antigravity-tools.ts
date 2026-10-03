@@ -18,8 +18,9 @@ const native = (
 
 /*
  * Names and parameter keys were captured from Antigravity CLI 1.2.11's `stream-json` output
- * (`step_update.tool_info`). The CLI reports only some parameters (never file contents), so the
- * common-name schemas keep everything else optional.
+ * (`step_update.tool_info`). CLI 1.2.16 added `list_plugin_accounts` and `search_marketplace`.
+ * The CLI reports only some parameters (never file contents), so the common-name schemas keep
+ * everything else optional.
  */
 export const ANTIGRAVITY_BUILTIN_TOOLS = {
   bash: {
@@ -96,6 +97,8 @@ export const ANTIGRAVITY_BUILTIN_TOOLS = {
   browser_subagent: native('browser_subagent', 'Browser Subagent'),
   notebook_edit: native('notebook_edit', 'Edit Notebook', 'edit'),
   ask_question: native('ask_question', 'Ask Question'),
+  list_plugin_accounts: native('list_plugin_accounts', 'List Plugin Accounts'),
+  search_marketplace: native('search_marketplace', 'Search Marketplace'),
 } as const satisfies Record<string, BuiltinTool>
 
 export type AntigravityBuiltinTools = typeof ANTIGRAVITY_BUILTIN_TOOLS

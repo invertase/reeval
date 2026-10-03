@@ -50,7 +50,7 @@ export function resolveAntigravityCredentials(
 
 /**
  * The model-request endpoint the CLI sends the key on: `POST /v1beta/models/<model>:
- * streamGenerateContent` (checked with CLI 1.2.14; it also calls a lite model for titles and
+ * streamGenerateContent` (checked with CLI 1.2.16; it also calls a lite model for titles and
  * checkpoints). Pass it as a gateway's endpoint allowlist to refuse the key anywhere else.
  */
 export function antigravityEndpoints(baseUrl: string = GEMINI_API_URL) {
