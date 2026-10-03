@@ -1,11 +1,11 @@
 import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 
 /** The CLI build the bootstrap installs. Bump it with both checksums from the release. */
-export const ANTIGRAVITY_CLI_VERSION = '1.2.14'
+export const ANTIGRAVITY_CLI_VERSION = '1.2.16'
 
 export const ANTIGRAVITY_CLI_SHA256 = {
-  x64: '68cf4d221cb62e0289245439d3d37f599bdc8e0c4e1e3dae03f326463a0c26dc',
-  arm64: '3b40c3baab245b43a41007c1db64df51f5f162b6059fcc4a4504731f2689d301',
+  x64: 'd4247430e04cebdbe1ca93d9ccb483cd2f3daeb4cdb0ace5a71cd130e0bdab84',
+  arm64: 'a6d269d2764e5636ab2bcda73b78c587fe9d00ead767aa3974574229585ee0d3',
 } as const
 
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */

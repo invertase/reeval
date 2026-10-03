@@ -142,6 +142,18 @@ describe('tools', () => {
       input: { DirectoryPath: '/w' },
       dynamic: false,
     })
+    assert.deepEqual(projectToolCall('list_plugin_accounts', {}), {
+      toolName: 'list_plugin_accounts',
+      nativeName: 'list_plugin_accounts',
+      input: {},
+      dynamic: false,
+    })
+    assert.deepEqual(projectToolCall('search_marketplace', { Query: 'x' }), {
+      toolName: 'search_marketplace',
+      nativeName: 'search_marketplace',
+      input: { Query: 'x' },
+      dynamic: false,
+    })
     assert.equal(projectToolCall('manage_task', {}).dynamic, true)
   })
 
