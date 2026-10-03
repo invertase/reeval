@@ -195,6 +195,26 @@ test('an aborted fake sandbox command stops, with everything it started', async 
   }
 })
 
+test('destroying the fake sandbox removes it after a leftover host process', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  const started = await box.exec(
+    'node -e "setInterval(() => {}, 60000)" >/tmp/reeval-bg.log 2>&1 & echo $!',
+  )
+  const pid = started.stdout.trim().split(/\s+/).at(-1) ?? ''
+  assert.match(pid, /^\d+$/)
+  await sleep(100)
+  await box.destroy()
+  assert.equal(existsSync(box.home), false, 'the sandbox directory is gone')
+})
+
+test('destroying an already-removed fake sandbox is a no-op', async () => {
+  const box = await createFakeSandbox({ kind: 'fake' })
+  await box.destroy()
+  assert.equal(existsSync(box.home), false)
+  await box.destroy()
+  assert.equal(existsSync(box.home), false)
+})
+
 test("the fake agent's MCP step waits for a slow server's reply, and reports a crash", async () => {
   const box = await createFakeSandbox({ kind: 'fake' })
   // Event-driven, not timed: the server marks that the call arrived, then answers only once the

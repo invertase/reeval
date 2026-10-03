@@ -55,10 +55,63 @@ done`
  * `sleep 30` would run on, holding the command's pipes and working directory.
  */
 function killTagged(sh: string, tag: string) {
-  spawn(sh, ['-c', KILL_TAGGED, 'sh', tag], {
-    stdio: 'ignore',
-    windowsHide: true,
-  }).on('error', () => {})
+  void runSh(sh, KILL_TAGGED, tag)
+}
+
+/**
+ * Kills host processes whose cwd is the sandbox, including native `node.exe` `c.serve` starts.
+ * Match only the unique `reeval-sandbox-*` folder name: Git Bash `pwd` and node.exe's
+ * `/proc/cwd` disagree (`/tmp/...` vs `D:\\Users\\...\\Temp\\...`), and an empty
+ * `"$prefix"/*` is `/*`, which SIGKILLs the Windows runner (exit 2304).
+ */
+const KILL_UNDER = `cd "$1" || exit 0
+base=$(pwd -P 2>/dev/null || pwd)
+name=\${base##*/}
+case "$name" in
+  reeval-sandbox-?*) ;;
+  *) exit 0 ;;
+esac
+for f in /proc/[0-9]*/cwd; do
+  t=$(readlink "$f" 2>/dev/null) || continue
+  case "$t" in
+    *"$name"*) ;;
+    *) continue ;;
+  esac
+  p=\${f#/proc/}; p=\${p%/cwd}
+  [ -n "$p" ] || continue
+  kill -9 "$p" 2>/dev/null
+  wp=$(tr -d '\\r\\n' < /proc/$p/winpid 2>/dev/null)
+  [ -n "$wp" ] && taskkill /F /PID "$wp" >/dev/null 2>&1
+done`
+
+function runSh(sh: string, script: string, arg: string): Promise<void> {
+  return new Promise((resolve) => {
+    const child = spawn(sh, ['-c', script, 'sh', arg], {
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    const done = () => resolve()
+    child.on('error', done)
+    child.on('close', done)
+  })
+}
+
+/** Windows refuses to delete a directory a live process still has as cwd; retry after kills. */
+async function removeTree(path: string): Promise<void> {
+  const deadline = Date.now() + 8_000
+  for (;;) {
+    try {
+      await rm(path, { recursive: true, force: true })
+      if (!existsSync(path)) return
+    } catch {
+      /* EBUSY while a handle is released */
+    }
+    if (Date.now() >= deadline) {
+      await rm(path, { recursive: true, force: true }).catch(() => {})
+      return
+    }
+    await new Promise((r) => setTimeout(r, 50))
+  }
 }
 
 /**
@@ -104,13 +157,20 @@ export async function createFakeSandbox(
       await writeFile(target, content)
     },
     // An abort destroys the sandbox while the body may still be writing into it, so a later
-    // call removes again instead of reusing the settled promise.
+    // call removes again instead of reusing the settled promise. Background `c.serve` / `node`
+    // leftovers hold the workdir on Windows; kill them before rm, and retry while handles drop.
+    // POSIX unlinks the tree even if a process still has it as cwd, so a second destroy is just rm.
     destroy: () => {
-      destroyed ??= rm(base, { recursive: true, force: true })
-        .catch(() => {})
-        .finally(() => {
-          destroyed = undefined
-        })
+      destroyed ??= (async () => {
+        if (process.platform === 'win32') {
+          if (existsSync(base)) await runSh(sh, KILL_UNDER, base)
+          await removeTree(base)
+          return
+        }
+        await rm(base, { recursive: true, force: true }).catch(() => {})
+      })().finally(() => {
+        destroyed = undefined
+      })
       return destroyed
     },
   }
