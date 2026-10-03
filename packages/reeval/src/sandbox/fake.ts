@@ -55,10 +55,51 @@ done`
  * `sleep 30` would run on, holding the command's pipes and working directory.
  */
 function killTagged(sh: string, tag: string) {
-  spawn(sh, ['-c', KILL_TAGGED, 'sh', tag], {
-    stdio: 'ignore',
-    windowsHide: true,
-  }).on('error', () => {})
+  void runSh(sh, KILL_TAGGED, tag)
+}
+
+/** Kills host processes whose cwd is the sandbox, including native `node.exe` `c.serve` starts. */
+const KILL_UNDER = `base=$(cd "$1" && { pwd -P 2>/dev/null || pwd; })
+for f in /proc/[0-9]*/cwd; do
+  t=$(readlink "$f" 2>/dev/null) || continue
+  case "$t" in
+    "$base"|"$base"/*)
+      p=\${f#/proc/}; p=\${p%/cwd}
+      kill -9 "$p" 2>/dev/null
+      wp=$(tr -d '\\r\\n' < /proc/$p/winpid 2>/dev/null)
+      [ -n "$wp" ] && taskkill /F /PID "$wp" >/dev/null 2>&1
+      ;;
+  esac
+done`
+
+function runSh(sh: string, script: string, arg: string): Promise<void> {
+  return new Promise((resolve) => {
+    const child = spawn(sh, ['-c', script, 'sh', arg], {
+      stdio: 'ignore',
+      windowsHide: true,
+    })
+    const done = () => resolve()
+    child.on('error', done)
+    child.on('close', done)
+  })
+}
+
+/** Windows refuses to delete a directory a live process still has as cwd; retry after kills. */
+async function removeTree(path: string): Promise<void> {
+  const deadline = Date.now() + 8_000
+  for (;;) {
+    try {
+      await rm(path, { recursive: true, force: true })
+      if (!existsSync(path)) return
+    } catch {
+      /* EBUSY while a handle is released */
+    }
+    if (Date.now() >= deadline) {
+      await rm(path, { recursive: true, force: true }).catch(() => {})
+      return
+    }
+    await new Promise((r) => setTimeout(r, 50))
+  }
 }
 
 /**
@@ -104,13 +145,15 @@ export async function createFakeSandbox(
       await writeFile(target, content)
     },
     // An abort destroys the sandbox while the body may still be writing into it, so a later
-    // call removes again instead of reusing the settled promise.
+    // call removes again instead of reusing the settled promise. Background `c.serve` / `node`
+    // leftovers hold the workdir on Windows; kill them before rm, and retry while handles drop.
     destroy: () => {
-      destroyed ??= rm(base, { recursive: true, force: true })
-        .catch(() => {})
-        .finally(() => {
-          destroyed = undefined
-        })
+      destroyed ??= (async () => {
+        await runSh(sh, KILL_UNDER, base)
+        await removeTree(base)
+      })().finally(() => {
+        destroyed = undefined
+      })
       return destroyed
     },
   }

@@ -52,7 +52,13 @@ export async function startBackground(
     async kill() {
       if (killed) return
       killed = true
-      await box.exec(`kill ${pid} 2>/dev/null || true`, { signal: a.signal }).catch(() => {})
+      // Do not pass a.signal: after a timeout it is already aborted, and run() would skip the kill.
+      // SIGTERM does not stop native node.exe started from Git Bash; SIGKILL plus the Win32 pid does.
+      const win =
+        a.spec.sandbox.kind === 'fake' && process.platform === 'win32'
+          ? `; wp=$(tr -d '\\r\\n' < /proc/${pid}/winpid 2>/dev/null) && taskkill /F /PID "$wp" >/dev/null 2>&1 || true`
+          : ''
+      await box.exec(`kill -9 ${pid} 2>/dev/null || true${win}`).catch(() => {})
     },
   }
   a.backgrounds.push(handle)
