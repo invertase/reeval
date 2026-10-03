@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/invertase/reeval/compare/v0.6.0...v0.6.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **sandbox:** remove leftover fake sandboxes on Windows after c.serve ([#226](https://github.com/invertase/reeval/issues/226)) ([aec1f47](https://github.com/invertase/reeval/commit/aec1f4797cd03427328fe59ce81fcca3233abc99))
+
 ## [0.6.0](https://github.com/invertase/reeval/compare/v0.5.0...v0.6.0) (2026-10-02)
 
 
