@@ -398,9 +398,9 @@ npx @docs.page/cli check        # links, assets and frontmatter
 shows `{/* */}` as text and rejects `<!-- -->`): the CLI help per command (from `reeval --help`), the `reeval query` views and
 tables (from `reeval query --schema --json`), exit codes, the option keys and where each is accepted,
 and the record's fields (from `src/history/types.ts` and `src/types.ts` and their doc comments).
-It also writes the harness feature matrix (`scripts/harness-matrix.mjs`) into the Harnesses guide
-and `README.md`'s `readme:harness-matrix` block, from the harness catalog, each adapter's tool
-catalog and the contract rows in `test/support/harnesses.ts`, and fails when those disagree.
+It also writes the harness feature matrix (`scripts/harness-matrix.mjs`) into the Harnesses
+guide, from the harness catalog, each adapter's tool catalog and the contract rows in
+`test/support/harnesses.ts`, and fails when those disagree. It does not write to `README.md`.
 `--check` also fails when an option key, `REEVAL_*` variable or exit code in the code isn't named on
 its Reference page, when `reeval --help` misses a flag the CLI parses, when a sidebar link has no page
 (or a page no link), or when a page installs or imports the package by name. CI runs it in the `docs` job.

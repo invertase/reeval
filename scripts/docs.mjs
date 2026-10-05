@@ -8,8 +8,8 @@
 // Generated blocks sit between `[//]: # (generated:<name>)` and `[//]: # (/generated:<name>)` in
 // the .mdx files; everything outside them is hand-written. The CLI help and the query schema
 // come from the built CLI, so run `pnpm build` first. The flags come from src/cli-spec.ts, which
-// is why the scripts run node with --experimental-strip-types. README.md has generated blocks too,
-// named `readme:<name>`, rendered with links to the docs' files.
+// is why the scripts run node with --experimental-strip-types. README.md is hand-written; this
+// script does not write to it.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -351,7 +351,6 @@ async function blocks() {
   const harness = await harnessFacts()
   problems.push(...harness.problems)
   out.set('harness-matrix', renderMatrix(harness.facts, { href: (p) => `/${p}`, text: mdxText }))
-  out.set('readme:harness-matrix', renderMatrix(harness.facts, { href: (p) => `./docs/${p}.mdx` }))
   out.set('harness-layout', renderLayout(harness.facts))
   out.set('opencode-providers', renderOpenCodeProviders())
   out.set('opencode-refused', renderOpenCodeRefused())
@@ -380,7 +379,7 @@ const used = new Set()
 const marker =
   /(\[\/\/\]: # \(generated:([\w:-]+)\))\n(?:[\s\S]*?\n)?(\[\/\/\]: # \(\/generated:\2\))/g
 
-for (const file of [...mdxFiles(), join(root, 'README.md')]) {
+for (const file of mdxFiles()) {
   const text = read(file)
   const next = text.replace(marker, (all, open, name, close) => {
     used.add(name)
