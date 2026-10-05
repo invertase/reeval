@@ -202,7 +202,10 @@ describe('assert() and expect matchers', () => {
     throws(() => transcriptAssert(t).calledSkill('bar'), /expected skill-like calls matching bar/)
     assert.equal(matchers.toHaveCalledSkill(t, 'foo').pass, true)
     assert.equal(matchers.toHaveCalledSkill(t, 'bar').pass, false)
-    assert.throws(() => transcriptAssert({}), /expects a turn from c.send\(\), or c/)
+    assert.throws(
+      () => transcriptAssert({} as never).calledSkill('foo'),
+      /expects a turn from c.send\(\), or c/,
+    )
   })
 
   test('reads every turn on c', () => {
@@ -210,7 +213,10 @@ describe('assert() and expect matchers', () => {
     const second = turnOf([tool('mcp__stamp__house_stamp', {})])
     const c = { turns: [first, second] }
     transcriptAssert(c).calledSkill('foo').calledTool('mcp__stamp__house_stamp')
-    throws(() => transcriptAssert(first).calledTool('mcp__stamp__house_stamp'), /got none/)
+    throws(
+      () => transcriptAssert(first).calledTool('mcp__stamp__house_stamp'),
+      /expected tool calls matching mcp__stamp__house_stamp, got \["read"\]/,
+    )
   })
 })
 
