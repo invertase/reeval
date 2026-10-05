@@ -1196,6 +1196,25 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'assert',
+    area: 'Judges and matchers',
+    name: '`assert(c | turn)` transcript assertions: `calledSkill`, `calledTool`, `ran`, `edited`, `searched`, `fetched`',
+    fixtures: [
+      'assert/called-skill',
+      'assert/called-skill-path',
+      'assert/called-tool-mcp',
+      'assert/ran',
+      'assert/edited',
+    ],
+    tests: [
+      'reeval/test/assert.test.ts › passes on a dedicated load tool',
+      'reeval/test/assert.test.ts › matches type: tool only',
+      "reeval/test/assert.test.ts › calledSkill('contract-probe')",
+      "reeval/test/assert.test.ts › calledTool('mcp__stamp__house_stamp')",
+      'reeval/test/query.test.ts › skill_reads counts a dedicated skill load',
+    ],
+  },
+  {
     id: 'expect',
     area: 'Judges and matchers',
     name: "Vitest's `expect` from `@vitest/expect`: matchers, diffs, `soft`, `poll`, `assertions`",

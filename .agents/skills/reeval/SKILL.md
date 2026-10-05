@@ -107,7 +107,7 @@ with `--config reeval.fake.config.ts`.
 
 ```ts
 // evals/hello.eval.ts
-import { evaluate, expect, group } from 'reeval'
+import { assert, evaluate, expect, group } from 'reeval'
 
 group('hello', () => {
   evaluate('creates hello.txt', async (c) => {
@@ -150,6 +150,14 @@ group('hello', () => {
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
   Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
+- Transcript assertions (sync, no `await`): `assert(turn | c).calledSkill(name)`,
+  `calledTool(name | RegExp, input?)`, `ran(command?)`, `edited(path?)`,
+  `searched(query?)`, `fetched(url?)`. `.not` negates. Same predicates on
+  `expect` as `toHaveCalledSkill` / `toHaveCalledTool` / `toHaveRun` /
+  `toHaveEdited`. `calledSkill` is opened or loaded (a `skill` / `load_skill`
+  tool, or a Read/`sed` of `skills/<name>/`), not "followed". MCP is
+  `calledTool('mcp__<server>__<tool>')` after the normaliser, on every harness.
+  Use `edited` / `searched`, not `calledTool('edit')` or `'webSearch'`.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw

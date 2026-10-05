@@ -42,6 +42,10 @@ declare module '@vitest/expect' {
     toSucceed(): Promise<void>
     toHaveSearched(query?: RegExp | string): void
     toHaveFetched(url?: RegExp | string): void
+    toHaveCalledSkill(name: string): void
+    toHaveCalledTool(name: string | RegExp, input?: string | RegExp | Record<string, unknown>): void
+    toHaveRun(command?: RegExp | string): void
+    toHaveEdited(path?: RegExp | string): void
     toPass(): void
   }
 }

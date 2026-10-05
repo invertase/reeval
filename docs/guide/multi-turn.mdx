@@ -87,7 +87,12 @@ const edits = second.transcript.filter((e) => e.type === 'file-edit')
 expect(edits.length).toBeGreaterThan(0)
 ```
 
-`turn.transcript` is that turn's events, in order: `prompt`, `reasoning`, `text`, `tool`, `file-edit`, `web-search`, `web-fetch`, `error` and `turn-end`. Use it to check how the agent worked: which tools it called and how many files it touched. For web calls there are matchers: `expect(turn).toHaveSearched(/node/i)` and `expect(turn).toHaveFetched('nodejs.org')`. [Transcripts](/reference/transcript) lists every field.
+`turn.transcript` is that turn's events, in order: `prompt`, `reasoning`, `text`,
+`tool`, `file-edit`, `web-search`, `web-fetch`, `error` and `turn-end`. Use
+`assert(turn).calledSkill`, `calledTool`, `ran`, `edited`, `searched` and
+`fetched` for the events reeval already normalises, or filter the array
+yourself. [Matchers](/reference/matchers#assert) and
+[Transcripts](/reference/transcript) list every field.
 
 ## Judge an earlier turn
 

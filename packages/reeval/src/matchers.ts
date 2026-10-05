@@ -1,55 +1,17 @@
-import type {
-  ExecResult,
-  JudgeFailure,
-  TranscriptEvent,
-  Turn,
-  Verdict,
-  WebEventType,
-} from './types.ts'
+import {
+  calledSkill,
+  calledTool,
+  edited,
+  fetched,
+  ran,
+  searched,
+  type ToolInputMatch,
+} from './assert.ts'
+import type { ExecResult, JudgeFailure, Verdict } from './types.ts'
+
+export { HarnessCapabilityError } from './assert.ts'
 
 type Result = { pass: boolean; message: () => string }
-
-/** A check the turn's harness can't answer either way, e.g. a web fetch it never reports. */
-export class HarnessCapabilityError extends Error {
-  override name = 'HarnessCapabilityError'
-}
-
-const isTurn = (value: unknown): value is Pick<Turn, 'transcript' | 'unreported'> =>
-  typeof value === 'object' &&
-  value !== null &&
-  Array.isArray((value as Turn).transcript) &&
-  Array.isArray((value as Turn).unreported)
-
-const matches = (value: string, pattern: RegExp | string | undefined) =>
-  pattern === undefined ||
-  (typeof pattern === 'string' ? value.includes(pattern) : pattern.test(value))
-
-/** Passes when the turn has a `type` event whose `field` matches; refuses when it can't know. */
-function webEvent(
-  matcher: string,
-  actual: unknown,
-  type: WebEventType,
-  field: (e: TranscriptEvent) => string,
-  pattern: RegExp | string | undefined,
-): Result {
-  if (!isTurn(actual)) throw new TypeError(`${matcher}() expects a turn from c.send()`)
-  const what = type === 'web-search' ? 'web searches' : 'web fetches'
-  if (actual.unreported.includes(type)) {
-    throw new HarnessCapabilityError(
-      `${matcher}() can't check this turn: its harness doesn't report ${what} ('${type}' is in turn.unreported), so the agent may have made them with no event. Check the reply or files instead, or use a harness that reports them.`,
-    )
-  }
-  const seen = actual.transcript.filter((e) => e.type === type).map(field)
-  const pass = seen.some((v) => matches(v, pattern))
-  const target = pattern === undefined ? '' : ` matching ${pattern}`
-  return {
-    pass,
-    message: () =>
-      pass
-        ? `expected no ${what}${target}, got ${JSON.stringify(seen)}`
-        : `expected ${what}${target}, got ${seen.length ? JSON.stringify(seen) : 'none'}`,
-  }
-}
 
 /** The last `lines` lines, and at most `chars` characters of them: one line can be megabytes. */
 const tail = (s: string, lines = 20, chars = 2000) => {
@@ -92,17 +54,27 @@ export const matchers = {
   },
 
   toHaveSearched(actual: unknown, query?: RegExp | string): Result {
-    return webEvent(
-      'toHaveSearched',
-      actual,
-      'web-search',
-      (e) => ('query' in e ? e.query : ''),
-      query,
-    )
+    return searched(actual, query)
   },
 
   toHaveFetched(actual: unknown, url?: RegExp | string): Result {
-    return webEvent('toHaveFetched', actual, 'web-fetch', (e) => ('url' in e ? e.url : ''), url)
+    return fetched(actual, url)
+  },
+
+  toHaveCalledSkill(actual: unknown, name: string): Result {
+    return calledSkill(actual, name)
+  },
+
+  toHaveCalledTool(actual: unknown, name: string | RegExp, input?: ToolInputMatch): Result {
+    return calledTool(actual, name, input)
+  },
+
+  toHaveRun(actual: unknown, command?: RegExp | string): Result {
+    return ran(actual, command)
+  },
+
+  toHaveEdited(actual: unknown, path?: RegExp | string): Result {
+    return edited(actual, path)
   },
 
   toPass(this: { isNot?: boolean } | undefined, actual: unknown): Result {

@@ -106,7 +106,38 @@ Summary
   An unawaited matcher fails its eval even when its check passes, so a missing `await` shows up as a failure that tells you to add it.
 </Warning>
 
-`toPass()` is synchronous: await `c.judge`, not the `expect`. So are `toHaveSearched(query?)` and `toHaveFetched(url?)`, which check a turn's web calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`, `toMatch`…) work too.
+`toPass()` is synchronous: await `c.judge`, not the `expect`. So are
+`toHaveSearched(query?)` and `toHaveFetched(url?)`, which check a turn's web
+calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`,
+`toMatch`…) work too.
+
+## Check the transcript
+
+`assert(turn)` or `assert(c)` reads the events already in memory. No `await`.
+`.not` negates. The same checks hang on `expect` as `toHaveCalledSkill` and
+friends.
+
+```ts title="evals/activation.eval.ts"
+import { assert, evaluate, expect } from '{{ pkg }}'
+
+evaluate('uses the house skill and stamps', async (c) => {
+  const turn = await c.send(
+    'Use the house-greeting skill, then call house_stamp.',
+  )
+
+  assert(turn).calledSkill('house-greeting')
+  assert(turn).calledTool('mcp__stamp__house_stamp')
+  assert(turn).edited('greet.js')
+  await expect(c).toHaveFile('greet.js', /Ahoy/)
+})
+```
+
+`calledSkill` means the agent opened or loaded that skill (a `skill` /
+`load_skill` tool, or a Read/`sed` of `skills/<name>/`). It does not mean the
+agent followed it. MCP is `calledTool('mcp__<server>__<tool>')` after the
+normaliser, on every harness. Use `edited` and `searched`, not
+`calledTool('edit')` or `calledTool('webSearch')`. [Matchers](/reference/matchers)
+lists every method.
 
 ## Ask the judge
 
@@ -123,6 +154,7 @@ The judge answers a yes/no question about the latest turn. It sees the task, the
 |---|---|---|
 | `c.exec`, `toSucceed` | Something a command can decide | `node --test`, a build, a script's output |
 | `toHaveFile`, `c.readFile` | In the files | A config key, an import, no `require(` |
+| `assert(turn).calledSkill` / `calledTool` / `ran` / `edited` | In the transcript | A skill load, an MCP call, a shell command, a file edit |
 | `c.judge` | A matter of judgement | "Does the message describe the change?" |
 
 Prefer checks: they're exact, free and never change their mind. Use the judge for what no command can decide, and keep each question to one thing.

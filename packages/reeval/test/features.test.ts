@@ -1389,6 +1389,36 @@ export const features: Feature[] = [
       ]),
   },
   {
+    dir: 'assert/called-skill',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /expected skill-like calls matching other/,
+  },
+  {
+    dir: 'assert/called-skill-path',
+    tiers: ['fake'],
+    env: 'skilled',
+    canary: /expected skill-like calls matching other/,
+  },
+  {
+    dir: 'assert/called-tool-mcp',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /expected tool calls matching mcp__stamp__other/,
+  },
+  {
+    dir: 'assert/ran',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /expected shell commands matching \/deploy\//,
+  },
+  {
+    dir: 'assert/edited',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /expected file edits matching other\.txt/,
+  },
+  {
     dir: 'judge/files',
     tiers: ['fake'],
     env: 'readme-app',
