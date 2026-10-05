@@ -134,10 +134,11 @@ evaluate('uses the house skill and stamps', async (c) => {
 
 `calledSkill` means the agent opened or loaded that skill (a `skill` /
 `load_skill` tool, or a Read/`sed` of `skills/<name>/`). It does not mean the
-agent followed it. MCP is `calledTool('mcp__<server>__<tool>')` after the
-normaliser, on every harness. Use `edited` and `searched`, not
-`calledTool('edit')` or `calledTool('webSearch')`. [Matchers](/reference/matchers)
-lists every method.
+agent followed it. MCP is `calledTool('mcp__<server>__<tool>')` after adapters
+and the normaliser, on every harness (stdio; `mcp.sse` is refused on Goose,
+OpenCode, pi and Codex). Use `edited` and `searched`, not
+`calledTool('edit')` or `calledTool('webSearch')`.
+[Matchers](/reference/matchers) lists every method.
 
 ## Ask the judge
 

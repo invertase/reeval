@@ -156,8 +156,9 @@ group('hello', () => {
   `expect` as `toHaveCalledSkill` / `toHaveCalledTool` / `toHaveRun` /
   `toHaveEdited`. `calledSkill` is opened or loaded (a `skill` / `load_skill`
   tool, or a Read/`sed` of `skills/<name>/`), not "followed". MCP is
-  `calledTool('mcp__<server>__<tool>')` after the normaliser, on every harness.
-  Use `edited` / `searched`, not `calledTool('edit')` or `'webSearch'`.
+  `calledTool('mcp__<server>__<tool>')` after adapters and the normaliser, on
+  every harness (stdio; Goose, OpenCode, pi and Codex refuse `mcp.sse`). Use
+  `edited` / `searched`, not `calledTool('edit')` or `'webSearch'`.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw
