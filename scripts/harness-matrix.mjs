@@ -1,4 +1,4 @@
-// The harness feature matrix in README.md and the docs' Harnesses guide, from the code: the
+// The harness feature matrix in the docs' Harnesses guide, from the code: the
 // harness catalog (src/harness/agents.ts), each adapter's builtin tool catalog, and the rows of
 // the harness contract (test/support/harnesses.ts), whose real runs check tokens and the served
 // model. Every note is tied to the fact it explains, so it goes when that fact changes.
