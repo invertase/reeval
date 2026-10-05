@@ -224,7 +224,7 @@ importers:
         specifier: workspace:0.1.1
         version: link:../harness-goose
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.3
+        specifier: workspace:0.2.4
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.3
@@ -263,7 +263,7 @@ importers:
         specifier: workspace:0.1.1
         version: link:../harness-goose
       '@reeval/harness-opencode':
-        specifier: workspace:0.2.3
+        specifier: workspace:0.2.4
         version: link:../harness-opencode
       '@reeval/harness-pi':
         specifier: workspace:0.2.3

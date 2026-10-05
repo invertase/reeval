@@ -42,10 +42,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
-| Adapter | `@reeval/harness-opencode` 0.2.3 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.0.22 |
+| Adapter | `@reeval/harness-opencode` 0.2.4 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | `@opencode/cli` 2.0.23 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.3` |
+| Image | `reeval-sandbox:opencode-0.2.4` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
@@ -187,7 +187,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 
 ## Supported providers
 
-Every provider OpenCode 2.0.22 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.0.23 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -246,6 +246,7 @@ Every provider OpenCode 2.0.22 knows whose key it sends in a header on known hos
 | Echo | `echo/…` | `ECHO_API_KEY` | `Authorization: Bearer` | `echo.tracerml.ai` |
 | Eden AI | `edenai/…` | `EDENAI_API_KEY` | `Authorization: Bearer` | `api.edenai.run` |
 | EmpirioLabs AI | `empiriolabs/…` | `EMPIRIOLABS_API_KEY` | `Authorization: Bearer` | `api.empiriolabs.ai` |
+| engy | `engy/…` | `ENGY_API_KEY` | `Authorization: Bearer` | `api.engy.ai` |
 | evroc | `evroc/…` | `EVROC_API_KEY` | `Authorization: Bearer` | `models.think.evroc.com` |
 | FastRouter | `fastrouter/…` | `FASTROUTER_API_KEY` | `Authorization: Bearer` | `go.fastrouter.ai` |
 | Fireworks AI | `fireworks-ai/…` | `FIREWORKS_API_KEY` | `Authorization: Bearer` | `api.fireworks.ai` |
@@ -314,7 +315,7 @@ Every provider OpenCode 2.0.22 knows whose key it sends in a header on known hos
 | NovitaAI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
 | Nvidia | `nvidia/…` | `NVIDIA_API_KEY` | `Authorization: Bearer` | `integrate.api.nvidia.com` |
 | OCI Generative AI | `oci/…` | `OCI_GENAI_API_KEY` | `Authorization: Bearer` | `inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
-| Ofox | `ofox/…` | `OFOX_API_KEY` | `x-api-key`, `Authorization: Bearer`, `x-goog-api-key` | `api.ofox.ai` |
+| Ofox | `ofox/…` | `OFOX_API_KEY` | `Authorization: Bearer`, `x-api-key`, `x-goog-api-key` | `api.ofox.ai` |
 | Ollama Cloud | `ollama-cloud/…` | `OLLAMA_API_KEY` | `Authorization: Bearer` | `ollama.com` |
 | OpenAI | `openai/…` | `OPENAI_API_KEY` | `Authorization: Bearer` | `api.openai.com` |
 | OpenCode Console | `opencode/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-api-key`, `x-goog-api-key` | `opencode.ai` |
@@ -353,7 +354,7 @@ Every provider OpenCode 2.0.22 knows whose key it sends in a header on known hos
 | Subconscious | `subconscious/…` | `SUBCONSCIOUS_API_KEY` | `x-api-key` | `api.subconscious.dev` |
 | submodel | `submodel/…` | `SUBMODEL_INSTAGEN_ACCESS_KEY` | `Authorization: Bearer` | `llm.submodel.ai` |
 | Synthetic | `synthetic/…` | `SYNTHETIC_API_KEY` | `Authorization: Bearer` | `api.synthetic.new` |
-| Tempr | `tempr/…` | `TEMPR_API_KEY` | `Authorization: Bearer` | `api.temprhq.io` |
+| Tempr Gateway | `tempr/…` | `TEMPR_API_KEY` | `Authorization: Bearer` | `api.temprhq.io` |
 | Tencent Coding Plan (China) | `tencent-coding-plan/…` | `TENCENT_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `api.lkeap.cloud.tencent.com` |
 | Tencent Token Plan | `tencent-token-plan/…` | `TENCENT_TOKEN_PLAN_API_KEY` | `Authorization: Bearer` | `api.lkeap.cloud.tencent.com` |
 | Tencent TokenHub | `tencent-tokenhub/…` | `TENCENT_TOKENHUB_API_KEY` | `Authorization: Bearer` | `tokenhub.tencentmaas.com` |
@@ -374,7 +375,7 @@ Every provider OpenCode 2.0.22 knows whose key it sends in a header on known hos
 | Venice AI | `venice/…` | `VENICE_API_KEY` | `Authorization: Bearer` | `api.venice.ai` |
 | Vercel AI Gateway | `vercel/…` | `AI_GATEWAY_API_KEY` | `Authorization: Bearer` | `ai-gateway.vercel.sh` |
 | Vispark | `vispark/…` | `VISPARK_LAB_API_KEY` | `Authorization: Bearer` | `api.lab.vispark.in` |
-| Vivgrid | `vivgrid/…` | `VIVGRID_API_KEY` | `x-api-key`, `Authorization: Bearer` | `api.vivgrid.com` |
+| Vivgrid | `vivgrid/…` | `VIVGRID_API_KEY` | `Authorization: Bearer`, `x-api-key` | `api.vivgrid.com` |
 | Volcengine Ark | `volcengine/…` | `ARK_API_KEY` | `Authorization: Bearer` | `ark.cn-beijing.volces.com` |
 | Volcengine Ark Coding Plan | `volcengine-coding-plan/…` | `ARK_CODING_PLAN_API_KEY` | `Authorization: Bearer` | `ark.cn-beijing.volces.com` |
 | Vultr | `vultr/…` | `VULTR_API_KEY` | `Authorization: Bearer` | `api.vultrinference.com` |
