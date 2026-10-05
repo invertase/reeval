@@ -13,7 +13,7 @@ export const HARNESS_PACKAGES: Record<
   antigravity: { name: '@reeval/harness-antigravity', version: '0.1.2' },
   opencode: { name: '@reeval/harness-opencode', version: '0.2.3' },
   goose: { name: '@reeval/harness-goose', version: '0.1.1' },
-  pi: { name: '@reeval/harness-pi', version: '0.2.2' },
+  pi: { name: '@reeval/harness-pi', version: '0.2.3' },
   codex: { name: '@reeval/harness-codex', version: '0.1.3' },
 }
 
