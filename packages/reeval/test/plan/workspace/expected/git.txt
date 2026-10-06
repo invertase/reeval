@@ -7,4 +7,4 @@ evals/workspace.eval.ts › a variant swaps the starting code  fake/pinned/docke
 evals/workspace.eval.ts › no workspace                       fake/-/docker       control       gated    ×1
 excluded: —
 image docker · 4 evals
-  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.3  (reeval's image: built when missing or when its base changed)

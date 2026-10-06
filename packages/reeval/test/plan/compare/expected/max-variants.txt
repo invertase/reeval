@@ -15,4 +15,4 @@ evals/limited.eval.ts › pinned        a/base/docker     control          ungat
                                       b/terse/docker    variant terse    gated    ×1
 excluded: —
 image docker · 3 evals
-  base  reeval-sandbox:cursor-0.1.2  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.3  (reeval's image: built when missing or when its base changed)
