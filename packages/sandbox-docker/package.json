@@ -43,7 +43,7 @@
     "@reeval/harness-cursor-sdk": "workspace:0.1.2",
     "@reeval/harness-goose": "workspace:0.1.1",
     "@reeval/harness-opencode": "workspace:0.2.5",
-    "@reeval/harness-pi": "workspace:0.2.3",
+    "@reeval/harness-pi": "workspace:0.2.4",
     "ws": "8.22.0",
     "zod": "4.6.5"
   }
