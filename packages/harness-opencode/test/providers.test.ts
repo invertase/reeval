@@ -103,7 +103,7 @@ test("the main providers' keys go where OpenCode 2.0.18 was seen to send them", 
     vercel: {
       env: 'AI_GATEWAY_API_KEY',
       headers: bearer,
-      posts: ['ai-gateway.vercel.sh/v3/ai/language-model'],
+      posts: ['ai-gateway.vercel.sh/v1/messages'],
     },
   }
   for (const [id, want] of Object.entries(expected)) assert.deepEqual(where(id), want, id)

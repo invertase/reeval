@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-opencode",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "An AI SDK harness adapter for OpenCode 2 on any provider whose key a gateway can broker, over its ACP server (opencode acp)",
   "license": "Apache-2.0",

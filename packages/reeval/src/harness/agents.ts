@@ -336,7 +336,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
   },
-  // CLI 1.2.16 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
+  // CLI 1.2.17 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
   // path its docs give.
   antigravity: {
     rulesFile: 'AGENTS.md',
@@ -442,9 +442,9 @@ export const AGENTS: Record<AgentKind, Agent> = {
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
-    // The only request CLI 1.2.16 sends the key on (its main model, and a lite one for titles).
+    // The only request CLI 1.2.17 sends the key on (its main model, and a lite one for titles).
     endpoints: GEMINI_ENDPOINTS,
-    // CLI 1.2.16 opens both in every session. Neither `enableTelemetry: false` nor any other
+    // CLI 1.2.17 opens both in every session. Neither `enableTelemetry: false` nor any other
     // setting or variable in the binary stops them (checked on 1.2.11 behind a logging proxy).
     expectedBlocked: {
       hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
@@ -469,7 +469,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    // The requests 2.0.23 sends each provider's key on (its model, and the same model for titles),
+    // The requests 2.0.24 sends each provider's key on (its model, and the same model for titles),
     // probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,

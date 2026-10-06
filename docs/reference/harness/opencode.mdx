@@ -42,10 +42,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
-| Adapter | `@reeval/harness-opencode` 0.2.4 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.0.23 |
+| Adapter | `@reeval/harness-opencode` 0.2.5 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | `@opencode/cli` 2.0.24 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.4` |
+| Image | `reeval-sandbox:opencode-0.2.5` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
@@ -187,7 +187,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 
 ## Supported providers
 
-Every provider OpenCode 2.0.23 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.0.24 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
