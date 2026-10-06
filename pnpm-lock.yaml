@@ -163,8 +163,8 @@ importers:
         specifier: 2.1.3
         version: 2.1.3(hono@4.13.11)
       '@modelcontextprotocol/server':
-        specifier: 2.3.0
-        version: 2.3.0
+        specifier: 2.3.1
+        version: 2.3.1
       '@vitest/expect':
         specifier: 5.0.2
         version: 5.0.2
@@ -209,8 +209,8 @@ importers:
         specifier: 1.0.142
         version: 1.0.142(patch_hash=8edc594fd5014010df069f0a2e9bd9904b71fb2336676c2197c4e57d2ca9724c)(zod@4.6.5)
       '@modelcontextprotocol/client':
-        specifier: 2.3.0
-        version: 2.3.0
+        specifier: 2.3.1
+        version: 2.3.1
       '@reeval/harness-antigravity':
         specifier: workspace:0.1.2
         version: link:../harness-antigravity
@@ -486,16 +486,16 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@modelcontextprotocol/client@2.3.0':
-    resolution: {integrity: sha512-pbHtGj6EeFCHngFE8gtNPaKrsj8Mb1IMw45BLcaPML/m2WTxI7pyYmeNQvaux88Lw8BSO5r7nyRbUyIkICmGrg==}
+  '@modelcontextprotocol/client@2.3.1':
+    resolution: {integrity: sha512-mIGZXpHsjnZ6lD+gD/WCMpR5k8yVQQ8nNFH1N0Srf7AvnwTUMYD6pvTY8ng2+He5FfV7YMZLmrjL7cLa/cc3dQ==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/core@2.3.0':
-    resolution: {integrity: sha512-09BHFaNVBe5pB2AhzCfLj0cqmsKLERvZQ4FblzP90UMGLaXVqdZPByFjURwsUYCmxonUW2yAwgTTvle+8O2/8w==}
+  '@modelcontextprotocol/core@2.3.1':
+    resolution: {integrity: sha512-laVmIhPGpWi7rG9q+0UigblRN0Hws/Yjlb6qLFtVqryXVLkc4h+yN8z731POD2LnAGQlFe7/tXhUm7Bi0YB91g==}
     engines: {node: '>=20'}
 
-  '@modelcontextprotocol/server@2.3.0':
-    resolution: {integrity: sha512-+6b0LdsQLmHsvS7J6sQJ4weTpzUn61fU1JKS+321/+IyDYoHW5CR2Tgqcs6GgAAQvlesCo6yX3xttgmx+XGtJw==}
+  '@modelcontextprotocol/server@2.3.1':
+    resolution: {integrity: sha512-e59MfWuSssj6DoQ96JCTqdW1AXT5/XtnTl0WWd6MU1Ka434fFUGGosCLJbGNySDhHGvxQWoRWK137FXYFkYNWw==}
     engines: {node: '>=20'}
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
@@ -2910,9 +2910,9 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@modelcontextprotocol/client@2.3.0':
+  '@modelcontextprotocol/client@2.3.1':
     dependencies:
-      '@modelcontextprotocol/core': 2.3.0
+      '@modelcontextprotocol/core': 2.3.1
       cross-spawn: 7.0.6
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
@@ -2920,13 +2920,13 @@ snapshots:
       pkce-challenge: 5.0.1
       zod: 4.6.5
 
-  '@modelcontextprotocol/core@2.3.0':
+  '@modelcontextprotocol/core@2.3.1':
     dependencies:
       zod: 4.6.5
 
-  '@modelcontextprotocol/server@2.3.0':
+  '@modelcontextprotocol/server@2.3.1':
     dependencies:
-      '@modelcontextprotocol/core': 2.3.0
+      '@modelcontextprotocol/core': 2.3.1
       zod: 4.6.5
 
   '@napi-rs/lzma-linux-x64-gnu@1.5.1':
