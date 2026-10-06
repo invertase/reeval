@@ -30,7 +30,7 @@ outside. Every user-facing feature or option lands with its fixtures in the same
   file set and the content, say) gets two fixtures.
 - The canary makes the same check with one deliberate mistake, so it fails with an assertion.
   That proves the check can fail. The oracle matches its message, so it also fails for the right
-  reason.
+  reason. Comment the current mistake, not what used to fail.
 - Then add a row to `features` in `features.test.ts`:
   - `dir` and `tiers`;
   - `env`: the environment's name, since attempt ids are `fake/<env>/<sandbox>#1`;
