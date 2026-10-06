@@ -89,9 +89,10 @@ expect(edits.length).toBeGreaterThan(0)
 
 `turn.transcript` is that turn's events, in order: `prompt`, `reasoning`, `text`,
 `tool`, `file-edit`, `web-search`, `web-fetch`, `error` and `turn-end`. Use
-`assert(turn).calledSkill`, `calledTool`, `ran`, `edited`, `searched` and
-`fetched` for the events reeval already normalises, or filter the array
-yourself. [Matchers](/reference/matchers#assert) and
+`expect(turn).toHaveCalledSkill`, `toHaveCalledTool`, `toHaveRun`,
+`toHaveEdited`, `toHaveSearched` and `toHaveFetched` for the events reeval
+already normalises, or filter the array yourself.
+[Matchers](/reference/matchers#transcript-matchers) and
 [Transcripts](/reference/transcript) list every field.
 
 ## Judge an earlier turn

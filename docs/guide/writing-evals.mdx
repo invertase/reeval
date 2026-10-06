@@ -113,32 +113,31 @@ calls. The usual `expect` [matchers](/reference/matchers) (`toBe`, `toContain`,
 
 ## Check the transcript
 
-`assert(turn)` or `assert(c)` reads the events already in memory. No `await`.
-`.not` negates. The same checks hang on `expect` as `toHaveCalledSkill` and
-friends.
+`expect(turn)` or `expect(c)` reads the events already in memory. No `await`.
+`.not` and `expect.soft` are Vitest's.
 
 ```ts title="evals/activation.eval.ts"
-import { assert, evaluate, expect } from '{{ pkg }}'
+import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('uses the house skill and stamps', async (c) => {
   const turn = await c.send(
     'Use the house-greeting skill, then call house_stamp.',
   )
 
-  assert(turn).calledSkill('house-greeting')
-  assert(turn).calledTool('mcp__stamp__house_stamp')
-  assert(turn).edited('greet.js')
+  expect(turn).toHaveCalledSkill('house-greeting')
+  expect(turn).toHaveCalledTool('mcp__stamp__house_stamp')
+  expect(turn).toHaveEdited('greet.js')
   await expect(c).toHaveFile('greet.js', /Ahoy/)
 })
 ```
 
-`calledSkill` means the agent opened or loaded that skill (a `skill` /
+`toHaveCalledSkill` means the agent opened or loaded that skill (a `skill` /
 `load_skill` tool, or a Read/`sed` of `skills/<name>/`). It does not mean the
-agent followed it. MCP is `calledTool('mcp__<server>__<tool>')` after adapters
-and the normaliser, on every harness (stdio; `mcp.sse` is refused on Goose,
-OpenCode, pi and Codex). Use `edited` and `searched`, not
-`calledTool('edit')` or `calledTool('webSearch')`.
-[Matchers](/reference/matchers) lists every method.
+agent followed it. MCP is `toHaveCalledTool('mcp__<server>__<tool>')` after
+adapters and the normaliser, on every harness (stdio; `mcp.sse` is refused on
+Goose, OpenCode, pi and Codex). Use `toHaveEdited` and `toHaveSearched`, not
+`toHaveCalledTool('edit')` or `toHaveCalledTool('webSearch')`.
+[Matchers](/reference/matchers#transcript-matchers) lists every method.
 
 ## Ask the judge
 
@@ -155,7 +154,7 @@ The judge answers a yes/no question about the latest turn. It sees the task, the
 |---|---|---|
 | `c.exec`, `toSucceed` | Something a command can decide | `node --test`, a build, a script's output |
 | `toHaveFile`, `c.readFile` | In the files | A config key, an import, no `require(` |
-| `assert(turn).calledSkill` / `calledTool` / `ran` / `edited` | In the transcript | A skill load, an MCP call, a shell command, a file edit |
+| `toHaveCalledSkill` / `toHaveCalledTool` / `toHaveRun` / `toHaveEdited` | In the transcript | A skill load, an MCP call, a shell command, a file edit |
 | `c.judge` | A matter of judgement | "Does the message describe the change?" |
 
 Prefer checks: they're exact, free and never change their mind. Use the judge for what no command can decide, and keep each question to one thing.

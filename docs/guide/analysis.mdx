@@ -102,7 +102,7 @@ antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  house-greeting  
 a path under `skills/<name>/`, or a dedicated `skill` / `load_skill` call. It's
 null, with `reads` at 0, when the agent never opened it. A variant that passes
 without reading its skill didn't pass because of it. The same signals are
-`assert(turn).calledSkill(name)` during the eval.
+`expect(turn).toHaveCalledSkill(name)` during the eval.
 
 ## Count tokens
 

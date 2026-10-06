@@ -1,7 +1,6 @@
 // `reeval`: the core authoring API. Harnesses, sandboxes and judges live in subpaths.
 
-export type { TranscriptAssert } from './assert.ts'
-export { assert, HarnessCapabilityError } from './assert.ts'
+export { HarnessCapabilityError } from './assert.ts'
 export { defineConfig } from './config.ts'
 export { DEFAULT_EGRESS_ALLOW } from './egress.ts'
 export { expect } from './engine/expect.ts'

@@ -133,7 +133,7 @@ function webEvent(
 }
 
 export function calledSkill(actual: unknown, name: string): Result {
-  const { transcript } = transcriptSubject(actual, 'calledSkill')
+  const { transcript } = transcriptSubject(actual, 'toHaveCalledSkill')
   const calls = toolsOf(transcript)
   const seen = calls.flatMap((e) => {
     const label = skillLike(e)
@@ -150,7 +150,7 @@ export function calledSkill(actual: unknown, name: string): Result {
 }
 
 export function calledTool(actual: unknown, name: string | RegExp, input?: ToolInputMatch): Result {
-  const { transcript } = transcriptSubject(actual, 'calledTool')
+  const { transcript } = transcriptSubject(actual, 'toHaveCalledTool')
   const calls = toolsOf(transcript)
   const inputPart = input === undefined ? '' : ` with input ${formatInput(input)}`
   const seen = calls.map((e) =>
@@ -172,7 +172,7 @@ function formatInput(input: ToolInputMatch): string {
 }
 
 export function ran(actual: unknown, command?: RegExp | string): Result {
-  const { transcript } = transcriptSubject(actual, 'ran')
+  const { transcript } = transcriptSubject(actual, 'toHaveRun')
   const shells = toolsOf(transcript).filter((e) => SHELL_TOOLS.has(e.tool))
   const seen = shells.map(commandOf)
   const pass = shells.some((e) => matches(commandOf(e), command))
@@ -186,7 +186,7 @@ export function ran(actual: unknown, command?: RegExp | string): Result {
 }
 
 export function edited(actual: unknown, path?: RegExp | string): Result {
-  const { transcript } = transcriptSubject(actual, 'edited')
+  const { transcript } = transcriptSubject(actual, 'toHaveEdited')
   const edits = editsOf(transcript)
   const calls = toolsOf(transcript)
   const fileHit = edits.some((e) => matches(e.path, path))
@@ -219,49 +219,4 @@ export function searched(actual: unknown, query?: RegExp | string): Result {
 
 export function fetched(actual: unknown, url?: RegExp | string): Result {
   return webEvent('toHaveFetched', actual, 'web-fetch', (e) => ('url' in e ? e.url : ''), url)
-}
-
-function fail(result: Result, negated: boolean): void {
-  if (negated ? result.pass : !result.pass) {
-    const error = new Error(result.message())
-    error.name = 'AssertionError'
-    throw error
-  }
-}
-
-export type TranscriptAssert = {
-  calledSkill(name: string): TranscriptAssert
-  calledTool(name: string | RegExp, input?: ToolInputMatch): TranscriptAssert
-  ran(command?: RegExp | string): TranscriptAssert
-  edited(path?: RegExp | string): TranscriptAssert
-  searched(query?: RegExp | string): TranscriptAssert
-  fetched(url?: RegExp | string): TranscriptAssert
-  readonly not: TranscriptAssert
-}
-
-/**
- * Synchronous checks on a turn's transcript, or on every turn on `c` so far.
- * `.not` negates. MCP tools are `mcp__<server>__<tool>` after the normaliser.
- */
-export function assert(actual: Turn | AttemptContext): TranscriptAssert {
-  return createAssert(actual, false)
-}
-
-function createAssert(actual: unknown, negated: boolean): TranscriptAssert {
-  const run = (result: Result) => {
-    fail(result, negated)
-    return api
-  }
-  const api: TranscriptAssert = {
-    calledSkill: (name) => run(calledSkill(actual, name)),
-    calledTool: (name, input) => run(calledTool(actual, name, input)),
-    ran: (command) => run(ran(actual, command)),
-    edited: (path) => run(edited(actual, path)),
-    searched: (query) => run(searched(actual, query)),
-    fetched: (url) => run(fetched(actual, url)),
-    get not() {
-      return createAssert(actual, !negated)
-    },
-  }
-  return api
 }

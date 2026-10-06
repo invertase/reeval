@@ -135,8 +135,8 @@ export type TurnData = {
   model: string | null
   /**
    * Event types the harness couldn't report for this turn: the agent may have searched or
-   * fetched with no event in `transcript`. `toHaveSearched()` / `assert().searched()` and
-   * `toHaveFetched()` / `assert().fetched()` refuse such a turn. Usually `[]`; a Cursor turn
+   * fetched with no event in `transcript`. `toHaveSearched()` and `toHaveFetched()` refuse
+   * such a turn. Usually `[]`; a Cursor turn
    * whose web calls the adapter couldn't recover (its SDK drops them from the stream) is
    * `['web-search', 'web-fetch']`.
    */

@@ -1,24 +1,19 @@
-// Transcript assertions: pass, fail, .not, expect matchers, and every replay skill
-// capture through today's normaliser.
+// Transcript matchers: pass, fail, .not, and every replay skill capture through
+// today's normaliser.
 import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import {
-  calledSkill,
-  calledTool,
-  edited,
-  fetched,
-  ran,
-  searched,
-  assert as transcriptAssert,
-} from '../src/assert.ts'
+import { calledSkill, calledTool, edited, fetched, ran, searched } from '../src/assert.ts'
+import { expect, extendExpect } from '../src/engine/expect.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { toolCalls } from '../src/history/db.ts'
 import { toolTarget } from '../src/history/tool-target.ts'
 import { matchers } from '../src/matchers.ts'
 import type { TranscriptEvent } from '../src/types.ts'
 import { testDir } from './support/fixture.ts'
+
+extendExpect(matchers)
 
 const at = { ts: '2026-10-05T12:00:00.000Z', atMs: 0, durationMs: 1 }
 
@@ -59,8 +54,7 @@ const turnOf = (
 
 const throws = (fn: () => void, message: RegExp | string) => {
   assert.throws(fn, (e: Error) => {
-    assert.equal(e.name, 'AssertionError')
-    if (typeof message === 'string') assert.equal(e.message, message)
+    if (typeof message === 'string') assert.ok(e.message.includes(message), e.message)
     else assert.match(e.message, message)
     return true
   })
@@ -94,14 +88,14 @@ describe('calledSkill', () => {
     )
   })
 
-  test('assert().not.calledSkill is the activation negative', () => {
+  test('expect().not.toHaveCalledSkill is the activation negative', () => {
     const t = turnOf([tool('skill', { id: 'foo' })])
-    transcriptAssert(t).calledSkill('foo')
+    expect(t).toHaveCalledSkill('foo')
     throws(
-      () => transcriptAssert(t).not.calledSkill('foo'),
+      () => expect(t).not.toHaveCalledSkill('foo'),
       /expected no skill-like calls matching foo/,
     )
-    transcriptAssert(t).not.calledSkill('bar')
+    expect(t).not.toHaveCalledSkill('bar')
   })
 })
 
@@ -180,7 +174,7 @@ describe('searched and fetched', () => {
     assert.equal(searched(web, /RFC 2606/).pass, true)
     const c = { turns: [web] }
     assert.equal(fetched(c, 'httpbin.org').pass, true)
-    transcriptAssert(c).fetched('httpbin.org')
+    expect(c).toHaveFetched('httpbin.org')
   })
 
   test("refuse a turn whose harness doesn't report them", () => {
@@ -195,16 +189,16 @@ describe('searched and fetched', () => {
   })
 })
 
-describe('assert() and expect matchers', () => {
-  test('throw AssertionError, and the expect wrappers share the predicates', () => {
+describe('expect matchers', () => {
+  test('throw, and the expect wrappers share the predicates', () => {
     const t = turnOf([tool('skill', { id: 'foo' })])
-    transcriptAssert(t).calledSkill('foo')
-    throws(() => transcriptAssert(t).calledSkill('bar'), /expected skill-like calls matching bar/)
+    expect(t).toHaveCalledSkill('foo')
+    throws(() => expect(t).toHaveCalledSkill('bar'), /expected skill-like calls matching bar/)
     assert.equal(matchers.toHaveCalledSkill(t, 'foo').pass, true)
     assert.equal(matchers.toHaveCalledSkill(t, 'bar').pass, false)
     assert.throws(
-      () => transcriptAssert({} as never).calledSkill('foo'),
-      /expects a turn from c.send\(\), or c/,
+      () => expect({} as never).toHaveCalledSkill('foo'),
+      /toHaveCalledSkill\(\) expects a turn from c.send\(\), or c/,
     )
   })
 
@@ -212,9 +206,10 @@ describe('assert() and expect matchers', () => {
     const first = turnOf([tool('read', { path: '~/.agents/skills/foo/SKILL.md' })])
     const second = turnOf([tool('mcp__stamp__house_stamp', {})])
     const c = { turns: [first, second] }
-    transcriptAssert(c).calledSkill('foo').calledTool('mcp__stamp__house_stamp')
+    expect(c).toHaveCalledSkill('foo')
+    expect(c).toHaveCalledTool('mcp__stamp__house_stamp')
     throws(
-      () => transcriptAssert(first).calledTool('mcp__stamp__house_stamp'),
+      () => expect(first).toHaveCalledTool('mcp__stamp__house_stamp'),
       /expected tool calls matching mcp__stamp__house_stamp, got \["read"\]/,
     )
   })
@@ -262,27 +257,26 @@ describe('replay captures through normaliseStream', () => {
   })
 
   for (const harness of harnesses) {
-    test(`${harness} skill.raw.jsonl: calledSkill('contract-probe')`, () => {
+    test(`${harness} skill.raw.jsonl: toHaveCalledSkill('contract-probe')`, () => {
       const t = replay(harness, 'skill.raw.jsonl')
-      transcriptAssert(t).calledSkill('contract-probe')
-      throws(() => transcriptAssert(t).calledSkill('no-such-skill'), /expected skill-like calls/)
+      expect(t).toHaveCalledSkill('contract-probe')
+      throws(() => expect(t).toHaveCalledSkill('no-such-skill'), /expected skill-like calls/)
     })
 
-    test(`${harness} mcp.raw.jsonl: calledTool('mcp__stamp__house_stamp')`, () => {
+    test(`${harness} mcp.raw.jsonl: toHaveCalledTool('mcp__stamp__house_stamp')`, () => {
       const t = replay(harness, 'mcp.raw.jsonl')
-      transcriptAssert(t).calledTool('mcp__stamp__house_stamp')
+      expect(t).toHaveCalledTool('mcp__stamp__house_stamp')
       throws(
-        () => transcriptAssert(t).calledTool('mcp__stamp__other'),
+        () => expect(t).toHaveCalledTool('mcp__stamp__other'),
         /expected tool calls matching mcp__stamp__other/,
       )
     })
 
-    test(`${harness} edit-and-run.raw.jsonl: ran and edited`, () => {
+    test(`${harness} edit-and-run.raw.jsonl: toHaveRun and toHaveEdited`, () => {
       const t = replay(harness, 'edit-and-run.raw.jsonl')
-      transcriptAssert(t)
-        .ran(/contract/)
-        .edited('notes.txt')
-      throws(() => transcriptAssert(t).ran(/deploy/), /expected shell commands matching \/deploy\//)
+      expect(t).toHaveRun(/contract/)
+      expect(t).toHaveEdited('notes.txt')
+      throws(() => expect(t).toHaveRun(/deploy/), /expected shell commands matching \/deploy\//)
     })
   }
 })

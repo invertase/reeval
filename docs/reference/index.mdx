@@ -6,7 +6,7 @@ description: Every option, helper, CLI command and flag, exit code and file form
 The full detail on every reeval feature, one topic per page. Parts of it (the CLI help, the `reeval query` views, the option keys, exit codes and the record's fields) are generated from the code, so they match the version you run.
 
 ```ts
-import { assert, defineConfig, evaluate, expect, group } from '{{ pkg }}'
+import { defineConfig, evaluate, expect, group } from '{{ pkg }}'
 import { cursor } from '{{ pkg }}/harness'
 import { docker } from '{{ pkg }}/sandbox'
 ```
@@ -15,7 +15,7 @@ import { docker } from '{{ pkg }}/sandbox'
 
 | Import | What it exports |
 |---|---|
-| `{{ pkg }}` | `defineConfig`, `defineEnvironment`, `group`, `evaluate`, `assert`, `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, `HarnessCapabilityError`, and the types |
+| `{{ pkg }}` | `defineConfig`, `defineEnvironment`, `group`, `evaluate`, `expect`, `DEFAULT_EGRESS_ALLOW`, `DEFAULT_SKILL_EXCLUDE`, `HarnessCapabilityError`, and the types |
 | `{{ pkg }}/harness` | `cursor`, `claudeCode`, `antigravity`, `opencode`, `goose`, `pi`, `codex`, `fakeHarness` |
 | `{{ pkg }}/sandbox` | `docker`, `fakeSandbox` |
 | `{{ pkg }}/judge` | `fakeJudge`, `fakeAnalysis`, `DEFAULT_THRESHOLD`, `RECOMMENDED_JUDGE_MODEL` |

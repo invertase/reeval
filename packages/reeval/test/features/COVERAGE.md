@@ -128,7 +128,7 @@
 | A failed judge call returns `verdict: "error"`, is recorded, and fails the attempt after its body, so the judges and checks after it still run | ✓ 2 | — | — | — | — |
 | A real judge model call | ✓ 1 | — | — | — | — |
 | `toHaveFile`, `toSucceed` and `toPass` | ✓ 5 | — | — | — | — |
-| `assert(c | turn)` transcript assertions: `calledSkill`, `calledTool`, `ran`, `edited`, `searched`, `fetched` | ✓ 5 | — | ● 5 | — | — |
+| `expect(c | turn)` transcript matchers: `toHaveCalledSkill`, `toHaveCalledTool`, `toHaveRun`, `toHaveEdited`, `toHaveSearched`, `toHaveFetched` | ✓ 5 | — | ● 5 | — | — |
 | Vitest's `expect` from `@vitest/expect`: matchers, diffs, `soft`, `poll`, `assertions` | ✓ 4 | — | — | — | — |
 
 ## Records and studio
