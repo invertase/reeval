@@ -16,7 +16,7 @@ export function requireSandbox(a: Attempt, who = 'c.exec() or c.readFile()'): Sa
 }
 
 /**
- * Phase 4, checks: `c.exec` runs with the checks' variables and secrets, each run recorded and
+ * `c.exec` runs with the checks' variables and secrets, each run recorded and
  * timed; `c.readFile` reads the sandbox as is.
  */
 export function createChecks(a: Attempt) {

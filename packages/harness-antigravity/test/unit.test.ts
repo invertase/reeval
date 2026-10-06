@@ -165,7 +165,7 @@ describe('tools', () => {
       input: p,
       dynamic: true,
     })
-    // Without both names there's nothing to name it by: the native tool, as before.
+    // Without both names there's nothing to name it by: fall back to the native tool.
     assert.equal(projectToolCall('call_mcp_tool', { ToolName: 'x' }).toolName, 'call_mcp_tool')
   })
 })

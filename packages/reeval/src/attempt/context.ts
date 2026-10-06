@@ -101,9 +101,8 @@ export function contextTaker(a: Attempt) {
 const ADAPTER_HOME = /^~\/\.ai-sdk-harness\/\.harness-bootstrap\/[^/]+\/implementation\/home\//
 
 /**
- * Files the Cursor CLI (the ACP harness `cursor()` used before the Cursor SDK) rewrote every
- * session, under `~/` or its adapter's home. Records from then still list them; no current
- * harness writes session state into the paths reeval records.
+ * Paths older Cursor records may still list as context. No current harness writes session
+ * state into the paths reeval records.
  */
 const RETIRED_RUNTIME_STATE = new Set([
   '.cursor/cli-config.json',

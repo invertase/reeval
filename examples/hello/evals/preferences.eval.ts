@@ -1,6 +1,6 @@
 import { evaluate, expect } from 'reeval'
 
-// Ports of the Lightsage recommendation evals. Each judge question is unchanged.
+// Each judge question is unchanged.
 
 evaluate('recommends a framework for a production AI feature', async (c) => {
   await c.send(

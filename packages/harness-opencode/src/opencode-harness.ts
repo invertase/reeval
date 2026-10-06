@@ -36,7 +36,7 @@ export const OPENCODE_CLI_VERSION = '2.0.26'
 export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
 /**
  * OpenCode's own repo skill directory. It also reads `.claude/skills` and `.agents/skills`, in
- * the repo and the home directory, and 2.0.18 has no setting that turns that off.
+ * the repo and the home directory, and has no setting that turns that off.
  */
 export const OPENCODE_WORKSPACE_SKILLS_DIR = '.opencode/skills'
 
@@ -53,8 +53,8 @@ export const OPENCODE_DENIED_TOOLS = ['question', 'browser'] as const
 export const OPENCODE_WEB_SEARCH = { provider: 'exa', host: 'mcp.exa.ai' } as const
 
 /**
- * The config OpenCode runs with, as `OPENCODE_CONFIG_CONTENT` (2.0.18 no longer reads the
- * `OPENCODE_DISABLE_*` variables for these): no self-update or share links,
+ * The config OpenCode runs with, as `OPENCODE_CONFIG_CONTENT` (not the
+ * `OPENCODE_DISABLE_*` variables): no self-update or share links,
  * {@link OPENCODE_DENIED_TOOLS} off, web search on {@link OPENCODE_WEB_SEARCH},
  * session titles on the run's own model (OpenCode's default is a second, small one), the
  * provider's model calls over HTTP, and the MCP servers. It loads after an eval's own
@@ -130,7 +130,7 @@ export type OpenCodeHarnessSettings = {
   readonly vars?: Record<string, string>
   /**
    * MCP servers, keyed by name, which go in OpenCode's config with `codemode: false`, so its
-   * model calls their tools directly. Over ACP `session/new`, OpenCode 2.0.18 offers them only
+   * model calls their tools directly. Over ACP `session/new`, OpenCode offers them only
    * through Code Mode (`execute`), which reports no call's input or output.
    */
   readonly mcpServers?: Record<string, OpenCodeMcpServer>
@@ -139,7 +139,7 @@ export type OpenCodeHarnessSettings = {
 }
 
 /**
- * The requests OpenCode sends the model's provider's key on (probed on 2.0.26, see
+ * The requests OpenCode sends the model's provider's key on (see
  * `opencode-provider-table.ts`). A gateway that enforces them refuses the key anywhere else.
  */
 export const openCodeEndpoints = (model: string, env: Record<string, string | undefined> = {}) =>

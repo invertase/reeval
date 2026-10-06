@@ -1604,7 +1604,7 @@ function fixtureTests(tiers: Tier[]) {
 }
 
 describe('feature fixtures', { concurrency: 4 }, () => fixtureTests(['fake', 'docker']))
-// Real attempts run one at a time (test-strategy §5), each within its own timeout.
+// Real attempts run one at a time, each within its own timeout.
 describe('feature fixtures on real Cursor', { concurrency: 1 }, () => fixtureTests(['real']))
 
 test('every feature fixture is in the table, with one check and a canary', () => {

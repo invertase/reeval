@@ -95,7 +95,7 @@ describe('persisted shapes', () => {
     )
   })
 
-  test('the guard names what #80, #82 and #100 added, from the record shape before #80', () => {
+  test('the guard names the fields the before-80 snapshot lacks', () => {
     const before80: ShapeSchema = JSON.parse(
       readFileSync(join(testDir, 'fixtures/schema/before-80/run-record.schema.json'), 'utf8'),
     )

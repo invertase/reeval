@@ -51,7 +51,7 @@ export const PI_MCP_FILE = `${PI_AGENT_DIR}/mcp.json`
 
 /**
  * The model-request endpoint pi sends the key on, `POST /v1beta/models/<model>:
- * streamGenerateContent` (checked with 0.99.1). A gateway that enforces it refuses the key
+ * streamGenerateContent`. A gateway that enforces it refuses the key
  * anywhere else.
  */
 export const PI_ENDPOINTS = [

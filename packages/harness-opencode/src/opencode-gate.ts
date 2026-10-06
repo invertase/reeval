@@ -20,7 +20,7 @@ export const OPENCODE_GATE_TIMEOUT_MS = 30_000
 export const OPENCODE_GATE_SETTLE_MS = 250
 
 /**
- * The gate `harness-acp` runs in front of `opencode acp`. OpenCode 2.0.18 connects the MCP servers
+ * The gate `harness-acp` runs in front of `opencode acp`. OpenCode connects the MCP servers
  * in its config in the background once `session/new` has returned, and a prompt sent before
  * they're connected runs its first step without their tools. The gate holds the first
  * `session/prompt` (and what follows it) until each server named in

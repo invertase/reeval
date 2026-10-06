@@ -2,7 +2,7 @@
 // (COVERAGE.md, `pnpm features:matrix`) is generated from this, the fixture table in
 // features.test.ts and the plan cases in plan.test.ts; matrix.test.ts fails when a feature has
 // nothing on any tier and isn't a known gap, when a fixture or plan case covers no feature, or
-// when an entry names something that doesn't exist. Seeded from test-strategy.md §1.
+// when an entry names something that doesn't exist.
 
 export type InventoryFeature = {
   /** Stable, dotted, e.g. `skill.git`. */
@@ -926,10 +926,7 @@ export const inventory: InventoryFeature[] = [
       ),
       opencodeAdapter('providers', "Bedrock's hosts are its AWS_REGION's, us-east-1 by default"),
       opencodeAdapter('providers', 'Bedrock brokers its API key as a Bearer token'),
-      opencodeAdapter(
-        'providers',
-        "the main providers' keys go where OpenCode 2.0.18 was seen to send them",
-      ),
+      opencodeAdapter('providers', "the main providers' keys go where OpenCode sends them"),
       opencodeAdapter('providers', 'a model that can’t run says why'),
       opencodeAdapter(
         'providers',
@@ -1063,7 +1060,7 @@ export const inventory: InventoryFeature[] = [
     fixtures: ['harness/cursor-web-fetch', 'harness/opencode-web-search'],
     tests: [
       harness('web calls the runner recovers survive the adapter, HarnessAgent and the normaliser'),
-      harness('SDK 1.0.32 loses them before our first layer'),
+      harness('the SDK stream loses them before our first layer'),
       harness("a Cursor turn is unreported for the web tools the runner couldn't recover"),
       cursorAdapter('stream', 'a real web turn on SDK 1.0.32'),
       cursorAdapter('stream', "the runner's recovered web calls"),

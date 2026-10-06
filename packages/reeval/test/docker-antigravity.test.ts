@@ -93,7 +93,7 @@ evaluate('hi', async (c) => {
       // The twin of the checks below: the same search finds the gateway's lines.
       assert.match(out, /reeval:egress /)
       assert.doesNotMatch(out, /refused/, 'the key goes only to its endpoint')
-      // CLI 1.2.11 still fetches feature flags (antigravity-unleash.goog) and logs to
+      // The CLI fetches feature flags (antigravity-unleash.goog) and logs to
       // play.googleapis.com, even with enableTelemetry off; both are tunnelled, never given the key.
       assert.doesNotMatch(
         out,

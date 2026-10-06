@@ -86,7 +86,7 @@ test("session titles run on the turn's model, not a second one", () => {
     JSON.parse(env.OPENCODE_CONFIG_CONTENT),
     openCodeConfig({ model: 'google/gemini-3.8-flash' }),
   )
-  // Only variables 2.0.18 still reads, and the gate's.
+  // Only variables OpenCode still reads, and the gate's.
   assert.deepEqual(Object.keys(env).sort(), [
     'OPENCODE_CONFIG_CONTENT',
     'OPENCODE_DISABLE_AUTOUPDATE',
@@ -124,7 +124,7 @@ test('MCP servers go in the config with codemode off, and the gate waits for the
   assert.deepEqual(JSON.parse(openCodeEnv().REEVAL_OPENCODE_MCP_SERVERS), [])
 })
 
-test("the catalog names 2.0.18's tools, with its path inputs", () => {
+test("the catalog names OpenCode's tools, with its path inputs", () => {
   assert.equal(OPENCODE_BUILTIN_TOOLS.bash.nativeName, 'shell')
   assert.deepEqual(Object.keys(OPENCODE_BUILTIN_TOOLS).sort(), [
     'bash',

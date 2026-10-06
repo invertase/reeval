@@ -152,7 +152,7 @@ async function startHarness(
 }
 
 /**
- * Phase 2: starts the sandbox (with the brokered secrets its gateway swaps in), writes the
+ * Starts the sandbox (with the brokered secrets its gateway swaps in), writes the
  * environment's files and workspace skills, runs its setup steps, snapshots the workspace for
  * the diff, and starts the harness session with the harness-placed skills and MCP servers.
  */

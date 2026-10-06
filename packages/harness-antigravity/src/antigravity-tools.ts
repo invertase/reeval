@@ -17,8 +17,7 @@ const native = (
 })
 
 /*
- * Names and parameter keys were captured from Antigravity CLI 1.2.11's `stream-json` output
- * (`step_update.tool_info`). CLI 1.2.16 added `list_plugin_accounts` and `search_marketplace`.
+ * Names and parameter keys from the CLI's `stream-json` output (`step_update.tool_info`).
  * The CLI reports only some parameters (never file contents), so the common-name schemas keep
  * everything else optional.
  */

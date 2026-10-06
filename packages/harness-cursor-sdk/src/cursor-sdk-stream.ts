@@ -306,8 +306,8 @@ export class CursorSdkStreamTranslator {
       case 'tool_call': {
         const id = e.call_id
         if (!id) return
-        // Should the SDK stream web calls itself one day, the runner's recovered copies of them
-        // are dropped: same id, or the same tool and target under another id.
+        // If the stream also reports a web call, drop recovered duplicates by id, or the same
+        // tool and target under another id.
         const web = webKey(e)
         if (recovered) {
           if (this.streamedWeb.has(id) || (web && this.streamedWeb.has(web))) return

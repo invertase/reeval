@@ -1,4 +1,4 @@
-// The analysis MVP (docs/analysis-feature-design.md): the facts views in `reeval query`, effort next to
+// The analysis pipeline: the facts views in `reeval query`, effort next to
 // lift, and `reeval analyze`. The facts come out exactly on two real dogfood histories (trimmed by
 // fixtures/analysis/trim.mjs), each verdict rule has a canary where the opposite data must flip it,
 // and the model step runs on a fake model that returns canned (and deliberately wrong) answers.

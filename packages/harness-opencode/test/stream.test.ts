@@ -6,7 +6,7 @@ type Part = { type: string; [key: string]: unknown }
 
 const text = (t: string) => ({ type: 'content', content: { type: 'text', text: t } })
 
-/** OpenCode 2.0.18's ACP updates for one call, as `@ai-sdk/harness-acp` passes them on. */
+/** OpenCode's ACP updates for one call, as `@ai-sdk/harness-acp` passes them on. */
 const call = (
   id: string,
   title: string,
