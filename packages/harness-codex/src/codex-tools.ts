@@ -6,7 +6,7 @@ import { z } from 'zod'
 type BuiltinTool = HarnessV1BuiltinTool<any, any>
 
 /*
- * The tools Codex 0.160.0's `exec --json` items report, as the adapter names them: a
+ * The tools Codex 0.160.1's `exec --json` items report, as the adapter names them: a
  * `command_execution` is `bash`, and each path of a `file_change` is `write` (added), `edit`
  * (updated) or `delete`, with the path relative to the workspace. A `web_search` is `webSearch`,
  * or `webFetch` when the model opened a page; an `mcp_tool_call` is `mcp__<server>__<tool>`.
