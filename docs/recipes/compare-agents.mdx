@@ -42,7 +42,7 @@ Every harness needs a `model`. `params` sets Cursor's model parameters; `fast: '
 |---|---|---|---|
 | `cursor({ model: 'composer-2.5' })` | `cursor:composer-2.5` | `CURSOR_API_KEY` | `reeval-sandbox:cursor-0.1.0` |
 | `claudeCode({ model: 'claude-sonnet-5' })` | `claude-code:claude-sonnet-5` | `ANTHROPIC_API_KEY` | `reeval-sandbox:claude-code-1.0.142-patch.8edc594f` |
-| `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `reeval-sandbox:antigravity-0.1.3` |
+| `antigravity({ model: 'gemini-3.8-flash-medium' })` | `antigravity:gemini-3.8-flash-medium` | `GEMINI_API_KEY` | `reeval-sandbox:antigravity-0.1.4` |
 
 Each key stays on the host and is swapped in by the egress gateway only on that agent's API endpoints (see [Credential brokering](/concepts/credential-brokering)).
 
@@ -57,7 +57,7 @@ images  2 sandbox images (nothing built: --dry-run)
 docker · 2 evals
   base  reeval-sandbox:cursor-0.1.0  (rebuild: the harness bootstrap)
 docker · antigravity · 2 evals
-  base  reeval-sandbox:antigravity-0.1.3  (rebuild: the harness bootstrap)
+  base  reeval-sandbox:antigravity-0.1.4  (rebuild: the harness bootstrap)
 ```
 
 ```bash
