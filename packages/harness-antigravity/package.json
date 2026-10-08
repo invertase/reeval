@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-antigravity",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "An AI SDK harness adapter for the Google Antigravity CLI (agy), over its stream-json headless mode",
   "license": "Apache-2.0",
