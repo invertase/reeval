@@ -88,6 +88,29 @@ test("a dashed MCP server's name is put back in pi's mcp__<server>__ prefix, unl
   assert.equal(name('read', ['my-docs']), 'read')
 })
 
+test('1.1.0 durationMs and agent_settled.aborted do not change the translated turn', () => {
+  const withNew = fixture('edit-and-run').map((l) => {
+    if (!l) return l
+    const e = JSON.parse(l) as {
+      type?: string
+      aborted?: boolean
+      durationMs?: number
+      message?: { durationMs?: number }
+      toolResults?: Array<{ durationMs?: number }>
+    }
+    if (e.type === 'agent_settled') e.aborted = true
+    if (e.type === 'tool_execution_end') e.durationMs = 12
+    if (e.message) e.message.durationMs = 3
+    if (e.toolResults) for (const r of e.toolResults) r.durationMs = 4
+    return JSON.stringify(e)
+  })
+  const a = translate(fixture('edit-and-run')).parts
+  const b = translate(withNew).parts
+  assert.deepEqual(b, a)
+  const finish = b.find((p) => p.type === 'finish')
+  assert.equal((finish as { finishReason?: { raw?: string } })?.finishReason?.raw, 'stop')
+})
+
 test('twin: a process that dies before agent_end is an error, not a clean finish', () => {
   const lines = fixture('edit-and-run')
   const cut = lines.findIndex((l) => l.includes('"type":"agent_end"'))

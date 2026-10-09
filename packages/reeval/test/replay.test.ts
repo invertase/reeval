@@ -540,6 +540,27 @@ describe("replay: pi's format holds every stop reason pi defines, and a failed c
     assert.notDeepEqual(unknownIn(nativeEvents(changed)), [])
   })
 
+  test('1.1.0 durationMs and agent_settled.aborted are not a format change', () => {
+    const events = nativeEvents(read('pi', 'edit-and-run.raw.jsonl')).map((e) => {
+      if (e.type === 'agent_settled') return { ...e, aborted: false }
+      if (e.type === 'tool_execution_end') return { ...e, durationMs: 12 }
+      const role = (e.message as { role?: string } | undefined)?.role
+      const onMessage =
+        (e.type === 'message_end' && (role === 'assistant' || role === 'toolResult')) ||
+        (e.type === 'message_start' && role === 'toolResult') ||
+        (e.type === 'turn_end' && role === 'assistant')
+      if (!onMessage) return e
+      const message = { ...(e.message as Record<string, unknown>), durationMs: 3 }
+      const toolResults = e.toolResults as Array<Record<string, unknown>> | undefined
+      return {
+        ...e,
+        message,
+        ...(toolResults ? { toolResults: toolResults.map((r) => ({ ...r, durationMs: 4 })) } : {}),
+      }
+    })
+    assert.deepEqual(unknownIn(events), [])
+  })
+
   test("pi 0.87.1's whole failed turn (a bad key): message_start, message_end and turn_end", () => {
     assert.deepEqual(unknownIn(packageCapture('harness-pi', 'bad-key.ndjson')), [])
   })
