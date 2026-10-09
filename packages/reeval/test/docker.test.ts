@@ -1509,7 +1509,18 @@ evaluate('hi', async (c) => {
   // The failed call is one error event, not the stream's and the thrown error's both.
   expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
   const environ = await c.exec('env; cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
-  expect(environ.stdout).toMatch(/^ANTHROPIC_API_KEY=aisdkhc_[\\w-]{43}$/m)
+  // After a 401 the CLI may unset ANTHROPIC_API_KEY. What's left is reeval's
+  // placeholder, the adapter's, or nothing — never the host key.
+  const keyLines = environ.stdout
+    .split('\\n')
+    .filter((line) => line.startsWith('ANTHROPIC_API_KEY='))
+  expect(
+    keyLines.every((line) =>
+      /^ANTHROPIC_API_KEY=(?:aisdkhc_[\\w-]{43}|reeval_secret_[0-9A-Za-z]{32})?$/.test(
+        line,
+      ),
+    ),
+  ).toBe(true)
   expect(environ.stdout).not.toContain('not_a_real_key')
 })
 `
