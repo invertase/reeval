@@ -1505,7 +1505,12 @@ export default defineConfig({
       const eval_ = `import { evaluate, expect } from 'reeval'
 evaluate('hi', async (c) => {
   const turn = await c.send('Reply with the word hi.')
-  expect(turn.transcript.some((e) => e.type === 'error' && /401/.test(e.message ?? ''))).toBe(true)
+  expect(
+    turn.transcript.some(
+      (e) =>
+        e.type === 'error' && /401|Invalid API key/i.test(e.message ?? ''),
+    ),
+  ).toBe(true)
   // The failed call is one error event, not the stream's and the thrown error's both.
   expect(turn.transcript.filter((e) => e.type === 'error')).toHaveLength(1)
   const environ = await c.exec('env; cat /proc/[0-9]*/environ | tr "\\\\0" "\\\\n"')
