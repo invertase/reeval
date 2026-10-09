@@ -42,7 +42,7 @@ import { ANTIGRAVITY_BUILTIN_TOOLS, type AntigravityBuiltinTools } from './antig
 
 export const ANTIGRAVITY_HARNESS_ID = 'antigravity'
 
-/** Where the CLI reads home skills (1.3.1; its docs' `~/.gemini/antigravity-cli/skills` isn't read). */
+/** Where the CLI reads home skills (1.3.2; its docs' `~/.gemini/antigravity-cli/skills` isn't read). */
 export const ANTIGRAVITY_HOME_SKILLS_DIR = '.gemini/config/skills'
 /** Always-on global rules; `instructions` are appended here. */
 export const ANTIGRAVITY_INSTRUCTIONS_FILE = '.gemini/GEMINI.md'
