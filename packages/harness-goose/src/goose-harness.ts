@@ -9,10 +9,10 @@ import { GOOSE_BUILTIN_TOOLS, type GooseBuiltinTools } from './goose-tools.ts'
 
 export const GOOSE_HARNESS_ID = 'goose'
 /** The Goose release the bootstrap installs, checked against its published sha256s. */
-export const GOOSE_CLI_VERSION = '1.53.0'
+export const GOOSE_CLI_VERSION = '1.54.0'
 export const GOOSE_CLI_SHA256 = {
-  x86_64: 'deb2191a6b75acc0a20232fc5c52655ea2f9cc8fa2f5dffc8622e8d378a915dc',
-  aarch64: '01a0ea109e1984e7a511ff3f99d1a29d32e6f90f0852b5a3b416499c8eaae567',
+  x86_64: 'ab396c95aebbd28b4d38c175234be8d4a3ea0c96e7ccb24c307e4618c9be57e1',
+  aarch64: '0f174b5118a53888cd4e65b7ca9a4b72dd0b887e89142c8ce41e2409205e40d5',
 } as const
 /** The only credential the adapter uses: a Gemini API key, for Goose's `google` provider. */
 export const GOOSE_CREDENTIAL_ENV = 'GOOGLE_API_KEY'
@@ -40,7 +40,7 @@ export const GOOSE_QUIET_ENV = {
 } as const
 
 /**
- * The endpoints Goose sends the key on (checked with 1.53.0): the model request, `POST
+ * The endpoints Goose sends the key on (checked with 1.54.0): the model request, `POST`
  * /v1beta/models/<model>:streamGenerateContent`, and the model list, `GET /v1beta/models`, which
  * it fetches at the start of every turn. A gateway that enforces them refuses the key anywhere
  * else.
@@ -78,7 +78,7 @@ export type GooseHarnessSettings = {
   /**
    * MCP servers as Goose extensions, keyed by name: `{ type: 'stdio', cmd, args, envs }` or
    * `{ type: 'streamable_http', uri, headers }`. They go in Goose's `config.yaml`, enabled:
-   * 1.53.0 leaves servers from ACP `session/new` disabled until the model enables them itself.
+   * 1.54.0 leaves servers from ACP `session/new` disabled until the model enables them itself.
    */
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */

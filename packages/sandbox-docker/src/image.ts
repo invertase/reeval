@@ -12,7 +12,7 @@ export const HARNESS_PACKAGES: Record<
   'claude-code': { name: '@ai-sdk/harness-claude-code', version: '1.0.142', patch: '8edc594f' },
   antigravity: { name: '@reeval/harness-antigravity', version: '0.1.5' },
   opencode: { name: '@reeval/harness-opencode', version: '0.2.6' },
-  goose: { name: '@reeval/harness-goose', version: '0.1.1' },
+  goose: { name: '@reeval/harness-goose', version: '0.1.2' },
   pi: { name: '@reeval/harness-pi', version: '0.2.5' },
   codex: { name: '@reeval/harness-codex', version: '0.1.5' },
 }

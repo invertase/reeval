@@ -38,7 +38,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
           ? { content: [{ type: 'text', text: 'STAMP-7Q' }] }
           : undefined
   // Unknown methods get JSON-RPC's "method not found", which is how a client probing a newer
-  // handshake (Goose 1.53.0 tries `server/discover` first) knows to fall back to `initialize`.
+  // handshake (Goose 1.54.0 tries `server/discover` first) knows to fall back to `initialize`.
   send(
     result
       ? { jsonrpc: '2.0', id: m.id, result }

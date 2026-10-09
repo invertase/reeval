@@ -4,7 +4,7 @@ import { GooseStreamTranslator } from '../src/goose-stream.ts'
 
 type Part = { type: string; [key: string]: unknown }
 
-/** Goose 1.53.0's ACP `tool_call` for one call, and the parts `@ai-sdk/harness-acp` makes of it. */
+/** Goose 1.54.0's ACP `tool_call` for one call, and the parts `@ai-sdk/harness-acp` makes of it. */
 const call = (id: string, toolName: string, extensionName: string): Part[] => [
   {
     type: 'raw',
@@ -56,7 +56,7 @@ test('twin: without the metadata, the call keeps its generic name', () => {
   assert.deepEqual(names(turn(rest, ['stamp'])), ['acp_tool_m1'])
 })
 
-/** Goose 1.53.0 on a key Gemini refuses: the provider error comes back as the turn's message. */
+/** Goose 1.54.0 on a key Gemini refuses: the provider error comes back as the turn's message. */
 const refused = (text: string): Part[] => [
   {
     type: 'raw',
