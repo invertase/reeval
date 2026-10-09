@@ -1,12 +1,12 @@
 import type { HarnessV1Bootstrap } from '@ai-sdk/harness'
 
 /** The Codex release the bootstrap installs, checked against npm's published sha512s. */
-export const CODEX_CLI_VERSION = '0.161.0'
+export const CODEX_CLI_VERSION = '0.162.0'
 /** The `dist.integrity` of `@openai/codex@<version>-linux-<arch>`, its native build for Linux. */
 export const CODEX_CLI_INTEGRITY = {
-  x64: 'sha512-AVkNzeJWyCHHPyg5vxD8UE6aFsYaOwq0/x6mtmkOKy6LdjvsyxLr7Q7UULlk+Ma3+PnrN8uIxG2/XGPQ936hgA==',
+  x64: 'sha512-qHWp6oKpf456PqjberGN8avs8zChv2oS+UuDiqVFYAuDOhq6vBc1drh8jEsnR7dBX+zcw03PN5VLtePGlMcC3w==',
   arm64:
-    'sha512-SBu0n4C1Pby9rGKUNA02yHEg/ScbECgiTIiKiKhbYWiUWqGPV1hY0Br7joEntbz0dyNzSWqNPD8uOqxcOry/Fg==',
+    'sha512-6NYWwy09FsZ+/0Dz/bvV/yz3aFhkNzj86fSiux9Ax9VMBOID5nPdwd51OySm7fy8TMRud4fgJFELSi3Enc1s7Q==',
 } as const
 /** Relative to the harness state directory, `$HOME/.ai-sdk-harness`. */
 export const CODEX_BOOTSTRAP_DIR = '.harness-bootstrap/codex'
