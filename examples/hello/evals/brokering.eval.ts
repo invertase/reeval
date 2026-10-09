@@ -51,12 +51,17 @@ evaluate(
     expect(turn.status).toBe('completed')
     expect(holdsAKey(turn.text), 'the reply holds a key').toBe(false)
 
-    // What the agent's own shell saw: the placeholder. The agent's processes may have exited by
-    // now, so `environ` alone can't show it for every harness.
+    // What the agent's own shell saw: a placeholder, or no key after a CLI that unsets it.
+    // The agent's processes may have exited by now, so `environ` alone can't show it
+    // for every harness.
     const seen = (await c.readFile('env.txt')) ?? ''
     const environ = await c.exec('env; cat /proc/[0-9]*/environ | tr "\\0" "\\n"')
-    expect(seen).toMatch(/^\w+_API_KEY=aisdkhc_[\w-]{43}$/m)
-    expect(holdsAKey(`${seen}\n${environ.stdout}`), 'env or /proc holds a key').toBe(false)
+    const dumped = `${seen}\n${environ.stdout}`
+    const keyLines = dumped.split('\n').filter((line) => /^\w+_API_KEY=/.test(line))
+    for (const line of keyLines) {
+      expect(line).toMatch(/^\w+_API_KEY=(?:aisdkhc_[\w-]{43}|reeval_secret_[0-9A-Za-z]{32})?$/)
+    }
+    expect(holdsAKey(dumped), 'env or /proc holds a key').toBe(false)
 
     const scan = await c.exec(`node ~/.reeval-scan/scan.mjs '${targets}'`)
     expect(scan.exitCode).toBe(0)
