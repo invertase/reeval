@@ -17,8 +17,8 @@ const BUILTIN_BY_NATIVE = new Map<string, string>([
 const record = (value: unknown): Record<string, unknown> =>
   typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
 
-/** OpenCode's name for an MCP server in its tools' names. */
-const namespaceOf = (server: string) => server.replace(/[^a-zA-Z0-9_-]/g, '_')
+/** OpenCode's name for an MCP server in its tools' names (`-` becomes `_`). */
+const namespaceOf = (server: string) => server.replace(/[^a-zA-Z0-9]/g, '_')
 
 /** The text items of an ACP tool call's `content`, joined. */
 function contentText(content: unknown): string | undefined {
@@ -42,8 +42,10 @@ const searchResults = (text: string) =>
  *   `content`, and `harness-acp` passes on its `rawOutput`, `{ metadata }`. A web search's also
  *   lists its `references`, `{ title, url }`.
  * - A call it couldn't name (`acp_tool_<id>`) is named from OpenCode's first `tool_call` update,
- *   whose title is the tool's name: `shell` (its later titles are the command), `patch` (an
- *   `edit`), or `<server>_<tool>` for an MCP tool, named `mcp__<server>__<tool>`.
+ *   whose `name` (2.0.26) or title is the tool's name: `shell` (its later titles are the
+ *   command), `patch` (an `edit`), or `<server>_<tool>` for an MCP tool, named
+ *   `mcp__<server>__<tool>`. 2.0.26 also sends `tool_call.name`, which `harness-acp` can pass
+ *   through as `<server>_<tool>`; that is remapped the same way.
  * - The `finish` part's usage is left as `@ai-sdk/harness-acp` mapped it from
  *   `PromptResponse.usage`. OpenCode #52467 reports the whole turn; `usage_update.used` is still
  *   the last step's context size, so it is not used here.
@@ -66,9 +68,15 @@ export class OpenCodeStreamTranslator {
     if (part.type !== 'tool-call' && part.type !== 'tool-result') return [part]
     const id = typeof part.toolCallId === 'string' ? part.toolCallId : ''
     let out = part
-    if (typeof part.toolName === 'string' && part.toolName.startsWith('acp_tool_')) {
-      const name = this.nameFor(this.titles.get(id))
-      if (name) out = { ...out, toolName: name }
+    if (typeof part.toolName === 'string') {
+      if (part.toolName.startsWith('acp_tool_')) {
+        const name = this.nameFor(this.titles.get(id))
+        if (name) out = { ...out, toolName: name }
+      } else {
+        // 2.0.26's tool_call.name: harness-acp passes `<server>_<tool>` through.
+        const name = this.nameFor(part.toolName)
+        if (name?.startsWith('mcp__')) out = { ...out, toolName: name }
+      }
     }
     if (part.type !== 'tool-result') return [out]
     const text = this.texts.get(id)
@@ -83,8 +91,14 @@ export class OpenCodeStreamTranslator {
   private observe(update: Record<string, unknown>) {
     const id = update.toolCallId
     if (typeof id !== 'string') return
-    if (update.sessionUpdate === 'tool_call' && typeof update.title === 'string') {
-      this.titles.set(id, update.title)
+    if (update.sessionUpdate === 'tool_call') {
+      const label =
+        typeof update.name === 'string' && update.name
+          ? update.name
+          : typeof update.title === 'string'
+            ? update.title
+            : undefined
+      if (label) this.titles.set(id, label)
     }
     if (update.sessionUpdate !== 'tool_call' && update.sessionUpdate !== 'tool_call_update') return
     const text = contentText(update.content)
@@ -96,6 +110,10 @@ export class OpenCodeStreamTranslator {
     const builtin = BUILTIN_BY_NATIVE.get(title)
     if (builtin) return builtin
     const server = this.servers.find((s) => title.startsWith(`${namespaceOf(s)}_`))
-    return server ? `mcp__${server}__${title.slice(namespaceOf(server).length + 1)}` : undefined
+    if (!server) return undefined
+    const ns = namespaceOf(server)
+    // Two servers that sanitize alike (`a-b` and `a_b`) can't be told apart.
+    if (this.servers.some((s) => s !== server && namespaceOf(s) === ns)) return undefined
+    return `mcp__${server}__${title.slice(ns.length + 1)}`
   }
 }

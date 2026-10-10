@@ -86,11 +86,12 @@ would generate differs from this one.
 - **Tools.** `OPENCODE_BUILTIN_TOOLS` maps OpenCode's tools (`shell` becomes the common `bash`;
   `read`, `write` and `edit` take `path`). A tool's output is rebuilt as `{ output, metadata }`
   from the ACP `content`, since OpenCode 2's `rawOutput` has no text. A call `harness-acp` can't
-  name is named from OpenCode's first `tool_call` update, whose title is the tool's name; `patch`,
-  the edit tool OpenCode gives GPT models, is an `edit`.
+  name is named from OpenCode's first `tool_call` update, whose `name` (2.0.26) or title is the
+  tool's name; `patch`, the edit tool OpenCode gives GPT models, is an `edit`.
 - **MCP.** `mcpServers` go in the config's `mcp.servers` with `codemode: false`, so the model
   calls their tools directly (`<server>_<tool>`, named `mcp__<server>__<tool>`), with input and
-  output. Over ACP `session/new`, OpenCode 2 offers them only through Code Mode, its `execute`
+  output. 2.0.26 reports that name on `tool_call.name`; the translator remaps it. Over ACP
+  `session/new`, OpenCode 2 offers them only through Code Mode, its `execute`
   tool. It has no SSE transport.
 - **Gate.** OpenCode connects config MCP servers in the background after `session/new`, and a
   prompt sent before they connect runs its first step without their tools. `harness-acp` runs

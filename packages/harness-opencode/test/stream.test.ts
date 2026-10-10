@@ -159,3 +159,50 @@ test('an MCP tool is named from its title, by the longest server', () => {
   const out = turn(call('m1', 'docs_api_search', 'x', {}), ['docs', 'docs_api'])
   assert.deepEqual(names(out), ['mcp__docs_api__search', 'mcp__docs_api__search'])
 })
+
+test("2.0.26's tool_call.name is remapped from <server>_<tool>, like the title", () => {
+  const named = (toolName: string, mcpServers: string[], title = toolName) =>
+    names(turn(call('m1', title, title, {}, {}, toolName), mcpServers))
+  assert.deepEqual(named('stamp_house_stamp', ['stamp']), [
+    'mcp__stamp__house_stamp',
+    'mcp__stamp__house_stamp',
+  ])
+  assert.deepEqual(named('docs_api_search', ['docs', 'docs_api']), [
+    'mcp__docs_api__search',
+    'mcp__docs_api__search',
+  ])
+  // A dashed server's OpenCode name uses `_`; the configured name is put back.
+  assert.deepEqual(named('my_docs_latest_version', ['my-docs']), [
+    'mcp__my-docs__latest_version',
+    'mcp__my-docs__latest_version',
+  ])
+  // Two servers that sanitize alike can't be told apart, so OpenCode's name stands.
+  assert.deepEqual(named('a_b_x', ['a-b', 'a_b']), ['a_b_x', 'a_b_x'])
+  assert.deepEqual(named('stamp_house_stamp', []), ['stamp_house_stamp', 'stamp_house_stamp'])
+  assert.deepEqual(named('read', ['stamp']), ['read', 'read'])
+})
+
+test("2.0.26's tool_call.name names an acp_tool_ call when the title is a display string", () => {
+  const parts = [
+    {
+      type: 'raw',
+      rawValue: {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'm1',
+        name: 'stamp_house_stamp',
+        title: 'House stamp',
+      },
+    },
+    { type: 'tool-call', toolCallId: 'm1', toolName: 'acp_tool_m1', input: '{}' },
+    {
+      type: 'tool-result',
+      toolCallId: 'm1',
+      toolName: 'acp_tool_m1',
+      result: { metadata: { truncated: false } },
+    },
+  ]
+  assert.deepEqual(names(turn(parts, ['stamp'])), [
+    'mcp__stamp__house_stamp',
+    'mcp__stamp__house_stamp',
+  ])
+})
