@@ -38,9 +38,9 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `GEMINI_API_KEY` (a Gemini API key) |
-| Adapter | `@reeval/harness-antigravity` 0.1.5, bundled with reeval |
+| Adapter | `@reeval/harness-antigravity` 0.1.6, bundled with reeval |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:antigravity-0.1.5` |
+| Image | `reeval-sandbox:antigravity-0.1.6` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.gemini/config/skills` |
 | Skills (`placement: 'workspace'`) | `.agents/skills` in the workspace |
@@ -51,7 +51,7 @@ Build its image once with `reeval image build` in a project whose config uses `a
 
 ## The key
 
-The harness uses a Gemini API key only, never the CLI's Google sign-in, which Google's terms don't allow automating. reeval passes `GEMINI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request (what CLI 1.3.2 sends it on: its model, and a lite one for titles):
+The harness uses a Gemini API key only, never the CLI's Google sign-in, which Google's terms don't allow automating. reeval passes `GEMINI_API_KEY` to the adapter explicitly, and it never enters the container. The gateway swaps it in on one kind of request (what CLI 1.3.3 sends it on: its model, and a lite one for titles):
 
 | Host | Endpoint |
 |---|---|
@@ -67,7 +67,7 @@ The CLI reads home skills from `~/.gemini/config/skills`, not the `~/.gemini/ant
 
 ## Telemetry it sends anyway
 
-CLI 1.3.2 opens `play.googleapis.com` (telemetry) and `antigravity-unleash.goog` (feature flags) in every session. No setting stops them, and neither gets the key.
+CLI 1.3.3 opens `play.googleapis.com` (telemetry) and `antigravity-unleash.goog` (feature flags) in every session. No setting stops them, and neither gets the key.
 
 Under a restricted egress policy the gateway refuses them, records them under the record's `egress.expectedBlocked` rather than `blocked`, and `-v` prints one `gateway` line at teardown instead of one per request: `expected blocks, not logged per request:`, each `host:port` with its connection count, then the reason ("Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off").
 
