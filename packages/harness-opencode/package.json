@@ -31,10 +31,10 @@
     "test": "node --test --experimental-strip-types --no-warnings test/*.test.ts"
   },
   "dependencies": {
-    "@ai-sdk/harness": "1.0.138",
-    "@ai-sdk/harness-acp": "1.0.77",
-    "@ai-sdk/provider": "4.0.21",
-    "@ai-sdk/provider-utils": "5.0.53",
+    "@ai-sdk/harness": "1.0.144",
+    "@ai-sdk/harness-acp": "1.0.83",
+    "@ai-sdk/provider": "4.0.25",
+    "@ai-sdk/provider-utils": "5.0.57",
     "zod": "4.6.5"
   }
 }
