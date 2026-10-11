@@ -147,16 +147,21 @@ describe('the progress file', () => {
       }
       return { rename, calls: () => calls }
     }
+    const instant = { wait() {} }
     for (const code of ['EPERM', 'EACCES', 'EBUSY']) {
       const r = busy(code, 3)
-      replace('a', 'b', r.rename)
+      replace('a', 'b', r.rename, instant)
       assert.equal(r.calls(), 4, code)
     }
     const gone = busy('ENOENT', 1)
-    assert.throws(() => replace('a', 'b', gone.rename), /ENOENT/)
+    assert.throws(() => replace('a', 'b', gone.rename, instant), /ENOENT/)
     assert.equal(gone.calls(), 1)
     const stuck = busy('EPERM', 100)
-    assert.throws(() => replace('a', 'b', stuck.rename), /EPERM/)
+    let t = 0
+    assert.throws(
+      () => replace('a', 'b', stuck.rename, { now: () => ++t, wait() {}, busyMs: 20 }),
+      /EPERM/,
+    )
     assert.equal(stuck.calls(), 20)
   })
 
@@ -167,29 +172,44 @@ describe('the progress file', () => {
     const reader = new Worker(
       `const { readFileSync } = require('node:fs')
        const { workerData, parentPort } = require('node:worker_threads')
-       let reads = 0, bad = 0
-       parentPort.on('message', () => parentPort.postMessage({ reads, bad }))
+       const busy = new Set(['EPERM', 'EACCES', 'EBUSY'])
+       let reads = 0, bad = 0, missed = 0
+       parentPort.on('message', () => parentPort.postMessage({ reads, bad, missed }))
        const loop = () => {
-         for (let i = 0; i < 50; i++) {
-           try { JSON.parse(readFileSync(workerData, 'utf8')); reads++ } catch { bad++ }
-         }
+         try { JSON.parse(readFileSync(workerData, 'utf8')); reads++ }
+         catch (e) { if (e && busy.has(e.code)) missed++; else bad++ }
          setImmediate(loop)
        }
        loop()`,
       { eval: true, workerData: join(dir, LIVE_FILE) },
     )
-    try {
-      for (const item of items) {
-        live.start(item.key, Date.now())
-        live.end(result(item.key, 'passed', 'pass'))
-        if (item.key.endsWith('0#1')) await sleep(1)
-      }
-      const stats = await new Promise<{ reads: number; bad: number }>((resolve) => {
+    const stats = () =>
+      new Promise<{ reads: number; bad: number; missed: number }>((resolve) => {
         reader.once('message', resolve)
         reader.postMessage('stats')
       })
-      assert.ok(stats.reads > 100, `the reader read ${stats.reads} times`)
-      assert.equal(stats.bad, 0)
+    const shown = (s: { reads: number; bad: number; missed: number }) =>
+      `the reader read ${s.reads} times (${s.bad} partial, ${s.missed} misses)`
+    try {
+      const ready = Date.now() + 5000
+      while ((await stats()).reads === 0) {
+        if (Date.now() > ready) assert.fail('the reader never started')
+        await sleep(1)
+      }
+      for (const item of items) {
+        live.start(item.key, Date.now())
+        live.end(result(item.key, 'passed', 'pass'))
+        await sleep(0)
+      }
+      const until = Date.now() + 5000
+      let last = await stats()
+      while (last.reads <= 100 && last.bad === 0 && Date.now() < until) {
+        live.phase('running')
+        await sleep(5)
+        last = await stats()
+      }
+      assert.equal(last.bad, 0, shown(last))
+      assert.ok(last.reads > 100, shown(last))
       assert.equal(readLive(dir).counts.passed, 200)
     } finally {
       await reader.terminate()
