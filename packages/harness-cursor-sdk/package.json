@@ -1,6 +1,6 @@
 {
   "name": "@reeval/harness-cursor-sdk",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "An AI SDK harness adapter for Cursor's agent, over the Cursor TypeScript SDK's local runtime",
   "license": "Apache-2.0",
