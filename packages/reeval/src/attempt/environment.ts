@@ -8,7 +8,7 @@ import { traceEnvironment } from './debug.ts'
 import type { Attempt } from './state.ts'
 
 /**
- * Phase 1: resolves the attempt's environment (files, skills, secrets and their placeholders)
+ * Resolves the attempt's environment (files, skills, secrets and their placeholders)
  * and finds the image a Docker sandbox starts from, which preflight prepared. Runs on the test's
  * signal, before the eval timer starts.
  */

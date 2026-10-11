@@ -6,7 +6,7 @@ import { z } from 'zod'
 type BuiltinTool = HarnessV1BuiltinTool<any, any>
 
 /*
- * pi 0.99.1's built-in tools, from its `--mode json` events. read, write and edit take `path`, not
+ * pi's built-in tools, from its `--mode json` events. read, write and edit take `path`, not
  * the common `file_path`, so they aren't common tools; edit takes a list of `edits`.
  */
 export const PI_BUILTIN_TOOLS = {

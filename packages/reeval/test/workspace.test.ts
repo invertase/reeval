@@ -192,7 +192,7 @@ evaluate('commits in the repo', { environment: env, runs: 2 }, async (c) => {
 `,
     })
     const repo = makeRepo(p.dir)
-    // What init: true commits: the tree, by es at a fixed date, so its hash is known up front.
+    // What init: true commits: the tree, by reeval at a fixed date, so its hash is known up front.
     const at = '2000-01-01T00:00:00Z'
     const head = execFileSync(
       'git',

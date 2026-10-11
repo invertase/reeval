@@ -276,7 +276,7 @@ createInterface({ input: process.stdin }).on('line', (line) => {
 })
 
 test('an auth failure names the credential; other errors get no hint', () => {
-  // What each harness reported with a made-up key (26 Sep 2026).
+  // What each harness reported with a made-up key.
   const refused: Array<[AgentKind, string]> = [
     ['cursor', "Cursor's model catalog request failed: HTTP 401"],
     ['claude-code', 'Invalid API key · Fix external API key'],
@@ -313,7 +313,7 @@ test('an auth failure names the credential; other errors get no hint', () => {
       message,
     )
   }
-  // OpenCode's words for any provider refusing its key (Bedrock's 403, 28 Sep 2026), naming the
+  // OpenCode's words for any provider refusing its key (Bedrock's 403), naming the
   // model's provider's variable.
   assert.equal(
     authHint(

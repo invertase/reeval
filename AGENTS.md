@@ -47,6 +47,11 @@ config is `reeval.config.ts` and local state is `.reeval/`. Inside this monorepo
   [feature contract](./packages/reeval/test/features/README.md) asks for: a plan case if it
   changes the matrix, and a one-check fixture with a canary if it changes what happens inside an
   attempt, in every tier it touches. A feature isn't done until they pass.
+- **Comments describe current invariants.** A comment says why the code is as it is *now*, not
+  what changed, what was tried, or what it used to be called. No changelog ("used to",
+  "previously", "after #123", "captured from 1.2.11"), leftover reasoning, or stale names.
+  Licence headers, generated-file markers and `/* c8 ignore */` with a current reason stay.
+  Git is the history.
 - `@vitest/expect` and `@vitest/utils` are pinned to exactly the same version, and only
   `packages/reeval/src/engine` imports them (`test/manifest.test.ts` and `test/engine.test.ts`
   hold both). `@vitest/utils` is Vitest's internal package and isn't semver-safe alone, so bump

@@ -42,7 +42,7 @@ import { ANTIGRAVITY_BUILTIN_TOOLS, type AntigravityBuiltinTools } from './antig
 
 export const ANTIGRAVITY_HARNESS_ID = 'antigravity'
 
-/** Where the CLI reads home skills (1.3.3; its docs' `~/.gemini/antigravity-cli/skills` isn't read). */
+/** Where the CLI reads home skills (its docs' `~/.gemini/antigravity-cli/skills` isn't read). */
 export const ANTIGRAVITY_HOME_SKILLS_DIR = '.gemini/config/skills'
 /** Always-on global rules; `instructions` are appended here. */
 export const ANTIGRAVITY_INSTRUCTIONS_FILE = '.gemini/GEMINI.md'
@@ -210,7 +210,7 @@ async function startSession(
       if (ended) throw new Error('This Antigravity session has ended')
       if (turn.tools.length > 0) throw unsupported('host-executed tools')
       const schema = turn.responseFormat?.type === 'json' ? turn.responseFormat.schema : undefined
-      // Since 1.2.14 the CLI exits 1 at startup on a schema whose root isn't an object.
+      // The CLI rejects --json-schema unless the root schema is type: object.
       if (schema && schema.type !== 'object') {
         throw new HarnessCapabilityUnsupportedError({
           message: `The Antigravity CLI's --json-schema takes only a schema whose root is "type": "object" (got ${JSON.stringify(schema.type ?? null)})`,

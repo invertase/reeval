@@ -40,7 +40,7 @@ export const GOOSE_QUIET_ENV = {
 } as const
 
 /**
- * The endpoints Goose sends the key on (checked with 1.54.0): the model request, `POST`
+ * The endpoints Goose sends the key on: the model request, `POST
  * /v1beta/models/<model>:streamGenerateContent`, and the model list, `GET /v1beta/models`, which
  * it fetches at the start of every turn. A gateway that enforces them refuses the key anywhere
  * else.
@@ -78,7 +78,7 @@ export type GooseHarnessSettings = {
   /**
    * MCP servers as Goose extensions, keyed by name: `{ type: 'stdio', cmd, args, envs }` or
    * `{ type: 'streamable_http', uri, headers }`. They go in Goose's `config.yaml`, enabled:
-   * 1.54.0 leaves servers from ACP `session/new` disabled until the model enables them itself.
+   * Goose leaves servers from ACP `session/new` disabled until the model enables them itself.
    */
   readonly mcpServers?: Record<string, Record<string, unknown>>
   /** Refuse a sandbox that can't broker the key, rather than forwarding the real one. */

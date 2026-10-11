@@ -79,7 +79,7 @@ const text = (content: PiContent[] | undefined) =>
   (content ?? []).flatMap((c) => (c.type === 'text' && c.text ? [c.text] : [])).join('')
 
 /**
- * pi names an MCP tool `mcp__<server>__<tool>` with every `-` made `_` (since 0.99.2). This puts
+ * pi names an MCP tool `mcp__<server>__<tool>` with every `-` made `_`. This puts
  * the server's configured name back when no other server sanitizes to the same name. The tool
  * part stays as pi named it: the adapter doesn't know the server's tool names, and pi shortens a
  * colliding or over-64-character name with a hash.

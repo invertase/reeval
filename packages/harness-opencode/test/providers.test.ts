@@ -45,7 +45,7 @@ test('each provider is supported or refused, once, and the table is well formed'
   for (const p of REFUSED_OPENCODE_PROVIDERS) assert.ok(p.why.length > 20, p.id)
 })
 
-test("the main providers' keys go where OpenCode 2.0.18 was seen to send them", () => {
+test("the main providers' keys go where OpenCode sends them", () => {
   const where = (id: string) => {
     const p = openCodeProvider(`${id}/m`)
     return {
@@ -286,7 +286,7 @@ test('Bedrock brokers its API key as a Bearer token, and its URL names the serve
     ],
   )
   const runtime = { method: 'POST', host: 'bedrock-runtime.eu-south-2.amazonaws.com' }
-  // As the probe saw OpenCode 2.0.18 send it; an inference profile's `:0` is encoded.
+  // As the probe saw OpenCode send it; an inference profile's `:0` is encoded.
   assert.equal(
     providerServedModel(bedrock, {
       ...runtime,

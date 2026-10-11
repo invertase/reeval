@@ -122,6 +122,8 @@ group('hello', () => {
 - `evaluate(name, [options,] fn)` and `group(name, [options,] fn)`; also `.skip`, `.only`
   (an error in CI), `.todo`, and `evaluate.for(cases)(name, (c, item) => …)` (`$key`, `%s`,
   `%#` in the name). The eval id is `file › group › name`; renaming an eval restarts its history.
+  A comment on an eval describes the current check (why a canary fails, which path it reads),
+  not what used to be true or which product a prompt was ported from.
 - `await c.send(prompt)` runs one agent turn and returns a `Turn` (`text`, `status`, `diff`,
   `transcript`). Call it again for multi-turn; `c.judge(q, { on: firstTurn })` grades an earlier one.
 - `await c.exec(cmd)` returns `{ exitCode, stdout, stderr }`; `c.exec(cmd, { background: true })`

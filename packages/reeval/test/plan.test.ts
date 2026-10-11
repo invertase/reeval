@@ -249,7 +249,7 @@ evaluate('uses tools', { environment: tools }, async () => {})
       const planned = await runCli(p.dir, ['run', '--dry-run'])
       assert.equal(planned.code, 0, `${factory}: ${planned.stdout}${planned.stderr}`)
     }
-    // The twin: the same servers, one named with a dot, which pi 0.99.1 would skip.
+    // The twin: the same servers, one named with a dot, which pi would skip.
     const dotted = await project('mcp-pi-dotted', {
       'reeval.config.ts': config('pi'),
       'evals/m.eval.ts': evals('my.local'),

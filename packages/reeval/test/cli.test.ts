@@ -157,7 +157,7 @@ describe('cli', () => {
     }
   })
 
-  test('bad command lines exit 2 with one es: line', async () => {
+  test('bad command lines exit 2 with one reeval: line', async () => {
     const p = await project('cli-usage', { 'reeval.config.ts': fakeConfig() })
     const cases: Array<[string[], RegExp]> = [
       [['bogus'], /^reeval: Unknown command "bogus"\. Run reeval --help\.\n$/],

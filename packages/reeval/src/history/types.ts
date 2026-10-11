@@ -179,7 +179,7 @@ export type AttemptRecord = {
 export type EvalEntry = {
   /** `file › group › … › name`, as shown. */
   id: string
-  /** What the eval is matched on across runs; its `id` for now. */
+  /** What the eval is matched on across runs; currently the same as `id`. */
   key: string
   /** Directory name inside the artifact directory, from `key`. */
   slug: string

@@ -11,7 +11,7 @@ const native = (title: string, toolUseKind?: 'readonly' | 'edit' | 'bash'): Buil
 })
 
 /*
- * Captured from OpenCode 2.0.18's ACP `tool_call` updates. `@ai-sdk/harness-acp` names a call
+ * From ACP `tool_call` updates on the pinned CLI. `@ai-sdk/harness-acp` names a call
  * when it first has input, when OpenCode's title is still the tool's name, except for `shell`,
  * whose title is already the command by then: that one is matched by its `command` input.
  * read, write and edit take `path`, not the common `file_path`, so they aren't common tools.

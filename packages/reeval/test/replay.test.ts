@@ -233,7 +233,7 @@ describe('replay: the OpenCode adapter, from the captured parts', () => {
     assert.ok(!mcp.includes('mcp__stamp__house_stamp'), JSON.stringify(mcp))
   })
 
-  // Captured on openai/gpt-5.4-mini, before the adapter named it: GPT models get `patch`.
+  // OpenCode maps GPT models' `patch` tool to edit.
   const gptPatch = () =>
     parse(readFileSync(join(testDir, 'fixtures', 'opencode-gpt-patch.raw.jsonl'), 'utf8'))
 

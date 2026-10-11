@@ -245,8 +245,8 @@ export function antigravityMcpServers(
 }
 
 /**
- * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on;
- * 2.0.18 has no SSE transport.
+ * OpenCode's config shape (its `mcp.servers`), which the adapter sets `codemode: false` on.
+ * OpenCode has no SSE transport.
  */
 export function opencodeMcpServers(
   servers: Record<string, ResolvedMcpServer>,
@@ -284,7 +284,7 @@ export function gooseMcpServers(
 }
 
 /**
- * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. 0.99.1
+ * pi's `mcp.json` shape, which the adapter escapes and sets `"exposure": "direct"` on. pi
  * skips a server whose name isn't letters, digits, `_` and `-`, so the plan refuses it instead.
  */
 export function piMcpServers(
@@ -325,7 +325,7 @@ export function cursorMcpServers(
 /** Where each agent with an image reads rules and skills. */
 export const LAYOUTS: Record<BakedHarness, Layout> = {
   // The SDK loads AGENTS.md and .cursor/skills from the workspace (settingSources `project`) and
-  // ~/.agents/skills from home (`user`), as the Cursor CLI does.
+  // ~/.agents/skills from home (`user`).
   cursor: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.cursor/skills',
@@ -336,21 +336,20 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.claude/skills',
     harnessSkillDir: '.claude/skills',
   },
-  // CLI 1.3.3 reads home skills from ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli
-  // path its docs give.
+  // Home skills are ~/.gemini/config/skills, not the ~/.gemini/antigravity-cli path its docs give.
   antigravity: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.agents/skills',
     harnessSkillDir: '.gemini/config/skills',
   },
-  // 2.0.18 reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
+  // OpenCode reads AGENTS.md but not CLAUDE.md. It also reads .claude/skills and .agents/skills, in
   // the workspace and the home directory; nothing turns that off.
   opencode: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
   },
-  // Goose's bootstrap gives it a private home, so its home skills are under that. 1.54.0 also
+  // Goose's bootstrap gives it a private home, so its home skills are under that. It also
   // reads .agents/skills and .claude/skills; nothing turns that off.
   goose: {
     rulesFile: 'AGENTS.md',
@@ -358,14 +357,14 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     harnessSkillDir:
       '.ai-sdk-harness/.harness-bootstrap/goose/implementation/home/.config/goose/skills',
   },
-  // 0.99.1 reads workspace skills only in a trusted project, which the adapter's --approve makes
+  // pi reads workspace skills only in a trusted project, which the adapter's --approve makes
   // it; it reads AGENTS.md (or CLAUDE.md, when there's no AGENTS.md).
   pi: {
     rulesFile: 'AGENTS.md',
     workspaceSkillDir: '.pi/skills',
     harnessSkillDir: '.pi/agent/skills',
   },
-  // 0.157.1 reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
+  // Codex reads skills from ~/.agents/skills and the repo's .agents/skills, AGENTS.md from
   // ~/.codex and the workspace.
   codex: {
     rulesFile: 'AGENTS.md',
@@ -389,7 +388,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
       fields: ['accessToken', 'refreshToken'],
       hosts: ['cursor.sh', '*.cursor.sh'],
     },
-    // SDK 1.0.32 and 1.0.34 drop web search and fetch calls from their stream (they run on
+    // The SDK drops web search and fetch calls from its stream (they run on
     // Cursor's backend, so the egress log doesn't see them either). The runner recovers them from
     // the stored conversation, and names the tools it couldn't recover for a turn.
     unreported: cursorUnreported,
@@ -409,7 +408,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Claude Code',
     factory: 'claudeCode',
     credential: 'ANTHROPIC_API_KEY',
-    // What CLI 2.1.281 sends the key on, with non-essential traffic off (checked in Docker).
+    // What the CLI sends the key on, with non-essential traffic off.
     // Anything else gets a 403 from the gateway and a warning that names the request.
     endpoints: [
       { host: 'api.anthropic.com', path: { exact: '/v1/messages' }, method: ['POST'] },
@@ -442,10 +441,10 @@ export const AGENTS: Record<AgentKind, Agent> = {
     factory: 'antigravity',
     // A Gemini API key, never the CLI's Google sign-in: automating that session risks the account.
     credential: 'GEMINI_API_KEY',
-    // The only request CLI 1.3.3 sends the key on (its main model, and a lite one for titles).
+    // The only request the CLI sends the key on (its main model, and a lite one for titles).
     endpoints: GEMINI_ENDPOINTS,
-    // CLI 1.3.3 opens both in every session. Neither `enableTelemetry: false` nor any other
-    // setting or variable in the binary stops them (checked on 1.2.11 behind a logging proxy).
+    // The CLI opens both in every session. Neither `enableTelemetry: false` nor any other
+    // setting or variable in the binary stops them.
     expectedBlocked: {
       hosts: ['play.googleapis.com', 'antigravity-unleash.goog'],
       why: "Antigravity's telemetry and feature flags, which its CLI sends even with telemetry off",
@@ -469,8 +468,8 @@ export const AGENTS: Record<AgentKind, Agent> = {
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
-    // The requests 2.0.26 sends each provider's key on (its model, and the same model for titles),
-    // probed per provider (harness-opencode's opencode-provider-table.ts).
+    // The requests the pinned CLI sends each provider's key on (its model, and the same model for
+    // titles), probed per provider (harness-opencode's opencode-provider-table.ts).
     forModel: opencodeForModel,
     mcpServers: opencodeMcpServers,
     adapter: async ({ auth, mcpServers, descriptor }) =>
@@ -487,7 +486,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The requests 1.54.0 sends the key on, with session naming off.
+    // The requests Goose sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
@@ -507,7 +506,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'pi',
     factory: 'pi',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The only request 0.99.1 sends the key on; --offline stops its startup network operations.
+    // The only request pi sends the key on; --offline stops its startup network operations.
     endpoints: GEMINI_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: piMcpServers,
@@ -524,7 +523,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
-    // The only request 0.162.0 sends the key on, on the adapter's provider (HTTP, not WebSockets),
+    // The only request Codex sends the key on, on the adapter's provider (HTTP, not WebSockets),
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,

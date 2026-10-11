@@ -50,7 +50,7 @@ async function judgeState(
 }
 
 /**
- * Phase 4, the judge: grades a turn (the last by default) or a value against a question, under
+ * Grades a turn (the last by default) or a value against a question, under
  * the judge provider's concurrency lease. Every call's input is recorded, including calls that
  * fail. A call that fails returns a `JudgeFailure` and fails the attempt as a judge error after the eval's body, so the judges and
  * checks after it still run.

@@ -1,4 +1,4 @@
-// Which files are eval files, and which of them a path filter picks, as Vitest decided both.
+// Which files are eval files, and which of them a path filter picks, matching Vitest's discovery.
 import { isAbsolute, relative, resolve } from 'node:path'
 import { glob } from 'tinyglobby'
 import { attemptId, relativeFile } from '../ids.ts'

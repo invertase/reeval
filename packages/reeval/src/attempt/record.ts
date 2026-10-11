@@ -68,7 +68,7 @@ export function recordEgress(a: Attempt, sandbox: Sandbox | undefined): void {
   a.record.servedModels = sandbox?.servedModels?.() ?? null
 }
 
-/** Phase 6: writes the attempt's record, redacted, and returns what the runner reports. */
+/** Writes the attempt's record, redacted, and returns what the runner reports. */
 export async function writeRecord(a: Attempt, stagingDir: string, id: string): Promise<EvalMeta> {
   const { record, spec } = a
   const recordPath = join(

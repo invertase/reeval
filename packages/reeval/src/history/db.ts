@@ -1,6 +1,6 @@
 // `.reeval/history.db`: a gitignored SQLite projection of the run records, for `reeval query`. Nothing in
-// it isn't in `evals/.history` or `.reeval/runs`; it's rebuilt incrementally from them on every query
-// and can be deleted at any time.
+// it isn't in the configured history folder or `.reeval/runs`; it's rebuilt incrementally from them on
+// every query and can be deleted at any time.
 import { mkdir, readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { DatabaseSync, SQLInputValue } from 'node:sqlite'

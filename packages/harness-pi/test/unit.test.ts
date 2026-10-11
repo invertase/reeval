@@ -76,7 +76,7 @@ test('env and header values are escaped so pi reads them literally', () => {
 })
 
 test("each escaped value resolves, under pi's expansion rules, to the value as written", () => {
-  // pi's rules (core/resolve-config-value.js, 0.99.1): a leading `!` runs a command; otherwise
+  // pi's rules (core/resolve-config-value.js): a leading `!` runs a command; otherwise
   // `$$` and `$!` are literals and `$NAME` or `${NAME}` expands.
   const resolve = (config: string) => {
     if (config.startsWith('!')) return { command: config.slice(1) }

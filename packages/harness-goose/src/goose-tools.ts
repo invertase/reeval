@@ -6,7 +6,7 @@ import { z } from 'zod'
 type BuiltinTool = HarnessV1BuiltinTool<any, any>
 
 /*
- * Goose 1.54.0's developer extension, from its ACP `tool_call` updates: the title is
+ * Goose's developer extension, from its ACP `tool_call` updates: the title is
  * `<tool> · <target>` (`shell · cat a.txt`), which `@ai-sdk/harness-acp` matches by prefix.
  * write and edit take `path`, not the common `file_path`, so they aren't common tools. Its other
  * tools keep Goose's own names (see GooseStreamTranslator).

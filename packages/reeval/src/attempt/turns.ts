@@ -50,7 +50,7 @@ type Checks = {
 }
 
 /**
- * Phase 3: one turn. Sends the prompt to the started session, records the turn as it goes (an
+ * One turn. Sends the prompt to the started session, records the turn as it goes (an
  * errored entry first, so a turn that throws is still in the record), takes the agent's context
  * after the first, and diffs the workspace since the snapshot.
  */

@@ -1,4 +1,4 @@
-// Session behaviours in a real container (test-strategy §11.1–11.2): what an abort or kill leaves
+// Session behaviours in a real container: what an abort or kill leaves
 // running, and what a create leaves behind.
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'

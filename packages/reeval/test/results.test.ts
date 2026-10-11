@@ -1,4 +1,4 @@
-// What a result means (plan-of-attack wave 2): gate policies, lift with its interval, and what a
+// What a result means: gate policies, lift with its interval, and what a
 // fingerprint covers. Pure functions here; the CLI behaviour is in options.test.ts and
 // history.test.ts.
 import assert from 'node:assert/strict'

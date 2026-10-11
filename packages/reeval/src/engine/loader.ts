@@ -1,5 +1,5 @@
 // Loads an eval file in a worker: TypeScript, ESM or CommonJS, with extensionless imports, through
-// jiti. The file's tsconfig.json must load, as it had to when Vite transformed eval files: a
+// jiti. The file's tsconfig.json must load (jiti uses it like any TypeScript runner): a
 // broken one fails every eval file under it, loudly.
 import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'

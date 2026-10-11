@@ -61,7 +61,7 @@ evaluate('hello', async (c) => {
 }
 
 // Yarn doesn't install peer dependencies, and neither does pnpm without auto-install-peers, so
-// everything es loads must be one of the package's own dependencies. Strict peers also fails
+// everything reeval loads must be one of the package's own dependencies. Strict peers also fails
 // the install when a dependency's required peer isn't met.
 const installers = [
   {
@@ -110,7 +110,7 @@ for (const installer of installers) {
   })
 }
 
-// A project's own Vitest, another major for its own unit tests, is never loaded or run by es.
+// A project's own Vitest, another major for its own unit tests, is never loaded or run by reeval.
 test("the packed package runs beside the project's own, different vitest", {
   skip: noTools,
   timeout: 600_000,

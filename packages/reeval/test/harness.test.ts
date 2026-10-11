@@ -1272,7 +1272,7 @@ describe('OpenCode transcripts', () => {
       ms: 20,
       part: { type: 'tool-result', toolCallId: id, output },
     })
-    // OpenCode 2.0.18's outputs: its content's text, with its ACP rawOutput's metadata.
+    // OpenCode's outputs: its content's text, with its ACP rawOutput's metadata.
     const events = normaliseStream(
       [
         call('w', 'write', { path: '/reeval/workspace/b.txt', content: 'bee\nsting\n' }),
@@ -1720,7 +1720,7 @@ describe('Cursor web tools at every layer: SDK, adapter, HarnessAgent, normalise
     )
   })
 
-  test('SDK 1.0.32 loses them before our first layer: its stream alone has none anywhere', async () => {
+  test('the SDK stream loses them before our first layer: its stream alone has none anywhere', async () => {
     const { sdk, adapter, agent, events } = await layers('web-1.0.32.ndjson', 0)
     assert.deepEqual([sdk, adapter, agent, events], [[], [], [], []])
   })

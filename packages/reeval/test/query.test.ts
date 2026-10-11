@@ -1,4 +1,4 @@
-// `reeval query` over `.reeval/history.db` (plan-of-attack wave 2b): a projection of the run records, so
+// `reeval query` over `.reeval/history.db`: a projection of the run records, so
 // every check compares a query with what the records say.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
