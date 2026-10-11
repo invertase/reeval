@@ -350,7 +350,7 @@ export const LAYOUTS: Record<BakedHarness, Layout> = {
     workspaceSkillDir: '.opencode/skills',
     harnessSkillDir: '.config/opencode/skills',
   },
-  // Goose's bootstrap gives it a private home, so its home skills are under that. 1.53.0 also
+  // Goose's bootstrap gives it a private home, so its home skills are under that. 1.54.0 also
   // reads .agents/skills and .claude/skills; nothing turns that off.
   goose: {
     rulesFile: 'AGENTS.md',
@@ -487,7 +487,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Goose',
     factory: 'goose',
     credential: 'GOOGLE_GENERATIVE_AI_API_KEY',
-    // The requests 1.53.0 sends the key on, with session naming off.
+    // The requests 1.54.0 sends the key on, with session naming off.
     endpoints: GOOSE_ENDPOINTS,
     servedModel: geminiServedModel,
     mcpServers: gooseMcpServers,
