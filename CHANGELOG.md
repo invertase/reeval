@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/invertase/reeval/compare/v0.6.1...v0.6.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **sandbox:** keep the Claude Code broker check after the CLI unsets the key ([#254](https://github.com/invertase/reeval/issues/254)) ([977b289](https://github.com/invertase/reeval/commit/977b2895773454cca83824ceedc31d3a8ca3863e))
+
 ## [0.6.1](https://github.com/invertase/reeval/compare/v0.6.0...v0.6.1) (2026-10-03)
 
 
