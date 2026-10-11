@@ -46,19 +46,43 @@ function finished(result: EvalResult): LiveStatus {
   return result.state === 'passed' ? 'pass' : 'fail'
 }
 
+/** Sharing-violation codes Windows uses while a reader has `to` open. */
+const BUSY = new Set(['EPERM', 'EACCES', 'EBUSY'])
+
+/** How long a busy rename is retried. A studio poll holds the file for a few milliseconds. */
+const BUSY_MS = 1000
+
+type ReplaceHooks = {
+  now?: () => number
+  wait?: (ms: number) => void
+  busyMs?: number
+}
+
+function pause(ms: number): void {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
 /**
  * Renames `from` over `to`. Windows refuses while a reader (`reeval studio`) has `to` open, for a
- * moment: try again briefly rather than drop the update.
+ * moment: try again for up to a second rather than drop the update.
  */
-export function replace(from: string, to: string, rename = renameSync): void {
+export function replace(
+  from: string,
+  to: string,
+  rename = renameSync,
+  hooks: ReplaceHooks = {},
+): void {
+  const now = hooks.now ?? Date.now
+  const wait = hooks.wait ?? pause
+  const deadline = now() + (hooks.busyMs ?? BUSY_MS)
   for (let attempt = 1; ; attempt++) {
     try {
       rename(from, to)
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
-      if (attempt >= 20 || !(code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) throw error
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, attempt)
+      if (!code || !BUSY.has(code) || now() >= deadline) throw error
+      wait(Math.min(attempt, 32))
     }
   }
 }
