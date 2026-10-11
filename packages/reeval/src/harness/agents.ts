@@ -524,7 +524,7 @@ export const AGENTS: Record<AgentKind, Agent> = {
     name: 'Codex',
     factory: 'codex',
     credential: 'OPENAI_API_KEY',
-    // The only request 0.160.1 sends the key on, on the adapter's provider (HTTP, not WebSockets),
+    // The only request 0.162.0 sends the key on, on the adapter's provider (HTTP, not WebSockets),
     // whose response names the dated model and the effort that served it.
     endpoints: OPENAI_ENDPOINTS,
     modelResponses: OPENAI_ENDPOINTS,

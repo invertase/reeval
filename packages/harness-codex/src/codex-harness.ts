@@ -47,7 +47,7 @@ export const CODEX_WORKSPACE_SKILLS_DIR = '.agents/skills'
 export const CODEX_PROVIDER_ID = 'openai-http'
 
 /**
- * The one request Codex 0.160.1 sends the key on, `POST /v1/responses`, on its own provider (with
+ * The one request Codex 0.162.0 sends the key on, `POST /v1/responses`, on its own provider (with
  * WebSockets off, so it's always HTTP). A gateway that enforces it refuses the key anywhere else.
  */
 export const CODEX_ENDPOINTS = [

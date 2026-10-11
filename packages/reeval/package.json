@@ -96,7 +96,7 @@
     "@ai-sdk/harness-claude-code": "1.0.142",
     "@modelcontextprotocol/client": "2.3.1",
     "@reeval/harness-antigravity": "workspace:0.1.5",
-    "@reeval/harness-codex": "workspace:0.1.4",
+    "@reeval/harness-codex": "workspace:0.1.5",
     "@reeval/harness-cursor-sdk": "workspace:0.1.2",
     "@reeval/harness-goose": "workspace:0.1.1",
     "@reeval/harness-opencode": "workspace:0.2.5",
