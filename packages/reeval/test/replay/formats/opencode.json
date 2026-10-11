@@ -22,6 +22,7 @@
   "prompt-response .usage.totalTokens",
   "tool_call .kind",
   "tool_call .locations",
+  "tool_call .name",
   "tool_call .rawInput",
   "tool_call .sessionUpdate",
   "tool_call .status",
