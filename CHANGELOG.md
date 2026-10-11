@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/invertase/reeval/compare/v0.6.2...v0.6.3) (2026-10-11)
+
+
+### Bug Fixes
+
+* **studio:** make live.json whole-replace reliable on Windows ([#259](https://github.com/invertase/reeval/issues/259)) ([f0c55b5](https://github.com/invertase/reeval/commit/f0c55b506932205c1177398ff824cc1784aa8b0f))
+
 ## [0.6.2](https://github.com/invertase/reeval/compare/v0.6.1...v0.6.2) (2026-10-11)
 
 
