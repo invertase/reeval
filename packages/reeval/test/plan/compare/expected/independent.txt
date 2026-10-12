@@ -5,4 +5,4 @@ evals/independent.eval.ts › parent › baseline, not the inherited environment
                                                                               b/peer/docker  variant peer  gated    ×1
 excluded: —
 image docker · 1 evals
-  base  reeval-sandbox:cursor-0.1.3  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)
