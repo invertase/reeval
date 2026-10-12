@@ -106,10 +106,14 @@ which may be complete.
 `--resume <ref>` is a run id or unique prefix. Git SHA prefixes are not used:
 they would pick the newest run at that commit, which is often complete.
 
-A run is resumable when its studio heartbeat is stale (or the process is gone)
-and it is not `complete`. A live run is refused. `.reeval/current` points at
-the id when the run starts, after the plan, so `--resume` with no ref can find
-a crash that never assembled. A usage error at plan time writes nothing.
+A run is resumable when no process for that id is still alive on this machine
+and it is not `complete`. The pid is what counts: a quiet heartbeat (a sleeping
+laptop) is still running, and resume will not destroy its containers. A second
+`--resume` of the same id is refused while the first CLI still holds it. With
+no ref, a live leftover is named (`still running`) rather than reported as
+missing. `.reeval/current` points at the id when the run starts, after the
+plan, so `--resume` with no ref can find a crash that never assembled. A usage
+error at plan time writes nothing.
 
 In-flight attempts start again from the beginning of the attempt. Completed
 ones keep their outcome, including a pass. The assembled record replaces the
