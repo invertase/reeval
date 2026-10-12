@@ -127,9 +127,8 @@ export function LiveRunPage() {
           <p>
             This run stopped without writing a record: its{' '}
             <span className="font-mono">reeval run</span> exited or stopped responding. Continue it
-            with{' '}
-            <span className="font-mono">reeval run --resume {run.runId}</span>. The attempts below
-            are what finished before it did.
+            with <span className="font-mono">reeval run --resume {run.runId}</span>. The attempts
+            below are what finished before it did.
           </p>
         </div>
       ) : null}
