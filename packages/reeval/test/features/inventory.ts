@@ -1641,6 +1641,9 @@ export const inventory: InventoryFeature[] = [
     plan: ['resume/stopped-staging'],
     tests: [
       'reeval/test/resume.test.ts › omitted ref and latest pick the newest resumable, not assembled latest',
+      'reeval/test/resume.test.ts › a quiet heartbeat is still running when the pid is alive',
+      'reeval/test/resume.test.ts › omitted ref names a live run instead of no resumable',
+      'reeval/test/resume.test.ts › refuses a second claim while this process holds the id',
       'reeval/test/resume.test.ts › reuses the leftover id, skips a completed attempt and runs the rest',
       'reeval/test/resume.test.ts › --dry-run does not write the pointer or move an interrupted scratch',
       'reeval/test/results.test.ts › a skipped attempt keeps a staged pass',

@@ -8,6 +8,7 @@ import { RefError } from '../src/history/views.ts'
 import { attemptKey, evalId } from '../src/ids.ts'
 import {
   completedKeysFor,
+  HOLDER_FILE,
   isCompletedAttempt,
   prepareResume,
   readCurrent,
@@ -16,6 +17,29 @@ import {
 } from '../src/resume.ts'
 import { fakeConfig, project, readRun, runCli } from './helpers.ts'
 import { SEEDED_RUN_ID, writeScratch, writeStoppedStaging } from './support/resume.ts'
+
+function writeLiveStaging(
+  root: string,
+  runId: string,
+  extra: { pid: number; heartbeatAt: string },
+): void {
+  writeStoppedStaging(root, runId)
+  writeFileSync(
+    join(root, '.reeval', 'staging', runId, 'live.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      runId,
+      startedAt: '2026-01-01T00:00:00.000Z',
+      pid: extra.pid,
+      host: hostname(),
+      heartbeatAt: extra.heartbeatAt,
+      phase: 'running',
+      planned: 0,
+      counts: { done: 0, passed: 0, failed: 0, errored: 0, skipped: 0, running: 0 },
+      attempts: [],
+    })}\n`,
+  )
+}
 
 describe('isCompletedAttempt', () => {
   test('pass, fail and infra count; skipped and aborted do not', () => {
@@ -63,22 +87,7 @@ describe('resolveResume', () => {
   test('a live run and a complete run are refused', async () => {
     const p = await project('resume-refuse', { 'reeval.config.ts': fakeConfig() })
     const live = '20260101T000000Z_nogit_live_aaaa'
-    writeStoppedStaging(p.dir, live)
-    writeFileSync(
-      join(p.dir, '.reeval', 'staging', live, 'live.json'),
-      `${JSON.stringify({
-        schemaVersion: 1,
-        runId: live,
-        startedAt: '2026-01-01T00:00:00.000Z',
-        pid: process.pid,
-        host: hostname(),
-        heartbeatAt: new Date().toISOString(),
-        phase: 'running',
-        planned: 0,
-        counts: { done: 0, passed: 0, failed: 0, errored: 0, skipped: 0, running: 0 },
-        attempts: [],
-      })}\n`,
-    )
+    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
     writeScratch(p.dir, '20260102T000000Z_nogit_done_bbbb', 'complete')
     await assert.rejects(
       () => resolveResume(p.dir, live),
@@ -92,6 +101,40 @@ describe('resolveResume', () => {
       () => resolveResume(p.dir, 'no-such-run'),
       (e: unknown) => e instanceof RefError,
     )
+  })
+
+  test('a quiet heartbeat is still running when the pid is alive', async () => {
+    const p = await project('resume-sleep', { 'reeval.config.ts': fakeConfig() })
+    const live = '20260101T000000Z_nogit_sleep_aaaa'
+    writeLiveStaging(p.dir, live, {
+      pid: process.pid,
+      heartbeatAt: new Date(Date.now() - 60_000).toISOString(),
+    })
+    await assert.rejects(
+      () => resolveResume(p.dir, live),
+      (e: unknown) =>
+        e instanceof UsageError &&
+        /still running/.test((e as Error).message) &&
+        (e as Error).message.includes(live),
+    )
+  })
+
+  test('omitted ref names a live run instead of no resumable', async () => {
+    const p = await project('resume-omitted-live', { 'reeval.config.ts': fakeConfig() })
+    const live = '20260101T000000Z_nogit_only_aaaa'
+    writeLiveStaging(p.dir, live, { pid: process.pid, heartbeatAt: new Date().toISOString() })
+    await assert.rejects(
+      () => resolveResume(p.dir),
+      (e: unknown) =>
+        e instanceof UsageError &&
+        /still running/.test((e as Error).message) &&
+        (e as Error).message.includes(live),
+    )
+    const r = await runCli(p.dir, ['run', '--resume'])
+    assert.equal(r.code, 2, r.stdout + r.stderr)
+    assert.match(r.stderr, /still running/)
+    assert.match(r.stderr, new RegExp(live))
+    assert.doesNotMatch(r.stderr, /No resumable run/)
   })
 
   test('no resumable run is a usage error', async () => {
@@ -116,6 +159,28 @@ describe('completedKeysFor and prepareResume', () => {
       join(p.dir, '.reeval', 'staging', SEEDED_RUN_ID),
     )
     assert.deepEqual([...keys], [key])
+  })
+
+  test('refuses a second claim while this process holds the id', async () => {
+    const p = await project('resume-holder', { 'reeval.config.ts': fakeConfig() })
+    const runId = '20260101T000000Z_nogit_hold_aaaa'
+    writeStoppedStaging(p.dir, runId)
+    const target = await resolveResume(p.dir, runId)
+    await prepareResume(target, p.dir)
+    await assert.rejects(
+      () => prepareResume(target, p.dir),
+      (e: unknown) => e instanceof UsageError && /still running/.test((e as Error).message),
+    )
+  })
+
+  test('steals a holder whose process is gone', async () => {
+    const p = await project('resume-steal', { 'reeval.config.ts': fakeConfig() })
+    const runId = '20260101T000000Z_nogit_dead_aaaa'
+    const staging = writeStoppedStaging(p.dir, runId)
+    writeFileSync(join(staging, HOLDER_FILE), `2000000000\n${hostname()}\n`)
+    const target = await resolveResume(p.dir, runId)
+    await prepareResume(target, p.dir)
+    assert.match(readFileSync(join(staging, HOLDER_FILE), 'utf8'), new RegExp(String(process.pid)))
   })
 
   test('moves an interrupted scratch aside so the same id can be rewritten', async () => {
@@ -233,4 +298,5 @@ test('writeCurrent overwrites the pointer', async () => {
   assert.equal(readCurrent(p.dir), SEEDED_RUN_ID)
   writeCurrent(p.dir, '20260102T000000Z_nogit_test_efgh')
   assert.equal(readCurrent(p.dir), '20260102T000000Z_nogit_test_efgh')
+  assert.equal(existsSync(join(p.dir, '.reeval', `current.${process.pid}.tmp`)), false)
 })

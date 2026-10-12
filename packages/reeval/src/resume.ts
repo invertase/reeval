@@ -1,6 +1,14 @@
 // Resume a stopped, interrupted or budget-stopped run: same runId, skip completed attempts,
 // restart ones that never wrote a record (or only wrote `aborted`).
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { readdir, readFile, rm, stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -9,11 +17,15 @@ import { scratchDir } from './history/files.ts'
 import type { AttemptRecord, RunRecord } from './history/types.ts'
 import { RefError } from './history/views.ts'
 import { RUN_ID, recordFileName } from './ids.ts'
+import { replace } from './live.ts'
 import type { EvalRecord, Outcome } from './types.ts'
 import { LIVE_FILE, readableLiveProgress } from './view/live.ts'
 
-/** Matches the studio: a heartbeat older than this, or a dead pid on this host, is Stopped. */
+/** Other-host / studio: a heartbeat older than this is quiet. A live pid on this host is not. */
 const STALE_MS = 15_000
+
+/** Exclusive claim in staging so two CLIs cannot resume the same id through the plan window. */
+export const HOLDER_FILE = 'holder'
 
 /** `.reeval/current`: the run id, written when the run starts (after the plan). */
 export const currentPath = (root: string) => join(root, '.reeval', 'current')
@@ -23,7 +35,70 @@ const stagingOf = (root: string, runId: string) => join(root, '.reeval', 'stagin
 export function writeCurrent(root: string, runId: string): void {
   const file = currentPath(root)
   mkdirSync(join(root, '.reeval'), { recursive: true })
-  writeFileSync(file, `${runId}\n`)
+  const tmp = `${file}.${process.pid}.tmp`
+  writeFileSync(tmp, `${runId}\n`)
+  try {
+    replace(tmp, file)
+  } catch (error) {
+    rmSync(tmp, { force: true })
+    throw error
+  }
+}
+
+const stillRunning = (runId: string) =>
+  new UsageError(
+    `run ${runId} is still running. Wait for it to finish or stop, then reeval run --resume ${runId}.`,
+  )
+
+/** Same host only: `kill(pid, 0)`. Another host cannot be probed. */
+export function processAlive(pid: number, host: string): boolean {
+  if (host !== hostname()) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
+  }
+}
+
+function readHolder(dir: string): { pid: number; host: string } | null {
+  try {
+    const [pidLine, hostLine] = readFileSync(join(dir, HOLDER_FILE), 'utf8').split('\n')
+    const pid = Number(pidLine)
+    if (!Number.isInteger(pid) || pid <= 0 || !hostLine) return null
+    return { pid, host: hostLine }
+  } catch {
+    return null
+  }
+}
+
+const holderLive = (dir: string) => {
+  const holder = readHolder(dir)
+  return holder ? processAlive(holder.pid, holder.host) : false
+}
+
+function acquireHolder(staging: string, runId: string): void {
+  const file = join(staging, HOLDER_FILE)
+  const body = `${process.pid}\n${hostname()}\n`
+  const create = () => writeFileSync(file, body, { flag: 'wx' })
+  try {
+    create()
+    return
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  }
+  if (holderLive(staging)) throw stillRunning(runId)
+  try {
+    unlinkSync(file)
+  } catch {
+    throw stillRunning(runId)
+  }
+  try {
+    create()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw stillRunning(runId)
+    throw error
+  }
 }
 
 export function readCurrent(root: string): string | null {
@@ -103,15 +178,11 @@ function progressLive(
   progress: NonNullable<ReturnType<typeof readableLiveProgress>>,
   now: number,
 ): boolean {
+  // A sleeping laptop goes quiet; the pid is still this process. Do not steal it.
+  if (processAlive(progress.pid, progress.host)) return true
   const quiet = now - Date.parse(progress.heartbeatAt) > STALE_MS
   if (quiet) return false
-  if (progress.host !== hostname()) return true
-  try {
-    process.kill(progress.pid, 0)
-    return true
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ESRCH'
-  }
+  return progress.host !== hostname()
 }
 
 async function readScratch(root: string, runId: string): Promise<RunRecord | null> {
@@ -134,7 +205,7 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
     if (!info?.isDirectory()) continue
     const text = await readFile(join(dir, LIVE_FILE), 'utf8').catch(() => null)
     const progress = text ? readableLiveProgress(JSON.parse(text) as unknown) : null
-    const live = progress ? progressLive(progress, now) : false
+    const live = (progress ? progressLive(progress, now) : false) || holderLive(dir)
     const startedAt = progress?.startedAt ?? new Date(info.mtimeMs).toISOString()
     found.set(runId, {
       runId,
@@ -207,8 +278,9 @@ function matchRef(candidates: Candidate[], ref: string): Candidate | undefined {
 /**
  * `--resume` with no ref (or `latest`): the newest Stopped staging directory, or an
  * `interrupted` / `budget` scratch. A pointer at `.reeval/current` wins when it still names
- * one of those. `--resume <ref>` is a run id or unique prefix, not today's assembled `latest`
- * and not a git SHA.
+ * one of those. A live pid (or a holder this process did not steal) is still running: omitted
+ * `--resume` names that id instead of "No resumable run". `--resume <ref>` is a run id or
+ * unique prefix, not today's assembled `latest` and not a git SHA.
  */
 export async function resolveResume(root: string, ref?: string): Promise<ResumeTarget> {
   const candidates = await listCandidates(root)
@@ -219,6 +291,10 @@ export async function resolveResume(root: string, ref?: string): Promise<ResumeT
     const pointed = pointer ? open.find((c) => c.runId === pointer) : undefined
     const pick = pointed ?? open.at(-1)
     if (!pick) {
+      const liveOnes = candidates.filter((c) => c.live)
+      const pointedLive = pointer ? liveOnes.find((c) => c.runId === pointer) : undefined
+      const livePick = pointedLive ?? liveOnes.at(-1)
+      if (livePick) throw stillRunning(livePick.runId)
       throw new UsageError(
         'No resumable run. A stopped staging directory, or an interrupted or budget-stopped scratch record, can be resumed.',
       )
@@ -233,11 +309,7 @@ export async function resolveResume(root: string, ref?: string): Promise<ResumeT
   }
   const found = matchRef(candidates, ref)
   if (!found) throw new RefError(`No run matches "${ref}"`)
-  if (found.live) {
-    throw new UsageError(
-      `run ${found.runId} is still running. Wait for it to finish or stop, then reeval run --resume ${found.runId}.`,
-    )
-  }
+  if (found.live) throw stillRunning(found.runId)
   if (found.complete || !resumable(found)) {
     throw new UsageError(
       `run ${found.runId} is complete and cannot be resumed. reeval run starts a new run.`,
@@ -253,6 +325,7 @@ export async function resolveResume(root: string, ref?: string): Promise<ResumeT
 export async function prepareResume(target: ResumeTarget, root: string): Promise<void> {
   const staging = stagingOf(root, target.runId)
   mkdirSync(join(staging, 'evals'), { recursive: true })
+  acquireHolder(staging, target.runId)
   if (!target.previous) return
   const scratch = scratchDir(root)
   const recordPath = join(scratch, `${target.runId}.json`)
