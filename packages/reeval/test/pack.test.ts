@@ -180,6 +180,12 @@ test('the packed package installs into a clean project and runs reeval', {
   const { dir, tarball, manifest, pkg } = pack()
   const listing = sh('tar', dir, ['tzf', tarball]).stdout
   assert.match(listing, /^package\/LICENSE$/m)
+  // The published README is the repo-root README, copied at build.
+  assert.match(listing, /^package\/README\.md$/m)
+  assert.equal(
+    extract(dir, tarball, 'README.md'),
+    readFileSync(join(pkgRoot, '..', '..', 'README.md'), 'utf8'),
+  )
   assert.match(listing, /^package\/dist\/cli\.js$/m)
   assert.match(listing, /^package\/dist\/studio-app\/index\.html$/m)
   for (const entry of ['index', 'harness', 'sandbox', 'judge', 'view/index']) {

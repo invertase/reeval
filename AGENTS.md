@@ -133,6 +133,8 @@ An inlined package's other `files` (`sandbox-docker`'s `docker/` build context, 
 `assets/` lockfile) ship at the
 root of `reeval`, beside `dist/` as in their own package, so a `../docker` from one of
 its modules resolves in both; list each in `reeval`'s `files` and `.gitignore`.
+The published package's README is the repo-root README, copied here at build so the tarball
+has it. README.md is handwritten; `pnpm docs` does not write it.
 
 **Third-party notices.** The build writes `packages/reeval/THIRD_PARTY_NOTICES.md`, which ships
 in the tarball: every third-party package whose code the tarball inlines (tsdown's bundle, the
