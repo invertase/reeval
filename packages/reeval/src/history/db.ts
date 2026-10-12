@@ -10,10 +10,13 @@ import { RUN_ID, relativeFile, sha256 } from '../ids.ts'
 import { BUILD_ID, ownRequire } from '../root.ts'
 import { DERIVED, DERIVED_TABLES, deriveFacts } from './facts.ts'
 import { readRecord, recordNames, scratchDir, warnUnreadable } from './files.ts'
+import { toolTarget } from './tool-target.ts'
 import type { AttemptRecord, CellRecord, RunRecord } from './types.ts'
 
+export { toolTarget }
+
 /** Bump when the tables or views change: a database from another version is rebuilt. */
-const DB_VERSION = 2
+const DB_VERSION = 3
 /** This build of reeval, like the header cache: another reeval re-derives every row. */
 const BUILD = BUILD_ID
 
@@ -145,13 +148,17 @@ CREATE VIEW effort AS SELECT * FROM effort_m;
 CREATE VIEW factor_effects AS SELECT * FROM factor_effects_m;
 
 -- Whether each attempt read each skill its environment placed, and at which transcript line.
+-- A read is a tool whose target is under skills/<name>/, or a dedicated load
+-- (OpenCode skill, Goose load_skill) whose target is the skill name.
 CREATE VIEW skill_reads AS
   SELECT a.run_id, a.eval_key, a.cell_key, a.key AS attempt_key, a.id AS attempt_id, c.variant,
     s.name AS skill, s.placement,
     (SELECT MIN(t.line) FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key
-      AND t.target LIKE '%skills/' || s.name || '/%') AS read_line,
+      AND (t.target LIKE '%skills/' || s.name || '/%'
+        OR (t.tool IN ('skill', 'Skill', 'load_skill') AND t.target = s.name))) AS read_line,
     (SELECT COUNT(*) FROM tool_calls t WHERE t.run_id = a.run_id AND t.attempt_key = a.key
-      AND t.target LIKE '%skills/' || s.name || '/%') AS reads
+      AND (t.target LIKE '%skills/' || s.name || '/%'
+        OR (t.tool IN ('skill', 'Skill', 'load_skill') AND t.target = s.name))) AS reads
   FROM attempts a
   JOIN cells c ON c.run_id = a.run_id AND c.eval_key = a.eval_key AND c.key = a.cell_key
   JOIN env_skills s ON s.run_id = c.run_id AND s.digest = c.environment_digest;
@@ -204,25 +211,6 @@ const json = (value: unknown) => JSON.stringify(value)
 /** `attempts.last_text` is the agent's final message, capped: most "why" questions start there. */
 export const LAST_TEXT_LIMIT = 2048
 
-/** A tool call's target: its path, pattern, command or URL, else its input, capped. */
-function toolTarget(input: unknown): string {
-  if (typeof input !== 'object' || input === null) return String(input ?? '').slice(0, 300)
-  const i = input as Record<string, unknown>
-  for (const key of [
-    'path',
-    'file_path',
-    'filePath',
-    'pattern',
-    'glob_pattern',
-    'command',
-    'url',
-    'query',
-  ]) {
-    if (typeof i[key] === 'string') return (i[key] as string).slice(0, 300)
-  }
-  return JSON.stringify(input).slice(0, 300)
-}
-
 export type ToolCall = {
   line: number
   turn: number | null
@@ -248,7 +236,7 @@ export function toolCalls(transcript: string): ToolCall[] {
       line: i + 1,
       turn: typeof event.turn === 'number' ? event.turn : null,
       tool: String(event.tool ?? ''),
-      target: toolTarget(event.input),
+      target: toolTarget(event.input, String(event.tool ?? '')),
       ok: event.ok !== false,
       durationMs: typeof event.durationMs === 'number' ? event.durationMs : null,
     })

@@ -31,7 +31,7 @@ const VIEW_ROWS: Record<string, string> = {
   factor_effects:
     'factor contrast (environment, harness, model) by evidence tier, with pass-rate and effort verdicts',
   skill_reads:
-    'attempt and skill its environment placed: the transcript line of its first read, and how many',
+    'attempt and skill its environment placed: the transcript line of its first read (a path under skills/<name>/, or a skill / load_skill call), and how many',
   flaky_cells:
     'cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict and a likely cause',
   drift:

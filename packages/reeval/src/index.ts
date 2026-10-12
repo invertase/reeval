@@ -1,4 +1,6 @@
 // `reeval`: the core authoring API. Harnesses, sandboxes and judges live in subpaths.
+
+export { HarnessCapabilityError } from './assert.ts'
 export { defineConfig } from './config.ts'
 export { DEFAULT_EGRESS_ALLOW } from './egress.ts'
 export { expect } from './engine/expect.ts'
@@ -9,7 +11,6 @@ export {
 } from './environment.ts'
 export { evaluate, group } from './evaluate.ts'
 export type { AttemptRecord, CellRecord, EvalEntry, RunRecord } from './history/types.ts'
-export { HarnessCapabilityError } from './matchers.ts'
 export type {
   AttemptContext,
   BackgroundHandle,

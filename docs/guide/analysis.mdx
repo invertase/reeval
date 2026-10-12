@@ -97,7 +97,12 @@ cursor:composer-2.5/with-house-greeting/docker                house-greeting  4 
 antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  house-greeting  2          1
 ```
 
-`skill_reads` has one row per attempt and skill its environment placed. `read_line` is the line in `transcript.jsonl` of the first tool call on the skill's folder, and it's null, with `reads` at 0, when the agent never opened it. A variant that passes without reading its skill didn't pass because of it.
+`skill_reads` has one row per attempt and skill its environment placed.
+`read_line` is the line in `transcript.jsonl` of the first tool that opened it:
+a path under `skills/<name>/`, or a dedicated `skill` / `load_skill` call. It's
+null, with `reads` at 0, when the agent never opened it. A variant that passes
+without reading its skill didn't pass because of it. The same signals are
+`expect(turn).toHaveCalledSkill(name)` during the eval.
 
 ## Count tokens
 

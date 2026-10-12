@@ -1,15 +1,17 @@
 ---
 title: Matchers
-description: The matchers reeval adds to expect, what they accept, and the failure messages they print.
+description: The matchers reeval adds to expect, including transcript checks.
 ---
 
-reeval adds `toHaveFile`, `toSucceed`, `toPass`, `toHaveSearched` and `toHaveFetched` to `expect`, which you import from `'{{ pkg }}'`.
+Import `expect` from `'{{ pkg }}'`. Transcript checks read the in-memory
+events (no `await`). File, exec and judge checks stay on `expect` too.
 
 ```ts title="evals/greet.eval.ts"
 import { evaluate, expect } from '{{ pkg }}'
 
 evaluate('creates a tested greet module', async (c) => {
   const turn = await c.send('Create greet.js exporting greet(name).')
+  expect(turn).toHaveEdited('greet.js')
   await expect(turn).toHaveFile('greet.js', /export/)
   await expect(c.exec('node --check greet.js')).toSucceed()
   expect(await c.judge('Is greet.js small and readable?')).toPass()
@@ -19,6 +21,104 @@ evaluate('creates a tested greet module', async (c) => {
 `expect` has Vitest's matchers (from `@vitest/expect`), so `toBe`, `toContain`, `toMatch`, `toHaveLength`, `.not`, asymmetric matchers such as `expect.any(…)`, `expect.soft`, `expect.poll` and `expect.assertions(n)` work too. A failed matcher fails the attempt; a failed `expect.soft` fails it when the eval ends.
 
 `toHaveFile`, `toSucceed` and `.resolves`/`.rejects` are async. One you don't `await` still runs before the sandbox is torn down, but it fails the attempt, with its own failure or with `expect(…).toSucceed() wasn't awaited`.
+
+## Transcript matchers
+
+```ts
+expect(turnOrC).toHaveCalledSkill(name)
+expect(turnOrC).toHaveCalledMcp(server, tool, input?)
+expect(turnOrC).toHaveCalledTool(name, input?)
+expect(turnOrC).toHaveRun(command?)
+expect(turnOrC).toHaveEdited(path?)
+expect(turnOrC).toHaveSearched(query?)
+expect(turnOrC).toHaveFetched(url?)
+```
+
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()`, or `c` (every turn so far). Anything else throws
+  `toHaveCalledSkill() expects a turn from c.send(), or c`.
+</Property>
+
+Each matcher is synchronous. `.not` and `expect.soft` are Vitest's. File,
+exec and judge checks stay on `expect` as `toHaveFile`, `toSucceed` and
+`toPass`.
+
+`toHaveCalledSkill(name)` passes when a tool loaded that skill: `skill`,
+`Skill` or `load_skill` with `input.id` or `input.name` equal to `name`, or
+any tool whose target contains `skills/<name>/` (a Read or a `sed` of
+`SKILL.md`). That is "opened or loaded", not "followed". Keep a file or
+`c.exec` check for the outcome. A silent inject (skill text in the system
+prompt, no tool) cannot be asserted.
+
+`toHaveCalledMcp(server, tool, input?)` is the author path for MCP: a
+`type: 'tool'` event named `mcp__<server>__<tool>` after adapters and the
+normaliser. `server` and `tool` are the names you already own (`mcp.stamp`
+and `house_stamp`). Optional `input` is the same match as
+`toHaveCalledTool`. Copy-paste from a transcript still works:
+
+```ts
+expect(turn).toHaveCalledTool('mcp__stamp__house_stamp')
+expect(turn).toHaveCalledTool(/^mcp__stamp__/)
+```
+
+After adapters and the normaliser, that string is the same on every harness.
+Claude Code may `ToolSearch` `select:mcp__stamp__house_stamp` first; that is
+a different tool. OpenCode and Goose keep `acp_tool_<id>` if the first ACP
+update or Goose `_meta` is missing. pi turns `-` in a **tool** name into `_`
+(write `latest_version`, not `latest-version`); a hyphenated **server** is
+remapped when unambiguous. Goose, OpenCode, pi and Codex refuse `mcp.sse`
+at plan time; stdio MCP plans on all of them, including pi.
+
+`toHaveCalledTool(name, input?)` looks at `type: 'tool'` events only. `name`
+is an exact string or a RegExp. `input` is an optional substring, RegExp, or
+object matched against the recorded input. Successful `edit` / `write` /
+`delete` are `file-edit` events: use `toHaveEdited`, not
+`toHaveCalledTool('edit')`. Web tools are `web-search` / `web-fetch`: use
+`toHaveSearched` / `toHaveFetched`.
+
+`toHaveRun(command?)` matches `bash` or `shell` (the fake agent). Optional
+`command` is a substring or RegExp on `input.command`. This is the agent's
+command, not `c.exec`.
+
+`toHaveEdited(path?)` matches a `file-edit` whose path matches, or a tool
+whose target or output mentions the path (a shell edit). No argument: any
+`file-edit`.
+
+```ts title="evals/activation.eval.ts"
+import { evaluate, expect } from '{{ pkg }}'
+
+evaluate('uses the house skill and stamps', async (c) => {
+  const turn = await c.send(
+    'Use the house-greeting skill, then call house_stamp.',
+  )
+
+  expect(turn).toHaveCalledSkill('house-greeting')
+  expect(turn).toHaveCalledMcp('stamp', 'house_stamp')
+  expect(c).toHaveRun(/echo contract/)
+  expect(turn).toHaveEdited('greet.js')
+
+  await expect(c).toHaveFile('greet.js', /Ahoy/)
+  await expect(c.exec('node --test')).toSucceed()
+})
+```
+
+```text
+expected skill-like calls matching house-greeting, got ["skill:other"]
+```
+
+```text
+expected MCP calls matching stamp/other, got ["stamp/house_stamp"]
+```
+
+```text
+expected tool calls matching mcp__stamp__other, got ["mcp__stamp__house_stamp"]
+```
+
+<Warning>
+  `toHaveCalledTool('edit')` and `toHaveCalledTool('webSearch')` miss real
+  edits and web calls. The normaliser rewrites those to `file-edit` and
+  `web-*`.
+</Warning>
 
 ## toHaveFile
 
@@ -99,8 +199,9 @@ expect(turn).toHaveSearched(query?)
 expect(turn).toHaveFetched(url?)
 ```
 
-<Property name="actual" type="Turn">
-  A turn from `c.send()`. Anything else throws `toHaveSearched() expects a turn from c.send()`.
+<Property name="actual" type="Turn | AttemptContext">
+  A turn from `c.send()`, or `c`. Anything else throws
+  `toHaveSearched() expects a turn from c.send(), or c`.
 </Property>
 
 <Property name="query / url" type="string | RegExp" optional>

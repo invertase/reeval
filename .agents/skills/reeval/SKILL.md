@@ -150,6 +150,17 @@ group('hello', () => {
 - A failed judge call doesn't throw: `c.judge()` returns `{ verdict: 'error', score: null, error }`,
   the later judges and checks still run, and the attempt fails as a judge error at the end.
   Write `expect.soft(await c.judge(q), name).toPass()` to see every judge's result.
+- Transcript matchers (sync, no `await`): `expect(turn | c).toHaveCalledSkill(name)`,
+  `toHaveCalledMcp(server, tool, input?)`, `toHaveCalledTool(name | RegExp, input?)`,
+  `toHaveRun(command?)`, `toHaveEdited(path?)`, `toHaveSearched(query?)`,
+  `toHaveFetched(url?)`. `.not` and `expect.soft` are Vitest's. `toHaveCalledSkill`
+  is opened or loaded (a `skill` / `load_skill` tool, or a Read/`sed` of
+  `skills/<name>/`), not "followed". MCP is `toHaveCalledMcp(server, tool)`
+  (the names in `mcp.<server>`); `toHaveCalledTool('mcp__<server>__<tool>')` is
+  the raw transcript name. After adapters and the normaliser, that string is
+  the same on every harness (stdio; Goose, OpenCode, pi and Codex refuse
+  `mcp.sse`). Use `toHaveEdited` / `toHaveSearched`, not
+  `toHaveCalledTool('edit')` or `'webSearch'`.
 - Matchers: `await expect(turn).toHaveFile(path, pattern?)`,
   `await expect(c.exec(cmd)).toSucceed()`, `expect(verdict).toPass()`,
   `expect(turn).toHaveSearched(query?)` / `toHaveFetched(url?)` (sync; they throw

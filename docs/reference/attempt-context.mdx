@@ -105,7 +105,10 @@ A fake run printing `c.attempt` shows:
 </Property>
 
 <Property name="unreported" type="Array<'web-search' | 'web-fetch'>">
-  Web event types the harness couldn't report for this turn, so the transcript may be missing them. Usually empty. `toHaveSearched` and `toHaveFetched` throw `HarnessCapabilityError` on a turn that lists theirs. See [Matchers](/reference/matchers#tohavesearched-and-tohavefetched).
+  Web event types the harness couldn't report for this turn, so the transcript
+  may be missing them. Usually empty. `toHaveSearched` and `toHaveFetched`
+  throw `HarnessCapabilityError` on a turn that lists theirs. See
+  [Matchers](/reference/matchers#tohavesearched-and-tohavefetched).
 </Property>
 
 <Property name="diff" type="{ patch: string, files: { path, status }[] }">

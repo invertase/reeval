@@ -5,7 +5,10 @@ description: Give the agent your MCP server, check that it calls the server's to
 
 **Goal:** find out whether agents call your MCP server, and whether they answer better with it than without.
 
-The server goes in an [environment](/guide/environments). A `compare` runs the eval with and without it, and the transcript shows each tool call as `mcp__<server>__<tool>`.
+The server goes in an [environment](/guide/environments). A `compare` runs the
+eval with and without it. Check the call with
+`toHaveCalledMcp(server, tool)`. The transcript still names it
+`mcp__<server>__<tool>`.
 
 ## The files
 
@@ -45,11 +48,8 @@ group(
         'Which version of acme-sdk is the latest? ' +
           'Reply with the version only.',
       )
-      const tools = turn.transcript.flatMap((e) =>
-        e.type === 'tool' ? [e.tool] : [],
-      )
       if (c.attempt.cell.role === 'variant') {
-        expect(tools).toContain('mcp__docs__latest_version')
+        expect(turn).toHaveCalledMcp('docs', 'latest_version')
       }
       expect(turn.text).toContain('4.2.0')
     })
@@ -59,7 +59,9 @@ group(
 
 - `mcp.http(url, { headers })` connects the agent to a remote server. `mcp.sse(url)` works the same way for SSE servers, except on OpenCode, Goose, pi and Codex, which have no SSE transport, so their plans exit 2.
 - `secret.template('Bearer ${ACME_TOKEN}')` reads `ACME_TOKEN` from the host when the attempt starts.
-- The tool-call check runs only in the variant cell: the control has no server to call.
+- The MCP check runs only in the variant cell: the control has no server to
+  call. Copy-paste from a transcript is
+  `toHaveCalledTool('mcp__docs__latest_version')`.
 
 ## The token stays out of the sandbox
 
@@ -94,7 +96,10 @@ Each variant attempt's transcript names the server and tool, the same way on eve
 {"turn":0,"ts":"2026-09-26T17:45:18.116Z","atMs":0,"type":"tool","toolCallId":"call_1","tool":"mcp__docs__latest_version","input":{},"output":"acme-sdk 4.2.0","ok":true,"durationMs":112}
 ```
 
-That line comes from a fake run (below). In the studio, the attempt's Transcript tab shows the same call, and `reeval run -v` prints a `harness tool mcp__docs__latest_version called` line as it happens.
+That line comes from a fake run (below). In the studio, the attempt's
+Transcript tab shows the same call, and `reeval run -v` prints a
+`harness tool mcp__docs__latest_version called` line as it happens.
+`toHaveCalledMcp('docs', 'latest_version')` is the same fact.
 
 ## Try it without keys
 
@@ -185,7 +190,10 @@ Summary
 - **A published stdio server:** `mcp.stdio('npx', ['-y', '@acme/docs-mcp@1.0.0'])`. Pin the version, and give its env secrets `hosts` to broker them: `secret.fromEnv('ACME_TOKEN', { hosts: ['api.acme.dev'] })`.
 - **Check the answer, not the call:** drop the tool check and add `c.judge('Does the reply name 4.2.0 as the latest version?')`.
 - **Server plus docs skill:** `compare: { baseline: plain, variants: [withDocsMcp, withDocsSkill] }` compares both against the same control, and `withDocsMcp.extendEnvironment('mcp-and-skill', …)` adds a cell with both.
-- **Every harness:** set `harness: [cursor(…), claudeCode(…)]`. The `mcp__<server>__<tool>` name is the same on each (see [Compare agents](/recipes/compare-agents)), except that pi writes a `-` in a tool's name as `_` ([pi](/reference/harness/pi)).
+- **Every harness:** set `harness: [cursor(…), claudeCode(…)]`.
+  `toHaveCalledMcp` and the `mcp__<server>__<tool>` transcript name are the
+  same on each (see [Compare agents](/recipes/compare-agents)), except that
+  pi writes a `-` in a tool's name as `_` ([pi](/reference/harness/pi)).
 
 ## Next
 

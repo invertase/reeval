@@ -155,6 +155,13 @@ describe('toHaveFetched and toHaveSearched', () => {
   })
 
   test('reject something that is not a turn', () => {
-    assert.throws(() => matchers.toHaveFetched({}), /toHaveFetched\(\) expects a turn/)
+    assert.throws(
+      () => matchers.toHaveFetched({}),
+      /toHaveFetched\(\) expects a turn from c.send\(\), or c/,
+    )
+  })
+
+  test('accept c, every turn so far', () => {
+    assert.equal(matchers.toHaveFetched({ turns: [turn()] }, 'httpbin.org').pass, true)
   })
 })

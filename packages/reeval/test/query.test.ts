@@ -176,6 +176,33 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 3 
     assert.equal((await one(p.dir, 'SELECT COUNT(*) AS n FROM runs')).n, 1, 'nothing was deleted')
   })
 
+  test('skill_reads counts a dedicated skill load, not only a path under skills/', async () => {
+    const p = await project('query-skill-reads', {
+      'reeval.config.ts': fakeConfig({
+        harness:
+          "{ tools: [{ tool: 'skill', input: { id: 'house-greeting' }, output: 'loaded' }] }",
+      }),
+      'skills/house-greeting/SKILL.md': skill('house-greeting'),
+      'evals/s.eval.ts': `import { defineEnvironment, evaluate } from 'reeval'
+import { fakeSandbox } from 'reeval/sandbox'
+const sandbox = fakeSandbox()
+const skilled = defineEnvironment('skilled', ({ skill }) => ({
+  sandbox,
+  skills: [skill.local('../skills/house-greeting')],
+}))
+evaluate('loads', { environment: skilled }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const rows = await query(
+      p.dir,
+      'SELECT skill, reads, read_line IS NOT NULL AS opened FROM skill_reads',
+    )
+    assert.deepEqual(rows, [{ skill: 'house-greeting', reads: 1, opened: 1 }])
+  })
+
   test('failing attempts join skills by environment digest, not name', async () => {
     const p = await project('query-joins', {
       'reeval.config.ts': fakeConfig(),

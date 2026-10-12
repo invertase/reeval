@@ -170,6 +170,7 @@ Every attempt passed, and the run still exits 1: `minLift: 0` asks for confidenc
 - **Report only:** drop `minLift` and set `compare: { baseline, variants, gate: 'none' }` to see lift without failing anything.
 - **Ask which arm did better:** `compare: { baseline, variants, questions: ['Which greet.js reads more like our house style?'] }` judges the two arms' diffs pair by pair after the run, as `examples/hello`'s `skill.eval.ts` does. Only attempts that pass their checks are paired, so here, where the control is expected to fail, the answer says there are no pairs; see [Ask questions](/guide/compare#ask-questions).
 - **Across runs:** `reeval query lift` lists every variant cell's lift from recorded runs (see [Analysis](/guide/analysis)).
+- **Did the agent open the skill?** `expect(turn).toHaveCalledSkill('house-greeting')` after `c.send`. That is "opened or loaded", not "followed". Keep the `c.exec` check for the greeting. See [Matchers](/reference/matchers#transcript-matchers).
 
 ## Next
 
