@@ -10,6 +10,7 @@ import { harnessId, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
+import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
@@ -25,7 +26,6 @@ import type {
   WebEventType,
 } from '../types.ts'
 import { promptTokens, sumUsage } from '../usage.ts'
-import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { type Source, traceSources } from './sources.ts'
 import { FINGERPRINT_SCOPE, judgeVersion, packageVersions, WORKTREE_PATCH_LIMIT } from './state.ts'
 import {
@@ -868,15 +868,7 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
           formattedErrors: [],
           meta: undefined,
         }
-        await addPreviousAttempt(
-          stub,
-          a,
-          seen,
-          out,
-          judge,
-          input.previousArtifacts,
-          entry.sources,
-        )
+        await addPreviousAttempt(stub, a, seen, out, judge, input.previousArtifacts, entry.sources)
       }
     }
   }

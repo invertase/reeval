@@ -52,7 +52,10 @@ export function writeScratch(
   root: string,
   runId: string,
   status: 'complete' | 'interrupted' | 'budget',
-  attempts: ReadonlyArray<{ key: string; outcome: 'pass' | 'fail' | 'skipped' | 'infra_error' }> = [],
+  attempts: ReadonlyArray<{
+    key: string
+    outcome: 'pass' | 'fail' | 'skipped' | 'infra_error'
+  }> = [],
 ): void {
   mkdirSync(join(root, '.reeval', 'runs'), { recursive: true })
   writeFileSync(

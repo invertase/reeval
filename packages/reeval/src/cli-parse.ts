@@ -106,9 +106,7 @@ function valuesOf(command: Command, flags: FlagName[]): Flags {
     } else if (value !== undefined) {
       const spec = FLAGS[flag]
       values[flag] =
-        spec.type === 'string' && 'optional' in spec && spec.optional && value === true
-          ? ''
-          : value
+        spec.type === 'string' && 'optional' in spec && spec.optional && value === true ? '' : value
     }
   }
   return values as Flags

@@ -1615,19 +1615,20 @@ function fixtureTests(tiers: Tier[]) {
           cwd,
           ['run', ...(tier === 'real' ? ['--concurrency', '1'] : []), ...(f.args ?? [])],
           {
-          env: {
-            ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
-            REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
-            ...(tier === 'real'
-              ? {
-                  REEVAL_FIXTURE_HARNESS: harnessOf(row),
-                  REEVAL_REAL_MODEL: realModelOf(row),
-                  ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
-                }
-              : {}),
+            env: {
+              ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
+              REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
+              ...(tier === 'real'
+                ? {
+                    REEVAL_FIXTURE_HARNESS: harnessOf(row),
+                    REEVAL_REAL_MODEL: realModelOf(row),
+                    ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
+                  }
+                : {}),
+            },
+            timeoutMs: timeout - 10_000,
           },
-          timeoutMs: timeout - 10_000,
-        })
+        )
         const sandbox = f.sandbox ?? (tier === 'fake' ? 'fake' : 'docker')
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'

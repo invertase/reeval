@@ -127,7 +127,11 @@ describe('completedKeysFor and prepareResume', () => {
     await prepareResume(target, p.dir)
     assert.equal(existsSync(join(p.dir, '.reeval', 'runs', `${runId}.json`)), false)
     assert.equal(existsSync(join(p.dir, '.reeval', 'staging', runId, 'previous.json')), true)
-    const keys = completedKeysFor([{ key }], join(p.dir, '.reeval', 'staging', runId), target.previous)
+    const keys = completedKeysFor(
+      [{ key }],
+      join(p.dir, '.reeval', 'staging', runId),
+      target.previous,
+    )
     assert.ok(keys.has(key))
   })
 })

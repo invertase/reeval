@@ -72,8 +72,7 @@ describe('cli', () => {
               : [[`--${flag}`, 'x'], [`--${flag}=x`]]
             : [[`--${flag}`], ...(s.short ? [[`-${s.short}`]] : [])]
         for (const form of forms) {
-          const expected =
-            s.type === 'string' ? (form.join('').includes('x') ? 'x' : '') : true
+          const expected = s.type === 'string' ? (form.join('').includes('x') ? 'x' : '') : true
           const { values, positionals } = parseCli([...path, ...form])
           assert.deepEqual(positionals, path, name)
           assert.deepEqual(values, { [flag]: s.multiple ? [expected] : expected }, name)
