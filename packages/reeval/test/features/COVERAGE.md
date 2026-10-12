@@ -176,7 +176,7 @@
 | Redaction of the debug trace on screen, in debug.log and in trace.ndjson, encoded forms included | ✓ 3 | — | — | — | — |
 | `config.debug` (`keep`, `traceBufferMb`) and `reeval clean` | ✓ 2 | — | — | — | — |
 | Concurrency caps, order and queue time | ✓ 4 | — | — | — | — |
-| `reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id | ✓ 5 | ✓ 1 | ● 1 | — | — |
+| `reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id | ✓ 8 | ✓ 1 | ● 1 | — | — |
 | Eval timeouts, Ctrl-C and SIGTERM | ✓ 10 | — | — | — | — |
 | The packed package installs into a clean project and runs | ✓ 1 | — | — | — | — |
 
