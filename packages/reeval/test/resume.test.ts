@@ -136,9 +136,9 @@ describe('reeval run --resume', () => {
   const twoEvals = {
     'reeval.config.ts': fakeConfig(),
     'evals/pair.eval.ts': `
-import { evaluate, expect } from 'reeval'
-evaluate('done', async (c) => { expect(await c.readFile('missing.txt')).toBe(null) })
-evaluate('leftover', async (c) => { expect(await c.readFile('missing.txt')).toBe(null) })
+import { evaluate } from 'reeval'
+evaluate('done', async () => {})
+evaluate('leftover', async () => {})
 `,
   }
 

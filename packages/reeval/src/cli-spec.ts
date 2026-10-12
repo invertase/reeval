@@ -469,7 +469,7 @@ function checkOne(
       if (type === 'string' && eq === -1) {
         const value = args[i + 1]
         if (value === undefined || value.startsWith('--')) {
-          if (!spec.optional) return `--${flag} needs a value`
+          if (!('optional' in spec && spec.optional)) return `--${flag} needs a value`
         } else {
           i++
           if (flag === 'tag') tags.push(value)
@@ -499,7 +499,7 @@ function checkOne(
 /** One line per command, for the analysis prompt and `--context`. */
 export function commandSummary(): string[] {
   const line = (name: string, spec: Omit<CommandSpec, 'sub'>) =>
-    `reeval ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? (FLAGS[f].optional ? ' [v]' : ' <v>') : ''}`).join(' ')}` : ''}`
+    `reeval ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? ('optional' in FLAGS[f] && FLAGS[f].optional ? ' [v]' : ' <v>') : ''}`).join(' ')}` : ''}`
   return Object.entries(COMMANDS).flatMap(([name, spec]) => [
     ...(name === 'image' ? [] : [line(name, spec)]),
     ...Object.entries(spec.sub ?? {}).map(([sub, s]) => line(`${name} ${sub}`, s)),

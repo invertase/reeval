@@ -71,8 +71,9 @@ describe('cli', () => {
               ? [[`--${flag}`], [`--${flag}`, 'x'], [`--${flag}=x`]]
               : [[`--${flag}`, 'x'], [`--${flag}=x`]]
             : [[`--${flag}`], ...(s.short ? [[`-${s.short}`]] : [])]
-        const expected = s.type === 'string' ? (s.optional && forms[0]?.length === 1 ? '' : 'x') : true
         for (const form of forms) {
+          const expected =
+            s.type === 'string' ? (form.join('').includes('x') ? 'x' : '') : true
           const { values, positionals } = parseCli([...path, ...form])
           assert.deepEqual(positionals, path, name)
           assert.deepEqual(values, { [flag]: s.multiple ? [expected] : expected }, name)
@@ -150,7 +151,9 @@ describe('cli', () => {
         const value = FLAGS[flag].type === 'string' ? ['x'] : []
         usage([...path, `--${flag}`, ...value], /isn't an option of reeval /)
       }
-      for (const flag of spec.flags.filter((f) => FLAGS[f].type === 'string')) {
+      for (const flag of spec.flags.filter(
+        (f) => FLAGS[f].type === 'string' && !('optional' in FLAGS[f] && FLAGS[f].optional),
+      )) {
         usage([...path, `--${flag}`], /argument missing/)
       }
       for (const flag of spec.flags.filter((f) => FLAGS[f].type === 'boolean')) {

@@ -483,7 +483,7 @@ async function addPreviousAttempt(
       if (copied.length) files[name] = copied as never
       continue
     }
-    files[name] = await copyRef(ref, previousArtifacts, out)
+    files[name] = (await copyRef(ref, previousArtifacts, out)) as never
   }
   const checks = []
   for (const c of kept.checks) {
