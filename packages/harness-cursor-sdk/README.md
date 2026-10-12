@@ -44,7 +44,7 @@ this adapter passes them on as `finish-step` and `finish` usage.
   `mcp` with `providerIdentifier` and `toolName`), and usage. Tool paths under the workspace are
   reported relative to it, as ACP reports them. The SDK logs to stdout, so the runner keeps
   stdout for its lines and sends the rest to stderr.
-- **Bootstrap.** Checks for Node 22.21 or later and installs the pinned `@cursor/sdk` (1.0.36,
+- **Bootstrap.** Checks for Node 22.21 or later and installs the pinned `@cursor/sdk` (1.0.37,
   with its platform package: ripgrep and the sandbox helper) next to the runner.
 - **Auth and brokering.** A Cursor user or service-account API key (`CURSOR_API_KEY`). On a
   sandbox with `addRequestTransformations`, the runner gets a placeholder. The SDK sends the key

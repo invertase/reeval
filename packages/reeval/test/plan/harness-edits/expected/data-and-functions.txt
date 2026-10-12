@@ -11,6 +11,6 @@ evals/edits.eval.ts › cursor only › then add  cursor:composer-2.5/-/docker  
                                               fast/-/docker                         control  gated  ×1
 excluded: —
 image docker · 5 evals
-  base  reeval-sandbox:cursor-0.1.3  (reeval's image: built when missing or when its base changed)
+  base  reeval-sandbox:cursor-0.1.4  (reeval's image: built when missing or when its base changed)
 image docker · claude-code · 2 evals
   base  reeval-sandbox:claude-code-1.0.148-patch.8edc594f  (reeval's image: built when missing or when its base changed)
