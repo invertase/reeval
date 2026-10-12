@@ -35,13 +35,13 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   -v, --verbose               Print each attempt's phase trace as it happens: plan, image,
                               container, environment, brokering, turns and tool calls, checks,
                               judge calls, gateway requests and teardown
-    -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
-                                keep every attempt's trace.ndjson (else only failing attempts')
-                                Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
-    --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
-                                skip completed attempts, restart in-flight ones. Without a ref, the
-                                newest resumable (Stopped staging, or an interrupted/budget scratch),
-                                not assembled latest. Ref is a run id or unique prefix
+  -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
+                              keep every attempt's trace.ndjson (else only failing attempts')
+                              Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
+  --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
+                              skip completed attempts, restart in-flight ones. Without a ref, the
+                              newest resumable (Stopped staging, or an interrupted/budget scratch),
+                              not assembled latest. Ref is a run id or unique prefix
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -108,8 +108,8 @@ they would pick the newest run at that commit, which is often complete.
 
 A run is resumable when its studio heartbeat is stale (or the process is gone)
 and it is not `complete`. A live run is refused. `.reeval/current` points at
-the id as soon as it is minted, so `--resume` with no ref can find a crash
-that never assembled.
+the id when the run starts, after the plan, so `--resume` with no ref can find
+a crash that never assembled. A usage error at plan time writes nothing.
 
 In-flight attempts start again from the beginning of the attempt. Completed
 ones keep their outcome, including a pass. The assembled record replaces the

@@ -35,7 +35,6 @@ import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
-import { PACKAGE_VERSION } from './root.ts'
 import {
   completedKeysFor,
   loadPrevious,
@@ -43,6 +42,7 @@ import {
   resolveResume,
   writeCurrent,
 } from './resume.ts'
+import { PACKAGE_VERSION } from './root.ts'
 import { clip } from './text.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
 import { colors } from './ui/colors.ts'
@@ -318,7 +318,6 @@ async function runCommand(
   const setup = await prepareRun(flags, configPath)
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
-  if (!setup.dryRun) writeCurrent(setup.config.root, ctx.runId)
   const githubOut = process.env.GITHUB_OUTPUT
   if (githubOut) await appendFile(githubOut, `run-id=${ctx.runId}\n`).catch(() => {})
   const stepStart = process.env.GITHUB_STEP_SUMMARY
@@ -878,6 +877,7 @@ async function executeRun(
       filters,
       onPlan,
       onRunStart: (files) => {
+        writeCurrent(setup.config.root, runId)
         live = writeLiveProgress({
           dir: stagingDir,
           runId,

@@ -8,14 +8,14 @@ import { UsageError } from './errors.ts'
 import { scratchDir } from './history/files.ts'
 import type { AttemptRecord, RunRecord } from './history/types.ts'
 import { RefError } from './history/views.ts'
-import { recordFileName, RUN_ID } from './ids.ts'
+import { RUN_ID, recordFileName } from './ids.ts'
 import type { EvalRecord, Outcome } from './types.ts'
 import { LIVE_FILE, readableLiveProgress } from './view/live.ts'
 
 /** Matches the studio: a heartbeat older than this, or a dead pid on this host, is Stopped. */
 const STALE_MS = 15_000
 
-/** `.reeval/current`: the run id minted (or resumed) as soon as it exists. */
+/** `.reeval/current`: the run id, written when the run starts (after the plan). */
 export const currentPath = (root: string) => join(root, '.reeval', 'current')
 
 const stagingOf = (root: string, runId: string) => join(root, '.reeval', 'staging', runId)
@@ -179,8 +179,9 @@ async function listCandidates(root: string, now = Date.now()): Promise<Candidate
 }
 
 const resumable = (c: Candidate) =>
-  !c.live && !c.complete && (c.kind === 'staging' || c.previous?.status === 'interrupted' ||
-    c.previous?.status === 'budget')
+  !c.live &&
+  !c.complete &&
+  (c.kind === 'staging' || c.previous?.status === 'interrupted' || c.previous?.status === 'budget')
 
 function toTarget(c: Candidate): ResumeTarget {
   return {
@@ -308,4 +309,5 @@ export async function removePrevious(staging: string): Promise<void> {
 export const previousAttempt = (
   previous: RunRecord | null | undefined,
   key: string,
-): AttemptRecord | undefined => previous?.evals.flatMap((e) => e.attempts).find((a) => a.key === key)
+): AttemptRecord | undefined =>
+  previous?.evals.flatMap((e) => e.attempts).find((a) => a.key === key)
