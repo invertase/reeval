@@ -873,7 +873,7 @@ evaluate('passes', async () => {})
     assert.equal(r.code, 1)
     const [plan, ...out] = r.stdout.trimEnd().split('\n')
     assert.match(plan ?? '', /^plan {2}(?:run \S+ · )?2 evals · 2 cells · 2 attempts · ~/)
-    assert.equal(out[0], 'reeval run: 1 eval file')
+    assert.match(out[0] ?? '', /^reeval run: \S+ · 1 eval file$/)
     assert.match(out[1] ?? '', /^FAIL evals\/agent\.eval\.ts › agent eval \(\d+m?s, judge\)$/)
     assert.equal(out[2], '  judge  fail 0.30 (≥ 0.8)  ok?')
     assert.match(
