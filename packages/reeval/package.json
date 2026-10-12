@@ -9,7 +9,7 @@
     "url": "git+https://github.com/invertase/reeval.git",
     "directory": "packages/reeval"
   },
-  "homepage": "https://github.com/invertase/reeval/tree/main/packages/reeval#readme",
+  "homepage": "https://github.com/invertase/reeval#readme",
   "bugs": {
     "url": "https://github.com/invertase/reeval/issues"
   },
@@ -48,6 +48,7 @@
     "dist",
     "docker",
     "assets",
+    "README.md",
     "THIRD_PARTY_NOTICES.md"
   ],
   "preferUnplugged": true,
