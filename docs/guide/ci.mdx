@@ -53,7 +53,9 @@ After 60 seconds without output, plain mode prints what's still running and in w
 
 When `GITHUB_ACTIONS` is set, passing attempts fold into `::group::` blocks titled with their result line. Failing ones stay open and add an `::error` annotation on the failing line. Lines inside a group drop the `[creates#1 cursor]` prefix unless you pass `--log-prefix task`, as this capture did.
 
-reeval also appends the run's `summary.md` to the job summary (`$GITHUB_STEP_SUMMARY`), so the result is on the run's page.
+reeval also appends the run's `summary.md` to the job summary (`$GITHUB_STEP_SUMMARY`), so the result is on the run's page. At the start of `reeval run` it writes `run-id=<id>` to `$GITHUB_OUTPUT` and `run <id>` to the step summary, so the job log has the id even when the runner is killed before assemble.
+
+To continue that run after a timeout, restore `.reeval/staging` (or the interrupted scratch) onto the new VM and run `reeval run --resume`, or `reeval run --resume <id>` with the value from `run-id`. Without those files, `--resume` has nothing to continue. See [Resume a stopped run](/reference/cli/run#resume-a-stopped-run).
 
 ## Gate pull requests
 

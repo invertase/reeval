@@ -67,6 +67,17 @@ export const cases: PlanCase[] = [
     name: 'empty-control',
     args: ['--config', 'reeval.empty.config.ts', 'evals/empty.eval.ts'],
   },
+  {
+    dir: 'resume',
+    name: 'stopped-staging',
+    args: ['--resume'],
+    async prepare(dir) {
+      const { writeStoppedStaging } = await import('./support/resume.ts')
+      writeStoppedStaging(dir, '20260101T000000Z_nogit_test_abcd', [
+        { file: 'evals/r.eval.ts', name: 'done', cell: 'fake/-/docker' },
+      ])
+    },
+  },
 ]
 
 // Each case starts an `reeval` and its worker. All 25 at once swamp a small CI runner (Windows'
@@ -85,6 +96,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
   test('is one document with the host-dependent fields the snapshots leave out', async () => {
     const plan = await planJson({ dir: 'matrix', args: [] })
     assert.deepEqual(Object.keys(plan), [
+      'runId',
       'profile',
       'totals',
       'budget',
@@ -97,6 +109,7 @@ describe('the JSON plan', { concurrency: CLIS }, () => {
       'excluded',
       'images',
     ])
+    assert.match(plan.runId ?? '', /^\d{8}T\d{6}Z_/)
     assert.ok(plan.concurrency >= 1)
     assert.equal(
       plan.estimateMs,

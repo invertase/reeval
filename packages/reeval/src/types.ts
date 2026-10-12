@@ -1399,6 +1399,8 @@ export type AttemptMeta = {
   /** The paths its environment's `files` write, layered and sorted; unset when there are none. */
   files?: string[]
   plan: EvalPlan
+  /** Why this attempt does not run, e.g. it already completed in a resumed run. */
+  skip?: string
 }
 
 /** Small summary carried through the engine's task metadata. */
@@ -1427,4 +1429,6 @@ export type RunContext = {
   verbosity?: 0 | 1 | 2
   /** The config file, relative to the current directory, for the debug trace; unset without one. */
   configFile?: string
+  /** Attempt keys already finished when this run was resumed; workers register them as skip. */
+  completed?: string[]
 }

@@ -1634,6 +1634,20 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'run.resume',
+    area: 'CLI and runner',
+    name: '`reeval run --resume [<ref>]`: continue a stopped, interrupted or budget-stopped run with the same id',
+    fixtures: ['run/resume'],
+    plan: ['resume/stopped-staging'],
+    tests: [
+      'reeval/test/resume.test.ts › omitted ref and latest pick the newest resumable, not assembled latest',
+      'reeval/test/resume.test.ts › reuses the leftover id, skips a completed attempt and runs the rest',
+      'reeval/test/resume.test.ts › --dry-run does not write the pointer or move an interrupted scratch',
+      'reeval/test/results.test.ts › a skipped attempt keeps a staged pass',
+      'reeval/test/ui.test.ts › grouped: start lines stream',
+    ],
+  },
+  {
     id: 'cancel',
     area: 'CLI and runner',
     name: 'Eval timeouts, Ctrl-C and SIGTERM',

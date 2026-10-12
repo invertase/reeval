@@ -102,7 +102,7 @@ export function writeLiveProgress(options: LiveProgressOptions): LiveProgressWri
         file: p.file,
         cell: p.attempt.cell.key,
         n: p.attempt.n,
-        status: p.attempt.plan.skip ? 'skipped' : 'queued',
+        status: p.attempt.skip || p.attempt.plan.skip ? 'skipped' : 'queued',
         startedAt: null,
         durationMs: null,
       },

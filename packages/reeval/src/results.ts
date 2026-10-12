@@ -1,7 +1,7 @@
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type AssembleInput, assembleRun } from './history/assemble.ts'
-import { scratchDir, type WrittenRun, writeRun } from './history/files.ts'
+import { readRecord, scratchDir, type WrittenRun, writeRun } from './history/files.ts'
 import { renderSummary } from './history/summary.ts'
 import type { RunRecord } from './history/types.ts'
 
@@ -11,10 +11,11 @@ const STALE_STAGING_MS = 24 * 60 * 60 * 1000
 export const stagingDir = (root: string, runId: string) => join(root, '.reeval', 'staging', runId)
 
 /** Removes staging left behind by runs that were killed before they could clean up. */
-export async function sweepStaging(root: string): Promise<void> {
+export async function sweepStaging(root: string, keep?: string): Promise<void> {
   const dir = join(root, '.reeval', 'staging')
   const entries = await readdir(dir).catch(() => [])
   for (const name of entries) {
+    if (name === keep) continue
     const age = await stat(join(dir, name)).then(
       (s) => Date.now() - s.mtimeMs,
       () => 0,
@@ -30,7 +31,16 @@ export async function writeScratchRun(
 ): Promise<WrittenRun & { record: RunRecord }> {
   const { record, artifacts } = await assembleRun(input)
   artifacts.set('summary.md', Buffer.from(renderSummary(record)))
-  const written = await writeRun(scratchDir(input.ctx.config.root), record, artifacts)
+  const scratch = scratchDir(input.ctx.config.root)
+  const existing = join(scratch, `${record.runId}.json`)
+  try {
+    const old = await readRecord(existing)
+    if (old.status === 'interrupted' || old.status === 'budget') {
+      await rm(existing, { force: true })
+      await rm(join(scratch, record.runId), { recursive: true, force: true })
+    }
+  } catch {}
+  const written = await writeRun(scratch, record, artifacts)
   landed?.()
   await rm(input.ctx.stagingDir, { recursive: true, force: true })
   return { ...written, record }

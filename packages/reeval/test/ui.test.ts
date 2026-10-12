@@ -131,6 +131,7 @@ const interleaved: EsEvent[] = [
     harness: 'cursor/composer-2.5',
     sandbox: 'docker',
     concurrency: 2,
+    runId: '20260101T000000Z_nogit_test_abcd',
   },
   {
     type: 'collected',
@@ -297,7 +298,7 @@ describe('plain renderer', () => {
     assert.equal(
       render(interleaved, options()),
       lines(
-        'reeval 0.1.0 · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
+        'reeval 0.1.0 · run 20260101T000000Z_nogit_test_abcd · 1 eval file · harness cursor/composer-2.5 · sandbox docker · concurrency 2 · grouped logs',
         '[creates#1 cursor] ▶ evals/hello.eval.ts › greet module › creates a tested greet module',
         '[adds#1 cursor] ▶ evals/hello.eval.ts › greet module › adds a default name in a follow-up turn',
         '… 2 running after 1m 01s: [creates#1 cursor] turn 1 1m 01s, [adds#1 cursor] turn 1 1m 00s',
@@ -679,6 +680,7 @@ test('browser-download names the binary, version, size and cache', () => {
       harness: 'cursor/composer-2.5',
       sandbox: 'docker',
       concurrency: 1,
+      runId: '20260101T000000Z_nogit_test_abcd',
     },
     {
       type: 'collected',
@@ -725,7 +727,7 @@ describe('agent renderer', () => {
     assert.equal(
       text,
       lines(
-        'reeval run: 1 eval file',
+        'reeval run: 20260101T000000Z_nogit_test_abcd · 1 eval file',
         'FAIL evals/hello.eval.ts › greet module › adds a default name in a follow-up turn (6m 03s, assertion)',
         '  AssertionError: expected 1 to be 2 // Object.is equality',
         '',

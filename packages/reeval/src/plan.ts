@@ -46,6 +46,10 @@ export type RunPlan = {
   harnesses: string[]
   /** The model that answers a compare question naming none; null when there's no language model. */
   questionModel: string | null
+  /** The run this plan belongs to, minted or resumed before collect. */
+  runId?: string
+  /** Set when this plan continues a stopped, interrupted or budget-stopped run. */
+  resume?: { runId: string; completed: number }
 }
 
 const median = (values: number[]) => {
@@ -106,9 +110,10 @@ export async function buildPlan(options: {
   let attempts = 0
   let estimateMs = 0
   for (const { id, attempt } of planned) {
-    if (!rows.has(id)) rows.set(id, { id, plan: attempt.plan })
+    const existing = rows.get(id)
+    if (!existing || existing.plan.skip) rows.set(id, { id, plan: attempt.plan })
     for (const w of attempt.plan.warnings) warnings.add(w)
-    if (attempt.plan.skip) continue
+    if (attempt.skip || attempt.plan.skip) continue
     for (const w of attempt.plan.sandboxWarnings) {
       sandboxWarnings.set(`${w.file}\0${w.message}`, w)
     }
@@ -193,8 +198,12 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
  * `plan  profile pr (auto: CI is set) · 3 evals · 4 cells · 12 attempts · ~9m serial · …`, led by
  * `config ../reeval.config.ts` when `config` is given (the config isn't in the current directory).
  */
-export function planLine(plan: RunPlan, config?: string): string {
-  const parts: string[] = config ? [`config ${config}`] : []
+export function planLine(plan: RunPlan, config?: string, runId?: string): string {
+  const parts: string[] = []
+  const id = runId ?? plan.runId
+  if (id) parts.push(`run ${id}`)
+  if (config) parts.push(`config ${config}`)
+  if (plan.resume) parts.push('resume')
   if (plan.profile) parts.push(`profile ${plan.profile.name} (${plan.profile.reason})`)
   const skipped = plan.rows.length - plan.evals
   parts.push(plural(plan.evals, 'eval') + (skipped ? ` (${skipped} skipped)` : ''))
@@ -295,7 +304,11 @@ export type PlanImage = {
 
 /** `reeval run --dry-run --json`: the plan as one document. */
 export type PlanDocument = {
+  /** Minted or resumed before the plan was collected. */
+  runId?: string
   profile: { name: string; reason: string } | null
+  /** Set when `--resume` continues a previous run. */
+  resume?: { runId: string; completed: number }
   totals: { evals: number; skipped: number; cells: number; attempts: number }
   budget: { attempts: number | null; duration: Duration | null; fits: boolean }
   concurrency: number
@@ -333,7 +346,7 @@ export function planDocument(
       }
       evals.set(id, e)
     }
-    if (attempt.plan.skip) continue
+    if (attempt.skip || attempt.plan.skip) continue
     const cell = e.cells.find((c) => c.key === attempt.cell.key)
     if (cell) cell.runs++
     else {
@@ -357,7 +370,9 @@ export function planDocument(
   }
   const { attempts, duration } = plan.budget
   return {
+    ...(plan.runId ? { runId: plan.runId } : {}),
     profile: plan.profile && { name: plan.profile.name, reason: plan.profile.reason },
+    ...(plan.resume ? { resume: plan.resume } : {}),
     totals: {
       evals: plan.evals,
       skipped: plan.rows.length - plan.evals,

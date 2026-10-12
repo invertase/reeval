@@ -8,7 +8,8 @@ export type ParsedCli = { positionals: string[]; values: Flags }
 const OPTIONS: Record<FlagName, () => Option> = Object.fromEntries(
   Object.entries(FLAGS).map(([name, spec]) => {
     const short = 'short' in spec ? `-${spec.short}, ` : ''
-    const value = spec.type === 'string' ? ' <value>' : ''
+    const value =
+      spec.type === 'string' ? ('optional' in spec && spec.optional ? ' [value]' : ' <value>') : ''
     return [
       name,
       () => {
@@ -102,7 +103,10 @@ function valuesOf(command: Command, flags: FlagName[]): Flags {
     const value = option && opts[option.attributeName()]
     if (option?.negate) {
       if (value === false) values[flag] = true
-    } else if (value !== undefined) values[flag] = value
+    } else if (value !== undefined) {
+      const spec = FLAGS[flag]
+      values[flag] = spec.type === 'string' && spec.optional && value === true ? '' : value
+    }
   }
   return values as Flags
 }

@@ -8,7 +8,7 @@ import type { Gate, TestMode } from './engine/runtime.ts'
 import { filesOf, workspaceOf } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { refusedMcp } from './harness/agents.ts'
-import { attemptId, evalId, relativeFile } from './ids.ts'
+import { attemptId, attemptKey, evalId, relativeFile } from './ids.ts'
 import {
   brokeredIn,
   cascade,
@@ -42,7 +42,7 @@ export type EvalDeclaration = {
 /** Where the eval is planned: the run, the eval file, and how many evals the file planned before it. */
 export type PlanContext = Pick<
   RunContext,
-  'config' | 'profile' | 'runs' | 'tags' | 'concurrency'
+  'config' | 'profile' | 'runs' | 'tags' | 'concurrency' | 'completed'
 > & {
   /** The eval file's path, absolute. */
   file: string | undefined
@@ -148,6 +148,11 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
     const workspace = workspaceOf(planned.environment.layers)
     const files = filesOf(planned.environment.layers)
     const setBy = setByOf(planned)
+    const rankFile = relativeFile(ctx.config.root, ctx.file ?? '')
+    const id = evalId(rankFile, [...groups, name])
+    const key = attemptKey(id, planned.cell.key, planned.n)
+    const done = ctx.completed?.includes(key)
+    const skip = done ? 'already completed in this run' : undefined
     const attempt: AttemptMeta = {
       name,
       groups,
@@ -165,35 +170,39 @@ export function planEval(declaration: EvalDeclaration, ctx: PlanContext): Planne
       egress: planned.egress,
       ...(workspace ? { workspace } : {}),
       ...(files.length ? { files } : {}),
-      plan,
+      plan: skip ? { ...plan, skip } : plan,
+      ...(skip ? { skip } : {}),
     }
-    const rankFile = relativeFile(ctx.config.root, ctx.file ?? '')
     return {
       name: `${name} [${attemptId(planned.cell.key, planned.n)}]`,
-      mode,
+      mode: skip ? 'skip' : mode,
       attempt,
-      timeout: timeoutMs + setupAllowance(planned) + GRACE_MS,
-      gate: {
-        limits: attemptLimits(planned, ctx.concurrency),
-        rank: {
-          eval: evalId(rankFile, [...groups, name]),
-          file: rankFile,
-          order: ctx.order,
-          n: planned.n,
-          cell: cells.indexOf(planned.cell.key),
-        },
-      },
-      spec: {
-        ...planned,
-        name,
-        groups,
-        timeoutMs,
-        env: resolved.env,
-        judge: resolved.judge,
-        capture: resolved.capture,
-        sources: { ...resolved.sources, sandbox: setBy.sandbox },
-        notes: resolvedEval.notes,
-      },
+      timeout: skip ? undefined : timeoutMs + setupAllowance(planned) + GRACE_MS,
+      gate: skip
+        ? undefined
+        : {
+            limits: attemptLimits(planned, ctx.concurrency),
+            rank: {
+              eval: id,
+              file: rankFile,
+              order: ctx.order,
+              n: planned.n,
+              cell: cells.indexOf(planned.cell.key),
+            },
+          },
+      spec: skip
+        ? undefined
+        : {
+            ...planned,
+            name,
+            groups,
+            timeoutMs,
+            env: resolved.env,
+            judge: resolved.judge,
+            capture: resolved.capture,
+            sources: { ...resolved.sources, sandbox: setBy.sandbox },
+            notes: resolvedEval.notes,
+          },
     }
   })
 }

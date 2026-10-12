@@ -67,9 +67,11 @@ describe('cli', () => {
         const name = `${path.join(' ')} --${flag}`
         const forms =
           s.type === 'string'
-            ? [[`--${flag}`, 'x'], [`--${flag}=x`]]
+            ? s.optional
+              ? [[`--${flag}`], [`--${flag}`, 'x'], [`--${flag}=x`]]
+              : [[`--${flag}`, 'x'], [`--${flag}=x`]]
             : [[`--${flag}`], ...(s.short ? [[`-${s.short}`]] : [])]
-        const expected = s.type === 'string' ? 'x' : true
+        const expected = s.type === 'string' ? (s.optional && forms[0]?.length === 1 ? '' : 'x') : true
         for (const form of forms) {
           const { values, positionals } = parseCli([...path, ...form])
           assert.deepEqual(positionals, path, name)

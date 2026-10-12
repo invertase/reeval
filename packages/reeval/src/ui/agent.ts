@@ -82,7 +82,7 @@ export class AgentRenderer implements Renderer {
         for (const w of e.sandboxWarnings ?? []) this.#write(sandboxWarningLine(w))
         return
       case 'run-start':
-        this.#write(`reeval run: ${e.files} eval file${e.files === 1 ? '' : 's'}`)
+        this.#write(`reeval run: ${e.runId} · ${e.files} eval file${e.files === 1 ? '' : 's'}`)
         return
       case 'collected':
         this.#tags.addFile(e.evals)
