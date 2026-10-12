@@ -26,6 +26,7 @@ evaluate('creates a tested greet module', async (c) => {
 
 ```ts
 expect(turnOrC).toHaveCalledSkill(name)
+expect(turnOrC).toHaveCalledMcp(server, tool, input?)
 expect(turnOrC).toHaveCalledTool(name, input?)
 expect(turnOrC).toHaveRun(command?)
 expect(turnOrC).toHaveEdited(path?)
@@ -49,21 +50,31 @@ any tool whose target contains `skills/<name>/` (a Read or a `sed` of
 `c.exec` check for the outcome. A silent inject (skill text in the system
 prompt, no tool) cannot be asserted.
 
+`toHaveCalledMcp(server, tool, input?)` is the author path for MCP: a
+`type: 'tool'` event named `mcp__<server>__<tool>` after adapters and the
+normaliser. `server` and `tool` are the names you already own (`mcp.stamp`
+and `house_stamp`). Optional `input` is the same match as
+`toHaveCalledTool`. Copy-paste from a transcript still works:
+
+```ts
+expect(turn).toHaveCalledTool('mcp__stamp__house_stamp')
+expect(turn).toHaveCalledTool(/^mcp__stamp__/)
+```
+
+After adapters and the normaliser, that string is the same on every harness.
+Claude Code may `ToolSearch` `select:mcp__stamp__house_stamp` first; that is
+a different tool. OpenCode and Goose keep `acp_tool_<id>` if the first ACP
+update or Goose `_meta` is missing. pi turns `-` in a **tool** name into `_`
+(write `latest_version`, not `latest-version`); a hyphenated **server** is
+remapped when unambiguous. Goose, OpenCode, pi and Codex refuse `mcp.sse`
+at plan time; stdio MCP plans on all of them, including pi.
+
 `toHaveCalledTool(name, input?)` looks at `type: 'tool'` events only. `name`
 is an exact string or a RegExp. `input` is an optional substring, RegExp, or
 object matched against the recorded input. Successful `edit` / `write` /
 `delete` are `file-edit` events: use `toHaveEdited`, not
 `toHaveCalledTool('edit')`. Web tools are `web-search` / `web-fetch`: use
 `toHaveSearched` / `toHaveFetched`.
-
-MCP is `toHaveCalledTool('mcp__stamp__house_stamp')` or
-`toHaveCalledTool(/^mcp__stamp__/)`. After adapters and the normaliser, that
-string is the same on every harness. Claude Code may `ToolSearch`
-`select:mcp__stamp__house_stamp` first; that is a different tool. OpenCode and
-Goose keep `acp_tool_<id>` if the first ACP update or Goose `_meta` is missing.
-pi turns `-` in a **tool** name into `_`; a hyphenated **server** is remapped
-when unambiguous. Goose, OpenCode, pi and Codex refuse `mcp.sse` at plan time;
-stdio MCP plans on all of them, including pi.
 
 `toHaveRun(command?)` matches `bash` or `shell` (the fake agent). Optional
 `command` is a substring or RegExp on `input.command`. This is the agent's
@@ -82,7 +93,7 @@ evaluate('uses the house skill and stamps', async (c) => {
   )
 
   expect(turn).toHaveCalledSkill('house-greeting')
-  expect(turn).toHaveCalledTool('mcp__stamp__house_stamp')
+  expect(turn).toHaveCalledMcp('stamp', 'house_stamp')
   expect(c).toHaveRun(/echo contract/)
   expect(turn).toHaveEdited('greet.js')
 
@@ -93,6 +104,10 @@ evaluate('uses the house skill and stamps', async (c) => {
 
 ```text
 expected skill-like calls matching house-greeting, got ["skill:other"]
+```
+
+```text
+expected MCP calls matching stamp/other, got ["stamp/house_stamp"]
 ```
 
 ```text

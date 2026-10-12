@@ -1,4 +1,5 @@
 import {
+  calledMcp,
   calledSkill,
   calledTool,
   edited,
@@ -63,6 +64,10 @@ export const matchers = {
 
   toHaveCalledSkill(actual: unknown, name: string): Result {
     return calledSkill(actual, name)
+  },
+
+  toHaveCalledMcp(actual: unknown, server: string, tool: string, input?: ToolInputMatch): Result {
+    return calledMcp(actual, server, tool, input)
   },
 
   toHaveCalledTool(actual: unknown, name: string | RegExp, input?: ToolInputMatch): Result {

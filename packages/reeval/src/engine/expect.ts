@@ -43,6 +43,11 @@ declare module '@vitest/expect' {
     toHaveSearched(query?: RegExp | string): void
     toHaveFetched(url?: RegExp | string): void
     toHaveCalledSkill(name: string): void
+    toHaveCalledMcp(
+      server: string,
+      tool: string,
+      input?: string | RegExp | Record<string, unknown>,
+    ): void
     toHaveCalledTool(name: string | RegExp, input?: string | RegExp | Record<string, unknown>): void
     toHaveRun(command?: RegExp | string): void
     toHaveEdited(path?: RegExp | string): void

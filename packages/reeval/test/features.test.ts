@@ -1401,6 +1401,12 @@ export const features: Feature[] = [
     canary: /expected skill-like calls matching other/,
   },
   {
+    dir: 'assert/called-mcp',
+    tiers: ['fake'],
+    env: 'plain',
+    canary: /expected MCP calls matching stamp\/other/,
+  },
+  {
     dir: 'assert/called-tool-mcp',
     tiers: ['fake'],
     env: 'plain',

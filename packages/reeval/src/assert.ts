@@ -166,6 +166,36 @@ export function calledTool(actual: unknown, name: string | RegExp, input?: ToolI
   }
 }
 
+const MCP_NAME = /^mcp__(.+)__(.+)$/
+
+const mcpLabel = (tool: string) => {
+  const m = MCP_NAME.exec(tool)
+  return m ? `${m[1]}/${m[2]}` : tool
+}
+
+/** `type: 'tool'` named `mcp__<server>__<tool>` after adapters and the normaliser. */
+export function calledMcp(
+  actual: unknown,
+  server: string,
+  tool: string,
+  input?: ToolInputMatch,
+): Result {
+  const subject = transcriptSubject(actual, 'toHaveCalledMcp')
+  const result = calledTool(subject, `mcp__${server}__${tool}`, input)
+  const mcpCalls = toolsOf(subject.transcript).filter((e) => e.tool.startsWith('mcp__'))
+  const inputPart = input === undefined ? '' : ` with input ${formatInput(input)}`
+  const seen = mcpCalls.map((e) =>
+    input === undefined ? mcpLabel(e.tool) : `${mcpLabel(e.tool)} ${JSON.stringify(e.input)}`,
+  )
+  return {
+    pass: result.pass,
+    message: () =>
+      result.pass
+        ? `expected no MCP calls matching ${server}/${tool}${inputPart}, got ${listed(seen)}`
+        : `expected MCP calls matching ${server}/${tool}${inputPart}, got ${listed(seen)}`,
+  }
+}
+
 function formatInput(input: ToolInputMatch): string {
   if (typeof input === 'string' || input instanceof RegExp) return String(input)
   return JSON.stringify(input)

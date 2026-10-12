@@ -4,7 +4,15 @@ import assert from 'node:assert/strict'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, test } from 'node:test'
-import { calledSkill, calledTool, edited, fetched, ran, searched } from '../src/assert.ts'
+import {
+  calledMcp,
+  calledSkill,
+  calledTool,
+  edited,
+  fetched,
+  ran,
+  searched,
+} from '../src/assert.ts'
 import { expect, extendExpect } from '../src/engine/expect.ts'
 import { normaliseStream } from '../src/harness/transcript.ts'
 import { toolCalls } from '../src/history/db.ts'
@@ -128,6 +136,41 @@ describe('calledTool', () => {
   })
 })
 
+describe('calledMcp', () => {
+  test('joins server and tool into mcp__<server>__<tool>', () => {
+    const t = turnOf([tool('mcp__stamp__house_stamp', { args: {} }), edit('notes.txt')])
+    assert.equal(calledMcp(t, 'stamp', 'house_stamp').pass, true)
+    assert.equal(calledMcp(t, 'stamp', 'other').pass, false)
+    assert.equal(calledMcp(t, 'other', 'house_stamp').pass, false)
+  })
+
+  test('optional input is the same match as calledTool', () => {
+    const t = turnOf([tool('mcp__stamp__house_stamp', { query: 'contract-42' })])
+    assert.equal(calledMcp(t, 'stamp', 'house_stamp', 'contract-42').pass, true)
+    assert.equal(calledMcp(t, 'stamp', 'house_stamp', /contract-\d+/).pass, true)
+    assert.equal(calledMcp(t, 'stamp', 'house_stamp', { query: 'contract-42' }).pass, true)
+    assert.equal(calledMcp(t, 'stamp', 'house_stamp', { query: /42/ }).pass, true)
+    assert.equal(calledMcp(t, 'stamp', 'house_stamp', 'deploy').pass, false)
+  })
+
+  test('fails listing MCP calls as server/tool', () => {
+    const t = turnOf([tool('mcp__stamp__house_stamp', {}), tool('bash', { command: 'echo hi' })])
+    const r = calledMcp(t, 'stamp', 'other')
+    assert.equal(r.pass, false)
+    assert.equal(r.message(), 'expected MCP calls matching stamp/other, got ["stamp/house_stamp"]')
+  })
+
+  test('expect().not.toHaveCalledMcp is the negative', () => {
+    const t = turnOf([tool('mcp__stamp__house_stamp', {})])
+    expect(t).toHaveCalledMcp('stamp', 'house_stamp')
+    throws(
+      () => expect(t).not.toHaveCalledMcp('stamp', 'house_stamp'),
+      /expected no MCP calls matching stamp\/house_stamp/,
+    )
+    expect(t).not.toHaveCalledMcp('stamp', 'other')
+  })
+})
+
 describe('ran', () => {
   test('matches bash or shell, and an optional command', () => {
     const bash = turnOf([tool('bash', { command: 'echo contract-42' })])
@@ -200,6 +243,10 @@ describe('expect matchers', () => {
       () => expect({} as never).toHaveCalledSkill('foo'),
       /toHaveCalledSkill\(\) expects a turn from c.send\(\), or c/,
     )
+    assert.throws(
+      () => expect({} as never).toHaveCalledMcp('stamp', 'house_stamp'),
+      /toHaveCalledMcp\(\) expects a turn from c.send\(\), or c/,
+    )
   })
 
   test('reads every turn on c', () => {
@@ -207,7 +254,12 @@ describe('expect matchers', () => {
     const second = turnOf([tool('mcp__stamp__house_stamp', {})])
     const c = { turns: [first, second] }
     expect(c).toHaveCalledSkill('foo')
+    expect(c).toHaveCalledMcp('stamp', 'house_stamp')
     expect(c).toHaveCalledTool('mcp__stamp__house_stamp')
+    throws(
+      () => expect(first).toHaveCalledMcp('stamp', 'house_stamp'),
+      /expected MCP calls matching stamp\/house_stamp, got none/,
+    )
     throws(
       () => expect(first).toHaveCalledTool('mcp__stamp__house_stamp'),
       /expected tool calls matching mcp__stamp__house_stamp, got \["read"\]/,
@@ -263,9 +315,14 @@ describe('replay captures through normaliseStream', () => {
       throws(() => expect(t).toHaveCalledSkill('no-such-skill'), /expected skill-like calls/)
     })
 
-    test(`${harness} mcp.raw.jsonl: toHaveCalledTool('mcp__stamp__house_stamp')`, () => {
+    test(`${harness} mcp.raw.jsonl: toHaveCalledMcp('stamp', 'house_stamp')`, () => {
       const t = replay(harness, 'mcp.raw.jsonl')
+      expect(t).toHaveCalledMcp('stamp', 'house_stamp')
       expect(t).toHaveCalledTool('mcp__stamp__house_stamp')
+      throws(
+        () => expect(t).toHaveCalledMcp('stamp', 'other'),
+        /expected MCP calls matching stamp\/other/,
+      )
       throws(
         () => expect(t).toHaveCalledTool('mcp__stamp__other'),
         /expected tool calls matching mcp__stamp__other/,
