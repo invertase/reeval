@@ -180,7 +180,7 @@ gemini-3.8-flash · analysis-v2 · digest v1 · 10381 in / 3196 out tokens · 13
 
 reeval computes the facts, the model only explains them, and every claim must cite a fact (`F…`) or evidence (`E…`) from the digest. reeval drops claims that don't, flags numbers no cited fact holds, and rejects any verify command its CLI wouldn't parse.
 
-After those checks it caps confidence: not `high` when any citation or command failed, and `low` when a claim was dropped or a command was rejected. The TL;DR is one sentence (what happened, how sure, why, next) and shows that capped value; the footer still counts the checks. An `insufficient` lift or effort verdict is not measured, so it is not a results line.
+After those checks it caps confidence: not `high` when any citation or command failed, and `low` when a claim was dropped or a command was rejected. The TL;DR is one sentence (what happened, how sure, why, next) and shows that capped value; the footer still counts the checks. An `insufficient` lift or effort verdict is not measured, so it is not a results line. When the eval's sources changed, the digest says `not comparable` and drops the mixed pass-rate: `6/10 vs 8/9` is not a results line.
 
 The studio run page leads with a deterministic pass/fail/infra sentence, and pins the TL;DR under the header when an analysis exists.
 

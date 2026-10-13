@@ -2,9 +2,9 @@
 // checked. Browser-safe, so the studio's Analysis tab renders the same document the CLI prints.
 
 /** Bumped when the system prompt or output schema changes: an older analysis is superseded. */
-export const ANALYSIS_PROMPT_VERSION = 'analysis-v5'
+export const ANALYSIS_PROMPT_VERSION = 'analysis-v6'
 /** Bumped when the digest's shape or selection rules change. */
-export const DIGEST_VERSION = 3
+export const DIGEST_VERSION = 4
 
 export type Confidence = 'high' | 'medium' | 'low'
 
