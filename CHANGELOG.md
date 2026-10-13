@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/invertase/reeval/compare/v0.6.3...v0.7.0) (2026-10-13)
+
+
+### Features
+
+* **assert:** transcript matchers on expect ([#236](https://github.com/invertase/reeval/issues/236)) ([13b06e3](https://github.com/invertase/reeval/commit/13b06e346db5906633abd362c5bed045c75048ae))
+* **cli:** resume a stopped run with --resume ([6b70bcd](https://github.com/invertase/reeval/commit/6b70bcd910a158e18316935fea31d7804c0169e7))
+
+
+### Bug Fixes
+
+* **reeval:** ship the repo-root readme in the npm package ([#264](https://github.com/invertase/reeval/issues/264)) ([94ce2b5](https://github.com/invertase/reeval/commit/94ce2b575862761637288067a64235580acde1d9))
+
 ## [0.6.3](https://github.com/invertase/reeval/compare/v0.6.2...v0.6.3) (2026-10-11)
 
 
