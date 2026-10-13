@@ -1364,6 +1364,8 @@ export const inventory: InventoryFeature[] = [
       analysis('the prompt asks for one sentence and does not self-rate checks'),
       analysis('the prompt tells the model only --tag values that appear'),
       analysis("the digest lists each eval's tags"),
+      analysis('the digest includes compare-question answers'),
+      analysis('the prompt and rules say compare-question rates annotate only'),
       analysis('one counted attempt a side is insufficient lift'),
       analysis('a changed eval is not comparable, not an effect'),
       analysis('a changed eval has no mixed 6/10 vs 8/9 result line'),

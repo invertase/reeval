@@ -81,6 +81,7 @@ export const RULES = [
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
   'An eval where every cell passes at least 95% is saturated: pass rate cannot tell cells apart there, effort can.',
   'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
+  'Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run.',
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -528,6 +529,38 @@ export async function buildDigestKeepingDropped(
         ...(row.changes?.length ? { changes: row.changes } : {}),
       })),
     })
+  }
+
+  // Compare questions: win rates by cut, ties, and a failed call. They never gate the run.
+  for (const r of runs) {
+    for (const e of r.record.evals) {
+      if (!evalKeys.has(e.key)) continue
+      for (const a of e.answers ?? []) {
+        const ties = a.votes.filter((v) => v.winner === 'tie').length
+        fact('compare-question', {
+          run: short.get(r.record.runId),
+          eval: tagOf(e.key),
+          question: clip(a.question, 120),
+          model: a.resolvedModel ?? a.model,
+          votes: a.votes.length,
+          ties,
+          ...(a.rates.length
+            ? {
+                rates: a.rates.map((x) => ({
+                  cut: x.cut,
+                  name: x.name,
+                  wins: x.wins,
+                  n: x.n,
+                })),
+              }
+            : {}),
+          ...(a.error ? { error: clip(a.error, 200) } : {}),
+          ...(a.votes.length === 0 && a.error === undefined
+            ? { note: 'no pairs to judge: attempts that failed their checks are left out' }
+            : {}),
+        })
+      }
+    }
   }
 
   // Evidence, by rule: failures first, then a passing twin, then tool strips of contrasting cells.

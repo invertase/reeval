@@ -264,7 +264,7 @@ A real run on Cursor and pi. Lift can't separate the arms, since all four attemp
 
 reeval pairs the attempts from their diffs in two cuts. `within` a harness, arm against arm on the same run; `across` harnesses, agent against agent on the same arm and run. Each pair goes to the model twice, the order swapped, labelled only A and B, so neither position nor a name can win it.
 
-A side's rate is its wins over the decided votes it was in; a tie counts for neither side. Every vote is in the record under `evals[].answers`, with the rates per cut. A model error is kept on its answer as `error` and printed as a warning, and the outcomes stand.
+A side's rate is its wins over the decided votes it was in; a tie counts for neither side. Every vote is in the record under `evals[].answers`, with the rates per cut. A model error is kept on its answer as `error` and printed as a warning, and the outcomes stand. `reeval analyze` includes those rates, the vote and tie counts, and a failed call, as annotation: they never gate the run.
 
 <Warning>
   Attempts that failed their checks are left out of the pairs. A question on a compare whose baseline is expected to fail, like the house-greeting eval, has no pairs to judge: ask it where both arms can pass.

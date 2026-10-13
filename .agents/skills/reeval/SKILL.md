@@ -295,11 +295,13 @@ group(
   the baseline. `compare: false` on `evaluate` or `group` is an error.
 - `compare.questions` (always a list of strings and `{ question, model? }`) asks which arm
   did better, pair by pair, after the run. Questions annotate the compare and never gate:
-  pass, fail and the exit code stay the checks'. Their model is the entry's `model`, else
-  `analysis.model`, else the judge's when it's a language model (not `typesafe-ai/*`); with
-  none, `reeval run` exits 2 at plan time while `--dry-run` still lists them. A profile that
-  leaves only the baseline drops them (`questions off (profile …)`). Keep deterministic checks
-  for pass or fail, and ask questions only about quality between arms.
+  pass, fail and the exit code stay the checks'. `reeval analyze` puts each answer in the
+  digest (rates by cut, votes, ties, a failed call) as annotation, not a results line. Their
+  model is the entry's `model`, else `analysis.model`, else the judge's when it's a language
+  model (not `typesafe-ai/*`); with none, `reeval run` exits 2 at plan time while `--dry-run`
+  still lists them. A profile that leaves only the baseline drops them (`questions off
+  (profile …)`). Keep deterministic checks for pass or fail, and ask questions only about
+  quality between arms.
 - Questions are answered on the host once all of an eval's attempts end, from their diffs.
   Attempts that failed their checks (a judge failure doesn't count) are left out of the pairs:
   a question on a compare whose baseline is expected to fail gets no pairs, so ask it where

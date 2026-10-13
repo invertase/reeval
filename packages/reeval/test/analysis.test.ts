@@ -579,6 +579,18 @@ describe('reeval analyze', () => {
     assert.match(RULES[1] ?? '', /Do not put those mixed counts on a results line/)
   })
 
+  test('the prompt and rules say compare-question rates annotate only', () => {
+    assert.match(SYSTEM_PROMPT, /Compare-question facts \(kind compare-question\) are annotation/)
+    assert.match(SYSTEM_PROMPT, /never change pass, fail or the exit code/)
+    assert.ok(
+      RULES.some(
+        (r) =>
+          r.includes('Compare-question win rates annotate') &&
+          r.includes('never change pass, fail'),
+      ),
+    )
+  })
+
   test('the prompt asks for one sentence and does not self-rate checks', () => {
     assert.match(SYSTEM_PROMPT, /one sentence: what happened, how sure, why, next/)
     assert.match(SYSTEM_PROMPT, /Do not rate your own citation or command checks/)
@@ -759,6 +771,58 @@ evaluate('hello', async (c) => {
     const byTag = Object.fromEntries((digest.setup?.evals ?? []).map((e) => [e.tag, e.tags]))
     assert.deepEqual(byTag, { 'sign-in': ['auth'], hello: [] })
     assert.ok(digest.setup?.evals.every((e) => e.id.includes(e.tag)))
+  })
+
+  test('the digest includes compare-question answers: rates by cut, ties, error and no pairs', async () => {
+    const p = await project('analyze-compare-answers', {
+      'reeval.config.ts': fakeConfig({ extra: "record: 'always'," }),
+    })
+    cpSync(
+      join(pkgRoot, 'test/fixtures/records/with-answers/evals/.history'),
+      join(p.dir, 'evals/.history'),
+      {
+        recursive: true,
+      },
+    )
+    const { digest } = await digestOf(p.dir, [
+      '20260929T222130Z_fbc30c8_cursor-agent_33kp',
+      '--vs',
+      'none',
+    ])
+    const questions = digest.facts.filter((f) => f.kind === 'compare-question')
+    assert.equal(questions.length, 4)
+    const house = questions.find(
+      (f) => f.question === 'Which greeting reads more like our house style?' && f.votes === 2,
+    )
+    const failed = questions.find((f) => f.error === 'Rate limit exceeded (429)')
+    const none = questions.filter((f) => f.note)
+    assert.ok(house)
+    assert.equal(house.model, 'fake')
+    assert.equal(house.votes, 2)
+    assert.equal(house.ties, 0)
+    assert.deepEqual(house.rates, [
+      { cut: 'within', name: 'plain', wins: 0, n: 2 },
+      { cut: 'within', name: 'with-house-greeting', wins: 2, n: 2 },
+    ])
+    assert.equal(house.error, undefined)
+    assert.ok(failed)
+    assert.deepEqual(
+      { votes: failed.votes, ties: failed.ties, error: failed.error, note: failed.note },
+      { votes: 0, ties: 0, error: 'Rate limit exceeded (429)', note: undefined },
+    )
+    assert.equal(none.length, 2)
+    assert.ok(
+      none.every(
+        (f) =>
+          f.votes === 0 &&
+          f.error === undefined &&
+          f.note === 'no pairs to judge: attempts that failed their checks are left out',
+      ),
+    )
+    assert.ok(
+      digest.rules.some((r) => r.includes('Compare-question win rates annotate')),
+      'the digest carries the annotation rule',
+    )
   })
 
   test('one counted attempt a side is insufficient lift, not a results verdict', async () => {
