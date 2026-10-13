@@ -2,17 +2,19 @@ import { useQuery } from '@tanstack/react-query'
 import { getRouteApi, Link } from '@tanstack/react-router'
 import { ChevronRight, SearchX } from 'lucide-react'
 import { useMemo } from 'react'
-import { cellRows, evalHistory, splitEvalId } from 'reeval/view'
+import { evalHistory, splitEvalId } from 'reeval/view'
 import { EvalRunsTable } from '@/components/eval-runs-table'
 import { EmptyState, ErrorState, PageHeaderSkeleton, RowsSkeleton } from '@/components/states'
+import { OutcomeBadge } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { headersQuery, recordQuery } from '@/lib/data'
-import { plural, timeAgo } from '@/lib/format'
-import { CellsTable } from '@/pages/run'
+import { EvalRunBody, RunMeta } from '@/pages/run'
 
 const route = getRouteApi('/evals/$slug')
 
 const RECENT = 4
+
+const fileName = (file: string) => file.split('/').at(-1) ?? file
 
 export function EvalPage() {
   const { slug } = route.useParams()
@@ -44,11 +46,7 @@ export function EvalPage() {
     )
   }
   const { file, path } = splitEvalId(catalog.id)
-  const counted = points.filter((p) => p.outcome === 'pass' || p.outcome === 'fail')
-  const passes = counted.filter((p) => p.outcome === 'pass').length
-  const changes = points.filter((p) => p.changed).length
   const entry = record?.evals.find((e) => e.slug === slug)
-  const rows = entry ? cellRows(entry) : []
   const recent = newestFirst.slice(0, RECENT)
 
   return (
@@ -58,36 +56,28 @@ export function EvalPage() {
           Evals
         </Link>
         <ChevronRight className="size-3.5" />
-        <span className="truncate text-foreground">{path.at(-1)}</span>
+        <span className="truncate font-mono text-foreground">{fileName(file)}</span>
       </nav>
       <div>
-        <div className="font-mono text-xs text-muted-foreground">
-          {[file, ...path.slice(0, -1)].join(' › ')}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="text-2xl font-semibold tracking-tight">{path.at(-1)}</h1>
+          {entry ? (
+            <OutcomeBadge outcome={entry.outcome} label={entry.todo ? 'Todo' : undefined} />
+          ) : null}
         </div>
-        <h1 className="mt-1.5 text-2xl font-semibold tracking-tight">{path.at(-1)}</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Passed in {passes} of {plural(counted.length, 'run')} with a verdict
-          {changes ? ` · the eval or its stack changed ${plural(changes, 'time')}` : ''}.
-        </p>
+        {record ? (
+          <div className="mt-2">
+            <RunMeta record={record} />
+          </div>
+        ) : null}
       </div>
 
       {recordPending ? (
-        <RowsSkeleton rows={4} />
-      ) : entry && rows.length ? (
-        <section className="space-y-3" data-latest-run>
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-medium">Latest run</h2>
-            <Link
-              to="/runs/$runId"
-              params={{ runId: latest.run.runId }}
-              search={{ eval: slug }}
-              className="text-sm text-muted-foreground hover:text-foreground hover:underline"
-            >
-              {timeAgo(latest.run.startedAt)}
-            </Link>
-          </div>
-          <CellsTable rows={rows} runId={latest.run.runId} slug={slug} />
-        </section>
+        <RowsSkeleton rows={6} />
+      ) : record && entry ? (
+        <div data-latest-run>
+          <EvalRunBody record={record} entry={entry} />
+        </div>
       ) : null}
 
       <section className="space-y-3">

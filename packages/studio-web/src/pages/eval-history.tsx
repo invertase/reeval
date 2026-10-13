@@ -47,8 +47,12 @@ export function EvalHistoryPage() {
           Evals
         </Link>
         <ChevronRight className="size-3.5" />
-        <Link to="/evals/$slug" params={{ slug }} className="truncate hover:text-foreground">
-          {path.at(-1)}
+        <Link
+          to="/evals/$slug"
+          params={{ slug }}
+          className="truncate font-mono hover:text-foreground"
+        >
+          {file.split('/').at(-1) ?? file}
         </Link>
         <ChevronRight className="size-3.5" />
         <span className="text-foreground">History</span>

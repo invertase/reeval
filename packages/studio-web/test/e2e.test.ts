@@ -207,7 +207,13 @@ describe('studio in a browser', () => {
     await page.getByRole('heading', { name: 'adds a default name in a follow-up turn' }).waitFor()
     assert.match(page.url(), /#\/evals\/[^/]+$/)
     assert.doesNotMatch((await page.locator('h1').innerText()) ?? '', /\d{1,2} \w+ \d{4}/)
+    assert.equal(await page.getByRole('heading', { name: 'Latest run' }).count(), 0)
+    await page.locator('nav').getByText('hello.eval.ts').waitFor()
     await page.locator('[data-latest-run]').getByText('Harness').waitFor()
+    await page
+      .locator('[data-latest-run]')
+      .getByText(/tool call/)
+      .waitFor()
     const recent = page
       .locator('table')
       .filter({ has: page.getByRole('columnheader', { name: 'Run', exact: true }) })
