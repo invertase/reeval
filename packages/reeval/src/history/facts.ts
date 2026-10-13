@@ -343,13 +343,14 @@ export function deriveFacts(db: DatabaseSync): void {
     })
   }
   // Pooled: the same contrast over runs where both cells are comparable, per eval, then across
-  // evals with each (eval, comparable runs) group as a stratum.
+  // evals with each (eval, comparable runs) group as a stratum. Two source fingerprints of the
+  // same eval are not two strata of one contrast: that would straddle an eval-changed pair.
   const pooled = new Map<string, Pair[]>()
   for (const p of pairs) {
     const id = [p.factor, p.level, p.baseline, p.context, p.evalKey, p.pool].join('\0')
     pooled.set(id, [...(pooled.get(id) ?? []), p])
   }
-  const strata = new Map<string, Array<{ v: Side; c: Side }>>()
+  const strata = new Map<string, Array<{ evalKey: string; pool: string; v: Side; c: Side }>>()
   for (const group of pooled.values()) {
     const first = group[0] as Pair
     const v = merge(group.map((p) => p.v))
@@ -368,22 +369,27 @@ export function deriveFacts(db: DatabaseSync): void {
       })
     }
     const id = [first.factor, first.level, first.baseline, first.context].join('\0')
-    strata.set(id, [...(strata.get(id) ?? []), { v, c }])
+    strata.set(id, [...(strata.get(id) ?? []), { evalKey: first.evalKey, pool: first.pool, v, c }])
   }
   for (const [id, list] of strata) {
-    if (list.length < 2) continue
+    const poolsByEval = new Map<string, Set<string>>()
+    for (const s of list) {
+      poolsByEval.set(s.evalKey, new Set([...(poolsByEval.get(s.evalKey) ?? []), s.pool]))
+    }
+    const comparable = list.filter((s) => (poolsByEval.get(s.evalKey)?.size ?? 0) === 1)
+    if (new Set(comparable.map((s) => s.evalKey)).size < 2) continue
     const [factor, level, baseline, context] = id.split('\0') as [string, string, string, string]
-    const v = merge(list.map((s) => s.v))
-    const c = merge(list.map((s) => s.c))
+    const v = merge(comparable.map((s) => s.v))
+    const c = merge(comparable.map((s) => s.c))
     factorRows.push({
       ...head({ factor, level, baseline, context }),
       tier: 'pooled',
       run_id: null,
       eval_key: null,
-      strata: list.length,
+      strata: comparable.length,
       runs: null,
       ...passCols(v, c),
-      ...pooledEffort(list.map((s) => contrastEffort(s.v.samples, s.c.samples))),
+      ...pooledEffort(comparable.map((s) => contrastEffort(s.v.samples, s.c.samples))),
       note: 'pass rate: summed counts; effort: an effect in at least 2/3 of strata',
     })
   }

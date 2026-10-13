@@ -558,7 +558,9 @@ describe('reeval analyze', () => {
   test('the prompt and rules say a changed eval is not an effect', () => {
     assert.match(SYSTEM_PROMPT, /first line says the eval changed/)
     assert.match(SYSTEM_PROMPT, /A lift is an effect only when sources match/)
+    assert.match(SYSTEM_PROMPT, /mixed counts such as 6\/10 vs 8\/9 are not a results line/)
     assert.match(RULES[1] ?? '', /not comparable: the eval changed/)
+    assert.match(RULES[1] ?? '', /Do not put those mixed counts on a results line/)
   })
 
   test('the prompt asks for one sentence and does not self-rate checks', () => {
@@ -719,6 +721,12 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
       JSON.stringify(observed),
     )
     assert.ok(observed.every((r) => String(r.note).includes('the eval changed')))
+    const pooled = await query(p.dir, "SELECT * FROM factor_effects WHERE tier = 'pooled'")
+    assert.equal(
+      pooled.length,
+      0,
+      `pooled rows must not straddle an eval-changed pair: ${JSON.stringify(pooled)}`,
+    )
     const implicit = await digestOf(p.dir)
     assert.ok(
       implicit.digest.facts.some((f) => f.kind === 'eval-changed'),
@@ -735,11 +743,74 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
       sources.every(
         (f) =>
           f.passVerdict === 'not comparable' &&
-          String(f.lift).startsWith('not comparable: the eval changed'),
+          f.lift === 'not comparable: the eval changed' &&
+          !('passRate' in f),
       ),
       JSON.stringify(sources),
     )
+    assert.ok(
+      !digest.facts.some((f) => f.kind === 'factor' && f.tier === 'pooled'),
+      'a pooled row must not straddle the eval-changed pair',
+    )
     assert.ok(digest.rules.some((r) => r.includes('the eval changed')))
+  })
+
+  test('a changed eval has no mixed 6/10 vs 8/9 result line', async () => {
+    const evalFile = (
+      prompt: string,
+      runs: number,
+      failFrom: number,
+    ) => `import { evaluate } from 'reeval'
+evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
+  await c.send(${JSON.stringify(prompt)})
+  if (c.attempt.n >= ${failFrom}) throw new Error('counted miss')
+})
+`
+    const p = await project('analyze-eval-changed-mixed-rate', {
+      'reeval.config.ts': fakeConfig({ extra: "record: 'always'," }),
+      'evals/c.eval.ts': evalFile('go', 9, 9),
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    writeFileSync(join(p.dir, 'evals/c.eval.ts'), evalFile('go now', 10, 7))
+    assert.equal((await runCli(p.dir)).code, 0)
+    const observed = await query(
+      p.dir,
+      "SELECT variant_pass, variant_counted, control_pass, control_counted, pass_verdict FROM factor_effects WHERE tier = 'observed'",
+    )
+    assert.ok(
+      observed.some(
+        (r) =>
+          r.variant_pass === 6 &&
+          r.variant_counted === 10 &&
+          r.control_pass === 8 &&
+          r.control_counted === 9 &&
+          r.pass_verdict === 'not_comparable',
+      ),
+      `sources drift is 6/10 vs 8/9, not comparable: ${JSON.stringify(observed)}`,
+    )
+    const pooled = await query(p.dir, "SELECT * FROM factor_effects WHERE tier = 'pooled'")
+    assert.equal(pooled.length, 0, `no pooled row straddles the pair: ${JSON.stringify(pooled)}`)
+    const { digest } = await digestOf(p.dir, ['--vs', 'latest~1'])
+    assert.ok(
+      digest.facts.some((f) => f.kind === 'eval-changed'),
+      'digest has the eval-changed fact',
+    )
+    const resultLines = digest.facts.flatMap((f) => [
+      ...(typeof f.passRate === 'string' ? [f.passRate] : []),
+      ...(typeof f.lift === 'string' ? [f.lift] : []),
+    ])
+    assert.ok(
+      !resultLines.includes('6/10 vs 8/9'),
+      `mixed pass-rate is not a result line: ${JSON.stringify(resultLines)}`,
+    )
+    assert.ok(
+      !JSON.stringify(digest.facts).includes('6/10 vs 8/9'),
+      'the mixed rate is not on any digest fact',
+    )
+    assert.ok(
+      !digest.facts.some((f) => f.kind === 'factor' && f.tier === 'pooled'),
+      'digest emits no pooled factor that straddles the eval-changed pair',
+    )
   })
 
   test('two counted attempts can still be an effect', async () => {

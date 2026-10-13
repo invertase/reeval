@@ -74,7 +74,7 @@ export type DigestInput = {
 
 export const RULES = [
   `Pass-rate lift is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
-  'When sources or the eval fingerprint differ across the compared runs, the pass-rate difference is not comparable: the eval changed. Never call it an effect. Keep the counts. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
+  'When sources or the eval fingerprint differ across the compared runs, the pass-rate difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
   'Effort (tool calls, agent time) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot); pooled across evals it is an effect only when at least 2/3 of strata agree.',
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
@@ -111,8 +111,8 @@ function digestLiftVerdict(
 }
 
 /** Observed sources (or eval fingerprint) drift is not an effect of the thing under test. */
-function evalChangedLift(variantCounted: number, controlCounted: number): string {
-  return `not comparable: the eval changed (${variantCounted} vs ${controlCounted})`
+function evalChangedLift(): string {
+  return 'not comparable: the eval changed'
 }
 
 function sourcesKey(e: EvalEntry): string {
@@ -279,6 +279,13 @@ export async function buildDigestKeepingDropped(
 
   // Factor effects: pooled over comparable runs (per eval and across evals), harness and model
   // contrasts in these runs, what changed between runs, and what one level can't tell.
+  const changedEvalKeys = new Set<string>()
+  if (base) {
+    for (const e of scopeEvals) {
+      const prior = base.record.evals.find((x) => x.key === e.key)
+      if (prior && evalSourcesChanged(prior, e)) changedEvalKeys.add(e.key)
+    }
+  }
   const harnesses = [...new Set(runs.flatMap((r) => r.record.stack.harnesses.map((h) => h.id)))]
   const factors = q(
     `SELECT * FROM factor_effects WHERE
@@ -297,6 +304,12 @@ export async function buildDigestKeepingDropped(
       fact('factor', { tier: f.tier, factor: f.factor, level: f.level, note: f.note })
       continue
     }
+    // A pooled row that includes an eval-changed pair is not a contrast of the thing under test.
+    if (f.tier === 'pooled') {
+      if (f.eval_key && changedEvalKeys.has(f.eval_key as string)) continue
+      if (!f.eval_key && changedEvalKeys.size) continue
+    }
+    const notComparable = f.pass_verdict === 'not_comparable' || f.factor === 'sources'
     fact('factor', {
       tier: f.tier,
       factor: f.factor,
@@ -308,13 +321,13 @@ export async function buildDigestKeepingDropped(
       ...(f.run_id && f.tier !== 'observed' ? { run: short.get(f.run_id as string) } : {}),
       ...(f.strata && (f.strata as number) > 1 ? { strata: f.strata } : {}),
       ...(f.runs ? { runs: f.runs } : {}),
-      passRate: `${f.variant_pass}/${f.variant_counted} vs ${f.control_pass}/${f.control_counted}`,
-      ...(f.pass_verdict === 'not_comparable' || f.factor === 'sources'
+      ...(notComparable
         ? {
-            lift: evalChangedLift(f.variant_counted as number, f.control_counted as number),
+            lift: evalChangedLift(),
             passVerdict: 'not comparable',
           }
         : {
+            passRate: `${f.variant_pass}/${f.variant_counted} vs ${f.control_pass}/${f.control_counted}`,
             lift: digestLift(
               f.variant_counted as number,
               f.control_counted as number,
