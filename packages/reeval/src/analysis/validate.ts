@@ -1,7 +1,8 @@
 // Checks a model's analysis against its digest: citations must name something in it, quotes must be
-// in the cited evidence, numbers should be in the cited facts, and verify commands must parse as
+// in the cited evidence, numbers should be in the cited facts (anomalies included), a cited judge
+// score must match the recorded one or the line is dropped, and verify commands must parse as
 // reeval's own CLI and, for `reeval run`, select an eval of the run. A rejected verify is dropped.
-// What fails is dropped (or, for numbers, flagged), and counted in `validation`.
+// What fails is dropped (or, for other numbers, flagged), and counted in `validation`.
 import { checkCommand, type SelectableEval } from '../cli-spec.ts'
 import type {
   AnalysisAction,
@@ -63,6 +64,58 @@ export function citations(digest: Digest) {
 
 const ANY_NUMBER = /[−-]?\d+(?:\.\d+)?/g
 const FRACTION = /(\d+)\/(\d+)/g
+const ATTEMPT_CITE = /:check\d+$|:L\d+$/
+
+/** A decimal in [0, 1]: the form a judge score or threshold takes in the digest. */
+const looksLikeScore = (raw: string) => {
+  if (!raw.includes('.')) return false
+  const n = Number(raw.replace('−', '-'))
+  return n >= 0 && n <= 1
+}
+
+const addScore = (scores: number[], n: unknown) => {
+  if (typeof n === 'number' && Number.isFinite(n)) scores.push(n)
+}
+
+/**
+ * Recorded judge scores (and thresholds) on the cited attempt, fact or evidence. The digest stores
+ * them as `attempt.judge`, `judge: { score, threshold }` on a failure, and `judge score:` lines.
+ */
+function citedJudgeScores(cites: string[], digest: Digest): number[] {
+  const scores: number[] = []
+  for (const cite of cites) {
+    const id = cite
+      .trim()
+      .replace(/^\[|\]$/g, '')
+      .replace(ATTEMPT_CITE, '')
+    addScore(scores, digest.attempts[id]?.judge)
+    const fact = digest.facts.find((f) => f.id === id)
+    if (fact) {
+      const j = fact.judge
+      if (typeof j === 'number') addScore(scores, j)
+      else if (j && typeof j === 'object') {
+        addScore(scores, (j as { score?: unknown }).score)
+        addScore(scores, (j as { threshold?: unknown }).threshold)
+      }
+      if (Array.isArray(fact.failures)) {
+        for (const row of fact.failures) {
+          if (row && typeof row === 'object') addScore(scores, (row as { score?: unknown }).score)
+        }
+      }
+      if (Array.isArray(fact.threshold)) for (const t of fact.threshold) addScore(scores, t)
+    }
+    const evidence = digest.evidence.find((e) => e.id === id)
+    if (evidence) {
+      for (const line of evidence.lines) {
+        const score = /judge score:\s*([−-]?\d+(?:\.\d+)?)/i.exec(line)
+        if (score) addScore(scores, Number((score[1] as string).replace('−', '-')))
+        const threshold = /threshold\s+([−-]?\d+(?:\.\d+)?)/i.exec(line)
+        if (threshold) addScore(scores, Number((threshold[1] as string).replace('−', '-')))
+      }
+    }
+  }
+  return scores
+}
 
 /**
  * Numbers in `text` that none of `sources` contains: within rounding, as a percentage, or as the
@@ -139,6 +192,21 @@ export function validateAnalysis(
     }
     return { good, texts }
   }
+  /**
+   * Unverified numbers, or null when a cited judge score disagrees: that line cannot keep a
+   * wrong score in the written explanation.
+   */
+  const numbersOrDrop = (where: string, text: string, cites: string[], texts: string[]) => {
+    const numbers = unverifiedNumbers(text, [...texts, ...digest.rules])
+    validation.unverifiedNumbers += numbers.length
+    const recorded = citedJudgeScores(cites, digest)
+    const wrong = recorded.length ? numbers.filter(looksLikeScore) : []
+    if (!wrong.length) return numbers
+    const shown = [...new Set(recorded.map(String))].join(', ')
+    validation.invalid.push(`${where}: ${wrong.join(', ')} isn't the cited judge score (${shown})`)
+    validation.dropped++
+    return null
+  }
   const claims = (where: string, items: AnalysisOutput['whatHappened']): AnalysisClaim[] =>
     items.flatMap((item, i) => {
       const c = cited(`${where}[${i}]`, item.cites)
@@ -152,8 +220,8 @@ export function validateAnalysis(
         validation.dropped++
         return []
       }
-      const numbers = unverifiedNumbers(item.text, [...c.texts, ...digest.rules])
-      validation.unverifiedNumbers += numbers.length
+      const numbers = numbersOrDrop(`${where}[${i}]`, item.text, c.good, c.texts)
+      if (!numbers) return []
       return [
         {
           text: item.text,
@@ -169,7 +237,17 @@ export function validateAnalysis(
   const why = claims('why', output.why)
   const anomalies: AnalysisAnomaly[] = output.anomalies.flatMap((a, i) => {
     const c = cited(`anomalies[${i}]`, a.cites)
-    return c ? [{ text: a.text, kind: a.kind, cites: c.good }] : []
+    if (!c) return []
+    const numbers = numbersOrDrop(`anomalies[${i}]`, a.text, c.good, c.texts)
+    if (!numbers) return []
+    return [
+      {
+        text: a.text,
+        kind: a.kind,
+        cites: c.good,
+        ...(numbers.length ? { unverifiedNumbers: numbers } : {}),
+      },
+    ]
   })
   const actions: AnalysisAction[] = output.actions.flatMap((a, i) => {
     const c = cited(`actions[${i}]`, a.cites)

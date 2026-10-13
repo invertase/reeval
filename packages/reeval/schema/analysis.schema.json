@@ -77,6 +77,12 @@
         },
         "text": {
           "type": "string"
+        },
+        "unverifiedNumbers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": ["cites", "kind", "text"]
