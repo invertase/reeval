@@ -185,8 +185,8 @@ After those checks it caps confidence: not `high` when any citation or command f
 The studio run page leads with a deterministic pass/fail/infra sentence, and pins the TL;DR under the header when an analysis exists.
 
 <Warning>
-  A `--tag` that no eval has is rewritten to `reeval run <id>` when it was a
-  guess at the name, or the action is dropped. A rejected verify is not printed.
+  A `--tag` that no eval has, or any other rejected verify, drops the action.
+  It is not printed with `verify: none`.
 </Warning>
 
 The studio shows saved analyses on the run's Analysis tab, with citations that link to attempts:

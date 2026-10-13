@@ -34,11 +34,7 @@ import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { resolveAnalysisModel } from '../src/analysis/model.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
-import {
-  capConfidence,
-  rewriteGuessedTagCommand,
-  validateAnalysis,
-} from '../src/analysis/validate.ts'
+import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { allRuns } from '../src/commands.ts'
 import { resolveConfig } from '../src/config.ts'
@@ -638,7 +634,7 @@ describe('reeval analyze', () => {
     )
   })
 
-  test('a rejected verify is dropped, or rewritten from --tag to the eval id', () => {
+  test('a rejected verify is dropped', () => {
     const evals = [
       {
         file: 'evals/sign-in.eval.ts',
@@ -648,22 +644,6 @@ describe('reeval analyze', () => {
         cells: ['fake/-'],
       },
     ]
-    assert.equal(
-      rewriteGuessedTagCommand('reeval run --tag sign-in', evals),
-      "reeval run 'evals/sign-in.eval.ts › sign-in'",
-    )
-    assert.equal(
-      rewriteGuessedTagCommand('reeval run --runs 6 --tag=sign-in', evals),
-      "reeval run --runs 6 'evals/sign-in.eval.ts › sign-in'",
-    )
-    assert.equal(rewriteGuessedTagCommand('reeval run --tag nosuch', evals), null)
-    assert.equal(rewriteGuessedTagCommand('reeval run --tag auth', evals), null)
-    assert.equal(
-      rewriteGuessedTagCommand('reeval run --tag skill', [{ ...evals[0], tags: ['skill'] }]),
-      null,
-      'a real tag is left alone',
-    )
-
     const digest: AnalysisDigest = {
       digestVersion: 5,
       scope: { kind: 'run', head: 'r1', base: null, evals: null },
@@ -701,29 +681,26 @@ describe('reeval analyze', () => {
       anomalies: [] as [],
       confidence: { overall: 'high' as const, why: 'n = 1' },
     }
-    const rewritten = validateAnalysis(
-      { ...base, actions: [action('reeval run --tag sign-in')] },
+    const dropped = validateAnalysis(
+      {
+        ...base,
+        actions: [
+          action('reeval run --tag sign-in'),
+          action('reeval run --tag nosuch'),
+          action('reeval query nope'),
+          action('reeval query effort'),
+        ],
+      },
       digest,
-      [],
+      ['effort'],
       evals,
     )
     assert.deepEqual(
-      rewritten.body.actions.map((a) => a.verify),
-      ["reeval run 'evals/sign-in.eval.ts › sign-in'"],
+      dropped.body.actions.map((a) => a.verify),
+      ['reeval query effort'],
     )
-    assert.equal(rewritten.validation.invalidCommands.length, 0)
-    assert.equal(rewritten.validation.dropped, 0)
-    assert.equal(rewritten.body.confidence.overall, 'high')
-
-    const dropped = validateAnalysis(
-      { ...base, actions: [action('reeval run --tag nosuch'), action('reeval query nope')] },
-      digest,
-      [],
-      evals,
-    )
-    assert.deepEqual(dropped.body.actions, [])
-    assert.equal(dropped.validation.dropped, 2)
-    assert.equal(dropped.validation.invalidCommands.length, 2)
+    assert.equal(dropped.validation.dropped, 3)
+    assert.equal(dropped.validation.invalidCommands.length, 3)
     assert.equal(dropped.body.confidence.overall, 'low')
   })
 

@@ -1369,7 +1369,7 @@ export const inventory: InventoryFeature[] = [
       analysis('a changed eval has no mixed 6/10 vs 8/9 result line'),
       analysis('two counted attempts can still be an effect'),
       analysis('claims with invented citations or quotes are dropped'),
-      analysis('a rejected verify is dropped, or rewritten from --tag to the eval id'),
+      analysis('a rejected verify is dropped'),
       analysis('validation caps confidence when citations or commands fail'),
       analysis('verify commands must parse as reeval commands'),
       analysis('reeval run and reeval image build verify commands must select an eval of the run'),
