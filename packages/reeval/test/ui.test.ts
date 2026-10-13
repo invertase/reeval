@@ -660,6 +660,48 @@ describe('collapsed judges, per-key rates and tokens', () => {
     assert.match(thinOut, /login 1\/1/)
     assert.doesNotMatch(thinOut, /\(\+\d+ pts\)/)
   })
+
+  test('cell rows distinguish judges that share a clipped prefix', () => {
+    const email = 'Does this change implement email sign-in?'
+    const social = 'Does this change implement social sign-in?'
+    const colliding: EvalEntry = {
+      ...entry(greetResult, 1),
+      cells: [
+        {
+          key: 'fake/plain/fake',
+          harness: 'fake',
+          environment: 'plain',
+          sandbox: 'fake',
+          role: 'control',
+          gate: 'all',
+          overrides: [],
+          runs: 2,
+          pass: 0,
+          fail: 2,
+          infraError: 0,
+          skipped: 0,
+          passRate: 0,
+          outcome: 'fail',
+        } as EvalEntry['cells'][number],
+      ],
+      attempts: [1, 2].map((n) => ({
+        id: `fake/plain/fake#${n}`,
+        cell: 'fake/plain/fake',
+        n,
+        outcome: 'fail',
+        usage: null,
+        turns: [{}],
+        judgements: [
+          judgement(email, n === 1 ? 'pass' : 'fail', n === 1 ? 0.9 : 0.2, '0:email'),
+          judgement(social, 'fail', 0.1, '1:social'),
+        ],
+      })) as EvalEntry['attempts'],
+    }
+    const out = summaryOf([colliding])
+    assert.match(out, /…email sign-in 1\/2/)
+    assert.match(out, /…social sign-in 0\/2/)
+    assert.doesNotMatch(out, /Does this change…/)
+  })
 })
 
 test('browser-download names the binary, version, size and cache', () => {

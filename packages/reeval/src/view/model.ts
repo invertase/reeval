@@ -18,7 +18,7 @@ import {
   stackChanges,
 } from './compare.ts'
 import { type CellEffort, cellContrast, cellEffort, type EffortContrast } from './effort.ts'
-import { cellJudgeRates, cellUsage, type JudgeKeyRate, judgeLabel } from './judgements.ts'
+import { cellJudgeRates, cellUsage, type JudgeKeyRate, uniqueJudgeLabels } from './judgements.ts'
 import { manifestPath, shardOf, shardPath } from './paths.ts'
 import { readableTranscriptLine } from './record.ts'
 
@@ -191,20 +191,19 @@ function andList(items: readonly string[]): string {
 /** Distinct judge labels that failed on a counted attempt, in first-seen order. */
 export function failedJudgeLabels(record: Pick<RunRecord, 'evals'>): string[] {
   const seen = new Set<string>()
-  const labels: string[] = []
+  const items: { key: string; question: string }[] = []
   for (const e of record.evals) {
     for (const a of e.attempts) {
       if (a.outcome !== 'pass' && a.outcome !== 'fail') continue
       for (const j of a.judgements) {
-        if (j.verdict !== 'fail') continue
-        const label = judgeLabel(j.question)
-        if (seen.has(label)) continue
-        seen.add(label)
-        labels.push(label)
+        if (j.verdict !== 'fail' || seen.has(j.key)) continue
+        seen.add(j.key)
+        items.push({ key: j.key, question: j.question })
       }
     }
   }
-  return labels
+  const labels = uniqueJudgeLabels(items)
+  return items.map((item) => labels.get(item.key) ?? item.key)
 }
 
 /**

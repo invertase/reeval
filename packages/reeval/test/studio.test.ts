@@ -38,6 +38,7 @@ import {
   splitPatch,
   traceApiPath,
   transcriptItems,
+  uniqueJudgeLabels,
 } from '../src/view/index.ts'
 import { baseEnv, fakeConfig, pkgRoot, project, runCli } from './helpers.ts'
 import { e2eNewlineAnswer, realAttempts } from './support/real-runs.ts'
@@ -478,6 +479,7 @@ describe('view-models over a real history', () => {
     assert.ok(first && skillOne)
     assert.equal(LIFT_MIN_COUNTED, 2)
     assert.equal(judgeLabel('login?'), 'login')
+    assert.equal(judgeLabel('Does this change implement email sign-in?'), 'Does this change…')
     assert.equal(collapsedJudgeLabel(first.judgements), 'fail 0.20/0.80 · fail 0.10/0.80')
     assert.equal(
       collapsedJudgeLabel([...first.judgements, j('extra', 'fail', 0.05, '2:extra')]),
@@ -521,6 +523,73 @@ describe('view-models over a real history', () => {
     })
     assert.equal(rows[1]?.judgeRates[0]?.lift?.points, 0.5)
     assert.equal(rows[0]?.usage?.input, 100)
+  })
+
+  test('colliding judge prefixes take the distinctive tail', () => {
+    const email = 'Does this change implement email sign-in?'
+    const social = 'Does this change implement social sign-in?'
+    const login = 'login?'
+    assert.equal(judgeLabel(email), judgeLabel(social))
+    assert.deepEqual(
+      [
+        ...uniqueJudgeLabels([
+          { key: '0:email', question: email },
+          { key: '1:social', question: social },
+          { key: '2:login', question: login },
+        ]),
+      ],
+      [
+        ['0:email', '…email sign-in'],
+        ['1:social', '…social sign-in'],
+        ['2:login', 'login'],
+      ],
+    )
+    assert.deepEqual(
+      [
+        ...uniqueJudgeLabels([
+          { key: '0:same', question: email },
+          { key: '1:same', question: email },
+        ]),
+      ],
+      [
+        ['0:same', '0:same'],
+        ['1:same', '1:same'],
+      ],
+    )
+
+    const j = (question: string, key: string, verdict: 'pass' | 'fail') => ({
+      question,
+      verdict,
+      score: verdict === 'pass' ? 0.9 : 0.2,
+      threshold: 0.8,
+      model: 'fake',
+      key,
+    })
+    const attempt = (n: number, emailVerdict: 'pass' | 'fail') =>
+      ({
+        id: `fake/plain/fake#${n}`,
+        cell: 'fake/plain/fake',
+        n,
+        outcome: 'fail',
+        judgements: [j(email, '0:email', emailVerdict), j(social, '1:social', 'fail')],
+      }) as RunRecord['evals'][number]['attempts'][number]
+    const entry = {
+      cells: [{ key: 'fake/plain/fake' }],
+      attempts: [attempt(1, 'fail'), attempt(2, 'pass')],
+    } as RunRecord['evals'][number]
+    assert.deepEqual(
+      cellJudgeRates(entry, 'fake/plain/fake').map((r) => [r.label, r.pass, r.counted]),
+      [
+        ['…email sign-in', 1, 2],
+        ['…social sign-in', 0, 2],
+      ],
+    )
+    assert.deepEqual(
+      failedJudgeLabels({
+        evals: [entry],
+      } as Pick<RunRecord, 'evals'>),
+      ['…email sign-in', '…social sign-in'],
+    )
   })
 
   test("compare answers: each question's win rates per cut, and nothing without one", () => {

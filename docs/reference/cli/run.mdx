@@ -161,10 +161,13 @@ count (`fail 0.33/0.80 · 3 judges`). Token usage, when the harness reported it,
 follows the turns.
 
 An eval with several attempts also prints each judge key's passes over counted
-attempts on the cell row (`login 4/5 · checkout 0/5`). A variant key shows lift
-only when both sides have at least two counted attempts. The cell's tokens are
-the sum of those counted attempts; a harness that reports none leaves the field
-blank, never `0`.
+attempts on the cell row (`login 4/5 · checkout 0/5`). Questions that share a
+prefix show the distinctive tail (`…email sign-in 4/5 · …social sign-in 0/5`)
+so the rates stay matchable.
+
+A variant key shows lift only when both sides have at least two counted
+attempts. The cell's tokens are the sum of those counted attempts; a harness
+that reports none leaves the field blank, never `0`.
 
 ## What it writes
 

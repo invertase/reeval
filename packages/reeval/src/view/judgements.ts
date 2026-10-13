@@ -23,10 +23,83 @@ const COLLAPSE_AFTER = 2
 
 const counted = (a: Pick<AttemptRecord, 'outcome'>) => a.outcome === 'pass' || a.outcome === 'fail'
 
+/** Short names stay at this many characters; a collision takes the distinctive tail instead. */
+const LABEL_MAX = 20
+
+const judgeText = (question: string) => question.replace(/\?+$/, '').trim()
+
+/** Last `max` characters, cut at a word boundary where there is one, marked with a leading `…`. */
+function clipTail(text: string, max: number): string {
+  if (text.length <= max) return text
+  const cut = text.slice(-(max - 1))
+  const space = cut.search(/\s/)
+  const body = space >= 0 && space < max / 2 ? cut.slice(space + 1) : cut
+  return `…${body.trimStart()}`
+}
+
 /** Short name for a judge question, e.g. `login` from `login?`. */
 export function judgeLabel(question: string): string {
-  const text = question.replace(/\?+$/, '').trim()
-  return clip(text, 20)
+  return clip(judgeText(question), LABEL_MAX)
+}
+
+/**
+ * One short label per key. Shared prefixes take the distinctive tail so
+ * `Does this change…` does not collapse several checks; a tail that still
+ * collides falls back to the key.
+ */
+export function uniqueJudgeLabels(
+  items: readonly { key: string; question: string }[],
+): Map<string, string> {
+  const first = new Map<string, { key: string; question: string }>()
+  for (const item of items) {
+    if (!first.has(item.key)) first.set(item.key, item)
+  }
+  const labels = new Map<string, string>()
+  const used = new Map<string, string[]>()
+
+  const setLabel = (key: string, label: string) => {
+    const prev = labels.get(key)
+    if (prev !== undefined) {
+      const group = used.get(prev)
+      if (group) {
+        const next = group.filter((k) => k !== key)
+        if (next.length) used.set(prev, next)
+        else used.delete(prev)
+      }
+    }
+    labels.set(key, label)
+    const group = used.get(label) ?? []
+    group.push(key)
+    used.set(label, group)
+  }
+
+  for (const row of first.values()) setLabel(row.key, judgeLabel(row.question))
+
+  for (const [label, keys] of [...used]) {
+    if (keys.length < 2) continue
+    const tails = new Map<string, string[]>()
+    for (const key of keys) {
+      const row = first.get(key)
+      if (!row) continue
+      const tail = clipTail(judgeText(row.question), LABEL_MAX)
+      const group = tails.get(tail) ?? []
+      group.push(key)
+      tails.set(tail, group)
+    }
+    for (const [tail, tkeys] of tails) {
+      const [only] = tkeys
+      const taken = (used.get(tail) ?? []).some((k) => !tkeys.includes(k))
+      if (only && tkeys.length === 1 && tail !== label && !taken) setLabel(only, tail)
+      else for (const key of tkeys) setLabel(key, key)
+    }
+  }
+
+  for (const [, keys] of [...used]) {
+    if (keys.length < 2) continue
+    for (const key of keys) setLabel(key, key)
+  }
+
+  return labels
 }
 
 export type JudgeKeyRate = {
@@ -47,7 +120,7 @@ function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string
     if (a.cell !== cellKey || !counted(a)) continue
     for (const j of a.judgements) {
       const row = byKey.get(j.key) ?? {
-        label: judgeLabel(j.question),
+        label: '',
         question: j.question,
         pass: 0,
         counted: 0,
@@ -57,6 +130,10 @@ function keyTallies(e: Pick<EvalEntry, 'attempts'>, cellKey: string): Map<string
       byKey.set(j.key, row)
     }
   }
+  const labels = uniqueJudgeLabels(
+    [...byKey].map(([key, row]) => ({ key, question: row.question })),
+  )
+  for (const [key, row] of byKey) row.label = labels.get(key) ?? judgeLabel(row.question)
   return byKey
 }
 
@@ -127,11 +204,12 @@ export function collapsedJudges(judgements: readonly JudgementRecord[]): {
   shown: CollapsedJudge[]
   extra: number
 } {
+  const labels = uniqueJudgeLabels(judgements)
   const items = judgements.map((j) => ({
     verdict: j.verdict,
     score: j.score,
     threshold: j.threshold,
-    label: judgeLabel(j.question),
+    label: labels.get(j.key) ?? judgeLabel(j.question),
     key: j.key,
   }))
   if (items.length <= COLLAPSE_AFTER) return { shown: items, extra: 0 }
