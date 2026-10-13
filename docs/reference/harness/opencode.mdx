@@ -42,10 +42,10 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | The model's provider's, such as `GOOGLE_GENERATIVE_AI_API_KEY` for `google/…` ([every provider](#supported-providers)) |
-| Adapter | `@reeval/harness-opencode` 0.2.6 (over `@ai-sdk/harness-acp`), bundled with reeval |
-| CLI | `@opencode/cli` 2.0.26 |
+| Adapter | `@reeval/harness-opencode` 0.2.7 (over `@ai-sdk/harness-acp`), bundled with reeval |
+| CLI | `@opencode/cli` 2.0.27 |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:opencode-0.2.6` |
+| Image | `reeval-sandbox:opencode-0.2.7` |
 | Rules file | `AGENTS.md` |
 | Skills (default placement) | `~/.config/opencode/skills` |
 | Skills (`placement: 'workspace'`) | `.opencode/skills` in the workspace |
@@ -187,7 +187,7 @@ OpenCode connects config MCP servers in the background once the session exists. 
 
 ## Supported providers
 
-Every provider OpenCode 2.0.26 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
+Every provider OpenCode 2.0.27 knows whose key it sends in a header on known hosts. A provider whose models use several APIs (OpenCode Zen, ZenMux, ofox and others) has a header for each.
 
 [//]: # (generated:opencode-providers)
 
@@ -288,6 +288,7 @@ Every provider OpenCode 2.0.26 knows whose key it sends in a header on known hos
 | LLM Tech | `llmtech/…` | `LLMTECH_API_KEY` | `Authorization: Bearer` | `api.llmtech.eu` |
 | LLMTR | `llmtr/…` | `LLMTR_API_KEY` | `Authorization: Bearer` | `llmtr.com` |
 | LongCat | `longcat/…` | `LONGCAT_API_KEY` | `Authorization: Bearer` | `api.longcat.chat` |
+| LowRouter | `lowrouter/…` | `LOWROUTER_API_KEY` | `Authorization: Bearer` | `api.lowrouter.ai` |
 | LucidQuery | `lucidquery/…` | `LUCIDQUERY_API_KEY` | `Authorization: Bearer` | `api.lucidquery.com` |
 | Meganova | `meganova/…` | `MEGANOVA_API_KEY` | `Authorization: Bearer` | `api.meganova.ai` |
 | Melious | `melious/…` | `MELIOUS_API_KEY` | `Authorization: Bearer` | `api.melious.ai` |
@@ -312,10 +313,10 @@ Every provider OpenCode 2.0.26 knows whose key it sends in a header on known hos
 | NeoSmith | `neosmith/…` | `NEOSMITH_API_KEY` | `Authorization: Bearer` | `router.neosmith.ai` |
 | Neuralwatt | `neuralwatt/…` | `NEURALWATT_API_KEY` | `Authorization: Bearer` | `api.neuralwatt.com` |
 | Nova | `nova/…` | `NOVA_API_KEY` | `Authorization: Bearer` | `api.nova.amazon.com` |
-| NovitaAI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
+| Novita AI | `novita-ai/…` | `NOVITA_API_KEY` | `Authorization: Bearer` | `api.novita.ai` |
 | Nvidia | `nvidia/…` | `NVIDIA_API_KEY` | `Authorization: Bearer` | `integrate.api.nvidia.com` |
 | OCI Generative AI | `oci/…` | `OCI_GENAI_API_KEY` | `Authorization: Bearer` | `inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
-| Ofox | `ofox/…` | `OFOX_API_KEY` | `Authorization: Bearer`, `x-api-key`, `x-goog-api-key` | `api.ofox.ai` |
+| Ofox | `ofox/…` | `OFOX_API_KEY` | `x-api-key`, `Authorization: Bearer`, `x-goog-api-key` | `api.ofox.ai` |
 | Ollama Cloud | `ollama-cloud/…` | `OLLAMA_API_KEY` | `Authorization: Bearer` | `ollama.com` |
 | OpenAI | `openai/…` | `OPENAI_API_KEY` | `Authorization: Bearer` | `api.openai.com` |
 | OpenCode Console | `opencode/…` | `OPENCODE_API_KEY` | `Authorization: Bearer`, `x-api-key`, `x-goog-api-key` | `opencode.ai` |

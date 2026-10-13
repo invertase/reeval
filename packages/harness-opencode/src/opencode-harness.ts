@@ -31,7 +31,7 @@ import { OPENCODE_BUILTIN_TOOLS, type OpenCodeBuiltinTools } from './opencode-to
 
 export const OPENCODE_HARNESS_ID = 'opencode'
 /** The `@opencode/cli` release the bootstrap installs (pinned in `opencode-install.ts`). */
-export const OPENCODE_CLI_VERSION = '2.0.26'
+export const OPENCODE_CLI_VERSION = '2.0.27'
 /** Where harness-placed skills go, under the sandbox home: OpenCode's own global directory. */
 export const OPENCODE_HOME_SKILLS_DIR = '.config/opencode/skills'
 /**
