@@ -210,10 +210,10 @@ describe('studio in a browser', () => {
     await page.locator('[data-latest-run]').getByText('Harness').waitFor()
     const recent = page
       .locator('table')
-      .filter({ has: page.getByRole('columnheader', { name: 'Run' }) })
+      .filter({ has: page.getByRole('columnheader', { name: 'Run', exact: true }) })
     assert.ok((await recent.locator('tbody tr').count()) <= 4)
     await page.goto(`${page.url()}/history`)
-    await page.getByRole('columnheader', { name: 'Run' }).waitFor()
+    await page.getByRole('columnheader', { name: 'Run', exact: true }).waitFor()
 
     await page.goto(`${origin}#/runs`)
     await page.waitForSelector('tbody tr')
@@ -529,7 +529,7 @@ describe('studio in a browser', () => {
     await page.locator('[data-latest-run]').waitFor()
     await page.getByRole('link', { name: 'View All' }).click()
     assert.match(page.url(), /#\/evals\/[^/]+\/history$/)
-    await page.getByRole('columnheader', { name: 'Run' }).waitFor()
+    await page.getByRole('columnheader', { name: 'Run', exact: true }).waitFor()
     await page.goto(`${page.url().split('#')[0]}#/runs`)
     await page.waitForSelector('tbody tr')
     assert.equal(await page.locator('tbody tr').count(), 5)
