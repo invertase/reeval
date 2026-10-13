@@ -145,7 +145,7 @@
 | `reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
 | Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio | ✓ 3 | — | — | — | — |
-| Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts | ✓ 2 | — | — | — | — |
+| Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts | ✓ 4 | — | — | — | — |
 | Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 2 | — | — | — | — |
 | Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio | ✓ 3 | — | — | — | — |
 | `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 13 | — | — | — | — |

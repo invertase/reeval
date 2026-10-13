@@ -1329,7 +1329,9 @@ export const inventory: InventoryFeature[] = [
     name: 'Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts',
     tests: [
       'reeval/test/ui.test.ts › cell rows show per-key rates',
+      'reeval/test/ui.test.ts › cell rows distinguish judges that share a clipped prefix',
       studio('per-key judge rates, collapsed scores and cell usage'),
+      studio('colliding judge prefixes take the distinctive tail'),
     ],
   },
   {
