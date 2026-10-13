@@ -50,13 +50,20 @@ function combinations<T>(items: T[]): Array<[T, T]> {
 /** Distinct values in first-seen order. */
 const distinct = (values: string[]) => [...new Set(values)]
 
+/** Both cuts, in the order `pairsOf` builds them. */
+export const ALL_CUTS: CompareCut[] = ['within', 'across']
+
+/** The cuts a question asks: its own, else both. */
+export const cutsOf = (cut?: CompareCut): CompareCut[] => (cut ? [cut] : ALL_CUTS)
+
 /**
  * The pairs to judge. Within a harness, for each run, every two arms; across harnesses, for each
  * arm and run, every two harnesses. Attempts that failed their deterministic checks are left out
  * (they still count in the pass rate), so a pair missing a side isn't judged. The control arm
- * comes first, then arms and harnesses in the order they first appear.
+ * comes first, then arms and harnesses in the order they first appear. `cuts` keeps one kind;
+ * omitted or empty, both run.
  */
-export function pairsOf(attempts: PairAttempt[]): Pair[] {
+export function pairsOf(attempts: PairAttempt[], cuts?: readonly CompareCut[]): Pair[] {
   const eligible = attempts.filter((a) => a.checksPassed)
   const find = (harness: string, arm: string, run: number) =>
     eligible.find((a) => a.harness === harness && a.arm === arm && a.run === run)
@@ -66,26 +73,48 @@ export function pairsOf(attempts: PairAttempt[]): Pair[] {
     ...attempts.map((a) => a.arm),
   ])
   const runs = [...new Set(attempts.map((a) => a.run))].sort((x, y) => x - y)
+  const want = new Set(cuts?.length ? cuts : ALL_CUTS)
   const pairs: Pair[] = []
-  for (const harness of harnesses) {
-    for (const run of runs) {
-      for (const [x, y] of combinations(arms)) {
-        const a = find(harness, x, run)
-        const b = find(harness, y, run)
-        if (a && b) pairs.push({ cut: 'within', harness, run, a, b })
+  if (want.has('within')) {
+    for (const harness of harnesses) {
+      for (const run of runs) {
+        for (const [x, y] of combinations(arms)) {
+          const a = find(harness, x, run)
+          const b = find(harness, y, run)
+          if (a && b) pairs.push({ cut: 'within', harness, run, a, b })
+        }
       }
     }
   }
-  for (const arm of arms) {
-    for (const run of runs) {
-      for (const [x, y] of combinations(harnesses)) {
-        const a = find(x, arm, run)
-        const b = find(y, arm, run)
-        if (a && b) pairs.push({ cut: 'across', arm, run, a, b })
+  if (want.has('across')) {
+    for (const arm of arms) {
+      for (const run of runs) {
+        for (const [x, y] of combinations(harnesses)) {
+          const a = find(x, arm, run)
+          const b = find(y, arm, run)
+          if (a && b) pairs.push({ cut: 'across', arm, run, a, b })
+        }
       }
     }
   }
   return pairs
+}
+
+/** Optimistic pair sides from planned attempts: every check is assumed to pass. */
+export function plannedSides(
+  attempts: Array<{
+    cell: { harness: string; environment: string; role: string }
+    n: number
+  }>,
+): PairAttempt[] {
+  return attempts.map((a) => ({
+    harness: a.cell.harness,
+    arm: a.cell.environment,
+    run: a.n,
+    diff: '',
+    checksPassed: true,
+    control: a.cell.role === 'control',
+  }))
 }
 
 /** The two sides in the order the model sees them: `a` first, or `b` first when swapped. */

@@ -1,4 +1,5 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
+import { cutsOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
@@ -7,10 +8,12 @@ import type {
   Budget,
   Cell,
   CellGate,
+  CompareCut,
   Duration,
   EvalPlan,
   HarnessDescriptor,
   PlannedEgress,
+  PlannedQuestion,
   ResolvedProfile,
   SandboxDescriptor,
   SandboxWarning,
@@ -22,7 +25,12 @@ const DEFAULT_FAKE_MS = 1000
 /** The most recent runs whose durations feed the estimate. */
 const HISTORY_RUNS = 30
 
-export type PlanRow = { id: string; plan: EvalPlan }
+export type PlanRow = {
+  id: string
+  plan: EvalPlan
+  /** Optimistic pair sides for `--dry-run`: every planned attempt is assumed to pass checks. */
+  sides: PairAttempt[]
+}
 
 export type RunPlan = {
   profile: ResolvedProfile | null
@@ -111,7 +119,7 @@ export async function buildPlan(options: {
   let estimateMs = 0
   for (const { id, attempt } of planned) {
     const existing = rows.get(id)
-    if (!existing || existing.plan.skip) rows.set(id, { id, plan: attempt.plan })
+    if (!existing || existing.plan.skip) rows.set(id, { id, plan: attempt.plan, sides: [] })
     for (const w of attempt.plan.warnings) warnings.add(w)
     if (attempt.skip || attempt.plan.skip) continue
     for (const w of attempt.plan.sandboxWarnings) {
@@ -139,6 +147,11 @@ export async function buildPlan(options: {
       variants: variants && { run: c.variants.size, of: variants.of },
       attempts: c.n,
     }
+    row.sides = plannedSides(
+      planned
+        .filter((p) => p.id === row.id && !p.attempt.skip && !p.attempt.plan.skip)
+        .map((p) => p.attempt),
+    )
   }
   return {
     profile: options.profile,
@@ -165,21 +178,38 @@ export type PlanQuestion = {
   question: string
   /** Its own model, else the plan's question model; null when there's no language model. */
   model: string | null
+  /** Which pairs it asks; unset when both cuts run (the default). */
+  cut?: CompareCut
+  /** Pairs it will ask, assuming every attempt passes its checks. */
+  pairs: number
 }
 
-/** An eval's compare questions, each with the model that will answer it. */
-export const planQuestions = (plan: RunPlan, p: EvalPlan): PlanQuestion[] =>
-  (p.skip ? [] : (p.questions ?? [])).map((q) => ({
+/** `within · 2 pairs` when it asks one cut; `4 pairs` when it asks both. */
+export const questionPairLabel = (q: Pick<PlanQuestion, 'cut' | 'pairs'>): string => {
+  const n = `${q.pairs} ${q.pairs === 1 ? 'pair' : 'pairs'}`
+  return q.cut ? `${q.cut} · ${n}` : n
+}
+
+/** An eval's compare questions, each with the model that will answer it and its pair count. */
+export const planQuestions = (
+  questions: PlannedQuestion[] | undefined,
+  sides: PairAttempt[],
+  questionModel: string | null,
+  skip?: string,
+): PlanQuestion[] =>
+  (skip ? [] : (questions ?? [])).map((q) => ({
     question: q.question,
-    model: q.model ?? plan.questionModel,
+    model: q.model ?? questionModel,
+    ...(q.cut ? { cut: q.cut } : {}),
+    pairs: pairsOf(sides, cutsOf(q.cut)).length,
   }))
 
-/** `  question 1/2  Which is cleaner? · after the run · google/gemini-3.8-flash` */
-function questionLines(plan: RunPlan, p: EvalPlan): string[] {
-  const questions = planQuestions(plan, p)
+/** `  question 1/2  Which is cleaner? · after the run · 4 pairs · google/gemini-3.8-flash` */
+function questionLines(row: PlanRow, questionModel: string | null): string[] {
+  const questions = planQuestions(row.plan.questions, row.sides, questionModel, row.plan.skip)
   return questions.map(
     (q, i) =>
-      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · ${q.model ?? 'needs a language model: set analysis.model'}`,
+      `  question ${i + 1}/${questions.length}  ${clip(q.question, 80)} · after the run · ${questionPairLabel(q)} · ${q.model ?? 'needs a language model: set analysis.model'}`,
   )
 }
 
@@ -260,8 +290,8 @@ export function planTable(plan: RunPlan, todos: readonly string[] = []): string[
   return [
     line(header),
     ...rows.flatMap((row, i) => {
-      const p = plan.rows[i]?.plan
-      return [line(row), ...(p ? questionLines(plan, p) : [])]
+      const p = plan.rows[i]
+      return [line(row), ...(p ? questionLines(p, plan.questionModel) : [])]
     }),
   ]
 }
@@ -332,7 +362,12 @@ export function planDocument(
   for (const { id, file, attempt } of planned) {
     let e = evals.get(id)
     if (!e) {
-      const questions = planQuestions(plan, attempt.plan)
+      const questions = planQuestions(
+        attempt.plan.questions,
+        plan.rows.find((r) => r.id === id)?.sides ?? [],
+        plan.questionModel,
+        attempt.plan.skip,
+      )
       e = {
         id,
         file,

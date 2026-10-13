@@ -775,16 +775,25 @@ export type CompareOptions<E = Environment> = {
    * win rates and never change pass, fail or the exit code.
    */
   questions?: CompareQuestion[]
+  /**
+   * Which pairs every question asks, when a question does not name its own `cut`. `'within'` is
+   * arm vs arm on one harness; `'across'` is harness vs harness on one arm. The default is both.
+   */
+  cuts?: CompareCut[]
 }
 
 /**
  * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
  * answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model.
+ * `cut` limits the pairs it asks; without it (and without `compare.cuts`) both cuts run.
  */
-export type CompareQuestion = string | { question: string; model?: string }
+export type CompareQuestion = string | { question: string; model?: string; cut?: CompareCut }
 
-/** A compare question as planned: its text, and the model it names itself, if any. */
-export type PlannedQuestion = { question: string; model?: string }
+/**
+ * A compare question as planned: its text, the model it names itself, if any, and the one cut it
+ * asks when it doesn't ask both.
+ */
+export type PlannedQuestion = { question: string; model?: string; cut?: CompareCut }
 
 /** Which pairs a vote is over: two arms on one harness, or two harnesses on one arm. */
 export type CompareCut = 'within' | 'across'

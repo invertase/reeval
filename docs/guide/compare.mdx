@@ -229,7 +229,10 @@ evaluate('greets by name', {
   compare: {
     baseline: plain,
     variants: [withHouseGreeting],
-    questions: ['Which greet.js handles a missing or empty name better?'],
+    questions: [{
+      question: 'Which greet.js handles a missing or empty name better?',
+      cut: 'within',
+    }],
   },
 }, async (c) => { … })
 ```
@@ -240,10 +243,10 @@ Lift says which arm passes more often. Each of `questions` asks which attempt di
 plan  profile questions (--profile) · 1 eval · 4 cells · 4 attempts · …
 eval                                      harnesses  variants  runs  attempts  notes
 evals/questions.eval.ts › greets by name  2          1         1     4
-  question 1/1  Which greet.js handles a missing or empty name better? · after the run · google/gemini-3.8-flash
+  question 1/1  Which greet.js handles a missing or empty name better? · after the run · within · 2 pairs · google/gemini-3.8-flash
 ```
 
-`reeval run --dry-run` lists each question with the model that will answer it, and a profile that leaves only the baseline drops them. `questions` is always a list: each entry is a string, or `{ question, model }` to give that one its own model. Without one, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
+`reeval run --dry-run` lists each question, the model that will answer it, and how many pairs it will ask (assuming every attempt passes its checks). A profile that leaves only the baseline drops them. `questions` is always a list: each entry is a string, or `{ question, model?, cut? }`. `cut: 'within'` asks only arm vs arm on one harness; `'across'` asks only harness vs harness on one arm. `compare.cuts: ['within']` sets that default for every question that does not name its own `cut`. Without either, both cuts run. Without a model, `analysis.model` answers, else the judge's model when it's a language model; with neither, `reeval run` exits 2 at plan time.
 
 ## Read the answers
 
@@ -262,7 +265,7 @@ Summary
 
 A real run on Cursor and pi. Lift can't separate the arms, since all four attempts passed, but the question can: with the skill, both agents' `greet.js` answered a missing name with `Ahoy, crew!`, and the model picked that arm in both orders on both harnesses.
 
-reeval pairs the attempts from their diffs in two cuts. `within` a harness, arm against arm on the same run; `across` harnesses, agent against agent on the same arm and run. Each pair goes to the model twice, the order swapped, labelled only A and B, so neither position nor a name can win it.
+reeval pairs the attempts from their diffs in two cuts, unless `cut` or `compare.cuts` keeps one. `within` a harness, arm against arm on the same run; `across` harnesses, agent against agent on the same arm and run. Each pair goes to the model twice, the order swapped, labelled only A and B, so neither position nor a name can win it.
 
 A side's rate is its wins over the decided votes it was in; a tie counts for neither side. Every vote is in the record under `evals[].answers`, with the rates per cut. A model error is kept on its answer as `error` and printed as a warning, and the outcomes stand.
 

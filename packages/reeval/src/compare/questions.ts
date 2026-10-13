@@ -15,12 +15,13 @@ import { redactSecrets } from '../redact.ts'
 import type {
   BlindPair,
   CompareAnswer,
+  CompareCut,
   EvalRecord,
   FakeAnalysisModel,
   FakeVote,
   PairVote,
 } from '../types.ts'
-import { type Pair, type PairAttempt, pairsOf, ratesOf, slots, voteOf } from './pairs.ts'
+import { cutsOf, type Pair, type PairAttempt, pairsOf, ratesOf, slots, voteOf } from './pairs.ts'
 
 export const QUESTION_SYSTEM = `You compare two attempts by coding agents at the same task and answer one question about them.
 Each attempt is shown as the changes it made to the project, as a unified diff, labelled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
@@ -199,7 +200,7 @@ const readStaged = async (stagingDir: string, key: string): Promise<EvalRecord |
 export type EvalQuestions = {
   row: PlanRow
   /** Each question with the model that answers it, resolved at plan time. */
-  questions: Array<{ question: string; model: QuestionModel }>
+  questions: Array<{ question: string; model: QuestionModel; cut?: CompareCut }>
 }
 
 export type QuestionRunnerOptions = {
@@ -230,14 +231,15 @@ export function questionRunner(options: QuestionRunnerOptions) {
         attempts.map(async (a) => stagedAttempt(a, await readStaged(options.stagingDir, a.key))),
       )
       // By cell key, not the order attempts happened to end in, so a run's pairs are its own.
-      const staged = sides.filter((s): s is PairAttempt => s !== null)
-      const pairs = pairsOf(staged.sort((x, y) => ((x.id ?? '') < (y.id ?? '') ? -1 : 1)))
+      const staged = sides
+        .filter((s): s is PairAttempt => s !== null)
+        .sort((x, y) => ((x.id ?? '') < (y.id ?? '') ? -1 : 1))
       return Promise.all(
         e.questions.map(async (q) => {
           const answer = await answerQuestion({
             question: q.question,
             model: q.model,
-            pairs,
+            pairs: pairsOf(staged, cutsOf(q.cut)),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,
             signal: controller.signal,

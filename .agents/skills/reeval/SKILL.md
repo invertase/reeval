@@ -293,13 +293,16 @@ group(
   only when nothing counted.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.
-- `compare.questions` (always a list of strings and `{ question, model? }`) asks which arm
-  did better, pair by pair, after the run. Questions annotate the compare and never gate:
-  pass, fail and the exit code stay the checks'. Their model is the entry's `model`, else
-  `analysis.model`, else the judge's when it's a language model (not `typesafe-ai/*`); with
-  none, `reeval run` exits 2 at plan time while `--dry-run` still lists them. A profile that
-  leaves only the baseline drops them (`questions off (profile …)`). Keep deterministic checks
-  for pass or fail, and ask questions only about quality between arms.
+- `compare.questions` (always a list of strings and `{ question, model?, cut? }`) asks which
+  arm did better, pair by pair, after the run. `cut: 'within'` is arm vs arm on one harness;
+  `'across'` is harness vs harness on one arm. `compare.cuts: ['within']` sets that for every
+  question that does not name its own `cut`. The default is both. `--dry-run` shows the pair
+  count. Questions annotate the compare and never gate: pass, fail and the exit code stay the
+  checks'. Their model is the entry's `model`, else `analysis.model`, else the judge's when
+  it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2 at plan time
+  while `--dry-run` still lists them. A profile that leaves only the baseline drops them
+  (`questions off (profile …)`). Keep deterministic checks for pass or fail, and ask
+  questions only about quality between arms.
 - Questions are answered on the host once all of an eval's attempts end, from their diffs.
   Attempts that failed their checks (a judge failure doesn't count) are left out of the pairs:
   a question on a compare whose baseline is expected to fail gets no pairs, so ask it where

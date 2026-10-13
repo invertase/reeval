@@ -735,6 +735,7 @@ async function executeRun(
       const questions = (row.plan.questions ?? []).map((q) => ({
         question: q.question,
         model: models.questionModel(config, q, row.id),
+        ...(q.cut ? { cut: q.cut } : {}),
       }))
       for (const q of questions) if (typeof q.model === 'string') questionModels.add(q.model)
       if (questions.length) asked.push({ row, questions })

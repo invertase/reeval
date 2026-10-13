@@ -328,6 +328,22 @@ describe('compare question pairs', () => {
     }
   })
 
+  test('cuts: within keeps only arm-vs-arm pairs; across keeps only harness pairs', () => {
+    const attempts = matrix(['h1', 'h2', 'h3', 'h4'], ['sdk', 'ui'], 2)
+    const within = pairsOf(attempts, ['within'])
+    const across = pairsOf(attempts, ['across'])
+    const both = pairsOf(attempts, ['within', 'across'])
+    assert.equal(within.length, 8)
+    assert.ok(within.every((p) => p.cut === 'within'))
+    assert.equal(across.length, 24)
+    assert.ok(across.every((p) => p.cut === 'across'))
+    assert.deepEqual(
+      both.map((p) => p.cut),
+      [...within, ...across].map((p) => p.cut),
+    )
+    assert.equal(pairsOf(attempts).length, both.length)
+  })
+
   test('the control arm is a within a harness, whichever attempt came first', () => {
     const [pair] = pairsOf([
       side('h', 'variant', 1),

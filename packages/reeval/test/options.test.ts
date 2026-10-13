@@ -438,12 +438,12 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · needs a language model: set analysis\.model$/m,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · 1 pair · needs a language model: set analysis\.model$/m,
     )
     const json = await runCli(p.dir, ['run', '--dry-run', '--json'])
     assert.equal(json.code, 0, json.stdout + json.stderr)
     assert.deepEqual(JSON.parse(json.stdout).evals[0].questions, [
-      { question: 'Which is cleaner?', model: null },
+      { question: 'Which is cleaner?', model: null, pairs: 1 },
     ])
     const r = await runCli(p.dir)
     assert.equal(r.code, 2, r.stdout + r.stderr)
@@ -489,7 +489,7 @@ evaluate('asks', { compare: { baseline: base, variants: [skilled], questions: ${
     const dry = await runCli(p.dir, ['run', '--dry-run', '--json'], { env: noKeys })
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.deepEqual(JSON.parse(dry.stdout).evals[0].questions, [
-      { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash' },
+      { question: 'Which is cleaner?', model: 'google/gemini-3.8-flash', pairs: 1 },
     ])
     const missing = await runCli(p.dir, ['run'], { env: noKeys })
     assert.equal(missing.code, 2, missing.stdout + missing.stderr)
@@ -524,8 +524,14 @@ export default defineConfig({
     })
     const dry = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
-    assert.match(dry.stdout, /^ {2}question 1\/2 {2}Which is cleaner\? · after the run · fake$/m)
-    assert.match(dry.stdout, /^ {2}question 2\/2 {2}Which is shorter\? · after the run · fake$/m)
+    assert.match(
+      dry.stdout,
+      /^ {2}question 1\/2 {2}Which is cleaner\? · after the run · 1 pair · fake$/m,
+    )
+    assert.match(
+      dry.stdout,
+      /^ {2}question 2\/2 {2}Which is shorter\? · after the run · 1 pair · fake$/m,
+    )
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
     const [e] = readRun(p.dir).evals
@@ -631,6 +637,30 @@ export default defineConfig({
     assert.match(
       agent.stdout,
       /^question evals\/q\.eval\.ts › asks: "Which is cleaner\?" within: .* · 16 votes, 4 ties · fake$/m,
+    )
+  })
+
+  test('a question with cut: within records only within votes', async () => {
+    const p = await project('questions-cut-within', {
+      'reeval.config.ts': threeHarnesses(extra),
+      ...asks(`[{ question: 'Which is cleaner?', cut: 'within' }]`),
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(
+      dry.stdout,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · within · 6 pairs · fake$/m,
+    )
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
+    assert.ok(answer)
+    assert.equal(answer.votes.length, 8)
+    assert.ok(answer.votes.every((v) => v.cut === 'within'))
+    assert.ok(!answer.rates.some((x) => x.cut === 'across'))
+    assert.match(
+      r.stdout,
+      /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · 8 votes, 4 ties · fake$/m,
     )
   })
 
@@ -942,12 +972,42 @@ describe('common mistakes', () => {
     [
       'a compare question that is not a string or an entry',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [42] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\? \} \(got 42\)/,
+      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\?, cut\? \} \(got 42\)/,
     ],
     [
       'a compare question entry with an unknown key',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', judge: 'x' }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\? \} \(got "judge"\)\./,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, cut\? \} \(got "judge"\)\./,
+    ],
+    [
+      'cuts on a compare question entry',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cuts: ['within'] }] as never } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, cut\? \} \(got "cuts"\)\. Did you mean "cut"\?/,
+    ],
+    [
+      'a compare question cut that is not within or across',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cut: 'axis' }] as never } }, async () => {})`,
+      /compare\.questions "Which\?" in evaluate\("e"\): cut is 'within' \(arm vs arm, same harness\) or 'across' \(harness vs harness, same arm\) \(got "axis"\)/,
+    ],
+    [
+      'the singular compare cut',
+      `evaluate('e', { compare: { baseline: a, variants: [b], cut: 'within' } as never }, async () => {})`,
+      /Unknown compare option "cut" in evaluate\("e"\)\. Did you mean "cuts"\? It's a list: cuts: \['within'\]\./,
+    ],
+    [
+      'compare.cuts as a single string',
+      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: 'within' as never } }, async () => {})`,
+      /compare\.cuts in evaluate\("e"\) is a non-empty list of 'within' and 'across' \(got "within"\)/,
+    ],
+    [
+      'an empty compare.cuts list',
+      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: [] } }, async () => {})`,
+      /compare\.cuts in evaluate\("e"\) is a non-empty list of 'within' and 'across' \(got a list of 0\)/,
+    ],
+    [
+      'the same compare cut twice',
+      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: ['within', 'within'] } }, async () => {})`,
+      /compare\.cuts in evaluate\("e"\) lists "within" twice/,
     ],
     [
       'a compare question entry without its question',

@@ -100,7 +100,12 @@ export function renderPlan(plan: PlanDocument): string {
       ])
     })
     for (const q of e.questions ?? []) {
-      rows.push(['', `question: ${q.question} · ${q.model ?? 'no language model'}`])
+      const pairs = `${q.pairs} ${q.pairs === 1 ? 'pair' : 'pairs'}`
+      const cut = q.cut ? `${q.cut} · ` : ''
+      rows.push([
+        '',
+        `question: ${q.question} · ${cut}${pairs} · ${q.model ?? 'no language model'}`,
+      ])
     }
   }
   const excluded = plan.excluded.map((x) => `${x.id} (${x.mode})`)
