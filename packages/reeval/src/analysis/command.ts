@@ -240,6 +240,7 @@ export async function analyseDigest(
   const evals = p.headRun.record.evals.map((e) => ({
     file: e.file,
     name: [...e.group, e.name].join(' '),
+    id: e.id,
     tags: e.tags,
     cells: e.cells.map((c) => c.key),
   }))

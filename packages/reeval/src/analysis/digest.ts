@@ -49,7 +49,7 @@ export type Digest = {
     harnesses: string[]
     judge: string
     environments: Array<{ name: string; skills: string[] }>
-    evals: Array<{ tag: string; id: string; task: string }>
+    evals: Array<{ tag: string; id: string; task: string; tags: string[] }>
   }
   rules: string[]
   cli: string[]
@@ -660,6 +660,7 @@ export async function buildDigestKeepingDropped(
         tag: tagOf(e.key),
         id: e.id,
         task: clip(e.attempts[0]?.turns[0]?.prompt ?? '', 400),
+        tags: e.tags,
       })),
     },
     rules: RULES,

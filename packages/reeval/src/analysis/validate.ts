@@ -1,8 +1,8 @@
 // Checks a model's analysis against its digest: citations must name something in it, quotes must be
 // in the cited evidence, numbers should be in the cited facts (anomalies included), a cited judge
 // score must match the recorded one or the line is dropped, and verify commands must parse as
-// reeval's own CLI and, for `reeval run`, select an eval of the run. What fails is dropped (or, for
-// other numbers, flagged), and counted in `validation`.
+// reeval's own CLI and, for `reeval run`, select an eval of the run. A rejected verify is dropped.
+// What fails is dropped (or, for other numbers, flagged), and counted in `validation`.
 import { checkCommand, type SelectableEval } from '../cli-spec.ts'
 import type {
   AnalysisAction,
@@ -255,7 +255,11 @@ export function validateAnalysis(
     const verify = a.verify.trim().replace(/^`+|`+$/g, '')
     validation.commands++
     const problem = verify ? checkCommand(verify, tables, evals) : 'no command'
-    if (problem) validation.invalidCommands.push(`${verify}: ${problem}`)
+    if (problem) {
+      validation.invalidCommands.push(`${verify}: ${problem}`)
+      validation.dropped++
+      return []
+    }
     return [
       {
         title: a.title,
@@ -263,8 +267,7 @@ export function validateAnalysis(
         kind: a.kind,
         change: a.change,
         expectedEffect: a.expectedEffect,
-        verify: problem ? null : verify,
-        ...(problem ? { verifyProblem: `${verify}: ${problem}` } : {}),
+        verify,
         impact: a.impact,
         effort: a.effort,
         cites: c.good,
