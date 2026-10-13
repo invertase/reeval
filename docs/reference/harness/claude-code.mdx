@@ -41,9 +41,9 @@ export default defineConfig({
 |---|---|
 | Import | `'{{ pkg }}/harness'` |
 | Credential | `ANTHROPIC_API_KEY` |
-| Adapter | `@ai-sdk/harness-claude-code` 1.0.148, with a fix reeval patches in (below) |
+| Adapter | `@ai-sdk/harness-claude-code` 1.0.152, with a fix reeval patches in (below) |
 | Sandbox | `docker()` only |
-| Image | `reeval-sandbox:claude-code-1.0.148-patch.8edc594f` |
+| Image | `reeval-sandbox:claude-code-1.0.152-patch.8edc594f` |
 | Rules file | `CLAUDE.md` |
 | Skills (default placement) | `~/.claude/skills` |
 | Skills (`placement: 'workspace'`) | `.claude/skills` in the workspace |
@@ -51,7 +51,7 @@ export default defineConfig({
 
 Build its image once with `reeval image build` in a project whose config uses `claudeCode()`.
 
-reeval ships the adapter with one fix, which its image bakes: 1.0.148 never reports the served model, because its bridge starts the stream on the `command_lifecycle` message Claude Code sends before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.8edc594f` names that patch.
+reeval ships the adapter with one fix, which its image bakes: 1.0.152 never reports the served model, because its bridge starts the stream on the `command_lifecycle` message Claude Code sends before `system/init`. With the fix, each turn records the model Claude Code used. The tag's `patch.8edc594f` names that patch.
 
 ## The key
 
