@@ -126,7 +126,8 @@ export function LiveRunPage() {
           <CircleStop className="mt-0.5 size-4 shrink-0 text-infra" />
           <p>
             This run stopped without writing a record: its{' '}
-            <span className="font-mono">reeval run</span> exited or stopped responding. The attempts
+            <span className="font-mono">reeval run</span> exited or stopped responding. Continue it
+            with <span className="font-mono">reeval run --resume {run.runId}</span>. The attempts
             below are what finished before it did.
           </p>
         </div>

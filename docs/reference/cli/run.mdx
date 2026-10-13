@@ -38,6 +38,10 @@ reeval run [filter...]        Run evals matching config.include; filters are pat
   -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
                               keep every attempt's trace.ndjson (else only failing attempts')
                               Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
+  --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
+                              skip completed attempts, restart in-flight ones. Without a ref, the
+                              newest resumable (Stopped staging, or an interrupted/budget scratch),
+                              not assembled latest. Ref is a run id or unique prefix
 ```
 
 [//]: # (/generated:cli-help:run)
@@ -62,13 +66,13 @@ npx reeval run skill antigravity            # the Antigravity cells of skill.eva
 Every run starts with it, before anything runs:
 
 ```text
-plan  1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
+plan  run 20260101T000000Z_nogit_ada-lovelace_k3f9 · 1 eval · 2 cells · 4 attempts · ~50s serial (~13s at concurrency 4)
 ```
 
 The estimate is the median of each eval's recent attempts on that harness (the last 30 runs, recorded and scratch), else the harness's median, else 3 minutes an attempt. With a profile and a budget it also says which profile, why, and whether the plan fits:
 
 ```text
-plan  profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
+plan  run 20260926T174055Z_b010670_ci_vdfy · profile pr (auto: CI is set) · 18 evals · 19 cells · 19 attempts · ~57m 00s serial (~14m 15s at concurrency 4) · budget 20 attempts ✓
 ```
 
 `--dry-run` adds a row per eval, then, when Docker is running, a line per sandbox image saying whether it's ready, to build, stale or missing (a `from` tag is looked up in its registry, never pulled), and stops with exit 0. `--dry-run --json` prints the whole plan, every cell and what was excluded, as one JSON document, with each image step's `status` and `detail`. Neither needs credentials, and Docker is optional.
@@ -82,6 +86,43 @@ images  4 sandbox images: 1 ready, 3 to build
 ```
 
 A sandbox that runs as root or with capabilities added back gets a line under the plan, one per config, profile, group or eval that set it. See [Privilege warnings](/reference/sandbox/docker#privilege-warnings).
+
+## Resume a stopped run
+
+`--resume` continues the same run: it keeps the run id, skips attempts that already
+finished, and restarts ones that never wrote a record (or only wrote `aborted`).
+
+```bash
+npx reeval run --resume
+npx reeval run --resume 20260101T000000Z_nogit_ada-lovelace_k3f9
+npx reeval run --resume 20260101T0000
+```
+
+Without a ref, reeval picks the newest **resumable** thing: a Stopped staging
+directory, or an `interrupted` / `budget` scratch record. That is not `reeval
+show latest`. After a crash, `latest` is often the previous assembled run,
+which may be complete.
+
+`--resume <ref>` is a run id or unique prefix. Git SHA prefixes are not used:
+they would pick the newest run at that commit, which is often complete.
+
+A run is resumable when no process for that id is still alive on this machine
+and it is not `complete`. The pid is what counts: a quiet heartbeat (a sleeping
+laptop) is still running, and resume will not destroy its containers. A second
+`--resume` of the same id is refused while the first CLI still holds it. With
+no ref, a live leftover is named (`still running`) rather than reported as
+missing. `.reeval/current` points at the id when the run starts, after the
+plan, so `--resume` with no ref can find a crash that never assembled. A usage
+error at plan time writes nothing.
+
+In-flight attempts start again from the beginning of the attempt. Completed
+ones keep their outcome, including a pass. The assembled record replaces the
+interrupted or budget scratch under the same id.
+
+On GitHub Actions, the id is written to `GITHUB_OUTPUT` as `run-id` and to the
+step summary when the run starts, so the job log has it even if SIGKILL skips
+assemble. Re-run still needs the leftover staging (or interrupted scratch)
+restored onto the new VM.
 
 ## Before any attempt starts
 

@@ -835,11 +835,17 @@ evaluate('${name}', async () => expect('this config').toBe('never run'))
     }
 
     const plan = await ok(['run', '--dry-run'])
-    assert.match(plan.stdout, /^plan {2}config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · 1 eval · /m)
+    assert.match(
+      plan.stdout,
+      /^plan {2}(?:run \S+ · )?config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · 1 eval · /m,
+    )
     assert.doesNotMatch(plan.stdout, /decoy/)
 
     const run = await ok(['run', '-v'])
-    assert.match(run.stdout, /plan +config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · no profile · /)
+    assert.match(
+      run.stdout,
+      /plan +(?:run \S+ · )?config \.\.\/\.\.\/\.\.\/reeval\.config\.ts · no profile · /,
+    )
     const first = readRun(p.dir).run
     assert.deepEqual(
       first.evals.flatMap((e) => e.attempts.map((a) => `${e.id} ${a.id}`)),

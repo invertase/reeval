@@ -11,11 +11,14 @@ export type PlanCase = {
   name: string
   args: string[]
   env?: NodeJS.ProcessEnv
+  /** Seed the copied project before `reeval run --dry-run --json`, e.g. leftover staging. */
+  prepare?: (dir: string) => void | Promise<void>
 }
 
 /** `reeval run --dry-run --json` in a copy of the case's directory: exit 0 and one JSON document. */
 export async function planJson(c: Omit<PlanCase, 'name'>): Promise<PlanDocument> {
   const p = await fixture(`plan/${c.dir}`)
+  await c.prepare?.(p.dir)
   const r = await runCli(p.dir, ['run', '--dry-run', '--json', ...c.args], {
     ...(c.env ? { env: c.env } : {}),
   })
@@ -61,6 +64,7 @@ export function renderPlan(plan: PlanDocument): string {
     budget.duration === null ? '' : `duration ${budget.duration}`,
   ].filter(Boolean)
   if (caps.length) head.push(`budget ${caps.join(', ')} ${budget.fits ? '✓' : '✗'}`)
+  if (plan.resume) head.push(`resume ${plan.resume.completed} skipped`)
   const rows: string[][] = []
   for (const e of plan.evals) {
     const tags = e.tags.length ? ` [${e.tags.join(', ')}]` : ''

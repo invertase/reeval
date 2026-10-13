@@ -138,7 +138,7 @@ export class PlainRenderer implements Renderer {
         const files = `${e.files} eval file${e.files === 1 ? '' : 's'}`
         const order = `${this.#o.output.logOrder} logs`
         const setup = `harness ${e.harness} · sandbox ${e.sandbox} · concurrency ${e.concurrency}`
-        this.#write(c.dim(`reeval ${e.version} · ${files} · ${setup} · ${order}`))
+        this.#write(c.dim(`reeval ${e.version} · run ${e.runId} · ${files} · ${setup} · ${order}`))
         return
       }
       case 'plan':

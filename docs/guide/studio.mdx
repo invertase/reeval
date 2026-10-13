@@ -29,7 +29,7 @@ The runs list shows each run's commit, branch, author (or CI), pass counts, toke
 
 Start `reeval run` with the studio open and the run appears at the top of the runs list with a `Running 2/4` badge and a progress bar. Its page lists every planned attempt, filling in with each outcome and duration as it finishes. A finished attempt opens its transcript straight away.
 
-When the record lands, the run's own page replaces the live one. A run that was killed, or stopped answering for 15 seconds, shows as `Stopped`, with what it finished. A static build never shows runs in progress.
+When the record lands, the run's own page replaces the live one. A run that was killed, or stopped answering for 15 seconds, shows as `Stopped`, with what it finished and `reeval run --resume <id>` to continue it. `--resume` still refuses if that process is alive (a sleeping laptop). A static build never shows runs in progress.
 
 ## Read a run
 

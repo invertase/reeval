@@ -88,6 +88,7 @@ export type EsEvent =
       sandbox: string
       /** How many attempts run at once. */
       concurrency: number
+      runId: string
     }
   /**
    * The plan line (and, for `--dry-run`, its table), its warnings and hints, before anything runs;

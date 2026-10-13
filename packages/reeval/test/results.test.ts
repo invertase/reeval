@@ -101,6 +101,21 @@ describe('mergeOutcome and abort classification', () => {
     )
   })
 
+  test('a skipped attempt keeps a staged pass, so a resume does not turn it into skipped', () => {
+    const record = {
+      outcome: 'pass',
+      error: null,
+    } as EvalRecord
+    assert.deepEqual(mergeOutcome({ state: 'skipped', errors: [] } as EngineEval, record), {
+      outcome: 'pass',
+      error: null,
+    })
+    assert.deepEqual(mergeOutcome({ state: 'skipped', errors: [] } as EngineEval, null), {
+      outcome: 'skipped',
+      error: null,
+    })
+  })
+
   test("the worker's record wins, including an infra error whose message says timed out", () => {
     const record = {
       outcome: 'infra_error',

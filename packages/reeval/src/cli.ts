@@ -35,6 +35,13 @@ import { redactSecrets, registerSecret } from './redact.ts'
 import { logInvocation } from './report/invocations.ts'
 import { commandOf, redactArgv } from './report/scrub.ts'
 import type { CliInvocation } from './report/types.ts'
+import {
+  completedKeysFor,
+  loadPrevious,
+  prepareResume,
+  resolveResume,
+  writeCurrent,
+} from './resume.ts'
 import { PACKAGE_VERSION } from './root.ts'
 import { clip } from './text.ts'
 import type { HarnessDescriptor, RunContext, SandboxDescriptor } from './types.ts'
@@ -311,6 +318,10 @@ async function runCommand(
   const setup = await prepareRun(flags, configPath)
   const ctx = await startRun(setup)
   invocation.runId = ctx.runId
+  const githubOut = process.env.GITHUB_OUTPUT
+  if (githubOut) await appendFile(githubOut, `run-id=${ctx.runId}\n`).catch(() => {})
+  const stepStart = process.env.GITHUB_STEP_SUMMARY
+  if (stepStart) await appendFile(stepStart, `run ${ctx.runId}\n`).catch(() => {})
   const { engineVersions } = await import('./engine/node.ts')
   const renderer = createRenderer({
     // The JSON plan is the only output of `--dry-run --json`.
@@ -326,7 +337,7 @@ async function runCommand(
     executed = await executeRun(ctx, setup, filters, renderer)
   } catch (error) {
     renderer.close()
-    await rm(ctx.stagingDir, { recursive: true, force: true })
+    if (setup.resume === undefined) await rm(ctx.stagingDir, { recursive: true, force: true })
     throw error
   }
   const { engineRun, plan, sandboxVersions, budgetReached, live, notes, questions } = executed
@@ -374,6 +385,8 @@ async function runCommand(
       worktreePatch: ctx.worktreePatch,
       lockfiles: await lockfiles(ctx.config.root),
       git: ctx.git,
+      previous: ctx.previous,
+      previousArtifacts: ctx.previousArtifacts,
       runner: runnerInfo(),
       ...(answers?.size ? { answers } : {}),
     },
@@ -481,6 +494,8 @@ async function prepareRun(flags: Flags, configPath: string | undefined) {
     configFile: configPath && configLabel(configPath),
     /** Named in the plan line when the project root isn't the current directory. */
     configElsewhere: !!configPath && dirname(configPath) !== process.cwd(),
+    /** `undefined` is a new run; `''` is newest resumable; a string is a run id or prefix. */
+    resume: flags.resume,
   }
 }
 
@@ -493,6 +508,8 @@ type StartedRun = RunContext & {
   author: string
   /** `.reeval/runs`, where the run is written. */
   scratch: string
+  previous: import('./history/types.ts').RunRecord | null
+  previousArtifacts: string | null
 }
 
 /** The run's id and the state it starts from: commit, uncommitted changes, author. */
@@ -504,6 +521,8 @@ async function startRun({
   concurrency,
   verbosity,
   configFile,
+  resume,
+  dryRun,
 }: Prepared): Promise<StartedRun> {
   const startedAt = new Date()
   const git = await gitInfo(config.root, [config.history.dir])
@@ -513,6 +532,38 @@ async function startRun({
   const { stagingDir, sweepStaging } = await import('./results.ts')
   const { scratchDir } = await import('./history/files.ts')
   const scratch = scratchDir(config.root)
+  if (resume !== undefined) {
+    const target = await resolveResume(config.root, resume || undefined)
+    if (!dryRun) await prepareResume(target, config.root)
+    await sweepStaging(config.root, target.runId)
+    const aside = dryRun
+      ? { record: target.previous, artifacts: target.previousArtifacts }
+      : await loadPrevious(stagingDir(config.root, target.runId))
+    if (!dryRun) {
+      try {
+        const { removeRunContainers } = await import('./sandbox/docker.ts')
+        await removeRunContainers(target.runId)
+      } catch {}
+    }
+    return {
+      runId: target.runId,
+      stagingDir: stagingDir(config.root, target.runId),
+      config,
+      runs,
+      tags,
+      concurrency,
+      profile,
+      verbosity,
+      configFile,
+      startedAt: target.startedAt,
+      git,
+      worktreePatch: patch,
+      author: who,
+      scratch,
+      previous: aside.record ?? target.previous,
+      previousArtifacts: aside.artifacts ?? target.previousArtifacts,
+    }
+  }
   // Run ids sort in run order, so a second run in the same second takes the next second's id,
   // whatever its commit or author.
   const stamps = new Set(
@@ -541,6 +592,8 @@ async function startRun({
     worktreePatch: patch,
     author: who,
     scratch,
+    previous: null,
+    previousArtifacts: null,
   }
 }
 
@@ -572,6 +625,20 @@ async function executeRun(
   renderer: ReturnType<typeof createRenderer>,
 ) {
   const { runId, stagingDir, config, runs, tags, concurrency, profile, verbosity, configFile } = ctx
+  const run = JSON.parse(
+    JSON.stringify({
+      runId,
+      stagingDir,
+      config,
+      runs,
+      tags,
+      concurrency,
+      profile,
+      verbosity,
+      configFile,
+      completed: [] as string[],
+    }),
+  ) as typeof ctx
   const { runEngine } = await import('./engine/node.ts')
   const { buildPlan, checkAttemptBudget, planDocument, planLine, planTable } = await import(
     './plan.ts'
@@ -588,13 +655,26 @@ async function executeRun(
   const onPlan = async ({ planned, excluded, matched, unmatched }: CollectedPlan) => {
     if (unmatched.length) throw unmatchedFilter(config, unmatched)
     if (matched === 0) throw noMatch(config, filters, tags)
-    toRun = planned
-    for (const p of planned)
+    const completed = completedKeysFor(planned, stagingDir, ctx.previous)
+    const skipped = planned.map((p) =>
+      completed.has(p.key)
+        ? {
+            ...p,
+            attempt: {
+              ...p.attempt,
+              skip: 'already completed in this run',
+              plan: { ...p.attempt.plan, skip: 'already completed in this run' },
+            },
+          }
+        : p,
+    )
+    toRun = skipped
+    for (const p of skipped)
       for (const name of p.attempt.secretVars) registerSecret(process.env[name])
-    const asks = planned.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
+    const asks = skipped.some((p) => !p.attempt.plan.skip && p.attempt.plan.questions?.length)
     const models = asks ? await import('./analysis/model.ts') : undefined
     plan = await buildPlan({
-      planned,
+      planned: skipped,
       profile,
       budget: setup.budget,
       concurrency,
@@ -602,9 +682,12 @@ async function executeRun(
       historyDir: config.history.dir,
       questionModel: models?.questionModelLabel(config) ?? null,
     })
+    plan.runId = runId
+    if (completed.size) plan.resume = { runId, completed: completed.size }
+    run.completed = [...completed]
     const { imageStages, imageTargets } = await import('./sandbox/images.ts')
     const targets = imageTargets(
-      planned
+      skipped
         .filter((p) => !p.attempt.plan.skip)
         .map((p) => ({ id: p.id, harness: p.attempt.harness, sandbox: p.attempt.sandbox })),
     )
@@ -617,11 +700,11 @@ async function executeRun(
           stages: await imageStages(t, config.root),
         })),
       )
-      const doc = planDocument(plan, planned, excluded, images)
+      const doc = planDocument(plan, skipped, excluded, images)
       process.stdout.write(`${JSON.stringify(doc, null, 2)}\n`)
       return false
     }
-    const lines = [planLine(plan, setup.configElsewhere ? configFile : undefined)]
+    const lines = [planLine(plan, setup.configElsewhere ? configFile : undefined, runId)]
     if (setup.dryRun) {
       const todos = excluded.filter((e) => e.mode === 'todo').map((e) => e.id)
       lines.push(...planTable(plan, todos))
@@ -683,7 +766,7 @@ async function executeRun(
         model: analysis.resolveAnalysisModel(config, 'agent'),
         runId,
         stagingDir,
-        planned,
+        planned: skipped,
         warn: (text) => renderer.onEvent({ type: 'notice', at: Date.now(), level: 'warn', text }),
       })
     }
@@ -706,7 +789,7 @@ async function executeRun(
       })
     }
     const { prepareWorkspaces, workspaceKey } = await import('./workspace.ts')
-    const live = planned.filter((p) => !p.attempt.plan.skip)
+    const live = skipped.filter((p) => !p.attempt.plan.skip)
     const outcomes = await prepareWorkspaces(
       live.flatMap(({ attempt: a }) =>
         a.workspace ? [{ workspace: a.workspace, environment: a.cell.environment }] : [],
@@ -744,7 +827,7 @@ async function executeRun(
     }
     try {
       sandboxVersions = await preflight(
-        planned
+        skipped
           .filter((p) => !p.attempt.plan.skip)
           .map((p) => ({
             harness: p.attempt.harness,
@@ -790,22 +873,11 @@ async function executeRun(
     engineRun = await runEngine({
       // Provided to every worker, so only what evals need; not the worktree patch. Plain data:
       // an environment's `extend` method doesn't cross to the workers.
-      run: JSON.parse(
-        JSON.stringify({
-          runId,
-          stagingDir,
-          config,
-          runs,
-          tags,
-          concurrency,
-          profile,
-          verbosity,
-          configFile,
-        }),
-      ),
+      run,
       filters,
       onPlan,
       onRunStart: (files) => {
+        writeCurrent(setup.config.root, runId)
         live = writeLiveProgress({
           dir: stagingDir,
           runId,
@@ -820,6 +892,7 @@ async function executeRun(
           harness: (plan?.harnesses ?? config.harness.map(harnessId)).join(', '),
           sandbox: sandboxId(config.sandbox),
           concurrency,
+          runId,
         })
       },
       onEvent: (e) => {

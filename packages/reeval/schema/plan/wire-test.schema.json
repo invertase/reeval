@@ -110,6 +110,9 @@
           },
           "required": ["harness", "sandbox"]
         },
+        "skip": {
+          "type": "string"
+        },
         "tags": {
           "type": "array",
           "items": {

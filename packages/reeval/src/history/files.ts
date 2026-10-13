@@ -363,6 +363,14 @@ export async function recordRun(options: RecordOptions): Promise<RecordResult> {
     }
   }
   await ensureHistoryGitignore(options.historyDir)
+  const dest = recordFile(options.historyDir, runId)
+  try {
+    const old = await readRecord(dest)
+    if (old.status === 'interrupted' || old.status === 'budget') {
+      await rm(dest, { force: true })
+      await rm(runDir(options.historyDir, runId), { recursive: true, force: true })
+    }
+  } catch {}
   const written = await writeRun(options.historyDir, record, files)
   const bytes = [...files.values()].reduce((n, b) => n + b.length, encodeRecord(record).length)
   if (!written.created) return { ...written, files: files.size, bytes, droppedPatch, ignored: [] }

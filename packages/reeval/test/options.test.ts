@@ -55,7 +55,7 @@ group('g', { runs: 2 }, () => {
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
-    assert.match(r.stdout, /^plan {2}1 eval · 2 cells · 4 attempts · ~/m)
+    assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts · ~/m)
     assert.match(r.stdout, /^\[writes#1 good\] ✓ evals\/m\.eval\.ts › g › writes ok\.txt/m)
     assert.match(r.stdout, /^\[writes#2 bad\] ✗ evals\/m\.eval\.ts › g › writes ok\.txt/m)
     assert.match(
@@ -283,7 +283,7 @@ group('g', { compare: { baseline: base, variants: [skilled] }, runs: 2 }, () => 
     })
     const r = await runCli(p.dir)
     assert.equal(r.code, 0, r.stdout + r.stderr)
-    assert.match(r.stdout, /^plan {2}1 eval · 2 cells · 4 attempts/m)
+    assert.match(r.stdout, /^plan {2}(?:run \S+ · )?1 eval · 2 cells · 4 attempts/m)
     assert.match(r.stdout, /^\[writes#1 control\] ○ .*\(not gated\)$/m)
     assert.match(r.stdout, /^\[writes#1 skilled\] ✓ /m)
     assert.match(r.stdout, /fake\/base\/fake +control +0\/2 +0% +not gated/)
@@ -740,7 +740,7 @@ describe('profiles', () => {
     assert.equal(r.code, 0, r.stdout + r.stderr)
     assert.match(
       r.stdout,
-      /^plan {2}profile pr \(auto: CI is set\) · 3 evals \(1 skipped\) · 4 cells · 6 attempts · ~.* · budget 5 attempts ✗$/m,
+      /^plan {2}(?:run \S+ · )?profile pr \(auto: CI is set\) · 3 evals \(1 skipped\) · 4 cells · 6 attempts · ~.* · budget 5 attempts ✗$/m,
     )
     assert.match(r.stdout, /^eval +harnesses +variants +runs +attempts +notes$/m)
     assert.equal(existsSync(join(p.dir, '.reeval/runs')), false, 'a dry run writes no run')

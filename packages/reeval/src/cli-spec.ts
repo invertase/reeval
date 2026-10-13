@@ -2,7 +2,13 @@
 // (`cli-parse.ts`) and its `--help` from it, and `reeval analyze` checks each suggested verify
 // command against it, so a model can't invent a flag.
 
-export type FlagSpec = { type: 'string' | 'boolean'; short?: string; multiple?: boolean }
+export type FlagSpec = {
+  type: 'string' | 'boolean'
+  short?: string
+  multiple?: boolean
+  /** A string flag that may be given with no value (`--resume`). */
+  optional?: boolean
+}
 
 export const FLAGS = {
   config: { type: 'string' },
@@ -53,6 +59,7 @@ export const FLAGS = {
   online: { type: 'boolean' },
   issue: { type: 'boolean' },
   last: { type: 'boolean' },
+  resume: { type: 'string', optional: true },
 } as const satisfies Record<string, FlagSpec>
 
 export type FlagName = keyof typeof FLAGS
@@ -92,6 +99,7 @@ const RUN_FLAGS: FlagName[] = [
   'output-logs',
   'verbose',
   'trace',
+  'resume',
 ]
 
 export const COMMANDS: Record<string, CommandSpec> = {
@@ -146,7 +154,11 @@ export const COMMANDS: Record<string, CommandSpec> = {
                                 judge calls, gateway requests and teardown
     -vv, --trace                Also raw payloads, docker commands, headers and DNS decisions, and
                                 keep every attempt's trace.ndjson (else only failing attempts')
-                                Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)`,
+                                Either way each attempt's debug.log is in .reeval/debug/<run>/ (local only)
+    --resume [ref]              Continue a stopped, interrupted or budget-stopped run: same run id,
+                                skip completed attempts, restart in-flight ones. Without a ref, the
+                                newest resumable (Stopped staging, or an interrupted/budget scratch),
+                                not assembled latest. Ref is a run id or unique prefix`,
   },
   clean: {
     flags: ['keep', 'images'],
@@ -452,12 +464,16 @@ function checkOne(
         : Object.entries(FLAGS).find(([, s]) => 'short' in s && s.short === raw)?.[0]
       if (!flag || !(flag in FLAGS)) return `${arg} isn't a reeval flag`
       if (!allowed.has(flag)) return `--${flag} isn't an option of ${name}`
-      const type = FLAGS[flag as FlagName].type
+      const spec = FLAGS[flag as FlagName]
+      const type = spec.type
       if (type === 'string' && eq === -1) {
         const value = args[i + 1]
-        if (value === undefined || value.startsWith('--')) return `--${flag} needs a value`
-        i++
-        if (flag === 'tag') tags.push(value)
+        if (value === undefined || value.startsWith('--')) {
+          if (!('optional' in spec && spec.optional)) return `--${flag} needs a value`
+        } else {
+          i++
+          if (flag === 'tag') tags.push(value)
+        }
       } else if (flag === 'tag' && eq !== -1) tags.push(arg.slice(eq + 1))
       if (type === 'boolean' && eq !== -1) return `--${flag} takes no value`
       continue
@@ -483,7 +499,7 @@ function checkOne(
 /** One line per command, for the analysis prompt and `--context`. */
 export function commandSummary(): string[] {
   const line = (name: string, spec: Omit<CommandSpec, 'sub'>) =>
-    `reeval ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? ' <v>' : ''}`).join(' ')}` : ''}`
+    `reeval ${name}${spec.positionals ? ' [args]' : ''}${spec.flags.length ? ` ${spec.flags.map((f) => `--${f}${FLAGS[f].type === 'string' ? ('optional' in FLAGS[f] && FLAGS[f].optional ? ' [v]' : ' <v>') : ''}`).join(' ')}` : ''}`
   return Object.entries(COMMANDS).flatMap(([name, spec]) => [
     ...(name === 'image' ? [] : [line(name, spec)]),
     ...Object.entries(spec.sub ?? {}).map(([sub, s]) => line(`${name} ${sub}`, s)),

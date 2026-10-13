@@ -41,6 +41,7 @@ import {
   reserveAttempts,
 } from './support/harnesses.ts'
 import { type EvalExpectation, expectRun } from './support/oracle.ts'
+import { SEEDED_RUN_ID, writeStoppedStaging } from './support/resume.ts'
 
 /** `real` is Docker with real Cursor (REEVAL_FIXTURE_HARNESS=cursor), one fixture at a time. */
 type Tier = 'fake' | 'docker' | 'real'
@@ -98,6 +99,8 @@ type Feature = {
    * docker 240s, real 600s.
    */
   timeoutMs?: Partial<Record<Tier, number>>
+  /** Extra `reeval run` arguments, e.g. `--resume`. */
+  args?: string[]
 }
 
 const TOKEN = 'reeval-fixture-token-7c1d9a0b52e4'
@@ -1513,6 +1516,18 @@ export const features: Feature[] = [
       assert.equal(existsSync(join(cache, 'chrome-headless-shell')), false)
     },
   },
+  {
+    dir: 'run/resume',
+    tiers: ['fake'],
+    env: 'resume',
+    args: ['--resume'],
+    canary: /expected 'resume' to be 'new-run'/,
+    prepare: (dir) => writeStoppedStaging(dir, SEEDED_RUN_ID),
+    record: ({ run, project }) => {
+      assert.equal(run.runId, SEEDED_RUN_ID)
+      assert.equal(readFileSync(join(project, '.reeval/current'), 'utf8').trim(), SEEDED_RUN_ID)
+    },
+  },
 ]
 
 /** Paths under `dir` whose content includes `needle`, one per line; '' when none do. */
@@ -1596,20 +1611,24 @@ function fixtureTests(tiers: Tier[]) {
         const p = await fixture(`features/${f.dir}`)
         f.prepare?.(p.dir)
         const cwd = join(p.dir, f.cwd ?? '')
-        const r = await runCli(cwd, tier === 'real' ? ['run', '--concurrency', '1'] : ['run'], {
-          env: {
-            ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
-            REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
-            ...(tier === 'real'
-              ? {
-                  REEVAL_FIXTURE_HARNESS: harnessOf(row),
-                  REEVAL_REAL_MODEL: realModelOf(row),
-                  ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
-                }
-              : {}),
+        const r = await runCli(
+          cwd,
+          ['run', ...(tier === 'real' ? ['--concurrency', '1'] : []), ...(f.args ?? [])],
+          {
+            env: {
+              ...(typeof f.hostEnv === 'function' ? f.hostEnv(p.dir) : f.hostEnv),
+              REEVAL_FIXTURE_SANDBOX: tier === 'fake' ? 'fake' : 'docker',
+              ...(tier === 'real'
+                ? {
+                    REEVAL_FIXTURE_HARNESS: harnessOf(row),
+                    REEVAL_REAL_MODEL: realModelOf(row),
+                    ...(row.key ? { [row.key.name]: keyOf(row) } : {}),
+                  }
+                : {}),
+            },
+            timeoutMs: timeout - 10_000,
           },
-          timeoutMs: timeout - 10_000,
-        })
+        )
         const sandbox = f.sandbox ?? (tier === 'fake' ? 'fake' : 'docker')
         const harness =
           tier === 'real' ? `${harnessOf(row)}:${realModelOf(row).split('/').at(-1)}` : 'fake'

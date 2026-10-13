@@ -27,6 +27,8 @@ evals/.history/                            commit this
     checks/<n>.log                         each c.exec: command, exit code, stdout, stderr
     artifacts/<name>.png                   each c.capture() PNG (`history.artifacts` keeps it)
 .reeval/                                       scratch: gitignore it
+  current                                  the run id minted (or resumed) this session
+  staging/<runId>/                         a run in progress, until assemble
   runs/<runId>.json + <runId>/             every reeval run, same shape
   debug/<runId>/…                          local debug data, never recorded
   history.db                               reeval query's projection

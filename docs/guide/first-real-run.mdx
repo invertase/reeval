@@ -175,7 +175,7 @@ On a terminal, the same run is in colour:
     <eval>/<cell>/1/                               transcript, diff, checks, judge input
 ```
 
-Every `reeval run` writes a scratch run under `.reeval/runs/`. The name is the UTC start time, the commit, the author and a random suffix. [History](/guide/history) shows how to keep runs in git.
+Every `reeval run` writes a scratch run under `.reeval/runs/`. The name is the UTC start time, the commit, the author and a random suffix; the plan line prints it, and `.reeval/current` points at it so `reeval run --resume` can continue after a crash. [History](/guide/history) shows how to keep runs in git.
 
 ## Run from any directory
 

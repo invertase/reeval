@@ -10,6 +10,7 @@ import { harnessId, profileJudge, sandboxId } from '../options.ts'
 import type { RunPlan } from '../plan.ts'
 import type { SandboxVersions } from '../preflight.ts'
 import { redactSecrets } from '../redact.ts'
+import { isCompletedAttempt, previousAttempt } from '../resume.ts'
 import { liftInterval, round3 } from '../stats.ts'
 import type {
   Cell,
@@ -86,6 +87,10 @@ export type AssembleInput = {
   budgetReached: boolean
   plan: RunPlan
   author: string
+  /** A resumed interrupted/budget record, so completed attempts keep their evidence. */
+  previous?: RunRecord | null
+  /** Artifact directory of `previous`, when it was moved aside into staging. */
+  previousArtifacts?: string | null
   es: string
   runtime: NonNullable<Stack['runtime']>
   /** What the evals are written in; a runner for another language gives its own. */
@@ -122,9 +127,8 @@ type Merged = Pick<EvalRecord, 'error'> & { outcome: Outcome }
 
 /** The engine and the worker's record can disagree, e.g. when a timeout fails the eval first. */
 export function mergeOutcome(e: EngineEval, record: EvalRecord | null): Merged {
-  if (e.state === 'skipped' && record && record.outcome !== 'pass') {
-    return { outcome: record.outcome, error: record.error }
-  }
+  // A resume skips a completed attempt: keep the staged (or previous) outcome, including pass.
+  if (e.state === 'skipped' && record) return { outcome: record.outcome, error: record.error }
   if (e.state === 'skipped') return { outcome: 'skipped', error: null }
   if (e.state === 'passed') return { outcome: 'pass', error: null }
   const message = e.errors[0] ?? 'Eval failed'
@@ -410,6 +414,105 @@ function cellOf(
 /** Over the judge's model, threshold and version: a new judge is a new measurement. */
 type JudgeFingerprint = string
 
+async function copyRef(
+  ref: FileRef,
+  from: string | null | undefined,
+  out: Artifacts,
+): Promise<FileRef> {
+  if (!from) return ref
+  const bytes = await readFile(join(from, ...ref.path.split('/'))).catch(() => null)
+  if (!bytes) return ref
+  return out.add(ref.path, Buffer.from(bytes).toString('utf8'))
+}
+
+/** A completed attempt from a previous assemble of this runId, kept on resume. */
+async function addPreviousAttempt(
+  e: Pick<EngineEval, 'id' | 'key' | 'file' | 'group' | 'name' | 'attempt'>,
+  kept: AttemptRecord,
+  seen: Seen,
+  out: Artifacts,
+  judge: JudgeFingerprint,
+  previousArtifacts?: string | null,
+  sources?: Source[],
+): Promise<void> {
+  const cell = e.attempt?.cell ?? {
+    ...UNKNOWN_CELL,
+    key: kept.cell,
+    harness: kept.cell.split('/')[0] ?? 'unknown',
+    environment: kept.cell.split('/')[1] ?? 'unknown',
+    sandbox: kept.cell.split('/')[2]?.replace(/#\d+$/, '') ?? 'unknown',
+  }
+  if (!seen.sources.has(e.file) && sources) seen.sources.set(e.file, sources)
+  if (!seen.sources.has(e.file)) {
+    seen.sources.set(e.file, [])
+  }
+  const resolved = sources ?? seen.sources.get(e.file) ?? []
+  const stub: EngineEval = {
+    id: e.id,
+    key: e.key,
+    file: e.file,
+    group: e.group,
+    name: e.name,
+    attempt: e.attempt,
+    state: 'skipped',
+    durationMs: kept.durationMs,
+    errors: [],
+    formattedErrors: [],
+    meta: undefined,
+  }
+  seen.add(null, cell, stub)
+  const entry = seen.entry(stub, resolved)
+  const cellRecord = cellOf(entry, cell, e.attempt?.gate ?? 'all', e.attempt?.harness)
+  const files: AttemptFiles = {}
+  for (const [name, ref] of Object.entries(kept.files) as Array<
+    [keyof AttemptFiles, AttemptFiles[keyof AttemptFiles]]
+  >) {
+    if (!ref) continue
+    if (Array.isArray(ref)) {
+      const copied = []
+      for (const art of ref) {
+        if (!previousArtifacts) {
+          copied.push(art)
+          continue
+        }
+        const bytes = await readFile(join(previousArtifacts, ...art.path.split('/'))).catch(
+          () => null,
+        )
+        copied.push(bytes ? out.addBinary(art.path, bytes) : art)
+      }
+      if (copied.length) files[name] = copied as never
+      continue
+    }
+    files[name] = (await copyRef(ref, previousArtifacts, out)) as never
+  }
+  const checks = []
+  for (const c of kept.checks) {
+    checks.push({
+      ...c,
+      log: c.log ? await copyRef(c.log, previousArtifacts, out) : c.log,
+    })
+  }
+  entry.attempts.push({
+    ...kept,
+    seq: null,
+    files,
+    checks,
+  })
+  if (!cellRecord.fingerprint && kept.outcome !== 'skipped') {
+    const parts: FingerprintParts = {
+      sources: sha256(JSON.stringify(resolved)),
+      harness: sha256(JSON.stringify(e.attempt ? withoutCaps(e.attempt.harness) : null)),
+      environment: cellRecord.environmentDigest,
+      image: kept.imageId,
+      agentCli: null,
+      judge,
+      context: sha256(JSON.stringify(kept.context)),
+    }
+    cellRecord.fingerprintParts = parts
+    cellRecord.fingerprint = fingerprintOf(parts)
+  }
+}
+
 /** Reads one attempt's worker record, files its artifacts and adds it to its eval and cell. */
 async function addAttempt(
   e: EngineEval,
@@ -417,9 +520,16 @@ async function addAttempt(
   seen: Seen,
   out: Artifacts,
   judge: JudgeFingerprint,
+  previous?: RunRecord | null,
+  previousArtifacts?: string | null,
 ): Promise<void> {
   const cell = e.attempt?.cell ?? UNKNOWN_CELL
   const n = e.attempt?.n ?? 1
+  const kept = previousAttempt(previous, e.key)
+  if (e.state === 'skipped' && kept && isCompletedAttempt(kept.outcome, kept.error)) {
+    await addPreviousAttempt(e, kept, seen, out, judge, previousArtifacts)
+    return
+  }
   const record = await readRecord(join(ctx.stagingDir, 'evals', recordFileName(e.key)))
   const { outcome, error } = mergeOutcome(e, record)
   if (!seen.sources.has(e.file)) {
@@ -736,7 +846,32 @@ export async function assembleRun(input: AssembleInput): Promise<AssembledRun> {
       version: judgeVersion(input.es, packageVersions(input.enginePackages), judgeModel ?? ''),
     }),
   )
-  for (const e of engine.evals) await addAttempt(e, ctx, seen, out, judge)
+  for (const e of engine.evals)
+    await addAttempt(e, ctx, seen, out, judge, input.previous, input.previousArtifacts)
+  if (input.previous) {
+    const have = new Set(
+      [...seen.byEval.values()].flatMap((entry) => entry.attempts.map((a) => a.key)),
+    )
+    for (const entry of input.previous.evals) {
+      for (const a of entry.attempts) {
+        if (have.has(a.key) || !isCompletedAttempt(a.outcome, a.error)) continue
+        const stub: EngineEval = {
+          id: entry.id,
+          key: a.key,
+          file: entry.file,
+          group: entry.group,
+          name: entry.name,
+          attempt: undefined,
+          state: 'skipped',
+          durationMs: a.durationMs,
+          errors: [],
+          formattedErrors: [],
+          meta: undefined,
+        }
+        await addPreviousAttempt(stub, a, seen, out, judge, input.previousArtifacts, entry.sources)
+      }
+    }
+  }
   const evals = [...seen.byEval.values()]
   rollUp(evals)
   sequence(evals)
