@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
@@ -13,6 +13,7 @@ import {
   pageUrl,
   pickPageDebuggerUrl,
   refusedBrowser,
+  removeChromeProfile,
   resolveCaptureCall,
   resolveCaptureTarget,
   stubPng,
@@ -127,6 +128,27 @@ test('pageUrl joins origin and path without a doubled slash', () => {
 
 test('cacheLabel uses ~/.cache/reeval for the default dir', () => {
   assert.match(cacheLabel(), /reeval/)
+})
+
+test('removeChromeProfile deletes a profile and ignores a busy one', () => {
+  const dir = join(tmpdir(), `reeval-chrome-rm-${process.pid}`)
+  mkdirSync(join(dir, 'Default'), { recursive: true })
+  writeFileSync(join(dir, 'Default', 'Prefs'), 'x')
+  removeChromeProfile(dir)
+  assert.equal(existsSync(dir), false)
+
+  const busy = Object.assign(new Error('ENOTEMPTY, Directory not empty'), { code: 'ENOTEMPTY' })
+  assert.doesNotThrow(() =>
+    removeChromeProfile('/nope', () => {
+      throw busy
+    }),
+  )
+  const locked = Object.assign(new Error('EBUSY'), { code: 'EBUSY' })
+  assert.doesNotThrow(() =>
+    removeChromeProfile('/nope', () => {
+      throw locked
+    }),
+  )
 })
 
 test('ensureChrome skips download when the binary is cached', async () => {

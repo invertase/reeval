@@ -67,6 +67,9 @@ evaluate('landing page', async (c) => {
 The PNG lands at `artifacts/<name>.png` on the attempt. Studio shows it under Artefacts as
 `image/png`. Retention is `history.artifacts` (`all`, `failures`, `none`).
 
+Several attempts can capture at once. Cleaning up Chrome's profile after the
+shot never fails the attempt or drops the PNG.
+
 The first `chrome-headless-shell` download is visible in `reeval run` (name, pinned version,
 size, progress, cache path). A cache hit is quiet. Fake-tier stubs never download.
 
