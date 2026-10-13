@@ -217,6 +217,7 @@ describe('studio in a browser', () => {
     await page
       .locator('[data-latest-run]')
       .getByText(/tool call/)
+      .first()
       .waitFor()
     const recent = page
       .locator('table')
@@ -226,7 +227,7 @@ describe('studio in a browser', () => {
     await page.getByText('reviews a greet module').click()
     await page.locator('nav').getByText('review.eval.ts').waitFor()
     await page.locator('[data-latest-run] [data-questions]').getByText('Within a harness').waitFor()
-    await page.locator('[data-latest-run]').getByText(/tool call/).waitFor()
+    await page.locator('[data-latest-run]').getByText(/tool call/).first().waitFor()
     await page.goto(`${page.url()}/history`)
     await page.getByRole('columnheader', { name: 'Run', exact: true }).waitFor()
 
