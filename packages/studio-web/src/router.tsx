@@ -4,11 +4,13 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  redirect,
 } from '@tanstack/react-router'
 import { Shell } from '@/components/shell'
 import { headersQuery, recordQuery } from '@/lib/data'
 import { AttemptPage, TABS, type Tab } from '@/pages/attempt'
 import { ComparePage } from '@/pages/compare'
+import { EvalPage } from '@/pages/eval'
 import { EvalHistoryPage } from '@/pages/eval-history'
 import { EvalsPage } from '@/pages/evals'
 import { LiveAttemptPage, LiveRunPage } from '@/pages/live-run'
@@ -25,6 +27,16 @@ const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   notFoundComponent: NotFoundPage,
 })
 
+export type EvalsSearch = { q?: string }
+
+const homeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/',
+  validateSearch: (s: Record<string, unknown>): EvalsSearch => ({ q: str(s.q) }),
+  loader: ({ context }) => context.queryClient.prefetchQuery(headersQuery),
+  component: EvalsPage,
+})
+
 export type RunsSearch = {
   q?: string
   status?: 'passed' | 'failed'
@@ -33,7 +45,7 @@ export type RunsSearch = {
 
 const runsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/',
+  path: '/runs',
   validateSearch: (s: Record<string, unknown>): RunsSearch => ({
     q: str(s.q),
     status: oneOf(['passed', 'failed'] as const, s.status),
@@ -78,16 +90,26 @@ const liveAttemptRoute = createRoute({
   component: LiveAttemptPage,
 })
 
-const evalsRoute = createRoute({
+const evalsRedirectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/evals',
-  validateSearch: (s: Record<string, unknown>): { q?: string } => ({ q: str(s.q) }),
-  component: EvalsPage,
+  validateSearch: (s: Record<string, unknown>): EvalsSearch => ({ q: str(s.q) }),
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/', search: { q: search.q } })
+  },
+})
+
+const evalRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/evals/$slug',
+  loader: ({ context }) => context.queryClient.prefetchQuery(headersQuery),
+  component: EvalPage,
 })
 
 const evalHistoryRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: '/evals/$slug',
+  path: '/evals/$slug/history',
+  loader: ({ context }) => context.queryClient.prefetchQuery(headersQuery),
   component: EvalHistoryPage,
 })
 
@@ -104,12 +126,14 @@ const compareRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
+  homeRoute,
   runsRoute,
   runRoute,
   attemptRoute,
   liveRunRoute,
   liveAttemptRoute,
-  evalsRoute,
+  evalsRedirectRoute,
+  evalRoute,
   evalHistoryRoute,
   compareRoute,
 ])

@@ -1444,6 +1444,15 @@ export const inventory: InventoryFeature[] = [
     real: ['e2e › reeval studio build'],
   },
   {
+    id: 'studio.eval',
+    area: 'Records and studio',
+    name: "The studio's home page is the evals list; an eval leads with its latest run's cells and the last four runs",
+    tests: [
+      'studio-web/test/e2e.test.ts › a static build works from a subpath',
+      'studio-web/test/e2e.test.ts › reeval studio needs its token, then shows new runs as they land',
+    ],
+  },
+  {
     id: 'studio.debug',
     area: 'Records and studio',
     name: "The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only",

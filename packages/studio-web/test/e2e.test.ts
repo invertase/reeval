@@ -196,10 +196,28 @@ describe('studio in a browser', () => {
       JSON.stringify(savedAnalysis(grace, failing)),
     )
     const { page, errors } = await open(await host(out))
+    const origin = page.url().split('#')[0]
 
+    await page.getByRole('heading', { name: 'Evals' }).waitFor()
+    assert.equal(await page.getByText('Snapshot').count(), 1)
+    assert.equal(await page.getByRole('link', { name: 'Runs', exact: true }).count(), 0)
+    assert.equal(await page.getByRole('link', { name: 'Compare', exact: true }).count(), 0)
+
+    await page.getByText('adds a default name in a follow-up turn').click()
+    await page.getByRole('heading', { name: 'adds a default name in a follow-up turn' }).waitFor()
+    assert.match(page.url(), /#\/evals\/[^/]+$/)
+    assert.doesNotMatch((await page.locator('h1').innerText()) ?? '', /\d{1,2} \w+ \d{4}/)
+    await page.locator('[data-latest-run]').getByText('Harness').waitFor()
+    const recent = page
+      .locator('table')
+      .filter({ has: page.getByRole('columnheader', { name: 'Run' }) })
+    assert.ok((await recent.locator('tbody tr').count()) <= 4)
+    await page.goto(`${page.url()}/history`)
+    await page.getByRole('columnheader', { name: 'Run' }).waitFor()
+
+    await page.goto(`${origin}#/runs`)
     await page.waitForSelector('tbody tr')
     assert.equal(await page.locator('tbody tr').count(), 4)
-    assert.equal(await page.getByText('Snapshot').count(), 1)
 
     await page.locator('tbody tr', { hasText: 'grace-hopper' }).click()
     await page.waitForSelector('h2')
@@ -267,7 +285,7 @@ describe('studio in a browser', () => {
       await page.screenshot({ path: shot })
     }
 
-    await page.getByRole('link', { name: 'Compare', exact: true }).click()
+    await page.goto(`${page.url().split('#')[0]}#/compare`)
     await page.getByText('Regressed').first().waitFor()
     assert.deepEqual(errors, [])
   })
@@ -292,7 +310,7 @@ describe('studio in a browser', () => {
       child.on('exit', () => reject(new Error(out)))
     })
     const { page, errors } = await open(url)
-    await page.waitForSelector('tbody tr')
+    await page.getByRole('heading', { name: 'Evals' }).waitFor()
 
     await page.goto(new URL(`/#/runs/${matrix}`, url).href)
     await page.getByRole('tab', { name: 'Analysis' }).click()
@@ -381,6 +399,7 @@ describe('studio in a browser', () => {
       .filter((n) => n.endsWith('.json'))
       .map((n) => n.slice(0, -5))
       .sort()
+    await page.goto(`${url}#/runs`)
     await page.waitForSelector('tbody tr')
     assert.equal(await page.locator('tbody tr').count(), runs.length, label)
     for (const runId of runs) {
@@ -504,8 +523,15 @@ describe('studio in a browser', () => {
     assert.match((await denied.page.textContent('body')) ?? '', /session token/)
 
     const { page, errors } = await open(url)
-    await page.waitForSelector('tbody tr')
+    await page.getByRole('heading', { name: 'Evals' }).waitFor()
     assert.doesNotMatch(page.url(), /token=/)
+    await page.getByText('adds a default name in a follow-up turn').click()
+    await page.locator('[data-latest-run]').waitFor()
+    await page.getByRole('link', { name: 'View All' }).click()
+    assert.match(page.url(), /#\/evals\/[^/]+\/history$/)
+    await page.getByRole('columnheader', { name: 'Run' }).waitFor()
+    await page.goto(`${page.url().split('#')[0]}#/runs`)
+    await page.waitForSelector('tbody tr')
     assert.equal(await page.locator('tbody tr').count(), 5)
     assert.equal(await page.getByText('scratch', { exact: true }).count(), 1)
     assert.equal(await page.getByText('Live', { exact: true }).count(), 1)
@@ -590,6 +616,7 @@ evaluate('waits for its gate', async (c) => {
     })
     const { page, errors } = await open(url)
     await page.setViewportSize({ width: 1280, height: 860 })
+    await page.goto(`${page.url().split('#')[0]}#/runs`)
     await page.waitForSelector('tbody tr')
     const before = await page.locator('tbody tr').count()
     assert.equal(await page.locator('[data-live-run]').count(), 0)
@@ -624,7 +651,7 @@ evaluate('waits for its gate', async (c) => {
     assert.equal(built.status, 0, built.stderr)
     assert.equal(existsSync(join(out, 'api')), false)
     const snapshot = await open(await host(out))
-    await snapshot.page.waitForSelector('tbody tr')
+    await snapshot.page.getByRole('heading', { name: 'Evals' }).waitFor()
     await assert.rejects(waitForLive(snapshot.page, 2000), /Timeout/)
     assert.deepEqual(snapshot.errors, [])
     await snapshot.page.close()

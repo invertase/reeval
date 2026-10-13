@@ -1,5 +1,5 @@
 import { Link, Outlet } from '@tanstack/react-router'
-import { FlaskConical, GitCompareArrows, History, Laptop, Moon, Sun } from 'lucide-react'
+import { Laptop, Moon, Sun } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -12,12 +12,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useLiveUpdates, useStudio } from '@/lib/data'
 import { timeAgo } from '@/lib/format'
 import { type Theme, useTheme } from '@/lib/theme'
-
-const NAV = [
-  { to: '/', label: 'Runs', icon: History },
-  { to: '/evals', label: 'Evals', icon: FlaskConical },
-  { to: '/compare', label: 'Compare', icon: GitCompareArrows },
-] as const
 
 function ThemeToggle() {
   const { theme, resolved, setTheme } = useTheme()
@@ -100,19 +94,6 @@ export function Shell() {
               {studio.project}
             </span>
           ) : null}
-          <nav className="ml-1 flex items-center gap-0.5 sm:ml-4">
-            {NAV.map(({ to, label, icon: Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                activeOptions={{ exact: to === '/', includeSearch: false }}
-                className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[status=active]:bg-accent data-[status=active]:text-foreground"
-              >
-                <Icon className="size-4" />
-                <span className="hidden sm:inline">{label}</span>
-              </Link>
-            ))}
-          </nav>
           <div className="ml-auto flex items-center gap-2">
             <ModeBadge />
             <ThemeToggle />

@@ -214,7 +214,15 @@ function pruneFailed(nodes: TreeNode[]): TreeNode[] {
   })
 }
 
-function CellsTable({ rows, runId, slug }: { rows: CellRow[]; runId: string; slug: string }) {
+export function CellsTable({
+  rows,
+  runId,
+  slug,
+}: {
+  rows: CellRow[]
+  runId: string
+  slug: string
+}) {
   const showLift = rows.some((r) => r.lift !== null)
   const showEffort = rows.some((r) => r.effort !== null)
   const showUsage = rows.some((r) => r.usage)
@@ -583,7 +591,7 @@ export function RunPage() {
   return (
     <div className="space-y-6">
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link to="/" className="hover:text-foreground">
+        <Link to="/runs" className="hover:text-foreground">
           Runs
         </Link>
         <ChevronRight className="size-3.5" />

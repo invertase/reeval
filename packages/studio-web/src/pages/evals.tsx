@@ -9,11 +9,11 @@ import { Input } from '@/components/ui/input'
 import { headersQuery } from '@/lib/data'
 import { plural } from '@/lib/format'
 
-const route = getRouteApi('/evals')
+const route = getRouteApi('/')
 
 export function EvalsPage() {
   const { q } = route.useSearch()
-  const navigate = useNavigate({ from: '/evals' })
+  const navigate = useNavigate({ from: '/' })
   const { data, error, isPending } = useQuery(headersQuery)
   const byFile = useMemo(() => {
     const groups = new Map<string, EvalCatalogEntry[]>()

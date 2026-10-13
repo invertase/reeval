@@ -59,7 +59,7 @@ function NotLive({ runId }: { runId: string }) {
     <EmptyState icon={Radio} title="This run isn't in progress">
       No running <span className="font-mono">reeval run</span> has the id{' '}
       <span className="font-mono">{runId}</span>, and no record of it has landed.{' '}
-      <Link to="/" className="underline">
+      <Link to="/runs" className="underline">
         Back to runs
       </Link>
     </EmptyState>
@@ -104,7 +104,7 @@ export function LiveRunPage() {
     <div className="space-y-6">
       <div>
         <Button asChild variant="ghost" size="sm" className="-ml-2 text-muted-foreground">
-          <Link to="/">
+          <Link to="/runs">
             <ArrowLeft /> Runs
           </Link>
         </Button>

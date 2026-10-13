@@ -15,19 +15,25 @@ reeval studio · scratch-guide · evals/.history/
 Ctrl-C to stop.
 ```
 
-Open the printed URL. New runs appear as they're recorded, and unrecorded runs from `.reeval/runs/` show too, labelled scratch (`--no-scratch` hides them). A run that's still going shows at the top. `--open` opens the browser for you.
+Open the printed URL. The home page lists every eval a recorded run included, grouped by file, with the last 20 runs as a strip. Click one to open it. `--open` opens the browser for you.
+
+## Follow one eval
+
+<Image src="/assets/studio/eval-history.png" alt="One eval across runs, with pass rates and fingerprint change marks" width={800} />
+
+An eval's page is titled with its name. It leads with the latest run's cells (harness, environment, attempts, pass rate, lift and effort), then the last four runs. When there are more, **View All** opens the full history table, with a mark where the eval's fingerprint changed.
 
 ## Browse runs
 
 <Image src="/assets/studio/runs.png" alt="The studio's runs list, with commit, branch, pass counts, duration and drift badges" width={800} />
 
-The runs list shows each run's commit, branch, author (or CI), pass counts, tokens and duration. A `drift` badge means a cell's fingerprint changed since the last run that had it: its eval, image, agent CLI or environment.
+A run in the history table opens that run. The runs list shows each run's commit, branch, author (or CI), pass counts, tokens and duration. A `drift` badge means a cell's fingerprint changed since the last run that had it: its eval, image, agent CLI or environment.
 
 ## Watch a run in progress
 
 <Image src="/assets/studio/live-run.png" alt="A run in progress: Running 2/4, a progress bar, two attempts passed and two still running" width={800} />
 
-Start `reeval run` with the studio open and the run appears at the top of the runs list with a `Running 2/4` badge and a progress bar. Its page lists every planned attempt, filling in with each outcome and duration as it finishes. A finished attempt opens its transcript straight away.
+Start `reeval run` with the studio open and the run appears with a `Running 2/4` badge and a progress bar. Its page lists every planned attempt, filling in with each outcome and duration as it finishes. A finished attempt opens its transcript straight away.
 
 When the record lands, the run's own page replaces the live one. A run that was killed, or stopped answering for 15 seconds, shows as `Stopped`, with what it finished and `reeval run --resume <id>` to continue it. `--resume` still refuses if that process is alive (a sleeping laptop). A static build never shows runs in progress.
 
@@ -44,13 +50,7 @@ attempts and stay blank when a harness reports none. A run you've analysed with
 
 <Image src="/assets/studio/run-questions.png" alt="An eval's cells, then its questions: win rates within a harness and across harnesses, and a question whose model call failed" width={800} />
 
-An eval with [compare questions](/guide/compare#ask-questions) lists them under its cells: each side's win rate over the decided votes, within a harness and across harnesses, and the error when the model call failed. Evals without questions show nothing new.
-
-## Follow one eval
-
-<Image src="/assets/studio/eval-history.png" alt="One eval across runs, with pass rates and fingerprint change marks" width={800} />
-
-An eval's page lists it across runs, with a mark where its fingerprint changed. The compare page diffs two runs, as `reeval compare` does; [History](/guide/history) shows both.
+An eval with [compare questions](/guide/compare#ask-questions) lists them under its cells: each side's win rate over the decided votes, within a harness and across harnesses, and the error when the model call failed. Evals without questions show nothing new. The compare page diffs two runs, as `reeval compare` does; [History](/guide/history) shows both.
 
 ## Open an attempt
 
