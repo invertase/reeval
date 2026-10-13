@@ -820,6 +820,8 @@ export type PairVote = {
   winner: string | 'tie'
   /** True for the repeat that showed `b` first. */
   swapped: boolean
+  /** The model's short reason for this pick; omitted when it gave none. Capped. */
+  reason?: string
 }
 
 /** A compare question's answer: every vote, and each side's wins over decided votes per cut. */
@@ -986,13 +988,16 @@ export type FakeAnalysisModel = {
   note?: string | ((input: FakeNoteInput) => string) | { error: string }
   /**
    * How it answers compare questions: a fixed pick, a function of the blinded pair, or
-   * `{ error }` to fail every call. Default `'tie'`.
+   * `{ error }` to fail every call. A pick may be `{ winner, reason? }`. Default `'tie'`.
    */
-  vote?: FakeVote | ((pair: BlindPair) => FakeVote) | { error: string }
+  vote?: FakePick | ((pair: BlindPair) => FakePick) | { error: string }
 }
 
 /** A blinded label's pick: the attempt shown first (`A`), second (`B`), or neither. */
 export type FakeVote = 'A' | 'B' | 'tie'
+
+/** A fake compare-question pick, optionally with a reason. */
+export type FakePick = FakeVote | { winner: FakeVote; reason?: string }
 
 /** What a compare question's model is shown: the prompt, and the two diffs in slot order. */
 export type BlindPair = { question: string; prompt: string; a: string; b: string }

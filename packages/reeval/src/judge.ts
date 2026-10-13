@@ -18,8 +18,9 @@ export const fakeJudge = ({
 /**
  * An analysis model for tests: `reeval analyze` gets `output` (or `output(digest)`) back as the
  * model's structured answer, and each compare question's pair gets `vote` (a fixed `'A'`, `'B'` or
- * `'tie'`, a function of the blinded pair, or `{ error }`), through the same parsing and
- * validation as a real one. With `analysis.agent`, each note calls the same tools a real model
+ * `'tie'`, `{ winner, reason? }`, a function of the blinded pair, or `{ error }`), through the same
+ * parsing and validation as a real one. With `analysis.agent`, each note calls the same tools a real
+ * model
  * would, then answers with `note` (or `note(input)`), or throws `note.error`.
  */
 export const fakeAnalysis = ({

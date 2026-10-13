@@ -1,6 +1,7 @@
 // Pairs for compare questions, as pure data: which attempts are judged against which, the order
 // each is shown in, and how the blinded picks map back to names and win rates. A run's staging
 // records and recorded runs both feed it.
+import { clip } from '../text.ts'
 import type { CompareAnswer, CompareCut, FakeVote, PairFactor, PairVote } from '../types.ts'
 
 /** One attempt, as a compare question sees it. */
@@ -135,8 +136,38 @@ export function winnerOf(pair: Pair, swapped: boolean, pick: FakeVote): string |
   return sideName(pair.cut, pick === 'A' ? first : second)
 }
 
+/** Stored vote reasons are at most this long. */
+export const VOTE_REASON_CAP = 200
+
+/** Distinct stored reasons, in vote order, capped at `n`. */
+export function sampleReasons(votes: PairVote[], n = 3): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const v of votes) {
+    if (!v.reason || seen.has(v.reason)) continue
+    seen.add(v.reason)
+    out.push(v.reason)
+    if (out.length >= n) break
+  }
+  return out
+}
+
+/** A stored reason: trimmed, capped, omitted when empty. */
+export function voteReason(text: string | undefined): string | undefined {
+  const trimmed = text?.trim()
+  if (!trimmed) return undefined
+  return clip(trimmed, VOTE_REASON_CAP)
+}
+
 /** The vote a pick makes, with the pair's names. */
-export function voteOf(question: string, pair: Pair, swapped: boolean, pick: FakeVote): PairVote {
+export function voteOf(
+  question: string,
+  pair: Pair,
+  swapped: boolean,
+  pick: FakeVote,
+  reason?: string,
+): PairVote {
+  const why = voteReason(reason)
   return {
     question,
     cut: pair.cut,
@@ -146,6 +177,7 @@ export function voteOf(question: string, pair: Pair, swapped: boolean, pick: Fak
     b: sideName(pair.cut, pair.b),
     winner: winnerOf(pair, swapped, pick),
     swapped,
+    ...(why ? { reason: why } : {}),
   }
 }
 

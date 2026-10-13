@@ -21,13 +21,25 @@ import type {
   PairFactor,
   PairVote,
 } from '../types.ts'
-import { acrossOf, type Pair, type PairAttempt, pairsOf, ratesOf, slots, voteOf } from './pairs.ts'
+import {
+  acrossOf,
+  type Pair,
+  type PairAttempt,
+  pairsOf,
+  ratesOf,
+  slots,
+  voteOf,
+  voteReason,
+} from './pairs.ts'
 
 export const QUESTION_SYSTEM = `You compare two attempts by coding agents at the same task and answer one question about them.
 Each attempt is shown as the changes it made to the project, as a unified diff, labelled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
-Judge only by the question, from the changes shown. Answer A or B for the attempt the question favours, or tie when the changes don't separate them on it.`
+Judge only by the question, from the changes shown. Answer A or B for the attempt the question favours, or tie when the changes don't separate them on it. Give a short reason for the pick.`
 
-const voteSchema = z.object({ winner: z.enum(['A', 'B', 'tie']) })
+const voteSchema = z.object({
+  winner: z.enum(['A', 'B', 'tie']),
+  reason: z.string().optional(),
+})
 
 /** Roughly four characters a token: each side gets half of `maxInputTokens`. */
 const CHARS_PER_TOKEN = 4
@@ -79,12 +91,16 @@ export type QuestionModel = string | FakeAnalysisModel
 
 function fakeAnswer(fake: FakeAnalysisModel, pair: BlindPair) {
   const vote = fake.vote ?? 'tie'
-  if (typeof vote === 'object') return cannedModel({ error: vote.error })
-  const pick: FakeVote = typeof vote === 'function' ? vote(pair) : vote
-  return cannedModel({ text: JSON.stringify({ winner: pick }) })
+  if (typeof vote === 'object' && 'error' in vote) return cannedModel({ error: vote.error })
+  const pick = typeof vote === 'function' ? vote(pair) : vote
+  const winner = typeof pick === 'string' ? pick : pick.winner
+  const reason = typeof pick === 'string' ? undefined : pick.reason
+  return cannedModel({
+    text: JSON.stringify({ winner, ...(reason !== undefined ? { reason } : {}) }),
+  })
 }
 
-type Pick = { pick: FakeVote; resolvedModel: string | null }
+type Pick = { pick: FakeVote; reason?: string; resolvedModel: string | null }
 
 async function ask(
   model: QuestionModel,
@@ -104,8 +120,12 @@ async function ask(
     maxRetries: 3,
     ...(signal ? { abortSignal: signal } : {}),
   })
-  const { winner } = result.output as z.infer<typeof voteSchema>
-  return { pick: winner, resolvedModel: isFake(model) ? null : (result.response?.modelId ?? null) }
+  const { winner, reason } = result.output as z.infer<typeof voteSchema>
+  return {
+    pick: winner,
+    reason: voteReason(reason),
+    resolvedModel: isFake(model) ? null : (result.response?.modelId ?? null),
+  }
 }
 
 /** Runs `work` over `items`, at most `limit` at once, keeping their order. */
@@ -149,14 +169,14 @@ export async function answerQuestion(options: AnswerOptions): Promise<CompareAns
     if (error !== undefined) return null
     const blind = blindPair(question, pair, swapped, options.maxInputTokens)
     try {
-      const { pick, resolvedModel } = await ask(
+      const { pick, reason, resolvedModel } = await ask(
         model,
         blind,
         options.maxOutputTokens,
         options.signal,
       )
       if (resolvedModel) served.add(resolvedModel)
-      return voteOf(question, pair, swapped, pick)
+      return voteOf(question, pair, swapped, pick, reason)
     } catch (e) {
       error ??= errorText(e)
       return null

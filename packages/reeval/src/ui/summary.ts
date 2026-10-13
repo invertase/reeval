@@ -1,3 +1,4 @@
+import { sampleReasons } from '../compare/pairs.ts'
 import { answersLabel, gateLabel, liftLabel } from '../history/summary.ts'
 import type { AttemptRecord, EvalEntry, RunSummary } from '../history/types.ts'
 import { attemptKey } from '../ids.ts'
@@ -133,9 +134,10 @@ function cellRows(c: Colors, e: EvalEntry, indent: string): string[] {
 
 /** One row per compare question: its win rates, or why it has none. They never gate. */
 function questionRows(c: Colors, e: EvalEntry, indent: string): string[] {
-  return (e.answers ?? []).map((a) => {
+  return (e.answers ?? []).flatMap((a) => {
     const label = answersLabel(a)
-    return `${indent}${c.dim('question')}  ${a.error !== undefined ? c.yellow(label) : label}`
+    const head = `${indent}${c.dim('question')}  ${a.error !== undefined ? c.yellow(label) : label}`
+    return [head, ...sampleReasons(a.votes).map((reason) => `${indent}  ${c.dim(reason)}`)]
   })
 }
 
