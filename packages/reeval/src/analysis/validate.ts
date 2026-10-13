@@ -1,6 +1,8 @@
 // Checks a model's analysis against its digest: citations must name something in it, quotes must be
 // in the cited evidence, numbers should be in the cited facts, and verify commands must parse as
-// reeval's own CLI and, for `reeval run`, select an eval of the run. What fails is dropped (or, for numbers, flagged), and counted in `validation`.
+// reeval's own CLI and, for `reeval run`, select an eval of the run. A rejected verify is dropped,
+// or rewritten from a guessed `--tag` to that eval's id. What fails is dropped (or, for numbers,
+// flagged), and counted in `validation`.
 import { checkCommand, type SelectableEval } from '../cli-spec.ts'
 import type {
   AnalysisAction,
@@ -104,6 +106,49 @@ export function capConfidence(
   return overall
 }
 
+const TAG_FLAG = /(?:^|\s)(--tag(?:=|\s+))(!?)(\S+)/g
+
+const matchesEval = (e: SelectableEval, f: string) =>
+  e.file.includes(f.replace(/^\.\//, '')) ||
+  e.name.includes(f) ||
+  e.cells.some((c) => c.includes(f)) ||
+  e.id?.includes(f)
+
+const quoteFilter = (s: string) => (/[\s'"\\]/.test(s) ? `'${s.replace(/'/g, `'\\''`)}'` : s)
+
+/**
+ * When `--tag X` names no eval tag but X selects an eval as a filter (a guess at the name or id),
+ * replace those flags with that eval's id. Null when nothing to rewrite, or a tag matches nothing.
+ */
+export function rewriteGuessedTagCommand(
+  line: string,
+  evals: readonly SelectableEval[],
+): string | null {
+  const known = new Set(evals.flatMap((e) => e.tags))
+  let out = ''
+  let last = 0
+  let rewrote = false
+  for (const m of line.matchAll(TAG_FLAG)) {
+    const full = m[0]
+    const excl = m[2] ?? ''
+    const bare = m[3] ?? ''
+    const start = m.index ?? 0
+    out += line.slice(last, start)
+    last = start + full.length
+    const lead = /^\s/.test(full) ? full[0] : ''
+    if (excl || known.has(bare)) {
+      out += full
+      continue
+    }
+    const hits = evals.filter((e) => matchesEval(e, bare))
+    if (hits.length === 0) return null
+    const filter = hits.length === 1 ? (hits[0]?.id ?? bare) : bare
+    out += `${lead}${quoteFilter(filter)}`
+    rewrote = true
+  }
+  return rewrote ? out + line.slice(last) : null
+}
+
 export function validateAnalysis(
   output: AnalysisOutput,
   digest: Digest,
@@ -176,7 +221,27 @@ export function validateAnalysis(
     const verify = a.verify.trim().replace(/^`+|`+$/g, '')
     validation.commands++
     const problem = verify ? checkCommand(verify, tables, evals) : 'no command'
-    if (problem) validation.invalidCommands.push(`${verify}: ${problem}`)
+    if (!problem) {
+      return [
+        {
+          title: a.title,
+          target: a.target,
+          kind: a.kind,
+          change: a.change,
+          expectedEffect: a.expectedEffect,
+          verify,
+          impact: a.impact,
+          effort: a.effort,
+          cites: c.good,
+        },
+      ]
+    }
+    const rewritten = verify && evals ? rewriteGuessedTagCommand(verify, evals) : null
+    if (!rewritten || checkCommand(rewritten, tables, evals)) {
+      validation.invalidCommands.push(`${verify}: ${problem}`)
+      validation.dropped++
+      return []
+    }
     return [
       {
         title: a.title,
@@ -184,8 +249,7 @@ export function validateAnalysis(
         kind: a.kind,
         change: a.change,
         expectedEffect: a.expectedEffect,
-        verify: problem ? null : verify,
-        ...(problem ? { verifyProblem: `${verify}: ${problem}` } : {}),
+        verify: rewritten,
         impact: a.impact,
         effort: a.effort,
         cites: c.good,

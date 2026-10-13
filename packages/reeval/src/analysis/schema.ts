@@ -48,7 +48,9 @@ export const analysisSchema = z.object({
         expectedEffect: z.string().describe('What should measurably change'),
         verify: z
           .string()
-          .describe('One reeval command from the CLI list that would show the effect'),
+          .describe(
+            'One reeval command from the CLI list that would show the effect. --tag only if that tag is on setup.evals; otherwise reeval run <id>',
+          ),
         impact: z.enum(['high', 'medium', 'low']),
         effort: z.enum(['low', 'medium', 'high']),
         cites,
@@ -72,7 +74,7 @@ Rules:
 - Say what can't be attributed (factors that are not_measured).
 - Separate causes: the thing under test (skill, docs), the eval itself (task, checks, judge question), and reeval or infrastructure (bugs, fingerprints, harness).
 - Explain a failed judge verdict by comparing the cited output with the judge question, and say it's your reading: judges record no reason.
-- Actions: at most 5, each with a concrete target, the change, the expected measurable effect, and a verify command that is exactly one of the reeval commands in the CLI list, with only the flags listed for it. "No actions" is a valid answer when nothing is worth doing. No generic advice ("add more tests") without a concrete target.
+- Actions: at most 5, each with a concrete target, the change, the expected measurable effect, and a verify command that is exactly one of the reeval commands in the CLI list, with only the flags listed for it. A \`--tag\` value must appear on some eval's \`tags\` in the digest. If none does, select that eval with \`reeval run <id>\` using its \`id\` from setup.evals; do not invent a tag from the eval name. "No actions" is a valid answer when nothing is worth doing. No generic advice ("add more tests") without a concrete target.
 - Quotes, if any, must be copied exactly from the cited evidence.
 - TL;DR: one sentence: what happened, how sure, why, next. No fact ids or intervals.
 - Do not rate your own citation or command checks; reeval caps confidence after it checks them.

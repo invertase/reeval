@@ -348,8 +348,15 @@ export function shellWords(line: string): string[] | null {
 
 const RUNNERS = [['npx'], ['pnpm', 'exec'], ['pnpm'], ['npm', 'exec', '--'], ['yarn']]
 
-/** An eval as `reeval run` selects it: by file path, by name (with its groups) or cell, and by tag. */
-export type SelectableEval = { file: string; name: string; tags: string[]; cells: string[] }
+/** An eval as `reeval run` selects it: by file path, by id, by name (with its groups) or cell, and by tag. */
+export type SelectableEval = {
+  file: string
+  name: string
+  /** The record's eval id (`file › group › … › name`), when the digest has it. */
+  id?: string
+  tags: string[]
+  cells: string[]
+}
 
 /**
  * Why `line` isn't a valid reeval command line, or null when it is. It may chain `reeval` commands with
@@ -390,7 +397,7 @@ export function selectionProblem(
     }
   }
   const byName = (e: SelectableEval, f: string) =>
-    e.name.includes(f) || e.cells.some((c) => c.includes(f))
+    e.name.includes(f) || e.cells.some((c) => c.includes(f)) || e.id?.includes(f)
   const paths = filters.filter((f) => evals.some((e) => e.file.includes(f.replace(/^\.\//, ''))))
   const names = filters.filter((f) => !paths.includes(f))
   const unknown = names.filter((f) => !evals.some((e) => byName(e, f)))

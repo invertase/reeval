@@ -30,11 +30,15 @@ import {
   stagedAttempts,
 } from '../src/analysis/agent/tools.ts'
 import { analyseDigest, defaultBase, prepareAnalysis } from '../src/analysis/command.ts'
-import { RULES } from '../src/analysis/digest.ts'
+import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { resolveAnalysisModel } from '../src/analysis/model.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
-import { capConfidence } from '../src/analysis/validate.ts'
+import {
+  capConfidence,
+  rewriteGuessedTagCommand,
+  validateAnalysis,
+} from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { allRuns } from '../src/commands.ts'
 import { resolveConfig } from '../src/config.ts'
@@ -114,6 +118,7 @@ type Digest = {
   evidence: Array<{ id: string; ref: string; lines: string[] }>
   attempts: Record<string, Row>
   rules: string[]
+  setup?: { evals: Array<{ tag: string; id: string; task: string; tags: string[] }> }
 }
 
 /** Compares `value` with a golden file; REEVAL_UPDATE_SNAPSHOTS=1 rewrites it. */
@@ -458,6 +463,15 @@ describe('reeval CLI spec', () => {
       ['reeval run --record && reeval run --tag nope', /--tag nope: no eval/],
     ]
     for (const [c, why] of bad) assert.match(checkCommand(c, [], evals) ?? '', why, c)
+    const withIds = evals.map((e) => ({
+      ...e,
+      id: `${e.file} › ${e.name}`,
+    }))
+    assert.equal(
+      checkCommand(`reeval run '${withIds[0]?.id}'`, ['effort'], withIds),
+      null,
+      'reeval run <id> selects that eval',
+    )
     assert.equal(
       checkCommand('reeval run --tag nosuchtag'),
       null,
@@ -572,6 +586,12 @@ describe('reeval analyze', () => {
     )
   })
 
+  test('the prompt tells the model only --tag values that appear, else reeval run <id>', () => {
+    assert.match(SYSTEM_PROMPT, /A `--tag` value must appear on some eval's `tags`/)
+    assert.match(SYSTEM_PROMPT, /reeval run <id>/)
+    assert.match(SYSTEM_PROMPT, /do not invent a tag from the eval name/)
+  })
+
   test('validation caps confidence when citations or commands fail', () => {
     const empty = { invalid: [] as string[], dropped: 0, invalidCommands: [] as string[] }
     assert.equal(capConfidence('high', empty), 'high')
@@ -618,6 +638,95 @@ describe('reeval analyze', () => {
     )
   })
 
+  test('a rejected verify is dropped, or rewritten from --tag to the eval id', () => {
+    const evals = [
+      {
+        file: 'evals/sign-in.eval.ts',
+        name: 'sign-in',
+        id: 'evals/sign-in.eval.ts › sign-in',
+        tags: [] as string[],
+        cells: ['fake/-'],
+      },
+    ]
+    assert.equal(
+      rewriteGuessedTagCommand('reeval run --tag sign-in', evals),
+      "reeval run 'evals/sign-in.eval.ts › sign-in'",
+    )
+    assert.equal(
+      rewriteGuessedTagCommand('reeval run --runs 6 --tag=sign-in', evals),
+      "reeval run --runs 6 'evals/sign-in.eval.ts › sign-in'",
+    )
+    assert.equal(rewriteGuessedTagCommand('reeval run --tag nosuch', evals), null)
+    assert.equal(rewriteGuessedTagCommand('reeval run --tag auth', evals), null)
+    assert.equal(
+      rewriteGuessedTagCommand('reeval run --tag skill', [{ ...evals[0], tags: ['skill'] }]),
+      null,
+      'a real tag is left alone',
+    )
+
+    const digest: AnalysisDigest = {
+      digestVersion: 5,
+      scope: { kind: 'run', head: 'r1', base: null, evals: null },
+      runs: { r1: { runId: 'r1', commit: null, branch: null, status: 'complete', summary: '0/1' } },
+      setup: {
+        harnesses: ['fake'],
+        judge: 'none threshold 0.7',
+        environments: [],
+        evals: [{ tag: 'sign-in', id: evals[0]?.id ?? '', task: 'sign in', tags: [] }],
+      },
+      rules: [],
+      cli: [],
+      instructions: null,
+      attempts: {},
+      facts: [{ id: 'F1', kind: 'pass-rate' }],
+      evidence: [],
+      dropped: [],
+    }
+    const action = (verify: string) => ({
+      title: 'Retry',
+      target: 'evals/sign-in.eval.ts',
+      kind: 'eval' as const,
+      change: 'c',
+      expectedEffect: 'e',
+      verify,
+      impact: 'high' as const,
+      effort: 'low' as const,
+      cites: ['F1'],
+    })
+    const base = {
+      tldr: 'A run.',
+      whatHappened: [] as [],
+      results: [] as [],
+      why: [] as [],
+      anomalies: [] as [],
+      confidence: { overall: 'high' as const, why: 'n = 1' },
+    }
+    const rewritten = validateAnalysis(
+      { ...base, actions: [action('reeval run --tag sign-in')] },
+      digest,
+      [],
+      evals,
+    )
+    assert.deepEqual(
+      rewritten.body.actions.map((a) => a.verify),
+      ["reeval run 'evals/sign-in.eval.ts › sign-in'"],
+    )
+    assert.equal(rewritten.validation.invalidCommands.length, 0)
+    assert.equal(rewritten.validation.dropped, 0)
+    assert.equal(rewritten.body.confidence.overall, 'high')
+
+    const dropped = validateAnalysis(
+      { ...base, actions: [action('reeval run --tag nosuch'), action('reeval query nope')] },
+      digest,
+      [],
+      evals,
+    )
+    assert.deepEqual(dropped.body.actions, [])
+    assert.equal(dropped.validation.dropped, 2)
+    assert.equal(dropped.validation.invalidCommands.length, 2)
+    assert.equal(dropped.body.confidence.overall, 'low')
+  })
+
   test('the digest is facts with ids, evidence by rule, and the verdict rules; --context needs no key', async () => {
     const p = await historyProject('analyze-context', 'dogfood')
     const { text, digest } = await digestOf(p.dir)
@@ -640,6 +749,32 @@ describe('reeval analyze', () => {
     assert.ok(digest.evidence.some((e) => e.ref.startsWith('tool-strip:r2/scaffold/es-good#')))
     const scoped = (await digestOf(p.dir, ['--eval', 'fix-config'])).digest
     assert.ok(Object.keys(scoped.attempts).every((id) => id.includes('/fix-config/')))
+    assert.deepEqual(
+      digest.setup?.evals.map((e) => e.tags),
+      [[], [], []],
+      'each eval lists its tags, even when it has none',
+    )
+  })
+
+  test("the digest lists each eval's tags", async () => {
+    const p = await project('analyze-eval-tags', {
+      'reeval.config.ts': fakeConfig({ extra: "record: 'always'," }),
+      'evals/sign-in.eval.ts': `import { evaluate } from 'reeval'
+evaluate('sign-in', { tags: ['auth'] }, async (c) => {
+  await c.send('go')
+})
+`,
+      'evals/hello.eval.ts': `import { evaluate } from 'reeval'
+evaluate('hello', async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    const { digest } = await digestOf(p.dir)
+    const byTag = Object.fromEntries((digest.setup?.evals ?? []).map((e) => [e.tag, e.tags]))
+    assert.deepEqual(byTag, { 'sign-in': ['auth'], hello: [] })
+    assert.ok(digest.setup?.evals.every((e) => e.id.includes(e.tag)))
   })
 
   test('one counted attempt a side is insufficient lift, not a results verdict', async () => {
@@ -856,16 +991,12 @@ evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
     assert.equal(a.results[0].unverifiedNumbers, undefined)
     assert.deepEqual(
       a.actions.map((x: { verify: string | null }) => x.verify),
-      [null, null, null, 'reeval query effort'],
-      'the action citing only F999 is dropped',
+      ['reeval query effort'],
+      'rejected verifies are dropped; the action citing only F999 is dropped',
     )
-    assert.match(a.actions[0].verifyProblem, /--include-efficiency isn't a reeval flag/)
-    assert.match(
-      a.actions[2].verifyProblem,
-      /reeval run --runs 6 --tag nosuchtag: reeval run --tag nosuchtag: no eval in the run has the tag nosuchtag/,
-    )
+    assert.equal(a.actions[0].verifyProblem, undefined)
     const v = doc.validation
-    assert.deepEqual([v.dropped, v.commands, v.invalidCommands.length], [4, 4, 3])
+    assert.deepEqual([v.dropped, v.commands, v.invalidCommands.length], [7, 4, 3])
     assert.deepEqual(
       v.invalid.filter((x: string) => !x.includes('quote') && !x.includes("isn't in the cited")),
       ['whatHappened[1]: r9/nope/control#1', 'whatHappened[2]: E1:L9999', 'actions[4]: F999'],
@@ -877,13 +1008,11 @@ evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
       attempt: 'cursor:composer-2.5/broken-project/es-tarball#1',
     })
     const text = await runCli(p.dir, ['analyze'])
+    assert.doesNotMatch(text.stdout, /verify: none/)
+    assert.match(text.stdout, /verify: reeval query effort/)
     assert.match(
       text.stdout,
-      /verify: none \(npx reeval compare r1 r2 --include-efficiency: --include-efficiency isn't a reeval flag\)/,
-    )
-    assert.match(
-      text.stdout,
-      /14 citations checked, 4 invalid, 4 dropped · 4 commands checked, 3 rejected/,
+      /14 citations checked, 4 invalid, 7 dropped · 4 commands checked, 3 rejected/,
     )
     assert.equal(a.confidence.overall, 'low', 'dropped claims and rejected commands cap to low')
     assert.match(text.stdout, /^TL;DR \(low\) {2}/m)
