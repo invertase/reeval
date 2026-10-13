@@ -1365,6 +1365,7 @@ export const inventory: InventoryFeature[] = [
       analysis('one counted attempt a side is insufficient lift'),
       analysis('a changed eval is not comparable, not an effect'),
       analysis('a changed eval has no mixed 6/10 vs 8/9 result line'),
+      analysis('--vs none analyses this run only'),
       analysis('two counted attempts can still be an effect'),
       analysis('claims with invented citations or quotes are dropped'),
       analysis('validation caps confidence when citations or commands fail'),

@@ -176,7 +176,7 @@ Suggested actions
 gemini-3.8-flash · analysis-v2 · digest v1 · 10381 in / 3196 out tokens · 13s · 29 citations checked, 0 invalid, 0 dropped · 1 commands checked, 0 rejected
 ```
 
-`reeval analyze` explains the latest run against its nearest recorded ancestor, here the cross-agent run from [Harnesses](/guide/harnesses): what happened, the results, why, anomalies, and at most five actions.
+`reeval analyze` explains the latest run against its nearest recorded ancestor, here the cross-agent run from [Harnesses](/guide/harnesses): what happened, the results, why, anomalies, and at most five actions. `--vs none` skips that ancestor and writes up this run alone: no drift, eval-changed or cross-run factor rows.
 
 reeval computes the facts, the model only explains them, and every claim must cite a fact (`F…`) or evidence (`E…`) from the digest. reeval drops claims that don't, flags numbers no cited fact holds, and rejects any verify command its CLI wouldn't parse.
 

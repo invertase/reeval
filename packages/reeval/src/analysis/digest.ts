@@ -300,6 +300,8 @@ export async function buildDigestKeepingDropped(
       f.tier !== 'pooled' || f.factor !== 'environment' || harnesses.includes(f.context as string),
   )
   for (const f of factors) {
+    // Pooled and observed rows name other runs. With no base they are not this run alone.
+    if (!base && (f.tier === 'pooled' || f.tier === 'observed')) continue
     if (f.tier === 'not_measured') {
       fact('factor', { tier: f.tier, factor: f.factor, level: f.level, note: f.note })
       continue

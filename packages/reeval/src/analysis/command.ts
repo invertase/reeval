@@ -135,7 +135,7 @@ export type PreparedAnalysis = {
   key: string
 }
 
-/** The run `reeval analyze` compares `head` with when `--vs` names none: its nearest recorded ancestor. */
+/** The run `reeval analyze` compares `head` with when `--vs` is omitted: its nearest recorded ancestor. */
 export async function defaultBase(
   config: ResolvedConfig,
   entries: HistoryEntry[],
@@ -334,7 +334,12 @@ export async function analyzeCommand(ctx: Ctx, args: string[]): Promise<number> 
     evalFilter ??= args[0] as string
     head = latest
   }
-  const base = flags.vs ? resolveRun(entries, flags.vs) : await defaultBase(config, entries, head)
+  const base =
+    flags.vs === 'none'
+      ? null
+      : flags.vs
+        ? resolveRun(entries, flags.vs)
+        : await defaultBase(config, entries, head)
   if (base?.runId === head.runId) throw new UsageError('reeval analyze --vs names the run itself')
   if (flags.save && !head.recorded) {
     throw new CommandError(

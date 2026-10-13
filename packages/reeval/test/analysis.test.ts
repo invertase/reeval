@@ -110,7 +110,8 @@ async function digestOf(dir: string, args: string[] = []) {
 }
 
 type Digest = {
-  facts: Array<Row & { id: string; kind: string }>
+  scope: { base: string | null }
+  facts: Array<Row & { id: string; kind: string; tier?: string }>
   evidence: Array<{ id: string; ref: string; lines: string[] }>
   attempts: Record<string, Row>
   rules: string[]
@@ -395,6 +396,7 @@ describe('reeval CLI spec', () => {
       'npx reeval run --record',
       'pnpm reeval compare latest~1 latest --md',
       'reeval analyze latest --vs latest~1 --json',
+      'reeval analyze --vs none',
       'reeval run --tag smoke -vv',
       'reeval studio build --out site',
       'reeval image build --dry-run',
@@ -811,6 +813,52 @@ evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
       !digest.facts.some((f) => f.kind === 'factor' && f.tier === 'pooled'),
       'digest emits no pooled factor that straddles the eval-changed pair',
     )
+  })
+
+  test('--vs none analyses this run only, with no ancestor', async () => {
+    const p = await project('analyze-vs-none', {
+      'reeval.config.ts': fakeConfig({ extra: "record: 'always'," }),
+      'evals/c.eval.ts': `import { evaluate } from 'reeval'
+evaluate('greets', { runs: 1 }, async (c) => {
+  await c.send('go')
+})
+`,
+    })
+    assert.equal((await runCli(p.dir)).code, 0)
+    writeFileSync(
+      join(p.dir, 'evals/c.eval.ts'),
+      `import { evaluate } from 'reeval'
+evaluate('greets', { runs: 1 }, async (c) => {
+  await c.send('go now')
+})
+`,
+    )
+    assert.equal((await runCli(p.dir)).code, 0)
+    assert.ok(
+      (await digestOf(p.dir)).digest.facts.some((f) => f.kind === 'eval-changed'),
+      'the default still compares with the ancestor',
+    )
+    const self = await runCli(p.dir, ['analyze', '--vs', 'latest'])
+    assert.equal(self.code, 2, 'the run against itself')
+    assert.match(self.stderr, /reeval analyze --vs names the run itself/)
+    const { text, digest } = await digestOf(p.dir, ['--vs', 'none'])
+    assert.match(text.split('\n')[0] ?? '', /^# reeval analysis context: \S+$/)
+    assert.equal(digest.scope.base, null)
+    const kinds = digest.facts.map((f) => f.kind)
+    assert.ok(
+      !kinds.some((k) => ['eval-changed', 'drift', 'compare'].includes(k)),
+      `--vs none keeps no compare facts: ${kinds.join(', ')}`,
+    )
+    assert.ok(
+      !digest.facts.some(
+        (f) => f.kind === 'factor' && (f.tier === 'pooled' || f.tier === 'observed'),
+      ),
+      '--vs none keeps no cross-run factor rows',
+    )
+    const dry = await runCli(p.dir, ['analyze', '--vs', 'none', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stderr)
+    assert.match(dry.stdout.split('\n')[0] ?? '', /^digest \S+: /)
+    assert.doesNotMatch(dry.stdout.split('\n')[0] ?? '', / vs /)
   })
 
   test('two counted attempts can still be an effect', async () => {

@@ -219,7 +219,8 @@ export const COMMANDS: Record<string, CommandSpec> = {
   reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
                                 nearest recorded ancestor), citations and commands checked; cached
                                 in .reeval/analysis (model: config.analysis.model)
-    --vs <run>                  The run to compare with; --eval <filter> only matching evals
+    --vs <run>                  The run to compare with; none for this run only;
+                                --eval <filter> only matching evals
     --save                      Also write it into the run's history folder: <run>/analysis/
     --context                   Print the digest and rules for your own coding agent (no key, no call)
     --dry-run                   Print the digest's size and the cache key, without calling the model
