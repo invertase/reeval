@@ -1367,6 +1367,7 @@ export const inventory: InventoryFeature[] = [
       analysis('a changed eval has no mixed 6/10 vs 8/9 result line'),
       analysis('two counted attempts can still be an effect'),
       analysis('claims with invented citations or quotes are dropped'),
+      analysis('an anomaly that quotes a judge score the record does not have is dropped'),
       analysis('validation caps confidence when citations or commands fail'),
       analysis('verify commands must parse as reeval commands'),
       analysis('reeval run and reeval image build verify commands must select an eval of the run'),

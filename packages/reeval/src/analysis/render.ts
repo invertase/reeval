@@ -1,11 +1,10 @@
 import type { AnalysisClaim, AnalysisDoc } from '../view/analysis.ts'
 
 const cite = (cs: string[]) => (cs.length ? ` ${cs.map((c) => `[${c}]`).join(' ')}` : '')
+const unverified = (numbers?: string[]) =>
+  numbers?.length ? `unverified: ${numbers.join(', ')}` : ''
 const note = (c: AnalysisClaim) =>
-  [
-    c.confidence === 'high' ? '' : `${c.confidence} confidence`,
-    c.unverifiedNumbers?.length ? `unverified: ${c.unverifiedNumbers.join(', ')}` : '',
-  ]
+  [c.confidence === 'high' ? '' : `${c.confidence} confidence`, unverified(c.unverifiedNumbers)]
     .filter(Boolean)
     .join('; ')
 
@@ -39,7 +38,10 @@ export function renderMarkdown(doc: AnalysisDoc): string {
   }
   if (a.anomalies.length) {
     md.push('### Anomalies', '')
-    for (const x of a.anomalies) md.push(`- **${x.kind}**: ${x.text}${cite(x.cites)}`)
+    for (const x of a.anomalies)
+      md.push(
+        `- **${x.kind}**: ${x.text}${cite(x.cites)}${unverified(x.unverifiedNumbers) ? ` *(${unverified(x.unverifiedNumbers)})*` : ''}`,
+      )
     md.push('')
   }
   md.push('### Suggested actions', '')
@@ -84,7 +86,10 @@ export function renderText(doc: AnalysisDoc): string {
   }
   if (a.anomalies.length) {
     lines.push('', 'Anomalies')
-    for (const x of a.anomalies) lines.push(`  - ${x.kind}: ${x.text}${cite(x.cites)}`)
+    for (const x of a.anomalies)
+      lines.push(
+        `  - ${x.kind}: ${x.text}${cite(x.cites)}${unverified(x.unverifiedNumbers) ? ` (${unverified(x.unverifiedNumbers)})` : ''}`,
+      )
   }
   lines.push('', 'Suggested actions')
   if (!a.actions.length) lines.push('  none: nothing here is worth acting on')

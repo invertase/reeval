@@ -30,11 +30,11 @@ import {
   stagedAttempts,
 } from '../src/analysis/agent/tools.ts'
 import { analyseDigest, defaultBase, prepareAnalysis } from '../src/analysis/command.ts'
-import { RULES } from '../src/analysis/digest.ts'
+import { type Digest as AnalysisDigest, RULES } from '../src/analysis/digest.ts'
 import { listAnalyses, listNotes, noteFileName } from '../src/analysis/files.ts'
 import { resolveAnalysisModel } from '../src/analysis/model.ts'
 import { analysisSchema, SYSTEM_PROMPT } from '../src/analysis/schema.ts'
-import { capConfidence } from '../src/analysis/validate.ts'
+import { capConfidence, validateAnalysis } from '../src/analysis/validate.ts'
 import { COMMANDS, checkCommand, FLAGS } from '../src/cli-spec.ts'
 import { allRuns } from '../src/commands.ts'
 import { resolveConfig } from '../src/config.ts'
@@ -504,7 +504,11 @@ const FAKE = `analysis: {
             { text: 'The agent said so.', cites: [e1.id + ':' + line], confidence: 'medium', quotes: ['Fixed.'] },
             { text: 'An invented quote.', cites: [e1.id], confidence: 'low', quotes: ['this text is nowhere'] },
           ],
-          anomalies: [{ text: 'Saturated evals.', kind: 'eval-design', cites: [sat.id] }],
+          anomalies: [
+            { text: 'Saturated evals.', kind: 'eval-design', cites: [sat.id] },
+            { text: 'The control passed with 0.97.', kind: 'judge', cites: [failure.attempt] },
+            { text: 'Near-threshold scores include 88.', kind: 'other', cites: [sat.id] },
+          ],
           actions: [
             action('npx reeval compare r1 r2 --include-efficiency'),
             action('reeval query efficiency'),
@@ -566,6 +570,7 @@ describe('reeval analyze', () => {
   test('the prompt asks for one sentence and does not self-rate checks', () => {
     assert.match(SYSTEM_PROMPT, /one sentence: what happened, how sure, why, next/)
     assert.match(SYSTEM_PROMPT, /Do not rate your own citation or command checks/)
+    assert.match(SYSTEM_PROMPT, /cited judge score must be the recorded score/)
     assert.match(
       analysisSchema.shape.tldr.description ?? '',
       /One sentence: what happened, how sure, why, next/,
@@ -855,6 +860,12 @@ evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
     )
     assert.equal(a.results[0].unverifiedNumbers, undefined)
     assert.deepEqual(
+      a.anomalies.map((x: { text: string }) => x.text),
+      ['Saturated evals.', 'Near-threshold scores include 88.'],
+      'a cited judge score that is not in the record is dropped',
+    )
+    assert.deepEqual(a.anomalies[1].unverifiedNumbers, ['88'])
+    assert.deepEqual(
       a.actions.map((x: { verify: string | null }) => x.verify),
       [null, null, null, 'reeval query effort'],
       'the action citing only F999 is dropped',
@@ -865,10 +876,15 @@ evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
       /reeval run --runs 6 --tag nosuchtag: reeval run --tag nosuchtag: no eval in the run has the tag nosuchtag/,
     )
     const v = doc.validation
-    assert.deepEqual([v.dropped, v.commands, v.invalidCommands.length], [4, 4, 3])
+    assert.deepEqual([v.dropped, v.commands, v.invalidCommands.length], [5, 4, 3])
     assert.deepEqual(
       v.invalid.filter((x: string) => !x.includes('quote') && !x.includes("isn't in the cited")),
-      ['whatHappened[1]: r9/nope/control#1', 'whatHappened[2]: E1:L9999', 'actions[4]: F999'],
+      [
+        'whatHappened[1]: r9/nope/control#1',
+        'whatHappened[2]: E1:L9999',
+        "anomalies[1]: 0.97 isn't the cited judge score (0.1)",
+        'actions[4]: F999',
+      ],
     )
     assert.match(doc.cited['r2/fix-config/control#1'], /fail/)
     assert.deepEqual(doc.attempts['r2/fix-config/control#1'], {
@@ -883,10 +899,134 @@ evaluate('greets', { runs: ${runs}, gate: { passRate: 0.5 } }, async (c) => {
     )
     assert.match(
       text.stdout,
-      /14 citations checked, 4 invalid, 4 dropped · 4 commands checked, 3 rejected/,
+      /16 citations checked, 5 invalid, 5 dropped · 4 commands checked, 3 rejected/,
     )
     assert.equal(a.confidence.overall, 'low', 'dropped claims and rejected commands cap to low')
     assert.match(text.stdout, /^TL;DR \(low\) {2}/m)
+  })
+
+  test('an anomaly that quotes a judge score the record does not have is dropped', () => {
+    const attempt = 'r1/greets/control#1'
+    const digest: AnalysisDigest = {
+      digestVersion: 3,
+      scope: { kind: 'run', head: 'run1', base: null, evals: null },
+      runs: {},
+      setup: { harnesses: [], judge: '', environments: [], evals: [] },
+      rules: RULES,
+      cli: [],
+      instructions: null,
+      attempts: {
+        [attempt]: {
+          run: 'r1',
+          runId: 'run1',
+          key: 'k',
+          eval: 'greets',
+          evalSlug: 'greets',
+          cell: 'control',
+          attempt: 'fake/greets/control#1',
+          outcome: 'pass',
+          tools: 1,
+          agentS: 1,
+          judge: 0.87,
+          checks: 1,
+          artifacts: null,
+        },
+      },
+      facts: [
+        {
+          id: 'F1',
+          kind: 'failure',
+          attempt,
+          judge: { question: 'Is it tidy?', score: 0.87, threshold: 0.8 },
+        },
+        { id: 'F2', kind: 'saturation', evals: [], saturated: ['greets'] },
+      ],
+      evidence: [
+        {
+          id: 'E1',
+          ref: `attempt:${attempt}`,
+          why: 'a failing attempt',
+          lines: ['judge score: 0.87 (threshold 0.8)'],
+          priority: 1,
+        },
+      ],
+      dropped: [],
+    }
+    const blank = {
+      tldr: 'A run.',
+      whatHappened: [] as [],
+      results: [] as [],
+      why: [] as [],
+      actions: [] as [],
+      confidence: { overall: 'high' as const, why: 'n = 1' },
+    }
+    const wrong = validateAnalysis(
+      {
+        ...blank,
+        anomalies: [{ text: 'The attempt passed with 0.97.', kind: 'judge', cites: [attempt] }],
+      },
+      digest,
+      [],
+    )
+    assert.deepEqual(wrong.body.anomalies, [])
+    assert.deepEqual(wrong.validation.invalid, [
+      "anomalies[0]: 0.97 isn't the cited judge score (0.87)",
+    ])
+    assert.equal(wrong.validation.dropped, 1)
+    assert.equal(wrong.body.confidence.overall, 'low')
+
+    const matched = validateAnalysis(
+      {
+        ...blank,
+        anomalies: [{ text: 'The attempt passed with 0.87.', kind: 'judge', cites: [attempt] }],
+      },
+      digest,
+      [],
+    )
+    assert.deepEqual(
+      matched.body.anomalies.map((a) => a.text),
+      ['The attempt passed with 0.87.'],
+    )
+    assert.equal(matched.body.anomalies[0]?.unverifiedNumbers, undefined)
+    assert.equal(matched.validation.dropped, 0)
+
+    const flagged = validateAnalysis(
+      {
+        ...blank,
+        anomalies: [{ text: 'Near-threshold scores include 88.', kind: 'other', cites: ['F2'] }],
+      },
+      digest,
+      [],
+    )
+    assert.deepEqual(flagged.body.anomalies[0]?.unverifiedNumbers, ['88'])
+    assert.equal(flagged.validation.dropped, 0)
+    assert.equal(flagged.body.anomalies[0]?.text, 'Near-threshold scores include 88.')
+
+    const fromFact = validateAnalysis(
+      {
+        ...blank,
+        anomalies: [{ text: 'The attempt passed with 0.97.', kind: 'judge', cites: ['F1'] }],
+      },
+      digest,
+      [],
+    )
+    assert.deepEqual(fromFact.body.anomalies, [])
+    assert.match(
+      fromFact.validation.invalid[0] ?? '',
+      /isn't the cited judge score \(0\.87, 0\.8\)/,
+    )
+
+    const noJudge = validateAnalysis(
+      {
+        ...blank,
+        anomalies: [{ text: 'Something scored 0.97.', kind: 'other', cites: ['F2'] }],
+      },
+      digest,
+      [],
+    )
+    assert.equal(noJudge.body.anomalies[0]?.text, 'Something scored 0.97.')
+    assert.deepEqual(noJudge.body.anomalies[0]?.unverifiedNumbers, ['0.97'])
+    assert.equal(noJudge.validation.dropped, 0)
   })
 
   test('a cached analysis makes no call; --no-cache does', async () => {
