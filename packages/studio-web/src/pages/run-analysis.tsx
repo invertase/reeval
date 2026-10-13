@@ -163,6 +163,11 @@ function AnalysisView({ entry }: { entry: AnalysisEntry }) {
                 </Badge>
                 {x.text}
                 <Cites doc={doc} ids={x.cites} />
+                {x.unverifiedNumbers?.length ? (
+                  <span className="ml-1 text-xs text-infra">
+                    (not in the cited facts: {x.unverifiedNumbers.join(', ')})
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>

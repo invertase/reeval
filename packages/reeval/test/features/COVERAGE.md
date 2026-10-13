@@ -148,7 +148,7 @@
 | Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts | ✓ 4 | — | — | — | — |
 | Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 2 | — | — | — | — |
 | Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio | ✓ 3 | — | — | — | — |
-| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 14 | — | — | — | — |
+| `reeval analyze`: a digest of facts, one structured call on `analysis.model`, citation and CLI-command validation | ✓ 15 | — | — | — | — |
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
 | `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | ◐ 1 (1 without a canary) |
 | `analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error | ✓ 6 | — | — | — | ◐ 1 (1 without a canary) |

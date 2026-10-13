@@ -20,7 +20,13 @@ export type AnalysisClaim = {
 }
 
 export type AnomalyKind = 'es-bug' | 'eval-design' | 'judge' | 'noise' | 'other'
-export type AnalysisAnomaly = { text: string; kind: AnomalyKind; cites: string[] }
+export type AnalysisAnomaly = {
+  text: string
+  kind: AnomalyKind
+  cites: string[]
+  /** Numbers in the text that no cited fact or evidence contains. */
+  unverifiedNumbers?: string[]
+}
 
 export type ActionKind = 'skill' | 'docs' | 'eval' | 'judge' | 'es' | 'harness'
 export type Level = 'high' | 'medium' | 'low'
@@ -54,7 +60,7 @@ export type AnalysisValidation = {
   /** Citations checked, and those that named nothing in the digest. */
   citations: number
   invalid: string[]
-  /** Claims, anomalies and actions dropped for having no valid citation or an invented quote. */
+  /** Claims, anomalies and actions dropped for no valid citation, invented quote, or wrong judge score. */
   dropped: number
   commands: number
   invalidCommands: string[]

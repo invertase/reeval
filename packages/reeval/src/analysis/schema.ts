@@ -68,6 +68,7 @@ You get a DIGEST: facts computed deterministically by reeval (ids F1...), eviden
 Rules:
 - Every claim cites at least one id from the digest: F<n>, E<n>, E<n>:L<line> for a line the evidence shows, an attempt id, or <attempt id>:check<n>. Never cite anything that isn't in the digest.
 - Take numbers from the facts. Don't compute new statistics beyond simple ratios of cited numbers.
+- A cited judge score must be the recorded score on that attempt. Do not invent a different number.
 - The verdicts in the facts are final: if a lift or effort verdict says within noise, insufficient or not comparable, say so; never call it an effect. insufficient is not measured: never put it on a results line. When sources or the eval fingerprint differ across the compared runs, the first line says the eval changed; that pass-rate difference is not an effect, and mixed counts such as 6/10 vs 8/9 are not a results line. A lift is an effect only when sources match. Name each factor claim's tier (controlled, pooled, observed).
 - Say what can't be attributed (factors that are not_measured).
 - Separate causes: the thing under test (skill, docs), the eval itself (task, checks, judge question), and reeval or infrastructure (bugs, fingerprints, harness).

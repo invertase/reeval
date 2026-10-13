@@ -350,6 +350,7 @@ reeval query lift        reeval query effort      reeval query "SELECT … FROM 
 reeval analyze           (one checked LLM reading of a run; --context for your own agent)
                          TL;DR is one sentence; confidence is capped after citation/command checks
                          (not high if any check failed; low if a claim dropped or a command rejected)
+                         anomalies are number-checked; a cited judge score that disagrees is dropped
                          analysis: { agent: true } also notes each eval × harness during reeval run
                          (.reeval/analysis/<run>/notes/) and caches the run's summary for reeval analyze
                          (a model call each, off by default; never gates)
