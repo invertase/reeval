@@ -208,7 +208,11 @@ describe('studio in a browser', () => {
     assert.match(page.url(), /#\/evals\/[^/]+$/)
     assert.doesNotMatch((await page.locator('h1').innerText()) ?? '', /\d{1,2} \w+ \d{4}/)
     assert.equal(await page.getByRole('heading', { name: 'Latest run' }).count(), 0)
+    assert.equal(await page.getByText(/Passed in \d/).count(), 0)
     await page.locator('nav').getByText('hello.eval.ts').waitFor()
+    assert.equal(await page.getByText('evals/hello.eval.ts').count(), 0)
+    assert.equal(await page.locator('nav').getByText('adds a default name').count(), 0)
+    await page.getByText(/ada-lovelace|grace-hopper|CI ·/).first().waitFor()
     await page.locator('[data-latest-run]').getByText('Harness').waitFor()
     await page
       .locator('[data-latest-run]')
@@ -218,6 +222,11 @@ describe('studio in a browser', () => {
       .locator('table')
       .filter({ has: page.getByRole('columnheader', { name: 'Run', exact: true }) })
     assert.ok((await recent.locator('tbody tr').count()) <= 4)
+    await page.goto(`${origin}#/`)
+    await page.getByText('reviews a greet module').click()
+    await page.locator('nav').getByText('review.eval.ts').waitFor()
+    await page.locator('[data-latest-run] [data-questions]').getByText('Within a harness').waitFor()
+    await page.locator('[data-latest-run]').getByText(/tool call/).waitFor()
     await page.goto(`${page.url()}/history`)
     await page.getByRole('columnheader', { name: 'Run', exact: true }).waitFor()
 
