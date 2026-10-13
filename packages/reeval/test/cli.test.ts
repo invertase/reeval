@@ -108,6 +108,7 @@ describe('cli', () => {
       'no-token': true,
       'no-scratch': true,
     })
+    assert.deepEqual(parseCli(['analyze', '--vs', 'none']).values, { vs: 'none' })
     assert.deepEqual(parseCli(['studio', 'build', '--scratch']).values, { scratch: true })
     assert.deepEqual(parseCli(['mcp', '--http', '--port', '4990', '--token', 't']), {
       positionals: ['mcp'],

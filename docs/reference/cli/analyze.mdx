@@ -8,6 +8,7 @@ description: Explain a run in plain words with one checked LLM call over a diges
 ```bash
 npx reeval analyze                                  # latest vs its nearest recorded ancestor
 npx reeval analyze latest --vs latest~2 --eval skill
+npx reeval analyze --vs none                        # this run only: no ancestor
 npx reeval analyze --context                        # the digest for your own agent: no key, no call
 ```
 
@@ -19,7 +20,8 @@ npx reeval analyze --context                        # the digest for your own ag
 reeval analyze [run]          Explain a run with one LLM call over a digest of its facts (vs its
                               nearest recorded ancestor), citations and commands checked; cached
                               in .reeval/analysis (model: config.analysis.model)
-  --vs <run>                  The run to compare with; --eval <filter> only matching evals
+  --vs <run>                  The run to compare with; none for this run only;
+                              --eval <filter> only matching evals
   --save                      Also write it into the run's history folder: <run>/analysis/
   --context                   Print the digest and rules for your own coding agent (no key, no call)
   --dry-run                   Print the digest's size and the cache key, without calling the model
@@ -70,7 +72,7 @@ flowchart LR
   V --> O[analysis: shown, cached, optionally saved]
 ```
 
-1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, the judge's scores, failures, flaky cells, drift, the compare), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and check tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>`. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them, including `insufficient` (not measured) when lift has fewer than two counted attempts a side: `not enough attempts for lift (1 vs 1)`, never a results line. When sources or the eval fingerprint differ across the compared runs, the digest says `not comparable: the eval changed` and drops the mixed pass-rate (`6/10 vs 8/9` is not a results line); that difference is not an effect, and no pooled factor row straddles the pair.
+1. **Digest.** The runs, an attempts table with short ids (`r2/skill/control#1`), facts with ids (`F1…`: pass rate and lift, effort, factor effects by tier, skill reads, the judge's scores, failures, flaky cells, drift, the compare), and evidence chosen by rule (`E1…`: failing attempts' final messages, judge questions and check tails, and the first tool calls of contrasting attempts), with transcript lines as `L<n>`. It's capped at `analysis.maxInputTokens` by dropping the lowest-priority evidence first. The model is told the verdicts, not asked for them, including `insufficient` (not measured) when lift has fewer than two counted attempts a side: `not enough attempts for lift (1 vs 1)`, never a results line. When sources or the eval fingerprint differ across the compared runs, the digest says `not comparable: the eval changed` and drops the mixed pass-rate (`6/10 vs 8/9` is not a results line); that difference is not an effect, and no pooled factor row straddles the pair. `--vs none` drops the ancestor: no drift, eval-changed or cross-run factor rows.
 2. **Call.** One `generateText` call with a schema: a one-sentence TL;DR (what happened, how sure, why, next; no fact ids or intervals), what happened, results, why, anomalies, at most five actions (target, change, expected effect, verify command, impact, effort) and a confidence. Do not ask the model to self-rate the checks.
 3. **Validation.** A claim, anomaly or action with no citation that names something in the digest is dropped, and so is one whose quote isn't in its cited evidence. Numbers no cited fact holds are flagged, including on anomalies. An anomaly (or claim) that quotes a judge score which is not the cited attempt's recorded score is dropped, so a wrong score cannot stay in the written explanation. Each verify command must parse as reeval's own CLI, with only that command's flags, and an `reeval run` or `reeval image build` must select an eval of the run: a `--tag` no eval has, or a filter that matches no eval file, name or cell, is rejected. After those checks, reeval caps `confidence.overall`: not `high` when `invalid`, `dropped` or `rejected` is above zero; `low` when a claim was dropped or a command was rejected. The capped value sits with the TL;DR; the counts stay in the footer.
 4. **Storage.** Every analysis is cached in `.reeval/analysis/<key>.json`, keyed by the scope, the digest's hash, the prompt version and the model, so the same inputs never call the model twice (`--no-cache` does). `--save` also writes `<run>/analysis/<stamp>_<author>_<hash8>.json` and a `.md` twin into the history folder, create-only and after the secret scan. Only recorded runs can be saved into. With `analysis.agent`, `reeval run` also caches a note on each eval and harness in `.reeval/analysis/<runId>/notes/<eval slug>__<harness slug>.json`, and, once the run is written, the run's summary under the key `reeval analyze <run>` computes, so `reeval analyze` prints it from the cache (`--save` keeps it). Before that summary's call, the model may read evidence the cap dropped and open attempts (steps, checks and diff) with tools, and it can cite what it read. A summary whose call failed is cached with `error`: the studio shows it, and `reeval analyze` treats it as a miss.
@@ -117,7 +119,7 @@ For tests, `fakeAnalysis({ output })` from `{{ pkg }}/judge` answers with canned
 |---|---|
 | `reeval analyze takes --json or --md, not both` | Pick one |
 | `reeval analyze --context makes no analysis to save; drop --save` | `--context` only prints the digest |
-| `reeval analyze --vs names the run itself` | Name an earlier run |
+| `reeval analyze --vs names the run itself` | Name an earlier run, or `--vs none` |
 | `No eval in <run> matches "<filter>"` | Check `--eval` against `reeval show <run>` |
 | A missing key, or an evaluation model | Set the key, set `analysis.model`, or use `--context` with your own agent |
 
