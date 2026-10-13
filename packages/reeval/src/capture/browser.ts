@@ -1,8 +1,9 @@
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import {
   chmodSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -262,6 +263,53 @@ async function cdpConnect(url: string, timeoutMs: number): Promise<Cdp> {
   return new Cdp(ws)
 }
 
+/**
+ * Drops a chrome-headless-shell profile. Chrome can still write after SIGKILL,
+ * so `ENOTEMPTY` / `EBUSY` must not replace a PNG already in hand.
+ */
+export function removeChromeProfile(dir: string, rm: typeof rmSync = rmSync): void {
+  try {
+    rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 })
+  } catch {
+    scheduleChromeProfileSweep(dir, rm)
+  }
+}
+
+function scheduleChromeProfileSweep(dir: string, rm: typeof rmSync): void {
+  const later = setTimeout(() => {
+    try {
+      rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+    } catch {
+      // leftover in os.tmpdir(); the OS sweep takes it
+    }
+  }, 250)
+  later.unref()
+}
+
+function waitForExit(child: ChildProcess, timeoutMs: number): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer)
+      child.off('exit', finish)
+      resolve()
+    }
+    const timer = setTimeout(finish, timeoutMs)
+    child.once('exit', finish)
+  })
+}
+
+/** Kills the shell and drops its profile. Never throws: the PNG is already in hand. */
+async function disposeChrome(child: ChildProcess, userData: string): Promise<void> {
+  try {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
+    await waitForExit(child, 1_000)
+  } catch {
+    // already gone
+  }
+  removeChromeProfile(userData)
+}
+
 /** Navigate `url` and return a PNG from `Page.captureScreenshot`. */
 export async function screenshotWithChrome(
   bin: string,
@@ -269,8 +317,7 @@ export async function screenshotWithChrome(
   viewport: Viewport,
   timeoutMs: number,
 ): Promise<Buffer> {
-  const userData = join(tmpdir(), `reeval-chrome-${process.pid}-${Date.now()}`)
-  mkdirSync(userData, { recursive: true })
+  const userData = mkdtempSync(join(tmpdir(), `reeval-chrome-${process.pid}-`))
   const child = spawn(
     bin,
     [
@@ -317,7 +364,6 @@ export async function screenshotWithChrome(
       cdp.close()
     }
   } finally {
-    child.kill('SIGKILL')
-    rmSync(userData, { recursive: true, force: true })
+    await disposeChrome(child, userData)
   }
 }

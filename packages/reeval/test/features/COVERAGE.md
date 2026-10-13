@@ -152,7 +152,7 @@
 | `reeval analyze` caches in `.reeval/analysis`; `--save` writes create-only under `<run>/analysis/`; the studio Analysis tab shows them | ✓ 2 | — | — | — | — |
 | `analysis.agent`: `reeval run` writes a note on each eval and harness, from tools over its attempts, into `.reeval/analysis/<run>/notes/` | ✓ 9 | — | — | — | ◐ 1 (1 without a canary) |
 | `analysis.agent`'s run summary: once the run is written, the `reeval analyze` document for it, read with tools and cached under the same key; the studio's Analysis tab shows it, the notes, and a failed call's error | ✓ 6 | — | — | — | ◐ 1 (1 without a canary) |
-| `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 2 | ✓ 1 | ● 5 | ● 5 | — |
+| `c.capture()`, `c.serve` and `c.exec({ background })` | ✓ 3 | ✓ 1 | ● 6 | ● 6 | — |
 | `reeval studio` and `reeval studio build` | ✓ 7 | — | — | — | ◐ 1 (1 without a canary) |
 | The studio's Debug tab: an attempt's phase timeline, gateway requests and raw trace, from `.reeval/debug`, in `reeval studio` only | ✓ 4 | — | — | — | — |
 | Runs in progress in `reeval studio`: `reeval run`'s `.reeval/staging/<run>/live.json`, a `Running N/M` row and progress bar, attempts filling in with their transcripts, `Stopped` for a killed run, and the record replacing it | ✓ 9 | — | — | — | — |

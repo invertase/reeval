@@ -1460,6 +1460,29 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-concurrent',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'artifacts\/home\.png' to be 'artifacts\/wrong\.png'/,
+    record: ({ run, runDir, tier }) => {
+      const arts = landed(run)?.files.artifacts ?? []
+      assert.equal(arts.length, 2, 'both concurrent captures land')
+      assert.deepEqual(arts.map((a) => a.name).sort(), ['about', 'home'])
+      for (const art of arts) {
+        assert.match(art.path, new RegExp(`artifacts/${art.name}\\.png$`))
+        const bytes = readFileSync(join(runDir, art.path))
+        const viewport = art.capture?.viewport ?? { width: 1280, height: 720 }
+        const port = art.capture?.port ?? 0
+        const path = art.capture?.path ?? '/'
+        if (tier === 'fake') {
+          assert.deepEqual(bytes, stubPng(art.name, port, path, viewport))
+        } else {
+          assert.deepEqual(pngSize(bytes), viewport)
+        }
+      }
+    },
+  },
+  {
     dir: 'ui/capture-unreachable',
     tiers: ['fake', 'docker'],
     env: 'plain',

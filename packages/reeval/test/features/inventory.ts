@@ -1417,6 +1417,7 @@ export const inventory: InventoryFeature[] = [
     name: '`c.capture()`, `c.serve` and `c.exec({ background })`',
     fixtures: [
       'ui/capture',
+      'ui/capture-concurrent',
       'ui/capture-unreachable',
       'ui/capture-browser-false',
       'ui/capture-browser-env',
@@ -1426,6 +1427,7 @@ export const inventory: InventoryFeature[] = [
     tests: [
       'reeval/test/ui.test.ts › browser-download names the binary, version, size and cache',
       'reeval/test/capture.test.ts › stub PNG bytes are unique for the capture key',
+      'reeval/test/capture.test.ts › removeChromeProfile deletes a profile and ignores a busy one',
     ],
   },
   {
