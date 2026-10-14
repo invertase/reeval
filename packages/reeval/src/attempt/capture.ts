@@ -13,7 +13,7 @@ import {
 } from '../capture/index.ts'
 import { sha256 } from '../ids.ts'
 import { cacheDir } from '../root.ts'
-import type { BackgroundHandle, Capture, CaptureCall, ServeHandle } from '../types.ts'
+import type { BackgroundHandle, Capture, CaptureCall, CaptureWait, ServeHandle } from '../types.ts'
 import { asCheck, requireSandbox } from './checks.ts'
 import type { Attempt } from './state.ts'
 
@@ -103,7 +103,13 @@ export async function capturePage(
   const png =
     a.spec.sandbox.kind === 'fake'
       ? stubPng(resolved.name, resolved.port, resolved.path, resolved.viewport)
-      : await shot(a, pageUrl(origin, resolved.path), resolved.viewport, resolved.timeoutMs)
+      : await shot(
+          a,
+          pageUrl(origin, resolved.path),
+          resolved.viewport,
+          resolved.timeoutMs,
+          resolved.wait,
+        )
   const digest = sha256(png)
   const file = {
     path: `artifacts/${resolved.name}.png`,
@@ -133,6 +139,7 @@ async function shot(
   url: string,
   viewport: { width: number; height: number },
   timeoutMs: number,
+  wait: CaptureWait,
 ): Promise<Buffer> {
   const cache = cacheDir()
   const bin = await ensureChrome(cache, {
@@ -140,7 +147,7 @@ async function shot(
     signal: a.signal,
     onProgress: (p) => a.report({ kind: 'browser-download', ...p }),
   })
-  return screenshotWithChrome(bin, url, viewport, timeoutMs)
+  return screenshotWithChrome(bin, url, viewport, timeoutMs, wait)
 }
 
 /** Writes PNG sidecars next to the staging eval JSON so redact never sees the bytes. */

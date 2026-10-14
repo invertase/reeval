@@ -1443,12 +1443,17 @@ export const inventory: InventoryFeature[] = [
       'ui/capture-browser-false',
       'ui/capture-browser-env',
       'ui/capture-no-download',
+      'ui/capture-wait-idle',
+      'ui/capture-wait-timeout',
     ],
     plan: ['capture/options'],
     tests: [
       'reeval/test/ui.test.ts › browser-download names the binary, version, size and cache',
       'reeval/test/capture.test.ts › stub PNG bytes are unique for the capture key',
       'reeval/test/capture.test.ts › removeChromeProfile deletes a profile and ignores a busy one',
+      'reeval/test/capture-wait.test.ts › resolveCaptureWait defaults to load and rejects anything else',
+      'reeval/test/capture-wait.test.ts › listenForCaptureWait idle waits for networkAlmostIdle on the navigated loader',
+      'reeval/test/capture-wait.test.ts › listenForCaptureWait times out naming the wait and does not resolve late',
     ],
   },
   {

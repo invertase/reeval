@@ -81,6 +81,7 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
       path: '/login',
       viewport: { width: 390, height: 844 },
       timeoutMs: 30_000,
+      wait: 'load',
     },
   )
   assert.deepEqual(resolveCaptureCall(9, undefined, {}), {
@@ -89,6 +90,7 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
     path: '/',
     viewport,
     timeoutMs: 60_000,
+    wait: 'load',
   })
 })
 

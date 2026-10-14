@@ -62,6 +62,21 @@ evaluate('landing page', async (c) => {
 })
 ```
 
+## After load
+
+Client-rendered pages often fetch after `window` `load`. `wait: 'idle'` holds
+the shot until Chromium reports `networkAlmostIdle`.
+
+```ts
+await c.capture(server, { name: 'home', wait: 'idle' })
+```
+
+`'load'` (the default) is `Page.loadEventFired`. `'idle'` is Chromium's
+`Page.lifecycleEvent` `networkAlmostIdle` (at most two HTTP requests for about
+500ms). The same `timeout` is the budget: if the event never arrives, the
+capture fails and there is no PNG. Pages that never go quiet (Vite HMR, SSE,
+long-poll) keep `wait: 'load'` or raise `timeout`.
+
 ## What you get
 
 The PNG lands at `artifacts/<name>.png` on the attempt. Studio shows it under Artefacts as

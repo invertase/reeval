@@ -1540,6 +1540,42 @@ export const features: Feature[] = [
     },
   },
   {
+    dir: 'ui/capture-wait-idle',
+    tiers: ['fake', 'docker'],
+    env: 'ui',
+    canary: /expected 'artifacts\/home\.png' to be 'artifacts\/wrong\.png'/,
+    record: ({ run, runDir, tier }) => {
+      const art = landed(run)?.files.artifacts?.[0]
+      assert.ok(art, 'files.artifacts names the PNG')
+      assert.match(art.path, /artifacts\/home\.png$/)
+      const bytes = readFileSync(join(runDir, art.path))
+      const viewport = art.capture?.viewport ?? { width: 1280, height: 720 }
+      const port = art.capture?.port ?? 0
+      if (tier === 'fake') {
+        assert.deepEqual(bytes, stubPng('home', port, '/', viewport))
+      } else {
+        assert.deepEqual(pngSize(bytes), viewport)
+      }
+    },
+  },
+  {
+    // Docker only: the fake sandbox stubs the PNG and never waits on CDP.
+    dir: 'ui/capture-wait-timeout',
+    tiers: ['docker'],
+    env: 'ui',
+    lands: {
+      outcome: 'fail',
+      error: {
+        kind: 'assertion',
+        message: /c\.capture\(\) timed out waiting for networkAlmostIdle/,
+      },
+    },
+    canary: /timed out waiting for networkAlmostIdle[\s\S]*to be 'still loading'/,
+    record: ({ run }) => {
+      assert.equal(landed(run)?.files.artifacts, undefined)
+    },
+  },
+  {
     dir: 'run/resume',
     tiers: ['fake'],
     env: 'resume',
