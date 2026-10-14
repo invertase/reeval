@@ -776,26 +776,31 @@ export type CompareOptions<E = Environment> = {
    */
   questions?: CompareQuestion[]
   /**
-   * Which pairs every question asks, when a question does not name its own `cut`. `'within'` is
-   * arm vs arm on one harness; `'across'` is harness vs harness on one arm. The default is both.
+   * The factor every question varies when pairing, when a question does not name its own
+   * `across`. `'environment'` holds the harness; `'harness'` holds the environment. A list of
+   * both, or omitted, asks both pair kinds.
    */
-  cuts?: CompareCut[]
+  across?: PairFactor | PairFactor[]
 }
 
 /**
  * A question for pairwise judgement: its text, or the text and the `'provider/model'` that
  * answers it. Without a model, `analysis.model` answers, else the judge's when it's a language model.
- * `cut` limits the pairs it asks; without it (and without `compare.cuts`) both cuts run.
+ * `across` is the factor it varies when pairing; without it (and without a one-factor
+ * `compare.across`) both pair kinds run.
  */
-export type CompareQuestion = string | { question: string; model?: string; cut?: CompareCut }
+export type CompareQuestion = string | { question: string; model?: string; across?: PairFactor }
 
 /**
- * A compare question as planned: its text, the model it names itself, if any, and the one cut it
- * asks when it doesn't ask both.
+ * A compare question as planned: its text, the model it names itself, if any, and the one
+ * factor it varies when it doesn't ask both pair kinds.
  */
-export type PlannedQuestion = { question: string; model?: string; cut?: CompareCut }
+export type PlannedQuestion = { question: string; model?: string; across?: PairFactor }
 
-/** Which pairs a vote is over: two arms on one harness, or two harnesses on one arm. */
+/** A matrix factor a compare question varies when pairing; the others are held. */
+export type PairFactor = 'environment' | 'harness'
+
+/** Which pairs a vote is over: two environments on one harness, or two harnesses on one environment. */
 export type CompareCut = 'within' | 'across'
 
 /** One judgement of one pair of attempts, in one order. */

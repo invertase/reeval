@@ -640,16 +640,16 @@ export default defineConfig({
     )
   })
 
-  test('a question with cut: within records only within votes', async () => {
-    const p = await project('questions-cut-within', {
+  test('a question with across: environment records only environment pairs', async () => {
+    const p = await project('questions-across-environment', {
       'reeval.config.ts': threeHarnesses(extra),
-      ...asks(`[{ question: 'Which is cleaner?', cut: 'within' }]`),
+      ...asks(`[{ question: 'Which is cleaner?', across: 'environment' }]`),
     })
     const dry = await runCli(p.dir, ['run', '--dry-run'])
     assert.equal(dry.code, 0, dry.stdout + dry.stderr)
     assert.match(
       dry.stdout,
-      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · within · 6 pairs · fake$/m,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · environment · 6 pairs · fake$/m,
     )
     const r = await runCli(p.dir)
     assert.equal(r.code, 1, r.stdout + r.stderr)
@@ -662,6 +662,58 @@ export default defineConfig({
       r.stdout,
       /^ {7}question {2}"Which is cleaner\?" within: base 2\/4 \(50%\), skilled 2\/4 \(50%\) · 8 votes, 4 ties · fake$/m,
     )
+  })
+
+  test('compare.across sets the default factor for questions that omit it', async () => {
+    const p = await project('questions-compare-across', {
+      'reeval.config.ts': threeHarnesses(extra),
+      'evals/envs.ts': asks(`['Which is cleaner?']`)['evals/envs.ts'],
+      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate('asks', { compare: { baseline: base, variants: [skilled], across: 'environment', questions: ['Which is cleaner?'] } }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(
+      dry.stdout,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · environment · 6 pairs · fake$/m,
+    )
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
+    assert.ok(answer)
+    assert.equal(answer.votes.length, 8)
+    assert.ok(answer.votes.every((v) => v.cut === 'within'))
+  })
+
+  test('a question across overrides compare.across', async () => {
+    const p = await project('questions-across-override', {
+      'reeval.config.ts': threeHarnesses(extra),
+      'evals/envs.ts': asks(`['Which is cleaner?']`)['evals/envs.ts'],
+      'evals/q.eval.ts': `import { evaluate, expect } from 'reeval'
+import { base, skilled } from './envs.ts'
+evaluate('asks', { compare: { baseline: base, variants: [skilled], across: 'harness', questions: [{ question: 'Which is cleaner?', across: 'environment' }] } }, async (c) => {
+  await c.send('go')
+  await expect(c).toHaveFile('ok.txt')
+})
+`,
+    })
+    const dry = await runCli(p.dir, ['run', '--dry-run'])
+    assert.equal(dry.code, 0, dry.stdout + dry.stderr)
+    assert.match(
+      dry.stdout,
+      /^ {2}question 1\/1 {2}Which is cleaner\? · after the run · environment · 6 pairs · fake$/m,
+    )
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    const [answer] = readRun(p.dir).evals[0]?.answers ?? []
+    assert.ok(answer)
+    assert.ok(answer.votes.every((v) => v.cut === 'within'))
+    assert.ok(!answer.rates.some((x) => x.cut === 'across'))
   })
 
   test('a model error is kept on its answer and warned about; the outcome and exit code stand', async () => {
@@ -972,42 +1024,47 @@ describe('common mistakes', () => {
     [
       'a compare question that is not a string or an entry',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [42] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\?, cut\? \} \(got 42\)/,
+      /compare\.questions in evaluate\("e"\) takes strings or \{ question, model\?, across\? \} \(got 42\)/,
     ],
     [
       'a compare question entry with an unknown key',
       `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', judge: 'x' }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, cut\? \} \(got "judge"\)\./,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\? \} \(got "judge"\)\./,
     ],
     [
-      'cuts on a compare question entry',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cuts: ['within'] }] as never } }, async () => {})`,
-      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, cut\? \} \(got "cuts"\)\. Did you mean "cut"\?/,
+      'cut on a compare question entry',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cut: 'within' }] as never } }, async () => {})`,
+      /compare\.questions in evaluate\("e"\) takes \{ question, model\?, across\? \} \(got "cut"\)\. Did you mean "across"\?/,
     ],
     [
-      'a compare question cut that is not within or across',
-      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', cut: 'axis' }] as never } }, async () => {})`,
-      /compare\.questions "Which\?" in evaluate\("e"\): cut is 'within' \(arm vs arm, same harness\) or 'across' \(harness vs harness, same arm\) \(got "axis"\)/,
+      'a compare question across that is not a matrix factor',
+      `evaluate('e', { compare: { baseline: a, variants: [b], questions: [{ question: 'Which?', across: 'within' }] as never } }, async () => {})`,
+      /compare\.questions "Which\?" in evaluate\("e"\): across is 'environment' \(vary the environment, same harness\) or 'harness' \(vary the harness, same environment\) \(got "within"\)/,
+    ],
+    [
+      'the old compare cuts option',
+      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: ['within'] } as never }, async () => {})`,
+      /Unknown compare option "cuts" in evaluate\("e"\)\. Did you mean "across"\?/,
     ],
     [
       'the singular compare cut',
       `evaluate('e', { compare: { baseline: a, variants: [b], cut: 'within' } as never }, async () => {})`,
-      /Unknown compare option "cut" in evaluate\("e"\)\. Did you mean "cuts"\? It's a list: cuts: \['within'\]\./,
+      /Unknown compare option "cut" in evaluate\("e"\)\. Did you mean "across"\?/,
     ],
     [
-      'compare.cuts as a single string',
-      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: 'within' as never } }, async () => {})`,
-      /compare\.cuts in evaluate\("e"\) is a non-empty list of 'within' and 'across' \(got "within"\)/,
+      'an empty compare.across list',
+      `evaluate('e', { compare: { baseline: a, variants: [b], across: [] } }, async () => {})`,
+      /compare\.across in evaluate\("e"\) is 'environment' \(vary the environment, same harness\) or 'harness' \(vary the harness, same environment\), or a list of those \(got a list of 0\)/,
     ],
     [
-      'an empty compare.cuts list',
-      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: [] } }, async () => {})`,
-      /compare\.cuts in evaluate\("e"\) is a non-empty list of 'within' and 'across' \(got a list of 0\)/,
+      'the same compare across factor twice',
+      `evaluate('e', { compare: { baseline: a, variants: [b], across: ['environment', 'environment'] } }, async () => {})`,
+      /compare\.across in evaluate\("e"\) lists "environment" twice/,
     ],
     [
-      'the same compare cut twice',
-      `evaluate('e', { compare: { baseline: a, variants: [b], cuts: ['within', 'within'] } }, async () => {})`,
-      /compare\.cuts in evaluate\("e"\) lists "within" twice/,
+      'compare.across that is not a matrix factor',
+      `evaluate('e', { compare: { baseline: a, variants: [b], across: 'arm' as never } }, async () => {})`,
+      /compare\.across in evaluate\("e"\) is 'environment' \(vary the environment, same harness\) or 'harness' \(vary the harness, same environment\), or a list of those \(got "arm"\)/,
     ],
     [
       'a compare question entry without its question',

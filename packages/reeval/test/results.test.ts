@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { recordFailure } from '../src/attempt/record.ts'
 import type { Attempt } from '../src/attempt/state.ts'
-import { type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
+import { acrossOf, type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
 import { answerQuestion, blindPair, stagedAttempt } from '../src/compare/questions.ts'
 import type { EngineEval } from '../src/engine/node.ts'
 import { TimeoutError } from '../src/errors.ts'
@@ -328,18 +328,18 @@ describe('compare question pairs', () => {
     }
   })
 
-  test('cuts: within keeps only arm-vs-arm pairs; across keeps only harness pairs', () => {
+  test('acrossOf: environment keeps environment pairs; harness keeps harness pairs', () => {
     const attempts = matrix(['h1', 'h2', 'h3', 'h4'], ['sdk', 'ui'], 2)
-    const within = pairsOf(attempts, ['within'])
-    const across = pairsOf(attempts, ['across'])
-    const both = pairsOf(attempts, ['within', 'across'])
-    assert.equal(within.length, 8)
-    assert.ok(within.every((p) => p.cut === 'within'))
-    assert.equal(across.length, 24)
-    assert.ok(across.every((p) => p.cut === 'across'))
+    const environment = pairsOf(attempts, acrossOf('environment'))
+    const harness = pairsOf(attempts, acrossOf('harness'))
+    const both = pairsOf(attempts, acrossOf())
+    assert.equal(environment.length, 8)
+    assert.ok(environment.every((p) => p.cut === 'within'))
+    assert.equal(harness.length, 24)
+    assert.ok(harness.every((p) => p.cut === 'across'))
     assert.deepEqual(
       both.map((p) => p.cut),
-      [...within, ...across].map((p) => p.cut),
+      [...environment, ...harness].map((p) => p.cut),
     )
     assert.equal(pairsOf(attempts).length, both.length)
   })

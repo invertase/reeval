@@ -49,6 +49,7 @@ export type {
   JudgeFailure,
   JudgeOptions,
   McpServer,
+  PairFactor,
   PairVote,
   PinnableKey,
   Profile,

@@ -293,23 +293,26 @@ group(
   only when nothing counted.
 - There is no `strategy` field. A profile's `limit.compare: false` strips variants and runs
   the baseline. `compare: false` on `evaluate` or `group` is an error.
-- `compare.questions` (always a list of strings and `{ question, model?, cut? }`) asks which
-  arm did better, pair by pair, after the run. `cut: 'within'` is arm vs arm on one harness;
-  `'across'` is harness vs harness on one arm. `compare.cuts: ['within']` sets that for every
-  question that does not name its own `cut`. The default is both. `--dry-run` shows the pair
-  count. Questions annotate the compare and never gate: pass, fail and the exit code stay the
-  checks'. Their model is the entry's `model`, else `analysis.model`, else the judge's when
-  it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2 at plan time
-  while `--dry-run` still lists them. A profile that leaves only the baseline drops them
-  (`questions off (profile …)`). Keep deterministic checks for pass or fail, and ask
-  questions only about quality between arms.
-- Questions are answered on the host once all of an eval's attempts end, from their diffs.
-  Attempts that failed their checks (a judge failure doesn't count) are left out of the pairs:
-  a question on a compare whose baseline is expected to fail gets no pairs, so ask it where
-  both arms can pass. Each pair goes to the model twice, order swapped, labelled A and B; the
-  record's `evals[].answers` has every vote and each side's `wins`/`n` over decided votes, per
-  cut (`within` a harness, arm vs arm; `across` harnesses, agent vs agent). A model error is
-  stored on the answer as `error` and warned about; it never changes an outcome. Test with
+- `compare.questions` (always a list of strings and `{ question, model?, across? }`)
+  asks which side did better, pair by pair, after the run. `across` is the matrix
+  factor you vary when pairing: `'environment'` holds the harness; `'harness'`
+  holds the environment. `compare.across: 'environment'` sets that for every
+  question that does not name its own `across`. Omit it, or pass both, to ask
+  both pair kinds. `--dry-run` shows the pair count. Questions annotate the
+  compare and never gate: pass, fail and the exit code stay the checks'. Their
+  model is the entry's `model`, else `analysis.model`, else the judge's when
+  it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
+  at plan time while `--dry-run` still lists them. A profile that leaves only
+  the baseline drops them (`questions off (profile …)`). Keep deterministic
+  checks for pass or fail, and ask questions only about quality between sides.
+- Questions are answered on the host once all of an eval's attempts end, from
+  their diffs. Attempts that failed their checks (a judge failure doesn't count)
+  are left out of the pairs: a question on a compare whose baseline is expected
+  to fail gets no pairs, so ask it where both sides can pass. Each pair goes to
+  the model twice, order swapped, labelled A and B; the record's
+  `evals[].answers` has every vote and each side's `wins`/`n` over decided
+  votes, per pair kind. A model error is stored on the answer as `error` and
+  warned about; it never changes an outcome. Test with
   `fakeAnalysis({ vote: 'A' | 'B' | 'tie' | (pair) => … | { error } })`.
 
 ## Sandboxes

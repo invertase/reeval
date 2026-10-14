@@ -1,5 +1,5 @@
 // The run's plan: what it will start, how long that should take, and whether it fits the budget.
-import { cutsOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
+import { acrossOf, type PairAttempt, pairsOf, plannedSides } from './compare/pairs.ts'
 import type { ExcludedEval, PlannedItem } from './engine/node.ts'
 import { UsageError } from './errors.ts'
 import { recentRecords, scratchDir } from './history/files.ts'
@@ -8,10 +8,10 @@ import type {
   Budget,
   Cell,
   CellGate,
-  CompareCut,
   Duration,
   EvalPlan,
   HarnessDescriptor,
+  PairFactor,
   PlannedEgress,
   PlannedQuestion,
   ResolvedProfile,
@@ -178,16 +178,16 @@ export type PlanQuestion = {
   question: string
   /** Its own model, else the plan's question model; null when there's no language model. */
   model: string | null
-  /** Which pairs it asks; unset when both cuts run (the default). */
-  cut?: CompareCut
+  /** The factor it varies; unset when both pair kinds run (the default). */
+  across?: PairFactor
   /** Pairs it will ask, assuming every attempt passes its checks. */
   pairs: number
 }
 
-/** `within · 2 pairs` when it asks one cut; `4 pairs` when it asks both. */
-export const questionPairLabel = (q: Pick<PlanQuestion, 'cut' | 'pairs'>): string => {
+/** `environment · 2 pairs` when it varies one factor; `4 pairs` when it asks both. */
+export const questionPairLabel = (q: Pick<PlanQuestion, 'across' | 'pairs'>): string => {
   const n = `${q.pairs} ${q.pairs === 1 ? 'pair' : 'pairs'}`
-  return q.cut ? `${q.cut} · ${n}` : n
+  return q.across ? `${q.across} · ${n}` : n
 }
 
 /** An eval's compare questions, each with the model that will answer it and its pair count. */
@@ -200,8 +200,8 @@ export const planQuestions = (
   (skip ? [] : (questions ?? [])).map((q) => ({
     question: q.question,
     model: q.model ?? questionModel,
-    ...(q.cut ? { cut: q.cut } : {}),
-    pairs: pairsOf(sides, cutsOf(q.cut)).length,
+    ...(q.across ? { across: q.across } : {}),
+    pairs: pairsOf(sides, acrossOf(q.across)).length,
   }))
 
 /** `  question 1/2  Which is cleaner? · after the run · 4 pairs · google/gemini-3.8-flash` */

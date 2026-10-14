@@ -101,10 +101,10 @@ export function renderPlan(plan: PlanDocument): string {
     })
     for (const q of e.questions ?? []) {
       const pairs = `${q.pairs} ${q.pairs === 1 ? 'pair' : 'pairs'}`
-      const cut = q.cut ? `${q.cut} · ` : ''
+      const across = q.across ? `${q.across} · ` : ''
       rows.push([
         '',
-        `question: ${q.question} · ${cut}${pairs} · ${q.model ?? 'no language model'}`,
+        `question: ${q.question} · ${across}${pairs} · ${q.model ?? 'no language model'}`,
       ])
     }
   }

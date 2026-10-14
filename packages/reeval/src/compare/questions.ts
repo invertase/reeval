@@ -15,13 +15,13 @@ import { redactSecrets } from '../redact.ts'
 import type {
   BlindPair,
   CompareAnswer,
-  CompareCut,
   EvalRecord,
   FakeAnalysisModel,
   FakeVote,
+  PairFactor,
   PairVote,
 } from '../types.ts'
-import { cutsOf, type Pair, type PairAttempt, pairsOf, ratesOf, slots, voteOf } from './pairs.ts'
+import { acrossOf, type Pair, type PairAttempt, pairsOf, ratesOf, slots, voteOf } from './pairs.ts'
 
 export const QUESTION_SYSTEM = `You compare two attempts by coding agents at the same task and answer one question about them.
 Each attempt is shown as the changes it made to the project, as a unified diff, labelled A or B. The labels are assigned at random: which attempt comes first says nothing about it.
@@ -200,7 +200,7 @@ const readStaged = async (stagingDir: string, key: string): Promise<EvalRecord |
 export type EvalQuestions = {
   row: PlanRow
   /** Each question with the model that answers it, resolved at plan time. */
-  questions: Array<{ question: string; model: QuestionModel; cut?: CompareCut }>
+  questions: Array<{ question: string; model: QuestionModel; across?: PairFactor }>
 }
 
 export type QuestionRunnerOptions = {
@@ -239,7 +239,7 @@ export function questionRunner(options: QuestionRunnerOptions) {
           const answer = await answerQuestion({
             question: q.question,
             model: q.model,
-            pairs: pairsOf(staged, cutsOf(q.cut)),
+            pairs: pairsOf(staged, acrossOf(q.across)),
             maxInputTokens: options.maxInputTokens,
             maxOutputTokens: options.maxOutputTokens,
             signal: controller.signal,

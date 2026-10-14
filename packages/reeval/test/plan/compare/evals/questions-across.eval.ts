@@ -2,36 +2,41 @@ import { evaluate } from 'reeval'
 import { base, skilled } from './envs.ts'
 
 evaluate(
-  'within only',
+  'environment only',
   {
     compare: {
       baseline: base,
       variants: [skilled],
-      questions: [{ question: 'Which handles state more cleanly?', cut: 'within' }],
+      questions: [{ question: 'Which handles state more cleanly?', across: 'environment' }],
     },
   },
   async () => {},
 )
 evaluate(
-  'across from compare.cuts',
+  'harness from compare.across',
   {
     compare: {
       baseline: base,
       variants: [skilled],
-      cuts: ['across'],
+      across: 'harness',
       questions: ['Which agent is clearer?'],
     },
   },
   async () => {},
 )
 evaluate(
-  'question cut overrides compare.cuts',
+  'question across overrides compare.across',
   {
     compare: {
       baseline: base,
       variants: [skilled],
-      cuts: ['across'],
-      questions: [{ question: 'Which follows the house style more closely?', cut: 'within' }],
+      across: ['harness'],
+      questions: [
+        {
+          question: 'Which follows the house style more closely?',
+          across: 'environment',
+        },
+      ],
     },
   },
   async () => {},
