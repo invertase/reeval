@@ -3,8 +3,8 @@
 // all when both pass, so effort is reported with its own test and verdict. No USD: prices
 // aren't reeval's to know.
 import type { AttemptRecord, EvalEntry } from '../history/types.ts'
-import { totalTokens } from '../usage.ts'
 import { mannWhitney, median, minimumP, quantile } from '../stats.ts'
+import { totalTokens } from '../usage.ts'
 
 /** Below this two-sided p, an effort difference is an effect. */
 export const EFFORT_ALPHA = 0.05

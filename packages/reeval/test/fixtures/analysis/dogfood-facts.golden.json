@@ -11,7 +11,10 @@
       "tools_p": null,
       "separated": null,
       "verdict": null,
-      "time_verdict": null
+      "time_verdict": null,
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -24,7 +27,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -37,7 +43,10 @@
       "tools_p": 0.6667,
       "separated": 0,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -50,7 +59,10 @@
       "tools_p": null,
       "separated": null,
       "verdict": null,
-      "time_verdict": null
+      "time_verdict": null,
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -63,7 +75,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -76,7 +91,10 @@
       "tools_p": 0.6667,
       "separated": 0,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -89,7 +107,10 @@
       "tools_p": null,
       "separated": null,
       "verdict": null,
-      "time_verdict": null
+      "time_verdict": null,
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -102,7 +123,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104130Z_60f3dc9_cursor-agent_92gs",
@@ -115,7 +139,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -128,7 +155,10 @@
       "tools_p": null,
       "separated": null,
       "verdict": null,
-      "time_verdict": null
+      "time_verdict": null,
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -141,7 +171,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -154,7 +187,10 @@
       "tools_p": 1,
       "separated": 0,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -167,7 +203,10 @@
       "tools_p": null,
       "separated": null,
       "verdict": null,
-      "time_verdict": null
+      "time_verdict": null,
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -180,7 +219,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -193,7 +235,10 @@
       "tools_p": 1,
       "separated": 0,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -206,7 +251,10 @@
       "tools_p": null,
       "separated": null,
       "verdict": null,
-      "time_verdict": null
+      "time_verdict": null,
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -219,7 +267,10 @@
       "tools_p": 0.3333,
       "separated": 1,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     },
     {
       "run_id": "20260926T104633Z_041aef3_ci_jzvq",
@@ -232,7 +283,10 @@
       "tools_p": 1,
       "separated": 0,
       "verdict": "insufficient",
-      "time_verdict": "insufficient"
+      "time_verdict": "insufficient",
+      "tokens_median": null,
+      "tokens_verdict": null,
+      "tokens_note": null
     }
   ],
   "factor_effects": [

@@ -1333,6 +1333,7 @@ export const inventory: InventoryFeature[] = [
       analysis('tokens join the rank test when both sides reported usage'),
       analysis('a side with no usage omits the token metric, not insufficient'),
       analysis('tokens still verdict among cells that reported usage when another cell did not'),
+      analysis('attempts without usage drop out of the token sample only'),
       analysis('reeval run, summary.md and reeval compare show each variant cell'),
       analysis('reeval query effort verdicts tokens when usage is present'),
       analysis('the prompt and rules say missing usage omits tokens'),

@@ -333,11 +333,11 @@ evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
 })
 
 describe('effort next to lift', () => {
-  const sample = (tools: number, tokens?: number) => ({
+  const sample = (tools: number, extra?: { tokens?: number; agentMs?: number }) => ({
     tools,
-    agentMs: 20_000,
+    agentMs: extra?.agentMs ?? 20_000,
     fileEdits: 1,
-    ...(tokens !== undefined ? { tokens } : {}),
+    ...(extra?.tokens !== undefined ? { tokens: extra.tokens } : {}),
   })
 
   test('the rank test is exact: 4 against 4, fully separated, is 2/70', () => {
@@ -346,7 +346,7 @@ describe('effort next to lift', () => {
     assert.equal(minimumP(2, 2), 1 / 3)
     const c = contrastEffort(
       [4, 5, 5, 6].map((tools) => sample(tools)),
-      [30, 40, 50, 60].map((tools) => sample(tools)),
+      [30, 40, 50, 60].map((tools) => sample(tools, { agentMs: 45_000 })),
     )
     assert.ok(c)
     assert.equal(c.tokensVerdict, null)
@@ -358,22 +358,22 @@ describe('effort next to lift', () => {
 
   test('tokens join the rank test when both sides reported usage', () => {
     const c = contrastEffort(
-      [4, 5, 5, 6].map((tools) => sample(tools, 100 + tools)),
-      [30, 40, 50, 60].map((tools) => sample(tools, 1000 + tools)),
+      [4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })),
+      [30, 40, 50, 60].map((tools) => sample(tools, { tokens: 1000, agentMs: 45_000 })),
     )
     assert.ok(c)
     assert.equal(c.tokensVerdict, 'fewer')
     assert.equal(c.tokensNote, undefined)
     assert.equal(
       effortLabel(c),
-      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 105 vs 1050 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
+      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 100 vs 1000 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
     )
   })
 
   test('a side with no usage omits the token metric, not insufficient', () => {
     const c = contrastEffort(
-      [4, 5, 5, 6].map((tools) => sample(tools, 100)),
-      [30, 40, 50, 60].map((tools) => sample(tools)),
+      [4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })),
+      [30, 40, 50, 60].map((tools) => sample(tools, { agentMs: 45_000 })),
     )
     assert.ok(c)
     assert.equal(c.verdict, 'fewer')
@@ -387,8 +387,8 @@ describe('effort next to lift', () => {
 
   test('tokens still verdict among cells that reported usage when another cell did not', () => {
     const cursor = contrastEffort(
-      [4, 5, 5, 6].map((tools) => sample(tools, 100)),
-      [30, 40, 50, 60].map((tools) => sample(tools, 1000)),
+      [4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })),
+      [30, 40, 50, 60].map((tools) => sample(tools, { tokens: 1000 })),
     )
     const goose = contrastEffort(
       [4, 5, 5, 6].map((tools) => sample(tools)),
@@ -398,6 +398,22 @@ describe('effort next to lift', () => {
     assert.equal(goose?.tokensVerdict, null)
     assert.equal(goose?.verdict, 'fewer')
     assert.equal(goose?.tokensNote, undefined)
+  })
+
+  test('attempts without usage drop out of the token sample only', () => {
+    const c = contrastEffort(
+      [...[4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })), sample(7)],
+      [
+        ...[30, 40, 50, 60].map((tools) => sample(tools, { tokens: 1000, agentMs: 45_000 })),
+        sample(70, { agentMs: 45_000 }),
+      ],
+    )
+    assert.ok(c)
+    assert.equal(c.verdict, 'fewer')
+    assert.equal(c.tokensVerdict, 'fewer')
+    assert.equal(c.tokensNote, 'some cells did not report usage')
+    assert.match(effortLabel(c), /tokens 100 vs 1000/)
+    assert.doesNotMatch(effortLabel(c), /insufficient/)
   })
 
   test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
