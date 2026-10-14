@@ -1570,7 +1570,7 @@ export const features: Feature[] = [
         message: /c\.capture\(\) timed out waiting for networkAlmostIdle/,
       },
     },
-    canary: /timed out waiting for networkAlmostIdle[\s\S]*to be 'still loading'/,
+    canary: /expected 'c\.capture\(\) timed out waiting for net…' to be 'still loading'/,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },
