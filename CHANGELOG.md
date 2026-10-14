@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.8.0](https://github.com/invertase/reeval/compare/v0.7.0...v0.8.0) (2026-10-14)
+
+
+### Features
+
+* **analyze:** add --vs none for a single-run write-up ([#287](https://github.com/invertase/reeval/issues/287)) ([4830182](https://github.com/invertase/reeval/commit/4830182eace0a938964ccd84439b3fc464333945))
+* **analyze:** include compare-question answers in the digest ([#290](https://github.com/invertase/reeval/issues/290)) ([674612c](https://github.com/invertase/reeval/commit/674612cf09c162f99118ba3584c370a280103bc5))
+* **capture:** run a vision journey before the saved shot ([#296](https://github.com/invertase/reeval/issues/296)) ([0a78555](https://github.com/invertase/reeval/commit/0a78555b8b52861942ec20989bfcdfb917354a67))
+* **capture:** wait for load or networkAlmostIdle ([5612081](https://github.com/invertase/reeval/commit/5612081a8d2bbf44cc1a0e05bff5e1e5c0286978))
+* **compare:** record a reason on each paired-question vote ([#291](https://github.com/invertase/reeval/issues/291)) ([230b3be](https://github.com/invertase/reeval/commit/230b3bec57ce76e6e1373ad95f1a517503b90bdb))
+* **compare:** vary a named factor when pairing questions ([#289](https://github.com/invertase/reeval/issues/289)) ([2091421](https://github.com/invertase/reeval/commit/2091421da0b9a29d25a97e8e359d4e5b6695f582))
+* **effort:** compare tokens with the same rank test ([#292](https://github.com/invertase/reeval/issues/292)) ([e161d95](https://github.com/invertase/reeval/commit/e161d95573dc5fbbe19e240ea55e0bff6d170b10))
+* **harness:** add optional effort on every factory ([#297](https://github.com/invertase/reeval/issues/297)) ([418ec93](https://github.com/invertase/reeval/commit/418ec931fd3a06c41cb51a46de8958cd2bb77979))
+* **judge:** send captures as decide file parts ([#298](https://github.com/invertase/reeval/issues/298)) ([8b7a202](https://github.com/invertase/reeval/commit/8b7a202ed41b63ab346e732ba87f0860b819a3e7))
+
+
+### Bug Fixes
+
+* **analyze:** drop anomalies that quote a wrong judge score ([#285](https://github.com/invertase/reeval/issues/285)) ([8351bab](https://github.com/invertase/reeval/commit/8351babbee2d5cbec0cdea72ffd844273766775d))
+* **analyze:** drop mixed pass-rate when the eval changed ([#284](https://github.com/invertase/reeval/issues/284)) ([99117b1](https://github.com/invertase/reeval/commit/99117b167e01c9b6225247f95f8ae64201f5c1cf))
+* **analyze:** drop rejected verifies instead of rewriting --tag ([bdfa03e](https://github.com/invertase/reeval/commit/bdfa03e4631e6e5f1c63cf63980f465ed56a72ec))
+* **sandbox:** keep captures when chrome profile cleanup races ([#282](https://github.com/invertase/reeval/issues/282)) ([ff2e909](https://github.com/invertase/reeval/commit/ff2e909a759908cb05ada8c28a646a18aabe30ae))
+* **ui:** uniquify colliding per-check judge labels ([#283](https://github.com/invertase/reeval/issues/283)) ([47ef183](https://github.com/invertase/reeval/commit/47ef1837de6b17d896e2d535034edd478ddcf30a))
+
 ## [0.7.0](https://github.com/invertase/reeval/compare/v0.6.3...v0.7.0) (2026-10-13)
 
 
