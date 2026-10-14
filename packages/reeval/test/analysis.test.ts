@@ -128,7 +128,7 @@ function golden(name: string, value: unknown) {
 
 const FACT_QUERIES = {
   effort:
-    'SELECT run_id, eval_key, cell_key, n, tools_median, agent_s_median, tools_ratio, tools_p, separated, verdict, time_verdict FROM effort ORDER BY run_id, eval_key, cell_key',
+    'SELECT run_id, eval_key, cell_key, n, tools_median, agent_s_median, tools_ratio, tools_p, separated, verdict, time_verdict, tokens_median, tokens_verdict, tokens_note FROM effort ORDER BY run_id, eval_key, cell_key',
   factor_effects:
     'SELECT factor, level, baseline, context, tier, run_id, eval_key, strata, runs, variant_pass, variant_counted, control_pass, control_counted, points, lo, hi, pass_verdict, tools_ratios, tools_p, consistent, separated, effort_verdict FROM factor_effects ORDER BY tier, factor, level, context, eval_key, run_id',
   flaky_cells:
@@ -333,19 +333,87 @@ evaluate('flips', { runs: 6, gate: { passRate: 0.5 } }, async (c) => {
 })
 
 describe('effort next to lift', () => {
+  const sample = (tools: number, extra?: { tokens?: number; agentMs?: number }) => ({
+    tools,
+    agentMs: extra?.agentMs ?? 20_000,
+    fileEdits: 1,
+    ...(extra?.tokens !== undefined ? { tokens: extra.tokens } : {}),
+  })
+
   test('the rank test is exact: 4 against 4, fully separated, is 2/70', () => {
     assert.equal(mannWhitney([4, 5, 5, 6], [30, 40, 50, 60]), 2 / 70)
     assert.equal(mannWhitney([1, 2], [3, 4]), 1 / 3)
     assert.equal(minimumP(2, 2), 1 / 3)
     const c = contrastEffort(
-      [4, 5, 5, 6].map((tools) => ({ tools, agentMs: 20_000, fileEdits: 1 })),
-      [30, 40, 50, 60].map((tools) => ({ tools, agentMs: 45_000, fileEdits: 1 })),
+      [4, 5, 5, 6].map((tools) => sample(tools)),
+      [30, 40, 50, 60].map((tools) => sample(tools, { agentMs: 45_000 })),
     )
     assert.ok(c)
+    assert.equal(c.tokensVerdict, null)
     assert.equal(
       effortLabel(c),
       'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44): fewer tool calls (p = 0.029)',
     )
+  })
+
+  test('tokens join the rank test when both sides reported usage', () => {
+    const c = contrastEffort(
+      [4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })),
+      [30, 40, 50, 60].map((tools) => sample(tools, { tokens: 1000, agentMs: 45_000 })),
+    )
+    assert.ok(c)
+    assert.equal(c.tokensVerdict, 'fewer')
+    assert.equal(c.tokensNote, undefined)
+    assert.equal(
+      effortLabel(c),
+      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44), tokens 100 vs 1000 (×0.10): fewer tool calls (p = 0.029); fewer tokens (p = 0.029)',
+    )
+  })
+
+  test('a side with no usage omits the token metric, not insufficient', () => {
+    const c = contrastEffort(
+      [4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })),
+      [30, 40, 50, 60].map((tools) => sample(tools, { agentMs: 45_000 })),
+    )
+    assert.ok(c)
+    assert.equal(c.verdict, 'fewer')
+    assert.equal(c.tokensVerdict, null)
+    assert.equal(c.tokensNote, 'some cells did not report usage')
+    assert.equal(
+      effortLabel(c),
+      'tools 5 vs 45 (×0.11), agent 20s vs 45s (×0.44): fewer tool calls (p = 0.029)',
+    )
+  })
+
+  test('tokens still verdict among cells that reported usage when another cell did not', () => {
+    const cursor = contrastEffort(
+      [4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })),
+      [30, 40, 50, 60].map((tools) => sample(tools, { tokens: 1000 })),
+    )
+    const goose = contrastEffort(
+      [4, 5, 5, 6].map((tools) => sample(tools)),
+      [30, 40, 50, 60].map((tools) => sample(tools)),
+    )
+    assert.equal(cursor?.tokensVerdict, 'fewer')
+    assert.equal(goose?.tokensVerdict, null)
+    assert.equal(goose?.verdict, 'fewer')
+    assert.equal(goose?.tokensNote, undefined)
+  })
+
+  test('attempts without usage drop out of the token sample only', () => {
+    const c = contrastEffort(
+      [...[4, 5, 5, 6].map((tools) => sample(tools, { tokens: 100 })), sample(7)],
+      [
+        ...[30, 40, 50, 60].map((tools) => sample(tools, { tokens: 1000, agentMs: 45_000 })),
+        sample(70, { agentMs: 45_000 }),
+      ],
+    )
+    assert.ok(c)
+    assert.equal(c.verdict, 'fewer')
+    assert.equal(c.tokensVerdict, 'fewer')
+    assert.equal(c.tokensNote, 'some cells did not report usage')
+    assert.match(effortLabel(c), /tokens 100 vs 1000/)
+    assert.doesNotMatch(effortLabel(c), /insufficient/)
   })
 
   test('reeval run, summary.md and reeval compare show each variant cell\u2019s effort beside its lift', async () => {
@@ -386,6 +454,59 @@ evaluate('greets', { compare: { baseline: plain, variants: [skilled] }, runs: 2 
     )
     const skilled = json.rows[0].perCell.find((c: { key: string }) => c.key === 'fake/skilled/fake')
     assert.deepEqual([skilled.head.effort.n, skilled.head.lift.points], [2, 1])
+  })
+
+  test('reeval query effort verdicts tokens when usage is present and omits them when it is not', async () => {
+    const p = await compareProject('effort-tokens-query', 4)
+    assert.equal((await runCli(p.dir)).code, 0)
+    const none = await query(
+      p.dir,
+      `SELECT tokens_median, tokens_verdict, tokens_note FROM effort WHERE role = 'variant'`,
+    )
+    assert.ok(none.length)
+    assert.ok(
+      none.every((r) => r.tokens_verdict === null && r.tokens_median === null),
+      'fake harness reports no usage: omit tokens, do not say insufficient',
+    )
+
+    const history = join(p.dir, '.reeval/runs')
+    const names = readdirSync(history).filter((n) => n.endsWith('.json'))
+    assert.equal(names.length, 1)
+    const path = join(history, names[0] as string)
+    const record = JSON.parse(readFileSync(path, 'utf8')) as {
+      evals: Array<{ attempts: Array<{ cell: string; usage: unknown }> }>
+    }
+    const usage = (n: number) => ({
+      input: n,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      reasoning: null,
+    })
+    for (const e of record.evals) {
+      for (const a of e.attempts) {
+        a.usage = a.cell.includes('/skilled/') ? usage(100) : usage(1000)
+      }
+    }
+    writeFileSync(path, JSON.stringify(record))
+    const rebuilt = await runCli(p.dir, [
+      'query',
+      `SELECT tokens_median, control_tokens_median, tokens_ratio, tokens_verdict, tokens_note FROM effort WHERE role = 'variant'`,
+      '--json',
+      '--rebuild',
+    ])
+    assert.equal(rebuilt.code, 0, rebuilt.stderr)
+    const withUsage = JSON.parse(rebuilt.stdout) as Row[]
+    assert.deepEqual(
+      withUsage.map((r) => [
+        r.tokens_median,
+        r.control_tokens_median,
+        r.tokens_ratio,
+        r.tokens_verdict,
+        r.tokens_note,
+      ]),
+      [[100, 1000, 0.1, 'fewer', null]],
+    )
   })
 })
 
@@ -569,6 +690,13 @@ describe('reeval analyze', () => {
   test('the prompt and rules say insufficient lift is not measured', () => {
     assert.match(SYSTEM_PROMPT, /insufficient is not measured: never put it on a results line/)
     assert.match(RULES[0] ?? '', new RegExp(`fewer than ${LIFT_MIN_COUNTED} counted attempts`))
+  })
+
+  test('the prompt and rules say missing usage omits tokens, not insufficient', () => {
+    assert.match(SYSTEM_PROMPT, /a missing token metric is omitted, not insufficient/)
+    assert.match(SYSTEM_PROMPT, /do not treat unreportedUsage as a result/)
+    assert.match(RULES[2] ?? '', /never because a harness dropped usage/)
+    assert.match(RULES[2] ?? '', /omitted \(no line, not insufficient\)/)
   })
 
   test('the prompt and rules say a changed eval is not an effect', () => {

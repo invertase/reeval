@@ -1,20 +1,39 @@
-// Effort next to lift: tool calls and agent time per cell, and a variant's against its control.
-// Pass rate can't tell a skill that makes the agent 4× cheaper from no skill at all when both
-// pass, so effort is reported with its own test and verdict. No USD: prices aren't reeval's to know.
+// Effort next to lift: tool calls, agent time, and tokens per cell, and a variant's against
+// its control. Pass rate can't tell a skill that makes the agent 4× cheaper from no skill at
+// all when both pass, so effort is reported with its own test and verdict. No USD: prices
+// aren't reeval's to know.
 import type { AttemptRecord, EvalEntry } from '../history/types.ts'
 import { mannWhitney, median, minimumP, quantile } from '../stats.ts'
+import { totalTokens } from '../usage.ts'
 
 /** Below this two-sided p, an effort difference is an effect. */
 export const EFFORT_ALPHA = 0.05
 
-export type EffortSample = { tools: number; agentMs: number; fileEdits: number }
+/** Some counted attempts reported no usage. Not a verdict; never printed as one. */
+export const TOKENS_UNREPORTED = 'some cells did not report usage'
+
+export type EffortSample = {
+  tools: number
+  agentMs: number
+  fileEdits: number
+  /** Total tokens when this attempt reported usage; omitted when the harness dropped it. */
+  tokens?: number
+}
 export type Spread = { median: number; q1: number; q3: number }
 /** One cell's effort over its counted attempts (passes and fails; infra errors and skips aren't). */
-export type CellEffort = { n: number; tools: Spread; agentMs: Spread; fileEdits: number }
+export type CellEffort = {
+  n: number
+  tools: Spread
+  agentMs: Spread
+  fileEdits: number
+  /** Over the counted attempts that reported usage; omitted when none did. */
+  tokens?: Spread
+}
 
 /**
  * `fewer` / `more`: the exact rank test's p is below `EFFORT_ALPHA`. `noise`: it isn't.
- * `insufficient`: too few attempts for the test to ever reach it (2 against 2 can't).
+ * `insufficient`: too few attempts for the test to ever reach it (2 against 2 can't). Never
+ * means a harness dropped usage.
  */
 export type EffortVerdict = 'fewer' | 'more' | 'noise' | 'insufficient'
 
@@ -32,12 +51,28 @@ export type EffortContrast = {
   /** On tool calls, the steadier measure; `timeVerdict` on agent time. */
   verdict: EffortVerdict
   timeVerdict: EffortVerdict
+  /**
+   * Token medians' ratio when both sides have at least one usage sample; null when the
+   * control's is 0 or the token test was omitted.
+   */
+  tokensRatio: number | null
+  tokensP: number | null
+  /**
+   * Rank-test verdict on the attempts that reported usage. Null when either side has no
+   * token sample — omitted, not `insufficient`.
+   */
+  tokensVerdict: EffortVerdict | null
+  /** Set when some counted attempts on either side reported no usage. Not a verdict. */
+  tokensNote?: typeof TOKENS_UNREPORTED
 }
 
-export const effortSample = (a: Pick<AttemptRecord, 'activity' | 'timings'>): EffortSample => ({
+export const effortSample = (
+  a: Pick<AttemptRecord, 'activity' | 'timings' | 'usage'>,
+): EffortSample => ({
   tools: a.activity.tools,
   agentMs: a.timings.agentMs,
   fileEdits: a.activity.fileEdits,
+  ...(a.usage ? { tokens: totalTokens(a.usage) } : {}),
 })
 
 const counted = (a: Pick<AttemptRecord, 'outcome'>) => a.outcome === 'pass' || a.outcome === 'fail'
@@ -48,13 +83,19 @@ const spread = (values: number[]): Spread => ({
   q3: quantile(values, 0.75) ?? 0,
 })
 
+/** Token totals from the attempts that reported usage; empty when none did. */
+export const tokenValues = (samples: EffortSample[]): number[] =>
+  samples.flatMap((s) => (s.tokens === undefined ? [] : [s.tokens]))
+
 export function effortOf(samples: EffortSample[]): CellEffort | null {
   if (samples.length === 0) return null
+  const tokens = tokenValues(samples)
   return {
     n: samples.length,
     tools: spread(samples.map((s) => s.tools)),
     agentMs: spread(samples.map((s) => s.agentMs)),
     fileEdits: median(samples.map((s) => s.fileEdits)) ?? 0,
+    ...(tokens.length ? { tokens: spread(tokens) } : {}),
   }
 }
 
@@ -86,6 +127,12 @@ export function contrastEffort(
     variant.map((s) => s.agentMs),
     control.map((s) => s.agentMs),
   )
+  const vTok = tokenValues(variant)
+  const cTok = tokenValues(control)
+  // Both sides need at least one usage sample. Missing usage is not `insufficient`.
+  const tokens = vTok.length && cTok.length ? effortVerdict(vTok, cTok) : null
+  const reported = vTok.length + cTok.length
+  const unreported = reported > 0 && reported < variant.length + control.length
   const vt = variant.map((s) => s.tools)
   const ct = control.map((s) => s.tools)
   return {
@@ -99,6 +146,10 @@ export function contrastEffort(
     separated: Math.max(...vt) < Math.min(...ct) || Math.min(...vt) > Math.max(...ct),
     verdict: tools.verdict,
     timeVerdict: time.verdict,
+    tokensRatio: tokens && v.tokens && c.tokens ? ratio(v.tokens.median, c.tokens.median) : null,
+    tokensP: tokens?.p ?? null,
+    tokensVerdict: tokens?.verdict ?? null,
+    ...(unreported ? { tokensNote: TOKENS_UNREPORTED } : {}),
   }
 }
 
@@ -144,30 +195,54 @@ export const VERDICT_TEXT: Record<EffortVerdict, (what: string) => string> = {
   insufficient: () => 'too few attempts to test',
 }
 
+const toolsVerdictText = (c: EffortContrast): string =>
+  c.verdict === 'fewer' || c.verdict === 'more'
+    ? `${VERDICT_TEXT[c.verdict]('tool calls')}${formatP(c.toolsP)}`
+    : VERDICT_TEXT[c.verdict]('')
+
+/** Token verdict after the tools one; empty when omitted or already covered as insufficient. */
+const tokensVerdictText = (c: EffortContrast): string => {
+  if (c.tokensVerdict === null) return ''
+  if (c.verdict === 'insufficient' && c.tokensVerdict === 'insufficient') return ''
+  if (c.tokensVerdict === 'fewer' || c.tokensVerdict === 'more') {
+    return `; ${VERDICT_TEXT[c.tokensVerdict]('tokens')}${formatP(c.tokensP)}`
+  }
+  if (c.tokensVerdict === 'noise') return '; tokens within noise'
+  return `; ${VERDICT_TEXT[c.tokensVerdict]('')}`
+}
+
 /**
  * `tools 5 vs 43 (×0.11), agent 21s vs 46s (×0.47): too few attempts to test` for a variant
- * against its control; with enough attempts, `fewer tool calls (p = 0.029)`.
+ * against its control; with enough attempts, `fewer tool calls (p = 0.029)`. Tokens fold in
+ * when both sides have usage samples; they are omitted (not `insufficient`) when either does not.
  */
 export function effortLabel(c: EffortContrast): string {
   const tools = `tools ${formatCount(c.variant.tools.median)} vs ${formatCount(c.control.tools.median)} (${formatRatio(c.toolsRatio)})`
   const time = `agent ${formatSeconds(c.variant.agentMs.median)} vs ${formatSeconds(c.control.agentMs.median)} (${formatRatio(c.agentMsRatio)})`
-  const verdict =
-    c.verdict === 'fewer' || c.verdict === 'more'
-      ? `${VERDICT_TEXT[c.verdict]('tool calls')}${formatP(c.toolsP)}`
-      : VERDICT_TEXT[c.verdict]('')
-  return `${tools}, ${time}: ${verdict}`
+  const parts = [tools, time]
+  if (c.tokensVerdict !== null && c.variant.tokens && c.control.tokens) {
+    parts.push(
+      `tokens ${formatCount(c.variant.tokens.median)} vs ${formatCount(c.control.tokens.median)} (${formatRatio(c.tokensRatio)})`,
+    )
+  }
+  return `${parts.join(', ')}: ${toolsVerdictText(c)}${tokensVerdictText(c)}`
 }
 
-/** One cell's effort on its own: `tools 43 · agent 46s`. */
-export const effortSummary = (e: Pick<CellEffort, 'tools' | 'agentMs'>) =>
-  `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)}`
+/** One cell's effort on its own: `tools 43 · agent 46s`, plus tokens when any attempt reported them. */
+export const effortSummary = (e: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>) =>
+  e.tokens
+    ? `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)} · tokens ${formatCount(e.tokens.median)}`
+    : `tools ${formatCount(e.tools.median)} · agent ${formatSeconds(e.agentMs.median)}`
 
 /** The same cell between two runs: `tools 44 → 10 (×0.23) · agent 45s → 21s (×0.47)`. */
 export function effortChangeLabel(
-  base: Pick<CellEffort, 'tools' | 'agentMs'>,
-  head: Pick<CellEffort, 'tools' | 'agentMs'>,
+  base: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>,
+  head: Pick<CellEffort, 'tools' | 'agentMs' | 'tokens'>,
 ): string {
   const t = ratio(head.tools.median, base.tools.median)
   const a = ratio(head.agentMs.median, base.agentMs.median)
-  return `tools ${formatCount(base.tools.median)} → ${formatCount(head.tools.median)} (${formatRatio(t)}) · agent ${formatSeconds(base.agentMs.median)} → ${formatSeconds(head.agentMs.median)} (${formatRatio(a)})`
+  const core = `tools ${formatCount(base.tools.median)} → ${formatCount(head.tools.median)} (${formatRatio(t)}) · agent ${formatSeconds(base.agentMs.median)} → ${formatSeconds(head.agentMs.median)} (${formatRatio(a)})`
+  if (!base.tokens || !head.tokens) return core
+  const tok = ratio(head.tokens.median, base.tokens.median)
+  return `${core} · tokens ${formatCount(base.tokens.median)} → ${formatCount(head.tokens.median)} (${formatRatio(tok)})`
 }

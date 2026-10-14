@@ -144,7 +144,7 @@
 | `reeval mcp`: run history as read-only MCP tools and resources, over stdio or stateless HTTP | ✓ 6 | — | — | — | — |
 | `reeval query` facts views: `effort`, `factor_effects` (controlled, pooled, observed, not measured), `skill_reads` and `tool_calls`, `attempt_context` | ✓ 3 | — | — | — | — |
 | `flaky_cells` pooled over comparable runs with a minimum n, and `drift` with changed paths and a `noise` flag | ✓ 5 | — | — | — | — |
-| Effort (tool calls, agent time) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio | ✓ 3 | — | — | — | — |
+| Effort (tool calls, agent time, and tokens when both sides reported usage) next to lift in the `reeval run` summary, `summary.md`, `reeval compare` and the studio | ✓ 9 | — | — | — | — |
 | Standing per-key judge pass rate on the run summary and studio eval page, with lift per key when both sides have enough counted attempts | ✓ 4 | — | — | — | — |
 | Collapsed attempt lines show each judge as fail 0.78/0.80 (or the minimum plus a count) | ✓ 2 | — | — | — | — |
 | Token usage on each attempt line and a per-cell sum of counted attempts, in the summary and studio | ✓ 3 | — | — | — | — |

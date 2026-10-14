@@ -47,9 +47,9 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | Name | Columns |
 |---|---|
 | `drift` | `run_id`, `prev_run_id`, `eval_key`, `cell_key`, `changed`, `changed_paths`, `noise`, `real_changed` |
-| `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tools_p`, `agent_s_p`, `separated`, `verdict`, `time_verdict` |
+| `effort` | `run_id`, `eval_key`, `cell_key`, `role`, `variant`, `harness`, `environment`, `n`, `tools_median`, `tools_q1`, `tools_q3`, `agent_s_median`, `agent_s_q1`, `agent_s_q3`, `file_edits_median`, `tokens_median`, `tokens_q1`, `tokens_q3`, `control_key`, `control_n`, `control_tools_median`, `control_agent_s_median`, `control_tokens_median`, `tools_ratio`, `agent_s_ratio`, `agent_s_delta`, `tokens_ratio`, `tools_p`, `agent_s_p`, `tokens_p`, `separated`, `verdict`, `time_verdict`, `tokens_verdict`, `tokens_note` |
 | `eval_trend` | `eval_key`, `run_id`, `started_at`, `branch`, `pr_number`, `recorded`, `outcome`, `pass_rate`, `fingerprint` |
-| `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `note` |
+| `factor_effects` | `factor`, `level`, `baseline`, `context`, `tier`, `run_id`, `eval_key`, `strata`, `runs`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `pass_verdict`, `tools_ratio`, `tools_ratios`, `agent_s_ratio`, `tools_p`, `consistent`, `separated`, `effort_verdict`, `tokens_ratio`, `tokens_p`, `tokens_verdict`, `tokens_note`, `note` |
 | `failing_attempts` | `run_id`, `started_at`, `eval_key`, `attempt_key`, `cell_key`, `harness`, `model`, `environment`, `skill`, `error_kind`, `error_message`, `duration_ms` |
 | `flaky_cells` | `eval_key`, `cell_key`, `fingerprint`, `runs`, `flaky_runs`, `first_seen`, `last_seen`, `pass`, `counted`, `infra_error`, `rate`, `lo`, `hi`, `verdict`, `cause`, `min_attempts` |
 | `lift` | `run_id`, `started_at`, `branch`, `eval_key`, `harness`, `model`, `variant`, `control`, `variant_pass`, `variant_counted`, `control_pass`, `control_counted`, `points`, `lo`, `hi`, `within_noise`, `min_lift`, `outcome`, `fingerprint` |
@@ -61,7 +61,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 | View | One row per |
 |---|---|
 | `lift` | Variant cell per run: its control, both sides' counts, points, the 95% interval (`lo`, `hi`), `within_noise`, `min_lift` |
-| `effort` | Cell per run: attempts, median and quartiles of tool calls and agent seconds; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and a verdict |
+| `effort` | Cell per run: attempts, median and quartiles of tool calls, agent seconds and tokens; for a variant, its control's medians, the ratios, the exact Mann–Whitney p-values and verdicts. `tokens_verdict` is null when either side has no usage sample |
 | `factor_effects` | One factor's contrast (`environment`, `harness`, `model`) by evidence tier (`controlled`, `pooled`, `observed`, `not_measured`), with pass-rate and effort verdicts |
 | `skill_reads` | Attempt and skill its environment placed: the transcript line of its first read (a path under `skills/<name>/`, or a `skill` / `load_skill` call), and how many |
 | `flaky_cells` | Cell with mixed outcomes pooled over comparable runs: counts, a Wilson interval, a verdict (`flaky` from 6 counted attempts) and a likely cause (`infra`, `judge`, `agent`) |

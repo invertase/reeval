@@ -76,7 +76,7 @@ export type DigestInput = {
 export const RULES = [
   `Pass-rate lift is insufficient (not measured, never a results line) when either side has fewer than ${LIFT_MIN_COUNTED} counted attempts; otherwise it is an effect only when its 95% interval (Newcombe) excludes 0, and within noise when the interval spans 0, whatever the point estimate.`,
   'When sources or the eval fingerprint differ across the compared runs, the pass-rate difference is not comparable: the eval changed. Never call it an effect. Do not put those mixed counts on a results line. The first line of the analysis says the eval changed. A lift is an effect only when sources match; the two-attempt floor still applies then.',
-  'Effort (tool calls, agent time) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot); pooled across evals it is an effect only when at least 2/3 of strata agree.',
+  'Effort (tool calls, agent time, and tokens when both sides have usage samples) is compared with an exact Mann-Whitney test: "fewer"/"more" at p < 0.05; "insufficient" when the attempt counts can never reach it (2 vs 2 cannot) — never because a harness dropped usage. Attempts without usage are left out of the token sample only. If either side then has no token sample, the token metric is omitted (no line, not insufficient). A Goose cell does not blank tokens on Cursor cells in the same study. Pooled across evals, tokens are an effect only when at least 2/3 of the strata that reported usage agree.',
   'Each factor claim has a tier: controlled (two cells in one run that differ in one factor), pooled (the same contrast over comparable runs, and across evals), observed (a change between runs, which is weaker; "confounded" when several parts changed), not_measured (one level only).',
   `A cell with mixed outcomes is flaky only with at least ${FLAKY_MIN_ATTEMPTS} counted attempts over comparable runs; below that it is "insufficient", not flaky.`,
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
@@ -265,6 +265,7 @@ export async function buildDigestKeepingDropped(
         n: row.n,
         medianToolCalls: row.tools_median,
         medianAgentS: row.agent_s_median,
+        ...(row.tokens_median != null ? { medianTokens: row.tokens_median } : {}),
         ...(row.control_key
           ? {
               vsControl: {
@@ -272,6 +273,14 @@ export async function buildDigestKeepingDropped(
                 agentS: `${row.agent_s_median} vs ${row.control_agent_s_median}`,
                 p: row.tools_p,
                 verdict: row.verdict,
+                ...(row.tokens_verdict
+                  ? {
+                      tokens: `${row.tokens_median} vs ${row.control_tokens_median} (×${Number(row.tokens_ratio).toFixed(2)})`,
+                      tokensP: row.tokens_p,
+                      tokensVerdict: row.tokens_verdict,
+                    }
+                  : {}),
+                ...(row.tokens_note ? { unreportedUsage: row.tokens_note } : {}),
               },
             }
           : {}),
@@ -344,6 +353,14 @@ export async function buildDigestKeepingDropped(
       toolCalls: f.tools_ratios,
       toolsP: f.tools_p,
       effortVerdict: f.effort_verdict,
+      ...(f.tokens_verdict
+        ? {
+            tokensRatio: f.tokens_ratio,
+            tokensP: f.tokens_p,
+            tokensVerdict: f.tokens_verdict,
+          }
+        : {}),
+      ...(f.tokens_note ? { unreportedUsage: f.tokens_note } : {}),
       ...(f.strata && (f.strata as number) > 1
         ? {
             consistentStrata: `${f.consistent}/${f.strata}`,

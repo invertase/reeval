@@ -460,7 +460,7 @@ export type HistoryCell = Pick<
   | 'outcome'
 > & {
   lift?: { vs: string; points: number; lo: number; hi: number; withinNoise: boolean }
-  /** Median tool calls and agent time over the counted attempts; null when none counted. */
+  /** Median tool calls, agent time and tokens over the counted attempts; null when none counted. */
   effort: CellEffort | null
 }
 

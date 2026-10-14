@@ -62,7 +62,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 evals/skill.eval.ts › house greeting › greets in the house…  antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  2  3.5           24.5                  0.1429       0.3333   insufficient
 ```
 
-`effort` is the summary's effort line as data: median tool calls and agent time for each cell, and for a variant, its control's. `tools_p` is an exact rank test. With two attempts a side it can never drop below 0.05, so every row is `insufficient`, however large the gap.
+`effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap. `tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. A Goose cell does not blank `tokens_verdict` on Cursor cells in the same study.
 
 ## Pool runs to separate the factors
 
@@ -123,7 +123,7 @@ control  composer-2.5[fast=true]  4  92569  1458
 variant  composer-2.5[fast=true]  4  33045  494
 ```
 
-The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`. A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well.
+The `attempts` table has each attempt's tokens and the model that served it. With the skill, Cursor used about a third of the tokens. `served_model` shows the parameters too: with no `params` set, `composer-2.5` ran as `fast=true`. A cell's key repeats across evals in a run, so join `cells` on `eval_key` as well. `reeval query effort` also ranks those totals when both sides of a compare reported usage (`tokens_median`, `tokens_p`, `tokens_verdict`).
 
 ## Script it and rebuild it
 

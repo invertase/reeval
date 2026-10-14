@@ -28,9 +28,12 @@ CREATE TABLE effort_m (
   run_id TEXT, eval_key TEXT, cell_key TEXT, role TEXT, variant TEXT, harness TEXT,
   environment TEXT, n INTEGER, tools_median REAL, tools_q1 REAL, tools_q3 REAL,
   agent_s_median REAL, agent_s_q1 REAL, agent_s_q3 REAL, file_edits_median REAL,
+  tokens_median REAL, tokens_q1 REAL, tokens_q3 REAL,
   control_key TEXT, control_n INTEGER, control_tools_median REAL, control_agent_s_median REAL,
-  tools_ratio REAL, agent_s_ratio REAL, agent_s_delta REAL, tools_p REAL, agent_s_p REAL,
-  separated INTEGER, verdict TEXT, time_verdict TEXT
+  control_tokens_median REAL,
+  tools_ratio REAL, agent_s_ratio REAL, agent_s_delta REAL, tokens_ratio REAL,
+  tools_p REAL, agent_s_p REAL, tokens_p REAL,
+  separated INTEGER, verdict TEXT, time_verdict TEXT, tokens_verdict TEXT, tokens_note TEXT
 );
 CREATE TABLE factor_effects_m (
   factor TEXT, level TEXT, baseline TEXT, context TEXT, tier TEXT, run_id TEXT, eval_key TEXT,
@@ -38,6 +41,7 @@ CREATE TABLE factor_effects_m (
   control_pass INTEGER, control_counted INTEGER, points REAL, lo REAL, hi REAL,
   within_noise INTEGER, pass_verdict TEXT, tools_ratio REAL, tools_ratios TEXT,
   agent_s_ratio REAL, tools_p REAL, consistent INTEGER, separated INTEGER, effort_verdict TEXT,
+  tokens_ratio REAL, tokens_p REAL, tokens_verdict TEXT, tokens_note TEXT,
   note TEXT
 );
 CREATE TABLE flaky_m (
@@ -83,6 +87,11 @@ type Attempt = {
   tools: number
   agent_ms: number
   file_edits: number
+  input_tokens: number | null
+  output_tokens: number | null
+  cache_read_tokens: number | null
+  cache_write_tokens: number | null
+  reasoning_tokens: number | null
 }
 
 const PARTS = [
@@ -138,6 +147,15 @@ function passCols(v: Side, c: Side): Row {
   }
 }
 
+function tokenCols(e: EffortContrast | null): Row {
+  return {
+    tokens_ratio: r4(e?.tokensRatio ?? null),
+    tokens_p: r4(e?.tokensP ?? null),
+    tokens_verdict: e?.tokensVerdict ?? null,
+    tokens_note: e?.tokensNote ?? null,
+  }
+}
+
 function effortCols(e: EffortContrast | null): Row {
   return {
     tools_ratio: r4(e?.toolsRatio ?? null),
@@ -147,6 +165,7 @@ function effortCols(e: EffortContrast | null): Row {
     consistent: e && (e.verdict === 'fewer' || e.verdict === 'more') ? 1 : 0,
     separated: e?.separated ? 1 : 0,
     effort_verdict: e?.verdict ?? null,
+    ...tokenCols(e),
   }
 }
 
@@ -177,6 +196,41 @@ function pooledEffort(strata: Array<EffortContrast | null>): Row {
     consistent: verdict === 'fewer' || verdict === 'more' ? count(verdict) : 0,
     separated: known.filter((s) => s.separated).length,
     effort_verdict: verdict,
+    ...pooledTokens(known),
+  }
+}
+
+/**
+ * Token verdict over the strata that reported usage. A stratum without token samples is
+ * dropped from this pool only — not `insufficient`, and it does not blank tokens on the rest.
+ */
+function pooledTokens(known: EffortContrast[]): Row {
+  const withTokens = known.filter((s) => s.tokensVerdict !== null)
+  if (withTokens.length === 0) {
+    return { tokens_ratio: null, tokens_p: null, tokens_verdict: null, tokens_note: null }
+  }
+  const k = withTokens.length
+  const count = (v: EffortVerdict) => withTokens.filter((s) => s.tokensVerdict === v).length
+  const needed = Math.ceil((2 * k) / 3)
+  let verdict: EffortVerdict = 'noise'
+  if (count('fewer') >= needed && count('more') === 0) verdict = 'fewer'
+  else if (count('more') >= needed && count('fewer') === 0) verdict = 'more'
+  else if (count('insufficient') === k) verdict = 'insufficient'
+  const ratios = withTokens.map((s) => s.tokensRatio).filter((r): r is number => r !== null)
+  const sorted = [...ratios].sort((a, b) => a - b)
+  const mid = sorted.length
+    ? sorted.length % 2
+      ? (sorted[(sorted.length - 1) / 2] as number)
+      : ((sorted[sorted.length / 2 - 1] as number) + (sorted[sorted.length / 2] as number)) / 2
+    : null
+  return {
+    tokens_ratio: r4(mid),
+    tokens_p: r4(Math.max(...withTokens.map((s) => s.tokensP ?? 1))),
+    tokens_verdict: verdict,
+    tokens_note:
+      known.some((s) => s.tokensNote) || withTokens.length < known.length
+        ? 'some cells did not report usage'
+        : null,
   }
 }
 
@@ -207,7 +261,9 @@ export function deriveFacts(db: DatabaseSync): void {
     .all() as Cell[]
   const attempts = db
     .prepare(
-      'SELECT run_id, eval_key, cell_key, key, outcome, error_kind, tools, agent_ms, file_edits FROM attempts ORDER BY run_id, rowid',
+      `SELECT run_id, eval_key, cell_key, key, outcome, error_kind, tools, agent_ms, file_edits,
+        input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, reasoning_tokens
+       FROM attempts ORDER BY run_id, rowid`,
     )
     .all() as Attempt[]
   const nearThreshold = new Set(
@@ -225,9 +281,22 @@ export function deriveFacts(db: DatabaseSync): void {
     const id = cellId(a.run_id, a.eval_key, a.cell_key)
     byCell.set(id, [...(byCell.get(id) ?? []), a])
     if (a.outcome !== 'pass' && a.outcome !== 'fail') continue
+    const tokens =
+      a.input_tokens === null
+        ? undefined
+        : a.input_tokens +
+          (a.output_tokens ?? 0) +
+          (a.cache_read_tokens ?? 0) +
+          (a.cache_write_tokens ?? 0) +
+          (a.reasoning_tokens ?? 0)
     samples.set(id, [
       ...(samples.get(id) ?? []),
-      { tools: a.tools, agentMs: a.agent_ms, fileEdits: a.file_edits },
+      {
+        tools: a.tools,
+        agentMs: a.agent_ms,
+        fileEdits: a.file_edits,
+        ...(tokens !== undefined ? { tokens } : {}),
+      },
     ])
   }
   const side = (c: Cell): Side => ({
@@ -259,18 +328,26 @@ export function deriveFacts(db: DatabaseSync): void {
       agent_s_q1: own ? s1(own.agentMs.q1) : null,
       agent_s_q3: own ? s1(own.agentMs.q3) : null,
       file_edits_median: own?.fileEdits ?? null,
+      tokens_median: own?.tokens?.median ?? null,
+      tokens_q1: own?.tokens?.q1 ?? null,
+      tokens_q3: own?.tokens?.q3 ?? null,
       control_key: control?.key ?? null,
       control_n: vs?.control.n ?? null,
       control_tools_median: vs?.control.tools.median ?? null,
       control_agent_s_median: vs ? s1(vs.control.agentMs.median) : null,
+      control_tokens_median: vs?.control.tokens?.median ?? null,
       tools_ratio: r4(vs?.toolsRatio ?? null),
       agent_s_ratio: r4(vs?.agentMsRatio ?? null),
       agent_s_delta: vs ? s1(vs.agentMsDelta) : null,
+      tokens_ratio: r4(vs?.tokensRatio ?? null),
       tools_p: r4(vs?.toolsP ?? null),
       agent_s_p: r4(vs?.agentMsP ?? null),
+      tokens_p: r4(vs?.tokensP ?? null),
       separated: vs ? (vs.separated ? 1 : 0) : null,
       verdict: vs?.verdict ?? null,
       time_verdict: vs?.timeVerdict ?? null,
+      tokens_verdict: vs?.tokensVerdict ?? null,
+      tokens_note: vs?.tokensNote ?? null,
     }
   })
   insertAll(db, 'effort_m', effortRows)

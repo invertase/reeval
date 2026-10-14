@@ -216,9 +216,9 @@ The studio shows the same cells, roles, lift and effort for every run (here with
 effort: tools 3 vs 8 (×0.38), agent 9s vs 18s (×0.50): too few attempts to test
 ```
 
-Under each variant, the effort line compares the median attempt with the control's: tool calls, then the agent's time. With the skill, Cursor made 3 tool calls instead of 8 and finished in half the time.
+Under each variant, the effort line compares the median attempt with the control's: tool calls, then the agent's time, then tokens when both sides reported usage. With the skill, Cursor made 3 tool calls instead of 8 and finished in half the time.
 
-The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`. The studio's cells table shows effort next to lift, as in the screenshot above.
+The verdict comes from a rank test on the tool calls. Two attempts against two can never reach significance, so it says `too few attempts to test`. With enough runs it says `fewer tool calls` or `more tool calls` with a p-value, or `within noise`. Tokens use the same test on the attempts that reported usage; a cell without usage is left out of that sample only, and if either side then has none the token line is omitted, not marked `insufficient`. The studio's cells table shows effort next to lift, as in the screenshot above.
 
 ## Ask questions
 

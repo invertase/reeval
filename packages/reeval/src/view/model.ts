@@ -366,7 +366,7 @@ export type CellRow = {
   liftInterval: { lo: number; hi: number; withinNoise: boolean } | null
   /** The interval's lower bound is below the compare's `minLift`. */
   belowMinLift: boolean
-  /** Median tool calls and agent time over the cell's counted attempts. */
+  /** Median tool calls, agent time and tokens over the cell's counted attempts. */
   effort: CellEffort | null
   /** A variant's effort against its control, with the rank test's verdict. */
   effortVsControl: EffortContrast | null

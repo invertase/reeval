@@ -225,8 +225,8 @@ record. To see what an attempt did step by step, add `-v`: a timestamped line pe
 container, setup, brokering, each tool call, checks, judge calls, every gateway request).
 `-vv` adds the raw payloads and every `docker` command. Either way each attempt's trace is
 kept locally in `.reeval/debug`, never in the committed history. Commit runs into `evals/.history/` with `reeval record`, then track them with `reeval history`
-and `reeval compare`, or ask across runs with SQL: `reeval query lift`, `reeval query effort` (tool calls and
-agent time, variant against control), `reeval query factor_effects`, or
+and `reeval compare`, or ask across runs with SQL: `reeval query lift`, `reeval query effort` (tool calls,
+agent time and tokens, variant against control), `reeval query factor_effects`, or
 `reeval query "SELECT * FROM failing_attempts WHERE skill = 'house-greeting'"`. Where the harness
 reports them (Cursor, Claude Code, Antigravity, pi and Codex do), the record keeps each turn's tokens and the model that
 served it, and totals them per attempt and per run.

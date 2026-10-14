@@ -132,7 +132,7 @@ The recipe as written, under the [fake harness](/recipes/fake-harness) (which wr
 
 A skill can help without changing the pass rate: the agent gets there with less searching. The `effort:` line under each variant compares medians with the control's. In the real run above, the variant used 3 tool calls against 8, and 9 s of agent time against 18 s.
 
-`×0.38` is the variant's median divided by the control's. The verdict at the end comes from a rank test on tool calls: `fewer tool calls` or `more tool calls` (with its p) when it's significant, `within noise` when it isn't, and `too few attempts to test` when the counts can't reach significance at all. Two or three attempts per side never can; four per side can.
+`×0.38` is the variant's median divided by the control's. The verdict at the end comes from a rank test on tool calls: `fewer tool calls` or `more tool calls` (with its p) when it's significant, `within noise` when it isn't, and `too few attempts to test` when the counts can't reach significance at all. Two or three attempts per side never can; four per side can. Tokens join that test when both sides reported usage; a cell without usage is left out of the token sample only, and the token line is omitted rather than marked `insufficient`.
 
 ```bash
 npx reeval run skill --runs 4
