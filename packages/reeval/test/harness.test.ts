@@ -1125,7 +1125,10 @@ describe('credential brokering per agent', () => {
   test("Antigravity fails closed on a sandbox that can't broker: the key never goes in", async () => {
     await withHostEnv({ GEMINI_API_KEY: 'AIza-real' }, async () => {
       const agent = AGENTS.antigravity
-      const adapter = await agent.adapter({ auth: agentAuth(agent) })
+      const adapter = await agent.adapter({
+        auth: agentAuth(agent),
+        descriptor: antigravity({ model: 'm' }),
+      })
       const { session } = recordingSession()
       const { addRequestTransformations: _, ...plain } = session
       let spawned = false
