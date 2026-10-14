@@ -319,6 +319,11 @@ export type FakeHarnessDescriptor = {
    * and variant (`composer-2.5[fast=true]`); unset, it reports none.
    */
   servedModel?: string
+  /**
+   * Requested reasoning effort, recorded as `effort` on the cell. Use `servedModel` for what the
+   * turn reports (`fake-1[effort=medium]`). Fast is not this.
+   */
+  effort?: string
   /** Tool calls the fake agent reports on every turn, before writing files. */
   tools?: Array<{ tool: string; input: unknown; output: unknown; ok?: boolean }>
   /** Files and message used instead when the environment gives the agent a skill. */
@@ -372,7 +377,12 @@ export type CursorHarnessDescriptor = {
    * model catalog (`fast=true` for `composer-2.5`), sent explicitly; pass the ones that change cost.
    */
   params?: Record<string, string>
-  /** Cell id; defaults to `cursor:<model>`. */
+  /**
+   * Reasoning effort, mapped onto the catalog param `Cursor.models.list()` names for this model
+   * (`reasoning_effort`, `effort`, …). Not Fast: that stays `params.fast`.
+   */
+  effort?: string
+  /** Cell id; defaults to `cursor:<model>`, or `cursor:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most Cursor attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
@@ -387,7 +397,12 @@ export type ClaudeCodeHarnessDescriptor = {
   kind: 'claude-code'
   /** A model id or alias the `claude` CLI accepts, e.g. `claude-sonnet-5` or `sonnet`. */
   model: string
-  /** Cell id; defaults to `claude-code:<model>`. */
+  /**
+   * Reasoning effort the Agent SDK `/effort` control takes, e.g. `low`, `medium`, `high`,
+   * `xhigh` (Extra in the UI) or `max`.
+   */
+  effort?: string
+  /** Cell id; defaults to `claude-code:<model>`, or `claude-code:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most Claude Code attempts at once, across the run, e.g. for the account's rate limits. */
   maxConcurrent?: number
@@ -402,7 +417,12 @@ export type AntigravityHarnessDescriptor = {
   kind: 'antigravity'
   /** A model slug `agy models` lists for a Gemini API key, e.g. `gemini-3.8-flash-medium`. */
   model: string
-  /** Cell id; defaults to `antigravity:<model>`. */
+  /**
+   * Reasoning effort passed as `agy --effort`, e.g. `low`, `medium`, `high` or `max`. The
+   * slug's `-low`/`-medium`/`-high` suffix is the same knob baked into `model`.
+   */
+  effort?: string
+  /** Cell id; defaults to `antigravity:<model>`, or `antigravity:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most Antigravity attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
@@ -424,7 +444,12 @@ export type OpenCodeHarnessDescriptor = {
    * `anthropic/claude-haiku-4-5`; the provider picks the key.
    */
   model: string
-  /** Cell id; defaults to `opencode:<model>`. */
+  /**
+   * Reasoning effort for that provider: `options.reasoningEffort` (OpenAI) or `options.thinking`
+   * (Anthropic). Values are whatever that provider takes.
+   */
+  effort?: string
+  /** Cell id; defaults to `opencode:<model>`, or `opencode:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most OpenCode attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
@@ -442,7 +467,11 @@ export type GooseHarnessDescriptor = {
   kind: 'goose'
   /** A Gemini model id, run on Goose's `google` provider, e.g. `gemini-3.8-flash`. */
   model: string
-  /** Cell id; defaults to `goose:<model>`. */
+  /**
+   * Reasoning effort as `GOOSE_THINKING_EFFORT`, e.g. `off`, `low`, `medium`, `high` or `max`.
+   */
+  effort?: string
+  /** Cell id; defaults to `goose:<model>`, or `goose:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most Goose attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
@@ -461,7 +490,12 @@ export type PiHarnessDescriptor = {
   kind: 'pi'
   /** A Gemini model id, run on pi's `google` provider, e.g. `gemini-3.8-flash`. */
   model: string
-  /** Cell id; defaults to `pi:<model>`. */
+  /**
+   * Reasoning effort, passed as pi's `--thinking` (the CLI's name). Values are whatever that
+   * flag takes, e.g. `off`, `minimal`, `low`, `medium`, `high`, `xhigh` or `max`.
+   */
+  effort?: string
+  /** Cell id; defaults to `pi:<model>`, or `pi:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most pi attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number
@@ -479,7 +513,12 @@ export type CodexHarnessDescriptor = {
   kind: 'codex'
   /** An OpenAI model id Codex runs on the Responses API, e.g. `gpt-5.6-luna`. */
   model: string
-  /** Cell id; defaults to `codex:<model>`. */
+  /**
+   * Reasoning effort as Codex's `model_reasoning_effort`, e.g. `low`, `medium`, `high`,
+   * `xhigh`, `max` or `ultra`.
+   */
+  effort?: string
+  /** Cell id; defaults to `codex:<model>`, or `codex:<model>[effort=<value>]` when `effort` is set. */
   id?: string
   /** The most Codex attempts at once, across the run, e.g. for the key's rate limits. */
   maxConcurrent?: number

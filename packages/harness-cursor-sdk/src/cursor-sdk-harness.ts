@@ -70,6 +70,11 @@ export type CursorSdkHarnessSettings = {
    */
   readonly modelParams?: Readonly<Record<string, string>>
   /**
+   * Reasoning effort. Mapped onto the catalog param `Cursor.models.list()` names for the model
+   * (`reasoning_effort`, `effort`, …). Not Fast: that stays `modelParams.fast`.
+   */
+  readonly effort?: string
+  /**
    * The model catalog the SDK validates the model against. `'fetch'` (the default) gets it on
    * the host with the real key, so the sandbox never calls `api.cursor.com`; `false` lets the
    * SDK fetch it itself (with the sandbox's key).
@@ -272,7 +277,7 @@ async function startSession(
         abortSignal: turn.abortSignal,
       })
       const model: CursorSdkModel | undefined = turn.model
-        ? withParams(turn.model, settings.modelParams, catalog)
+        ? withParams(turn.model, mergeEffortParams(turn.model, settings, catalog), catalog)
         : undefined
       const turnFile = posix.join(sessionDir, `turn-${n}.json`)
       await sandbox.writeTextFile({
@@ -367,6 +372,50 @@ async function startSession(
     },
     doDestroy: stop,
   }
+}
+
+/**
+ * Catalog parameter ids that name reasoning effort, not Fast. The live catalog picks the id
+ * (`reasoning_effort` on one Grok listing, `effort` in others); this matches whichever it lists.
+ */
+const EFFORT_PARAM_ID = /^(reasoning[_-])?effort$|^thinking([_-]effort)?$/i
+
+/**
+ * The catalog param id that names reasoning effort for `model`, or undefined when that entry
+ * lists none. Fast (`fast`) never matches.
+ */
+export function cursorEffortParamId(
+  catalog: readonly CursorSdkModelEntry[] | undefined,
+  model: string,
+): string | undefined {
+  const entry = catalog?.find((m) => m.id === model || m.aliases?.includes(model))
+  const parameters = Array.isArray(entry?.parameters)
+    ? (entry.parameters as Array<{ id?: unknown }>)
+    : []
+  return parameters
+    .map((p) => p.id)
+    .find((id): id is string => typeof id === 'string' && EFFORT_PARAM_ID.test(id))
+}
+
+function mergeEffortParams(
+  model: string,
+  settings: CursorSdkHarnessSettings,
+  catalog: readonly CursorSdkModelEntry[] | undefined,
+): Readonly<Record<string, string>> | undefined {
+  const given = settings.modelParams
+  if (!settings.effort) return given
+  const id = cursorEffortParamId(catalog, model)
+  if (!id) {
+    throw new Error(
+      `Cursor's model catalog has no effort parameter for ${model}. Fast is params.fast, not effort.`,
+    )
+  }
+  if (given?.[id] !== undefined && given[id] !== settings.effort) {
+    throw new Error(
+      `cursor({ effort: '${settings.effort}' }) and params.${id} ('${given[id]}') disagree`,
+    )
+  }
+  return { ...given, [id]: settings.effort }
 }
 
 /**

@@ -53,6 +53,12 @@ test('the first turn starts a thread; later ones resume it, the prompt from its 
   )
 })
 
+test('effort is model_reasoning_effort in the config', () => {
+  const config = buildCodexConfig({ effort: 'high' })
+  assert.match(config, /"model_reasoning_effort" = "high"/)
+  assert.doesNotMatch(buildCodexConfig({}), /model_reasoning_effort/)
+})
+
 test("the config turns off analytics and plugins, and uses reeval's HTTP provider on the key", () => {
   const config = buildCodexConfig({})
   assert.equal(

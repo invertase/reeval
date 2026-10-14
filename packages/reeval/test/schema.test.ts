@@ -101,12 +101,17 @@ describe('persisted shapes', () => {
     )
     const bare = compare(before80, snapshot('run-record'), none).filter((c) => c.breaking)
     assert.deepEqual(bare.map((c) => c.path).sort(), [
+      'evals[].attempts[].effort',
+      'evals[].attempts[].servedEffort',
+      'evals[].cells[].effort',
       'evals[].todo',
       'plan.sandboxWarnings',
+      'stack.harnesses[].effort',
+      'stack.harnesses[].resolvedEffort',
       'stack.harnesses[].resolvedModels',
     ])
     const report = checkShape(shape('run-record'), snapshot('run-record'), before80)
-    assert.equal(explain([report]), '', 'READ_DEFAULTS covers all three')
+    assert.equal(explain([report]), '', 'READ_DEFAULTS covers every added required field')
   })
 
   test('a removed or renamed field fails', () => {
@@ -256,7 +261,10 @@ describe('read defaults', () => {
     }
     fillDefaults('run-record', record)
     assert.deepEqual(record.plan, { sandboxWarnings: [] })
-    assert.deepEqual(record.stack.harnesses, [{ resolvedModels: [] }, { resolvedModels: ['m'] }])
+    assert.deepEqual(record.stack.harnesses, [
+      { resolvedModels: [], effort: null, resolvedEffort: [] },
+      { resolvedModels: ['m'], effort: null, resolvedEffort: [] },
+    ])
     assert.deepEqual(record.evals, [{ todo: true }, { todo: false }])
   })
 

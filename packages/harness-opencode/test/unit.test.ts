@@ -5,6 +5,7 @@ import {
   createOpenCode,
   OPENCODE_CLI_VERSION,
   openCodeConfig,
+  openCodeEffortOptions,
   openCodeEnv,
 } from '../src/opencode-harness.ts'
 import {
@@ -75,6 +76,30 @@ test("the model's provider calls over HTTP, where the gateway reads the served m
   assert.deepEqual(openCodeConfig({ model: 'openrouter/anthropic/claude-haiku-4.5' }).providers, {
     openrouter: { settings: { transport: 'http' } },
   })
+})
+
+test("effort is that provider's thinking option", () => {
+  assert.deepEqual(openCodeEffortOptions('openai/gpt-5.4-mini', 'high'), {
+    reasoningEffort: 'high',
+  })
+  assert.deepEqual(openCodeEffortOptions('anthropic/claude-haiku-4-5', '8000'), {
+    thinking: '8000',
+  })
+  assert.deepEqual(openCodeConfig({ model: 'openai/gpt-5.4-mini', effort: 'high' }).providers, {
+    openai: {
+      settings: { transport: 'http' },
+      models: { 'gpt-5.4-mini': { options: { reasoningEffort: 'high' } } },
+    },
+  })
+  assert.deepEqual(
+    openCodeConfig({ model: 'anthropic/claude-haiku-4-5', effort: '8000' }).providers,
+    {
+      anthropic: {
+        settings: { transport: 'http' },
+        models: { 'claude-haiku-4-5': { options: { thinking: '8000' } } },
+      },
+    },
+  )
 })
 
 test("session titles run on the turn's model, not a second one", () => {

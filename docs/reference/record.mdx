@@ -195,8 +195,8 @@ What ran and graded the agents: the machine, images, harnesses and judge.
   Exact versions of the packages that run and grade the agent.
 </Property>
 
-<Property name="harnesses" type="Array<{id: string; kind: string; model: string | null; resolvedModels: string[]}>">
-  Each harness: its configured `model`, and `resolvedModels`, what it reported serving across the run's turns with the variant it resolved (`composer-2.5[fast=true]` for `composer-2.5` without `params`); empty when it reports none.
+<Property name="harnesses" type="Array<{id: string; kind: string; model: string | null; effort: string | null; resolvedModels: string[]; resolvedEffort: string[]}>">
+  Each harness: its configured `model` and requested `effort`, `resolvedModels` (what it reported serving, with the variant it resolved), and `resolvedEffort` (reasoning-effort suffixes those labels named). Fast (`[fast=true]`) is not `resolvedEffort`.
 </Property>
 
 <Property name="judge" type="{model: string | null; resolvedModels: string[]; threshold: number; version: string}">
@@ -351,6 +351,10 @@ Also has every field of `Cell`.
   The configured harness model, when it has one.
 </Property>
 
+<Property name="effort" type="string | null">
+  The reasoning effort the harness factory asked for; null when it left it unset. Fast is not this.
+</Property>
+
 <Property name="gate" type="CellGate">
   How the attempts decide the cell's outcome; `'none'` when it doesn't fail the eval.
 </Property>
@@ -475,6 +479,14 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
 
 <Property name="servedModels" type="string[] | null">
   The models the harness's own API calls were served by, as the egress gateway saw them: named in the request (e.g. `gemini-3.8-flash` for the id `gemini-3.8-flash-low`, plus any the agent uses on the side) or, for Codex, in the response, with its effort (`gpt-5.6-luna[effort=medium]`); null when neither names one (Cursor) or nothing recorded them.
+</Property>
+
+<Property name="effort" type="string | null">
+  The reasoning effort the harness factory asked for (`claudeCode({ effort: 'high' })`); null when the factory left it unset. Fast is not this.
+</Property>
+
+<Property name="servedEffort" type="string | null">
+  The reasoning effort the harness's API said it ran at, from `servedModels` / each turn's `model` (`medium` from `gpt-5.6-luna[effort=medium]`); null when those labels name none. Fast (`[fast=true]`) is not this.
 </Property>
 
 <Property name="outcome" type="Outcome"></Property>

@@ -936,6 +936,22 @@ describe('records from before a field existed', () => {
     assert.doesNotMatch(renderSummary(readableRecord(raw())), /running as root/)
   })
 
+  test('stack.harnesses[].effort: a record without it reads as unset, and Fast is not served effort', () => {
+    const r = readableRecord(raw())
+    assert.deepEqual(
+      r.stack.harnesses.map((h) => [h.effort, h.resolvedEffort]),
+      [[null, []]],
+    )
+    assert.deepEqual(
+      r.evals[0]?.cells.map((c) => c.effort),
+      r.evals[0]?.cells.map(() => null),
+    )
+    assert.deepEqual(
+      r.evals[0]?.attempts.map((a) => [a.effort, a.servedEffort]),
+      r.evals[0]?.attempts.map(() => [null, null]),
+    )
+  })
+
   test('stack.harnesses[].resolvedModels: a record without it reads as none, and the harness label renders', () => {
     const r = readableRecord(raw())
     assert.deepEqual(

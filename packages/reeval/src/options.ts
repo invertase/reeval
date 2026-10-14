@@ -21,6 +21,7 @@ import {
 } from './environment.ts'
 import { UsageError } from './errors.ts'
 import { HARNESS_EXAMPLE, isAgentKind } from './harness/agents.ts'
+import { harnessEffort } from './harness/effort.ts'
 import { opencodeModelError } from './harness.ts'
 import { badJudgeList, checkModelString } from './judge/index.ts'
 import type {
@@ -104,15 +105,18 @@ const PAIR_FACTORS: PairFactor[] = ['environment', 'harness']
 const ACROSS_HINT = `'environment' (vary the environment, same harness) or 'harness' (vary the harness, same environment)`
 const ACROSS_MEAN = ' Did you mean "across"? It is the factor you vary: across: \'environment\'.'
 
-const ID = /^[A-Za-z0-9._:@+-]+$/
+const ID = /^[A-Za-z0-9._:@+\-=[\]]+$/
 
 const sanitize = (text: string) =>
   (text.split('/').at(-1) ?? text).replace(/[^A-Za-z0-9._:@-]+/g, '-')
 
 export function harnessId(h: HarnessDescriptor): string {
   if (h.id) return h.id
-  if (h.kind === 'fake') return 'fake'
-  return h.model ? `${h.kind}:${sanitize(h.model)}` : h.kind
+  const effort = harnessEffort(h)
+  const suffix = effort ? `[effort=${sanitize(effort)}]` : ''
+  if (h.kind === 'fake') return `fake${suffix}`
+  const base = h.model ? `${h.kind}:${sanitize(h.model)}` : h.kind
+  return `${base}${suffix}`
 }
 
 function installId(install: readonly InstallStep[] | undefined): string {
@@ -559,7 +563,7 @@ function checkUnique(list: HarnessDescriptor[], where: string) {
     const key = harnessId(item)
     if (!ID.test(key)) {
       throw new UsageError(
-        `The harness id "${key}" in ${where} may only use letters, digits and . _ : @ + -`,
+        `The harness id "${key}" in ${where} may only use letters, digits and . _ : @ + - [ ] =`,
       )
     }
     if (seen.has(key)) {

@@ -11,6 +11,7 @@ export {
   type OpenCodeHarnessSettings,
   type OpenCodeMcpServer,
   openCodeConfig,
+  openCodeEffortOptions,
   openCodeEndpoints,
   openCodeEnv,
 } from './opencode-harness.ts'

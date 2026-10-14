@@ -7,7 +7,9 @@ import {
   GOOSE_CLI_VERSION,
   GOOSE_CREDENTIAL_ENV,
   GOOSE_INSTALL_COMMAND,
+  GOOSE_QUIET_ENV,
   gooseConfig,
+  gooseEnv,
 } from '../src/goose-harness.ts'
 import { VERSION } from '../src/version.ts'
 
@@ -45,6 +47,18 @@ test("with requireCredentialBrokering, a sandbox that can't broker never gets th
     harness.doStart({ sandboxSession: { run: async () => ({}) } } as never),
     /The sandbox can't broker GOOGLE_API_KEY .* so the key stays out of it/,
   )
+})
+
+test('effort is GOOSE_THINKING_EFFORT', () => {
+  assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash' }), {
+    ...GOOSE_QUIET_ENV,
+    GOOSE_MODEL: 'gemini-3.8-flash',
+  })
+  assert.deepEqual(gooseEnv({ model: 'gemini-3.8-flash', effort: 'high' }), {
+    ...GOOSE_QUIET_ENV,
+    GOOSE_MODEL: 'gemini-3.8-flash',
+    GOOSE_THINKING_EFFORT: 'high',
+  })
 })
 
 test("MCP servers are enabled extensions in Goose's config.yaml", () => {

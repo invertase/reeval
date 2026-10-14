@@ -7,6 +7,9 @@
     "AntigravityHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -239,6 +242,9 @@
     "ClaudeCodeHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -276,6 +282,9 @@
     "CodexHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -313,6 +322,9 @@
     "CursorHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -559,6 +571,9 @@
         "delayMs": {
           "type": "number"
         },
+        "effort": {
+          "type": "string"
+        },
         "failWith": {
           "type": "string"
         },
@@ -774,6 +789,9 @@
     "GooseHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -874,6 +892,9 @@
     "OpenCodeHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },
@@ -911,6 +932,9 @@
     "PiHarnessDescriptor": {
       "type": "object",
       "properties": {
+        "effort": {
+          "type": "string"
+        },
         "id": {
           "type": "string"
         },

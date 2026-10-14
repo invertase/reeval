@@ -132,13 +132,15 @@ harness: [
 ],
 ```
 
-A harness's id defaults to `<kind>:<model>`. It names the cell (`cursor:composer-2.5/with-house-greeting/docker`), so two harnesses of the same kind and model need distinct ids, even when their `params` differ:
+A harness's id defaults to `<kind>:<model>`. Set `effort` and it becomes `<kind>:<model>[effort=<value>]`, so two reasoning-effort levels of the same model are two cells. Fast is not effort: two Composer Fast settings still need distinct `id`s, because `params.fast` is a speed tier.
 
 ```text
 reeval: evals/guide-matrix.eval.ts: Two harnesses in evaluate("fast and slow") resolve to the id "cursor:composer-2.5". Give one an id, e.g. cursor({ model: '…', id: '…' })
 ```
 
 `params` sets Cursor's model parameters, as strings. One you leave out takes the default variant Cursor's catalog lists (`fast=true` for `composer-2.5`), and reeval records and shows the variant that ran. The default can change, so pin every parameter, such as `params: { fast: 'false' }`, for reproducible evals.
+
+`effort` is reasoning effort on every shipped factory: the value that CLI takes (`high`, `xhigh`, `max`, `off`, …). There is no shared enum. On Cursor it maps onto the catalog param `Cursor.models.list()` names for that model, not `params.fast`. The record stores the requested value on the cell and the served suffix (`gpt-5.6-luna[effort=medium]`) on the attempt. `reeval query effort` is still the tool-call, time and token metric.
 
 Filter a run by id, as in `npx reeval run skill antigravity`, and a profile's `limit.harness` lists ids too.
 
