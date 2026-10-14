@@ -62,7 +62,7 @@ evals/skill.eval.ts › house greeting › greets in the house…  cursor:compos
 evals/skill.eval.ts › house greeting › greets in the house…  antigravity:gemini-3.8-flash-medium/with-house-greeting/doc…  2  3.5           24.5                  0.1429       0.3333   insufficient
 ```
 
-`effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap. `tokens_verdict` is null when either side reported no usage: omitted, not insufficient. A Goose cell does not blank `tokens_verdict` on Cursor cells in the same study.
+`effort` is the summary's effort line as data: median tool calls, agent time and tokens for each cell, and for a variant, its control's. `tools_p` and `tokens_p` are exact rank tests. With two attempts a side they can never drop below 0.05, so those verdicts are `insufficient`, however large the gap. `tokens_verdict` is null when either side has no usage sample: omitted, not insufficient. A Goose cell does not blank `tokens_verdict` on Cursor cells in the same study.
 
 ## Pool runs to separate the factors
 
