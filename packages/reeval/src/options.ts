@@ -397,10 +397,11 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.capture !== undefined) checkCapture(o.capture, where)
 }
 
-const CAPTURE_KEYS = ['viewport', 'timeout', 'browser', 'use']
-const CAPTURE_SHAPE = '{ viewport?, timeout?, browser?, use? }'
+const CAPTURE_KEYS = ['viewport', 'timeout', 'browser', 'model']
+const CAPTURE_SHAPE = '{ viewport?, timeout?, browser?, model? }'
+const CAPTURE_CALL_ONLY = new Set(['instructions', 'wait', 'fake', 'name', 'path'])
 
-/** Throws unless `capture` is a shallow-merge object with a viewport, timeout, browser and/or use. */
+/** Throws unless `capture` is a shallow-merge object with a viewport, timeout, browser and/or model. */
 export function checkCapture(value: unknown, where: string): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new UsageError(`capture is ${CAPTURE_SHAPE} (got ${JSON.stringify(value)}) in ${where}`)
@@ -408,13 +409,19 @@ export function checkCapture(value: unknown, where: string): void {
   const o = value as CaptureOptions & Record<string, unknown>
   if (o.instructions !== undefined) {
     throw new UsageError(
-      `c.capture() instructions need capture.use (a vision model or { fake }) in ${where}. instructions is call-only on the call.`,
+      `c.capture() instructions need a vision model (or fake on the call) in ${where}. instructions is call-only on the call.`,
     )
   }
   const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
   if (unknown.length) {
+    const key = unknown[0] ?? ''
+    if (CAPTURE_CALL_ONLY.has(key)) {
+      throw new UsageError(
+        `c.capture() ${key} is call-only on the call in ${where}. Use viewport, timeout, browser, model.`,
+      )
+    }
     throw new UsageError(
-      `Unknown capture key "${unknown[0]}" in ${where}. Use viewport, timeout, browser, use.`,
+      `Unknown capture key "${key}" in ${where}. Use viewport, timeout, browser, model.`,
     )
   }
   if (o.viewport !== undefined) checkViewport(o.viewport, where)
@@ -424,7 +431,7 @@ export function checkCapture(value: unknown, where: string): void {
       `capture.browser is true or false (got ${JSON.stringify(o.browser)}) in ${where}`,
     )
   }
-  if (o.use !== undefined) checkCaptureUse(o.use, where)
+  if (o.model !== undefined) checkCaptureModel(o.model, where)
 }
 
 function checkViewport(value: unknown, where: string): void {
@@ -454,40 +461,17 @@ function checkViewport(value: unknown, where: string): void {
   }
 }
 
-function checkCaptureUse(value: unknown, where: string): void {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+function checkCaptureModel(value: unknown, where: string): void {
+  if (typeof value !== 'string' || !value.includes('/')) {
     throw new UsageError(
-      `capture.use is { model } or { fake } (got ${JSON.stringify(value)}) in ${where}`,
+      `capture.model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(value)}) in ${where}`,
     )
   }
-  const o = value as Record<string, unknown>
-  if ('model' in o && 'fake' in o) {
-    throw new UsageError(`capture.use takes { model } or { fake }, not both, in ${where}`)
+  if (isEvaluationModel(value)) {
+    throw new UsageError(
+      `capture.model "${value}" in ${where} is an evaluation model: it scores yes/no questions and can't drive a capture. Use a language model that accepts images, e.g. 'google/gemini-3.8-flash'.`,
+    )
   }
-  if ('model' in o) {
-    if (typeof o.model !== 'string' || !o.model.includes('/')) {
-      throw new UsageError(
-        `capture.use.model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(o.model)}) in ${where}`,
-      )
-    }
-    if (isEvaluationModel(o.model)) {
-      throw new UsageError(
-        `capture.use.model "${o.model}" in ${where} is an evaluation model: it scores yes/no questions and can't drive a capture. Use a language model that accepts images, e.g. 'google/gemini-3.8-flash'.`,
-      )
-    }
-    return
-  }
-  if ('fake' in o) {
-    if (!Array.isArray(o.fake)) {
-      throw new UsageError(
-        `capture.use.fake is an array of action lists, one per instruction string, in ${where}`,
-      )
-    }
-    return
-  }
-  throw new UsageError(
-    `capture.use is { model } or { fake } (got ${JSON.stringify(value)}) in ${where}`,
-  )
 }
 
 function applyHarness(
@@ -1143,8 +1127,7 @@ function captureNote(c: CaptureOptions): string | undefined {
     parts.push(typeof c.timeout === 'number' ? `${c.timeout}ms` : c.timeout)
   }
   if (c.browser === false) parts.push('browser false')
-  if (c.use && 'model' in c.use) parts.push(`use ${c.use.model}`)
-  if (c.use && 'fake' in c.use) parts.push('use fake')
+  if (c.model) parts.push(`model ${c.model}`)
   return parts.length ? `capture: ${parts.join(' · ')}` : undefined
 }
 

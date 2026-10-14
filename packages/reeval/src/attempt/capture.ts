@@ -43,26 +43,27 @@ export type CaptureArtifact = {
 
 const isEvaluationModel = (model: string) => model.startsWith('typesafe-ai/')
 
-function defaultCaptureUse(): CaptureUse | undefined {
+function defaultCaptureModel(): string | undefined {
   try {
     const { config } = getRunContext()
     const analysis = config.analysis.model
-    if (typeof analysis === 'string' && !isEvaluationModel(analysis)) return { model: analysis }
+    if (typeof analysis === 'string' && !isEvaluationModel(analysis)) return analysis
     const judge = config.judge.model
-    if (typeof judge === 'string' && !isEvaluationModel(judge)) return { model: judge }
+    if (typeof judge === 'string' && !isEvaluationModel(judge)) return judge
   } catch {
     return undefined
   }
 }
 
 function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): CaptureUse | undefined {
-  if (resolved.use) return resolved.use
+  if (resolved.fake) return { fake: resolved.fake }
+  if (resolved.model) return { model: resolved.model }
   if (!resolved.instructions.length) return undefined
-  const fallback = defaultCaptureUse()
-  if (fallback) return fallback
+  const fallback = defaultCaptureModel()
+  if (fallback) return { model: fallback }
   if (fakeSandbox) return undefined
   throw new Error(
-    'c.capture() instructions need capture.use (a vision model or { fake }). Set capture.use.model, or analysis.model to a language model that accepts images.',
+    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or analysis.model to a language model that accepts images. Tests pass fake on the call.',
   )
 }
 

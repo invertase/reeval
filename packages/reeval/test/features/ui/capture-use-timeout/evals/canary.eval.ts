@@ -8,7 +8,7 @@ evaluate('canary', { environment: ui, capture: { timeout: '10s' } }, async (c) =
     await c.capture(server, {
       name: 'late',
       instructions: ['never done'],
-      use: { fake: [[{ type: 'click', x: 1, y: 1 }]] },
+      fake: [[{ type: 'click', x: 1, y: 1 }]],
     })
   } catch (error) {
     // Lands fails on the unfinished instruction; this expects another wording.

@@ -7,7 +7,7 @@ import type {
   CaptureCall,
   CaptureInstruction,
   CaptureOptions,
-  CaptureUse,
+  CaptureUseScript,
   CaptureWait,
   CaptureWindow,
   Duration,
@@ -188,7 +188,8 @@ export type ResolvedCaptureCall = {
   timeoutMs: number
   wait: Wait
   instructions: CaptureInstruction[]
-  use: CaptureUse | undefined
+  model: string | undefined
+  fake: CaptureUseScript | undefined
 }
 
 export function resolveCaptureCall(
@@ -198,6 +199,16 @@ export function resolveCaptureCall(
 ): ResolvedCaptureCall {
   if (call && Object.hasOwn(call, 'port')) {
     throw new Error('c.capture() takes the port as the first argument, not in the options')
+  }
+  if (call && Object.hasOwn(call, 'use')) {
+    throw new Error('c.capture() takes model or fake, not use')
+  }
+  if (call?.model !== undefined && call.fake !== undefined) {
+    throw new Error('c.capture() takes model or fake, not both')
+  }
+  if (call?.model !== undefined) checkCallModel(call.model)
+  if (call?.fake !== undefined && !Array.isArray(call.fake)) {
+    throw new Error('c.capture() fake is an array of action lists, one per instruction string')
   }
   const port = resolveCaptureTarget(target)
   const path = call?.path || '/'
@@ -214,7 +225,21 @@ export function resolveCaptureCall(
     timeoutMs: parseDuration(call?.timeout ?? cascade.timeout ?? DEFAULT_TIMEOUT),
     wait: resolveWait(call?.wait),
     instructions: parseInstructions(call?.instructions),
-    use: call?.use ?? cascade.use,
+    model: call?.model ?? cascade.model,
+    fake: call?.fake,
+  }
+}
+
+function checkCallModel(model: string): void {
+  if (!model.includes('/')) {
+    throw new Error(
+      `c.capture() model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(model)})`,
+    )
+  }
+  if (model.startsWith('typesafe-ai/')) {
+    throw new Error(
+      `c.capture() model "${model}" is an evaluation model: it scores yes/no questions and can't drive a capture. Use a language model that accepts images, e.g. 'google/gemini-3.8-flash'.`,
+    )
   }
 }
 

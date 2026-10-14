@@ -47,6 +47,9 @@
         "browser": {
           "type": "boolean"
         },
+        "model": {
+          "type": "string"
+        },
         "timeout": {
           "anyOf": [
             {
@@ -66,28 +69,6 @@
             }
           ]
         },
-        "use": {
-          "anyOf": [
-            {
-              "type": "object",
-              "properties": {
-                "fake": {
-                  "$ref": "#/$defs/CaptureUseScript"
-                }
-              },
-              "required": ["fake"]
-            },
-            {
-              "type": "object",
-              "properties": {
-                "model": {
-                  "type": "string"
-                }
-              },
-              "required": ["model"]
-            }
-          ]
-        },
         "viewport": {
           "anyOf": [
             {
@@ -100,121 +81,6 @@
         }
       },
       "required": []
-    },
-    "CaptureUseAction": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "dy": {
-              "type": "number"
-            },
-            "type": {
-              "const": "scroll"
-            },
-            "x": {
-              "type": "number"
-            },
-            "y": {
-              "type": "number"
-            }
-          },
-          "required": ["dy", "type", "x", "y"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "key": {
-              "enum": ["Enter", "Tab"]
-            },
-            "type": {
-              "const": "key"
-            }
-          },
-          "required": ["key", "type"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string"
-            },
-            "type": {
-              "const": "type"
-            }
-          },
-          "required": ["text", "type"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "toX": {
-              "type": "number"
-            },
-            "toY": {
-              "type": "number"
-            },
-            "type": {
-              "const": "drag"
-            },
-            "x": {
-              "type": "number"
-            },
-            "y": {
-              "type": "number"
-            }
-          },
-          "required": ["toX", "toY", "type", "x", "y"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "click"
-            },
-            "x": {
-              "type": "number"
-            },
-            "y": {
-              "type": "number"
-            }
-          },
-          "required": ["type", "x", "y"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "done"
-            }
-          },
-          "required": ["type"]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "const": "hover"
-            },
-            "x": {
-              "type": "number"
-            },
-            "y": {
-              "type": "number"
-            }
-          },
-          "required": ["type", "x", "y"]
-        }
-      ]
-    },
-    "CaptureUseScript": {
-      "type": "array",
-      "items": {
-        "type": "array",
-        "items": {
-          "$ref": "#/$defs/CaptureUseAction"
-        }
-      }
     },
     "CaptureWindow": {
       "type": "object",

@@ -1465,7 +1465,7 @@ export const inventory: InventoryFeature[] = [
   {
     id: 'ui.capture.use',
     area: 'Records and studio',
-    name: "`c.capture()` vision journey (`instructions`, `use`, `viewport: 'full-page'`)",
+    name: "`c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`)",
     fixtures: [
       'ui/capture-use',
       'ui/capture-full-page',

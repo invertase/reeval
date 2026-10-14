@@ -99,7 +99,8 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
     timeoutMs: 60_000,
     wait: 'load',
     instructions: [],
-    use: undefined,
+    model: undefined,
+    fake: undefined,
   })
 })
 
@@ -112,7 +113,7 @@ test('resolveCaptureCall accepts full-page and a wait beat', () => {
         viewport: 'full-page',
         wait: { ms: 3000 },
         instructions: ['Fill in the form', { wait: 'idle' }, 'Click forgot password'],
-        use: { fake: [[{ type: 'done' }]] },
+        fake: [[{ type: 'done' }]],
       },
       {},
     ),
@@ -126,8 +127,28 @@ test('resolveCaptureCall accepts full-page and a wait beat', () => {
       timeoutMs: 60_000,
       wait: { ms: 3000 },
       instructions: ['Fill in the form', { wait: 'idle' }, 'Click forgot password'],
-      use: { fake: [[{ type: 'done' }]] },
+      model: undefined,
+      fake: [[{ type: 'done' }]],
     },
+  )
+})
+
+test('resolveCaptureCall prefers call model over the cascade', () => {
+  assert.equal(
+    resolveCaptureCall(
+      9,
+      { model: 'google/gemini-3.8-flash' },
+      { model: 'openai/gpt-5.4' },
+    ).model,
+    'google/gemini-3.8-flash',
+  )
+  assert.equal(
+    resolveCaptureCall(9, undefined, { model: 'google/gemini-3.8-flash' }).model,
+    'google/gemini-3.8-flash',
+  )
+  assert.throws(
+    () => resolveCaptureCall(9, { use: { model: 'google/gemini-3.8-flash' } } as never, {}),
+    /takes model or fake, not use/,
   )
 })
 

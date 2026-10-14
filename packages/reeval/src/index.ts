@@ -21,6 +21,7 @@ export type {
   CaptureOptions,
   CaptureUse,
   CaptureUseAction,
+  CaptureUseScript,
   CaptureWait,
   CaptureWindow,
   Cell,

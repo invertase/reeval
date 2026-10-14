@@ -16,3 +16,5 @@ evaluate('no camera defaults', async () => {})
 evaluate('browser off', { capture: { browser: false } }, async () => {})
 
 evaluate('full page', { capture: { viewport: 'full-page' } }, async () => {})
+
+evaluate('vision model', { capture: { model: 'google/gemini-3.8-flash' } }, async () => {})

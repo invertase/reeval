@@ -1431,17 +1431,17 @@ describe('common mistakes', () => {
     [
       'capture as a string',
       `evaluate('e', { capture: 5173 as never }, async () => {})`,
-      /capture is \{ viewport\?, timeout\?, browser\?, use\? \} \(got 5173\) in evaluate\("e"\)/,
+      /capture is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\) in evaluate\("e"\)/,
     ],
     [
       'an unknown capture key',
       `evaluate('e', { capture: { ready: true } as never }, async () => {})`,
-      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser, use\./,
+      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
     ],
     [
       'capture.port on evaluate',
       `evaluate('e', { capture: { port: 5173 } as never }, async () => {})`,
-      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser, use\./,
+      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
     ],
     [
       'a capture viewport without height',
@@ -1459,14 +1459,19 @@ describe('common mistakes', () => {
       /capture\.viewport is \{ width, height \} or 'full-page' in evaluate\("e"\), not \{ height, fullPage \}/,
     ],
     [
-      'instructions without use',
+      'instructions without a vision model',
       `evaluate('e', { capture: { instructions: ['Fill the form'] } as never }, async () => {})`,
-      /c\.capture\(\) instructions need capture\.use \(a vision model or \{ fake \}\) in evaluate\("e"\)/,
+      /c\.capture\(\) instructions need a vision model \(or fake on the call\) in evaluate\("e"\)/,
     ],
     [
-      'an evaluation-model capture.use.model',
-      `evaluate('e', { capture: { use: { model: 'typesafe-ai/jev-1.13.0' } } }, async () => {})`,
-      /capture\.use\.model "typesafe-ai\/jev-1\.13\.0" in evaluate\("e"\) is an evaluation model/,
+      'an evaluation-model capture.model',
+      `evaluate('e', { capture: { model: 'typesafe-ai/jev-1.13.0' } }, async () => {})`,
+      /capture\.model "typesafe-ai\/jev-1\.13\.0" in evaluate\("e"\) is an evaluation model/,
+    ],
+    [
+      'leftover capture.use',
+      `evaluate('e', { capture: { use: { model: 'google/gemini-3.8-flash' } } as never }, async () => {})`,
+      /Unknown capture key "use" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
     ],
   ]
   for (const [what, body, message] of cases) {

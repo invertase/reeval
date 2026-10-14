@@ -83,7 +83,7 @@ export type CaptureUseAction =
 /** One list per instruction string. Tests; never downloads a model. */
 export type CaptureUseScript = CaptureUseAction[][]
 
-/** Vision driver for `instructions`. Cascades like `question`. */
+/** Resolved vision driver after cascade, call override and analysis fallback. */
 export type CaptureUse = { model: string } | { fake: CaptureUseScript }
 
 /**
@@ -97,8 +97,11 @@ export type CaptureOptions = {
   timeout?: Duration
   /** `false` refuses the host `chrome-headless-shell` binary. `c.capture()` then throws. */
   browser?: boolean
-  /** Vision driver; required when `c.capture` has `instructions` (except the fake stub). */
-  use?: CaptureUse
+  /**
+   * Vision model for `instructions`. Cascades like `question`. Default is the analysis
+   * model when that model accepts images; never Jev. `fake` is call-only.
+   */
+  model?: string
 }
 
 /** A background process started by `c.exec(..., { background: true })` or `c.serve`. */
@@ -125,7 +128,7 @@ export type Capture = {
 /**
  * Optional camera and path for `c.capture(port | ServeHandle, options?)`.
  * `port` is the first argument, not a field here. Default `path` is `/`;
- * default `name` is derived from the path. `wait` and `instructions` are call-only.
+ * default `name` is derived from the path. `wait`, `instructions` and `fake` are call-only.
  */
 export type CaptureCall = {
   name?: string
@@ -136,8 +139,10 @@ export type CaptureCall = {
   wait?: Wait
   /** Journey: goal strings and `{ wait }` beats. */
   instructions?: CaptureInstruction[]
-  /** Overrides cascaded `capture.use` for this call. */
-  use?: CaptureUse
+  /** Overrides cascaded `capture.model` for this call. */
+  model?: string
+  /** Test script; one list per instruction string. Call-only. */
+  fake?: CaptureUseScript
 }
 
 export type FileChange = { path: string; status: 'added' | 'modified' | 'deleted' }
@@ -915,7 +920,7 @@ type EvalOptionFields = {
    */
   egress?: EgressPolicy
   judge?: JudgeOptions
-  /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `use` replace the value. */
+  /** Screenshot defaults for `c.capture()`. Shallow-merged; `viewport` and `model` replace the value. */
   capture?: CaptureOptions
   /** Per attempt. */
   timeout?: Duration

@@ -33,6 +33,7 @@ export type JourneyOptions = {
   timeoutMs: number
   fullPage: boolean
   instructions: CaptureInstruction[]
+  /** Resolved driver: cascade/call `model`, call `fake`, or the analysis fallback. */
   use?: CaptureUse
   remaining: () => number
   loadModel?: (name: string) => Promise<unknown>

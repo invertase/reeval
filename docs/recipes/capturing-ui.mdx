@@ -90,9 +90,9 @@ strings is the authored beat. `viewport: 'full-page'` keeps the default
 window and saves a tall PNG. Typed secrets are plain text: they can appear
 in the PNG and in debug.
 
-Set `capture.use.model` (cascades like `question`) or rely on the analysis
-model when it accepts images. Tests use `use: { fake: [/* one list per
-string */] }`.
+Set `capture.model` (cascades like `question`) or rely on the analysis
+model when it accepts images. Tests pass `fake: [/* one list per
+string */]` on the call.
 
 ## After load
 
@@ -127,6 +127,6 @@ size, progress, cache path). A cache hit is quiet. Fake-tier stubs never downloa
     `c.capture`, `c.serve` and `c.exec({ background })`.
   </Card>
   <Card title="Options" icon="sliders" href="/reference/options">
-    The `capture` cascade: viewport, timeout, browser.
+    The `capture` cascade: viewport, timeout, browser, model.
   </Card>
 </CardGroup>
