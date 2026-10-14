@@ -1461,7 +1461,7 @@ describe('common mistakes', () => {
     [
       'instructions without a vision model',
       `evaluate('e', { capture: { instructions: ['Fill the form'] } as never }, async () => {})`,
-      /c\.capture\(\) instructions need a vision model \(or fake on the call\) in evaluate\("e"\)/,
+      /c\.capture\(\) instructions need a vision model in evaluate\("e"\)/,
     ],
     [
       'an evaluation-model capture.model',
@@ -1471,7 +1471,12 @@ describe('common mistakes', () => {
     [
       'leftover capture.use',
       `evaluate('e', { capture: { use: { model: 'google/gemini-3.8-flash' } } as never }, async () => {})`,
-      /Unknown capture key "use" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
+      /Unknown capture key "use" in evaluate\("e"\)\. Set capture\.model/,
+    ],
+    [
+      'leftover capture.fake',
+      `evaluate('e', { capture: { fake: [] } as never }, async () => {})`,
+      /Unknown capture key "fake" in evaluate\("e"\)\. Set capture\.model/,
     ],
   ]
   for (const [what, body, message] of cases) {

@@ -399,7 +399,7 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
 
 const CAPTURE_KEYS = ['viewport', 'timeout', 'browser', 'model']
 const CAPTURE_SHAPE = '{ viewport?, timeout?, browser?, model? }'
-const CAPTURE_CALL_ONLY = new Set(['instructions', 'wait', 'fake', 'name', 'path'])
+const CAPTURE_CALL_ONLY = new Set(['instructions', 'wait', 'name', 'path'])
 
 /** Throws unless `capture` is a shallow-merge object with a viewport, timeout, browser and/or model. */
 export function checkCapture(value: unknown, where: string): void {
@@ -409,12 +409,17 @@ export function checkCapture(value: unknown, where: string): void {
   const o = value as CaptureOptions & Record<string, unknown>
   if (o.instructions !== undefined) {
     throw new UsageError(
-      `c.capture() instructions need a vision model (or fake on the call) in ${where}. instructions is call-only on the call.`,
+      `c.capture() instructions need a vision model in ${where}. instructions is call-only on the call.`,
     )
   }
   const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
   if (unknown.length) {
     const key = unknown[0] ?? ''
+    if (key === 'use' || key === 'fake') {
+      throw new UsageError(
+        `Unknown capture key "${key}" in ${where}. Set capture.model. Tests pass fakeInstructions from reeval/testing as instructions.`,
+      )
+    }
     if (CAPTURE_CALL_ONLY.has(key)) {
       throw new UsageError(
         `c.capture() ${key} is call-only on the call in ${where}. Use viewport, timeout, browser, model.`,

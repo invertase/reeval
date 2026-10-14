@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
+import { fakeInstructions } from '../src/capture/fake-instructions.ts'
 import {
   dispatchInput,
   mapPagePoint,
@@ -26,6 +27,19 @@ test('parseInstructions keeps goals and wait beats', () => {
     { wait: { ms: 10 } },
   ])
   assert.throws(() => parseInstructions(['']), /instructions\[0\] is an empty string/)
+})
+
+test('fakeInstructions brands one list of action lists and waits', () => {
+  const instructions = fakeInstructions([
+    [{ type: 'click', x: 50, y: 35 }, { type: 'done' }],
+    { wait: 'idle' },
+    [{ type: 'click', x: 230, y: 215 }, { type: 'done' }],
+  ])
+  assert.deepEqual(parseInstructions(instructions), ['fake[0]', { wait: 'idle' }, 'fake[1]'])
+  assert.throws(
+    () => fakeInstructions(['Click go'] as never),
+    /fakeInstructions\(\)\[0\] is an action list or \{ wait \}/,
+  )
 })
 
 test('mapPagePoint scrolls the window when the click is below it', () => {

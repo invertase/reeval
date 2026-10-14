@@ -99,7 +99,7 @@ export type CaptureOptions = {
   browser?: boolean
   /**
    * Vision model for `instructions`. Cascades like `question`. Default is the analysis
-   * model when that model accepts images; never Jev. `fake` is call-only.
+   * model when that model accepts images; never Jev.
    */
   model?: string
 }
@@ -128,7 +128,7 @@ export type Capture = {
 /**
  * Optional camera and path for `c.capture(port | ServeHandle, options?)`.
  * `port` is the first argument, not a field here. Default `path` is `/`;
- * default `name` is derived from the path. `wait`, `instructions` and `fake` are call-only.
+ * default `name` is derived from the path. `wait` and `instructions` are call-only.
  */
 export type CaptureCall = {
   name?: string
@@ -137,12 +137,10 @@ export type CaptureCall = {
   timeout?: Duration
   /** Look-ready once, before the first model shot or the saved PNG. Default `'load'`. */
   wait?: Wait
-  /** Journey: goal strings and `{ wait }` beats. */
+  /** Journey: goal strings and `{ wait }` beats. Tests may pass `fakeInstructions(...)`. */
   instructions?: CaptureInstruction[]
   /** Overrides cascaded `capture.model` for this call. */
   model?: string
-  /** Test script; one list per instruction string. Call-only. */
-  fake?: CaptureUseScript
 }
 
 export type FileChange = { path: string; status: 'added' | 'modified' | 'deleted' }

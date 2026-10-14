@@ -7,6 +7,7 @@ import type {
   CaptureCall,
   CaptureInstruction,
   CaptureOptions,
+  CaptureUseAction,
   CaptureUseScript,
   CaptureWait,
   CaptureWindow,
@@ -15,6 +16,7 @@ import type {
   Viewport,
   Wait,
 } from '../types.ts'
+import { fakeInstructionSteps, isWaitStep } from './fake-instructions.ts'
 
 export type { ChromeSession, DownloadProgress, DownloadReporter } from './browser.ts'
 export {
@@ -201,15 +203,14 @@ export function resolveCaptureCall(
     throw new Error('c.capture() takes the port as the first argument, not in the options')
   }
   if (call && Object.hasOwn(call, 'use')) {
-    throw new Error('c.capture() takes model or fake, not use')
+    throw new Error(
+      'c.capture() has no use. Set model, or pass fakeInstructions from reeval/testing as instructions.',
+    )
   }
-  if (call?.model !== undefined && call.fake !== undefined) {
-    throw new Error('c.capture() takes model or fake, not both')
+  if (call && Object.hasOwn(call, 'fake')) {
+    throw new Error('c.capture() has no fake. Tests pass fakeInstructions(...) as instructions.')
   }
   if (call?.model !== undefined) checkCallModel(call.model)
-  if (call?.fake !== undefined && !Array.isArray(call.fake)) {
-    throw new Error('c.capture() fake is an array of action lists, one per instruction string')
-  }
   const port = resolveCaptureTarget(target)
   const path = call?.path || '/'
   const name = call?.name ?? nameFromPath(path)
@@ -226,8 +227,19 @@ export function resolveCaptureCall(
     wait: resolveWait(call?.wait),
     instructions: parseInstructions(call?.instructions),
     model: call?.model ?? cascade.model,
-    fake: call?.fake,
+    fake: fakeScriptFrom(call?.instructions),
   }
+}
+
+function fakeScriptFrom(value: CaptureCall['instructions']): CaptureUseScript | undefined {
+  const steps = fakeInstructionSteps(value)
+  if (!steps) return undefined
+  const script: CaptureUseAction[][] = []
+  for (const step of steps) {
+    if (isWaitStep(step)) continue
+    script.push(step)
+  }
+  return script
 }
 
 function checkCallModel(model: string): void {

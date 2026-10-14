@@ -63,7 +63,7 @@ function resolveUse(resolved: ResolvedCaptureCall, fakeSandbox: boolean): Captur
   if (fallback) return { model: fallback }
   if (fakeSandbox) return undefined
   throw new Error(
-    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or analysis.model to a language model that accepts images. Tests pass fake on the call.',
+    'c.capture() instructions need a vision model. Set capture.model, pass model on the call, or analysis.model to a language model that accepts images. Tests pass fakeInstructions from reeval/testing.',
   )
 }
 

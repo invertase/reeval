@@ -1,4 +1,5 @@
 import { evaluate, expect } from 'reeval'
+import { fakeInstructions } from 'reeval/testing'
 import { ui } from './env.ts'
 
 evaluate('canary', { environment: ui, capture: { timeout: '10s' } }, async (c) => {
@@ -7,8 +8,7 @@ evaluate('canary', { environment: ui, capture: { timeout: '10s' } }, async (c) =
   try {
     await c.capture(server, {
       name: 'late',
-      instructions: ['never done'],
-      fake: [[{ type: 'click', x: 1, y: 1 }]],
+      instructions: fakeInstructions([[{ type: 'click', x: 1, y: 1 }]]),
     })
   } catch (error) {
     // Lands fails on the unfinished instruction; this expects another wording.

@@ -20,7 +20,8 @@ test('resolveCaptureCall passes wait idle and defaults to load', () => {
     timeoutMs: 60_000,
     wait: 'idle',
     instructions: [],
-    use: undefined,
+    model: undefined,
+    fake: undefined,
   })
 })
 

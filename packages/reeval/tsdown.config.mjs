@@ -127,6 +127,7 @@ export default defineConfig({
     sandbox: 'src/sandbox.ts',
     judge: 'src/judge.ts',
     'view/index': 'src/view/index.ts',
+    testing: 'src/testing.ts',
     // `reeval`, and `reeval __worker`, which the engine starts for each eval file (src/engine/pool.ts).
     cli: 'src/bin.ts',
   },

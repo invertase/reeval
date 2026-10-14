@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 import { deflateRawSync } from 'node:zlib'
+import { fakeInstructions } from '../src/capture/fake-instructions.ts'
 import {
   cacheLabel,
   checkCaptureName,
@@ -86,7 +87,8 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
       timeoutMs: 30_000,
       wait: 'load',
       instructions: [],
-      use: undefined,
+      model: undefined,
+      fake: undefined,
     },
   )
   assert.deepEqual(resolveCaptureCall(9, undefined, {}), {
@@ -105,6 +107,7 @@ test('resolveCaptureCall takes a port or ServeHandle, not options.port', () => {
 })
 
 test('resolveCaptureCall accepts full-page and a wait beat', () => {
+  const instructions = fakeInstructions([[{ type: 'done' }], { wait: 'idle' }, [{ type: 'done' }]])
   assert.deepEqual(
     resolveCaptureCall(
       9,
@@ -112,8 +115,7 @@ test('resolveCaptureCall accepts full-page and a wait beat', () => {
         name: 'after-submit',
         viewport: 'full-page',
         wait: { ms: 3000 },
-        instructions: ['Fill in the form', { wait: 'idle' }, 'Click forgot password'],
-        fake: [[{ type: 'done' }]],
+        instructions,
       },
       {},
     ),
@@ -126,20 +128,16 @@ test('resolveCaptureCall accepts full-page and a wait beat', () => {
       fullPage: true,
       timeoutMs: 60_000,
       wait: { ms: 3000 },
-      instructions: ['Fill in the form', { wait: 'idle' }, 'Click forgot password'],
+      instructions: ['fake[0]', { wait: 'idle' }, 'fake[1]'],
       model: undefined,
-      fake: [[{ type: 'done' }]],
+      fake: [[{ type: 'done' }], [{ type: 'done' }]],
     },
   )
 })
 
 test('resolveCaptureCall prefers call model over the cascade', () => {
   assert.equal(
-    resolveCaptureCall(
-      9,
-      { model: 'google/gemini-3.8-flash' },
-      { model: 'openai/gpt-5.4' },
-    ).model,
+    resolveCaptureCall(9, { model: 'google/gemini-3.8-flash' }, { model: 'openai/gpt-5.4' }).model,
     'google/gemini-3.8-flash',
   )
   assert.equal(
@@ -148,7 +146,11 @@ test('resolveCaptureCall prefers call model over the cascade', () => {
   )
   assert.throws(
     () => resolveCaptureCall(9, { use: { model: 'google/gemini-3.8-flash' } } as never, {}),
-    /takes model or fake, not use/,
+    /has no use/,
+  )
+  assert.throws(
+    () => resolveCaptureCall(9, { fake: [[{ type: 'done' }]] } as never, {}),
+    /has no fake/,
   )
 })
 

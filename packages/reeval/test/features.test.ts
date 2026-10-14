@@ -1629,8 +1629,8 @@ export const features: Feature[] = [
     canary: /expected 'no' to be 'yes'/,
     record: ({ run }) => {
       assert.deepEqual(landed(run)?.files.artifacts?.[0]?.capture?.instructions, [
-        'Click go',
-        'Click the mark',
+        'fake[0]',
+        'fake[1]',
       ])
     },
   },
@@ -1642,10 +1642,10 @@ export const features: Feature[] = [
       outcome: 'fail',
       error: {
         kind: 'assertion',
-        message: /c\.capture\(\) timed out on "never done"/,
+        message: /c\.capture\(\) timed out on "fake\[0\]"/,
       },
     },
-    canary: /expected 'c\.capture\(\) timed out on "never done"' to be 'still loading'/,
+    canary: /expected 'c\.capture\(\) timed out on "fake\[0\]"' to be 'still loading'/,
     record: ({ run }) => {
       assert.equal(landed(run)?.files.artifacts, undefined)
     },
