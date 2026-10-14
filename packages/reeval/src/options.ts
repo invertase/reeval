@@ -397,40 +397,84 @@ export function checkOptions(options: object, where: string, allowed = KNOWN): v
   if (o.capture !== undefined) checkCapture(o.capture, where)
 }
 
-const CAPTURE_KEYS = ['viewport', 'timeout', 'browser']
+const CAPTURE_KEYS = ['viewport', 'timeout', 'browser', 'model']
+const CAPTURE_SHAPE = '{ viewport?, timeout?, browser?, model? }'
+const CAPTURE_CALL_ONLY = new Set(['instructions', 'wait', 'name', 'path'])
 
-/** Throws unless `capture` is a shallow-merge object with a viewport, timeout and/or browser. */
+/** Throws unless `capture` is a shallow-merge object with a viewport, timeout, browser and/or model. */
 export function checkCapture(value: unknown, where: string): void {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    throw new UsageError(
-      `capture is { viewport?, timeout?, browser? } (got ${JSON.stringify(value)}) in ${where}`,
-    )
+    throw new UsageError(`capture is ${CAPTURE_SHAPE} (got ${JSON.stringify(value)}) in ${where}`)
   }
   const o = value as CaptureOptions & Record<string, unknown>
-  const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
-  if (unknown.length) {
+  if (o.instructions !== undefined) {
     throw new UsageError(
-      `Unknown capture key "${unknown[0]}" in ${where}. Use viewport, timeout, browser.`,
+      `c.capture() instructions need a vision model in ${where}. instructions is call-only on the call.`,
     )
   }
-  if (o.viewport !== undefined) {
-    const { width, height } = o.viewport
-    const keys =
-      typeof o.viewport === 'object' && o.viewport !== null ? Object.keys(o.viewport) : []
-    if (
-      keys.some((k) => k !== 'width' && k !== 'height') ||
-      !(Number.isInteger(width) && width > 0) ||
-      !(Number.isInteger(height) && height > 0)
-    ) {
+  const unknown = Object.keys(o).filter((k) => !CAPTURE_KEYS.includes(k))
+  if (unknown.length) {
+    const key = unknown[0] ?? ''
+    if (key === 'use' || key === 'fake') {
       throw new UsageError(
-        `capture.viewport is { width, height } in CSS pixels (got ${JSON.stringify(o.viewport)}) in ${where}`,
+        `Unknown capture key "${key}" in ${where}. Set capture.model. Tests pass fakeInstructions from reeval/testing as instructions.`,
       )
     }
+    if (CAPTURE_CALL_ONLY.has(key)) {
+      throw new UsageError(
+        `c.capture() ${key} is call-only on the call in ${where}. Use viewport, timeout, browser, model.`,
+      )
+    }
+    throw new UsageError(
+      `Unknown capture key "${key}" in ${where}. Use viewport, timeout, browser, model.`,
+    )
   }
+  if (o.viewport !== undefined) checkViewport(o.viewport, where)
   if (o.timeout !== undefined) parseDuration(o.timeout)
   if (o.browser !== undefined && typeof o.browser !== 'boolean') {
     throw new UsageError(
       `capture.browser is true or false (got ${JSON.stringify(o.browser)}) in ${where}`,
+    )
+  }
+  if (o.model !== undefined) checkCaptureModel(o.model, where)
+}
+
+function checkViewport(value: unknown, where: string): void {
+  if (value === 'full-page') return
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new UsageError(
+      `capture.viewport is { width, height } or 'full-page' (got ${JSON.stringify(value)}) in ${where}`,
+    )
+  }
+  const o = value as Record<string, unknown>
+  const keys = Object.keys(o)
+  if (keys.includes('fullPage')) {
+    throw new UsageError(
+      `capture.viewport is { width, height } or 'full-page' in ${where}, not { height, fullPage }. Use viewport: 'full-page' for a tall shot.`,
+    )
+  }
+  const width = o.width
+  const height = o.height
+  if (
+    keys.some((k) => k !== 'width' && k !== 'height') ||
+    !(Number.isInteger(width) && (width as number) > 0) ||
+    !(Number.isInteger(height) && (height as number) > 0)
+  ) {
+    throw new UsageError(
+      `capture.viewport is { width, height } or 'full-page' (got ${JSON.stringify(value)}) in ${where}`,
+    )
+  }
+}
+
+function checkCaptureModel(value: unknown, where: string): void {
+  if (typeof value !== 'string' || !value.includes('/')) {
+    throw new UsageError(
+      `capture.model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(value)}) in ${where}`,
+    )
+  }
+  if (isEvaluationModel(value)) {
+    throw new UsageError(
+      `capture.model "${value}" in ${where} is an evaluation model: it scores yes/no questions and can't drive a capture. Use a language model that accepts images, e.g. 'google/gemini-3.8-flash'.`,
     )
   }
 }
@@ -1082,11 +1126,13 @@ export function evalPlan(
 
 function captureNote(c: CaptureOptions): string | undefined {
   const parts: string[] = []
-  if (c.viewport) parts.push(`${c.viewport.width}×${c.viewport.height}`)
+  if (c.viewport === 'full-page') parts.push('full-page')
+  else if (c.viewport) parts.push(`${c.viewport.width}×${c.viewport.height}`)
   if (c.timeout !== undefined) {
     parts.push(typeof c.timeout === 'number' ? `${c.timeout}ms` : c.timeout)
   }
   if (c.browser === false) parts.push('browser false')
+  if (c.model) parts.push(`model ${c.model}`)
   return parts.length ? `capture: ${parts.join(' · ')}` : undefined
 }
 

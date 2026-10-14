@@ -491,6 +491,10 @@ Each input of a cell fingerprint, hashed on its own, so a change can be named.
   Tokens across the attempt's turns; null when the harness reported none.
 </Property>
 
+<Property name="captureUse" type="{model: string; moves: number; usage: TokenUsage | null}" optional>
+  Tokens the capture vision loop used. Infrastructure only: never folded into `usage`, effort, compare or lift.
+</Property>
+
 <Property name="timings" type="PhaseTimings"></Property>
 
 <Property name="activity" type="{tools: number; fileEdits: number; webSearches: number | null; webFetches: number | null; reasoningMs: number}">
@@ -541,7 +545,7 @@ Also has every field of `FileRef`.
 
 <Property name="mediaType" type="'image/png'"></Property>
 
-<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}}" optional>
+<Property name="capture" type="{port: number; path: string; viewport?: {width: number; height: number}; fullPage?: boolean; instructions?: string[]; use?: {model: string; moves: number}}" optional>
   Set when the file came from `c.capture()`.
 </Property>
 

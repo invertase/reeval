@@ -1431,27 +1431,52 @@ describe('common mistakes', () => {
     [
       'capture as a string',
       `evaluate('e', { capture: 5173 as never }, async () => {})`,
-      /capture is \{ viewport\?, timeout\?, browser\? \} \(got 5173\) in evaluate\("e"\)/,
+      /capture is \{ viewport\?, timeout\?, browser\?, model\? \} \(got 5173\) in evaluate\("e"\)/,
     ],
     [
       'an unknown capture key',
       `evaluate('e', { capture: { ready: true } as never }, async () => {})`,
-      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser\./,
+      /Unknown capture key "ready" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
     ],
     [
       'capture.port on evaluate',
       `evaluate('e', { capture: { port: 5173 } as never }, async () => {})`,
-      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser\./,
+      /Unknown capture key "port" in evaluate\("e"\)\. Use viewport, timeout, browser, model\./,
     ],
     [
       'a capture viewport without height',
       `evaluate('e', { capture: { viewport: { width: 1280 } as never } }, async () => {})`,
-      /capture\.viewport is \{ width, height \} in CSS pixels/,
+      /capture\.viewport is \{ width, height \} or 'full-page'/,
     ],
     [
       'capture.browser as a string',
       `evaluate('e', { capture: { browser: 'off' as never } }, async () => {})`,
       /capture\.browser is true or false \(got "off"\) in evaluate\("e"\)/,
+    ],
+    [
+      'a capture viewport with height and fullPage',
+      `evaluate('e', { capture: { viewport: { height: 720, fullPage: true } as never } }, async () => {})`,
+      /capture\.viewport is \{ width, height \} or 'full-page' in evaluate\("e"\), not \{ height, fullPage \}/,
+    ],
+    [
+      'instructions without a vision model',
+      `evaluate('e', { capture: { instructions: ['Fill the form'] } as never }, async () => {})`,
+      /c\.capture\(\) instructions need a vision model in evaluate\("e"\)/,
+    ],
+    [
+      'an evaluation-model capture.model',
+      `evaluate('e', { capture: { model: 'typesafe-ai/jev-1.13.0' } }, async () => {})`,
+      /capture\.model "typesafe-ai\/jev-1\.13\.0" in evaluate\("e"\) is an evaluation model/,
+    ],
+    [
+      'leftover capture.use',
+      `evaluate('e', { capture: { use: { model: 'google/gemini-3.8-flash' } } as never }, async () => {})`,
+      /Unknown capture key "use" in evaluate\("e"\)\. Set capture\.model/,
+    ],
+    [
+      'leftover capture.fake',
+      `evaluate('e', { capture: { fake: [] } as never }, async () => {})`,
+      /Unknown capture key "fake" in evaluate\("e"\)\. Set capture\.model/,
     ],
   ]
   for (const [what, body, message] of cases) {

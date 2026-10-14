@@ -146,6 +146,9 @@
         "browser": {
           "type": "boolean"
         },
+        "model": {
+          "type": "string"
+        },
         "timeout": {
           "anyOf": [
             {
@@ -166,10 +169,29 @@
           ]
         },
         "viewport": {
-          "$ref": "#/$defs/Viewport"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureWindow"
+            },
+            {
+              "const": "full-page"
+            }
+          ]
         }
       },
       "required": []
+    },
+    "CaptureWindow": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": ["height", "width"]
     },
     "Cell": {
       "type": "object",
@@ -1584,18 +1606,6 @@
     },
     "TurnStatus": {
       "enum": ["aborted", "completed", "error"]
-    },
-    "Viewport": {
-      "type": "object",
-      "properties": {
-        "height": {
-          "type": "number"
-        },
-        "width": {
-          "type": "number"
-        }
-      },
-      "required": ["height", "width"]
     },
     "WireResult": {
       "type": "object",

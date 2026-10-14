@@ -1463,6 +1463,24 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'ui.capture.use',
+    area: 'Records and studio',
+    name: "`c.capture()` vision journey (`instructions`, `model`, `viewport: 'full-page'`)",
+    fixtures: [
+      'ui/capture-use',
+      'ui/capture-full-page',
+      'ui/capture-use-click',
+      'ui/capture-use-wait',
+      'ui/capture-use-timeout',
+    ],
+    plan: ['capture/options'],
+    tests: [
+      'reeval/test/capture.test.ts › resolveCaptureCall accepts full-page and a wait beat',
+      'reeval/test/capture-use.test.ts › dispatchInput sends CDP Input events and never Runtime.evaluate',
+      'reeval/test/capture-use.test.ts › runJourney times out before the saved screenshot',
+    ],
+  },
+  {
     id: 'studio',
     area: 'Records and studio',
     name: '`reeval studio` and `reeval studio build`',

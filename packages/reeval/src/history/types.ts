@@ -35,7 +35,13 @@ export type ArtifactRef = FileRef & {
   capture?: {
     port: number
     path: string
+    /** The live window, never the string `'full-page'`. */
     viewport?: { width: number; height: number }
+    /** Saved PNG used `captureBeyondViewport`. */
+    fullPage?: boolean
+    /** Goal strings only; wait beats omitted. */
+    instructions?: string[]
+    use?: { model: string; moves: number }
   }
 }
 
@@ -157,6 +163,11 @@ export type AttemptRecord = {
   }>
   /** Tokens across the attempt's turns; null when the harness reported none. */
   usage: TokenUsage | null
+  /**
+   * Tokens the capture vision loop used. Infrastructure only: never folded
+   * into `usage`, effort, compare or lift.
+   */
+  captureUse?: { model: string; moves: number; usage: TokenUsage | null }
   timings: PhaseTimings
   /** Counts from the transcript, so a run's shape is visible without reading it. */
   activity: {

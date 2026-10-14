@@ -78,6 +78,9 @@
         "browser": {
           "type": "boolean"
         },
+        "model": {
+          "type": "string"
+        },
         "timeout": {
           "anyOf": [
             {
@@ -98,10 +101,29 @@
           ]
         },
         "viewport": {
-          "$ref": "#/$defs/Viewport"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CaptureWindow"
+            },
+            {
+              "const": "full-page"
+            }
+          ]
         }
       },
       "required": []
+    },
+    "CaptureWindow": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        }
+      },
+      "required": ["height", "width"]
     },
     "ClaudeCodeHarnessDescriptor": {
       "type": "object",
@@ -1859,18 +1881,6 @@
           "required": ["t"]
         }
       ]
-    },
-    "Viewport": {
-      "type": "object",
-      "properties": {
-        "height": {
-          "type": "number"
-        },
-        "width": {
-          "type": "number"
-        }
-      },
-      "required": ["height", "width"]
     }
   }
 }

@@ -661,6 +661,7 @@ async function attemptEvidence(
           : t.text,
     })),
     usage: sumUsage((record?.turns ?? []).map((t) => t.usage)),
+    ...(record?.captureUse ? { captureUse: record.captureUse } : {}),
     timings: record?.timings ?? { setupMs: 0, agentMs: 0, diffMs: 0, checksMs: 0, judgeMs: 0 },
     activity: record
       ? activity(record)

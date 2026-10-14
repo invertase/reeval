@@ -5,31 +5,43 @@ import { parseDuration } from '../duration.ts'
 import { cacheDir } from '../root.ts'
 import type {
   CaptureCall,
+  CaptureInstruction,
   CaptureOptions,
+  CaptureUseAction,
+  CaptureUseScript,
   CaptureWait,
+  CaptureWindow,
   Duration,
   ServeHandle,
   Viewport,
+  Wait,
 } from '../types.ts'
+import { fakeInstructionSteps, isWaitStep } from './fake-instructions.ts'
 
-export type { DownloadProgress, DownloadReporter } from './browser.ts'
+export type { ChromeSession, DownloadProgress, DownloadReporter } from './browser.ts'
 export {
   CHROME_NAME,
   CHROME_VERSION,
   captureWaitLabel,
   captureWaitTimeout,
   chromeBinaryPath,
+  dispatchInput,
   ensureChrome,
   listenForCaptureWait,
+  mapPagePoint,
+  navigateAndWait,
   pickPageDebuggerUrl,
   removeChromeProfile,
   screenshotWithChrome,
+  waitForPage,
+  waitTimeout,
+  withChrome,
 } from './browser.ts'
 export { pollHttp } from './poll.ts'
 export { pngSize, stubPng } from './stub.ts'
 
 /** Default CSS pixels when the call and cascade omit `viewport`. */
-export const DEFAULT_VIEWPORT: Viewport = { width: 1280, height: 720 }
+export const DEFAULT_VIEWPORT: CaptureWindow = { width: 1280, height: 720 }
 
 /** Default poll (and screenshot) budget when the call and cascade omit `timeout`. */
 export const DEFAULT_TIMEOUT: Duration = '60s'
@@ -38,11 +50,79 @@ export const CAPTURE_NAME = /^[a-z0-9_-]+$/
 
 export const CAPTURE_WAITS = ['load', 'idle'] as const
 
+export function isWaitMs(wait: Wait): wait is { ms: number } {
+  return typeof wait === 'object' && wait !== null && 'ms' in wait
+}
+
+export function isCaptureWindow(viewport: Viewport): viewport is CaptureWindow {
+  return viewport !== 'full-page'
+}
+
+/** `'load'` when the call omits `wait`. `'load'`, `'idle'` or `{ ms }`. */
+export function resolveWait(wait: CaptureCall['wait']): Wait {
+  if (wait === undefined) return 'load'
+  if ((CAPTURE_WAITS as readonly string[]).includes(wait as string)) return wait as CaptureWait
+  if (
+    typeof wait === 'object' &&
+    wait !== null &&
+    Number.isFinite(wait.ms) &&
+    wait.ms >= 0 &&
+    Object.keys(wait).every((k) => k === 'ms')
+  ) {
+    return { ms: wait.ms }
+  }
+  throw new Error(`c.capture() wait is 'load', 'idle' or { ms } (got ${JSON.stringify(wait)})`)
+}
+
 /** `'load'` when the call omits `wait`. Anything else must be `'load'` or `'idle'`. */
 export function resolveCaptureWait(wait: CaptureCall['wait']): CaptureWait {
-  if (wait === undefined) return 'load'
-  if ((CAPTURE_WAITS as readonly string[]).includes(wait)) return wait
+  const resolved = resolveWait(wait)
+  if (!isWaitMs(resolved)) return resolved
   throw new Error(`c.capture() wait is 'load' or 'idle' (got ${JSON.stringify(wait)})`)
+}
+
+export function parseInstructions(value: CaptureCall['instructions']): CaptureInstruction[] {
+  if (value === undefined) return []
+  if (!Array.isArray(value)) {
+    throw new Error(
+      `c.capture() instructions is an array of strings and { wait } (got ${JSON.stringify(value)})`,
+    )
+  }
+  return value.map((step, i) => {
+    if (typeof step === 'string') {
+      if (!step.trim()) {
+        throw new Error(`c.capture() instructions[${i}] is an empty string`)
+      }
+      return step
+    }
+    if (typeof step === 'object' && step !== null && 'wait' in step) {
+      return { wait: resolveWait(step.wait) }
+    }
+    throw new Error(
+      `c.capture() instructions[${i}] is a string or { wait } (got ${JSON.stringify(step)})`,
+    )
+  })
+}
+
+export function instructionGoals(steps: CaptureInstruction[]): string[] {
+  return steps.filter((s): s is string => typeof s === 'string')
+}
+
+/** Live window and whether the saved PNG uses `captureBeyondViewport`. */
+export function resolveCaptureViewport(viewport: Viewport | undefined): {
+  viewport: Viewport
+  window: CaptureWindow
+  fullPage: boolean
+} {
+  const asked = viewport ?? DEFAULT_VIEWPORT
+  if (asked === 'full-page') {
+    return { viewport: 'full-page', window: DEFAULT_VIEWPORT, fullPage: true }
+  }
+  return { viewport: asked, window: asked, fullPage: false }
+}
+
+export function viewportKey(viewport: Viewport): string {
+  return viewport === 'full-page' ? 'full-page' : `${viewport.width}x${viewport.height}`
 }
 
 /** `~/.cache/reeval` when that's the resolved dir; otherwise the absolute path. */
@@ -100,32 +180,78 @@ export function nameFromPath(path: string): string {
   return slug || 'root'
 }
 
-export function resolveCaptureCall(
-  target: number | ServeHandle,
-  call: CaptureCall | undefined,
-  cascade: CaptureOptions,
-): {
+export type ResolvedCaptureCall = {
   port: number
   name: string
   path: string
   viewport: Viewport
+  window: CaptureWindow
+  fullPage: boolean
   timeoutMs: number
-  wait: CaptureWait
-} {
+  wait: Wait
+  instructions: CaptureInstruction[]
+  model: string | undefined
+  fake: CaptureUseScript | undefined
+}
+
+export function resolveCaptureCall(
+  target: number | ServeHandle,
+  call: CaptureCall | undefined,
+  cascade: CaptureOptions,
+): ResolvedCaptureCall {
   if (call && Object.hasOwn(call, 'port')) {
     throw new Error('c.capture() takes the port as the first argument, not in the options')
   }
+  if (call && Object.hasOwn(call, 'use')) {
+    throw new Error(
+      'c.capture() has no use. Set model, or pass fakeInstructions from reeval/testing as instructions.',
+    )
+  }
+  if (call && Object.hasOwn(call, 'fake')) {
+    throw new Error('c.capture() has no fake. Tests pass fakeInstructions(...) as instructions.')
+  }
+  if (call?.model !== undefined) checkCallModel(call.model)
   const port = resolveCaptureTarget(target)
   const path = call?.path || '/'
   const name = call?.name ?? nameFromPath(path)
   checkCaptureName(name)
+  const asked = resolveCaptureViewport(call?.viewport ?? cascade.viewport)
   return {
     port,
     name,
     path,
-    viewport: call?.viewport ?? cascade.viewport ?? DEFAULT_VIEWPORT,
+    viewport: asked.viewport,
+    window: asked.window,
+    fullPage: asked.fullPage,
     timeoutMs: parseDuration(call?.timeout ?? cascade.timeout ?? DEFAULT_TIMEOUT),
-    wait: resolveCaptureWait(call?.wait),
+    wait: resolveWait(call?.wait),
+    instructions: parseInstructions(call?.instructions),
+    model: call?.model ?? cascade.model,
+    fake: fakeScriptFrom(call?.instructions),
+  }
+}
+
+function fakeScriptFrom(value: CaptureCall['instructions']): CaptureUseScript | undefined {
+  const steps = fakeInstructionSteps(value)
+  if (!steps) return undefined
+  const script: CaptureUseAction[][] = []
+  for (const step of steps) {
+    if (isWaitStep(step)) continue
+    script.push(step)
+  }
+  return script
+}
+
+function checkCallModel(model: string): void {
+  if (!model.includes('/')) {
+    throw new Error(
+      `c.capture() model is a 'provider/model' string, e.g. 'google/gemini-3.8-flash' (got ${JSON.stringify(model)})`,
+    )
+  }
+  if (model.startsWith('typesafe-ai/')) {
+    throw new Error(
+      `c.capture() model "${model}" is an evaluation model: it scores yes/no questions and can't drive a capture. Use a language model that accepts images, e.g. 'google/gemini-3.8-flash'.`,
+    )
   }
 }
 

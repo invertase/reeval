@@ -105,8 +105,8 @@ Config-only keys are on [defineConfig](/reference/config); `profiles` and `defau
   Judge settings. **Merges field by field**, so overriding `threshold` keeps the model. No default model; `threshold` defaults to 0.8. See [Judges](/reference/judges).
 </Property>
 
-<Property name="capture" type="{ viewport?, timeout?, browser? }">
-  Camera defaults for `c.capture()`. **Shallow-merged**; a level that sets `viewport` replaces the whole viewport object. `viewport` is `{ width, height }` in CSS pixels (default 1280×720). `timeout` is how long to poll before failing (default `'60s'`). `browser: false` refuses the host `chrome-headless-shell` binary: `c.capture()` then throws. `port` is not an option here: pass it as the first argument to `c.capture`. See [The attempt context](/reference/attempt-context) and [Capturing UI](/recipes/capturing-ui).
+<Property name="capture" type="{ viewport?, timeout?, browser?, model? }">
+  Camera defaults for `c.capture()`. **Shallow-merged**; a level that sets `viewport` replaces the whole value. `viewport` is `{ width, height }` in CSS pixels (default 1280×720) or `'full-page'`. `timeout` is how long to poll before failing (default `'60s'`). `browser: false` refuses the host `chrome-headless-shell` binary: `c.capture()` then throws. `model` is the vision model; it cascades like `question`. Default is the analysis model when that model accepts images; never Jev. `wait` and `instructions` are call-only. `port` is not an option here: pass it as the first argument to `c.capture`. See [The attempt context](/reference/attempt-context) and [Capturing UI](/recipes/capturing-ui).
 </Property>
 
 <Property name="timeout" type="number | string">
