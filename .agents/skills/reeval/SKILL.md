@@ -299,7 +299,9 @@ group(
   holds the environment. `compare.across: 'environment'` sets that for every
   question that does not name its own `across`. Omit it, or pass both, to ask
   both pair kinds. `--dry-run` shows the pair count. Questions annotate the
-  compare and never gate: pass, fail and the exit code stay the checks'. Their
+  compare and never gate: pass, fail and the exit code stay the checks'.
+  `reeval analyze` puts each answer in the digest (rates by pair kind, votes,
+  ties, a failed call) as annotation, not a results line. Their
   model is the entry's `model`, else `analysis.model`, else the judge's when
   it's a language model (not `typesafe-ai/*`); with none, `reeval run` exits 2
   at plan time while `--dry-run` still lists them. A profile that leaves only
