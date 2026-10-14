@@ -8,7 +8,15 @@ import { join } from 'node:path'
 import { describe, test } from 'node:test'
 import { recordFailure } from '../src/attempt/record.ts'
 import type { Attempt } from '../src/attempt/state.ts'
-import { acrossOf, type PairAttempt, pairsOf, ratesOf, voteOf } from '../src/compare/pairs.ts'
+import {
+  acrossOf,
+  type PairAttempt,
+  pairsOf,
+  ratesOf,
+  sampleReasons,
+  VOTE_REASON_CAP,
+  voteOf,
+} from '../src/compare/pairs.ts'
 import { answerQuestion, blindPair, stagedAttempt } from '../src/compare/questions.ts'
 import type { EngineEval } from '../src/engine/node.ts'
 import { TimeoutError } from '../src/errors.ts'
@@ -431,6 +439,28 @@ describe('compare question pairs', () => {
       { cut: 'within', name: 'sdk', wins: 1, n: 3 },
       { cut: 'within', name: 'ui', wins: 2, n: 3 },
     ])
+  })
+
+  test('a vote reason is stored, capped and sampled; empty is omitted', async () => {
+    const [pair] = pairsOf([side('h', 'sdk', 1), side('h', 'ui', 1)])
+    assert.ok(pair)
+    const long = `${'x'.repeat(300)} tail`
+    assert.equal(
+      voteOf('q', pair, false, 'B', '  the skill writes Ahoy  ').reason,
+      'the skill writes Ahoy',
+    )
+    assert.equal(voteOf('q', pair, false, 'B', '   ').reason, undefined)
+    assert.equal(voteOf('q', pair, false, 'B').reason, undefined)
+    const capped = voteOf('q', pair, false, 'B', long).reason
+    assert.ok(capped)
+    assert.ok(capped.length <= VOTE_REASON_CAP)
+    assert.ok(capped.endsWith('…'))
+    const answer = await ask(pairsOf(matrix(['h1'], ['sdk', 'ui'], 1)), {
+      winner: 'A',
+      reason: 'A added the file',
+    })
+    assert.ok(answer.votes.every((v) => v.reason === 'A added the file'))
+    assert.deepEqual(sampleReasons(answer.votes), ['A added the file'])
   })
 
   test('a model error is kept on the answer, with no votes', async () => {

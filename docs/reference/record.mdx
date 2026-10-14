@@ -326,7 +326,7 @@ The tokens the run used, as the harnesses count them; reeval prices nothing.
 <Property name="attempts" type="AttemptRecord[]"></Property>
 
 <Property name="answers" type="CompareAnswer[]" optional>
-  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call).
+  The compare's questions, answered after its attempts by pairwise votes, one per question; unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote may include a short `reason` (capped). `reeval analyze` includes each answer in the digest (rates by cut, votes, ties, a failed call, a sample of reasons).
 </Property>
 
 ### CellRecord

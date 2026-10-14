@@ -553,6 +553,43 @@ export default defineConfig({
     )
   })
 
+  test('a vote reason is recorded, shown and left out of pass or fail', async () => {
+    const p = await project('questions-vote-reason', {
+      'reeval.config.ts': `import { defineConfig, defineEnvironment } from 'reeval'
+import { fakeHarness } from 'reeval/harness'
+import { fakeAnalysis, fakeJudge } from 'reeval/judge'
+import { fakeSandbox } from 'reeval/sandbox'
+export default defineConfig({
+  harness: ${OK},
+  environment: defineEnvironment('fake', { sandbox: fakeSandbox({ dir: new URL('./sandboxes', import.meta.url) }) }),
+  judge: { model: fakeJudge({ score: 0.9 }) },
+  analysis: {
+    model: fakeAnalysis({
+      vote: { winner: 'A', reason: 'the first slot writes ok.txt' },
+    }),
+  },
+})
+`,
+      ...asks(`['Which is cleaner?']`),
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 0, r.stdout + r.stderr)
+    const [e] = readRun(p.dir).evals
+    assert.equal(e?.outcome, 'pass')
+    assert.ok(e?.answers?.[0]?.votes.every((v) => v.reason === 'the first slot writes ok.txt'))
+    assert.match(r.stdout, /the first slot writes ok\.txt/)
+    assert.match(readRun(p.dir).read('summary.md'), /the first slot writes ok\.txt/)
+    const { digest } = await (async () => {
+      const out = await runCli(p.dir, ['analyze', '--context', '--vs', 'none'])
+      assert.equal(out.code, 0, out.stderr)
+      const json = /```json\n([\s\S]*?)\n```/.exec(out.stdout)?.[1]
+      assert.ok(json)
+      return { digest: JSON.parse(json) as { facts: Array<Record<string, unknown>> } }
+    })()
+    const fact = digest.facts.find((f) => f.kind === 'compare-question')
+    assert.deepEqual(fact?.reasons, ['the first slot writes ok.txt'])
+  })
+
   // Three harnesses: `two` writes an extra file, which the fake vote prefers, and `bad` fails
   // its check on every attempt, so it's in no pair but still in the pass rate and the exit code.
   const threeHarnesses = (

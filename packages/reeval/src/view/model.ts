@@ -1,3 +1,4 @@
+import { sampleReasons } from '../compare/pairs.ts'
 import type {
   AttemptRecord,
   CellRecord,
@@ -427,6 +428,8 @@ export type AnswerRow = {
   error: string | null
   /** No votes and no error: no pair had both sides pass their checks. */
   noPairs: boolean
+  /** Distinct vote reasons, in vote order, at most three. */
+  reasons: string[]
 }
 
 /** One row per compare question, with each cut's win rates in the record's order. */
@@ -445,6 +448,7 @@ export function answerRows(e: Pick<EvalEntry, 'answers'>): AnswerRow[] {
       across: rates('across'),
       error: a.error ?? null,
       noPairs: a.votes.length === 0 && a.error === undefined,
+      reasons: sampleReasons(a.votes),
     }
   })
 }

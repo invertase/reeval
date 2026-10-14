@@ -415,6 +415,13 @@ function Questions({ rows }: { rows: AnswerRow[] }) {
                   : `${plural(q.votes, 'vote')}, ${plural(q.ties, 'tie')}`}
               </p>
             ) : null}
+            {q.reasons.length ? (
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                {q.reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
         ))}
       </div>

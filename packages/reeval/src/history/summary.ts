@@ -1,3 +1,4 @@
+import { sampleReasons } from '../compare/pairs.ts'
 import { clip, formatDuration } from '../text.ts'
 import type { CompareAnswer, Outcome } from '../types.ts'
 import { cellContrast, effortLabel } from '../view/effort.ts'
@@ -228,7 +229,10 @@ export function renderSummary(run: RunRecord): string {
     const multi = e.attempts.length > 1
     if (multi) lines.push(`Cells: ${cellCounts(e)}`, '')
     if (e.answers?.length) {
-      for (const a of e.answers) lines.push(`- Question: ${cell(answersLabel(a))}`)
+      for (const a of e.answers) {
+        lines.push(`- Question: ${cell(answersLabel(a))}`)
+        for (const reason of sampleReasons(a.votes)) lines.push(`  - ${cell(reason)}`)
+      }
       lines.push('')
     }
     const attemptRank = (a: AttemptRecord) => (isUngatedMiss(e, a) ? 3 : rank(a.outcome))

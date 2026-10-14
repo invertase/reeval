@@ -4,6 +4,7 @@
 import { readFile } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { commandSummary } from '../cli-spec.ts'
+import { sampleReasons } from '../compare/pairs.ts'
 import type { HistoryDb } from '../history/db.ts'
 import { FLAKY_MIN_ATTEMPTS, LIFT_MIN_COUNTED } from '../history/facts.ts'
 import type { AttemptRecord, EvalEntry, RunRecord } from '../history/types.ts'
@@ -81,7 +82,7 @@ export const RULES = [
   "Drift marked noise changed only an agent CLI's own runtime state (e.g. ~/.cursor/cli-config.json): not a real change, and those runs stay comparable.",
   'An eval where every cell passes at least 95% is saturated: pass rate cannot tell cells apart there, effort can.',
   'Judge verdicts carry no recorded reason; an explanation of a failed verdict is your reading of the cited output, and must say so.',
-  'Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run.',
+  "Compare-question win rates annotate the run: they never change pass, fail or the exit code. Cite them as annotation, never as a result that gates the run. A vote's reason is the model's wording: do not treat it as a check.",
 ]
 
 const pts = (x: number | null | undefined) =>
@@ -537,6 +538,7 @@ export async function buildDigestKeepingDropped(
       if (!evalKeys.has(e.key)) continue
       for (const a of e.answers ?? []) {
         const ties = a.votes.filter((v) => v.winner === 'tie').length
+        const reasons = sampleReasons(a.votes)
         fact('compare-question', {
           run: short.get(r.record.runId),
           eval: tagOf(e.key),
@@ -558,6 +560,7 @@ export async function buildDigestKeepingDropped(
           ...(a.votes.length === 0 && a.error === undefined
             ? { note: 'no pairs to judge: attempts that failed their checks are left out' }
             : {}),
+          ...(reasons.length ? { reasons } : {}),
         })
       }
     }

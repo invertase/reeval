@@ -582,11 +582,12 @@ describe('reeval analyze', () => {
   test('the prompt and rules say compare-question rates annotate only', () => {
     assert.match(SYSTEM_PROMPT, /Compare-question facts \(kind compare-question\) are annotation/)
     assert.match(SYSTEM_PROMPT, /never change pass, fail or the exit code/)
+    assert.match(SYSTEM_PROMPT, /A vote's reason is the model's wording/)
     assert.ok(
       RULES.some(
         (r) =>
           r.includes('Compare-question win rates annotate') &&
-          r.includes('never change pass, fail'),
+          r.includes("A vote's reason is the model's wording"),
       ),
     )
   })

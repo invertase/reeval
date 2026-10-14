@@ -512,6 +512,18 @@
             },
             {
               "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "winner": {
+                  "$ref": "#/$defs/FakeVote"
+                }
+              },
+              "required": ["winner"]
+            },
+            {
+              "type": "object",
               "properties": {},
               "required": []
             }
@@ -731,6 +743,9 @@
           "required": ["write"]
         }
       ]
+    },
+    "FakeVote": {
+      "enum": ["A", "B", "tie"]
     },
     "GitWorkspace": {
       "type": "object",

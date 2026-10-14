@@ -1306,6 +1306,9 @@
         "question": {
           "type": "string"
         },
+        "reason": {
+          "type": "string"
+        },
         "run": {
           "type": "number"
         },

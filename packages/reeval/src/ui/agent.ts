@@ -1,6 +1,7 @@
 // For coding agents running `reeval run`: they read every line back into context, so print only
 // failures (and, as MISS, ungated cells' expected misses), each with where its detail lives, in
 // a stable greppable vocabulary.
+import { sampleReasons } from '../compare/pairs.ts'
 import { answersLabel } from '../history/summary.ts'
 import { sandboxWarningLine } from '../text.ts'
 import { colors } from './colors.ts'
@@ -135,6 +136,7 @@ export class AgentRenderer implements Renderer {
         for (const entry of e.record.evals) {
           for (const a of entry.answers ?? []) {
             this.#write(`question ${entry.id}: ${answersLabel(a)}`)
+            for (const reason of sampleReasons(a.votes)) this.#write(`  ${reason}`)
           }
         }
         const s = e.record.summary

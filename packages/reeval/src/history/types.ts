@@ -207,9 +207,9 @@ export type EvalEntry = {
   attempts: AttemptRecord[]
   /**
    * The compare's questions, answered after its attempts by pairwise votes, one per question;
-   * unset without any. They annotate: `outcome` and `passRate` never depend on them.
-   * `reeval analyze` includes each answer in the digest (rates by cut, votes, ties,
-   * a failed call).
+   * unset without any. They annotate: `outcome` and `passRate` never depend on them. Each vote
+   * may include a short `reason` (capped). `reeval analyze` includes each answer in the digest
+   * (rates by cut, votes, ties, a failed call, a sample of reasons).
    */
   answers?: CompareAnswer[]
 }

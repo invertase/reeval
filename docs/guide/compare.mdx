@@ -267,7 +267,7 @@ A real run on Cursor and pi. Lift can't separate the arms, since all four attemp
 
 reeval pairs the attempts from their diffs by varying one factor and holding the others, unless `across` or `compare.across` keeps one. Vary the environment and two environments meet on the same harness and run; vary the harness and two agents meet on the same environment and run. Each pair goes to the model twice, the order swapped, labelled only A and B, so neither position nor a name can win it.
 
-A side's rate is its wins over the decided votes it was in; a tie counts for neither side. Every vote is in the record under `evals[].answers`, with the rates per pair kind. A model error is kept on its answer as `error` and printed as a warning, and the outcomes stand. `reeval analyze` includes those rates, the vote and tie counts, and a failed call, as annotation: they never gate the run.
+A side's rate is its wins over the decided votes it was in; a tie counts for neither side. Every vote is in the record under `evals[].answers`, with the rates per pair kind. A vote may carry a short `reason` (capped), shown in `reeval show`, the summary and the studio. A model error is kept on its answer as `error` and printed as a warning, and the outcomes stand. `reeval analyze` includes those rates, the vote and tie counts, a failed call, and a sample of reasons, as annotation: they never gate the run.
 
 <Warning>
   Attempts that failed their checks are left out of the pairs. A question on a compare whose baseline is expected to fail, like the house-greeting eval, has no pairs to judge: ask it where both arms can pass.
