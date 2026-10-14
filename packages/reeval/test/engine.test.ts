@@ -1207,6 +1207,34 @@ evaluate('fine', async (c) => { await c.send('go'); expect(await c.judge('Is it 
     assert.deepEqual(judged, { empty: 0, 'over one': 0, fine: 1 })
   })
 
+  test('c.judge artifacts must be a capture handle or name on this attempt', async () => {
+    const p = await project('judge-artifacts-call', {
+      'reeval.config.ts': fakeConfig(),
+      'evals/j.eval.ts': `import { evaluate, expect } from 'reeval'
+evaluate('not a list', async (c) => {
+  await c.send('go')
+  await c.judge('ok?', { artifacts: 'form' as never })
+})
+evaluate('unknown name', async (c) => {
+  await c.send('go')
+  await c.judge('ok?', { artifacts: ['missing'] })
+})
+evaluate('fine', async (c) => {
+  await c.send('go')
+  expect(await c.judge('ok?')).toPass()
+})
+`,
+    })
+    const r = await runCli(p.dir)
+    assert.equal(r.code, 1, r.stdout + r.stderr)
+    assert.match(r.stdout, /c\.judge\(\) artifacts must be a list of capture handles or names/)
+    assert.match(r.stdout, /artifacts names a capture this attempt doesn't have: "missing"/)
+    const judged = Object.fromEntries(
+      readRun(p.dir).evals.map((e) => [e.name, e.attempts[0]?.judgements.length]),
+    )
+    assert.deepEqual(judged, { 'not a list': 0, 'unknown name': 0, fine: 1 })
+  })
+
   test('a failing check shows the tail of stderr', async () => {
     const p = await project('check-fail', {
       'reeval.config.ts': fakeConfig(),

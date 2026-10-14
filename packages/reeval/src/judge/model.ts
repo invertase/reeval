@@ -1,22 +1,22 @@
 import { google } from '@ai-sdk/google'
-import { experimental_evaluate as evaluate } from 'ai'
+import { experimental_decide as decide } from 'ai'
 import { debugTrace } from '../debug/attempt.ts'
 import type { JudgeModel, JudgeOptions } from '../types.ts'
 import { type JudgeState, judgeRoute } from './index.ts'
 
-type EvaluationModel = Parameters<typeof evaluate>[0]['model']
+type DecisionModel = Parameters<typeof decide>[0]['model']
 
 /** See `judgeRoute`: a known provider's own package when its key is set, else the AI Gateway. */
 async function resolveModel(
   model: Exclude<JudgeModel, { kind: 'fake-judge' }>,
-): Promise<EvaluationModel> {
-  if (typeof model !== 'string') return model as EvaluationModel
+): Promise<DecisionModel> {
+  if (typeof model !== 'string') return model as DecisionModel
   const route = judgeRoute(model)
   if (route.kind === 'gateway') return model
   const id = model.slice(route.provider.length + 1)
-  if (route.provider === 'google') return google.evaluationModel(id)
+  if (route.provider === 'google') return google.decisionModel(id)
   const { typeSafeAi } = await import('@ai-sdk/typesafe-ai')
-  return typeSafeAi.evaluationModel(id)
+  return typeSafeAi.decisionModel(id)
 }
 
 export async function scoreWithModel(
@@ -26,7 +26,7 @@ export async function scoreWithModel(
   providerOptions: JudgeOptions['providerOptions'],
   signal: AbortSignal,
 ): Promise<{ score: number; resolvedModel: string | undefined }> {
-  const result = await evaluate({
+  const result = await decide({
     model: await resolveModel(model),
     state,
     questions: { answer: { type: 'boolean', instructions: question } },

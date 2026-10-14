@@ -1186,6 +1186,17 @@ export const inventory: InventoryFeature[] = [
     ],
   },
   {
+    id: 'judge.artifacts',
+    area: 'Judges and matchers',
+    name: '`c.judge({ artifacts })` sends captures as AI SDK file parts; JSON-only calls stay an object',
+    fixtures: ['judge/artifacts'],
+    tests: [
+      unit('decideState keeps JSON-only state an object'),
+      unit('TypeSafe decide rejects file parts without HTTP'),
+      engine('c.judge artifacts must be a capture handle or name on this attempt'),
+    ],
+  },
+  {
     id: 'judge.input-size',
     area: 'Judges and matchers',
     name: "A judge call's provider error, worded as the provider wrote it, with the input's estimated size, biggest parts and files and the `include` hint",

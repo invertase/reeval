@@ -108,10 +108,26 @@ await c.capture(server, { name: 'home', wait: 'idle' })
 capture fails and there is no PNG. Pages that never go quiet (Vite HMR, SSE,
 long-poll) keep `wait: 'load'` or raise `timeout`.
 
+## Judge the screenshot
+
+Pass the handle (or its `name`) to `c.judge`. The judge sees the PNG as a file
+part. Ask about facts in the picture, not whether it "looks great".
+
+```ts
+const image = await c.capture(server, { name: 'form' })
+await c.judge('it has visual feedback for a failed form', {
+  artifacts: [image],
+})
+```
+
+A provider that cannot take files fails that call with its own error. JSON-only
+judge calls (no `artifacts`) are unchanged.
+
 ## What you get
 
 The PNG lands at `artifacts/<name>.png` on the attempt. Studio shows it under Artefacts as
-`image/png`. Retention is `history.artifacts` (`all`, `failures`, `none`).
+`image/png`. Retention is `history.artifacts` (`all`, `failures`, `none`). A
+judge call that sent the capture records the same ref on the verdict.
 
 Several attempts can capture at once. Cleaning up Chrome's profile after the
 shot never fails the attempt or drops the PNG.

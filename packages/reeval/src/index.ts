@@ -51,6 +51,7 @@ export type {
   HarnessOption,
   HistoryConfig,
   HostFile,
+  JudgeArtifactRef,
   JudgeCallOptions,
   JudgeFailure,
   JudgeOptions,

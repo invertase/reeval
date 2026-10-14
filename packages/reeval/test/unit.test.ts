@@ -55,6 +55,12 @@ import { warnings } from '../src/history/state.ts'
 import type { HistoryEntry, RunRecord } from '../src/history/types.ts'
 import { compare, formatCompare, stackChanges } from '../src/history/views.ts'
 import { newRunId, RUN_ID } from '../src/ids.ts'
+import {
+  badJudgeArtifacts,
+  decideState,
+  filePartsOf,
+  resolveJudgeArtifacts,
+} from '../src/judge/artifacts.ts'
 import { checkModelString, judgeCredentials, judgeRoute, runJudge } from '../src/judge/index.ts'
 import { changedFilesForJudge, judgeDiff, patchForJudge } from '../src/judge/patch.ts'
 import { backoffMs, isApiError, isTransient } from '../src/judge/retry.ts'
@@ -673,6 +679,47 @@ test("the judge's include filters its diff and files, the last match winning; fi
   assert.doesNotMatch(inFull.patch, /\/\/ src\/app\.ts\n/, 'shown in full, so not in the diff')
   assert.match(inFull.patch, /\/\/ src\/app\.test\.ts/)
   assert.ok(inFull.files.includes('added src/app.ts'), 'still listed as changed')
+})
+
+test('TypeSafe decide rejects file parts without HTTP', async () => {
+  const { experimental_decide: decide } = await import('ai')
+  const { typeSafeAi } = await import('@ai-sdk/typesafe-ai')
+  const png = new Uint8Array([137, 80, 78, 71])
+  await assert.rejects(
+    () =>
+      decide({
+        model: typeSafeAi.decisionModel('jev-1.13.0'),
+        state: [
+          { type: 'json', value: { task: 't', output: 'o' } },
+          { type: 'file', mediaType: 'image/png', data: png },
+        ],
+        questions: { answer: { type: 'boolean', instructions: 'ok?' } },
+      }),
+    /TypeSafe AI decision file input/,
+  )
+})
+
+test('decideState keeps JSON-only state an object', () => {
+  const json = { task: 't', output: 'o' }
+  assert.equal(decideState(json, []), json)
+  const png = Buffer.from([137, 80, 78, 71])
+  const resolved = resolveJudgeArtifacts(['form'], new Map([['form', png]]))
+  const parts = decideState(json, filePartsOf(resolved))
+  assert.ok(Array.isArray(parts))
+  assert.deepEqual(parts[0], { type: 'json', value: json })
+  assert.equal(parts[1]?.type, 'file')
+  assert.equal((parts[1] as { mediaType: string }).mediaType, 'image/png')
+  assert.deepEqual((parts[1] as { data: Uint8Array }).data, png)
+  assert.match(badJudgeArtifacts('form') ?? '', /capture handles or names/)
+  assert.equal(badJudgeArtifacts(['form']), undefined)
+  assert.equal(
+    badJudgeArtifacts([{ name: 'form', file: { path: 'artifacts/form.png' } }]),
+    undefined,
+  )
+  assert.throws(
+    () => resolveJudgeArtifacts(['missing'], new Map()),
+    /artifacts names a capture this attempt doesn't have: "missing"/,
+  )
 })
 
 test("a provider's error keeps its wording and adds what fills the judge's input", () => {

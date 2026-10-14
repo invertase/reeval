@@ -1253,9 +1253,36 @@
         "worktreePatchNote"
       ]
     },
+    "JudgeArtifactRef": {
+      "type": "object",
+      "properties": {
+        "bytes": {
+          "type": "number"
+        },
+        "mediaType": {
+          "const": "image/png"
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "required": ["bytes", "mediaType", "name", "path", "sha256"]
+    },
     "JudgementRecord": {
       "type": "object",
       "properties": {
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/JudgeArtifactRef"
+          }
+        },
         "key": {
           "type": "string"
         },
